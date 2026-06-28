@@ -478,6 +478,189 @@ function ResultPlaceholder({ src, message }) {
   );
 }
 
+const TOOL_HELP = {
+  generate: {
+    title: 'Image Generator',
+    what: 'Create images from a text prompt using AI — local ComfyUI or a hosted provider such as FAL.',
+    features: ['Pick aspect ratio: square, landscape or portrait', 'Style presets speed up prompt writing', 'Augment: feed an existing image as input for variations (ComfyUI + FAL)', 'Saved gallery below the form — hover a thumbnail to delete', 'Cost and token usage logged in the Usage dashboard'],
+  },
+  animate: {
+    title: 'Animate (GIF)',
+    what: 'Combine multiple images into an animated GIF.',
+    features: ['Drag-and-drop or file-picker to add frames', 'Reorder with ↑ / ↓ arrows', 'Frame delay slider: 50–2000 ms per frame', 'Loop toggle — disable for a one-shot animation', 'First frame sets the canvas size; others are cropped to cover'],
+  },
+  upscale: {
+    title: 'Upscale',
+    what: 'Enlarge an image while preserving or enhancing detail.',
+    features: ['Real-ESRGAN: faithful upscale, no hallucination', 'Clarity Pro: adds invented detail for a crisper look', 'Scale picker: 2×, 4× etc.', 'Fidelity slider (Clarity only): 0 = creative, 100 = faithful', 'Cost estimate shown before you run'],
+  },
+  convert: {
+    title: 'Convert',
+    what: 'Change an image\'s format.',
+    features: ['Outputs: PNG, JPG, WebP, GIF, AVIF, TIFF, ICO (multi-res favicon)', 'Quality slider for lossy formats', 'HEIC/HEIF input supported where the server\'s libvips allows it', 'Import by URL — fetches server-side to bypass CORS', 'Before/after compare + Export panel'],
+  },
+  compress: {
+    title: 'Compress',
+    what: 'Reduce file size while keeping the original format.',
+    features: ['Process many images at once', 'Quality presets: 90 / 75 / 60 / 40', 'Per-file savings and running total shown', 'Never returns a larger file — original kept if re-encoding doesn\'t help'],
+  },
+  batch: {
+    title: 'Batch',
+    what: 'Apply one operation to many images at once.',
+    features: ['Modes: Convert format, Resize, Strip metadata', 'Per-file result with individual downloads', '"Download all" button for the full set'],
+  },
+  pdf2img: {
+    title: 'PDF → Images',
+    what: 'Render every page of a PDF to PNG — entirely in your browser.',
+    features: ['Resolution selector: 1×–4× (higher = larger files)', 'Click any page thumbnail to zoom', 'Per-page download or download all', 'Nothing is uploaded — processed fully client-side'],
+  },
+  autoenhance: {
+    title: 'Auto-enhance',
+    what: 'One-click brightness, contrast and saturation correction based on histogram analysis.',
+    features: ['Analyses 5th/95th percentile tonal range per channel', 'Lifts brightness on dark images; pulls back overexposed ones', 'Stretches contrast when the tonal range is narrow', 'Shows applied multipliers (brightness, contrast, saturation)', 'Before/after compare included'],
+  },
+  cropresize: {
+    title: 'Crop / Resize',
+    what: 'Resize to exact dimensions, or interactively crop to any region.',
+    features: ['Numeric resize with fit modes: cover, contain, fill, inside, outside', 'Social/web presets: Instagram, YouTube, Open Graph, etc.', 'Interactive cropper: drag the box, resize handles, rule-of-thirds guides', 'Lock aspect ratio — corner handles enforce the ratio', 'Live pixel-size readout'],
+  },
+  extend: {
+    title: 'Canvas Extend',
+    what: 'Add padding around an image — the opposite of cropping.',
+    features: ['Link all sides for uniform padding, or set each side independently', 'Fill: white, transparent (PNG), or a custom hex colour', 'Before/after compare + Export'],
+  },
+  perspective: {
+    title: 'Perspective Correct',
+    what: 'Fix keystone / trapezoid distortion from off-angle shots.',
+    features: ['Horizontal skew: adjusts left/right lean (−50 to +50)', 'Vertical skew: adjusts top/bottom lean (−50 to +50)', 'Corner fill: transparent PNG, white, black, or custom colour', 'Best for whiteboards, documents and architecture shots taken at an angle', 'Before/after compare + Export'],
+  },
+  smartcrop: {
+    title: 'Smart Crop',
+    what: 'Crop to a target size or aspect ratio, keeping the most important part of the image.',
+    features: ['Attention: saliency detection — finds faces and salient subjects (recommended)', 'Entropy: keeps the region with the most visual detail', 'Cardinal directions: force crop to a fixed edge or corner', 'Aspect ratio field: 16:9, 1:1, 4:5 etc. — dimensions resolve automatically', 'Width/height fields for an exact pixel target'],
+  },
+  effects: {
+    title: 'Effects',
+    what: 'Apply geometric transforms and visual filters.',
+    features: ['Flip horizontal or vertical', 'Rotate 90°, 180°, 270° or any free angle (−180° to 180°)', 'Free rotate: transparent corners (PNG) or a fill colour', 'Border: width + colour', 'Round corners: radius slider, exported as transparent PNG', 'Drop shadow: blur, X/Y offset, colour, opacity', 'Filters: grayscale, sepia, invert, duotone (shadow/highlight colours)'],
+  },
+  adjust: {
+    title: 'Adjust',
+    what: 'Fine-tune tones and colours with a full darkroom panel.',
+    features: ['Brightness, contrast, saturation, hue shift', 'Levels: black point and white point (tonal stretch)', 'Gamma (midtone brightness)', 'Sharpness, blur, noise reduction (median filter)', 'Colour temperature (warm/cool)', 'Vignette', 'Presets: save current sliders as a named preset and recall later'],
+  },
+  colorgrade: {
+    title: 'Color Grading',
+    what: 'Apply a cinematic colour look in one click via channel recombination and tone mapping.',
+    features: ['Warm — boost reds, reduce blues', 'Cool — reduce reds, boost blues', 'Cinematic — desaturated teal-orange style', 'Vintage — warm + faded shadows', 'Fade — lifted shadows, low saturation', 'Matte — soft contrast with a shadow floor', 'Vivid — high saturation + contrast boost', 'Noir (B&W) — full desaturation with contrast', 'Golden hour — strong warm reds, saturated', 'Teal & orange — cross-processed look'],
+  },
+  pipeline: {
+    title: 'Pipeline',
+    what: 'Chain multiple edits into one repeatable server-side pass.',
+    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
+  },
+  annotate: {
+    title: 'Annotate',
+    what: 'Mark up an image with arrows, boxes, freehand drawing and text — fully in your browser.',
+    features: ['Tools: Select/Move, Arrow, Box, Pen (freehand), Text', 'Click to place text; type directly; Enter to confirm', 'Double-click a text label to re-edit it', 'Google Fonts picker: 20 curated typefaces per text shape', 'Select any shape and drag to reposition; Delete removes it', 'Colour and thickness/size controls', 'Undo/redo up to 20 steps (Cmd/Ctrl+Z)', 'Nothing is uploaded — fully client-side'],
+  },
+  watermark: {
+    title: 'Watermark',
+    what: 'Overlay text or an image logo on a photo.',
+    features: ['Text mode: custom text, colour, auto-scaled font size', 'Image mode: upload a PNG logo, scale as % of image width', 'Position: 7 options (corners, edges, centre)', 'Opacity slider', 'Tile: repeat the watermark across the whole image'],
+  },
+  batchtext: {
+    title: 'Batch Text',
+    what: 'Stamp a text label onto many images at once.',
+    features: ['Template variables: {filename}, {index}, {n}, {date}', 'Up to 20 images per run', 'Position: 7 options (corners, edges, centre)', 'Font size, text colour and opacity controls', 'Optional backing rectangle for contrast over busy images', 'Per-image thumbnail + individual download in results'],
+  },
+  collage: {
+    title: 'Collage',
+    what: 'Arrange multiple images into a grid.',
+    features: ['2–9 images, up to 9 cells', 'Column count control', 'Cell size and gap controls', 'Background colour picker', 'All cells cropped to a uniform size (cover)'],
+  },
+  favicon: {
+    title: 'Favicon / App Icons',
+    what: 'Generate a complete app icon set from one image.',
+    features: ['Sizes: 16, 32, 48, 64, 180 (Apple), 192, 256, 512 px', 'Includes an apple-touch-icon.png', 'site.webmanifest with correct icon references', 'Paste-ready <head> HTML snippet', 'All files bundled into a single ZIP download'],
+  },
+  svg: {
+    title: 'Vectorize (SVG)',
+    what: 'Trace a raster image into scalable SVG paths.',
+    features: ['Colour count: 2–64 colours', 'Detail: smooth / medium / detailed', 'Best for logos, icons and flat clipart', 'Photos become posterised — lower colour counts suit logos', 'Image capped at 700px before tracing for speed'],
+  },
+  iconlib: {
+    title: 'AI Icon Library',
+    what: 'Generate a cohesive set of custom SVG icons from a subject description.',
+    features: ['Step 1: enter a subject — see real Lucide and Font Awesome icons as reference', 'Step 2: set count (5–20), colour, stroke weight, fill style, corners and detail', 'Step 3: multi-select and download as individual .svg files', 'Refine & add more: give feedback and append new icons in the same style', 'Remove unwanted icons (hover → ×)', 'All SVG sanitised server-side before reaching your browser'],
+  },
+  background: {
+    title: 'Background',
+    what: 'Remove or replace an image background with one click.',
+    features: ['Transparent: cut out the subject as a PNG', 'Solid colour: flatten onto a chosen colour', 'Gradient: two-colour blend with direction control (top→bottom, diagonal, radial)', 'Image: composite the cut-out over a chosen background photo', 'Local ONNX model in dev; Replicate model in production'],
+  },
+  recolor: {
+    title: 'Recolor',
+    what: 'Change the colour of a specific item in an image.',
+    features: ['Eyedropper with zoom loupe — click to sample the colour to replace', 'Tolerance slider: how broadly to match similar shades', 'Match new colour: shifts brightness toward the target (dark items can become light)', 'Preserve shading: hue/saturation shift only, keeps original tones', '3×3 averaged sampling for reliable colour picking'],
+  },
+  redact: {
+    title: 'Redact',
+    what: 'Obscure faces, plates or sensitive text — entirely in your browser.',
+    features: ['Draw boxes over any area to redact', 'Modes: pixelate or blur', 'Strength slider', 'Undo/redo up to 20 steps', 'Nothing is uploaded — fully client-side canvas'],
+  },
+  inpaint: {
+    title: 'Inpaint / Remove',
+    what: 'Paint a mask over an area and let AI fill or replace it.',
+    features: ['Paint a white mask with an adjustable brush', 'Describe what should fill the masked area', 'Object removal tip: describe the background behind the object', 'Powered by FAL (fal-ai/flux-lora/inpainting by default)', 'Model overridable via GRAPHICS_INPAINT_MODEL env var', 'Cost logged like image generation'],
+  },
+  picker: {
+    title: 'Colour Picker',
+    what: 'Click anywhere on an image to read its exact colour.',
+    features: ['Zoom: 1×–6× slider', 'Drag-to-pan at high zoom', 'Reads HEX and RGB values', 'Copy HEX or RGB with one click', 'Nothing is uploaded — fully client-side'],
+  },
+  histogram: {
+    title: 'Histogram',
+    what: 'Visualise the tonal distribution of an image.',
+    features: ['View combined RGB, luminance, or a single channel', 'Rendered on a canvas overlay', 'Import by URL supported', 'Image capped at 1000px for the tally', 'Nothing is uploaded — pixels read in your browser'],
+  },
+  contrast: {
+    title: 'Contrast Checker (WCAG)',
+    what: 'Check text/background colour contrast against accessibility standards.',
+    features: ['WCAG 2.1 contrast ratio calculation', 'Pass/fail for AA and AAA at normal and large text sizes', 'Live preview of text on background', 'Swap colours button', 'Colour pickers + hex input for both colours', 'Fully browser-side'],
+  },
+  palette: {
+    title: 'Palette',
+    what: 'Extract the dominant colours from an image.',
+    features: ['Extracts 5–12 dominant colours', 'Client-side quantisation — nothing uploaded', 'HEX, RGB and approximate share % for each swatch', 'One-click copy per swatch'],
+  },
+  ocr: {
+    title: 'Extract Text (OCR)',
+    what: 'Read text from screenshots, scans and receipts.',
+    features: ['Powered by Tesseract.js — language model downloads once on first use', 'Languages: English, French, Spanish, German, Italian, Portuguese', 'Live progress readout during recognition', 'Editable result — correct OCR errors inline', 'Copy to clipboard or download as .txt', 'Nothing is uploaded — fully in your browser'],
+  },
+  blurdetect: {
+    title: 'Blur Detection',
+    what: 'Measure how sharp or blurry an image is.',
+    features: ['Laplacian variance measures edge sharpness', 'Sharp: variance ≥ 500 · Soft: 100–499 · Blurry: < 100', 'Numeric score lets you compare multiple shots', 'Analysis capped at 800px for speed', 'Useful for culling near-duplicate photos'],
+  },
+  diff: {
+    title: 'Image Diff',
+    what: 'Highlight the pixel differences between two images.',
+    features: ['Differing pixels shown in red over a faded copy of the first image', 'Sensitivity threshold: ignores minor differences below the level (e.g. anti-aliasing)', '"% of pixels differ" readout', 'Second image scaled to match the first automatically'],
+  },
+  metadata: {
+    title: 'Remove Metadata',
+    what: 'Strip identifying metadata from an image before sharing.',
+    features: ['First shows current metadata: format, dimensions, camera, lens, GPS', 'Removes: EXIF, GPS coordinates, camera/lens info, timestamps, ICC profile, XMP/IPTC', 'EXIF orientation baked in first so the image isn\'t left mis-rotated', 'Reports exactly what was removed'],
+  },
+  fileinfo: {
+    title: 'File Info',
+    what: 'Inspect an image file\'s technical details without uploading it.',
+    features: ['Name, MIME type, format', 'File size: human-readable and exact bytes', 'Pixel dimensions, aspect ratio, megapixels', 'Last-modified date', 'Image preview', 'Nothing is uploaded — fully browser-side'],
+  },
+};
+
 export default function GraphicsPage() {
   const getIcon = useIcon();
   const startProcessing = useProcessingStore((s) => s.startProcessing);
@@ -789,6 +972,8 @@ export default function GraphicsPage() {
   const [btBusy, setBtBusy] = useState(false);
   const [btResults, setBtResults] = useState([]);
   const [btError, setBtError] = useState('');
+  // Tool help modal
+  const [helpTool, setHelpTool] = useState(null);
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
   // Image-to-image augmentation is supported on local ComfyUI and on FAL (via its
   // /image-to-image endpoint). Other hosted providers don't support it yet.
@@ -3442,7 +3627,10 @@ export default function GraphicsPage() {
       {mode === 'upscale' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscale</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscale</h2>
+            <button type="button" onClick={() => setHelpTool('upscale')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
             {upscaleInfo
               ? `${upscaleInfo.provider === 'local-comfyui' ? 'Local' : 'Hosted'}: ${upscaleModel || upscaleInfo.model || 'not configured'}`
@@ -3594,7 +3782,10 @@ export default function GraphicsPage() {
       {mode === 'convert' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Convert format</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Convert format</h2>
+            <button type="button" onClick={() => setHelpTool('convert')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -3720,7 +3911,10 @@ export default function GraphicsPage() {
       {mode === 'favicon' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Favicon / app icons</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Favicon / app icons</h2>
+            <button type="button" onClick={() => setHelpTool('favicon')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -3775,7 +3969,10 @@ export default function GraphicsPage() {
       {mode === 'svg' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Vectorize to SVG</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Vectorize to SVG</h2>
+            <button type="button" onClick={() => setHelpTool('svg')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -3841,7 +4038,10 @@ export default function GraphicsPage() {
       {mode === 'compress' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Compress images</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Compress images</h2>
+            <button type="button" onClick={() => setHelpTool('compress')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -3965,7 +4165,10 @@ export default function GraphicsPage() {
       {mode === 'batch' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch process</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch process</h2>
+            <button type="button" onClick={() => setHelpTool('batch')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4136,7 +4339,10 @@ export default function GraphicsPage() {
       {mode === 'background' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Remove / replace background</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Remove / replace background</h2>
+            <button type="button" onClick={() => setHelpTool('background')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{status?.provider === 'local-comfyui' || !isHostedProvider ? 'Local AI' : 'Replicate'}</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -4294,7 +4500,10 @@ export default function GraphicsPage() {
       {mode === 'recolor' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recolor an item</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recolor an item</h2>
+            <button type="button" onClick={() => setHelpTool('recolor')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -4444,7 +4653,10 @@ export default function GraphicsPage() {
       {mode === 'cropresize' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Crop / Resize</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Crop / Resize</h2>
+            <button type="button" onClick={() => setHelpTool('cropresize')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4650,7 +4862,10 @@ export default function GraphicsPage() {
       {mode === 'metadata' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Remove metadata</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Remove metadata</h2>
+            <button type="button" onClick={() => setHelpTool('metadata')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -4742,7 +4957,10 @@ export default function GraphicsPage() {
       {mode === 'watermark' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Watermark</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Watermark</h2>
+            <button type="button" onClick={() => setHelpTool('watermark')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -4838,7 +5056,10 @@ export default function GraphicsPage() {
       {mode === 'collage' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Collage / grid maker</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Collage / grid maker</h2>
+            <button type="button" onClick={() => setHelpTool('collage')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -4900,7 +5121,10 @@ export default function GraphicsPage() {
       {mode === 'annotate' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
+            <button type="button" onClick={() => setHelpTool('annotate')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free · never uploaded</span>
         </div>
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -5011,7 +5235,10 @@ export default function GraphicsPage() {
       {mode === 'extend' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Canvas extend</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Canvas extend</h2>
+            <button type="button" onClick={() => setHelpTool('extend')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5101,7 +5328,10 @@ export default function GraphicsPage() {
       {mode === 'effects' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Effects</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Effects</h2>
+            <button type="button" onClick={() => setHelpTool('effects')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5243,7 +5473,10 @@ export default function GraphicsPage() {
       {mode === 'adjust' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Adjust</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Adjust</h2>
+            <button type="button" onClick={() => setHelpTool('adjust')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5363,7 +5596,10 @@ export default function GraphicsPage() {
       {mode === 'redact' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Redact</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Redact</h2>
+            <button type="button" onClick={() => setHelpTool('redact')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free · never uploaded</span>
         </div>
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -5407,7 +5643,10 @@ export default function GraphicsPage() {
       {mode === 'ocr' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Extract text (OCR)</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Extract text (OCR)</h2>
+            <button type="button" onClick={() => setHelpTool('ocr')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5460,7 +5699,10 @@ export default function GraphicsPage() {
       {mode === 'palette' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Palette</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Palette</h2>
+            <button type="button" onClick={() => setHelpTool('palette')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5520,7 +5762,10 @@ export default function GraphicsPage() {
       {mode === 'diff' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Image diff</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Image diff</h2>
+            <button type="button" onClick={() => setHelpTool('diff')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5572,7 +5817,10 @@ export default function GraphicsPage() {
       {mode === 'picker' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Colour picker</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Colour picker</h2>
+            <button type="button" onClick={() => setHelpTool('picker')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5631,7 +5879,10 @@ export default function GraphicsPage() {
       {mode === 'fileinfo' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>File info</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>File info</h2>
+            <button type="button" onClick={() => setHelpTool('fileinfo')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5681,7 +5932,10 @@ export default function GraphicsPage() {
       {mode === 'blurdetect' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Blur detection</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Blur detection</h2>
+            <button type="button" onClick={() => setHelpTool('blurdetect')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5726,7 +5980,10 @@ export default function GraphicsPage() {
       {mode === 'autoenhance' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Auto-enhance</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Auto-enhance</h2>
+            <button type="button" onClick={() => setHelpTool('autoenhance')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
@@ -5781,7 +6038,10 @@ export default function GraphicsPage() {
       {mode === 'perspective' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Perspective correct</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Perspective correct</h2>
+            <button type="button" onClick={() => setHelpTool('perspective')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5862,7 +6122,10 @@ export default function GraphicsPage() {
       {mode === 'smartcrop' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Smart crop</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Smart crop</h2>
+            <button type="button" onClick={() => setHelpTool('smartcrop')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -5939,7 +6202,10 @@ export default function GraphicsPage() {
       {mode === 'colorgrade' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Color grading</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Color grading</h2>
+            <button type="button" onClick={() => setHelpTool('colorgrade')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -6010,7 +6276,10 @@ export default function GraphicsPage() {
       {mode === 'batchtext' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch text</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch text</h2>
+            <button type="button" onClick={() => setHelpTool('batchtext')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
@@ -6119,7 +6388,10 @@ export default function GraphicsPage() {
       {mode === 'histogram' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Histogram</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Histogram</h2>
+            <button type="button" onClick={() => setHelpTool('histogram')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_520px] gap-6">
@@ -6182,7 +6454,10 @@ export default function GraphicsPage() {
         return (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Contrast checker</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Contrast checker</h2>
+              <button type="button" onClick={() => setHelpTool('contrast')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+            </div>
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
           </div>
           <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -6233,7 +6508,10 @@ export default function GraphicsPage() {
       {mode === 'animate' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Animate (GIF)</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Animate (GIF)</h2>
+            <button type="button" onClick={() => setHelpTool('animate')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -6300,7 +6578,10 @@ export default function GraphicsPage() {
       {mode === 'pdf2img' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>PDF → Images</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>PDF → Images</h2>
+            <button type="button" onClick={() => setHelpTool('pdf2img')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -6349,7 +6630,10 @@ export default function GraphicsPage() {
       {mode === 'pipeline' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pipeline</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pipeline</h2>
+            <button type="button" onClick={() => setHelpTool('pipeline')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -6432,7 +6716,10 @@ export default function GraphicsPage() {
       {mode === 'inpaint' && (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Inpaint / Remove</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Inpaint / Remove</h2>
+            <button type="button" onClick={() => setHelpTool('inpaint')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Hosted (FAL) · paid</span>
         </div>
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -6624,6 +6911,36 @@ export default function GraphicsPage() {
                 {previewImage.refinedPrompt || previewImage.prompt}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {helpTool && TOOL_HELP[helpTool] && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={() => setHelpTool(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex items-start justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{TOOL_HELP[helpTool].title}</h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP[helpTool].what}</p>
+              </div>
+              <button type="button" onClick={() => setHelpTool(null)} className="flex-shrink-0 hover:opacity-60 mt-0.5" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 16 })}</button>
+            </div>
+            <ul className="px-5 py-4 space-y-2 max-h-96 overflow-y-auto">
+              {TOOL_HELP[helpTool].features.map((f, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                  <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-primary)' }} />
+                  {f}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
