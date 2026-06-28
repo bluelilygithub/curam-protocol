@@ -108,7 +108,7 @@ const HOSTED_UPSCALE_MODELS = [
 // Background removal. Local uses the self-contained @imgly ONNX model (loaded
 // lazily so production doesn't pay the onnxruntime startup cost); production uses
 // a Replicate background-remover model.
-const DEFAULT_REPLICATE_BG_MODEL = '851-labs/background-remover';
+const DEFAULT_REPLICATE_BG_MODEL = 'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
 let _imgly = null;
 function getImgly() {
   if (!_imgly) _imgly = require('@imgly/background-removal-node');
@@ -1604,10 +1604,22 @@ async function removeBgWithReplicate(imageDataUrl) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
   const model = String(process.env.REPLICATE_BG_MODEL || DEFAULT_REPLICATE_BG_MODEL).trim();
-  const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+
+  // cjwbw/rembg and similar versioned models use "owner/name:version_hash" format.
+  // Unversioned models (owner/name only) use the /models/ deployment endpoint.
+  let url, body;
+  if (model.includes(':')) {
+    url = 'https://api.replicate.com/v1/predictions';
+    body = { version: model.split(':')[1], input: { image: imageDataUrl } };
+  } else {
+    url = `https://api.replicate.com/v1/models/${model}/predictions`;
+    body = { input: { image: imageDataUrl } };
+  }
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'wait' },
-    body: JSON.stringify({ input: { image: imageDataUrl } }),
+    body: JSON.stringify(body),
   });
   let pred = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(pred?.detail || pred?.error || `Replicate request failed (${res.status})`);
