@@ -221,7 +221,7 @@ const MODE_GROUPS = [
   { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
   { label: 'Compose', ids: ['annotate', 'watermark', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
-  { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'inpaint'] },
+  { label: 'Retouch', ids: ['background', 'recolor', 'redact', 'inpaint'] },
   { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
 

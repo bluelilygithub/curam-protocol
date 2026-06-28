@@ -31,7 +31,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 | **Transform** | Crop / Resize, Canvas Extend, Perspective Correct, Smart Crop |
 | **Enhance** | Effects, Adjust, Color Grading, Pipeline |
 | **Compose** | Annotate, Watermark, Batch Text, Collage, Favicon / Icons, Vectorize (SVG), AI Icon Library |
-| **Privacy** | Background, Recolor, Redact, Inpaint |
+| **Retouch** | Background, Recolor, Redact, Inpaint |
 | **Analyse** | Picker, Histogram, Contrast (WCAG), Palette, Extract Text, Blur Detection, Image Diff, Remove Meta, File Info |
 
 ---
@@ -78,7 +78,7 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 - **Vectorize (SVG)** — trace a raster to SVG with colour count and detail controls. `POST /api/graphics/vectorize`.
 - **AI Icon Library** — generate cohesive custom SVG icons from a subject with reference styles, refine and add more. `POST /api/graphics/icon-references`, `POST /api/graphics/icon-generate`.
 
-### Privacy
+### Retouch
 
 - **Background** — AI cut-out (local ONNX or Replicate), then transparent, solid colour, gradient or image background. `POST /api/graphics/background`.
 - **Recolor** — change the colour of a specific item via zoomable eyedropper, tolerance, and shading mode. `POST /api/graphics/recolor`.
