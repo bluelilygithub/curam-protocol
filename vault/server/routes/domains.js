@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { getModelsForUser } = require('../services/modelResolver');
+const { callModel } = require('../services/callModel');
 
 const DOMSCAN_BASE = 'https://domscan.net/v1';
 
@@ -74,35 +76,25 @@ function handle(fn) {
 
 // ── Discover ────────────────────────────────────────────────────────────────
 
-// Strip common English stopwords so a description becomes useful keywords
-const STOPWORDS = new Set([
-  'a','an','the','and','or','but','in','on','at','to','for','of','with',
-  'by','from','is','are','was','were','be','been','being','have','has',
-  'had','do','does','did','will','would','could','should','may','might',
-  'i','we','you','they','he','she','it','my','our','your','their','its',
-  'who','which','that','this','these','those','not','no','as','so','if',
-  'then','than','when','where','what','how','well','also','make','makes',
-  'get','use','can','about','into','out','up','down','over','under',
-  'some','all','any','both','each','few','more','most','other','such',
-]);
-
-function descriptionToKeywords(input) {
-  // If already comma-separated short tokens, use as-is
-  if (input.includes(',')) return input;
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !STOPWORDS.has(w))
-    .slice(0, 8)
-    .join(',');
+// Use the light AI model to extract brandable keywords from a description
+async function extractKeywords(description, userId) {
+  try {
+    const { light } = await getModelsForUser(userId);
+    const prompt = `Extract 6-8 short, brandable keywords from this business description that would work well as domain name building blocks. Return ONLY a comma-separated list of single words or short compound words (no spaces), no explanation.\n\nDescription: ${description}`;
+    const result = await callModel(light, prompt, { maxTokens: 60 });
+    // Clean up: lowercase, strip non-alphanumeric except commas, collapse whitespace
+    return result.toLowerCase().replace(/[^a-z0-9,]/g, ' ').replace(/\s+/g, '').replace(/,+/g, ',').replace(/^,|,$/g, '');
+  } catch {
+    // Fallback: naive word extraction
+    return description.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 8).join(',');
+  }
 }
 
-// AI-powered name suggestions based on keywords or a description
+// AI-powered name suggestions based on a description
 router.get('/suggest', handle(async (req) => {
   const { q, tlds, limit, style } = req.query;
-  if (!q) throw new Error('q (keywords or description) is required.');
-  const keywords = descriptionToKeywords(q);
+  if (!q) throw new Error('q (description) is required.');
+  const keywords = await extractKeywords(q, req.user.id);
   return domscan('/suggest', {
     keywords,
     tlds: tlds || 'com,io,ai,co,app',
