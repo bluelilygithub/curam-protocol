@@ -1273,8 +1273,10 @@ export default function PdfPage() {
     setOfficeBusy(true);
     try {
       const res = await api.post('/api/pdf/office-to-pdf', { dataUrl: officeFile.dataUrl, filename: officeFile.name });
-      setResultModal({ dataUrl: res.data.dataUrl, filename: officeFile.name.replace(/\.[^.]+$/, '.pdf') });
-    } catch (e) { setOfficeError(e.response?.data?.error || e.message || 'Conversion failed.'); }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Conversion failed.');
+      setResultModal({ dataUrl: data.dataUrl, filename: officeFile.name.replace(/\.[^.]+$/, '.pdf') });
+    } catch (e) { setOfficeError(e.message || 'Conversion failed.'); }
     finally { stopProcessing(); setOfficeBusy(false); }
   };
 
@@ -1282,14 +1284,15 @@ export default function PdfPage() {
   const runPdfToOffice = async () => {
     if (!pto_file) return setPtoError('Upload a PDF first.');
     setPtoError('');
-    const extMap = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain' };
     startProcessing('Converting PDF to Word…', pto_file.name);
     setPtoBusy(true);
     try {
       const res = await api.post('/api/pdf/pdf-to-office', { dataUrl: pto_file.dataUrl, format: pto_format });
-      const outName = pto_file.name.replace(/\.pdf$/i, `.${res.data.format || pto_format}`);
-      downloadFile(res.data.dataUrl, outName);
-    } catch (e) { setPtoError(e.response?.data?.error || e.message || 'Conversion failed.'); }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Conversion failed.');
+      const outName = pto_file.name.replace(/\.pdf$/i, `.${data.format || pto_format}`);
+      downloadFile(data.dataUrl, outName);
+    } catch (e) { setPtoError(e.message || 'Conversion failed.'); }
     finally { stopProcessing(); setPtoBusy(false); }
   };
 
@@ -1301,8 +1304,10 @@ export default function PdfPage() {
     setGoogleBusy(true);
     try {
       const res = await api.post('/api/pdf/google-to-pdf', { url: googleUrl.trim() });
-      setResultModal({ dataUrl: res.data.dataUrl, filename: res.data.fileName || 'export.pdf' });
-    } catch (e) { setGoogleError(e.response?.data?.error || e.message || 'Export failed.'); }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Export failed.');
+      setResultModal({ dataUrl: data.dataUrl, filename: data.fileName || 'export.pdf' });
+    } catch (e) { setGoogleError(e.message || 'Export failed.'); }
     finally { stopProcessing(); setGoogleBusy(false); }
   };
 
