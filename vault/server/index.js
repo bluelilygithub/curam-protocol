@@ -166,6 +166,13 @@ async function start() {
     startSharesCron();
   }
 
+  // API key presence checks — visible in Railway logs
+  const apiKeyChecks = ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'FINNHUB_API_KEY', 'DOMSCAN_API_KEY', 'FAL_API_KEY'];
+  apiKeyChecks.forEach(k => {
+    const v = process.env[k];
+    console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);
+  });
+
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);
   });
