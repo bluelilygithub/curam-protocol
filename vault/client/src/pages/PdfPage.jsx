@@ -352,54 +352,63 @@ function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, 
 function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
   const canvasRef = useRef(null);
   const pdfDocRef = useRef(null);
-  const renderTaskRef = useRef(null);
   const [pg, setPg] = useState(1);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('idle'); // 'idle'|'loading'|'ready'|'error'
+  const [errMsg, setErrMsg] = useState('');
 
-  const renderPg = useCallback(async (doc, pageNum) => {
+  // Render a single page to the canvas.
+  // Defined as a plain async function (not useCallback) so it always closes over
+  // the current canvasRef without needing to be in the useEffect dep array.
+  async function drawPage(doc, pageNum) {
     const canvas = canvasRef.current;
     if (!canvas || !doc) return;
-    if (renderTaskRef.current) { renderTaskRef.current.cancel(); renderTaskRef.current = null; }
-    const pdfPage = await doc.getPage(pageNum);
-    const origVp = pdfPage.getViewport({ scale: 1 });
-    const scale = Math.min(maxWidth / origVp.width, 2);
-    const vp = pdfPage.getViewport({ scale });
+    const page = await doc.getPage(pageNum);
+    const baseVp = page.getViewport({ scale: 1 });
+    const scale = Math.min(maxWidth / baseVp.width, 2);
+    const vp = page.getViewport({ scale });
     canvas.width = Math.floor(vp.width);
     canvas.height = Math.floor(vp.height);
-    const task = pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
-    renderTaskRef.current = task;
-    await task.promise.catch(e => { if (e?.name !== 'RenderingCancelledException') throw e; });
-    renderTaskRef.current = null;
-  }, [maxWidth]);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  }
 
   useEffect(() => {
-    if (!dataUrl) { pdfDocRef.current = null; setTotal(0); return; }
-    let dead = false;
+    if (!dataUrl) {
+      pdfDocRef.current = null;
+      setTotal(0); setPg(1);
+      setStatus('idle'); setErrMsg('');
+      return;
+    }
+    let cancelled = false;
+    setStatus('loading'); setErrMsg('');
     (async () => {
-      setLoading(true);
       try {
         const lib = await import('pdfjs-dist');
         if (!lib.GlobalWorkerOptions.workerSrc) lib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
         const doc = await lib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
-        if (dead) return;
+        if (cancelled) return;
         pdfDocRef.current = doc;
         setTotal(doc.numPages);
         setPg(1);
-        await renderPg(doc, 1);
-      } catch (e) { if (!dead) console.warn('PdfPagePreview:', e); }
-      finally { if (!dead) setLoading(false); }
+        await drawPage(doc, 1);
+        if (!cancelled) setStatus('ready');
+      } catch (e) {
+        if (!cancelled) {
+          console.error('PdfPagePreview:', e);
+          setErrMsg(e?.message || String(e));
+          setStatus('error');
+        }
+      }
     })();
-    return () => {
-      dead = true;
-      if (renderTaskRef.current) { renderTaskRef.current.cancel(); renderTaskRef.current = null; }
-    };
-  }, [dataUrl, renderPg]);
+    return () => { cancelled = true; };
+  }, [dataUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goTo = async (n) => {
     if (!pdfDocRef.current || n < 1 || n > total) return;
-    setPg(n); setLoading(true);
-    try { await renderPg(pdfDocRef.current, n); } finally { setLoading(false); }
+    setPg(n);
+    setStatus('loading');
+    try { await drawPage(pdfDocRef.current, n); setStatus('ready'); }
+    catch (e) { setErrMsg(e?.message || String(e)); setStatus('error'); }
   };
 
   if (!dataUrl) return (
@@ -410,20 +419,24 @@ function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
 
   return (
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-      {loading && total === 0 && (
+      {status === 'loading' && (
         <div className="flex items-center justify-center" style={{ minHeight: 160 }}>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Rendering preview…</span>
         </div>
       )}
-      <div style={{ overflowY: 'auto', maxHeight: 480, position: 'relative' }}>
-        <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
-        {loading && total > 0 && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Rendering…</span>
-          </div>
-        )}
-      </div>
-      {total > 1 && (
+      {status === 'error' && (
+        <div className="flex flex-col items-center justify-center gap-1 p-4" style={{ minHeight: 120 }}>
+          <span className="text-xs font-medium" style={{ color: '#ef4444' }}>Preview failed</span>
+          {errMsg && <span className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>{errMsg}</span>}
+        </div>
+      )}
+      {/* Canvas is always in the DOM once dataUrl is set so canvasRef stays valid.
+          Hidden while loading/errored so a zero-size blank canvas isn't visible. */}
+      <canvas
+        ref={canvasRef}
+        style={{ display: status === 'ready' ? 'block' : 'none', maxWidth: '100%' }}
+      />
+      {total > 1 && status === 'ready' && (
         <div className="flex items-center justify-center gap-2 py-2 border-t text-xs" style={{ borderColor: 'var(--color-border)' }}>
           <button onClick={() => goTo(pg - 1)} disabled={pg <= 1} className="px-2 py-0.5 rounded disabled:opacity-30 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>◀</button>
           <span style={{ color: 'var(--color-muted)' }}>Page {pg} of {total}</span>
