@@ -5,9 +5,18 @@ const DOMSCAN_BASE = 'https://domscan.net/v1';
 
 function key() {
   const k = process.env.DOMSCAN_API_KEY;
-  if (!k) throw new Error('DOMSCAN_API_KEY is not configured.');
+  if (!k) throw new Error('DOMSCAN_API_KEY environment variable is not set on this server. Add it in Railway → Variables and redeploy.');
   return k;
 }
+
+// Quick config check — helps confirm the key is visible to the process
+router.get('/config-check', (req, res) => {
+  const k = process.env.DOMSCAN_API_KEY;
+  res.json({
+    configured: !!k,
+    prefix: k ? k.slice(0, 6) + '…' : null,
+  });
+});
 
 async function domscan(path, params = {}) {
   const url = new URL(`${DOMSCAN_BASE}${path}`);
