@@ -336,6 +336,37 @@ router.post('/flatten', async (req, res) => {
 // ── Add Form Fields ────────────────────────────────────────────────────────────
 // Receives field definitions with PDF-point coordinates (bottom-left origin)
 // and embeds them as interactive AcroForm fields using pdf-lib.
+// Map user-facing font names to pdf-lib StandardFonts
+const STANDARD_FONT_MAP = {
+  'Helvetica':   StandardFonts.Helvetica,
+  'Times-Roman': StandardFonts.TimesRoman,
+  'Courier':     StandardFonts.Courier,
+};
+
+// Parse a #rrggbb hex colour to [r, g, b] in 0-1 range
+function hexToRgb01(hex) {
+  const h = (hex || '#000000').replace('#', '');
+  if (h.length !== 6) return [0, 0, 0];
+  return [parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255];
+}
+
+// Apply font size and text colour to a field's Default Appearance string
+function applyFieldTypography(field, def) {
+  const fontSize = Math.max(4, Number(def.fontSize) || 11);
+  try { field.setFontSize(fontSize); } catch {}
+  if (def.color && def.color !== '#000000') {
+    try {
+      const [r, g, b] = hexToRgb01(def.color);
+      const colorStr = `${r.toFixed(4)} ${g.toFixed(4)} ${b.toFixed(4)} rg`;
+      const da = field.acroField.getDefaultAppearance() ?? '';
+      const newDa = /[\d.]+ [\d.]+ [\d.]+ rg/.test(da)
+        ? da.replace(/[\d.]+ [\d.]+ [\d.]+ rg/, colorStr)
+        : `${da} ${colorStr}`;
+      field.acroField.setDefaultAppearance(newDa.trim());
+    } catch {}
+  }
+}
+
 router.post('/addfields', async (req, res) => {
   try {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);
@@ -348,6 +379,14 @@ router.post('/addfields', async (req, res) => {
     const form = doc.getForm();
     const pages = doc.getPages();
 
+    // Pre-embed fonts that are actually needed to avoid re-embedding
+    const embeddedFonts = {};
+    const neededFonts = new Set(fieldDefs.map(d => d.fontFamily || 'Helvetica'));
+    for (const fname of neededFonts) {
+      const stdFont = STANDARD_FONT_MAP[fname] || StandardFonts.Helvetica;
+      try { embeddedFonts[fname] = await doc.embedFont(stdFont); } catch {}
+    }
+
     // Ensure field names are unique within this batch + any existing fields.
     const existingNames = new Set(form.getFields().map(f => f.getName()));
     const usedInBatch = new Set();
@@ -355,9 +394,7 @@ router.post('/addfields', async (req, res) => {
       let n = (base || 'field').replace(/[^\w.]/g, '_') || 'field';
       let candidate = n;
       let i = 1;
-      while (existingNames.has(candidate) || usedInBatch.has(candidate)) {
-        candidate = `${n}_${i++}`;
-      }
+      while (existingNames.has(candidate) || usedInBatch.has(candidate)) candidate = `${n}_${i++}`;
       usedInBatch.add(candidate);
       return candidate;
     };
@@ -388,10 +425,13 @@ router.post('/addfields', async (req, res) => {
           }
           case 'dropdown': {
             const f = form.createDropdown(name);
-            const opts2 = Array.isArray(def.options) ? def.options.map(String).filter(Boolean) : [];
-            if (opts2.length) f.setOptions(opts2);
+            const choices = Array.isArray(def.options) ? def.options.map(String).filter(Boolean) : [];
+            if (choices.length) f.setOptions(choices);
             f.addToPage(page, opts);
             if (def.required) f.enableRequired();
+            applyFieldTypography(f, def);
+            const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
+            if (font) try { f.updateAppearances(font); } catch {}
             break;
           }
           case 'text':
@@ -400,6 +440,9 @@ router.post('/addfields', async (req, res) => {
             f.addToPage(page, opts);
             if (def.multiline) f.enableMultiline();
             if (def.required) f.enableRequired();
+            applyFieldTypography(f, def);
+            const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
+            if (font) try { f.updateAppearances(font); } catch {}
             break;
           }
         }

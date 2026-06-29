@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+import useProcessingStore from '../store/processingStore';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -425,6 +426,7 @@ function RunBtn({ onClick, busy, disabled, label, getIcon }) {
 
 export default function PdfPage() {
   const getIcon = useIcon();
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   // Sidebar state
   const [mode, setMode] = useState('merge');
@@ -664,6 +666,9 @@ export default function PdfPage() {
       required: false,
       multiline: false,
       options: [],
+      fontFamily: 'Helvetica',
+      fontSize: 11,
+      color: '#000000',
     };
     const next = [...fdFieldsRef.current, newField];
     fdFieldsRef.current = next;
@@ -711,6 +716,7 @@ export default function PdfPage() {
 
   const runAddFields = async () => {
     if (!fdFile || !fdFields.length) return;
+    startProcessing('Embedding Form Fields…', `${fdFields.length} field${fdFields.length !== 1 ? 's' : ''} · ${fdFile.name}`);
     setFdBusy(true); setFdError(''); setFdResult(null);
     try {
       const res = await api.post('/api/pdf/addfields', { dataUrl: fdFile.dataUrl, fields: fdFields });
@@ -721,7 +727,7 @@ export default function PdfPage() {
     } catch (err) {
       setFdError(err.message || 'Add fields failed');
     } finally {
-      setFdBusy(false);
+      stopProcessing(); setFdBusy(false);
     }
   };
 
@@ -888,6 +894,7 @@ export default function PdfPage() {
 
   const runMerge = async () => {
     if (mergeFiles.length < 2) return setMergeError('Upload at least 2 PDFs to merge.');
+    startProcessing('Merging PDFs…', `Combining ${mergeFiles.length} documents`);
     setMergeBusy(true); setMergeError(''); setMergeResult(null);
     try {
       const res = await api.post('/api/pdf/merge', { pdfs: mergeFiles.map(f => ({ dataUrl: f.dataUrl, name: f.name })) });
@@ -898,13 +905,14 @@ export default function PdfPage() {
     } catch (err) {
       setMergeError(err.message || 'Merge failed');
     } finally {
-      setMergeBusy(false);
+      stopProcessing(); setMergeBusy(false);
     }
   };
 
   const runSplit = async () => {
     if (!splitFile) return setSplitError('Upload a PDF first.');
     if (!splitPages.trim()) return setSplitError('Enter page numbers to extract.');
+    startProcessing('Splitting PDF…', `Extracting pages: ${splitPages}`);
     setSplitBusy(true); setSplitError(''); setSplitResult(null);
     try {
       const res = await api.post('/api/pdf/split', { dataUrl: splitFile.dataUrl, pages: splitPages });
@@ -915,12 +923,13 @@ export default function PdfPage() {
     } catch (err) {
       setSplitError(err.message || 'Split failed');
     } finally {
-      setSplitBusy(false);
+      stopProcessing(); setSplitBusy(false);
     }
   };
 
   const runRotate = async () => {
     if (!rotateFile) return setRotateError('Upload a PDF first.');
+    startProcessing('Rotating Pages…', `${rotateAngle}° · ${rotatePages === 'all' ? 'all pages' : `pages ${rotatePages}`}`);
     setRotateBusy(true); setRotateError(''); setRotateResult(null);
     try {
       const res = await api.post('/api/pdf/rotate', { dataUrl: rotateFile.dataUrl, angle: rotateAngle, pages: rotatePages });
@@ -931,12 +940,13 @@ export default function PdfPage() {
     } catch (err) {
       setRotateError(err.message || 'Rotate failed');
     } finally {
-      setRotateBusy(false);
+      stopProcessing(); setRotateBusy(false);
     }
   };
 
   const runImg2Pdf = async () => {
     if (!imgFiles.length) return setImgError('Upload at least 1 image.');
+    startProcessing('Building PDF…', `Packing ${imgFiles.length} image${imgFiles.length !== 1 ? 's' : ''} · ${imgPageSize}`);
     setImgBusy(true); setImgError(''); setImgResult(null);
     try {
       const res = await api.post('/api/pdf/img2pdf', {
@@ -951,12 +961,13 @@ export default function PdfPage() {
     } catch (err) {
       setImgError(err.message || 'Conversion failed');
     } finally {
-      setImgBusy(false);
+      stopProcessing(); setImgBusy(false);
     }
   };
 
   const runExtractText = async () => {
     if (!etFile) return setEtError('Upload a PDF first.');
+    startProcessing('Extracting Text…', etFile.name);
     setEtBusy(true); setEtError(''); setEtText('');
     try {
       const pdfjsLib = await import('pdfjs-dist');
@@ -973,13 +984,14 @@ export default function PdfPage() {
     } catch (err) {
       setEtError(err.message || 'Text extraction failed');
     } finally {
-      setEtBusy(false);
+      stopProcessing(); setEtBusy(false);
     }
   };
 
   const runWatermark = async () => {
     if (!wmFile) return setWmError('Upload a PDF first.');
     if (!wmText.trim()) return setWmError('Enter watermark text.');
+    startProcessing('Adding Watermark…', `"${wmText}" · ${wmFile.name}`);
     setWmBusy(true); setWmError(''); setWmResult(null);
     try {
       const res = await api.post('/api/pdf/watermark', {
@@ -993,12 +1005,13 @@ export default function PdfPage() {
     } catch (err) {
       setWmError(err.message || 'Watermark failed');
     } finally {
-      setWmBusy(false);
+      stopProcessing(); setWmBusy(false);
     }
   };
 
   const runPageNumbers = async () => {
     if (!pnFile) return setPnError('Upload a PDF first.');
+    startProcessing('Adding Page Numbers…', `Format: ${pnFormat} · ${pnPosition}`);
     setPnBusy(true); setPnError(''); setPnResult(null);
     try {
       const res = await api.post('/api/pdf/pagenumbers', {
@@ -1012,12 +1025,13 @@ export default function PdfPage() {
     } catch (err) {
       setPnError(err.message || 'Add page numbers failed');
     } finally {
-      setPnBusy(false);
+      stopProcessing(); setPnBusy(false);
     }
   };
 
   const runInspect = async () => {
     if (!inspectFile) return setInspectError('Upload a PDF first.');
+    startProcessing('Inspecting Form Fields…', inspectFile.name);
     setInspectBusy(true); setInspectError(''); setInspectFields(null);
     try {
       const res = await api.post('/api/pdf/inspect', { dataUrl: inspectFile.dataUrl });
@@ -1027,12 +1041,13 @@ export default function PdfPage() {
     } catch (err) {
       setInspectError(err.message || 'Inspect failed');
     } finally {
-      setInspectBusy(false);
+      stopProcessing(); setInspectBusy(false);
     }
   };
 
   const runFill = async () => {
     if (!fillFile) return setFillError('Upload a PDF first.');
+    startProcessing('Filling Form…', fillFile.name);
     setFillBusy(true); setFillError(''); setFillResult(null);
     try {
       const res = await api.post('/api/pdf/fill', { dataUrl: fillFile.dataUrl, fields: fillValues });
@@ -1043,12 +1058,13 @@ export default function PdfPage() {
     } catch (err) {
       setFillError(err.message || 'Fill failed');
     } finally {
-      setFillBusy(false);
+      stopProcessing(); setFillBusy(false);
     }
   };
 
   const runFlatten = async () => {
     if (!flatFile) return setFlatError('Upload a PDF first.');
+    startProcessing('Flattening Form…', flatFile.name);
     setFlatBusy(true); setFlatError(''); setFlatResult(null);
     try {
       const res = await api.post('/api/pdf/flatten', { dataUrl: flatFile.dataUrl });
@@ -1059,12 +1075,13 @@ export default function PdfPage() {
     } catch (err) {
       setFlatError(err.message || 'Flatten failed');
     } finally {
-      setFlatBusy(false);
+      stopProcessing(); setFlatBusy(false);
     }
   };
 
   const runMetaSave = async () => {
     if (!metaFile) return;
+    startProcessing('Saving Metadata…', metaFile.name);
     setMetaBusy(true); setMetaError(''); setMetaResult(null);
     try {
       const res = await api.post('/api/pdf/metadata', { dataUrl: metaFile.dataUrl, update: metaEdit });
@@ -1075,7 +1092,7 @@ export default function PdfPage() {
     } catch (err) {
       setMetaError(err.message || 'Save failed');
     } finally {
-      setMetaBusy(false);
+      stopProcessing(); setMetaBusy(false);
     }
   };
 
@@ -1829,6 +1846,41 @@ export default function PdfPage() {
                             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                             placeholder="Field name"
                           />
+
+                          {/* Typography: font / size / color */}
+                          {f.type !== 'checkbox' && (
+                            <div className="flex items-center gap-1 mb-1.5">
+                              <select
+                                value={f.fontFamily || 'Helvetica'}
+                                onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
+                                className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
+                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                title="Font family"
+                              >
+                                <option value="Helvetica">Helvetica</option>
+                                <option value="Times-Roman">Times Roman</option>
+                                <option value="Courier">Courier</option>
+                              </select>
+                              <input
+                                type="number"
+                                value={f.fontSize ?? 11}
+                                min={6} max={72}
+                                onChange={e => updateFdField(f.id, { fontSize: Number(e.target.value) })}
+                                className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
+                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                title="Font size (pt)"
+                              />
+                              <input
+                                type="color"
+                                value={f.color || '#000000'}
+                                onChange={e => updateFdField(f.id, { color: e.target.value })}
+                                className="w-8 h-7 rounded cursor-pointer p-0.5 border"
+                                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                                title="Text color"
+                              />
+                            </div>
+                          )}
+
                           {f.type === 'dropdown' && (
                             <textarea
                               value={f.options.join('\n')}
