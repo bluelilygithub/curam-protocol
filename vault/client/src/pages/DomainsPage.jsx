@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
-import { useProcessingStore } from '../store/processingStore';
+import useProcessingStore from '../store/processingStore';
 
 // ── Tool metadata ─────────────────────────────────────────────────────────────
 
