@@ -634,6 +634,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('domains') && (
+            <Link
+              to="/domains"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/domains' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              data-tip="Domain & Brand"
+            >
+              {getIcon('globe', { size: 16 })}
+            </Link>
+          )}
+
           {canUseFeature('themeBuilder') && (
             <Link
               to="/theme-builder"

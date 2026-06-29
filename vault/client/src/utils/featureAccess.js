@@ -19,6 +19,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
+  domains: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -42,5 +43,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'themeBuilder', label: 'WP Theme Builder' },
   { key: 'wellbeing', label: 'Wellbeing Check' },
   { key: 'gmailIntel', label: 'Inbox Intel' },
+  { key: 'domains', label: 'Domain & Brand' },
 ];
 

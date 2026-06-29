@@ -323,6 +323,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `INVITE_CODE` | Required for new user registration |
 | `FINNHUB_API_KEY` | Shares — NYSE/NASDAQ quotes + company news (free tier, no IP block on Railway) |
 | `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
+| `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
 
 ---
 
