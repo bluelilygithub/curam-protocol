@@ -161,27 +161,62 @@ const TOOL_HELP = {
       'To lock filled values permanently: run the filled PDF through the "Flatten" tool.',
     ],
   },
+  officetopdf: {
+    title: 'Office → PDF',
+    what: 'Convert Microsoft Office and OpenDocument files to PDF using LibreOffice on the server.',
+    features: [
+      'Supports Word (.docx, .doc, .odt, .rtf)',
+      'Supports Excel (.xlsx, .xls, .ods, .csv)',
+      'Supports PowerPoint (.pptx, .ppt, .odp)',
+      'High-fidelity conversion via LibreOffice — preserves formatting, tables, and images',
+      'Result opens as a full PDF preview',
+    ],
+  },
+  pdftooffice: {
+    title: 'PDF → Word',
+    what: 'Convert a PDF to an editable Word document (.docx) or plain-text file using LibreOffice.',
+    features: [
+      'Best for text-heavy PDFs — layout fidelity varies for complex designs',
+      'Outputs .docx (Word), .odt (OpenDocument), or .txt (plain text)',
+      'Uses LibreOffice — no cloud service, no file size restrictions beyond server memory',
+      'Result downloads immediately',
+    ],
+  },
+  googletopdf: {
+    title: 'Google Drive → PDF',
+    what: 'Export any Google Doc, Sheet, or Slide from your Drive as a PDF — no manual download needed.',
+    features: [
+      'Paste a Google Docs / Sheets / Slides URL and click Export',
+      'Uses your connected Google account — requires Google sign-in via Settings',
+      'Also converts Office files stored in Google Drive via LibreOffice',
+      'Result opens as a full PDF preview',
+      'Note: if you recently connected Google, you may need to reconnect to grant Drive read access',
+    ],
+  },
 };
 
 const MODES = [
-  { id: 'merge',       label: 'Merge',          icon: 'combine'    },
-  { id: 'split',       label: 'Split',           icon: 'scissors'   },
-  { id: 'rotate',      label: 'Rotate Pages',    icon: 'rotate-cw'  },
-  { id: 'img2pdf',     label: 'Images → PDF',    icon: 'file-image' },
-  { id: 'extracttext', label: 'Extract Text',    icon: 'type'       },
-  { id: 'watermark',   label: 'Watermark',       icon: 'droplets'   },
-  { id: 'pagenumbers', label: 'Page Numbers',    icon: 'hash'       },
-  { id: 'inspect',     label: 'Inspect Fields',  icon: 'list'       },
-  { id: 'fill',        label: 'Fill Form',       icon: 'file-pen'   },
-  { id: 'flatten',      label: 'Flatten',         icon: 'layers'   },
-  { id: 'fielddesigner', label: 'Add Fields',    icon: 'pen-line' },
-  { id: 'metadata',    label: 'Metadata',        icon: 'info'     },
-  { id: 'fileinfo',    label: 'File Info',       icon: 'file-text'},
+  { id: 'merge',        label: 'Merge',           icon: 'combine'     },
+  { id: 'split',        label: 'Split',            icon: 'scissors'    },
+  { id: 'rotate',       label: 'Rotate Pages',     icon: 'rotate-cw'   },
+  { id: 'img2pdf',      label: 'Images → PDF',     icon: 'file-image'  },
+  { id: 'extracttext',  label: 'Extract Text',     icon: 'type'        },
+  { id: 'officetopdf',  label: 'Office → PDF',     icon: 'file-up'     },
+  { id: 'pdftooffice',  label: 'PDF → Word',       icon: 'file-down'   },
+  { id: 'googletopdf',  label: 'Google Drive → PDF', icon: 'cloud'     },
+  { id: 'watermark',    label: 'Watermark',        icon: 'droplets'    },
+  { id: 'pagenumbers',  label: 'Page Numbers',     icon: 'hash'        },
+  { id: 'inspect',      label: 'Inspect Fields',   icon: 'list'        },
+  { id: 'fill',         label: 'Fill Form',        icon: 'file-pen'    },
+  { id: 'flatten',      label: 'Flatten',          icon: 'layers'      },
+  { id: 'fielddesigner', label: 'Add Fields',      icon: 'pen-line'    },
+  { id: 'metadata',     label: 'Metadata',         icon: 'info'        },
+  { id: 'fileinfo',     label: 'File Info',        icon: 'file-text'   },
 ];
 
 const MODE_GROUPS = [
   { label: 'Organise', ids: ['merge', 'split', 'rotate'] },
-  { label: 'Convert',  ids: ['img2pdf', 'extracttext']   },
+  { label: 'Convert',  ids: ['img2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf'] },
   { label: 'Edit',     ids: ['watermark', 'pagenumbers'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo']     },
@@ -546,6 +581,22 @@ export default function PdfPage() {
   const [infoData, setInfoData] = useState(null);
   const [infoDataUrl, setInfoDataUrl] = useState(null);
   const [infoBusy, setInfoBusy] = useState(false);
+
+  // Office → PDF
+  const [officeFile, setOfficeFile] = useState(null);
+  const [officeBusy, setOfficeBusy] = useState(false);
+  const [officeError, setOfficeError] = useState('');
+
+  // PDF → Office
+  const [pto_file, setPtoFile] = useState(null);
+  const [pto_format, setPtoFormat] = useState('docx');
+  const [pto_busy, setPtoBusy] = useState(false);
+  const [pto_error, setPtoError] = useState('');
+
+  // Google Drive → PDF
+  const [googleUrl, setGoogleUrl] = useState('');
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   // Field Designer
   const [fdFile, setFdFile] = useState(null);
@@ -1214,6 +1265,47 @@ export default function PdfPage() {
     }
   };
 
+  // ── Office → PDF ────────────────────────────────────────────────────────────
+  const runOfficeToPdf = async () => {
+    if (!officeFile) return setOfficeError('Upload an Office file first.');
+    setOfficeError('');
+    startProcessing('Converting to PDF…', officeFile.name);
+    setOfficeBusy(true);
+    try {
+      const res = await api.post('/api/pdf/office-to-pdf', { dataUrl: officeFile.dataUrl, filename: officeFile.name });
+      setResultModal({ dataUrl: res.data.dataUrl, filename: officeFile.name.replace(/\.[^.]+$/, '.pdf') });
+    } catch (e) { setOfficeError(e.response?.data?.error || e.message || 'Conversion failed.'); }
+    finally { stopProcessing(); setOfficeBusy(false); }
+  };
+
+  // ── PDF → Office ─────────────────────────────────────────────────────────────
+  const runPdfToOffice = async () => {
+    if (!pto_file) return setPtoError('Upload a PDF first.');
+    setPtoError('');
+    const extMap = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain' };
+    startProcessing('Converting PDF to Word…', pto_file.name);
+    setPtoBusy(true);
+    try {
+      const res = await api.post('/api/pdf/pdf-to-office', { dataUrl: pto_file.dataUrl, format: pto_format });
+      const outName = pto_file.name.replace(/\.pdf$/i, `.${res.data.format || pto_format}`);
+      downloadFile(res.data.dataUrl, outName);
+    } catch (e) { setPtoError(e.response?.data?.error || e.message || 'Conversion failed.'); }
+    finally { stopProcessing(); setPtoBusy(false); }
+  };
+
+  // ── Google Drive → PDF ───────────────────────────────────────────────────────
+  const runGoogleToPdf = async () => {
+    if (!googleUrl.trim()) return setGoogleError('Paste a Google Drive URL first.');
+    setGoogleError('');
+    startProcessing('Exporting from Google Drive…', 'Fetching PDF…');
+    setGoogleBusy(true);
+    try {
+      const res = await api.post('/api/pdf/google-to-pdf', { url: googleUrl.trim() });
+      setResultModal({ dataUrl: res.data.dataUrl, filename: res.data.fileName || 'export.pdf' });
+    } catch (e) { setGoogleError(e.response?.data?.error || e.message || 'Export failed.'); }
+    finally { stopProcessing(); setGoogleBusy(false); }
+  };
+
   // ── Shared label styles ────────────────────────────────────────────────────
 
   const lbl = 'block text-xs font-medium mb-1';
@@ -1235,6 +1327,9 @@ export default function PdfPage() {
     fielddesigner: 'Draw and place interactive form fields on a PDF page.',
     metadata: 'View and edit document metadata.',
     fileinfo: 'Show basic file information (client-side).',
+    officetopdf: 'Convert Word, Excel or PowerPoint to PDF.',
+    pdftooffice: 'Convert a PDF to an editable Word document.',
+    googletopdf: 'Export a Google Doc, Sheet or Slide as PDF.',
   };
 
   return (
@@ -1821,6 +1916,120 @@ export default function PdfPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Office → PDF ════════════════════════════════════════════ */}
+          {mode === 'officetopdf' && (
+            <section>
+              <ToolHeader id="officetopdf" label="Office → PDF" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  <PdfUpload
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0]; e.target.value = '';
+                      if (!f) return;
+                      setOfficeError('');
+                      const dataUrl = await readFileAsDataUrl(f);
+                      setOfficeFile({ name: f.name, size: f.size, dataUrl });
+                    }}
+                    files={officeFile ? [{ name: officeFile.name, size: officeFile.size }] : []}
+                    onRemove={() => setOfficeFile(null)}
+                    accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.txt"
+                    label="Upload an Office file"
+                  />
+                  <ErrMsg msg={officeError} />
+                  <RunBtn onClick={runOfficeToPdf} busy={officeBusy} disabled={!officeFile} label="Convert to PDF" getIcon={getIcon} />
+                </div>
+                <div>
+                  <div className="rounded-xl border p-4 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+                    <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Supported formats</p>
+                    <ul className="space-y-1 text-xs">
+                      <li><strong>Word:</strong> .docx, .doc, .odt, .rtf</li>
+                      <li><strong>Excel:</strong> .xlsx, .xls, .ods, .csv</li>
+                      <li><strong>PowerPoint:</strong> .pptx, .ppt, .odp</li>
+                      <li><strong>Text:</strong> .txt</li>
+                    </ul>
+                    <p className="mt-3 text-xs">Conversion runs via LibreOffice on the server — formatting, tables, and images are preserved where possible.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═══ PDF → Office ════════════════════════════════════════════ */}
+          {mode === 'pdftooffice' && (
+            <section>
+              <ToolHeader id="pdftooffice" label="PDF → Word" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  <PdfUpload
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0]; e.target.value = '';
+                      if (!f) return;
+                      setPtoError('');
+                      const dataUrl = await readFileAsDataUrl(f);
+                      setPtoFile({ name: f.name, size: f.size, dataUrl });
+                    }}
+                    files={pto_file ? [{ name: pto_file.name, size: pto_file.size }] : []}
+                    onRemove={() => { setPtoFile(null); setPtoError(''); }}
+                  />
+                  <div className="mt-3">
+                    <label className={lbl} style={{ color: 'var(--color-muted)' }}>Output format</label>
+                    <select className={inp} style={inpStyle} value={pto_format} onChange={e => setPtoFormat(e.target.value)}>
+                      <option value="docx">Word (.docx)</option>
+                      <option value="odt">OpenDocument (.odt)</option>
+                      <option value="txt">Plain text (.txt)</option>
+                    </select>
+                  </div>
+                  <ErrMsg msg={pto_error} />
+                  <RunBtn onClick={runPdfToOffice} busy={pto_busy} disabled={!pto_file} label="Convert" getIcon={getIcon} />
+                </div>
+                <div>
+                  {pto_file && <PdfPagePreview dataUrl={pto_file.dataUrl} />}
+                  {!pto_file && (
+                    <div className="rounded-xl border p-4 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+                      <p className="font-medium mb-1" style={{ color: 'var(--color-text)' }}>Conversion quality</p>
+                      <p className="text-xs">Best for text-heavy PDFs. Complex layouts (columns, images, advanced formatting) may not convert perfectly — this is a LibreOffice limitation, not a bug.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Google Drive → PDF ══════════════════════════════════════ */}
+          {mode === 'googletopdf' && (
+            <section>
+              <ToolHeader id="googletopdf" label="Google Drive → PDF" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  <label className={lbl} style={{ color: 'var(--color-muted)' }}>Google Drive / Docs / Sheets / Slides URL</label>
+                  <input
+                    className={inp}
+                    style={inpStyle}
+                    type="url"
+                    placeholder="https://docs.google.com/document/d/…"
+                    value={googleUrl}
+                    onChange={e => { setGoogleUrl(e.target.value); setGoogleError(''); }}
+                  />
+                  <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
+                    Paste any Google Docs, Sheets, Slides, or Drive file URL. Requires your Google account to be connected via Settings → Gmail / Drive.
+                  </p>
+                  <ErrMsg msg={googleError} />
+                  <RunBtn onClick={runGoogleToPdf} busy={googleBusy} disabled={!googleUrl.trim()} label="Export as PDF" getIcon={getIcon} />
+                </div>
+                <div className="rounded-xl border p-4 text-sm self-start" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+                  <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>How it works</p>
+                  <ol className="space-y-1.5 text-xs list-decimal list-inside">
+                    <li>Open the Google Doc/Sheet/Slide in your browser</li>
+                    <li>Copy the URL from the address bar</li>
+                    <li>Paste it here and click Export</li>
+                    <li>The PDF opens in a preview — download from there</li>
+                  </ol>
+                  <p className="mt-3 text-xs">If you get an access error, disconnect and reconnect your Google account in Settings to grant Drive read permission.</p>
                 </div>
               </div>
             </section>

@@ -38,6 +38,8 @@ const semanticMap = {
   'log-out': { lucide: 'LogOut' },
   sparkles: { lucide: 'Sparkles' },
   'file-down': { lucide: 'FileDown' },
+  'file-up': { lucide: 'FileUp' },
+  cloud: { lucide: 'Cloud' },
   'alert-triangle': { lucide: 'AlertTriangle' },
   compress: { lucide: 'Minimize2' },
   link: { lucide: 'Link' },

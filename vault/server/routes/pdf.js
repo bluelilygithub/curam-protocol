@@ -6,6 +6,85 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const sharp = require('sharp');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const os = require('os');
+const path = require('path');
+const fsp = require('fs').promises;
+const crypto = require('crypto');
+const { google } = require('googleapis');
+const { encrypt, decrypt } = require('../utils/encryption');
+
+const execFileAsync = promisify(execFile);
+
+// ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
+function _googleOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+}
+async function _googleAuthClient(userId) {
+  const { rows } = await pool.query('SELECT * FROM gmail_tokens WHERE "userId"=$1', [userId]);
+  if (!rows[0]) throw new Error('Google account not connected. Connect via Settings → Gmail / Drive.');
+  const row = rows[0];
+  const client = _googleOAuth2Client();
+  client.setCredentials({
+    access_token: decrypt(row.accessToken),
+    refresh_token: decrypt(row.refreshToken),
+    token_type: row.tokenType || 'Bearer',
+    expiry_date: row.expiryDate ? Number(row.expiryDate) : undefined,
+    scope: row.scope || undefined,
+  });
+  client.on('tokens', (tokens) => {
+    if (tokens.access_token) {
+      pool.query(
+        `UPDATE gmail_tokens SET "accessToken"=$1, "expiryDate"=$2, "updatedAt"=NOW() WHERE "userId"=$3`,
+        [encrypt(tokens.access_token), tokens.expiry_date || null, userId]
+      ).catch(() => {});
+    }
+  });
+  return client;
+}
+
+// ── Shared: LibreOffice headless conversion ──────────────────────────────────
+const LIBRE_ALLOWED_EXTS = new Set([
+  '.docx', '.doc', '.odt', '.rtf',
+  '.xlsx', '.xls', '.ods', '.csv',
+  '.pptx', '.ppt', '.odp',
+  '.txt',
+]);
+async function libreConvert(inputBuf, ext, targetFmt) {
+  const id = crypto.randomUUID();
+  const tmpDir = path.join(os.tmpdir(), `libre_${id}`);
+  await fsp.mkdir(tmpDir, { recursive: true });
+  const inFile = path.join(tmpDir, `input${ext}`);
+  await fsp.writeFile(inFile, inputBuf);
+  try {
+    await execFileAsync('libreoffice', [
+      '--headless', '--convert-to', targetFmt, '--outdir', tmpDir, inFile,
+    ], { timeout: 90_000 });
+    const outFile = path.join(tmpDir, `input.${targetFmt}`);
+    return await fsp.readFile(outFile);
+  } finally {
+    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// ── Shared: extract Google Drive file ID from URL ───────────────────────────
+function googleFileId(urlOrId = '') {
+  const patterns = [
+    /\/document\/d\/([a-zA-Z0-9_-]+)/,
+    /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,
+    /\/presentation\/d\/([a-zA-Z0-9_-]+)/,
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /[?&]id=([a-zA-Z0-9_-]+)/,
+  ];
+  for (const p of patterns) { const m = urlOrId.match(p); if (m) return m[1]; }
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(urlOrId.trim())) return urlOrId.trim();
+  return null;
+}
 
 function pdfBufFromDataUrl(dataUrl) {
   if (!dataUrl || !dataUrl.includes(',')) return null;
@@ -514,6 +593,90 @@ router.post('/metadata', async (req, res) => {
   } catch (err) {
     console.error('PDF metadata:', err);
     res.status(500).json({ error: err.message || 'Metadata operation failed' });
+  }
+});
+
+// ── Office → PDF ─────────────────────────────────────────────────────────────
+router.post('/office-to-pdf', async (req, res) => {
+  try {
+    const { dataUrl, filename } = req.body || {};
+    if (!dataUrl) return res.status(400).json({ error: 'No file data provided.' });
+    const ext = path.extname(filename || '').toLowerCase() || '.docx';
+    if (!LIBRE_ALLOWED_EXTS.has(ext))
+      return res.status(400).json({ error: `Unsupported file type: ${ext}. Supported: ${[...LIBRE_ALLOWED_EXTS].join(', ')}` });
+    const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
+    const pdfBuf = await libreConvert(inputBuf, ext, 'pdf');
+    const outDataUrl = `data:application/pdf;base64,${pdfBuf.toString('base64')}`;
+    res.json({ dataUrl: outDataUrl });
+  } catch (err) {
+    console.error('PDF office-to-pdf:', err);
+    if (err.code === 'ENOENT') return res.status(500).json({ error: 'LibreOffice is not installed on this server.' });
+    res.status(500).json({ error: err.message || 'Conversion failed.' });
+  }
+});
+
+// ── PDF → Office (DOCX) ──────────────────────────────────────────────────────
+router.post('/pdf-to-office', async (req, res) => {
+  try {
+    const { dataUrl, format = 'docx' } = req.body || {};
+    if (!dataUrl) return res.status(400).json({ error: 'No PDF provided.' });
+    const allowed = { docx: 'docx', odt: 'odt', txt: 'txt' };
+    const fmt = allowed[format] || 'docx';
+    const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
+    const outBuf = await libreConvert(inputBuf, '.pdf', fmt);
+    const mimes = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain' };
+    const outDataUrl = `data:${mimes[fmt]};base64,${outBuf.toString('base64')}`;
+    res.json({ dataUrl: outDataUrl, format: fmt });
+  } catch (err) {
+    console.error('PDF pdf-to-office:', err);
+    if (err.code === 'ENOENT') return res.status(500).json({ error: 'LibreOffice is not installed on this server.' });
+    res.status(500).json({ error: err.message || 'Conversion failed.' });
+  }
+});
+
+// ── Google Drive → PDF ────────────────────────────────────────────────────────
+router.post('/google-to-pdf', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url) return res.status(400).json({ error: 'Provide a Google Drive or Docs/Sheets/Slides URL.' });
+    const fileId = googleFileId(url);
+    if (!fileId) return res.status(400).json({ error: 'Could not extract a file ID from that URL.' });
+
+    const auth = await _googleAuthClient(req.user.id);
+    const drive = google.drive({ version: 'v3', auth });
+
+    const meta = await drive.files.get({ fileId, fields: 'name,mimeType' });
+    const mimeType = meta.data.mimeType || '';
+    const fileName = meta.data.name || 'document';
+
+    let pdfBuf;
+
+    if (mimeType.startsWith('application/vnd.google-apps.')) {
+      // Native Google Workspace file — export directly as PDF
+      if (mimeType === 'application/vnd.google-apps.folder')
+        return res.status(400).json({ error: 'That URL points to a folder, not a file.' });
+      const resp = await drive.files.export(
+        { fileId, mimeType: 'application/pdf' },
+        { responseType: 'arraybuffer' }
+      );
+      pdfBuf = Buffer.from(resp.data);
+    } else {
+      // Binary Office file stored in Drive — download then convert with LibreOffice
+      const ext = path.extname(fileName).toLowerCase();
+      if (!LIBRE_ALLOWED_EXTS.has(ext))
+        return res.status(400).json({ error: `Cannot convert this file type (${mimeType}).` });
+      const resp = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+      pdfBuf = await libreConvert(Buffer.from(resp.data), ext, 'pdf');
+    }
+
+    const outDataUrl = `data:application/pdf;base64,${pdfBuf.toString('base64')}`;
+    res.json({ dataUrl: outDataUrl, fileName: `${fileName}.pdf` });
+  } catch (err) {
+    console.error('PDF google-to-pdf:', err);
+    const msg = err.message || 'Export failed.';
+    if (msg.includes('not connected')) return res.status(401).json({ error: msg });
+    if (err.code === 403) return res.status(403).json({ error: 'Access denied. Reconnect your Google account to grant Drive read access.' });
+    res.status(500).json({ error: msg });
   }
 });
 
