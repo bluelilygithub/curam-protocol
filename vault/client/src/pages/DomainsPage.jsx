@@ -223,47 +223,53 @@ function SmartResult({ mode, data }) {
     );
   }
 
-  // Score
-  if (mode === 'score' && (data.score !== undefined || data.total !== undefined)) {
-    const score = data.score ?? data.total;
-    const breakdown = data.breakdown || data.scores || {};
-    return (
-      <div className="mt-4 space-y-3">
-        <div className="flex items-center gap-4 px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-          <div className="text-4xl font-bold" style={{ color: 'var(--color-primary)' }}>{score}</div>
-          <div>
-            <div className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>Overall Brand Score</div>
-            <div className="text-xs" style={{ color: 'var(--color-muted)' }}>out of 100</div>
+  // Score — response is { success, data: { name, overall_score, grade, scores, analysis } }
+  if (mode === 'score') {
+    const d = data.data || data;
+    const score = d.overall_score ?? d.score;
+    if (score !== undefined) {
+      const breakdown = d.scores || d.breakdown || {};
+      return (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center gap-4 px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <div className="text-4xl font-bold" style={{ color: 'var(--color-primary)' }}>{score}</div>
+            <div>
+              <div className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{d.name || ''} &nbsp;<span style={{ color: 'var(--color-primary)' }}>{d.grade || ''}</span></div>
+              <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Brand quality score out of 100</div>
+            </div>
           </div>
+          {Object.keys(breakdown).length > 0 && (
+            <div className="space-y-1.5">
+              {Object.entries(breakdown).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                  <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{k.replace(/_/g, ' ')}</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{typeof v === 'number' ? v : String(v)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        {Object.keys(breakdown).length > 0 && (
-          <div className="space-y-1.5">
-            {Object.entries(breakdown).map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-                <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{k.replace(/_/g, ' ')}</span>
-                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{typeof v === 'number' ? v : String(v)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
+      );
+    }
   }
 
-  // Compare
-  if (mode === 'compare' && (data.rankings || data.results || data.comparison)) {
-    const list = data.rankings || data.results || data.comparison || [];
-    return (
-      <div className="mt-4 space-y-2">
-        {list.map((item, i) => (
-          <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <span className="text-sm font-bold w-5 text-center" style={{ color: 'var(--color-primary)' }}>#{i + 1}</span>
-            <span className="flex-1 font-medium text-sm" style={{ color: 'var(--color-text)' }}>{item.domain || item.name}</span>
-            <span className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>{item.score ?? item.total ?? ''}</span>
-          </div>
-        ))}
-      </div>
-    );
+  // Compare — response is { names[], best, ranking[{ name, score, rank }] }
+  if (mode === 'compare') {
+    const list = data.ranking || data.rankings || data.names || [];
+    if (list.length > 0) {
+      return (
+        <div className="mt-4 space-y-2">
+          {data.best && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Best: <strong style={{ color: 'var(--color-primary)' }}>{data.best}</strong></p>}
+          {list.map((item, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <span className="text-sm font-bold w-5 text-center" style={{ color: 'var(--color-primary)' }}>#{item.rank ?? i + 1}</span>
+              <span className="flex-1 font-medium text-sm" style={{ color: 'var(--color-text)' }}>{item.name}</span>
+              <span className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>{item.score ?? ''}{item.grade ? ` · ${item.grade}` : ''}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
   }
 
   // Availability
@@ -430,7 +436,7 @@ function ScorePanel() {
 
   return (
     <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Domain or brand name" placeholder="e.g. launchpad.io" />
+      <DomainInput value={domain} onChange={setDomain} label="Brand name (with or without TLD)" placeholder="e.g. launchpad or launchpad.io" />
       <RunBtn onClick={run} busy={busy} label="Score Name" disabled={!domain.trim()} />
       <ErrMsg msg={err} />
       <SmartResult mode="score" data={result} />

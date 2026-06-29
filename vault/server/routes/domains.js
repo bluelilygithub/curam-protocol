@@ -74,18 +74,50 @@ function handle(fn) {
 
 // ── Discover ────────────────────────────────────────────────────────────────
 
-// AI-powered name suggestions based on keywords/description
+// Strip common English stopwords so a description becomes useful keywords
+const STOPWORDS = new Set([
+  'a','an','the','and','or','but','in','on','at','to','for','of','with',
+  'by','from','is','are','was','were','be','been','being','have','has',
+  'had','do','does','did','will','would','could','should','may','might',
+  'i','we','you','they','he','she','it','my','our','your','their','its',
+  'who','which','that','this','these','those','not','no','as','so','if',
+  'then','than','when','where','what','how','well','also','make','makes',
+  'get','use','can','about','into','out','up','down','over','under',
+  'some','all','any','both','each','few','more','most','other','such',
+]);
+
+function descriptionToKeywords(input) {
+  // If already comma-separated short tokens, use as-is
+  if (input.includes(',')) return input;
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOPWORDS.has(w))
+    .slice(0, 8)
+    .join(',');
+}
+
+// AI-powered name suggestions based on keywords or a description
 router.get('/suggest', handle(async (req) => {
-  const { q, tlds, limit } = req.query;
-  if (!q) throw new Error('q (keywords) is required.');
-  return domscan('/suggest', { q, tlds: tlds || 'com,io,ai,co,app', limit: limit || 10 });
+  const { q, tlds, limit, style } = req.query;
+  if (!q) throw new Error('q (keywords or description) is required.');
+  const keywords = descriptionToKeywords(q);
+  return domscan('/suggest', {
+    keywords,
+    tlds: tlds || 'com,io,ai,co,app',
+    limit: limit || 20,
+    style: style || 'brandable',
+  });
 }));
 
 // Domain quality / brand score
 router.get('/score', handle(async (req) => {
   const { domain } = req.query;
   if (!domain) throw new Error('domain is required.');
-  return domscan('/score', { domain });
+  // DomScan /v1/score uses 'name' param (no TLD needed)
+  const name = domain.replace(/\.[^.]+$/, ''); // strip TLD if provided
+  return domscan('/score', { name });
 }));
 
 // Compare and rank multiple brand names
@@ -94,7 +126,9 @@ router.post('/score/compare', handle(async (req) => {
   if (!domains || !Array.isArray(domains) || domains.length < 2) {
     throw new Error('Provide at least 2 domain names to compare.');
   }
-  return domscanPost('/score/compare', { domains });
+  // DomScan /v1/score/compare uses 'names' (strip TLDs)
+  const names = domains.map(d => d.replace(/\.[^.]+$/, ''));
+  return domscanPost('/score/compare', { names });
 }));
 
 // Typosquatting variants for a domain
