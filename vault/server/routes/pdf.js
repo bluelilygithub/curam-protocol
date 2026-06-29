@@ -48,13 +48,44 @@ async function _googleAuthClient(userId) {
   return client;
 }
 
-// ── Shared: LibreOffice headless conversion ──────────────────────────────────
-const LIBRE_ALLOWED_EXTS = new Set([
+// ── Shared: Office file metadata ─────────────────────────────────────────────
+const OFFICE_ALLOWED_EXTS = new Set([
   '.docx', '.doc', '.odt', '.rtf',
   '.xlsx', '.xls', '.ods', '.csv',
   '.pptx', '.ppt', '.odp',
   '.txt',
 ]);
+
+// Maps file extension → source MIME type (for uploading to Drive)
+function officeMimeType(ext) {
+  return {
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.doc':  'application/msword',
+    '.odt':  'application/vnd.oasis.opendocument.text',
+    '.rtf':  'application/rtf',
+    '.txt':  'text/plain',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls':  'application/vnd.ms-excel',
+    '.ods':  'application/vnd.oasis.opendocument.spreadsheet',
+    '.csv':  'text/csv',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.ppt':  'application/vnd.ms-powerpoint',
+    '.odp':  'application/vnd.oasis.opendocument.presentation',
+  }[ext] || 'application/octet-stream';
+}
+
+// Maps file extension → Google Workspace target MIME (Drive converts on upload)
+function googleWorkspaceMime(ext) {
+  if (['.docx','.doc','.odt','.rtf','.txt'].includes(ext))
+    return 'application/vnd.google-apps.document';
+  if (['.xlsx','.xls','.ods','.csv'].includes(ext))
+    return 'application/vnd.google-apps.spreadsheet';
+  if (['.pptx','.ppt','.odp'].includes(ext))
+    return 'application/vnd.google-apps.presentation';
+  return null;
+}
+
+// ── Shared: LibreOffice headless conversion (optional — not required) ─────────
 async function libreConvert(inputBuf, ext, targetFmt) {
   const id = crypto.randomUUID();
   const tmpDir = path.join(os.tmpdir(), `libre_${id}`);
@@ -69,6 +100,31 @@ async function libreConvert(inputBuf, ext, targetFmt) {
     return await fsp.readFile(outFile);
   } finally {
     fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// ── Shared: convert Office file to PDF via Google Drive API ──────────────────
+// Uses drive.file scope — uploads a temp file, exports as PDF, then deletes it.
+async function officeToGooglePdf(inputBuf, ext, filename, userId) {
+  const { Readable } = require('stream');
+  const gMime = googleWorkspaceMime(ext);
+  if (!gMime) throw new Error(`Cannot convert ${ext} files.`);
+  const auth = await _googleAuthClient(userId);
+  const drive = google.drive({ version: 'v3', auth });
+  const uploaded = await drive.files.create({
+    requestBody: { name: filename || `upload${ext}`, mimeType: gMime },
+    media: { mimeType: officeMimeType(ext), body: Readable.from(inputBuf) },
+    fields: 'id',
+  });
+  const fileId = uploaded.data.id;
+  try {
+    const exported = await drive.files.export(
+      { fileId, mimeType: 'application/pdf' },
+      { responseType: 'arraybuffer' }
+    );
+    return Buffer.from(exported.data);
+  } finally {
+    drive.files.delete({ fileId }).catch(() => {});
   }
 }
 
@@ -597,25 +653,48 @@ router.post('/metadata', async (req, res) => {
 });
 
 // ── Office → PDF ─────────────────────────────────────────────────────────────
+// Primary: Google Drive API (upload → convert → export → delete).
+// Fallback: LibreOffice headless if installed.
+// Requires Google account connected via Settings → Gmail / Drive.
 router.post('/office-to-pdf', async (req, res) => {
   try {
     const { dataUrl, filename } = req.body || {};
     if (!dataUrl) return res.status(400).json({ error: 'No file data provided.' });
     const ext = path.extname(filename || '').toLowerCase() || '.docx';
-    if (!LIBRE_ALLOWED_EXTS.has(ext))
-      return res.status(400).json({ error: `Unsupported file type: ${ext}. Supported: ${[...LIBRE_ALLOWED_EXTS].join(', ')}` });
+    if (!OFFICE_ALLOWED_EXTS.has(ext))
+      return res.status(400).json({ error: `Unsupported file type: ${ext}` });
+
     const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
-    const pdfBuf = await libreConvert(inputBuf, ext, 'pdf');
-    const outDataUrl = `data:application/pdf;base64,${pdfBuf.toString('base64')}`;
-    res.json({ dataUrl: outDataUrl });
+
+    // Try Google Drive API first (no system dependency)
+    try {
+      const pdfBuf = await officeToGooglePdf(inputBuf, ext, filename, req.user.id);
+      return res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}`, via: 'google' });
+    } catch (gErr) {
+      // Only fall through to LibreOffice if Google isn't connected
+      if (!gErr.message?.includes('not connected')) throw gErr;
+    }
+
+    // Fallback: LibreOffice (if installed)
+    try {
+      const pdfBuf = await libreConvert(inputBuf, ext, 'pdf');
+      return res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}`, via: 'libreoffice' });
+    } catch (lErr) {
+      if (lErr.code === 'ENOENT') {
+        return res.status(500).json({
+          error: 'Conversion requires a connected Google account. Go to Settings → Gmail / Drive and connect your Google account, then try again.',
+        });
+      }
+      throw lErr;
+    }
   } catch (err) {
     console.error('PDF office-to-pdf:', err);
-    if (err.code === 'ENOENT') return res.status(500).json({ error: 'LibreOffice is not installed on this server.' });
     res.status(500).json({ error: err.message || 'Conversion failed.' });
   }
 });
 
 // ── PDF → Office (DOCX) ──────────────────────────────────────────────────────
+// Requires LibreOffice. No Google Drive equivalent for PDF → DOCX direction.
 router.post('/pdf-to-office', async (req, res) => {
   try {
     const { dataUrl, format = 'docx' } = req.body || {};
@@ -625,11 +704,11 @@ router.post('/pdf-to-office', async (req, res) => {
     const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
     const outBuf = await libreConvert(inputBuf, '.pdf', fmt);
     const mimes = { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain' };
-    const outDataUrl = `data:${mimes[fmt]};base64,${outBuf.toString('base64')}`;
-    res.json({ dataUrl: outDataUrl, format: fmt });
+    res.json({ dataUrl: `data:${mimes[fmt]};base64,${outBuf.toString('base64')}`, format: fmt });
   } catch (err) {
     console.error('PDF pdf-to-office:', err);
-    if (err.code === 'ENOENT') return res.status(500).json({ error: 'LibreOffice is not installed on this server.' });
+    if (err.code === 'ENOENT')
+      return res.status(500).json({ error: 'PDF → Word conversion requires LibreOffice, which is not available on this server. This feature is coming soon.' });
     res.status(500).json({ error: err.message || 'Conversion failed.' });
   }
 });
@@ -643,8 +722,17 @@ router.post('/google-to-pdf', async (req, res) => {
     if (!fileId) return res.status(400).json({ error: 'Could not extract a file ID from that URL.' });
 
     const auth = await _googleAuthClient(req.user.id);
-    const drive = google.drive({ version: 'v3', auth });
 
+    // Check if the stored token has drive.readonly scope
+    const storedScope = auth.credentials?.scope || '';
+    if (!storedScope.includes('drive.readonly') && !storedScope.includes('drive"') && !storedScope.includes(' drive ')) {
+      return res.status(403).json({
+        error: 'Your Google account needs to be reconnected to grant Drive read access. Go to Settings → Gmail / Drive, disconnect, then reconnect.',
+        needsReconnect: true,
+      });
+    }
+
+    const drive = google.drive({ version: 'v3', auth });
     const meta = await drive.files.get({ fileId, fields: 'name,mimeType' });
     const mimeType = meta.data.mimeType || '';
     const fileName = meta.data.name || 'document';
@@ -652,7 +740,6 @@ router.post('/google-to-pdf', async (req, res) => {
     let pdfBuf;
 
     if (mimeType.startsWith('application/vnd.google-apps.')) {
-      // Native Google Workspace file — export directly as PDF
       if (mimeType === 'application/vnd.google-apps.folder')
         return res.status(400).json({ error: 'That URL points to a folder, not a file.' });
       const resp = await drive.files.export(
@@ -661,25 +748,25 @@ router.post('/google-to-pdf', async (req, res) => {
       );
       pdfBuf = Buffer.from(resp.data);
     } else {
-      // Binary Office file stored in Drive — download then convert with LibreOffice
+      // Binary Office file in Drive — download it, then re-upload via officeToGooglePdf
       const ext = path.extname(fileName).toLowerCase();
-      if (!LIBRE_ALLOWED_EXTS.has(ext))
+      if (!OFFICE_ALLOWED_EXTS.has(ext))
         return res.status(400).json({ error: `Cannot convert this file type (${mimeType}).` });
       const resp = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-      pdfBuf = await libreConvert(Buffer.from(resp.data), ext, 'pdf');
+      pdfBuf = await officeToGooglePdf(Buffer.from(resp.data), ext, fileName, req.user.id);
     }
 
-    const outDataUrl = `data:application/pdf;base64,${pdfBuf.toString('base64')}`;
-    res.json({ dataUrl: outDataUrl, fileName: `${fileName}.pdf` });
+    res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}`, fileName: `${fileName}.pdf` });
   } catch (err) {
     console.error('PDF google-to-pdf:', err);
     const msg = err.message || 'Export failed.';
     const code = err.code || err.status;
-    if (msg.includes('not connected')) return res.status(401).json({ error: msg });
+    if (msg.includes('not connected'))
+      return res.status(401).json({ error: 'Google account not connected. Go to Settings → Gmail / Drive to connect.', needsReconnect: true });
     if (code === 404 || msg.toLowerCase().includes('not found'))
-      return res.status(404).json({ error: 'File not found. Vault cannot access this file — your Google token was issued without Drive read permission. Reconnect your Google account to fix this.' });
+      return res.status(404).json({ error: 'File not found or not accessible. This usually means Drive read permission is missing. Go to Settings → Gmail / Drive, disconnect, then reconnect.', needsReconnect: true });
     if (code === 403)
-      return res.status(403).json({ error: 'Access denied. Reconnect your Google account to grant Drive read permission.' });
+      return res.status(403).json({ error: 'Access denied. Go to Settings → Gmail / Drive, disconnect, then reconnect.', needsReconnect: true });
     res.status(500).json({ error: msg });
   }
 });
