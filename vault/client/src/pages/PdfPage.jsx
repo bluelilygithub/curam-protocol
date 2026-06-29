@@ -275,31 +275,129 @@ function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, 
   );
 }
 
-function ResultCard({ dataUrl, filename, pageCount, getIcon, extra }) {
-  if (!dataUrl) return null;
-  const sizeBytes = Math.round((dataUrl.length * 3) / 4);
+// ── PdfPagePreview — renders a PDF data URL to a navigable canvas ──────────────
+function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
+  const canvasRef = useRef(null);
+  const pdfDocRef = useRef(null);
+  const renderTaskRef = useRef(null);
+  const [pg, setPg] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const renderPg = useCallback(async (doc, pageNum) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !doc) return;
+    if (renderTaskRef.current) { renderTaskRef.current.cancel(); renderTaskRef.current = null; }
+    const pdfPage = await doc.getPage(pageNum);
+    const origVp = pdfPage.getViewport({ scale: 1 });
+    const scale = Math.min(maxWidth / origVp.width, 2);
+    const vp = pdfPage.getViewport({ scale });
+    canvas.width = Math.floor(vp.width);
+    canvas.height = Math.floor(vp.height);
+    const task = pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+    renderTaskRef.current = task;
+    await task.promise.catch(e => { if (e?.name !== 'RenderingCancelledException') throw e; });
+    renderTaskRef.current = null;
+  }, [maxWidth]);
+
+  useEffect(() => {
+    if (!dataUrl) { pdfDocRef.current = null; setTotal(0); return; }
+    let dead = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const lib = await import('pdfjs-dist');
+        if (!lib.GlobalWorkerOptions.workerSrc) lib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+        const doc = await lib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+        if (dead) return;
+        pdfDocRef.current = doc;
+        setTotal(doc.numPages);
+        setPg(1);
+        await renderPg(doc, 1);
+      } catch (e) { if (!dead) console.warn('PdfPagePreview:', e); }
+      finally { if (!dead) setLoading(false); }
+    })();
+    return () => {
+      dead = true;
+      if (renderTaskRef.current) { renderTaskRef.current.cancel(); renderTaskRef.current = null; }
+    };
+  }, [dataUrl, renderPg]);
+
+  const goTo = async (n) => {
+    if (!pdfDocRef.current || n < 1 || n > total) return;
+    setPg(n); setLoading(true);
+    try { await renderPg(pdfDocRef.current, n); } finally { setLoading(false); }
+  };
+
+  if (!dataUrl) return (
+    <div className="flex items-center justify-center rounded-xl border-2 border-dashed" style={{ minHeight: 200, borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+      <span className="text-sm">Upload a PDF to see a preview</span>
+    </div>
+  );
+
   return (
-    <div className="rounded-xl border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-      <div className="flex items-center gap-2">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
-          {getIcon('file-text', { size: 20 })}
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+      {loading && total === 0 && (
+        <div className="flex items-center justify-center" style={{ minHeight: 160 }}>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Rendering preview…</span>
         </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{filename || 'result.pdf'}</p>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            {pageCount ? `${pageCount} page${pageCount !== 1 ? 's' : ''} · ` : ''}{formatBytes(sizeBytes)}
-          </p>
+      )}
+      <div style={{ overflowY: 'auto', maxHeight: 480, position: 'relative' }}>
+        <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
+        {loading && total > 0 && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Rendering…</span>
+          </div>
+        )}
+      </div>
+      {total > 1 && (
+        <div className="flex items-center justify-center gap-2 py-2 border-t text-xs" style={{ borderColor: 'var(--color-border)' }}>
+          <button onClick={() => goTo(pg - 1)} disabled={pg <= 1} className="px-2 py-0.5 rounded disabled:opacity-30 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>◀</button>
+          <span style={{ color: 'var(--color-muted)' }}>Page {pg} of {total}</span>
+          <button onClick={() => goTo(pg + 1)} disabled={pg >= total} className="px-2 py-0.5 rounded disabled:opacity-30 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>▶</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── PdfResultModal — full-screen modal showing a rendered result PDF ────────────
+function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon }) {
+  if (!dataUrl) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl shadow-2xl flex flex-col"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', width: '100%', maxWidth: 820, maxHeight: '92vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="min-w-0 mr-4">
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{filename || 'result.pdf'}</p>
+            {meta && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{meta}</p>}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => downloadFile(dataUrl, filename || 'result.pdf')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+            >
+              {getIcon('download', { size: 14 })}
+              Download
+            </button>
+            <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>
+              {getIcon('x', { size: 20 })}
+            </button>
+          </div>
+        </div>
+        <div className="overflow-auto flex-1 p-4" style={{ background: 'var(--color-bg)' }}>
+          <PdfPagePreview dataUrl={dataUrl} maxWidth={760} />
         </div>
       </div>
-      {extra}
-      <button
-        type="button"
-        onClick={() => downloadFile(dataUrl, filename || 'result.pdf')}
-        className="w-full py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-        style={{ background: 'var(--color-primary)', color: '#fff' }}
-      >
-        {getIcon('download', { size: 14 })} Download
-      </button>
     </div>
   );
 }
@@ -334,6 +432,7 @@ export default function PdfPage() {
   const [toolSearch, setToolSearch] = useState('');
   const [hoveredTool, setHoveredTool] = useState(null);
   const [helpTool, setHelpTool] = useState(null);
+  const [resultModal, setResultModal] = useState(null); // { dataUrl, filename, meta }
   const toolSearchRef = useRef(null);
 
   // Merge
@@ -423,6 +522,7 @@ export default function PdfPage() {
   // File info
   const [infoFile, setInfoFile] = useState(null);
   const [infoData, setInfoData] = useState(null);
+  const [infoDataUrl, setInfoDataUrl] = useState(null);
   const [infoBusy, setInfoBusy] = useState(false);
 
   // Field Designer
@@ -605,6 +705,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setFdResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, added: data.added });
+      setResultModal({ dataUrl: data.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${data.added} AcroForm field${data.added !== 1 ? 's' : ''} embedded` });
     } catch (err) {
       setFdError(err.message || 'Add fields failed');
     } finally {
@@ -753,10 +854,11 @@ export default function PdfPage() {
   const onInfoFileChange = async (e) => {
     const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
-    setInfoData(null); setInfoFile(file);
+    setInfoData(null); setInfoFile(file); setInfoDataUrl(null);
     setInfoBusy(true);
     try {
       const dataUrl = await readFileAsDataUrl(file);
+      setInfoDataUrl(dataUrl);
       const pageCount = await getPdfPageCount(dataUrl);
       setInfoData({
         name: file.name,
@@ -780,6 +882,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setMergeResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: 'merged.pdf', meta: `${data.pageCount} pages merged from ${mergeFiles.length} files` });
     } catch (err) {
       setMergeError(err.message || 'Merge failed');
     } finally {
@@ -796,6 +899,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setSplitResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, totalSource: data.totalSource });
+      setResultModal({ dataUrl: data.dataUrl, filename: splitFile ? `${splitFile.name.replace('.pdf','')}-split.pdf` : 'split.pdf', meta: `Extracted ${data.pageCount} of ${data.totalSource} pages` });
     } catch (err) {
       setSplitError(err.message || 'Split failed');
     } finally {
@@ -811,6 +915,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setRotateResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, rotated: data.rotated });
+      setResultModal({ dataUrl: data.dataUrl, filename: rotateFile ? `${rotateFile.name.replace('.pdf','')}-rotated.pdf` : 'rotated.pdf', meta: `${data.rotated} page${data.rotated !== 1 ? 's' : ''} rotated ${rotateAngle}°` });
     } catch (err) {
       setRotateError(err.message || 'Rotate failed');
     } finally {
@@ -830,6 +935,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setImgResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: 'images.pdf', meta: `${data.pageCount} pages from ${imgFiles.length} image${imgFiles.length !== 1 ? 's' : ''}` });
     } catch (err) {
       setImgError(err.message || 'Conversion failed');
     } finally {
@@ -871,6 +977,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setWmResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: wmFile ? `${wmFile.name.replace('.pdf','')}-watermarked.pdf` : 'watermarked.pdf', meta: `"${wmText}" watermark on ${data.pageCount} pages` });
     } catch (err) {
       setWmError(err.message || 'Watermark failed');
     } finally {
@@ -889,6 +996,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setPnResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: pnFile ? `${pnFile.name.replace('.pdf','')}-numbered.pdf` : 'numbered.pdf', meta: `Page numbers added to ${data.pageCount} pages` });
     } catch (err) {
       setPnError(err.message || 'Add page numbers failed');
     } finally {
@@ -919,6 +1027,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setFillResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, filled: data.filled });
+      setResultModal({ dataUrl: data.dataUrl, filename: fillFile ? `${fillFile.name.replace('.pdf','')}-filled.pdf` : 'filled.pdf', meta: `${data.filled} field${data.filled !== 1 ? 's' : ''} filled` });
     } catch (err) {
       setFillError(err.message || 'Fill failed');
     } finally {
@@ -934,6 +1043,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setFlatResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: flatFile ? `${flatFile.name.replace('.pdf','')}-flat.pdf` : 'flat.pdf', meta: `Form flattened · ${data.pageCount} pages` });
     } catch (err) {
       setFlatError(err.message || 'Flatten failed');
     } finally {
@@ -949,6 +1059,7 @@ export default function PdfPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setMetaResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({ dataUrl: data.dataUrl, filename: metaFile ? `${metaFile.name.replace('.pdf','')}-meta.pdf` : 'meta.pdf', meta: 'Metadata updated' });
     } catch (err) {
       setMetaError(err.message || 'Save failed');
     } finally {
@@ -1097,7 +1208,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runMerge} busy={mergeBusy} disabled={mergeFiles.length < 2} label="Merge PDFs" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard dataUrl={mergeResult?.dataUrl} filename="merged.pdf" pageCount={mergeResult?.pageCount} getIcon={getIcon} />
+                  <PdfPagePreview dataUrl={mergeFiles[0]?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1129,13 +1240,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runSplit} busy={splitBusy} disabled={!splitFile || !splitPages.trim()} label="Extract Pages" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={splitResult?.dataUrl}
-                    filename={splitFile ? `${splitFile.name.replace('.pdf', '')}-split.pdf` : 'split.pdf'}
-                    pageCount={splitResult?.pageCount}
-                    getIcon={getIcon}
-                    extra={splitResult && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Extracted {splitResult.pageCount} of {splitResult.totalSource} pages</p>}
-                  />
+                  <PdfPagePreview dataUrl={splitFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1167,13 +1272,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runRotate} busy={rotateBusy} disabled={!rotateFile} label="Rotate & Download" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={rotateResult?.dataUrl}
-                    filename={rotateFile ? `${rotateFile.name.replace('.pdf', '')}-rotated.pdf` : 'rotated.pdf'}
-                    pageCount={rotateResult?.pageCount}
-                    getIcon={getIcon}
-                    extra={rotateResult && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{rotateResult.rotated} page{rotateResult.rotated !== 1 ? 's' : ''} rotated {rotateAngle}°</p>}
-                  />
+                  <PdfPagePreview dataUrl={rotateFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1214,7 +1313,11 @@ export default function PdfPage() {
                   <RunBtn onClick={runImg2Pdf} busy={imgBusy} disabled={!imgFiles.length} label="Create PDF" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard dataUrl={imgResult?.dataUrl} filename="images.pdf" pageCount={imgResult?.pageCount} getIcon={getIcon} />
+                  {imgFiles[0] && (
+                    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                      <img src={imgFiles[0].dataUrl} alt="first image" style={{ display: 'block', maxWidth: '100%', maxHeight: 460, objectFit: 'contain' }} />
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -1229,6 +1332,9 @@ export default function PdfPage() {
                   <PdfUpload onChange={onEtFileChange} files={etFile ? [etFile] : []} onRemove={() => { setEtFile(null); setEtText(''); }} />
                   <ErrMsg msg={etError} />
                   <RunBtn onClick={runExtractText} busy={etBusy} disabled={!etFile} label="Extract Text" getIcon={getIcon} />
+                  <div className="mt-4">
+                    <PdfPagePreview dataUrl={etFile?.dataUrl} />
+                  </div>
                 </div>
                 <div>
                   {etText && (
@@ -1311,12 +1417,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runWatermark} busy={wmBusy} disabled={!wmFile} label="Apply Watermark" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={wmResult?.dataUrl}
-                    filename={wmFile ? `${wmFile.name.replace('.pdf', '')}-watermarked.pdf` : 'watermarked.pdf'}
-                    pageCount={wmResult?.pageCount}
-                    getIcon={getIcon}
-                  />
+                  <PdfPagePreview dataUrl={wmFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1367,12 +1468,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runPageNumbers} busy={pnBusy} disabled={!pnFile} label="Add Page Numbers" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={pnResult?.dataUrl}
-                    filename={pnFile ? `${pnFile.name.replace('.pdf', '')}-numbered.pdf` : 'numbered.pdf'}
-                    pageCount={pnResult?.pageCount}
-                    getIcon={getIcon}
-                  />
+                  <PdfPagePreview dataUrl={pnFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1387,6 +1483,9 @@ export default function PdfPage() {
                   <PdfUpload onChange={onInspectFileChange} files={inspectFile ? [inspectFile] : []} onRemove={() => { setInspectFile(null); setInspectFields(null); }} />
                   <ErrMsg msg={inspectError} />
                   <RunBtn onClick={runInspect} busy={inspectBusy} disabled={!inspectFile} label="Inspect Fields" getIcon={getIcon} />
+                  <div className="mt-4">
+                    <PdfPagePreview dataUrl={inspectFile?.dataUrl} />
+                  </div>
                 </div>
                 <div>
                   {inspectFields !== null && (
@@ -1471,13 +1570,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runFill} busy={fillBusy} disabled={!fillFile || !fillAvailable.length} label="Fill & Download" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={fillResult?.dataUrl}
-                    filename={fillFile ? `${fillFile.name.replace('.pdf', '')}-filled.pdf` : 'filled.pdf'}
-                    pageCount={fillResult?.pageCount}
-                    getIcon={getIcon}
-                    extra={fillResult && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{fillResult.filled} field{fillResult.filled !== 1 ? 's' : ''} filled</p>}
-                  />
+                  <PdfPagePreview dataUrl={fillFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1497,12 +1590,7 @@ export default function PdfPage() {
                   <RunBtn onClick={runFlatten} busy={flatBusy} disabled={!flatFile} label="Flatten & Download" getIcon={getIcon} />
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={flatResult?.dataUrl}
-                    filename={flatFile ? `${flatFile.name.replace('.pdf', '')}-flat.pdf` : 'flat.pdf'}
-                    pageCount={flatResult?.pageCount}
-                    getIcon={getIcon}
-                  />
+                  <PdfPagePreview dataUrl={flatFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1548,12 +1636,7 @@ export default function PdfPage() {
                   )}
                 </div>
                 <div>
-                  <ResultCard
-                    dataUrl={metaResult?.dataUrl}
-                    filename={metaFile ? `${metaFile.name.replace('.pdf', '')}-meta.pdf` : 'meta.pdf'}
-                    pageCount={metaResult?.pageCount}
-                    getIcon={getIcon}
-                  />
+                  <PdfPagePreview dataUrl={metaFile?.dataUrl} />
                 </div>
               </div>
             </section>
@@ -1565,8 +1648,11 @@ export default function PdfPage() {
               <ToolHeader id="fileinfo" label="File Info" onHelp={setHelpTool} getIcon={getIcon} badge="Client-side" />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onInfoFileChange} files={infoFile ? [{ name: infoFile.name, size: infoFile.size }] : []} onRemove={() => { setInfoFile(null); setInfoData(null); }} />
+                  <PdfUpload onChange={onInfoFileChange} files={infoFile ? [{ name: infoFile.name, size: infoFile.size }] : []} onRemove={() => { setInfoFile(null); setInfoData(null); setInfoDataUrl(null); }} />
                   {infoBusy && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Analysing…</p>}
+                  <div className="mt-4">
+                    <PdfPagePreview dataUrl={infoDataUrl} />
+                  </div>
                 </div>
                 <div>
                   {infoData && (
@@ -1767,14 +1853,21 @@ export default function PdfPage() {
                     <ErrMsg msg={fdError} />
                     <RunBtn onClick={runAddFields} busy={fdBusy} disabled={!fdFields.length} label={`Embed ${fdFields.length} Field${fdFields.length !== 1 ? 's' : ''} & Download`} getIcon={getIcon} />
                     {fdResult && (
-                      <div className="mt-3">
-                        <ResultCard
-                          dataUrl={fdResult.dataUrl}
-                          filename={fdFile ? `${fdFile.name.replace('.pdf', '')}-fields.pdf` : 'with-fields.pdf'}
-                          pageCount={fdResult.pageCount}
-                          getIcon={getIcon}
-                          extra={<p className="text-xs" style={{ color: 'var(--color-muted)' }}>{fdResult.added} AcroForm field{fdResult.added !== 1 ? 's' : ''} embedded</p>}
-                        />
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          onClick={() => setResultModal({ dataUrl: fdResult.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${fdResult.added} AcroForm field${fdResult.added !== 1 ? 's' : ''} embedded` })}
+                          className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}
+                        >
+                          View Result
+                        </button>
+                        <button
+                          onClick={() => downloadFile(fdResult.dataUrl, fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf')}
+                          className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          {getIcon('download', { size: 14 })}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1785,6 +1878,17 @@ export default function PdfPage() {
 
         </main>
       </div>
+
+      {/* ── Result modal ──────────────────────────────────────────────────── */}
+      {resultModal && (
+        <PdfResultModal
+          dataUrl={resultModal.dataUrl}
+          filename={resultModal.filename}
+          meta={resultModal.meta}
+          onClose={() => setResultModal(null)}
+          getIcon={getIcon}
+        />
+      )}
 
       {/* ── Help modal ────────────────────────────────────────────────────── */}
       {helpTool && (() => {

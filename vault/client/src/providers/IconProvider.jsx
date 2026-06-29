@@ -11,6 +11,7 @@ const semanticMap = {
   mic: { lucide: 'Mic' },
   speaker: { lucide: 'Volume2' },
   download: { lucide: 'Download' },
+  x: { lucide: 'X' },
   mail: { lucide: 'Mail' },
   trash: { lucide: 'Trash2' },
   plus: { lucide: 'Plus' },
