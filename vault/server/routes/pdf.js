@@ -333,6 +333,90 @@ router.post('/flatten', async (req, res) => {
   }
 });
 
+// ── Add Form Fields ────────────────────────────────────────────────────────────
+// Receives field definitions with PDF-point coordinates (bottom-left origin)
+// and embeds them as interactive AcroForm fields using pdf-lib.
+router.post('/addfields', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const fieldDefs = req.body?.fields;
+    if (!Array.isArray(fieldDefs) || !fieldDefs.length)
+      return res.status(400).json({ error: 'At least one field definition is required' });
+
+    const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const form = doc.getForm();
+    const pages = doc.getPages();
+
+    // Ensure field names are unique within this batch + any existing fields.
+    const existingNames = new Set(form.getFields().map(f => f.getName()));
+    const usedInBatch = new Set();
+    const uniqueName = (base) => {
+      let n = (base || 'field').replace(/[^\w.]/g, '_') || 'field';
+      let candidate = n;
+      let i = 1;
+      while (existingNames.has(candidate) || usedInBatch.has(candidate)) {
+        candidate = `${n}_${i++}`;
+      }
+      usedInBatch.add(candidate);
+      return candidate;
+    };
+
+    let added = 0;
+    for (const def of fieldDefs) {
+      const pageIdx = Math.max(0, (Number(def.page) || 1) - 1);
+      if (pageIdx >= pages.length) continue;
+      const page = pages[pageIdx];
+      const name = uniqueName(def.name);
+      const opts = {
+        x: Number(def.x) || 0,
+        y: Number(def.y) || 0,
+        width: Math.max(5, Number(def.width) || 100),
+        height: Math.max(5, Number(def.height) || 20),
+        borderColor: rgb(0.3, 0.3, 0.8),
+        borderWidth: 1,
+        backgroundColor: rgb(1, 1, 1),
+      };
+      try {
+        switch (def.type) {
+          case 'checkbox': {
+            const sz = Math.min(opts.width, opts.height);
+            const f = form.createCheckBox(name);
+            f.addToPage(page, { ...opts, width: sz, height: sz });
+            if (def.required) f.enableRequired();
+            break;
+          }
+          case 'dropdown': {
+            const f = form.createDropdown(name);
+            const opts2 = Array.isArray(def.options) ? def.options.map(String).filter(Boolean) : [];
+            if (opts2.length) f.setOptions(opts2);
+            f.addToPage(page, opts);
+            if (def.required) f.enableRequired();
+            break;
+          }
+          case 'text':
+          default: {
+            const f = form.createTextField(name);
+            f.addToPage(page, opts);
+            if (def.multiline) f.enableMultiline();
+            if (def.required) f.enableRequired();
+            break;
+          }
+        }
+        added++;
+      } catch (fieldErr) {
+        console.warn('addfields skip:', name, fieldErr.message);
+      }
+    }
+
+    const bytes = await doc.save();
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), added });
+  } catch (err) {
+    console.error('PDF addfields:', err);
+    res.status(500).json({ error: err.message || 'Add fields failed' });
+  }
+});
+
 // ── Metadata read / write ──────────────────────────────────────────────────────
 router.post('/metadata', async (req, res) => {
   try {

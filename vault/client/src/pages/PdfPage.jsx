@@ -125,6 +125,18 @@ const TOOL_HELP = {
       'Fully client-side — nothing leaves your device',
     ],
   },
+  fielddesigner: {
+    title: 'Add Form Fields',
+    what: 'Draw interactive form fields directly onto any PDF page. Drag a rectangle to place a field, then name it and configure its type.',
+    features: [
+      'Renders each PDF page as a canvas in your browser',
+      'Drag to draw field bounding boxes — precise pixel-level placement',
+      'Three field types: Text, Checkbox, Dropdown',
+      'Text fields can be flagged as multiline or required',
+      'Dropdown fields accept a custom options list',
+      'Fields are saved as real AcroForm fields (fillable with Inspect + Fill tools or any PDF reader)',
+    ],
+  },
 };
 
 const MODES = [
@@ -137,16 +149,17 @@ const MODES = [
   { id: 'pagenumbers', label: 'Page Numbers',    icon: 'hash'       },
   { id: 'inspect',     label: 'Inspect Fields',  icon: 'list'       },
   { id: 'fill',        label: 'Fill Form',       icon: 'file-pen'   },
-  { id: 'flatten',     label: 'Flatten',         icon: 'layers'     },
-  { id: 'metadata',    label: 'Metadata',        icon: 'info'       },
-  { id: 'fileinfo',    label: 'File Info',       icon: 'file-text'  },
+  { id: 'flatten',      label: 'Flatten',         icon: 'layers'   },
+  { id: 'fielddesigner', label: 'Add Fields',    icon: 'pen-line' },
+  { id: 'metadata',    label: 'Metadata',        icon: 'info'     },
+  { id: 'fileinfo',    label: 'File Info',       icon: 'file-text'},
 ];
 
 const MODE_GROUPS = [
   { label: 'Organise', ids: ['merge', 'split', 'rotate'] },
   { label: 'Convert',  ids: ['img2pdf', 'extracttext']   },
   { label: 'Edit',     ids: ['watermark', 'pagenumbers'] },
-  { label: 'Forms',    ids: ['inspect', 'fill', 'flatten'] },
+  { label: 'Forms',    ids: ['inspect', 'fill', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo']     },
 ];
 
@@ -398,6 +411,197 @@ export default function PdfPage() {
   const [infoFile, setInfoFile] = useState(null);
   const [infoData, setInfoData] = useState(null);
   const [infoBusy, setInfoBusy] = useState(false);
+
+  // Field Designer
+  const [fdFile, setFdFile] = useState(null);
+  const [fdPageCount, setFdPageCount] = useState(0);
+  const [fdCurrentPage, setFdCurrentPage] = useState(1);
+  const [fdPageDims, setFdPageDims] = useState(null);
+  const [fdFields, setFdFields] = useState([]);
+  const [fdFieldType, setFdFieldType] = useState('text');
+  const [fdBusy, setFdBusy] = useState(false);
+  const [fdResult, setFdResult] = useState(null);
+  const [fdError, setFdError] = useState('');
+  const fdPdfCanvasRef = useRef(null);
+  const fdUiCanvasRef = useRef(null);
+  const fdPdfDocRef = useRef(null);
+  const fdIsDrawingRef = useRef(false);
+  const fdStartRef = useRef(null);
+  // Refs keep canvas callbacks free of stale closures
+  const fdCurrentPageRef = useRef(1);
+  const fdPageDimsRef = useRef(null);
+  const fdFieldsRef = useRef([]);
+  const fdFieldTypeRef = useRef('text');
+
+  // Keep refs in sync
+  useEffect(() => { fdCurrentPageRef.current = fdCurrentPage; }, [fdCurrentPage]);
+  useEffect(() => { fdPageDimsRef.current = fdPageDims; }, [fdPageDims]);
+  useEffect(() => { fdFieldsRef.current = fdFields; }, [fdFields]);
+  useEffect(() => { fdFieldTypeRef.current = fdFieldType; }, [fdFieldType]);
+
+  // Redraw the UI overlay canvas (existing fields for current page)
+  const redrawFdOverlay = useCallback(() => {
+    const canvas = fdUiCanvasRef.current;
+    if (!canvas) return;
+    const dims = fdPageDimsRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!dims) return;
+    for (const f of fdFieldsRef.current.filter(f => f.page === fdCurrentPageRef.current)) {
+      const cx = f.x * dims.renderScale;
+      const cy = dims.canvasH - (f.y + f.height) * dims.renderScale;
+      const cw = f.width * dims.renderScale;
+      const ch = f.height * dims.renderScale;
+      ctx.fillStyle = 'rgba(99,102,241,0.12)';
+      ctx.fillRect(cx, cy, cw, ch);
+      ctx.strokeStyle = 'rgb(99,102,241)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx, cy, cw, ch);
+      ctx.fillStyle = 'rgb(99,102,241)';
+      ctx.font = 'bold 10px system-ui,sans-serif';
+      ctx.fillText(`${f.name} (${f.type})`, cx + 3, cy + 12);
+    }
+  }, []);
+
+  // Render a PDF page to the PDF canvas
+  const renderFdPage = useCallback(async (pageNum) => {
+    const pdfCanvas = fdPdfCanvasRef.current;
+    const uiCanvas = fdUiCanvasRef.current;
+    if (!pdfCanvas || !uiCanvas || !fdPdfDocRef.current) return;
+    const page = await fdPdfDocRef.current.getPage(pageNum);
+    const origVp = page.getViewport({ scale: 1 });
+    const maxW = Math.min(580, (window.innerWidth || 1200) * 0.52);
+    const rs = Math.min(maxW / origVp.width, 1.8);
+    const vp = page.getViewport({ scale: rs });
+    pdfCanvas.width = Math.floor(vp.width);
+    pdfCanvas.height = Math.floor(vp.height);
+    uiCanvas.width = Math.floor(vp.width);
+    uiCanvas.height = Math.floor(vp.height);
+    const dims = { pdfW: origVp.width, pdfH: origVp.height, renderScale: rs, canvasW: Math.floor(vp.width), canvasH: Math.floor(vp.height) };
+    fdPageDimsRef.current = dims;
+    setFdPageDims(dims);
+    await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp }).promise;
+    redrawFdOverlay();
+  }, [redrawFdOverlay]);
+
+  // Re-render when page changes
+  useEffect(() => {
+    if (fdPdfDocRef.current && fdCurrentPage) renderFdPage(fdCurrentPage);
+  }, [fdCurrentPage, renderFdPage]);
+
+  // Re-draw overlay when field list changes (e.g., name edits, removals)
+  useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
+
+  const fdCanvasCoords = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+  };
+
+  const onFdDown = useCallback((e) => {
+    if (!fdPageDimsRef.current) return;
+    fdIsDrawingRef.current = true;
+    fdStartRef.current = fdCanvasCoords(e, fdUiCanvasRef.current);
+  }, []);
+
+  const onFdMove = useCallback((e) => {
+    if (!fdIsDrawingRef.current || !fdStartRef.current) return;
+    const cur = fdCanvasCoords(e, fdUiCanvasRef.current);
+    const { x: sx, y: sy } = fdStartRef.current;
+    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    redrawFdOverlay();
+    const ctx = fdUiCanvasRef.current.getContext('2d');
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(239,68,68,0.9)';
+    ctx.fillStyle = 'rgba(239,68,68,0.08)';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+  }, [redrawFdOverlay]);
+
+  const onFdUp = useCallback((e) => {
+    if (!fdIsDrawingRef.current || !fdStartRef.current || !fdPageDimsRef.current) return;
+    fdIsDrawingRef.current = false;
+    const cur = fdCanvasCoords(e, fdUiCanvasRef.current);
+    const { x: sx, y: sy } = fdStartRef.current;
+    fdStartRef.current = null;
+    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    if (bw < 10 || bh < 6) { redrawFdOverlay(); return; }
+    const dims = fdPageDimsRef.current;
+    const newField = {
+      id: `fd_${Date.now()}`,
+      page: fdCurrentPageRef.current,
+      name: `field_${fdFieldsRef.current.length + 1}`,
+      type: fdFieldTypeRef.current,
+      x: bx / dims.renderScale,
+      y: dims.pdfH - (by + bh) / dims.renderScale, // flip y-axis (PDF bottom-left origin)
+      width: bw / dims.renderScale,
+      height: bh / dims.renderScale,
+      required: false,
+      multiline: false,
+      options: [],
+    };
+    const next = [...fdFieldsRef.current, newField];
+    fdFieldsRef.current = next;
+    setFdFields(next);
+  }, [redrawFdOverlay]);
+
+  const onFdLeave = useCallback(() => {
+    if (fdIsDrawingRef.current) { fdIsDrawingRef.current = false; fdStartRef.current = null; redrawFdOverlay(); }
+  }, [redrawFdOverlay]);
+
+  const updateFdField = useCallback((id, patch) => {
+    setFdFields(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
+  }, []);
+
+  const removeFdField = useCallback((id) => {
+    setFdFields(prev => prev.filter(f => f.id !== id));
+  }, []);
+
+  const onFdFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setFdFields([]); fdFieldsRef.current = [];
+    setFdResult(null); setFdError('');
+    setFdCurrentPage(1); fdCurrentPageRef.current = 1;
+    const dataUrl = await readFileAsDataUrl(file);
+    setFdFile({ name: file.name, dataUrl, size: file.size });
+    const pdfjsLib = await import('pdfjs-dist');
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+    }
+    const resp = await fetch(dataUrl);
+    const buf = await resp.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    fdPdfDocRef.current = doc;
+    setFdPageCount(doc.numPages);
+    // Trigger page render via useEffect
+    setFdCurrentPage(1);
+  };
+
+  const changeFdPage = (n) => {
+    if (n < 1 || n > fdPageCount) return;
+    setFdCurrentPage(n);
+  };
+
+  const runAddFields = async () => {
+    if (!fdFile || !fdFields.length) return;
+    setFdBusy(true); setFdError(''); setFdResult(null);
+    try {
+      const res = await api.post('/api/pdf/addfields', { dataUrl: fdFile.dataUrl, fields: fdFields });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setFdResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, added: data.added });
+    } catch (err) {
+      setFdError(err.message || 'Add fields failed');
+    } finally {
+      setFdBusy(false);
+    }
+  };
 
   // Keyboard shortcut: / focuses tool search
   useEffect(() => {
@@ -766,6 +970,7 @@ export default function PdfPage() {
     inspect: 'List all interactive form fields.',
     fill: 'Fill in form fields and download.',
     flatten: 'Lock form fields as static content.',
+    fielddesigner: 'Draw and place interactive form fields on a PDF page.',
     metadata: 'View and edit document metadata.',
     fileinfo: 'Show basic file information (client-side).',
   };
@@ -1381,6 +1586,196 @@ export default function PdfPage() {
                   )}
                 </div>
               </div>
+            </section>
+          )}
+
+          {/* ═══ Field Designer ══════════════════════════════════════════ */}
+          {mode === 'fielddesigner' && (
+            <section>
+              <ToolHeader id="fielddesigner" label="Add Form Fields" onHelp={setHelpTool} getIcon={getIcon}
+                badge={fdFields.length ? `${fdFields.length} field${fdFields.length !== 1 ? 's' : ''}` : undefined} />
+
+              {!fdFile && (
+                <PdfUpload onChange={onFdFileChange} files={[]} />
+              )}
+
+              {fdFile && (
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+                  {/* ── Canvas side ─────────────────────────────────────── */}
+                  <div className="flex-1 min-w-0">
+                    {/* Page navigation */}
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => changeFdPage(fdCurrentPage - 1)}
+                        disabled={fdCurrentPage <= 1}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >◀ Prev</button>
+                      <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                        Page <strong style={{ color: 'var(--color-text)' }}>{fdCurrentPage}</strong> of {fdPageCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeFdPage(fdCurrentPage + 1)}
+                        disabled={fdCurrentPage >= fdPageCount}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >Next ▶</button>
+                      <button
+                        type="button"
+                        onClick={() => { setFdFile(null); fdPdfDocRef.current = null; setFdFields([]); fdFieldsRef.current = []; setFdResult(null); }}
+                        className="ml-auto text-xs hover:opacity-60 transition-opacity"
+                        style={{ color: 'var(--color-muted)' }}
+                      >Change file</button>
+                    </div>
+
+                    {/* Field type picker */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Draw as:</span>
+                      {['text', 'checkbox', 'dropdown'].map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setFdFieldType(t)}
+                          className="px-3 py-1 rounded-lg text-xs font-medium transition-colors capitalize"
+                          style={{
+                            background: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-surface)',
+                            color: fdFieldType === t ? '#fff' : 'var(--color-text)',
+                            border: '1px solid',
+                            borderColor: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-border)',
+                          }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Stacked canvases */}
+                    <div
+                      className="rounded-xl border overflow-auto"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', maxHeight: '70vh' }}
+                    >
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <canvas ref={fdPdfCanvasRef} style={{ display: 'block' }} />
+                        <canvas
+                          ref={fdUiCanvasRef}
+                          style={{ position: 'absolute', top: 0, left: 0, cursor: 'crosshair' }}
+                          onMouseDown={onFdDown}
+                          onMouseMove={onFdMove}
+                          onMouseUp={onFdUp}
+                          onMouseLeave={onFdLeave}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                      Click and drag on the page to place a <strong>{fdFieldType}</strong> field.
+                    </p>
+                  </div>
+
+                  {/* ── Field list side ──────────────────────────────────── */}
+                  <div className="w-full lg:w-72 flex-shrink-0">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                        Fields — page {fdCurrentPage}
+                        <span className="ml-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          ({fdFields.filter(f => f.page === fdCurrentPage).length})
+                        </span>
+                      </p>
+                      {fdFields.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => { setFdFields([]); fdFieldsRef.current = []; }}
+                          className="text-xs hover:opacity-60 transition-opacity"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Fields on current page */}
+                    <div className="space-y-2 mb-3" style={{ maxHeight: 420, overflowY: 'auto' }}>
+                      {fdFields.filter(f => f.page === fdCurrentPage).map(f => (
+                        <div key={f.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize"
+                              style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                              {f.type}
+                            </span>
+                            <span className="text-[10px] flex-1 truncate" style={{ color: 'var(--color-muted)' }}>
+                              {Math.round(f.width)}×{Math.round(f.height)} pt
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeFdField(f.id)}
+                              className="hover:opacity-60 transition-opacity text-sm leading-none"
+                              style={{ color: 'var(--color-muted)' }}
+                            >×</button>
+                          </div>
+                          <input
+                            type="text"
+                            value={f.name}
+                            onChange={e => updateFdField(f.id, { name: e.target.value })}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                            placeholder="Field name"
+                          />
+                          {f.type === 'dropdown' && (
+                            <textarea
+                              value={f.options.join('\n')}
+                              onChange={e => updateFdField(f.id, { options: e.target.value.split('\n').filter(Boolean) })}
+                              placeholder="One option per line"
+                              rows={3}
+                              className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none resize-none mb-1.5"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                            />
+                          )}
+                          <div className="flex gap-3 mt-1">
+                            <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                              <input type="checkbox" checked={f.required} onChange={e => updateFdField(f.id, { required: e.target.checked })} className="w-3 h-3" />
+                              Required
+                            </label>
+                            {f.type === 'text' && (
+                              <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                                <input type="checkbox" checked={f.multiline} onChange={e => updateFdField(f.id, { multiline: e.target.checked })} className="w-3 h-3" />
+                                Multiline
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {fdFields.filter(f => f.page === fdCurrentPage).length === 0 && (
+                        <div className="rounded-xl border px-4 py-6 text-center text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', borderStyle: 'dashed' }}>
+                          Drag on the PDF to add fields to this page.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cross-page summary */}
+                    {fdFields.filter(f => f.page !== fdCurrentPage).length > 0 && (
+                      <p className="text-xs mb-3 px-1" style={{ color: 'var(--color-muted)' }}>
+                        + {fdFields.filter(f => f.page !== fdCurrentPage).length} field{fdFields.filter(f => f.page !== fdCurrentPage).length !== 1 ? 's' : ''} on other pages
+                      </p>
+                    )}
+
+                    <ErrMsg msg={fdError} />
+                    <RunBtn onClick={runAddFields} busy={fdBusy} disabled={!fdFields.length} label={`Embed ${fdFields.length} Field${fdFields.length !== 1 ? 's' : ''} & Download`} getIcon={getIcon} />
+                    {fdResult && (
+                      <div className="mt-3">
+                        <ResultCard
+                          dataUrl={fdResult.dataUrl}
+                          filename={fdFile ? `${fdFile.name.replace('.pdf', '')}-fields.pdf` : 'with-fields.pdf'}
+                          pageCount={fdResult.pageCount}
+                          getIcon={getIcon}
+                          extra={<p className="text-xs" style={{ color: 'var(--color-muted)' }}>{fdResult.added} AcroForm field{fdResult.added !== 1 ? 's' : ''} embedded</p>}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
