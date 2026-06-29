@@ -6,6 +6,19 @@ import useProcessingStore from '../store/processingStore';
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+// ─── Google Fonts available in the field designer ──────────────────────────────
+const GOOGLE_FONTS = [
+  // Sans-serif
+  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter',
+  'Nunito', 'Raleway', 'Ubuntu', 'Oswald', 'Source Sans 3',
+  // Serif
+  'Merriweather', 'Playfair Display', 'Lora', 'EB Garamond', 'Libre Baskerville',
+  // Monospace
+  'Roboto Mono', 'Source Code Pro', 'Inconsolata', 'JetBrains Mono',
+  // Display / Decorative
+  'Lobster', 'Pacifico', 'Dancing Script', 'Josefin Sans', 'Bebas Neue',
+];
+
 // ─── Tool catalogue ────────────────────────────────────────────────────────────
 
 const TOOL_HELP = {
@@ -666,9 +679,12 @@ export default function PdfPage() {
       required: false,
       multiline: false,
       options: [],
-      fontFamily: 'Helvetica',
+      fontFamily: 'Roboto',
       fontSize: 11,
       color: '#000000',
+      borderEnabled: true,
+      borderColor: '#4d4dcf',
+      borderWidth: 1,
     };
     const next = [...fdFieldsRef.current, newField];
     fdFieldsRef.current = next;
@@ -1851,15 +1867,15 @@ export default function PdfPage() {
                           {f.type !== 'checkbox' && (
                             <div className="flex items-center gap-1 mb-1.5">
                               <select
-                                value={f.fontFamily || 'Helvetica'}
+                                value={f.fontFamily || 'Roboto'}
                                 onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
                                 className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
                                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                title="Font family"
+                                title="Font family (Google Font)"
                               >
-                                <option value="Helvetica">Helvetica</option>
-                                <option value="Times-Roman">Times Roman</option>
-                                <option value="Courier">Courier</option>
+                                {GOOGLE_FONTS.map(font => (
+                                  <option key={font} value={font}>{font}</option>
+                                ))}
                               </select>
                               <input
                                 type="number"
@@ -1880,6 +1896,41 @@ export default function PdfPage() {
                               />
                             </div>
                           )}
+
+                          {/* Border controls */}
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <label className="flex items-center gap-1 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                              <input
+                                type="checkbox"
+                                checked={f.borderEnabled !== false}
+                                onChange={e => updateFdField(f.id, { borderEnabled: e.target.checked })}
+                                className="w-3 h-3"
+                              />
+                              Border
+                            </label>
+                            {f.borderEnabled !== false && (
+                              <>
+                                <input
+                                  type="color"
+                                  value={f.borderColor || '#4d4dcf'}
+                                  onChange={e => updateFdField(f.id, { borderColor: e.target.value })}
+                                  className="w-8 h-6 rounded cursor-pointer p-0.5 border"
+                                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                                  title="Border color"
+                                />
+                                <input
+                                  type="number"
+                                  value={f.borderWidth ?? 1}
+                                  min={0.5} max={10} step={0.5}
+                                  onChange={e => updateFdField(f.id, { borderWidth: Number(e.target.value) })}
+                                  className="w-14 text-xs px-1.5 py-0.5 rounded border outline-none text-center"
+                                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                  title="Border width (pt)"
+                                />
+                                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>pt</span>
+                              </>
+                            )}
+                          </div>
 
                           {f.type === 'dropdown' && (
                             <textarea

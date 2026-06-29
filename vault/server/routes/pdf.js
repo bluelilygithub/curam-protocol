@@ -336,12 +336,27 @@ router.post('/flatten', async (req, res) => {
 // ── Add Form Fields ────────────────────────────────────────────────────────────
 // Receives field definitions with PDF-point coordinates (bottom-left origin)
 // and embeds them as interactive AcroForm fields using pdf-lib.
-// Map user-facing font names to pdf-lib StandardFonts
-const STANDARD_FONT_MAP = {
-  'Helvetica':   StandardFonts.Helvetica,
-  'Times-Roman': StandardFonts.TimesRoman,
-  'Courier':     StandardFonts.Courier,
-};
+// In-memory font cache: family name → Buffer of TTF bytes
+const _fontCache = new Map();
+
+// Fetch a Google Font's TTF bytes. Uses an old User-Agent so Google Fonts
+// returns a TTF URL instead of woff2 (which pdf-lib cannot parse).
+async function fetchGoogleFontBytes(family) {
+  if (_fontCache.has(family)) return _fontCache.get(family);
+  const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(family)}:400`;
+  const cssResp = await fetch(cssUrl, {
+    headers: { 'User-Agent': 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)' },
+  });
+  if (!cssResp.ok) throw new Error(`Google Fonts CSS fetch failed: ${family} (${cssResp.status})`);
+  const css = await cssResp.text();
+  const urlMatch = css.match(/url\((https?:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
+  if (!urlMatch) throw new Error(`No font URL in CSS response for: ${family}`);
+  const fontResp = await fetch(urlMatch[1]);
+  if (!fontResp.ok) throw new Error(`Font file fetch failed for: ${family}`);
+  const bytes = Buffer.from(await fontResp.arrayBuffer());
+  _fontCache.set(family, bytes);
+  return bytes;
+}
 
 // Parse a #rrggbb hex colour to [r, g, b] in 0-1 range
 function hexToRgb01(hex) {
@@ -379,12 +394,17 @@ router.post('/addfields', async (req, res) => {
     const form = doc.getForm();
     const pages = doc.getPages();
 
-    // Pre-embed fonts that are actually needed to avoid re-embedding
+    // Pre-embed fonts that are needed (Google Fonts fetched on demand, Helvetica as fallback)
     const embeddedFonts = {};
-    const neededFonts = new Set(fieldDefs.map(d => d.fontFamily || 'Helvetica'));
+    const neededFonts = new Set(fieldDefs.filter(d => d.type !== 'checkbox').map(d => d.fontFamily || 'Roboto'));
     for (const fname of neededFonts) {
-      const stdFont = STANDARD_FONT_MAP[fname] || StandardFonts.Helvetica;
-      try { embeddedFonts[fname] = await doc.embedFont(stdFont); } catch {}
+      try {
+        const fontBytes = await fetchGoogleFontBytes(fname);
+        embeddedFonts[fname] = await doc.embedFont(fontBytes);
+      } catch (err) {
+        console.warn(`Google Font embed failed for "${fname}", falling back to Helvetica:`, err.message);
+        try { embeddedFonts[fname] = await doc.embedFont(StandardFonts.Helvetica); } catch {}
+      }
     }
 
     // Ensure field names are unique within this batch + any existing fields.
@@ -405,13 +425,15 @@ router.post('/addfields', async (req, res) => {
       if (pageIdx >= pages.length) continue;
       const page = pages[pageIdx];
       const name = uniqueName(def.name);
+      const hasBorder = def.borderEnabled !== false;
+      const [br, bg, bb] = hexToRgb01(def.borderColor || '#4d4dcf');
       const opts = {
         x: Number(def.x) || 0,
         y: Number(def.y) || 0,
         width: Math.max(5, Number(def.width) || 100),
         height: Math.max(5, Number(def.height) || 20),
-        borderColor: rgb(0.3, 0.3, 0.8),
-        borderWidth: 1,
+        borderColor: hasBorder ? rgb(br, bg, bb) : rgb(0.9, 0.9, 0.9),
+        borderWidth: hasBorder ? Math.max(0.5, Number(def.borderWidth) || 1) : 0,
         backgroundColor: rgb(1, 1, 1),
       };
       try {
