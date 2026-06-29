@@ -190,16 +190,27 @@ function readFileAsDataUrl(file) {
   });
 }
 
+// Decode a data URL to Uint8Array without fetch() (avoids CSP connect-src restrictions).
+function dataUrlToUint8Array(dataUrl) {
+  const base64 = dataUrl.split(',')[1] || '';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function initPdfjsWorker(pdfjsLib) {
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+  }
+}
+
 async function getPdfPageCount(dataUrl) {
   try {
     const pdfjsLib = await import('pdfjs-dist');
-    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-    }
-    const resp = await fetch(dataUrl);
-    const buf = await resp.arrayBuffer();
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    await initPdfjsWorker(pdfjsLib);
+    const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
     return doc.numPages;
   } catch {
     return null;
@@ -571,12 +582,8 @@ export default function PdfPage() {
     const dataUrl = await readFileAsDataUrl(file);
     setFdFile({ name: file.name, dataUrl, size: file.size });
     const pdfjsLib = await import('pdfjs-dist');
-    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-    }
-    const resp = await fetch(dataUrl);
-    const buf = await resp.arrayBuffer();
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    await initPdfjsWorker(pdfjsLib);
+    const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
     fdPdfDocRef.current = doc;
     setFdPageCount(doc.numPages);
     // Trigger page render via useEffect
@@ -833,13 +840,8 @@ export default function PdfPage() {
     setEtBusy(true); setEtError(''); setEtText('');
     try {
       const pdfjsLib = await import('pdfjs-dist');
-      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-      }
-      const resp = await fetch(etFile.dataUrl);
-      const buf = await resp.arrayBuffer();
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      await initPdfjsWorker(pdfjsLib);
+      const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(etFile.dataUrl) }).promise;
       const parts = [];
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
