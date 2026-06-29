@@ -674,8 +674,12 @@ router.post('/google-to-pdf', async (req, res) => {
   } catch (err) {
     console.error('PDF google-to-pdf:', err);
     const msg = err.message || 'Export failed.';
+    const code = err.code || err.status;
     if (msg.includes('not connected')) return res.status(401).json({ error: msg });
-    if (err.code === 403) return res.status(403).json({ error: 'Access denied. Reconnect your Google account to grant Drive read access.' });
+    if (code === 404 || msg.toLowerCase().includes('not found'))
+      return res.status(404).json({ error: 'File not found. Vault cannot access this file — your Google token was issued without Drive read permission. Reconnect your Google account to fix this.' });
+    if (code === 403)
+      return res.status(403).json({ error: 'Access denied. Reconnect your Google account to grant Drive read permission.' });
     res.status(500).json({ error: msg });
   }
 });

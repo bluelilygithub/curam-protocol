@@ -298,17 +298,34 @@ function ToolHeader({ id, label, badge, onHelp, getIcon }) {
 
 function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, onRemove }) {
   const inputRef = useRef();
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (!e.dataTransfer.files?.length) return;
+    onChange({ target: { files: e.dataTransfer.files, value: '' } });
+  };
+
   return (
     <div>
       {label && <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>{label}</p>}
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full flex items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed text-sm hover:opacity-70 transition-opacity"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        className="w-full flex items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed text-sm transition-opacity"
+        style={{
+          borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
+          color: dragOver ? 'var(--color-primary)' : 'var(--color-muted)',
+          background: 'var(--color-bg)',
+          opacity: dragOver ? 0.8 : 1,
+        }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        {multiple ? 'Upload PDFs' : 'Upload PDF'}
+        {dragOver ? 'Drop to upload' : (multiple ? 'Click or drag PDFs here' : 'Click or drag file here')}
       </button>
       <input ref={inputRef} type="file" accept={accept} multiple={multiple} className="hidden" onChange={onChange} />
       {files && files.length > 0 && (
@@ -2019,22 +2036,36 @@ export default function PdfPage() {
                     placeholder="https://docs.google.com/document/d/…"
                     value={googleUrl}
                     onChange={e => { setGoogleUrl(e.target.value); setGoogleError(''); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                      if (url) { setGoogleUrl(url.trim()); setGoogleError(''); }
+                    }}
+                    onDragOver={e => e.preventDefault()}
                   />
                   <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
-                    Paste any Google Docs, Sheets, Slides, or Drive file URL. Requires your Google account to be connected via Settings → Gmail / Drive.
+                    Paste or drag a Google Docs, Sheets, or Slides URL here. Requires Google account connected via Settings → Gmail / Drive.
                   </p>
-                  <ErrMsg msg={googleError} />
+                  {googleError && (
+                    <div className="mt-2 rounded-lg p-3 text-xs" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                      <p>{googleError}</p>
+                      {(googleError.includes('not found') || googleError.includes('Access denied') || googleError.includes('permission') || googleError.includes('not connected')) && (
+                        <p className="mt-1 font-medium">Go to Settings → Gmail / Drive, disconnect, then reconnect your Google account to grant Drive read access.</p>
+                      )}
+                    </div>
+                  )}
                   <RunBtn onClick={runGoogleToPdf} busy={googleBusy} disabled={!googleUrl.trim()} label="Export as PDF" getIcon={getIcon} />
                 </div>
                 <div className="rounded-xl border p-4 text-sm self-start" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
                   <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>How it works</p>
                   <ol className="space-y-1.5 text-xs list-decimal list-inside">
                     <li>Open the Google Doc/Sheet/Slide in your browser</li>
-                    <li>Copy the URL from the address bar</li>
-                    <li>Paste it here and click Export</li>
+                    <li>Copy the URL from the address bar (or drag it here)</li>
+                    <li>Click Export as PDF</li>
                     <li>The PDF opens in a preview — download from there</li>
                   </ol>
-                  <p className="mt-3 text-xs">If you get an access error, disconnect and reconnect your Google account in Settings to grant Drive read permission.</p>
+                  <p className="mt-3 text-xs font-medium" style={{ color: 'var(--color-text)' }}>Getting "File Not Found"?</p>
+                  <p className="mt-1 text-xs">Your Google token was issued before Drive read permission existed. Disconnect and reconnect your Google account in Settings to fix this.</p>
                 </div>
               </div>
             </section>
