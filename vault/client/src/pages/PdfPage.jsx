@@ -1947,10 +1947,6 @@ export default function PdfPage() {
           {mode === 'officetopdf' && (
             <section>
               <ToolHeader id="officetopdf" label="Office → PDF" onHelp={setHelpTool} getIcon={getIcon} />
-              <div className="rounded-xl border p-3 mb-4 text-xs flex items-start gap-2" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#92400e' }}>
-                <span style={{ marginTop: 1 }}>ℹ</span>
-                <span>This tool converts using your connected Google account. Go to <strong>Settings → Gmail / Drive</strong> and connect (or reconnect) Google before using this.</span>
-              </div>
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
                   <PdfUpload
@@ -1966,14 +1962,7 @@ export default function PdfPage() {
                     accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.txt"
                     label="Upload an Office file"
                   />
-                  {officeError && (
-                    <div className="mt-2 rounded-lg p-3 text-xs" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
-                      <p>{officeError}</p>
-                      {officeError.includes('Google') && (
-                        <p className="mt-1 font-medium">Go to Settings → Gmail / Drive, disconnect and reconnect your Google account.</p>
-                      )}
-                    </div>
-                  )}
+                  <ErrMsg msg={officeError} />
                   <RunBtn onClick={runOfficeToPdf} busy={officeBusy} disabled={!officeFile} label="Convert to PDF" getIcon={getIcon} />
                 </div>
                 <div>
@@ -1985,7 +1974,7 @@ export default function PdfPage() {
                       <li><strong>PowerPoint:</strong> .pptx, .ppt, .odp</li>
                       <li><strong>Text:</strong> .txt</li>
                     </ul>
-                    <p className="mt-3 text-xs">Converts via Google's servers using your connected Google account — high fidelity with no file size restrictions.</p>
+                    <p className="mt-3 text-xs">Runs via LibreOffice on the server — formatting, tables, and images are preserved.</p>
                   </div>
                 </div>
               </div>

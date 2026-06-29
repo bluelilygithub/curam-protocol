@@ -653,9 +653,7 @@ router.post('/metadata', async (req, res) => {
 });
 
 // ── Office → PDF ─────────────────────────────────────────────────────────────
-// Primary: Google Drive API (upload → convert → export → delete).
-// Fallback: LibreOffice headless if installed.
-// Requires Google account connected via Settings → Gmail / Drive.
+// Uses LibreOffice headless (installed via Dockerfile).
 router.post('/office-to-pdf', async (req, res) => {
   try {
     const { dataUrl, filename } = req.body || {};
@@ -663,32 +661,13 @@ router.post('/office-to-pdf', async (req, res) => {
     const ext = path.extname(filename || '').toLowerCase() || '.docx';
     if (!OFFICE_ALLOWED_EXTS.has(ext))
       return res.status(400).json({ error: `Unsupported file type: ${ext}` });
-
     const inputBuf = Buffer.from(dataUrl.split(',')[1], 'base64');
-
-    // Try Google Drive API first (no system dependency)
-    try {
-      const pdfBuf = await officeToGooglePdf(inputBuf, ext, filename, req.user.id);
-      return res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}`, via: 'google' });
-    } catch (gErr) {
-      // Only fall through to LibreOffice if Google isn't connected
-      if (!gErr.message?.includes('not connected')) throw gErr;
-    }
-
-    // Fallback: LibreOffice (if installed)
-    try {
-      const pdfBuf = await libreConvert(inputBuf, ext, 'pdf');
-      return res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}`, via: 'libreoffice' });
-    } catch (lErr) {
-      if (lErr.code === 'ENOENT') {
-        return res.status(500).json({
-          error: 'Conversion requires a connected Google account. Go to Settings → Gmail / Drive and connect your Google account, then try again.',
-        });
-      }
-      throw lErr;
-    }
+    const pdfBuf = await libreConvert(inputBuf, ext, 'pdf');
+    res.json({ dataUrl: `data:application/pdf;base64,${pdfBuf.toString('base64')}` });
   } catch (err) {
     console.error('PDF office-to-pdf:', err);
+    if (err.code === 'ENOENT')
+      return res.status(500).json({ error: 'LibreOffice is not available. The server image may still be deploying — please try again in a few minutes.' });
     res.status(500).json({ error: err.message || 'Conversion failed.' });
   }
 });
