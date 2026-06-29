@@ -127,6 +127,14 @@ const semanticMap = {
   aim: { lucide: 'Crosshair' },
   'palette-2': { lucide: 'PaintBucket' },
   text: { lucide: 'Type' },
+  combine: { lucide: 'Combine' },
+  'rotate-cw': { lucide: 'RotateCw' },
+  hash: { lucide: 'Hash' },
+  list: { lucide: 'List' },
+  'file-pen': { lucide: 'FilePen' },
+  'pen-square': { lucide: 'PenSquare' },
+  lock: { lucide: 'Lock' },
+  'lock-open': { lucide: 'LockOpen' },
 };
 
 const IconContext = createContext(null);

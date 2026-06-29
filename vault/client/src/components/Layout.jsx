@@ -623,6 +623,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('pdf') && (
+            <Link
+              to="/pdf"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/pdf' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="PDF Tools"
+            >
+              {getIcon('file-text', { size: 16 })}
+            </Link>
+          )}
+
           {canUseFeature('themeBuilder') && (
             <Link
               to="/theme-builder"
