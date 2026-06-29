@@ -9,13 +9,25 @@ function key() {
   return k;
 }
 
-// Quick config check — helps confirm the key is visible to the process
-router.get('/config-check', (req, res) => {
+// Quick config check — confirms the key is visible to the process
+router.get('/config-check', async (req, res) => {
   const k = process.env.DOMSCAN_API_KEY;
-  res.json({
-    configured: !!k,
-    prefix: k ? k.slice(0, 6) + '…' : null,
-  });
+  if (!k) return res.json({ configured: false, prefix: null });
+  // Probe DomScan with a lightweight call to confirm the key is valid
+  try {
+    const probe = await fetch(`${DOMSCAN_BASE}/tlds?limit=1`, {
+      headers: { 'X-API-Key': k, Accept: 'application/json' },
+    });
+    res.json({
+      configured: true,
+      prefix: k.slice(0, 6) + '…',
+      length: k.length,
+      domscanStatus: probe.status,
+      keyValid: probe.ok,
+    });
+  } catch (e) {
+    res.json({ configured: true, prefix: k.slice(0, 6) + '…', length: k.length, probeError: e.message });
+  }
 });
 
 async function domscan(path, params = {}) {
@@ -26,8 +38,11 @@ async function domscan(path, params = {}) {
   const res = await fetch(url.toString(), {
     headers: { 'X-API-Key': key(), Accept: 'application/json' },
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.message || body.error || `DomScan error ${res.status}`);
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`DomScan API key is invalid or unauthorised (HTTP ${res.status}). Check the key value in Railway → Variables.`);
+  }
+  if (!res.ok) throw new Error(body.message || body.error || `DomScan API error ${res.status}`);
   return body;
 }
 
@@ -37,8 +52,11 @@ async function domscanPost(path, payload = {}) {
     headers: { 'X-API-Key': key(), 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(payload),
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.message || body.error || `DomScan error ${res.status}`);
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`DomScan API key is invalid or unauthorised (HTTP ${res.status}). Check the key value in Railway → Variables.`);
+  }
+  if (!res.ok) throw new Error(body.message || body.error || `DomScan API error ${res.status}`);
   return body;
 }
 
