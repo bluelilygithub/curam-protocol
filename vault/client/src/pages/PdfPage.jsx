@@ -650,22 +650,6 @@ export default function PdfPage() {
   // Re-draw overlay when field list changes (e.g., name edits, removals)
   useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
 
-  // Delete selected field with Delete or Backspace (when not in a text input)
-  useEffect(() => {
-    const handleKey = (e) => {
-      if (!fdSelectedIdRef.current) return;
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      e.preventDefault();
-      removeFdField(fdSelectedIdRef.current);
-      setFdSelectedId(null);
-      fdSelectedIdRef.current = null;
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [removeFdField]);
-
   const fdCanvasCoords = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
     const sx = canvas.width / rect.width;
@@ -804,6 +788,22 @@ export default function PdfPage() {
   const removeFdField = useCallback((id) => {
     setFdFields(prev => prev.filter(f => f.id !== id));
   }, []);
+
+  // Delete/Backspace removes the selected field (must be declared after removeFdField)
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (!fdSelectedIdRef.current) return;
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      removeFdField(fdSelectedIdRef.current);
+      setFdSelectedId(null);
+      fdSelectedIdRef.current = null;
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [removeFdField]);
 
   const onFdFileChange = async (e) => {
     const file = e.target.files?.[0]; e.target.value = '';
