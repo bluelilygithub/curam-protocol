@@ -532,6 +532,7 @@ export default function PdfPage() {
   const [fdPageDims, setFdPageDims] = useState(null);
   const [fdFields, setFdFields] = useState([]);
   const [fdFieldType, setFdFieldType] = useState('text');
+  const [fdLoading, setFdLoading] = useState(false);
   const [fdBusy, setFdBusy] = useState(false);
   const [fdResult, setFdResult] = useState(null);
   const [fdError, setFdError] = useState('');
@@ -597,7 +598,13 @@ export default function PdfPage() {
     redrawFdOverlay();
   }, [redrawFdOverlay]);
 
-  // Re-render when page changes
+  // Render page 1 as soon as a new file is loaded and the canvas is mounted
+  useEffect(() => {
+    if (fdFile && fdPdfDocRef.current) renderFdPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fdFile]);
+
+  // Re-render when page changes (navigation)
   useEffect(() => {
     if (fdPdfDocRef.current && fdCurrentPage) renderFdPage(fdCurrentPage);
   }, [fdCurrentPage, renderFdPage]);
@@ -681,15 +688,20 @@ export default function PdfPage() {
     setFdFields([]); fdFieldsRef.current = [];
     setFdResult(null); setFdError('');
     setFdCurrentPage(1); fdCurrentPageRef.current = 1;
-    const dataUrl = await readFileAsDataUrl(file);
-    setFdFile({ name: file.name, dataUrl, size: file.size });
-    const pdfjsLib = await import('pdfjs-dist');
-    await initPdfjsWorker(pdfjsLib);
-    const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
-    fdPdfDocRef.current = doc;
-    setFdPageCount(doc.numPages);
-    // Trigger page render via useEffect
-    setFdCurrentPage(1);
+    setFdLoading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      // Load PDF before setting fdFile so the doc is ready the moment the canvas mounts
+      const pdfjsLib = await import('pdfjs-dist');
+      await initPdfjsWorker(pdfjsLib);
+      const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+      fdPdfDocRef.current = doc;
+      setFdPageCount(doc.numPages);
+      // setFdFile causes the canvas to mount; the useEffect below renders page 1
+      setFdFile({ name: file.name, dataUrl, size: file.size });
+    } finally {
+      setFdLoading(false);
+    }
   };
 
   const changeFdPage = (n) => {
@@ -1685,8 +1697,13 @@ export default function PdfPage() {
               <ToolHeader id="fielddesigner" label="Add Form Fields" onHelp={setHelpTool} getIcon={getIcon}
                 badge={fdFields.length ? `${fdFields.length} field${fdFields.length !== 1 ? 's' : ''}` : undefined} />
 
-              {!fdFile && (
+              {!fdFile && !fdLoading && (
                 <PdfUpload onChange={onFdFileChange} files={[]} />
+              )}
+              {fdLoading && (
+                <div className="flex items-center justify-center rounded-xl border-2 border-dashed" style={{ minHeight: 200, borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  <span className="text-sm">Loading PDF…</span>
+                </div>
               )}
 
               {fdFile && (
@@ -1759,9 +1776,9 @@ export default function PdfPage() {
                         />
                       </div>
                     </div>
-                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                      Click and drag on the page to place a <strong>{fdFieldType}</strong> field.
-                    </p>
+                    <div className="mt-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+                      <strong style={{ color: 'var(--color-text)' }}>How to add a field:</strong> Select a field type above (text / checkbox / dropdown), then <strong>click and drag</strong> on the PDF page to draw the field area. Name and configure it in the panel on the right, then click <strong>Embed Fields</strong> when done.
+                    </div>
                   </div>
 
                   {/* ── Field list side ──────────────────────────────────── */}
