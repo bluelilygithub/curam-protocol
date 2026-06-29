@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+// Vite copies this to the build output and returns a same-origin URL,
+// which satisfies script-src 'self' and avoids blob: worker CSP issues.
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // ─── Tool catalogue ────────────────────────────────────────────────────────────
 
@@ -201,8 +204,7 @@ function dataUrlToUint8Array(dataUrl) {
 
 async function initPdfjsWorker(pdfjsLib) {
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
   }
 }
 

@@ -3,6 +3,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import IconLibraryGenerator from '../components/IconLibraryGenerator';
 import useProcessingStore from '../store/processingStore';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 const CR_ASPECTS = [
   { id: 'free', label: 'Free', v: null },
@@ -1867,7 +1868,7 @@ export default function GraphicsPage() {
     try {
       const pdfjsLib = await import('pdfjs-dist');
       if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
       }
       const buffer = await file.arrayBuffer();
       const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
