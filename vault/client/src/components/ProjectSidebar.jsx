@@ -216,19 +216,47 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
       { icon: 'settings', title: 'Settings', action: () => navigate('/settings'), active: location.pathname === '/settings' },
     ];
+
+    // Fixed-position tooltip state — CSS ::after can't escape overflow:hidden on the sidebar
+    const [railTip, setRailTip] = useState(null);
+
     return (
       <div className="flex flex-col h-full w-full items-center py-3 gap-1">
         {railItems.map(item => (
           <button
             key={item.title}
             onClick={item.action}
-            data-tip-right={item.title}
+            onMouseEnter={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setRailTip({ label: item.title, top: r.top + r.height / 2, left: r.right + 8 });
+            }}
+            onMouseLeave={() => setRailTip(null)}
             className="w-9 h-9 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
             style={{ color: item.active ? 'var(--color-primary)' : 'var(--color-muted)' }}
           >
             {getIcon(item.icon, { size: 16 })}
           </button>
         ))}
+        {railTip && (
+          <div
+            style={{
+              position: 'fixed',
+              top: railTip.top,
+              left: railTip.left,
+              transform: 'translateY(-50%)',
+              background: 'var(--color-text)',
+              color: 'var(--color-bg)',
+              fontSize: 11,
+              padding: '3px 8px',
+              borderRadius: 5,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          >
+            {railTip.label}
+          </div>
+        )}
       </div>
     );
   }
