@@ -791,6 +791,41 @@ export default function SharesPage() {
                               </td>
                             </tr>
                           ))}
+                          {/* Totals row */}
+                          {(() => {
+                            const totalValue = dashboard.holdingsValueAud;
+                            const totalCost = dashboard.costBasisAud;
+                            const totalPnl = dashboard.unrealizedPnlAud;
+                            const totalPnlPct = dashboard.unrealizedPnlPct;
+                            const totalDayAud = dashboard.positions.reduce((s, p) => p.dayChangeAud != null ? s + p.dayChangeAud : s, 0);
+                            const totalPrevValue = dashboard.positions.reduce((s, p) => p.previousCloseAud != null ? s + p.previousCloseAud * p.quantity : s, 0);
+                            const totalDayPct = totalPrevValue > 0 ? (totalDayAud / totalPrevValue) * 100 : null;
+                            const hasDayData = dashboard.positions.some(p => p.dayChangeAud != null);
+                            return (
+                              <tr className="border-t-2 font-semibold" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                                <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>TOTAL</td>
+                                <td className="px-3 py-2" />
+                                <td className="px-3 py-2" />
+                                <td className="px-3 py-2">
+                                  <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>basis {fmtAud(totalCost)}</p>
+                                </td>
+                                <td className="px-3 py-2" />
+                                <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{fmtAud(totalValue)}</td>
+                                <td className="px-3 py-2" style={{ color: (totalPnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                  <p>{fmtAud(totalPnl)}</p>
+                                  <p className="text-[11px]">{fmtPct(totalPnlPct)}</p>
+                                </td>
+                                <td className="px-3 py-2" style={{ color: hasDayData ? (totalDayAud >= 0 ? '#22c55e' : '#ef4444') : 'var(--color-muted)' }}>
+                                  {hasDayData ? (
+                                    <>
+                                      <p>{fmtAud(totalDayAud)}</p>
+                                      <p className="text-[11px]">{fmtPct(totalDayPct)}</p>
+                                    </>
+                                  ) : <p className="text-[11px]">—</p>}
+                                </td>
+                              </tr>
+                            );
+                          })()}
                         </tbody>
                       </table>
                     </div>
