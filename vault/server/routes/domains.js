@@ -162,11 +162,11 @@ router.get('/value', handle(async (req) => {
 
 // ── Launch Readiness ─────────────────────────────────────────────────────────
 
-// Social handle availability (Instagram, X, TikTok, LinkedIn, YouTube, GitHub…)
+// Social handle availability — API uses 'handle' param
 router.get('/social', handle(async (req) => {
   const { username } = req.query;
   if (!username) throw new Error('username is required.');
-  return domscan('/social', { username });
+  return domscan('/social', { handle: username });
 }));
 
 // Brand launch readiness bundle (domain + social + health + typos combined)

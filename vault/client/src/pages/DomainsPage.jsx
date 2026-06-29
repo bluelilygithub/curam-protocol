@@ -223,29 +223,44 @@ function SmartResult({ mode, data }) {
     );
   }
 
-  // Score — response is { success, data: { name, overall_score, grade, scores, analysis } }
+  // Score — response: { success, data: { name, overall_score, grade, scores:{length,pronounceability,...}, analysis } }
   if (mode === 'score') {
     const d = data.data || data;
     const score = d.overall_score ?? d.score;
     if (score !== undefined) {
       const breakdown = d.scores || d.breakdown || {};
+      const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#f59e0b' : '#ef4444';
       return (
         <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-4 px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <div className="text-4xl font-bold" style={{ color: 'var(--color-primary)' }}>{score}</div>
+          <div className="flex items-center gap-4 px-4 py-4 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <div className="text-4xl font-bold" style={{ color: scoreColor }}>{score}</div>
             <div>
-              <div className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{d.name || ''} &nbsp;<span style={{ color: 'var(--color-primary)' }}>{d.grade || ''}</span></div>
-              <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Brand quality score out of 100</div>
+              <div className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
+                {d.name || ''}{d.grade ? <span style={{ color: 'var(--color-primary)' }}> · {d.grade}</span> : ''}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Brand quality score out of 100</div>
             </div>
           </div>
           {Object.keys(breakdown).length > 0 && (
             <div className="space-y-1.5">
-              {Object.entries(breakdown).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-                  <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{k.replace(/_/g, ' ')}</span>
-                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{typeof v === 'number' ? v : String(v)}</span>
-                </div>
-              ))}
+              {Object.entries(breakdown).map(([k, v]) => {
+                const numVal = typeof v === 'number' ? v : null;
+                return (
+                  <div key={k} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                    <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{k.replace(/_/g, ' ')}</span>
+                    <div className="flex items-center gap-2">
+                      {numVal !== null && (
+                        <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${numVal}%`, background: numVal >= 80 ? '#16a34a' : numVal >= 60 ? '#f59e0b' : '#ef4444' }} />
+                        </div>
+                      )}
+                      <span className="text-xs font-medium w-6 text-right" style={{ color: 'var(--color-text)' }}>
+                        {numVal !== null ? numVal : (typeof v === 'boolean' ? (v ? '✓' : '✗') : '')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -253,101 +268,154 @@ function SmartResult({ mode, data }) {
     }
   }
 
-  // Compare — response is { names[], best, ranking[{ name, score, rank }] }
+  // Compare — response: { names[{name,score,grade,verdict}], best, ranking[{name,score,rank}] }
   if (mode === 'compare') {
-    const list = data.ranking || data.rankings || data.names || [];
+    // Merge ranking order with names detail for full picture
+    const ranking = data.ranking || [];
+    const nameDetails = {};
+    (data.names || []).forEach(n => { nameDetails[n.name] = n; });
+    const list = ranking.length > 0 ? ranking : (data.names || []);
     if (list.length > 0) {
       return (
-        <div className="mt-4 space-y-2">
-          {data.best && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Best: <strong style={{ color: 'var(--color-primary)' }}>{data.best}</strong></p>}
-          {list.map((item, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-              <span className="text-sm font-bold w-5 text-center" style={{ color: 'var(--color-primary)' }}>#{item.rank ?? i + 1}</span>
-              <span className="flex-1 font-medium text-sm" style={{ color: 'var(--color-text)' }}>{item.name}</span>
-              <span className="text-sm font-medium" style={{ color: 'var(--color-muted)' }}>{item.score ?? ''}{item.grade ? ` · ${item.grade}` : ''}</span>
-            </div>
-          ))}
+        <div className="mt-4 space-y-3">
+          {data.best && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Recommended: <strong style={{ color: 'var(--color-primary)' }}>{data.best}</strong></p>}
+          {list.map((item, i) => {
+            const detail = nameDetails[item.name] || item;
+            const score = item.score ?? detail.score;
+            const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#f59e0b' : '#ef4444';
+            return (
+              <div key={i} className="px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-sm font-bold w-5 text-center" style={{ color: 'var(--color-primary)' }}>#{item.rank ?? i + 1}</span>
+                  <span className="flex-1 font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{item.name}</span>
+                  <span className="text-lg font-bold" style={{ color: scoreColor }}>{score}</span>
+                  {(detail.grade || item.grade) && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>{detail.grade || item.grade}</span>}
+                </div>
+                {detail.verdict && <p className="text-xs ml-8" style={{ color: 'var(--color-muted)' }}>{detail.verdict}</p>}
+              </div>
+            );
+          })}
         </div>
       );
     }
   }
 
-  // Availability
+  // Availability — response: { name, results[{domain, tld, available, source}], meta }
   if (mode === 'availability' && data.results) {
-    return (
-      <div className="mt-4 space-y-2">
-        {data.results.map((r, i) => (
-          <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <span className="font-mono text-sm" style={{ color: 'var(--color-text)' }}>{r.domain}</span>
-            <div className="flex items-center gap-2">
-              {r.price && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{r.price}</span>}
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
-                background: r.available ? '#dcfce7' : '#fef2f2',
-                color: r.available ? '#16a34a' : '#dc2626',
-              }}>
-                {r.available ? 'Available' : 'Taken'}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Typos
-  if (mode === 'typos' && (data.typos || data.variants || data.results)) {
-    const variants = data.typos || data.variants || data.results || [];
-    const registered = variants.filter(v => !v.available);
-    const available = variants.filter(v => v.available);
+    const available = data.results.filter(r => r.available === true);
+    const taken = data.results.filter(r => r.available !== true);
     return (
       <div className="mt-4 space-y-3">
-        {registered.length > 0 && (
+        {available.length > 0 && (
           <div>
-            <p className="text-xs font-medium mb-1.5" style={{ color: '#dc2626' }}>⚠ Registered ({registered.length}) — brand protection risk</p>
+            <p className="text-xs font-medium mb-1.5" style={{ color: '#16a34a' }}>Available ({available.length})</p>
             <div className="space-y-1">
-              {registered.map((v, i) => (
-                <div key={i} className="px-3 py-1.5 rounded-lg text-sm font-mono" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                  {v.domain || v.name}
+              {available.map((r, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                  <span className="font-mono text-sm font-medium" style={{ color: '#15803d' }}>{r.domain}</span>
+                  <span className="text-xs" style={{ color: '#16a34a' }}>Available</span>
                 </div>
               ))}
             </div>
           </div>
         )}
-        {available.length > 0 && (
+        {taken.length > 0 && (
           <div>
-            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Available variants ({available.length})</p>
+            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Taken ({taken.length})</p>
             <div className="space-y-1">
-              {available.slice(0, 20).map((v, i) => (
-                <div key={i} className="px-3 py-1.5 rounded-lg text-sm font-mono" style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
-                  {v.domain || v.name}
+              {taken.map((r, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                  <span className="font-mono text-sm" style={{ color: 'var(--color-muted)' }}>{r.domain}</span>
+                  <span className="text-xs" style={{ color: '#dc2626' }}>Taken</span>
                 </div>
               ))}
             </div>
           </div>
+        )}
+        {data.meta && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{data.meta.available_count ?? available.length} of {data.results.length} TLDs available</p>}
+      </div>
+    );
+  }
+
+  // Typos — response: { domain, registered_typos[{domain,type,risk,registered}], threat_level, risk_summary }
+  if (mode === 'typos') {
+    const registered = data.registered_typos || [];
+    const threatLevel = data.threat_level;
+    const summary = data.risk_summary || {};
+    const riskColor = { critical: '#dc2626', high: '#f59e0b', medium: '#3b82f6', low: '#16a34a' };
+    return (
+      <div className="mt-4 space-y-3">
+        {threatLevel && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <div>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Threat level</p>
+              <p className="font-bold capitalize" style={{ color: riskColor[threatLevel] || 'var(--color-text)' }}>{threatLevel}</p>
+            </div>
+            <div className="flex gap-3 text-xs">
+              {Object.entries(summary).map(([level, count]) => count > 0 && (
+                <div key={level} className="text-center">
+                  <div className="font-bold" style={{ color: riskColor[level] || 'var(--color-muted)' }}>{count}</div>
+                  <div style={{ color: 'var(--color-muted)' }} className="capitalize">{level}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {registered.length > 0 ? (
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: '#dc2626' }}>⚠ Registered variants ({registered.length}) — brand protection risks</p>
+            <div className="space-y-1.5">
+              {registered.map((v, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+                  <span className="text-sm font-mono" style={{ color: '#dc2626' }}>{v.domain}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{v.type?.replace(/_/g,' ')}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: riskColor[v.risk] || '#888', color: '#fff' }}>{v.risk}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm" style={{ color: '#16a34a' }}>✓ No registered typo variants found — your brand looks clean.</p>
+        )}
+        {data.permutations_generated > 0 && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{data.permutations_generated} permutations checked · {data.available_typos ?? 0} available</p>
         )}
       </div>
     );
   }
 
-  // Social handles
-  if (mode === 'social' && (data.platforms || data.handles || data.results)) {
-    const platforms = data.platforms || data.handles || data.results || {};
-    const entries = Array.isArray(platforms)
-      ? platforms
-      : Object.entries(platforms).map(([k, v]) => ({ platform: k, ...(typeof v === 'object' ? v : { available: v }) }));
+  // Social handles — response: { handle, availability:{github:{available,profile_url,...},...}, summary }
+  if (mode === 'social' && data.availability) {
+    const entries = Object.entries(data.availability).map(([platform, info]) => ({ platform, ...info }));
+    const avail = entries.filter(e => e.available === true);
+    const taken = entries.filter(e => e.available === false);
+    const unknown = entries.filter(e => e.available !== true && e.available !== false);
+    const summary = data.summary || {};
     return (
-      <div className="mt-4 space-y-2">
-        {entries.map((p, i) => (
-          <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <span className="text-sm font-medium capitalize" style={{ color: 'var(--color-text)' }}>{p.platform || p.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
-              background: p.available ? '#dcfce7' : p.available === false ? '#fef2f2' : '#fafafa',
-              color: p.available ? '#16a34a' : p.available === false ? '#dc2626' : '#888',
-            }}>
-              {p.available ? 'Available' : p.available === false ? 'Taken' : 'Unknown'}
-            </span>
-          </div>
-        ))}
+      <div className="mt-4 space-y-3">
+        <div className="flex gap-4 text-sm">
+          <span style={{ color: '#16a34a' }}><strong>{summary.available_count ?? avail.length}</strong> available</span>
+          <span style={{ color: '#dc2626' }}><strong>{summary.unavailable_count ?? taken.length}</strong> taken</span>
+          {(summary.unknown_count ?? unknown.length) > 0 && <span style={{ color: 'var(--color-muted)' }}><strong>{summary.unknown_count ?? unknown.length}</strong> unknown</span>}
+        </div>
+        <div className="space-y-1.5">
+          {entries.sort((a, b) => (b.available === true ? 1 : 0) - (a.available === true ? 1 : 0)).map((p, i) => (
+            <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium capitalize" style={{ color: 'var(--color-text)' }}>{p.platform}</span>
+                {p.profile_url && <a href={p.profile_url} target="_blank" rel="noreferrer" className="text-xs hover:opacity-60 transition-opacity" style={{ color: 'var(--color-primary)' }}>↗</a>}
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
+                background: p.available === true ? '#dcfce7' : p.available === false ? '#fef2f2' : '#f5f5f5',
+                color: p.available === true ? '#16a34a' : p.available === false ? '#dc2626' : '#888',
+              }}>
+                {p.available === true ? 'Available' : p.available === false ? 'Taken' : 'Unknown'}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -526,7 +594,7 @@ function TyposPanel() {
 
 function AvailabilityPanel() {
   const [name, setName] = useState('');
-  const [tlds, setTlds] = useState('com,io,ai,co,app,net,org,dev');
+  const [tlds, setTlds] = useState('com,com.au,io,ai,co,app,net,net.au,org,org.au,dev');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [err, setErr] = useState('');
