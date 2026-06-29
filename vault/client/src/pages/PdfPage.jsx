@@ -554,6 +554,7 @@ export default function PdfPage() {
   const [fdPageDims, setFdPageDims] = useState(null);
   const [fdFields, setFdFields] = useState([]);
   const [fdFieldType, setFdFieldType] = useState('text');
+  const [fdSelectedId, setFdSelectedId] = useState(null);
   const [fdLoading, setFdLoading] = useState(false);
   const [fdBusy, setFdBusy] = useState(false);
   const [fdResult, setFdResult] = useState(null);
@@ -563,17 +564,20 @@ export default function PdfPage() {
   const fdPdfDocRef = useRef(null);
   const fdIsDrawingRef = useRef(false);
   const fdStartRef = useRef(null);
+  const fdMoveRef = useRef(null); // { fieldId, startX, startY, origX, origY, fieldW, fieldH }
   // Refs keep canvas callbacks free of stale closures
   const fdCurrentPageRef = useRef(1);
   const fdPageDimsRef = useRef(null);
   const fdFieldsRef = useRef([]);
   const fdFieldTypeRef = useRef('text');
+  const fdSelectedIdRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => { fdCurrentPageRef.current = fdCurrentPage; }, [fdCurrentPage]);
   useEffect(() => { fdPageDimsRef.current = fdPageDims; }, [fdPageDims]);
   useEffect(() => { fdFieldsRef.current = fdFields; }, [fdFields]);
   useEffect(() => { fdFieldTypeRef.current = fdFieldType; }, [fdFieldType]);
+  useEffect(() => { fdSelectedIdRef.current = fdSelectedId; }, [fdSelectedId]);
 
   // Redraw the UI overlay canvas (existing fields for current page)
   const redrawFdOverlay = useCallback(() => {
@@ -588,14 +592,26 @@ export default function PdfPage() {
       const cy = dims.canvasH - (f.y + f.height) * dims.renderScale;
       const cw = f.width * dims.renderScale;
       const ch = f.height * dims.renderScale;
-      ctx.fillStyle = 'rgba(99,102,241,0.12)';
+      const isSel = f.id === fdSelectedIdRef.current;
+      // Fill
+      ctx.fillStyle = isSel ? 'rgba(234,88,12,0.14)' : 'rgba(99,102,241,0.12)';
       ctx.fillRect(cx, cy, cw, ch);
-      ctx.strokeStyle = 'rgb(99,102,241)';
-      ctx.lineWidth = 1.5;
+      // Stroke
+      ctx.strokeStyle = isSel ? 'rgb(234,88,12)' : 'rgb(99,102,241)';
+      ctx.lineWidth = isSel ? 2 : 1.5;
       ctx.strokeRect(cx, cy, cw, ch);
-      ctx.fillStyle = 'rgb(99,102,241)';
-      ctx.font = 'bold 10px system-ui,sans-serif';
+      // Label
+      ctx.fillStyle = isSel ? 'rgb(234,88,12)' : 'rgb(99,102,241)';
+      ctx.font = `bold 10px system-ui,sans-serif`;
       ctx.fillText(`${f.name} (${f.type})`, cx + 3, cy + 12);
+      // Corner handles when selected
+      if (isSel) {
+        const hs = 7;
+        ctx.fillStyle = 'rgb(234,88,12)';
+        [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([hx, hy]) => {
+          ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        });
+      }
     }
   }, []);
 
@@ -634,6 +650,22 @@ export default function PdfPage() {
   // Re-draw overlay when field list changes (e.g., name edits, removals)
   useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
 
+  // Delete selected field with Delete or Backspace (when not in a text input)
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (!fdSelectedIdRef.current) return;
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      removeFdField(fdSelectedIdRef.current);
+      setFdSelectedId(null);
+      fdSelectedIdRef.current = null;
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [removeFdField]);
+
   const fdCanvasCoords = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
     const sx = canvas.width / rect.width;
@@ -641,18 +673,70 @@ export default function PdfPage() {
     return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   };
 
-  const onFdDown = useCallback((e) => {
-    if (!fdPageDimsRef.current) return;
-    fdIsDrawingRef.current = true;
-    fdStartRef.current = fdCanvasCoords(e, fdUiCanvasRef.current);
+  // Returns the id of the top-most field under (cx, cy) in canvas coords, or null
+  const hitTestFields = useCallback((cx, cy, dims) => {
+    const onPage = [...fdFieldsRef.current].filter(f => f.page === fdCurrentPageRef.current).reverse();
+    for (const f of onPage) {
+      const fx = f.x * dims.renderScale;
+      const fy = dims.canvasH - (f.y + f.height) * dims.renderScale;
+      const fw = f.width * dims.renderScale;
+      const fh = f.height * dims.renderScale;
+      if (cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh) return f.id;
+    }
+    return null;
   }, []);
 
+  const onFdDown = useCallback((e) => {
+    const dims = fdPageDimsRef.current;
+    if (!dims) return;
+    const pos = fdCanvasCoords(e, fdUiCanvasRef.current);
+    const hitId = hitTestFields(pos.x, pos.y, dims);
+    if (hitId) {
+      // Select + start move
+      setFdSelectedId(hitId);
+      fdSelectedIdRef.current = hitId;
+      const field = fdFieldsRef.current.find(f => f.id === hitId);
+      fdMoveRef.current = { fieldId: hitId, startX: pos.x, startY: pos.y, origX: field.x, origY: field.y, fieldW: field.width, fieldH: field.height };
+      fdIsDrawingRef.current = false;
+    } else {
+      // Deselect + start draw
+      setFdSelectedId(null);
+      fdSelectedIdRef.current = null;
+      fdMoveRef.current = null;
+      fdIsDrawingRef.current = true;
+      fdStartRef.current = pos;
+    }
+  }, [hitTestFields]);
+
   const onFdMove = useCallback((e) => {
+    const dims = fdPageDimsRef.current;
+    const canvas = fdUiCanvasRef.current;
+    if (!canvas) return;
+    const cur = fdCanvasCoords(e, canvas);
+
+    // Update cursor based on hover (only when idle)
+    if (!fdIsDrawingRef.current && !fdMoveRef.current && dims) {
+      canvas.style.cursor = hitTestFields(cur.x, cur.y, dims) ? 'move' : 'crosshair';
+    }
+
+    if (fdMoveRef.current) {
+      // Moving an existing field
+      const { fieldId, startX, startY, origX, origY, fieldW, fieldH } = fdMoveRef.current;
+      const rs = dims.renderScale;
+      const newX = Math.max(0, Math.min(dims.pdfW - fieldW, origX + (cur.x - startX) / rs));
+      const newY = Math.max(0, Math.min(dims.pdfH - fieldH, origY - (cur.y - startY) / rs));
+      const next = fdFieldsRef.current.map(f => f.id === fieldId ? { ...f, x: newX, y: newY } : f);
+      fdFieldsRef.current = next;
+      setFdFields(next);
+      redrawFdOverlay();
+      return;
+    }
+
     if (!fdIsDrawingRef.current || !fdStartRef.current) return;
-    const cur = fdCanvasCoords(e, fdUiCanvasRef.current);
+    const cur2 = cur;
     const { x: sx, y: sy } = fdStartRef.current;
-    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
-    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    const bx = Math.min(sx, cur2.x), by = Math.min(sy, cur2.y);
+    const bw = Math.abs(cur2.x - sx), bh = Math.abs(cur2.y - sy);
     redrawFdOverlay();
     const ctx = fdUiCanvasRef.current.getContext('2d');
     ctx.setLineDash([5, 4]);
@@ -665,6 +749,13 @@ export default function PdfPage() {
   }, [redrawFdOverlay]);
 
   const onFdUp = useCallback((e) => {
+    // Finalise a move
+    if (fdMoveRef.current) {
+      fdMoveRef.current = null;
+      redrawFdOverlay();
+      return;
+    }
+    // Finalise a draw
     if (!fdIsDrawingRef.current || !fdStartRef.current || !fdPageDimsRef.current) return;
     fdIsDrawingRef.current = false;
     const cur = fdCanvasCoords(e, fdUiCanvasRef.current);
@@ -680,7 +771,7 @@ export default function PdfPage() {
       name: `field_${fdFieldsRef.current.length + 1}`,
       type: fdFieldTypeRef.current,
       x: bx / dims.renderScale,
-      y: dims.pdfH - (by + bh) / dims.renderScale, // flip y-axis (PDF bottom-left origin)
+      y: dims.pdfH - (by + bh) / dims.renderScale,
       width: bw / dims.renderScale,
       height: bh / dims.renderScale,
       required: false,
@@ -696,9 +787,13 @@ export default function PdfPage() {
     const next = [...fdFieldsRef.current, newField];
     fdFieldsRef.current = next;
     setFdFields(next);
+    // Auto-select newly drawn field
+    setFdSelectedId(newField.id);
+    fdSelectedIdRef.current = newField.id;
   }, [redrawFdOverlay]);
 
   const onFdLeave = useCallback(() => {
+    if (fdMoveRef.current) { fdMoveRef.current = null; redrawFdOverlay(); }
     if (fdIsDrawingRef.current) { fdIsDrawingRef.current = false; fdStartRef.current = null; redrawFdOverlay(); }
   }, [redrawFdOverlay]);
 
@@ -1778,6 +1873,11 @@ export default function PdfPage() {
                       >Change file</button>
                     </div>
 
+                    {/* Interaction hint */}
+                    <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+                      <strong style={{ color: 'var(--color-text)' }}>Draw</strong> a new field · <strong style={{ color: 'var(--color-text)' }}>Click</strong> to select · <strong style={{ color: 'var(--color-text)' }}>Drag</strong> to move · <kbd className="px-1 py-0.5 rounded text-[10px]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>Del</kbd> to delete
+                    </p>
+
                     {/* Field type picker */}
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Draw as:</span>
@@ -1845,7 +1945,16 @@ export default function PdfPage() {
                     {/* Fields on current page */}
                     <div className="space-y-2 mb-3" style={{ maxHeight: 420, overflowY: 'auto' }}>
                       {fdFields.filter(f => f.page === fdCurrentPage).map(f => (
-                        <div key={f.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                        <div
+                          key={f.id}
+                          className="rounded-xl border p-3 cursor-pointer"
+                          style={{
+                            borderColor: fdSelectedId === f.id ? 'rgb(234,88,12)' : 'var(--color-border)',
+                            background: fdSelectedId === f.id ? 'rgba(234,88,12,0.06)' : 'var(--color-surface)',
+                            outline: fdSelectedId === f.id ? '2px solid rgba(234,88,12,0.3)' : 'none',
+                          }}
+                          onClick={() => { setFdSelectedId(f.id); fdSelectedIdRef.current = f.id; redrawFdOverlay(); }}
+                        >
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize"
                               style={{ background: 'var(--color-primary)', color: '#fff' }}>
