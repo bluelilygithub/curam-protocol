@@ -98,18 +98,15 @@ input[type="file"]::file-selector-button:hover { opacity: 0.7; }
 .prose th, .prose td { border: 1px solid var(--color-border); padding: 6px 10px; }
 .prose th { background: var(--color-surface); font-weight: 600; }
 
-/* ── Nav icon tooltips ──────────────────────────────────────────────────────
-   Usage: add data-tip="Label" to any element.
-   The tooltip appears below on desktop (above would clip behind the top edge). */
-[data-tip] {
+/* ── Tooltips ───────────────────────────────────────────────────────────────
+   data-tip="Label"       → appears below (top nav icons)
+   data-tip-right="Label" → appears to the right (collapsed sidebar rail) */
+[data-tip],
+[data-tip-right] {
   position: relative;
 }
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+[data-tip]::after,
+[data-tip-right]::after {
   background: var(--color-text);
   color: var(--color-bg);
   font-size: 11px;
@@ -121,8 +118,22 @@ input[type="file"]::file-selector-button:hover { opacity: 0.7; }
   opacity: 0;
   transition: opacity 120ms ease;
   z-index: 9999;
+  position: absolute;
 }
-[data-tip]:hover::after {
+[data-tip]::after {
+  content: attr(data-tip);
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+[data-tip-right]::after {
+  content: attr(data-tip-right);
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+[data-tip]:hover::after,
+[data-tip-right]:hover::after {
   opacity: 1;
 }
 

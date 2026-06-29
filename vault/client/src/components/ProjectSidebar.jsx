@@ -222,7 +222,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
           <button
             key={item.title}
             onClick={item.action}
-            title={item.title}
+            data-tip-right={item.title}
             className="w-9 h-9 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
             style={{ color: item.active ? 'var(--color-primary)' : 'var(--color-muted)' }}
           >
@@ -265,7 +265,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             onClick={(e) => { e.stopPropagation(); document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate('/chat'); if (onClose) onClose(); }}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
             style={{ color: 'var(--color-primary)' }}
-            title="New general chat"
+            data-tip="New general chat"
           >
             {getIcon('plus', { size: 14 })}
           </button>
@@ -295,7 +295,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                   onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
                   className="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity flex-shrink-0"
                   style={{ color: 'var(--color-muted)' }}
-                  title="Move to project"
+                  data-tip="Move to project"
                 >
                   {getIcon('arrow-right', { size: 11 })}
                 </button>
@@ -319,7 +319,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             onClick={() => setShowFolderInput(v => !v)}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
-            title="New folder"
+            data-tip="New folder"
           >
             {getIcon('folder-plus', { size: 13 })}
           </button>
@@ -327,7 +327,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             onClick={() => setShowModal(true)}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-primary)' }}
-            title="New project"
+            data-tip="New project"
           >
             {getIcon('plus', { size: 14 })}
           </button>
@@ -482,7 +482,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: 'var(--color-muted)' }}
-                        title="Open project"
+                        data-tip="Open project"
                       >
                         {getIcon('external-link', { size: 11 })}
                       </span>
@@ -490,7 +490,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         onClick={(e) => { e.stopPropagation(); setActive(project.id); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: 'var(--color-primary)' }}
-                        title="New chat"
+                        data-tip="New chat"
                       >
                         {getIcon('plus', { size: 11 })}
                       </span>
@@ -498,7 +498,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         onClick={(e) => startRename(e, project)}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: 'var(--color-muted)' }}
-                        title="Rename"
+                        data-tip="Rename"
                       >
                         {getIcon('edit', { size: 11 })}
                       </span>
@@ -506,7 +506,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         onClick={async (e) => { e.stopPropagation(); await archive(project.id); if (activeProjectId === project.id) navigate('/'); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: 'var(--color-muted)' }}
-                        title="Archive project"
+                        data-tip="Archive project"
                       >
                         {getIcon('archive', { size: 11 })}
                       </span>
@@ -514,7 +514,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: '#ef4444' }}
-                        title="Delete project"
+                        data-tip="Delete project"
                       >
                         {getIcon('trash', { size: 11 })}
                       </span>
