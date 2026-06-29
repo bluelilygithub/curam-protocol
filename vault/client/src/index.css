@@ -98,6 +98,34 @@ input[type="file"]::file-selector-button:hover { opacity: 0.7; }
 .prose th, .prose td { border: 1px solid var(--color-border); padding: 6px 10px; }
 .prose th { background: var(--color-surface); font-weight: 600; }
 
+/* ── Nav icon tooltips ──────────────────────────────────────────────────────
+   Usage: add data-tip="Label" to any element.
+   The tooltip appears below on desktop (above would clip behind the top edge). */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 9999;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+}
+
 /* Bounce animation */
 @keyframes bounce {
   0%, 100% { transform: translateY(0); opacity: 0.4; }

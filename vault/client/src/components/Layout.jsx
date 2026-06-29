@@ -382,7 +382,7 @@ function Layout() {
             })}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
             style={{ color: 'var(--color-muted)' }}
-            title="Toggle sidebar"
+            data-tip="Toggle sidebar"
           >
             {getIcon('chevron-right', {
               size: 16,
@@ -417,7 +417,7 @@ function Layout() {
               color: location.pathname === '/guide' ? 'var(--color-primary)' : 'var(--color-muted)',
               borderColor: location.pathname === '/guide' ? 'var(--color-primary)' : 'var(--color-border)',
             }}
-            title="User Guide"
+            data-tip="User Guide"
           >
             ?
           </Link>
@@ -426,7 +426,7 @@ function Layout() {
             to="/personas"
             className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/personas' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Personas"
+            data-tip="Personas"
           >
             {getIcon('user', { size: 16 })}
           </Link>
@@ -435,7 +435,7 @@ function Layout() {
             to="/memory"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/memory' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Memory"
+            data-tip="Memory"
           >
             {getIcon('brain', { size: 16 })}
           </Link>
@@ -444,7 +444,7 @@ function Layout() {
             to="/suggestions"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
             style={{ color: location.pathname === '/suggestions' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Suggestions"
+            data-tip="Suggestions"
           >
             {getIcon('inbox', { size: 16 })}
             {newSuggestionCount > 0 && (
@@ -461,7 +461,7 @@ function Layout() {
             to="/prompts"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/prompts' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Prompt Library"
+            data-tip="Prompt Library"
           >
             {getIcon('book', { size: 16 })}
           </Link>
@@ -470,7 +470,7 @@ function Layout() {
             to="/notes"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/notes' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Notes"
+            data-tip="Notes"
           >
             {getIcon('pen-line', { size: 16 })}
           </Link>
@@ -480,7 +480,7 @@ function Layout() {
               to="/clients"
               className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname.startsWith('/clients') ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Clients"
+              data-tip="Clients"
             >
               {getIcon('briefcase', { size: 16 })}
             </Link>
@@ -490,7 +490,7 @@ function Layout() {
             to="/tasks"
             className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Tasks"
+            data-tip="Tasks"
           >
             {getIcon('list-checks', { size: 16 })}
           </Link>
@@ -500,7 +500,7 @@ function Layout() {
               to="/goals"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
               style={{ color: location.pathname === '/goals' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Goals"
+              data-tip="Goals"
             >
               {getIcon('target', { size: 16 })}
               {missionReminderDue && (
@@ -513,7 +513,7 @@ function Layout() {
             to="/history"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
             style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Chat History"
+            data-tip="Chat History"
           >
             {getIcon('clock', { size: 16 })}
             {bookmarkCount > 0 && (
@@ -529,7 +529,7 @@ function Layout() {
               to="/student/quiz"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname.startsWith('/student') ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Student"
+              data-tip="Student"
             >
               {getIcon('graduation-cap', { size: 16 })}
             </Link>
@@ -540,7 +540,7 @@ function Layout() {
               to="/chains"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/chains' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Prompt Chains"
+              data-tip="Prompt Chains"
             >
               ⛓
             </Link>
@@ -551,7 +551,7 @@ function Layout() {
               to="/graph"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/graph' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Knowledge Graph"
+              data-tip="Knowledge Graph"
             >
               {getIcon('share-2', { size: 16 })}
             </Link>
@@ -562,7 +562,7 @@ function Layout() {
               to="/debate"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Multi-Model Debate"
+              data-tip="Multi-Model Debate"
             >
               {getIcon('debate', { size: 16 })}
             </Link>
@@ -573,7 +573,7 @@ function Layout() {
               to="/compare"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/compare' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Document Compare"
+              data-tip="Document Compare"
             >
               {getIcon('compare', { size: 16 })}
             </Link>
@@ -584,7 +584,7 @@ function Layout() {
               to="/finance"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/finance' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Finance"
+              data-tip="Finance"
             >
               💰
             </Link>
@@ -595,7 +595,7 @@ function Layout() {
               to="/shares"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/shares' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Shares"
+              data-tip="Shares"
             >
               📈
             </Link>
@@ -606,7 +606,7 @@ function Layout() {
               to="/youtube"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/youtube' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="YouTube"
+              data-tip="YouTube"
             >
               📺
             </Link>
@@ -617,7 +617,7 @@ function Layout() {
               to="/graphics"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/graphics' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Graphics"
+              data-tip="Graphics"
             >
               {getIcon('palette', { size: 16 })}
             </Link>
@@ -628,7 +628,7 @@ function Layout() {
               to="/pdf"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/pdf' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="PDF Tools"
+              data-tip="PDF Tools"
             >
               {getIcon('file-text', { size: 16 })}
             </Link>
@@ -639,7 +639,7 @@ function Layout() {
               to="/theme-builder"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/theme-builder' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="WP Theme Builder"
+              data-tip="WP Theme Builder"
             >
               {getIcon('blocks', { size: 16 })}
             </Link>
@@ -651,7 +651,7 @@ function Layout() {
               state={{ dashboardNonce: Date.now() }}
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/wellbeing' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Wellbeing Check"
+              data-tip="Wellbeing Check"
             >
               {getIcon('heart-pulse', { size: 16 })}
             </Link>
@@ -662,7 +662,7 @@ function Layout() {
               to="/gmail-intel"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/gmail-intel' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Inbox Intel"
+              data-tip="Inbox Intel"
             >
               {getIcon('inbox', { size: 16 })}
             </Link>
@@ -673,7 +673,7 @@ function Layout() {
               to="/usage"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/usage' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Usage & Cost"
+              data-tip="Usage & Cost"
             >
               ⚡
             </Link>
@@ -684,7 +684,7 @@ function Layout() {
               to="/mood"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/mood' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Mood"
+              data-tip="Mood"
             >
               🫀
             </Link>
@@ -695,7 +695,7 @@ function Layout() {
               to="/news-digest"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
               style={{ color: location.pathname === '/news-digest' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="News Digest"
+              data-tip="News Digest"
             >
               📰
             </Link>
@@ -706,7 +706,7 @@ function Layout() {
               to="/admin"
               className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
               style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              title="Dashboard"
+              data-tip="Dashboard"
             >
               {getIcon('bar-chart', { size: 16 })}
             </Link>
@@ -716,7 +716,7 @@ function Layout() {
             to="/settings"
             className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/settings' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Settings"
+            data-tip="Settings"
           >
             {getIcon('settings', { size: 16 })}
           </Link>
@@ -725,7 +725,7 @@ function Layout() {
             onClick={handleLogout}
             className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
-            title="Sign out"
+            data-tip="Sign out"
           >
             {getIcon('log-out', { size: 16 })}
           </button>
@@ -738,7 +738,7 @@ function Layout() {
                   to="/mobile-dashboard"
                   className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                   style={{ color: 'var(--color-muted)' }}
-                  title="Dashboard"
+                  data-tip="Dashboard"
                 >
                   {getIcon('home', { size: 16 })}
                 </Link>
@@ -747,7 +747,7 @@ function Layout() {
                 onClick={() => setMobileNavOpen(true)}
                 className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
-                title="Menu"
+                data-tip="Menu"
               >
                 {getIcon('menu', { size: 16 })}
               </button>
@@ -755,7 +755,7 @@ function Layout() {
                 onClick={handleLogout}
                 className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
-                title="Sign out"
+                data-tip="Sign out"
               >
                 {getIcon('log-out', { size: 16 })}
               </button>
@@ -765,7 +765,7 @@ function Layout() {
 
         {canUseFeature('student') && location.pathname.startsWith('/student') && (
           <PageToolbar
-            title="Student"
+            data-tip="Student"
             views={[
               { mode: 'quiz', icon: 'clipboard-list', label: 'Quiz' },
               { mode: 'cards', icon: 'layers', label: 'Cards' },
