@@ -149,9 +149,16 @@ const TOOL_HELP = {
       'Renders each PDF page as a canvas in your browser',
       'Drag to draw field bounding boxes — precise pixel-level placement',
       'Three field types: Text, Checkbox, Dropdown',
+      'Choose font (25 Google Fonts), size, and text colour per field',
+      'Control border on/off, colour, and width per field',
       'Text fields can be flagged as multiline or required',
       'Dropdown fields accept a custom options list',
-      'Fields are saved as real AcroForm fields (fillable with Inspect + Fill tools or any PDF reader)',
+      'Fields are saved as real AcroForm fields (fillable in any PDF reader)',
+    ],
+    workflow: [
+      'After downloading: open in any PDF viewer (Preview, Acrobat, Chrome, Edge) to fill in fields and save.',
+      'To fill fields inside Vault: upload the form to the "Fill Form" tool, enter values, download the result.',
+      'To lock filled values permanently: run the filled PDF through the "Flatten" tool.',
     ],
   },
 };
@@ -1973,21 +1980,29 @@ export default function PdfPage() {
                     <ErrMsg msg={fdError} />
                     <RunBtn onClick={runAddFields} busy={fdBusy} disabled={!fdFields.length} label={`Embed ${fdFields.length} Field${fdFields.length !== 1 ? 's' : ''} & Download`} getIcon={getIcon} />
                     {fdResult && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          onClick={() => setResultModal({ dataUrl: fdResult.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${fdResult.added} AcroForm field${fdResult.added !== 1 ? 's' : ''} embedded` })}
-                          className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
-                          style={{ background: 'var(--color-primary)', color: '#fff' }}
-                        >
-                          View Result
-                        </button>
-                        <button
-                          onClick={() => downloadFile(fdResult.dataUrl, fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf')}
-                          className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        >
-                          {getIcon('download', { size: 14 })}
-                        </button>
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setResultModal({ dataUrl: fdResult.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${fdResult.added} AcroForm field${fdResult.added !== 1 ? 's' : ''} embedded` })}
+                            className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
+                            style={{ background: 'var(--color-primary)', color: '#fff' }}
+                          >
+                            View Result
+                          </button>
+                          <button
+                            onClick={() => downloadFile(fdResult.dataUrl, fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf')}
+                            className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            {getIcon('download', { size: 14 })}
+                          </button>
+                        </div>
+                        <div className="rounded-lg px-3 py-2.5 text-xs space-y-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                          <p className="font-semibold" style={{ color: 'var(--color-text)' }}>What to do next</p>
+                          <p>• Open the downloaded PDF in any viewer (Preview, Acrobat, Chrome) to fill in fields manually and save.</p>
+                          <p>• Or bring it back to the <strong style={{ color: 'var(--color-text)' }}>Fill Form</strong> tool here to fill fields and download the result in one step.</p>
+                          <p>• Use <strong style={{ color: 'var(--color-text)' }}>Flatten</strong> afterwards to lock the values permanently.</p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2045,6 +2060,16 @@ export default function PdfPage() {
                   </li>
                 ))}
               </ul>
+              {h.workflow && (
+                <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Workflow — what to do next</p>
+                  <ol className="space-y-1.5 list-decimal list-inside">
+                    {h.workflow.map((step, i) => (
+                      <li key={i} className="text-xs" style={{ color: 'var(--color-muted)' }}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
           </div>
         );

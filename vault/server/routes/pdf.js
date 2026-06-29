@@ -451,9 +451,11 @@ router.post('/addfields', async (req, res) => {
             if (choices.length) f.setOptions(choices);
             f.addToPage(page, opts);
             if (def.required) f.enableRequired();
+            // updateAppearances first (bakes font family into AP stream),
+            // then applyFieldTypography to lock font size + colour in DA last.
+            const fontD = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+            if (fontD) try { f.updateAppearances(fontD); } catch {}
             applyFieldTypography(f, def);
-            const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
-            if (font) try { f.updateAppearances(font); } catch {}
             break;
           }
           case 'text':
@@ -462,9 +464,9 @@ router.post('/addfields', async (req, res) => {
             f.addToPage(page, opts);
             if (def.multiline) f.enableMultiline();
             if (def.required) f.enableRequired();
+            const fontT = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+            if (fontT) try { f.updateAppearances(fontT); } catch {}
             applyFieldTypography(f, def);
-            const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
-            if (font) try { f.updateAppearances(font); } catch {}
             break;
           }
         }
