@@ -1119,6 +1119,44 @@ router.post('/augment', async (req, res) => {
   }
 });
 
+// Extract element: apply a painted mask as an alpha channel to isolate a region.
+// Client sends: imageDataUrl + maskDataUrl (white=keep, black=remove) + optional feather.
+router.post('/extract', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const maskDataUrl = String(req.body?.maskDataUrl || '');
+    const feather = Math.min(50, Math.max(0, Number(req.body?.feather) || 0));
+    const imgBuf = dataUrlToBuffer(imageDataUrl);
+    const maskBuf = dataUrlToBuffer(maskDataUrl);
+    if (!imgBuf || !maskBuf) return res.status(400).json({ error: 'Both image and mask are required' });
+
+    const meta = await sharp(imgBuf).metadata();
+    const W = meta.width;
+    const H = meta.height;
+
+    // Resize mask to match image, convert to greyscale, optionally blur for feathering.
+    let maskPipeline = sharp(maskBuf).resize(W, H, { fit: 'fill' }).greyscale();
+    if (feather > 0) maskPipeline = maskPipeline.blur(feather);
+    const { data: maskData } = await maskPipeline.raw().toBuffer({ resolveWithObject: true });
+
+    // Ensure image has alpha, then multiply existing alpha by mask value.
+    const { data: imgData, info } = await sharp(imgBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const nPixels = info.width * info.height;
+    const out = Buffer.alloc(nPixels * 4);
+    for (let i = 0; i < nPixels; i++) {
+      out[i * 4]     = imgData[i * 4];
+      out[i * 4 + 1] = imgData[i * 4 + 1];
+      out[i * 4 + 2] = imgData[i * 4 + 2];
+      out[i * 4 + 3] = Math.round(imgData[i * 4 + 3] * (maskData[i] / 255));
+    }
+    const resultBuf = await sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+    res.json({ imageDataUrl: `data:image/png;base64,${resultBuf.toString('base64')}`, width: info.width, height: info.height });
+  } catch (err) {
+    console.error('extract error:', err);
+    res.status(500).json({ error: err.message || 'Extraction failed' });
+  }
+});
+
 // Mask-based inpainting / object removal. Currently FAL-only (mask + prompt).
 router.post('/inpaint', async (req, res) => {
   try {

@@ -90,6 +90,8 @@ const semanticMap = {
   'smartphone':     { lucide: 'Smartphone' },
   'more-horizontal': { lucide: 'MoreHorizontal' },
   'help-circle':    { lucide: 'HelpCircle' },
+  'brush':          { lucide: 'Brush' },
+  'scan-search':    { lucide: 'ScanSearch' },
   'graduation-cap': { lucide: 'GraduationCap' },
   'clipboard-list': { lucide: 'ClipboardList' },
   'heart-pulse': { lucide: 'HeartPulse' },

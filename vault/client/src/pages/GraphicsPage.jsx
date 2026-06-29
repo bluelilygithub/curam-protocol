@@ -173,7 +173,9 @@ const MODES = [
   { id: 'svg', label: 'Vectorize (SVG)', icon: 'shapes' },
   { id: 'iconlib', label: 'AI Icon Library', icon: 'layout-grid' },
   { id: 'background', label: 'Background', icon: 'scissors' },
+  { id: 'extract', label: 'Extract Element', icon: 'scan-search' },
   { id: 'recolor', label: 'Recolor', icon: 'palette' },
+  { id: 'eraser', label: 'Eraser', icon: 'brush' },
   { id: 'redact', label: 'Redact', icon: 'eye-off' },
   { id: 'inpaint', label: 'Inpaint / Remove', icon: 'eraser' },
   { id: 'picker', label: 'Picker', icon: 'eye' },
@@ -221,7 +223,7 @@ const MODE_GROUPS = [
   { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
   { label: 'Compose', ids: ['annotate', 'watermark', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
-  { label: 'Retouch', ids: ['background', 'recolor', 'redact', 'inpaint'] },
+  { label: 'Retouch', ids: ['background', 'extract', 'recolor', 'eraser', 'redact', 'inpaint'] },
   { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
 
@@ -659,6 +661,16 @@ const TOOL_HELP = {
     what: 'Inspect an image file\'s technical details without uploading it.',
     features: ['Name, MIME type, format', 'File size: human-readable and exact bytes', 'Pixel dimensions, aspect ratio, megapixels', 'Last-modified date', 'Image preview', 'Nothing is uploaded — fully browser-side'],
   },
+  eraser: {
+    title: 'Eraser',
+    what: 'Paint over parts of an image to erase them to transparency — entirely in your browser.',
+    features: ['Circular brush with adjustable size (5–120 px)', 'Erase mode: removes pixels to full transparency', 'Restore mode: paints original pixels back — useful if you overshoot', 'Smooth stroke interpolation between mouse positions', 'Undo/redo stack — up to 20 snapshots (Cmd/Ctrl+Z supported)', 'Reset: restore the image to its original state', 'Output is always a PNG with an alpha channel', 'Nothing is uploaded — fully client-side'],
+  },
+  extract: {
+    title: 'Extract Element',
+    what: 'Paint a mask over the element you want to keep; the rest is removed to transparency.',
+    features: ['Paint brush marks the area to keep (shown as green overlay)', 'Erase brush removes paint strokes (shown in red) for fine adjustments', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
+  },
 };
 
 export default function GraphicsPage() {
@@ -974,6 +986,30 @@ export default function GraphicsPage() {
   const [btError, setBtError] = useState('');
   // Tool help modal
   const [helpTool, setHelpTool] = useState(null);
+  // Eraser (client-side canvas)
+  const [eraserSource, setEraserSource] = useState(null);
+  const [eraserBrush, setEraserBrush] = useState(30);
+  const [eraserMode, setEraserMode] = useState('erase'); // 'erase' | 'restore'
+  const [eraserCanUndo, setEraserCanUndo] = useState(false);
+  const [eraserCanRedo, setEraserCanRedo] = useState(false);
+  const eraserCanvasRef = useRef(null);
+  const eraserImgRef = useRef(null);
+  const eraserIsDrawingRef = useRef(false);
+  const eraserLastRef = useRef(null);
+  const eraserUndoRef = useRef([]);
+  const eraserRedoRef = useRef([]);
+  // Extract element (canvas mask → server)
+  const [extractSource, setExtractSource] = useState(null);
+  const [extractBrush, setExtractBrush] = useState(30);
+  const [extractErasing, setExtractErasing] = useState(false);
+  const [extractFeather, setExtractFeather] = useState(5);
+  const [extractBusy, setExtractBusy] = useState(false);
+  const [extractResult, setExtractResult] = useState(null);
+  const [extractError, setExtractError] = useState('');
+  const extractCanvasRef = useRef(null);
+  const extractMaskRef = useRef(null);
+  const extractImgRef = useRef(null);
+  const extractIsDrawingRef = useRef(false);
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
   // Image-to-image augmentation is supported on local ComfyUI and on FAL (via its
   // /image-to-image endpoint). Other hosted providers don't support it yet.
@@ -1957,6 +1993,221 @@ export default function GraphicsPage() {
   const deleteAdjPreset = (name) => persistAdjPresets(adjPresets.filter(p => p.name !== name));
 
   // Inpaint: paint a white mask (red overlay on screen) over the area to change.
+  // ── Eraser ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (mode !== 'eraser' || !eraserSource?.imageDataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      eraserImgRef.current = img;
+      const canvas = eraserCanvasRef.current;
+      if (!canvas) return;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      eraserUndoRef.current = [];
+      eraserRedoRef.current = [];
+      setEraserCanUndo(false);
+      setEraserCanRedo(false);
+    };
+    img.src = eraserSource.imageDataUrl;
+  }, [mode, eraserSource]);
+
+  const eraserPos = (e) => {
+    const c = eraserCanvasRef.current;
+    if (!c) return null;
+    const r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+  };
+  const eraserApplyDot = (from, to) => {
+    const canvas = eraserCanvasRef.current;
+    const img = eraserImgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const radius = Math.max(3, Number(eraserBrush)) * (canvas.width / rect.width) * 0.5;
+    const dist = from ? Math.hypot(to.x - from.x, to.y - from.y) : 0;
+    const steps = from ? Math.max(1, Math.ceil(dist / (radius * 0.4))) : 1;
+    const startP = from || to;
+    ctx.save();
+    for (let i = 0; i <= steps; i++) {
+      const t = steps > 0 ? i / steps : 0;
+      const cx = startP.x + (to.x - startP.x) * t;
+      const cy = startP.y + (to.y - startP.y) * t;
+      if (eraserMode === 'restore') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  };
+  const onEraserDown = (e) => {
+    const p = eraserPos(e);
+    if (!p) return;
+    e.preventDefault();
+    const canvas = eraserCanvasRef.current;
+    if (canvas) {
+      const snap = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      eraserUndoRef.current = [...eraserUndoRef.current, snap].slice(-20);
+      eraserRedoRef.current = [];
+      setEraserCanUndo(true);
+      setEraserCanRedo(false);
+    }
+    eraserIsDrawingRef.current = true;
+    eraserLastRef.current = p;
+    eraserApplyDot(null, p);
+  };
+  const onEraserMove = (e) => {
+    if (!eraserIsDrawingRef.current) return;
+    const p = eraserPos(e);
+    if (!p) return;
+    eraserApplyDot(eraserLastRef.current, p);
+    eraserLastRef.current = p;
+  };
+  const onEraserUp = () => { eraserIsDrawingRef.current = false; eraserLastRef.current = null; };
+  const undoEraser = () => {
+    const snap = eraserUndoRef.current[eraserUndoRef.current.length - 1];
+    if (!snap || !eraserCanvasRef.current) return;
+    const canvas = eraserCanvasRef.current;
+    const current = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    eraserRedoRef.current = [...eraserRedoRef.current, current].slice(-20);
+    eraserUndoRef.current = eraserUndoRef.current.slice(0, -1);
+    canvas.getContext('2d').putImageData(snap, 0, 0);
+    setEraserCanUndo(eraserUndoRef.current.length > 0);
+    setEraserCanRedo(true);
+  };
+  const redoEraser = () => {
+    const snap = eraserRedoRef.current[eraserRedoRef.current.length - 1];
+    if (!snap || !eraserCanvasRef.current) return;
+    const canvas = eraserCanvasRef.current;
+    const current = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    eraserUndoRef.current = [...eraserUndoRef.current, current].slice(-20);
+    eraserRedoRef.current = eraserRedoRef.current.slice(0, -1);
+    canvas.getContext('2d').putImageData(snap, 0, 0);
+    setEraserCanRedo(eraserRedoRef.current.length > 0);
+    setEraserCanUndo(true);
+  };
+  const resetEraser = () => {
+    const canvas = eraserCanvasRef.current;
+    const img = eraserImgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    eraserUndoRef.current = [];
+    eraserRedoRef.current = [];
+    setEraserCanUndo(false);
+    setEraserCanRedo(false);
+  };
+  const exportEraser = () => {
+    const canvas = eraserCanvasRef.current;
+    if (!canvas) return;
+    downloadDataUrl(canvas.toDataURL('image/png'), `erased-${Date.now()}.png`);
+  };
+
+  // ── Extract Element ─────────────────────────────────────────────
+  const drawExtractBase = () => {
+    const disp = extractCanvasRef.current;
+    const mask = extractMaskRef.current;
+    const img = extractImgRef.current;
+    if (!disp || !mask || !img) return;
+    const cap = 1200;
+    let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    if (Math.max(w, h) > cap) { const s = cap / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+    disp.width = w; disp.height = h; mask.width = w; mask.height = h;
+    disp.getContext('2d').drawImage(img, 0, 0, w, h);
+    const mctx = mask.getContext('2d');
+    mctx.fillStyle = '#000';
+    mctx.fillRect(0, 0, w, h);
+  };
+  useEffect(() => {
+    if (mode !== 'extract' || !extractSource?.imageDataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      extractImgRef.current = img;
+      setExtractResult(null);
+      setExtractError('');
+      drawExtractBase();
+    };
+    img.src = extractSource.imageDataUrl;
+  }, [mode, extractSource]);
+
+  const extractPos = (e) => {
+    const c = extractCanvasRef.current;
+    if (!c) return null;
+    const r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+  };
+  const extractPaint = (x, y) => {
+    const disp = extractCanvasRef.current;
+    const mask = extractMaskRef.current;
+    if (!disp || !mask) return;
+    const rect = disp.getBoundingClientRect();
+    const r = Math.max(3, Number(extractBrush)) * (disp.width / rect.width) * 0.5;
+    const dctx = disp.getContext('2d');
+    if (extractErasing) {
+      // Restore original pixels then paint light red to show erased mask area
+      const img = extractImgRef.current;
+      if (img) {
+        dctx.save();
+        dctx.beginPath(); dctx.arc(x, y, r, 0, Math.PI * 2); dctx.clip();
+        dctx.drawImage(img, 0, 0, disp.width, disp.height);
+        dctx.restore();
+      }
+      dctx.fillStyle = 'rgba(239,68,68,0.25)';
+      dctx.beginPath(); dctx.arc(x, y, r, 0, Math.PI * 2); dctx.fill();
+      const mctx = mask.getContext('2d');
+      mctx.fillStyle = '#000';
+      mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill();
+    } else {
+      dctx.fillStyle = 'rgba(34,197,94,0.45)';
+      dctx.beginPath(); dctx.arc(x, y, r, 0, Math.PI * 2); dctx.fill();
+      const mctx = mask.getContext('2d');
+      mctx.fillStyle = '#fff';
+      mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill();
+    }
+  };
+  const onExtractDown = (e) => { extractIsDrawingRef.current = true; const p = extractPos(e); if (p) extractPaint(p.x, p.y); };
+  const onExtractMove = (e) => { if (!extractIsDrawingRef.current) return; const p = extractPos(e); if (p) extractPaint(p.x, p.y); };
+  const onExtractUp = () => { extractIsDrawingRef.current = false; };
+  const clearExtractMask = () => drawExtractBase();
+  const runExtract = async () => {
+    const mask = extractMaskRef.current;
+    const disp = extractCanvasRef.current;
+    if (!mask || !disp) { setExtractError('Load an image first'); return; }
+    // Get original image at display size
+    const tmp = document.createElement('canvas');
+    tmp.width = disp.width; tmp.height = disp.height;
+    tmp.getContext('2d').drawImage(extractImgRef.current, 0, 0, tmp.width, tmp.height);
+    setExtractBusy(true); setExtractError(''); setExtractResult(null);
+    try {
+      const res = await api.post('/api/graphics/extract', {
+        imageDataUrl: tmp.toDataURL('image/png'),
+        maskDataUrl: mask.toDataURL('image/png'),
+        feather: extractFeather,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Extraction failed');
+      setExtractResult(data);
+    } catch (err) {
+      setExtractError(err.message || 'Extraction failed');
+    } finally {
+      setExtractBusy(false);
+    }
+  };
+
   const drawInpaintBase = () => {
     const disp = inpaintCanvasRef.current;
     const mask = inpaintMaskRef.current;
@@ -3335,6 +3586,8 @@ export default function GraphicsPage() {
             {mode === 'pdf2img' && 'Render each page of a PDF to a PNG image.'}
             {mode === 'pipeline' && 'Chain several edits into one repeatable sequence.'}
             {mode === 'inpaint' && 'Paint over an area and let AI fill or replace it.'}
+            {mode === 'eraser' && 'Paint over parts of an image to erase them to transparency.'}
+            {mode === 'extract' && 'Paint a mask over an element to isolate it as a transparent PNG.'}
             {mode === 'perspective' && 'Correct keystone / trapezoid distortion with horizontal and vertical shear sliders.'}
             {mode === 'smartcrop' && 'Crop to a target size or aspect ratio, with content-aware focus (attention, entropy, or a fixed direction).'}
             {mode === 'colorgrade' && 'Apply a cinematic colour grade — warm, cool, vintage, fade, noir, and more — in one click.'}
@@ -6707,6 +6960,140 @@ export default function GraphicsPage() {
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{pipeResult.steps} step{pipeResult.steps === 1 ? '' : 's'} · {pipeResult.width}×{pipeResult.height} · {formatBytes(pipeResult.bytes)}</p>
                 </>
               ) : <ResultPlaceholder src={pipeSource?.imageDataUrl} message="Your processed image will appear here." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'eraser' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Eraser</h2>
+            <button type="button" onClick={() => setHelpTool('eraser')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs in browser · free</span>
+        </div>
+        <div className="rounded-2xl border p-4 space-y-4 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint over parts of an image to erase them to transparency. Switch to Restore mode to paint original pixels back. Exports as a PNG with an alpha channel.</p>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+            <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) loadImageInto(src => { setEraserSource(src); setEraserCanUndo(false); setEraserCanRedo(false); })(f); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex gap-2">
+              {['erase', 'restore'].map(m => (
+                <button key={m} type="button" onClick={() => setEraserMode(m)} className="px-3 py-1.5 rounded-lg text-xs font-medium border capitalize" style={{ background: eraserMode === m ? 'var(--color-primary)' : 'transparent', color: eraserMode === m ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>{m === 'erase' ? 'Erase' : 'Restore'}</button>
+              ))}
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush size: {eraserBrush}px</label>
+              <input type="range" min="5" max="120" value={eraserBrush} onChange={e => setEraserBrush(Number(e.target.value))} className="w-full" />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button type="button" onClick={undoEraser} disabled={!eraserCanUndo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
+              <button type="button" onClick={redoEraser} disabled={!eraserCanRedo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button>
+              <button type="button" onClick={resetEraser} disabled={!eraserSource?.imageDataUrl} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button>
+              <button type="button" onClick={exportEraser} disabled={!eraserSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+                {getIcon('download', { size: 15 })} Export PNG
+              </button>
+            </div>
+          </div>
+        </div>
+        {!eraserSource?.imageDataUrl ? (
+          <div className="rounded-2xl border flex items-center justify-center text-sm text-center px-6 py-20" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+            Choose an image, then paint over the areas you want to erase.
+          </div>
+        ) : (
+          <div className="rounded-2xl border p-3 flex justify-center" style={{ borderColor: 'var(--color-border)', backgroundImage: 'repeating-conic-gradient(#d0d0d0 0% 25%, #f5f5f5 0% 50%)', backgroundSize: '20px 20px' }}>
+            <canvas
+              ref={eraserCanvasRef}
+              onMouseDown={onEraserDown}
+              onMouseMove={onEraserMove}
+              onMouseUp={onEraserUp}
+              onMouseLeave={onEraserUp}
+              style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: eraserMode === 'erase' ? 'cell' : 'copy', touchAction: 'none' }}
+            />
+          </div>
+        )}
+        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Everything runs in your browser — nothing is uploaded. The checkerboard pattern shows transparent areas.</p>
+      </section>
+      )}
+
+      {mode === 'extract' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Extract element</h2>
+            <button type="button" onClick={() => setHelpTool('extract')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint (green) over the element you want to keep. Everything outside the painted area will be removed. Use the Erase brush to clean up paint strokes.</p>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={e => loadImageInto(src => { setExtractSource(src); })(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) setExtractError(err); else setExtractSource(src); })} />
+            </div>
+            {extractSource?.imageDataUrl && (
+              <div className="space-y-2">
+                <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <canvas
+                    ref={extractCanvasRef}
+                    onMouseDown={onExtractDown}
+                    onMouseMove={onExtractMove}
+                    onMouseUp={onExtractUp}
+                    onMouseLeave={onExtractUp}
+                    className="w-full rounded-lg"
+                    style={{ display: 'block', cursor: extractErasing ? 'crosshair' : 'cell', touchAction: 'none' }}
+                  />
+                  <canvas ref={extractMaskRef} style={{ display: 'none' }} />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setExtractErasing(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: !extractErasing ? 'var(--color-primary)' : 'transparent', color: !extractErasing ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Paint</button>
+                    <button type="button" onClick={() => setExtractErasing(true)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: extractErasing ? 'var(--color-primary)' : 'transparent', color: extractErasing ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Erase</button>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush: {extractBrush}px</label>
+                    <input type="range" min="5" max="120" step="1" value={extractBrush} onChange={e => setExtractBrush(Number(e.target.value))} className="w-full" />
+                  </div>
+                  <button type="button" onClick={clearExtractMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Feather edges: {extractFeather}px</label>
+                  <input type="range" min="0" max="30" step="1" value={extractFeather} onChange={e => setExtractFeather(Number(e.target.value))} className="w-full" />
+                  <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>Higher values give softer, more natural edges. 0 = hard edge.</p>
+                </div>
+              </div>
+            )}
+            {extractError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{extractError}</div>}
+            <button type="button" onClick={runExtract} disabled={extractBusy || !extractSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {extractBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('scan-search', { size: 15 })}
+              {extractBusy ? 'Extracting...' : 'Extract element'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {extractResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(extractResult.imageDataUrl, 'extracted.png', 'extract')}
+                  {renderExport(extractResult.imageDataUrl, 'extracted')}
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {extractResult?.imageDataUrl ? (
+                <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', backgroundImage: 'repeating-conic-gradient(#d0d0d0 0% 25%, #f5f5f5 0% 50%)', backgroundSize: '20px 20px' }}>
+                  <button type="button" onClick={() => setPreviewImage(extractResult)} className="block w-full">
+                    <img src={extractResult.imageDataUrl} alt="extracted element" className="w-full" />
+                  </button>
+                </div>
+              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Paint the element you want to keep, then click Extract.</div>}
             </div>
           </div>
         </div>
