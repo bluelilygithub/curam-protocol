@@ -82,32 +82,46 @@ router.get('/suggest', handle(async (req) => {
   if (!q) throw new Error('q (description) is required.');
 
   const { standard } = await getModelsForUser(req.user.id);
+  console.log(`[domains/suggest] model=${standard} user=${req.user.id}`);
 
+  // Ask for one name per line — works reliably across all model providers
   const prompt = `You are an expert brand naming consultant. A client needs domain name ideas for this business:
 
 "${q}"
 
-Generate 16 creative, memorable domain name candidates. Rules:
-- Return ONLY a JSON array of lowercase strings (no TLDs, no explanation, no markdown)
-- Names should be 5–14 characters
-- Mix styles across the list: invented words, portmanteaus, metaphors, evocative compounds
-- Avoid generic filler words: "hub", "pro", "app", "best", "my", "get", "go" unless integral to the brand idea
-- Every name must feel like a real brand — something you'd see on a company website
-- Do not repeat similar ideas
+Generate exactly 16 creative, memorable domain name candidates.
 
-Example format: ["chillvault","vinoguard","cellrmate","frostelier"]`;
+Rules:
+- Output one name per line, nothing else — no numbering, no TLDs, no explanation
+- Names should be 5–14 characters, lowercase
+- Mix styles: invented words, portmanteaus, metaphors, evocative compounds
+- Avoid generic filler: "hub", "pro", "app", "best", "my", "get", "go"
+- Every name must feel like a real brand
 
-  const raw = await callModel(standard, prompt, { maxTokens: 400 });
+Example output:
+chillvault
+vinoguard
+cellrmate
+frostelier`;
 
-  // Greedy match to capture the full array (non-greedy stops at first ])
+  const raw = await callModel(standard, prompt, { maxTokens: 300 });
+  console.log(`[domains/suggest] raw output (${raw.length} chars): ${raw.slice(0, 300)}`);
+
+  if (!raw || !raw.trim()) {
+    throw new Error(`The configured AI model (${standard}) returned an empty response. Check the model is working in Settings → AI & Chat.`);
+  }
+
+  // Parse: try JSON array first, then fall back to one-name-per-line
   let names = [];
-  const match = raw.match(/\[[\s\S]*\]/);
-  if (match) {
-    try { names = JSON.parse(match[0]); } catch (e) {
-      throw new Error(`AI returned unparseable output. Raw: ${raw.slice(0, 200)}`);
-    }
-  } else {
-    throw new Error(`AI did not return a JSON array. Raw: ${raw.slice(0, 200)}`);
+  const jsonMatch = raw.match(/\[[\s\S]*\]/);
+  if (jsonMatch) {
+    try { names = JSON.parse(jsonMatch[0]); } catch { /* fall through to line parsing */ }
+  }
+  if (!names.length) {
+    names = raw
+      .split(/[\n,]+/)
+      .map(l => l.trim().replace(/^["'\d.\-\s]+|["'\s]+$/g, ''))
+      .filter(l => l.length >= 3 && l.length <= 30 && /^[a-z0-9-]+$/i.test(l));
   }
 
   // Sanitise: lowercase, alphanumeric + hyphens only, deduplicate
