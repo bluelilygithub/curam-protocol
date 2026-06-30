@@ -8,8 +8,8 @@ import useProcessingStore from '../store/processingStore';
 const TOOL_HELP = {
   suggest: {
     title: 'Name Generator',
-    description: 'Describe your business or paste keywords — get AI-powered domain name ideas with live availability across 1,500+ TLDs.',
-    features: ['AI suggestions based on your description', 'Checks .com, .io, .ai, .co, .app and more', 'Shows availability status per TLD', 'Filters to available names only'],
+    description: 'Describe your business in plain English and the AI generates 16 creative, brand-quality name candidates — then instantly checks availability across .com, .com.au, .io, .ai, .co and .app. Names with available .com or .com.au appear first.',
+    features: ['AI generates 16 creative brand names from your description', 'No keywords or jargon needed — plain English works best', 'Availability checked across 6 TLDs per name', 'Sorted: .com/.com.au available first', 'Green = available · Red = taken'],
   },
   score: {
     title: 'Name Scorer',
@@ -204,21 +204,44 @@ function ResultCard({ data }) {
 function SmartResult({ mode, data }) {
   if (!data) return null;
 
-  // Suggestions
+  // Suggestions — new format: { suggestions[{name, results[{domain,tld,available}], hasAvailable}] }
   if (mode === 'suggest' && data.suggestions) {
     return (
-      <div className="mt-4 space-y-2">
-        {data.suggestions.map((s, i) => (
-          <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <span className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{s.domain || s.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
-              background: s.available ? '#dcfce7' : '#fef2f2',
-              color: s.available ? '#16a34a' : '#dc2626',
-            }}>
-              {s.available ? 'Available' : 'Taken'}
-            </span>
-          </div>
-        ))}
+      <div className="mt-4 space-y-3">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          {data.suggestions.length} names generated · sorted by availability
+        </p>
+        {data.suggestions.map((s, i) => {
+          const availCount = s.results.filter(r => r.available === true).length;
+          return (
+            <div key={i} className="px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: `1px solid ${s.hasAvailable ? 'var(--color-border)' : 'var(--color-border)'}` }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{s.name}</span>
+                {s.results.length > 0 && (
+                  <span className="text-xs" style={{ color: availCount > 0 ? '#16a34a' : '#dc2626' }}>
+                    {availCount > 0 ? `${availCount} TLD${availCount > 1 ? 's' : ''} available` : 'All taken'}
+                  </span>
+                )}
+              </div>
+              {s.results.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {s.results.map((r, j) => (
+                    <span key={j} className="text-xs px-2 py-0.5 rounded font-mono" style={{
+                      background: r.available === true ? '#dcfce7' : r.available === false ? '#fef2f2' : '#f5f5f5',
+                      color: r.available === true ? '#15803d' : r.available === false ? '#dc2626' : '#888',
+                      border: `1px solid ${r.available === true ? '#bbf7d0' : r.available === false ? '#fecaca' : '#e5e5e5'}`,
+                    }}>
+                      .{r.tld}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {s.results.length === 0 && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Availability unknown</p>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -471,7 +494,7 @@ function SuggestPanel() {
           rows={3}
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="e.g. AI-powered fitness coaching app for busy professionals"
+          placeholder="e.g. We design and install bespoke wine fridges for luxury hotels and high-net-worth individuals"
           className="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none"
           style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
         />

@@ -76,31 +76,69 @@ function handle(fn) {
 
 // ── Discover ────────────────────────────────────────────────────────────────
 
-// Use the light AI model to extract brandable keywords from a description
-async function extractKeywords(description, userId) {
-  try {
-    const { light } = await getModelsForUser(userId);
-    const prompt = `Extract 6-8 short, brandable keywords from this business description that would work well as domain name building blocks. Return ONLY a comma-separated list of single words or short compound words (no spaces), no explanation.\n\nDescription: ${description}`;
-    const result = await callModel(light, prompt, { maxTokens: 60 });
-    // Clean up: lowercase, strip non-alphanumeric except commas, collapse whitespace
-    return result.toLowerCase().replace(/[^a-z0-9,]/g, ' ').replace(/\s+/g, '').replace(/,+/g, ',').replace(/^,|,$/g, '');
-  } catch {
-    // Fallback: naive word extraction
-    return description.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 8).join(',');
-  }
-}
-
-// AI-powered name suggestions based on a description
+// Step 1: LLM generates creative names. Step 2: DomScan checks availability.
 router.get('/suggest', handle(async (req) => {
-  const { q, tlds, limit, style } = req.query;
+  const { q, tlds } = req.query;
   if (!q) throw new Error('q (description) is required.');
-  const keywords = await extractKeywords(q, req.user.id);
-  return domscan('/suggest', {
-    keywords,
-    tlds: tlds || 'com,io,ai,co,app',
-    limit: limit || 20,
-    style: style || 'brandable',
+
+  const { standard } = await getModelsForUser(req.user.id);
+
+  const prompt = `You are an expert brand naming consultant. A client needs domain name ideas for this business:
+
+"${q}"
+
+Generate 16 creative, memorable domain name candidates. Rules:
+- Return ONLY a JSON array of lowercase strings (no TLDs, no explanation, no markdown)
+- Names should be 5–14 characters
+- Mix styles across the list: invented words, portmanteaus, metaphors, evocative compounds
+- Avoid generic filler words: "hub", "pro", "app", "best", "my", "get", "go" unless integral to the brand idea
+- Every name must feel like a real brand — something you'd see on a company website
+- Do not repeat similar ideas
+
+Example format: ["chillvault","vinoguard","cellrmate","frostelier"]`;
+
+  const raw = await callModel(standard, prompt, { maxTokens: 400 });
+
+  let names = [];
+  try {
+    const match = raw.match(/\[[\s\S]*?\]/);
+    if (match) names = JSON.parse(match[0]);
+  } catch { /* ignore parse errors */ }
+
+  // Sanitise: lowercase, alphanumeric + hyphens only, deduplicate
+  names = [...new Set(
+    names
+      .map(n => String(n).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30))
+      .filter(n => n.length >= 3)
+  )].slice(0, 16);
+
+  if (!names.length) throw new Error('The AI did not return usable names. Please rephrase your description and try again.');
+
+  // Step 2: check availability for each name across key TLDs
+  const tldList = tlds || 'com,com.au,io,ai,co,app';
+  const suggestions = [];
+
+  for (const name of names) {
+    try {
+      const avail = await domscan('/status', { name, tlds: tldList, prefer_cache: 1 });
+      const results = (avail.results || []).map(r => ({ domain: r.domain, tld: r.tld, available: r.available }));
+      suggestions.push({ name, results, hasAvailable: results.some(r => r.available === true) });
+    } catch {
+      suggestions.push({ name, results: [], hasAvailable: null });
+    }
+  }
+
+  // Sort: names with an available .com or .com.au first, then other available, then unknown
+  suggestions.sort((a, b) => {
+    const score = (s) => {
+      if (s.results.find(r => (r.tld === 'com' || r.tld === 'com.au') && r.available)) return 2;
+      if (s.hasAvailable) return 1;
+      return 0;
+    };
+    return score(b) - score(a);
   });
+
+  return { suggestions, source: 'llm', tlds: tldList };
 }));
 
 // Domain quality / brand score
