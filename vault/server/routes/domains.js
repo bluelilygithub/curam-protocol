@@ -99,11 +99,16 @@ Example format: ["chillvault","vinoguard","cellrmate","frostelier"]`;
 
   const raw = await callModel(standard, prompt, { maxTokens: 400 });
 
+  // Greedy match to capture the full array (non-greedy stops at first ])
   let names = [];
-  try {
-    const match = raw.match(/\[[\s\S]*?\]/);
-    if (match) names = JSON.parse(match[0]);
-  } catch { /* ignore parse errors */ }
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (match) {
+    try { names = JSON.parse(match[0]); } catch (e) {
+      throw new Error(`AI returned unparseable output. Raw: ${raw.slice(0, 200)}`);
+    }
+  } else {
+    throw new Error(`AI did not return a JSON array. Raw: ${raw.slice(0, 200)}`);
+  }
 
   // Sanitise: lowercase, alphanumeric + hyphens only, deduplicate
   names = [...new Set(
@@ -114,19 +119,20 @@ Example format: ["chillvault","vinoguard","cellrmate","frostelier"]`;
 
   if (!names.length) throw new Error('The AI did not return usable names. Please rephrase your description and try again.');
 
-  // Step 2: check availability for each name across key TLDs
+  // Step 2: check availability in parallel (not sequentially — avoids timeout)
   const tldList = tlds || 'com,com.au,io,ai,co,app';
-  const suggestions = [];
 
-  for (const name of names) {
-    try {
+  const results = await Promise.allSettled(
+    names.map(async (name) => {
       const avail = await domscan('/status', { name, tlds: tldList, prefer_cache: 1 });
-      const results = (avail.results || []).map(r => ({ domain: r.domain, tld: r.tld, available: r.available }));
-      suggestions.push({ name, results, hasAvailable: results.some(r => r.available === true) });
-    } catch {
-      suggestions.push({ name, results: [], hasAvailable: null });
-    }
-  }
+      const r = (avail.results || []).map(r => ({ domain: r.domain, tld: r.tld, available: r.available }));
+      return { name, results: r, hasAvailable: r.some(r => r.available === true) };
+    })
+  );
+
+  const suggestions = results.map((r, i) =>
+    r.status === 'fulfilled' ? r.value : { name: names[i], results: [], hasAvailable: null }
+  );
 
   // Sort: names with an available .com or .com.au first, then other available, then unknown
   suggestions.sort((a, b) => {
