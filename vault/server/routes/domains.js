@@ -81,8 +81,7 @@ router.get('/suggest', handle(async (req) => {
   const { q, tlds } = req.query;
   if (!q) throw new Error('q (description) is required.');
 
-  const { standard } = await getModelsForUser(req.user.id);
-  console.log(`[domains/suggest] model=${standard} user=${req.user.id}`);
+  const models = await getModelsForUser(req.user.id);
 
   // Ask for one name per line — works reliably across all model providers
   const prompt = `You are an expert brand naming consultant. A client needs domain name ideas for this business:
@@ -104,11 +103,30 @@ vinoguard
 cellrmate
 frostelier`;
 
-  const raw = await callModel(standard, prompt, { maxTokens: 300 });
-  console.log(`[domains/suggest] raw output (${raw.length} chars): ${raw.slice(0, 300)}`);
+  // Try models in order until one returns a non-empty response
+  const candidates = [models.standard, models.gemini, models.light].filter(Boolean);
+  let raw = '';
+  let usedModel = '';
+  for (const modelId of candidates) {
+    try {
+      console.log(`[domains/suggest] trying model=${modelId}`);
+      const result = await callModel(modelId, prompt, { maxTokens: 300 });
+      if (result && result.trim()) {
+        raw = result;
+        usedModel = modelId;
+        break;
+      }
+      console.log(`[domains/suggest] model=${modelId} returned empty, trying next`);
+    } catch (e) {
+      console.warn(`[domains/suggest] model=${modelId} error: ${e.message}, trying next`);
+    }
+  }
+
+  console.log(`[domains/suggest] used=${usedModel} raw (${raw.length} chars): ${raw.slice(0, 200)}`);
 
   if (!raw || !raw.trim()) {
-    throw new Error(`The configured AI model (${standard}) returned an empty response. Check the model is working in Settings → AI & Chat.`);
+    const tried = candidates.join(', ');
+    throw new Error(`All configured AI models returned empty responses (tried: ${tried}). Check your models in Settings → AI & Chat.`);
   }
 
   // Parse: try JSON array first, then fall back to one-name-per-line
