@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getModelsForUser } = require('../services/modelResolver');
+const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 
 const DOMSCAN_BASE = 'https://domscan.net/v1';
@@ -81,9 +81,16 @@ router.get('/suggest', handle(async (req) => {
   const { q, tlds } = req.query;
   if (!q) throw new Error('q (description) is required.');
 
-  const models = await getModelsForUser(req.user.id);
+  // Get all configured text models so we can try them all as fallbacks
+  const { models: allModels, defaultModel } = await getVaultModelsConfigForUser(req.user.id);
+  const textModels = allModels
+    .filter(m => !['fal', 'seedance'].includes(String(m.provider || '').toLowerCase()))
+    .map(m => m.id)
+    .filter(Boolean);
 
-  // Ask for one name per line — works reliably across all model providers
+  // Put the default model first, then the rest
+  const candidates = [...new Set([defaultModel, ...textModels].filter(Boolean))];
+
   const prompt = `You are an expert brand naming consultant. A client needs domain name ideas for this business:
 
 "${q}"
@@ -103,8 +110,6 @@ vinoguard
 cellrmate
 frostelier`;
 
-  // Try models in order until one returns a non-empty response
-  const candidates = [models.standard, models.gemini, models.light].filter(Boolean);
   let raw = '';
   let usedModel = '';
   for (const modelId of candidates) {
