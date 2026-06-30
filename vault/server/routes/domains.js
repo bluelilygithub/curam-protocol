@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
+const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 
 const DOMSCAN_BASE = 'https://domscan.net/v1';

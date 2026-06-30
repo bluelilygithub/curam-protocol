@@ -477,7 +477,7 @@ function SuggestPanel() {
   const run = useCallback(async () => {
     if (!q.trim()) return;
     setBusy(true); setErr(''); setResult(null);
-    startProcessing('Generating name ideas…', 'Querying DomScan AI suggestions.');
+    startProcessing('Generating name ideas…', 'AI generates names · DomScan checks availability.');
     try {
       const res = await api.get(`/api/domains/suggest?q=${encodeURIComponent(q)}`);
       const data = await res.json();
