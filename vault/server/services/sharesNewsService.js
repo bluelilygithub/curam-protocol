@@ -702,6 +702,7 @@ function observationHtml(text, { nasdaqPct, soxPct, asxPct, today, newsItems }) 
     Observations only — not financial advice.
   </p>
 </div>`;
+}
 
 async function generateObservation(userId) {
   const tz = await getWorkspaceTimezone();
