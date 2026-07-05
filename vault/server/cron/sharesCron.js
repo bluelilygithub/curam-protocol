@@ -88,24 +88,99 @@ function fmtAud(n) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(Number(n) || 0);
 }
 
-async function sendDropAlertEmail(to, { movement, threshold, testMode }) {
+function signedPct(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+}
+
+function pctColour(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '#555';
+  return v >= 0 ? '#16a34a' : '#dc2626';
+}
+
+function buildHourlyHtml({ movement, threshold, testMode, positions }) {
   const pct = movement.changePct;
-  const signed = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  const now = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+
+  // Per-stock rows — sorted by absolute day change desc
+  const rows = [...(positions || [])]
+    .filter((p) => p.priceAud != null && p.previousCloseAud != null)
+    .map((p) => {
+      const qty = Number(p.quantity) || 0;
+      const dayAud = (Number(p.priceAud) - Number(p.previousCloseAud)) * qty;
+      return { ...p, _dayAud: dayAud };
+    })
+    .sort((a, b) => Math.abs(b.dayChangePct || 0) - Math.abs(a.dayChangePct || 0));
+
+  const stockRows = rows.map((p) => `
+    <tr>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;">${p.symbol}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#888;font-size:12px;">${p.exchange}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;">${fmtAud(p.priceAud)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p.dayChangePct)};font-weight:600;">${signedPct(p.dayChangePct)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p._dayAud)};font-weight:600;">${fmtAud(p._dayAud)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#555;">${fmtAud(p.valueAud)}</td>
+    </tr>`).join('');
+
+  return `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:660px;color:#1a1a1a;">
+
+  <h2 style="margin:0 0 4px;font-size:18px;">
+    Portfolio Update — ${now} ET
+  </h2>
+  <p style="margin:0 0 20px;font-size:13px;color:#888;">
+    ${testMode
+      ? 'Test mode — sent after every market poll.'
+      : `Alert: portfolio dropped ${Math.abs(pct).toFixed(2)}% today (threshold ${threshold}%).`}
+  </p>
+
+  <!-- Portfolio summary -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#f9f9f7;border-radius:8px;">
+    <tr>
+      <td style="padding:12px 16px;font-size:13px;color:#555;">Portfolio change</td>
+      <td style="padding:12px 16px;font-weight:700;font-size:20px;color:${pctColour(pct)};text-align:right;">
+        ${signedPct(pct)} &nbsp; <span style="font-size:15px;">${fmtAud(movement.changeAud)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:8px 16px;font-size:13px;color:#555;">Open value (prev close)</td>
+      <td style="padding:8px 16px;text-align:right;">${fmtAud(movement.startValueAud)}</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 16px 12px;font-size:13px;color:#555;">Current value</td>
+      <td style="padding:8px 16px 12px;text-align:right;">${fmtAud(movement.currentValueAud)}</td>
+    </tr>
+  </table>
+
+  <!-- Per-stock table -->
+  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">Holdings</h3>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f0f0ec;">
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Symbol</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Exch</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Price</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day %</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day $</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Value</th>
+      </tr>
+    </thead>
+    <tbody>${stockRows || '<tr><td colspan="6" style="padding:12px 10px;color:#888;">No priced holdings.</td></tr>'}</tbody>
+  </table>
+
+  <p style="margin-top:20px;font-size:11px;color:#aaa;">Observations only — not financial advice.</p>
+</div>`;
+}
+
+async function sendDropAlertEmail(to, { movement, threshold, testMode, positions }) {
+  const pct = movement.changePct;
+  const signed = signedPct(pct);
   const subject = testMode
-    ? `Shares daily movement ${signed} (test)`
+    ? `Shares update ${signed} (test mode)`
     : `Shares alert — portfolio down ${Math.abs(pct).toFixed(2)}% today`;
-  const html = `
-    <p>Portfolio daily movement (holdings vs previous close):</p>
-    <ul>
-      <li>Change: <strong>${signed}</strong> (${fmtAud(movement.changeAud)})</li>
-      <li>Start of day (previous close): ${fmtAud(movement.startValueAud)}</li>
-      <li>Current value: ${fmtAud(movement.currentValueAud)}</li>
-      <li>Priced holdings: ${movement.priced}</li>
-    </ul>
-    <p>${testMode
-      ? 'Test mode is on (threshold 0%). You will receive this after every hourly market poll until you raise the threshold in Settings → Shares.'
-      : `This alert fires when the portfolio drops ${threshold}% or more in a day.`}</p>
-  `;
+  const html = buildHourlyHtml({ movement, threshold, testMode, positions });
   await sendEmail({ to, subject, html });
 }
 
@@ -133,7 +208,7 @@ async function checkDailyDropAlerts() {
       const dropPct = -movement.changePct; // positive when the portfolio is down
       if (!testMode && dropPct < threshold) continue;
 
-      await sendDropAlertEmail(admin.email, { movement, threshold, testMode });
+      await sendDropAlertEmail(admin.email, { movement, threshold, testMode, positions: dashboard.positions || [] });
       console.log(`[shares-cron] drop-alert sent to ${admin.email} (${movement.changePct.toFixed(2)}%, threshold ${threshold}%)`);
     } catch (err) {
       console.error(`[shares-cron] drop-alert user ${admin.id}:`, err.message);

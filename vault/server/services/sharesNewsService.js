@@ -418,47 +418,54 @@ const INDEX_PROXIES = {
   asx:    { symbol: String(process.env.OBS_INDEX_ASX || 'STW').toUpperCase(),     exchange: 'ASX' },
 };
 
-const OBSERVATION_SYSTEM_PROMPT = `You are a portfolio observation agent. Your job is to analyse data collected about a share portfolio and produce a concise daily briefing with observations, not financial advice.
+const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio observation agent producing a detailed daily briefing for a sophisticated investor. Your job is to analyse data and deliver sharp, well-evidenced observations — not financial advice.
 
 ## Your Task
-Produce a daily briefing covering:
+Produce a daily briefing with these five sections:
 
-1. **Portfolio Movement** — which holdings moved significantly (>2%) and why, if news explains it
-2. **Sector Pulse** — how AI/chip stocks moved as a group vs the broader market today
-3. **News That Matters** — flag any news items that are directly relevant to holdings in this portfolio. Ignore noise.
-4. **Watch List** — anything developing that could affect the portfolio in the next few days (earnings, macro events, product announcements)
-5. **One Liner** — a single sentence summarising the day for this portfolio
+1. **Portfolio Movement** — cover EVERY holding. For each: state today's price, day change %, day change in AUD, and current position value. Group into movers (>±1%) and flat (<±1%). For movers, explain WHY if the news supports it, or flag "no clear catalyst" if it doesn't.
+
+2. **Sector Pulse** — analyse the macro backdrop. Compare portfolio holdings against Nasdaq, SOX (semiconductors), and ASX 200 data provided. If the portfolio outperformed or underperformed the index, say so with numbers. Identify any sector-wide themes (AI momentum, chip cycle, rates, AUD/USD impact on US holdings).
+
+3. **News That Matters** — for every news item relevant to a holding, cite the source headline explicitly (e.g. "Reuters reports: [headline]"). Summarise its significance in one or two sentences. Only include news that has a plausible direct impact on holdings. If a news item contradicts the day's price move, flag that tension.
+
+4. **Watch List** — list upcoming catalysts that could affect the portfolio: earnings dates, macro data releases, product announcements, regulatory events. Be specific with timing where it is known. Flag any holding that has recently moved sharply and may be setting up for a reversal or continuation.
+
+5. **One Liner** — a single sentence capturing the single most important development for this portfolio today.
 
 ## Rules
-- Be direct and specific. No filler.
-- Always reference actual numbers from the data provided.
-- If data is missing or stale, say so rather than guessing.
+- Reference actual numbers from the data at all times (prices, percentages, AUD values, index moves).
+- Cite news sources by name and headline — do not paraphrase without attribution.
+- Do not invent data. If data is missing or stale, say so explicitly.
 - Do not give buy/sell recommendations.
-- Flag if any holding moved significantly with no obvious news explanation — that itself is worth noting.
-- Keep the full briefing under 400 words.
-- Format the briefing in clean Markdown, using the five sections above as headings.`;
+- Use professional financial language. This briefing is for a sophisticated investor who does not need basic concepts explained.
+- Format as clean Markdown using ## for the five section headings.
+- There is no word limit — be as thorough as the data supports.`;
 
 // Stage 2 — a second model reflects on and augments the primary draft.
 const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior markets analyst reviewing a colleague's draft portfolio observation before it is sent to the portfolio owner.
 
-Reflect on the draft critically against the source data:
-- Correct any number that does not match the data.
-- Fill genuine gaps: significant moves (>2%) the draft missed, sector context, or directly relevant news.
-- Remove filler, vague claims, or anything not supported by the provided data.
-- Sharpen the observations so they are specific and useful.
+Critically review the draft against the source data provided:
+- Correct any number that does not match the source data — do not let inaccuracies through.
+- Ensure EVERY holding from the price data appears in Portfolio Movement. If any are missing, add them.
+- Fill genuine gaps: significant moves the draft glossed over, sector themes not addressed, or relevant news not cited.
+- Verify every news citation: the headline should be quoted or closely paraphrased, not invented.
+- Remove filler, vague generalisations, or commentary not supported by the data.
+- Sharpen language to be precise and professional.
 
-Return an improved version of the FULL briefing in the same five-section Markdown structure (Portfolio Movement, Sector Pulse, News That Matters, Watch List, One Liner). Follow the same rules: reference real numbers, observations only (no buy/sell advice), flag significant moves with no news explanation, under 400 words. Do NOT invent data that is not present in the inputs. Return only the briefing.`;
+Return the improved FULL briefing in the same five-section Markdown structure (## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner). Observations only — no buy/sell advice. No word limit. Do NOT invent data not present in the inputs. Return only the briefing text.`;
 
 // Stage 3 — the primary model does a final review and produces what gets emailed.
-const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst doing the final review of a portfolio observation before it is emailed to the owner. You are given the source data, the original draft, and a reviewer's revised version.
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst producing the final version of a portfolio observation that will be emailed to the owner. You have the source data, the original draft, and a reviewer's revised version.
 
 Produce the FINAL briefing:
-- Keep the strongest, best-supported observations from either version.
-- Verify every number against the source data; drop or fix anything unsupported.
-- Keep the five-section Markdown structure and stay under 400 words.
+- Merge the strongest, best-evidenced observations from both versions.
+- Verify every number against the source data; drop or correct anything that doesn't match.
+- Ensure every news citation names its source headline explicitly.
+- Ensure all five ## sections are present and substantive.
+- No word limit — cover the portfolio comprehensively.
 - Observations only — no buy/sell recommendations.
-
-Return ONLY the final briefing, ready to send.`;
+- Return ONLY the final briefing text, ready to send.`;
 
 function pickSecondaryModel(tiers, primaryModel) {
   const candidates = [tiers.gemini, tiers.light, tiers.deepseek, tiers.standard].filter(Boolean);
@@ -577,17 +584,124 @@ function buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, so
   ].join('\n');
 }
 
-function observationHtml(text, { nasdaqPct, soxPct, asxPct, today }) {
-  const ctx = `Nasdaq ${pctOrNa(nasdaqPct)} · SOX ${pctOrNa(soxPct)} · ASX 200 ${pctOrNa(asxPct)}`;
-  return `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;">
-      <h2 style="margin:0 0 4px;">Portfolio observation — ${today}</h2>
-      <p style="color:#666;margin:0 0 16px;font-size:13px;">${ctx}</p>
-      <pre style="white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.5;margin:0;">${escapeHtml(text)}</pre>
-      <p style="color:#999;font-size:12px;margin-top:16px;">Observations only — not financial advice.</p>
-    </div>
-  `;
+// Convert inline markdown (**bold**, *italic*) to HTML.
+// escapeHtml first so raw text is safe, then apply formatting.
+function inlineMd(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
+
+// Convert markdown observation text to styled HTML.
+function markdownToObservationHtml(text) {
+  const lines = text.split('\n');
+  const parts = [];
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) { parts.push('</ul>'); inList = false; }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('## ')) {
+      closeList();
+      const heading = inlineMd(trimmed.slice(3));
+      parts.push(
+        `<h3 style="margin:28px 0 10px;font-size:15px;font-weight:700;color:#1a1a1a;` +
+        `border-bottom:2px solid #e8e8e4;padding-bottom:6px;">${heading}</h3>`
+      );
+    } else if (trimmed.startsWith('### ')) {
+      closeList();
+      const heading = inlineMd(trimmed.slice(4));
+      parts.push(`<h4 style="margin:16px 0 6px;font-size:14px;font-weight:600;color:#333;">${heading}</h4>`);
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!inList) {
+        parts.push('<ul style="margin:4px 0 8px;padding-left:22px;line-height:1.7;">');
+        inList = true;
+      }
+      parts.push(`<li style="margin:2px 0;">${inlineMd(trimmed.slice(2))}</li>`);
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      closeList();
+      parts.push(`<p style="margin:4px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
+    } else if (trimmed === '') {
+      closeList();
+    } else if (trimmed.startsWith('_') && trimmed.endsWith('_') && trimmed.length > 2) {
+      closeList();
+      parts.push(
+        `<p style="color:#888;font-size:12px;font-style:italic;margin:8px 0;">${escapeHtml(trimmed.slice(1, -1))}</p>`
+      );
+    } else {
+      closeList();
+      parts.push(`<p style="margin:6px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
+    }
+  }
+  closeList();
+  return parts.join('\n');
+}
+
+// Build a grouped sources section from newsItems.
+function buildSourcesHtml(newsItems) {
+  if (!newsItems || !newsItems.length) return '';
+  const bySymbol = {};
+  for (const n of newsItems) {
+    const key = n.symbol === 'SECTOR' ? 'Market / Sector' : `${n.symbol} (${n.exchange || ''})`;
+    if (!bySymbol[key]) bySymbol[key] = [];
+    bySymbol[key].push(n.title);
+  }
+  const rows = Object.entries(bySymbol).map(([label, titles]) => {
+    const items = titles.map((t) => `<li style="margin:2px 0;color:#555;">${escapeHtml(t)}</li>`).join('');
+    return `
+      <tr>
+        <td style="padding:8px 12px;vertical-align:top;font-weight:600;font-size:13px;white-space:nowrap;color:#333;">${escapeHtml(label)}</td>
+        <td style="padding:8px 12px;"><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">${items}</ul></td>
+      </tr>`;
+  }).join('');
+  return `
+    <div style="margin-top:32px;border-top:1px solid #e8e8e4;padding-top:16px;">
+      <h3 style="margin:0 0 10px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;">
+        Sources collected
+      </h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        ${rows}
+      </table>
+    </div>`;
+}
+
+function observationHtml(text, { nasdaqPct, soxPct, asxPct, today, newsItems }) {
+  const indexRow = [
+    nasdaqPct != null ? `Nasdaq <strong style="color:${nasdaqPct >= 0 ? '#16a34a' : '#dc2626'}">${nasdaqPct >= 0 ? '+' : ''}${nasdaqPct}%</strong>` : 'Nasdaq —',
+    soxPct   != null ? `SOX <strong style="color:${soxPct   >= 0 ? '#16a34a' : '#dc2626'}">${soxPct   >= 0 ? '+' : ''}${soxPct}%</strong>`   : 'SOX —',
+    asxPct   != null ? `ASX 200 <strong style="color:${asxPct >= 0 ? '#16a34a' : '#dc2626'}">${asxPct >= 0 ? '+' : ''}${asxPct}%</strong>`  : 'ASX 200 —',
+  ].join(' &nbsp;·&nbsp; ');
+
+  return `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:680px;color:#1a1a1a;">
+
+  <!-- Header -->
+  <div style="border-bottom:3px solid #1a1a1a;padding-bottom:12px;margin-bottom:4px;">
+    <h1 style="margin:0;font-size:22px;font-weight:700;">Portfolio Observation</h1>
+    <p style="margin:4px 0 0;font-size:13px;color:#888;">${today}</p>
+  </div>
+
+  <!-- Index bar -->
+  <div style="background:#f9f9f7;padding:10px 14px;margin:12px 0 20px;border-radius:6px;font-size:13px;">
+    ${indexRow}
+  </div>
+
+  <!-- Body -->
+  <div style="font-size:14px;line-height:1.6;">
+    ${markdownToObservationHtml(text)}
+  </div>
+
+  ${buildSourcesHtml(newsItems)}
+
+  <p style="margin-top:24px;font-size:11px;color:#bbb;border-top:1px solid #e8e8e4;padding-top:12px;">
+    Observations only — not financial advice.
+  </p>
+</div>`;
 
 async function generateObservation(userId) {
   const tz = await getWorkspaceTimezone();
@@ -659,7 +773,7 @@ async function generateObservation(userId) {
   let draft = '';
   try {
     const draftRes = await callModel(primaryModel, userPrompt, {
-      maxTokens: 1200,
+      maxTokens: 2500,
       system: OBSERVATION_SYSTEM_PROMPT,
       returnUsage: true,
     });
@@ -679,7 +793,7 @@ async function generateObservation(userId) {
     let revised = draft;
     try {
       const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
-        maxTokens: 1400,
+        maxTokens: 2800,
         system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -694,7 +808,7 @@ async function generateObservation(userId) {
     text = revised;
     try {
       const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
-        maxTokens: 1200,
+        maxTokens: 2500,
         system: OBSERVATION_FINAL_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -731,7 +845,7 @@ async function generateObservation(userId) {
       await sendEmail({
         to,
         subject: `Portfolio observation — ${today}`,
-        html: observationHtml(text, { nasdaqPct, soxPct, asxPct, today }),
+        html: observationHtml(text, { nasdaqPct, soxPct, asxPct, today, newsItems }),
       });
       emailed = true;
     }
