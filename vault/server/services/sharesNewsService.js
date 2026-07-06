@@ -418,54 +418,68 @@ const INDEX_PROXIES = {
   asx:    { symbol: String(process.env.OBS_INDEX_ASX || 'STW').toUpperCase(),     exchange: 'ASX' },
 };
 
-const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio observation agent producing a detailed daily briefing for a sophisticated investor. Your job is to analyse data and deliver sharp, well-evidenced observations — not financial advice.
+const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio observation agent producing a detailed daily briefing for a sophisticated investor. Deliver sharp, well-evidenced observations — not financial advice.
 
-## Your Task
-Produce a daily briefing with these five sections:
+## Output Format (STRICT)
 
-1. **Portfolio Movement** — cover EVERY holding. For each: state today's price, day change %, day change in AUD, and current position value. Group into movers (>±1%) and flat (<±1%). For movers, explain WHY if the news supports it, or flag "no clear catalyst" if it doesn't.
+**Do NOT use markdown tables.** Use the following structure exactly:
 
-2. **Sector Pulse** — analyse the macro backdrop. Compare portfolio holdings against Nasdaq, SOX (semiconductors), and ASX 200 data provided. If the portfolio outperformed or underperformed the index, say so with numbers. Identify any sector-wide themes (AI momentum, chip cycle, rates, AUD/USD impact on US holdings).
+### Section 1 — Portfolio Movement
+Use one ### sub-heading per holding, in this format:
 
-3. **News That Matters** — for every news item relevant to a holding, cite the source headline explicitly (e.g. "Reuters reports: [headline]"). Summarise its significance in one or two sentences. Only include news that has a plausible direct impact on holdings. If a news item contradicts the day's price move, flag that tension.
+### TICKER (EXCHANGE)
+- Price: $X.XX · Day: +X.XX% · Day $AUD: +$X.XX · Value: $X,XXX.XX (X.X% of portfolio)
+- [One or two sentences of analysis: explain the move citing specific news if available, or explicitly state "No clear catalyst identified — the move warrants monitoring."]
 
-4. **Watch List** — list upcoming catalysts that could affect the portfolio: earnings dates, macro data releases, product announcements, regulatory events. Be specific with timing where it is known. Flag any holding that has recently moved sharply and may be setting up for a reversal or continuation.
+List ALL holdings from the price data. Do not skip any.
 
-5. **One Liner** — a single sentence capturing the single most important development for this portfolio today.
+### Section 2 — Sector Pulse
+Use ## Sector Pulse as the heading. Paragraph format. Compare the portfolio's aggregate day change vs Nasdaq, SOX, and ASX 200. Identify sector-wide themes. Note if specific holdings moved with or against their sector.
 
-## Rules
-- Reference actual numbers from the data at all times (prices, percentages, AUD values, index moves).
-- Cite news sources by name and headline — do not paraphrase without attribution.
-- Do not invent data. If data is missing or stale, say so explicitly.
-- Do not give buy/sell recommendations.
-- Use professional financial language. This briefing is for a sophisticated investor who does not need basic concepts explained.
-- Format as clean Markdown using ## for the five section headings.
-- There is no word limit — be as thorough as the data supports.`;
+### Section 3 — News That Matters
+Use ## News That Matters as the heading. For each headline that directly concerns a holding in this portfolio, write:
+- **[TICKER]**: "[Exact headline]" — [1–2 sentence significance commentary]
+
+**Critical news relevance rule**: Only include a headline if it is primarily about the specific holding's company. Discard any headline about a different company, general market sentiment, or unrelated industries. If no directly relevant news exists for a holding, do not cite anything for it — state it in the Portfolio Movement section instead.
+
+### Section 4 — Watch List
+Use ## Watch List as the heading. Bullet list of upcoming catalysts: known earnings dates, product launches, regulatory decisions, macro events. Flag holdings that have moved sharply without news (potential continuation or reversal setup).
+
+### Section 5 — One Liner
+Use ## One Liner as the heading. A single sentence — the most important development for this portfolio today.
+
+## General Rules
+- Always reference actual numbers from the source data (prices, percentages, AUD values, index moves).
+- Cite news by exact headline, attributed to the source where known.
+- Do not invent data. If data is missing or stale, say so.
+- No buy/sell recommendations.
+- Professional financial language throughout.`;
 
 // Stage 2 — a second model reflects on and augments the primary draft.
 const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior markets analyst reviewing a colleague's draft portfolio observation before it is sent to the portfolio owner.
 
-Critically review the draft against the source data provided:
-- Correct any number that does not match the source data — do not let inaccuracies through.
-- Ensure EVERY holding from the price data appears in Portfolio Movement. If any are missing, add them.
-- Fill genuine gaps: significant moves the draft glossed over, sector themes not addressed, or relevant news not cited.
-- Verify every news citation: the headline should be quoted or closely paraphrased, not invented.
-- Remove filler, vague generalisations, or commentary not supported by the data.
-- Sharpen language to be precise and professional.
+Critically review the draft against the source data:
+- Correct any number that does not match the source data.
+- Ensure ALL holdings from the price data appear under ## Portfolio Movement with their own ### sub-heading. Add any that are missing.
+- Remove any news citation that is not primarily about the specific holding it is attributed to. Irrelevant headlines (about a different company, general sentiment, or unrelated industries) must be removed.
+- Flag any holding where a significant move (>1%) has no cited news — explicitly note "No clear catalyst identified."
+- Sharpen sector analysis in ## Sector Pulse with specific comparisons to Nasdaq/SOX/ASX 200 data.
+- Do NOT use markdown tables anywhere. Use ### sub-headings + bullet points as the draft does.
+- Ensure all five sections (## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner) are present and complete.
 
-Return the improved FULL briefing in the same five-section Markdown structure (## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner). Observations only — no buy/sell advice. No word limit. Do NOT invent data not present in the inputs. Return only the briefing text.`;
+Return the improved FULL briefing. No buy/sell advice. Return only the briefing text.`;
 
 // Stage 3 — the primary model does a final review and produces what gets emailed.
-const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst producing the final version of a portfolio observation that will be emailed to the owner. You have the source data, the original draft, and a reviewer's revised version.
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst producing the final portfolio observation to be emailed to the owner. You have the source data, a first draft, and a reviewer's revised version.
 
-Produce the FINAL briefing:
-- Merge the strongest, best-evidenced observations from both versions.
-- Verify every number against the source data; drop or correct anything that doesn't match.
-- Ensure every news citation names its source headline explicitly.
-- Ensure all five ## sections are present and substantive.
-- No word limit — cover the portfolio comprehensively.
+Produce the FINAL briefing by taking the best of both versions:
+- Verify every number against the source data; fix or drop anything that doesn't match.
+- All five sections must be present and complete: ## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner.
+- ## Portfolio Movement must have a ### sub-heading for EVERY holding with price, day %, day $AUD, and value.
+- Only include news citations for headlines that are directly about that specific holding's company.
+- No markdown tables anywhere — use ### sub-headings and bullet points only.
 - Observations only — no buy/sell recommendations.
-- Return ONLY the final briefing text, ready to send.`;
+- Return ONLY the final briefing text.`;
 
 function pickSecondaryModel(tiers, primaryModel) {
   const candidates = [tiers.gemini, tiers.light, tiers.deepseek, tiers.standard].filter(Boolean);
@@ -597,9 +611,33 @@ function markdownToObservationHtml(text) {
   const lines = text.split('\n');
   const parts = [];
   let inList = false;
+  let tableBuffer = [];
 
   const closeList = () => {
     if (inList) { parts.push('</ul>'); inList = false; }
+  };
+
+  const flushTable = () => {
+    if (!tableBuffer.length) return;
+    const parseCells = (row) =>
+      row.split('|').filter((_, i, a) => i > 0 && i < a.length - 1).map((c) => c.trim());
+    const isSeparator = (row) => /^\|[\s\-:| ]+\|$/.test(row);
+    const dataRows = tableBuffer.filter((r) => !isSeparator(r));
+    if (!dataRows.length) { tableBuffer = []; return; }
+    const [header, ...body] = dataRows;
+    const thCells = parseCells(header)
+      .map((c) => `<th style="padding:7px 10px;text-align:left;font-size:12px;font-weight:700;color:#555;border-bottom:2px solid #e8e8e4;">${inlineMd(c)}</th>`)
+      .join('');
+    const tdRows = body.map((row, ri) =>
+      `<tr style="${ri % 2 === 1 ? 'background:#f9f9f7;' : ''}">${
+        parseCells(row).map((c) => `<td style="padding:7px 10px;font-size:13px;border-bottom:1px solid #f0f0f0;">${inlineMd(c)}</td>`).join('')
+      }</tr>`
+    ).join('');
+    parts.push(`<div style="overflow-x:auto;margin:8px 0 16px;"><table style="width:100%;border-collapse:collapse;">`);
+    parts.push(`<thead><tr>${thCells}</tr></thead>`);
+    if (tdRows) parts.push(`<tbody>${tdRows}</tbody>`);
+    parts.push('</table></div>');
+    tableBuffer = [];
   };
 
   for (const raw of lines) {
@@ -607,37 +645,46 @@ function markdownToObservationHtml(text) {
     const trimmed = line.trim();
 
     if (trimmed.startsWith('## ')) {
-      closeList();
+      flushTable(); closeList();
       const heading = inlineMd(trimmed.slice(3));
       parts.push(
         `<h3 style="margin:28px 0 10px;font-size:15px;font-weight:700;color:#1a1a1a;` +
         `border-bottom:2px solid #e8e8e4;padding-bottom:6px;">${heading}</h3>`
       );
     } else if (trimmed.startsWith('### ')) {
-      closeList();
+      flushTable(); closeList();
       const heading = inlineMd(trimmed.slice(4));
-      parts.push(`<h4 style="margin:16px 0 6px;font-size:14px;font-weight:600;color:#333;">${heading}</h4>`);
+      // Stock sub-headings get a distinct card-like style
+      parts.push(
+        `<h4 style="margin:14px 0 4px;font-size:14px;font-weight:700;color:#1a1a1a;` +
+        `background:#f5f5f0;padding:6px 10px;border-left:3px solid #cc785c;border-radius:3px;">${heading}</h4>`
+      );
     } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      flushTable();
       if (!inList) {
         parts.push('<ul style="margin:4px 0 8px;padding-left:22px;line-height:1.7;">');
         inList = true;
       }
       parts.push(`<li style="margin:2px 0;">${inlineMd(trimmed.slice(2))}</li>`);
-    } else if (/^\d+\.\s/.test(trimmed)) {
+    } else if (trimmed.startsWith('|')) {
       closeList();
+      tableBuffer.push(trimmed);
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      flushTable(); closeList();
       parts.push(`<p style="margin:4px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
     } else if (trimmed === '') {
-      closeList();
+      flushTable(); closeList();
     } else if (trimmed.startsWith('_') && trimmed.endsWith('_') && trimmed.length > 2) {
-      closeList();
+      flushTable(); closeList();
       parts.push(
         `<p style="color:#888;font-size:12px;font-style:italic;margin:8px 0;">${escapeHtml(trimmed.slice(1, -1))}</p>`
       );
     } else {
-      closeList();
+      flushTable(); closeList();
       parts.push(`<p style="margin:6px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
     }
   }
+  flushTable();
   closeList();
   return parts.join('\n');
 }
