@@ -286,6 +286,18 @@ Adds an Upscale tool to the Graphics page that enlarges artwork and small images
 
 ---
 
+## 2026-07-10
+
+**Overhaul:** Shares — Portfolio Note daily email (replaces generic observation format).
+
+The daily observation email is now a structured **Portfolio Note** with seven sections: TOP LINE, MOVERS & CAUSALITY (beat/lag vs sector + thesis impact), SECTOR & MACRO CONTEXT (beta vs stock-specific split), NEWS WORTH ACTING ON (≤4 thesis-changing items with inline citations), RISK WATCH, DECISION TRIGGERS (falsifiable levels/events only), ONE-LINER. Header shows `PORTFOLIO NOTE — [date]`, benchmarks (Nasdaq/SOX/ASX 200 proxies), and book day move. Removed the bottom “Sources collected” headline dump.
+
+**Data pipeline:** Pre-computes portfolio day %, per-holding sector benchmarks (SOX for semis, Nasdaq for US tech, ASX proxy for ASX), beat/lagged/matched, and movers list before the LLM runs. Fetches macro + semiconductor sector news separately. Hourly US-session email includes per-holding movement table (prior change).
+
+**Docs:** `docs/shares-portfolio-note.md` — full spec for both email types, cron schedule, API, env vars, and LLM pipeline.
+
+---
+
 ## 2026-06-25 (6)
 
 **Robustness:** Shares observation — never silently drop the report email.
