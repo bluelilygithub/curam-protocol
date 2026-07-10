@@ -413,73 +413,166 @@ async function generateMonthlySummary(userId) {
 // can't be fetched we pass null and the prompt rules tell the model to say so.
 
 const INDEX_PROXIES = {
-  nasdaq: { symbol: String(process.env.OBS_INDEX_NASDAQ || 'QQQ').toUpperCase(), exchange: 'NASDAQ' },
-  sox:    { symbol: String(process.env.OBS_INDEX_SOX || 'SOXX').toUpperCase(),    exchange: 'NASDAQ' },
-  asx:    { symbol: String(process.env.OBS_INDEX_ASX || 'STW').toUpperCase(),     exchange: 'ASX' },
+  nasdaq: { symbol: String(process.env.OBS_INDEX_NASDAQ || 'QQQ').toUpperCase(), exchange: 'NASDAQ', label: 'Nasdaq' },
+  sox:    { symbol: String(process.env.OBS_INDEX_SOX || 'SOXX').toUpperCase(),    exchange: 'NASDAQ', label: 'SOX' },
+  asx:    { symbol: String(process.env.OBS_INDEX_ASX || 'STW').toUpperCase(),     exchange: 'ASX',    label: 'ASX 200' },
 };
 
-const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio observation agent producing a detailed daily briefing for a sophisticated investor. Deliver sharp, well-evidenced observations — not financial advice.
+// Holdings mapped to the benchmark used for beat/lag analysis in MOVERS & CAUSALITY.
+const SEMI_SYMBOLS = new Set([
+  'TSM', 'NVDA', 'ASML', 'AMD', 'AVGO', 'INTC', 'MU', 'QCOM', 'ARM', 'SMCI', 'LRCX', 'KLAC', 'AMAT',
+]);
 
-## Output Format (STRICT)
+function sectorBenchmarkFor(symbol, exchange) {
+  const sym = String(symbol || '').toUpperCase();
+  const ex = String(exchange || '').toUpperCase();
+  if (ex === 'ASX') return { label: 'ASX 200', key: 'asx' };
+  if (SEMI_SYMBOLS.has(sym)) return { label: 'SOX', key: 'sox' };
+  return { label: 'Nasdaq', key: 'nasdaq' };
+}
 
-**Do NOT use markdown tables.** Use the following structure exactly:
+function fmtAud(n) {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(Number(n) || 0);
+}
 
-### Section 1 — Portfolio Movement
-Use one ### sub-heading per holding, in this format:
+function signedPct(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+}
 
-### TICKER (EXCHANGE)
-- Price: $X.XX · Day: +X.XX% · Day $AUD: +$X.XX · Value: $X,XXX.XX (X.X% of portfolio)
-- [One or two sentences of analysis: explain the move citing specific news if available, or explicitly state "No clear catalyst identified — the move warrants monitoring."]
+function computePortfolioDayMovement(positions) {
+  let startValueAud = 0;
+  let currentValueAud = 0;
+  let priced = 0;
+  for (const p of positions || []) {
+    if (p.priceAud == null || p.previousCloseAud == null) continue;
+    const qty = Number(p.quantity) || 0;
+    startValueAud += Number(p.previousCloseAud) * qty;
+    currentValueAud += Number(p.priceAud) * qty;
+    priced += 1;
+  }
+  if (priced === 0 || startValueAud <= 0) return null;
+  const changeAud = currentValueAud - startValueAud;
+  return {
+    startValueAud: round2(startValueAud),
+    currentValueAud: round2(currentValueAud),
+    changeAud: round2(changeAud),
+    changePct: round2((changeAud / startValueAud) * 100),
+    priced,
+  };
+}
 
-List ALL holdings from the price data. Do not skip any.
+function enrichHoldingsForObservation(dash, indexPcts) {
+  const holdingsValue = dash.holdingsValueAud || 0;
+  return dash.positions.map((p) => {
+    const qty = Number(p.quantity) || 0;
+    const sector = sectorBenchmarkFor(p.symbol, p.exchange);
+    const sectorPct = indexPcts[sector.key] ?? null;
+    const dayChangePct = p.dayChangePct != null ? round2(p.dayChangePct) : null;
+    const dayChangeAud = p.dayChangeAud != null
+      ? round2(p.dayChangeAud)
+      : (p.priceAud != null && p.previousCloseAud != null
+        ? round2((Number(p.priceAud) - Number(p.previousCloseAud)) * qty)
+        : null);
+    const vsSector = (dayChangePct != null && sectorPct != null)
+      ? round2(dayChangePct - sectorPct)
+      : null;
+    let relative = 'unknown';
+    if (vsSector != null) {
+      if (Math.abs(vsSector) < 0.25) relative = 'matched';
+      else relative = vsSector > 0 ? 'beat' : 'lagged';
+    }
+    return {
+      symbol: p.symbol,
+      exchange: p.exchange,
+      quantity: qty,
+      priceAud: p.priceAud != null ? round2(p.priceAud) : null,
+      previousCloseAud: p.previousCloseAud != null ? round2(p.previousCloseAud) : null,
+      dayChangePct,
+      dayChangeAud,
+      valueAud: p.valueAud != null ? round2(p.valueAud) : null,
+      weightPct: p.valueAud != null && holdingsValue > 0 ? round2((p.valueAud / holdingsValue) * 100) : null,
+      totalReturnPct: p.pnlPct != null ? round2(p.pnlPct) : null,
+      sectorBenchmark: sector.label,
+      sectorBenchmarkPct: sectorPct,
+      vsSectorPct: vsSector,
+      relativeToSector: relative,
+    };
+  });
+}
 
-### Section 2 — Sector Pulse
-Use ## Sector Pulse as the heading. Paragraph format. Compare the portfolio's aggregate day change vs Nasdaq, SOX, and ASX 200. Identify sector-wide themes. Note if specific holdings moved with or against their sector.
+function selectMoversForReport(holdings) {
+  const ranked = [...holdings]
+    .filter((h) => h.dayChangePct != null)
+    .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct));
+  const overThreshold = ranked.filter((h) => Math.abs(h.dayChangePct) >= 1);
+  return (overThreshold.length ? overThreshold : ranked.slice(0, 3));
+}
 
-### Section 3 — News That Matters
-Use ## News That Matters as the heading. For each headline that directly concerns a holding in this portfolio, write:
-- **[TICKER]**: "[Exact headline]" — [1–2 sentence significance commentary]
+const OBSERVATION_OUTPUT_TEMPLATE = `## TOP LINE
+[2–3 sentences max. The single most important thing for this portfolio today and why it matters. Write as if this is the only paragraph the client reads. Use portfolio day % and $AUD from PRE-COMPUTED SUMMARY.]
 
-**Critical news relevance rule**: Only include a headline if it is primarily about the specific holding's company. Discard any headline about a different company, general market sentiment, or unrelated industries. If no directly relevant news exists for a holding, do not cite anything for it — state it in the Portfolio Movement section instead.
+## MOVERS & CAUSALITY
+[Cover ONLY holdings listed in moversToCover in the data — one bullet each, exactly this pattern:]
+- **TICKER** [±X.XX%] vs **sectorBenchmark** [±X.XX%] → **beat/lagged/matched** — [cause with inline citation as (Source: "headline") OR "no identified catalyst, beta move"]
+  Thesis impact: **reinforces / weakens / neutral** — [one short clause why]
 
-### Section 4 — Watch List
-Use ## Watch List as the heading. Bullet list of upcoming catalysts: known earnings dates, product launches, regulatory decisions, macro events. Flag holdings that have moved sharply without news (potential continuation or reversal setup).
+## SECTOR & MACRO CONTEXT
+[1–2 short paragraphs. What drove the sector/macro backdrop today — NOT stock-specific. Cite macro/sector headlines inline. Explicitly estimate how much of today's portfolio move is sector beta vs stock-specific (e.g. "roughly X% of the day's loss aligns with SOX −Y% given semi weighting").]
 
-### Section 5 — One Liner
-Use ## One Liner as the heading. A single sentence — the most important development for this portfolio today.
+## NEWS WORTH ACTING ON
+[Maximum 4 bullets total across all tickers. Only items that could plausibly change position size or thesis — NOT a headline dump. Format:]
+- **TICKER** — (Source: "exact headline") — [what it says] · [why it matters for the thesis]
 
-## General Rules
-- Always reference actual numbers from the source data (prices, percentages, AUD values, index moves).
-- Cite news by exact headline, attributed to the source where known.
-- Do not invent data. If data is missing or stale, say so.
-- No buy/sell recommendations.
-- Professional financial language throughout.`;
+## RISK WATCH
+[2–4 bullets. Background risks not fully priced today: regulatory, supply chain, valuation stretch, known upcoming events. No vague filler.]
 
-// Stage 2 — a second model reflects on and augments the primary draft.
-const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior markets analyst reviewing a colleague's draft portfolio observation before it is sent to the portfolio owner.
+## DECISION TRIGGERS
+[2–4 bullets. Concrete, falsifiable conditions — price levels, % moves, dates, or events. FORBIDDEN: "monitor closely" without a level or event. Examples: "Add only if ASML reclaims prior close +X% on volume"; "Revisit NVDA if SOX closes below −3% two sessions running".]
 
-Critically review the draft against the source data:
-- Correct any number that does not match the source data.
-- Ensure ALL holdings from the price data appear under ## Portfolio Movement with their own ### sub-heading. Add any that are missing.
-- Remove any news citation that is not primarily about the specific holding it is attributed to. Irrelevant headlines (about a different company, general sentiment, or unrelated industries) must be removed.
-- Flag any holding where a significant move (>1%) has no cited news — explicitly note "No clear catalyst identified."
-- Sharpen sector analysis in ## Sector Pulse with specific comparisons to Nasdaq/SOX/ASX 200 data.
-- Do NOT use markdown tables anywhere. Use ### sub-headings + bullet points as the draft does.
-- Ensure all five sections (## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner) are present and complete.
+## ONE-LINER
+[One sentence: portfolio value (AUD), position count, and how the book is doing today — what the client would repeat if asked.]`;
 
-Return the improved FULL briefing. No buy/sell advice. Return only the briefing text.`;
+const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio strategist writing a daily PORTFOLIO NOTE for a sophisticated investor. Observations and decision framing only — never buy/sell/hold recommendations.
 
-// Stage 3 — the primary model does a final review and produces what gets emailed.
-const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst producing the final portfolio observation to be emailed to the owner. You have the source data, a first draft, and a reviewer's revised version.
+The email header and benchmark line are added separately. You write ONLY the body sections below.
 
-Produce the FINAL briefing by taking the best of both versions:
-- Verify every number against the source data; fix or drop anything that doesn't match.
-- All five sections must be present and complete: ## Portfolio Movement, ## Sector Pulse, ## News That Matters, ## Watch List, ## One Liner.
-- ## Portfolio Movement must have a ### sub-heading for EVERY holding with price, day %, day $AUD, and value.
-- Only include news citations for headlines that are directly about that specific holding's company.
-- No markdown tables anywhere — use ### sub-headings and bullet points only.
-- Observations only — no buy/sell recommendations.
-- Return ONLY the final briefing text.`;
+${OBSERVATION_OUTPUT_TEMPLATE}
+
+## Rules
+- Use ONLY numbers from PRE-COMPUTED SUMMARY and holdings — never invent prices, % moves, or index levels.
+- MOVERS & CAUSALITY: use moversToCover exactly; compare each to its sectorBenchmark and sectorBenchmarkPct; state beat/lagged/matched from relativeToSector.
+- Inline citations required: (Source: "exact headline") — pull from news items provided; do not cite headlines about a different company.
+- NEWS WORTH ACTING ON: max 4 items; skip noise, tangential articles, and generic market takes unless they directly change thesis for a held name.
+- DECISION TRIGGERS: every bullet must include a falsifiable level, date, or event — no hand-waving.
+- No markdown tables. Use ## section headings exactly as shown and bullet lists.
+- Be direct and analytical. Cut filler and repetition.`;
+
+const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior editor reviewing a PORTFOLIO NOTE before it goes to the portfolio owner.
+
+Check against the source data:
+- TOP LINE: punchy, 2–3 sentences, uses correct portfolio day move numbers.
+- MOVERS & CAUSALITY: every symbol in moversToCover appears; beat/lag math matches sectorBenchmarkPct; thesis line present (reinforces/weakens/neutral).
+- Drop irrelevant news (wrong company, crypto, unrelated tickers). Require inline (Source: "headline") on any cited claim.
+- NEWS WORTH ACTING ON: cut to ≤4 high-conviction items; remove headline reposts.
+- SECTOR & MACRO: must separate sector beta from stock-specific drivers with a rough split.
+- DECISION TRIGGERS: reject any bullet without a concrete level, date, or event.
+- All seven ## sections present and complete.
+
+Return the improved full note only. No buy/sell advice.`;
+
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead strategist sending the final PORTFOLIO NOTE to the owner. Merge the best of the draft and reviewer version.
+
+Requirements:
+- All seven sections with exact ## headings: TOP LINE, MOVERS & CAUSALITY, SECTOR & MACRO CONTEXT, NEWS WORTH ACTING ON, RISK WATCH, DECISION TRIGGERS, ONE-LINER.
+- Every number verified against PRE-COMPUTED SUMMARY.
+- Inline (Source: "headline") on all news references.
+- NEWS WORTH ACTING ON: ≤4 bullets, thesis-changing only.
+- DECISION TRIGGERS: falsifiable conditions only.
+- No tables. No buy/sell recommendations.
+
+Return ONLY the final note body.`;
 
 function pickSecondaryModel(tiers, primaryModel) {
   const candidates = [tiers.gemini, tiers.light, tiers.deepseek, tiers.standard].filter(Boolean);
@@ -547,54 +640,91 @@ async function fetchIndexPct(proxy) {
   }
 }
 
-// Deterministic report used only when the AI pipeline is unavailable, so the
-// owner always receives something rather than silence.
-function buildFallbackReport({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct }) {
-  const movers = priceData
-    .filter((p) => p.dayChangePct != null && Math.abs(p.dayChangePct) >= 2)
-    .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct));
+function buildFallbackReport({ portfolio, holdings, movers, portfolioMove, nasdaqPct, soxPct, asxPct, asxNote }) {
+  const bench = [
+    `Nasdaq ${signedPct(nasdaqPct)}`,
+    `SOX ${signedPct(soxPct)}`,
+    asxPct != null ? `ASX 200 ${signedPct(asxPct)}` : `ASX 200 (${asxNote || 'proxy unavailable'})`,
+  ].join(' · ');
+
   const moverLines = movers.length
-    ? movers.map((p) => `- **${p.symbol}** (${p.exchange}): ${p.dayChangePct >= 0 ? '+' : ''}${p.dayChangePct}%`).join('\n')
-    : '- No holding moved more than 2% on the latest data.';
-  const news = newsItems.slice(0, 6);
-  const newsLines = news.length
-    ? news.map((n) => `- ${n.symbol === 'SECTOR' ? '[Sector] ' : `[${n.symbol}] `}${n.title}`).join('\n')
-    : '- No relevant news collected.';
+    ? movers.map((p) => {
+      const rel = p.relativeToSector !== 'unknown' ? p.relativeToSector : 'matched';
+      return `- **${p.symbol}** ${signedPct(p.dayChangePct)} vs ${p.sectorBenchmark} ${signedPct(p.sectorBenchmarkPct)} → **${rel}** — no identified catalyst, beta move (AI unavailable)\n  Thesis impact: **neutral** — automated summary only`;
+    }).join('\n')
+    : '- No material movers on latest data.';
+
+  const portLine = portfolioMove
+    ? `${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)} on holdings)`
+    : 'day move unavailable';
+
   return [
-    '_AI narrative was unavailable on this run — automated data-only summary._',
+    '_AI narrative unavailable — data-only portfolio note._',
     '',
-    '## Portfolio Movement',
+    '## TOP LINE',
+    `Portfolio ${portLine} with ${portfolio.holdings.length} positions (${fmtAud(portfolio.holdingsValueAud)} holdings value). Benchmarks: ${bench}.`,
+    '',
+    '## MOVERS & CAUSALITY',
     moverLines,
     '',
-    '## Sector Pulse',
-    `- Nasdaq ${pctOrNa(nasdaqPct)} · SOX ${pctOrNa(soxPct)} · ASX 200 ${pctOrNa(asxPct)}`,
+    '## SECTOR & MACRO CONTEXT',
+    `Macro backdrop from index proxies: ${bench}. Full sector vs stock-specific attribution requires AI analysis.`,
     '',
-    '## News That Matters',
-    newsLines,
+    '## NEWS WORTH ACTING ON',
+    '- None flagged automatically — review holdings manually.',
     '',
-    '## Watch List',
-    '- AI analysis unavailable — review the movers and news above manually.',
+    '## RISK WATCH',
+    '- AI analysis unavailable; check upcoming earnings and macro calendar manually.',
     '',
-    '## One Liner',
-    `- Holdings value ${portfolio.holdingsValueAud} AUD across ${portfolio.holdings.length} positions; ${movers.length} moved >2%.`,
+    '## DECISION TRIGGERS',
+    `- Re-run note when portfolio day move exceeds ±2% (${portfolioMove ? signedPct(portfolioMove.changePct) : 'n/a'} today).`,
+    '',
+    '## ONE-LINER',
+    `${fmtAud(portfolio.totalValueAud)} book, ${portfolio.holdings.length} positions — ${portLine}.`,
   ].join('\n');
 }
 
-function buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct }) {
+function buildObservationPrompt({
+  portfolio,
+  holdings,
+  movers,
+  portfolioMove,
+  newsItems,
+  nasdaqPct,
+  soxPct,
+  asxPct,
+  asxProxy,
+}) {
+  const asxLine = asxPct != null
+    ? `${asxPct}% (${asxProxy.symbol} proxy)`
+    : `${asxProxy.symbol} proxy unavailable — say "ASX 200 proxy unavailable" in macro text`;
+
   return [
-    '## Portfolio',
-    JSON.stringify(portfolio, null, 2),
+    'Write the PORTFOLIO NOTE body. Header and benchmarks are added by email template — start at ## TOP LINE.',
     '',
-    "## Today's Price Data",
-    JSON.stringify(priceData, null, 2),
+    '## PRE-COMPUTED SUMMARY',
+    JSON.stringify({
+      portfolioDay: portfolioMove,
+      portfolio: {
+        totalValueAud: portfolio.totalValueAud,
+        holdingsValueAud: portfolio.holdingsValueAud,
+        cashAud: portfolio.cashAud,
+        positionCount: portfolio.holdings.length,
+        unrealizedPnlPct: portfolio.unrealizedPnlPct,
+        asOf: portfolio.asOf,
+      },
+      benchmarks: {
+        nasdaqPct,
+        soxPct,
+        asx200Pct: asxPct,
+        asx200Note: asxLine,
+      },
+      moversToCover: movers.map((m) => m.symbol),
+      allHoldings: holdings,
+    }, null, 2),
     '',
-    '## Recent News (last 24 hours)',
+    '## NEWS (last 24h — cite inline only when directly about a held company)',
     JSON.stringify(newsItems, null, 2),
-    '',
-    '## Market Context',
-    `- Nasdaq change today: ${pctOrNa(nasdaqPct)}`,
-    `- SOX (semiconductor index) change today: ${pctOrNa(soxPct)}`,
-    `- ASX 200 change today: ${pctOrNa(asxPct)}`,
   ].join('\n');
 }
 
@@ -606,15 +736,45 @@ function inlineMd(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
+// Section headings that get distinct email styling.
+const OBS_CALLOUT_SECTIONS = new Set(['TOP LINE']);
+const OBS_SECTION_LABELS = {
+  'TOP LINE': 'Top line',
+  'MOVERS & CAUSALITY': 'Movers & causality',
+  'SECTOR & MACRO CONTEXT': 'Sector & macro context',
+  'NEWS WORTH ACTING ON': 'News worth acting on',
+  'RISK WATCH': 'Risk watch',
+  'DECISION TRIGGERS': 'Decision triggers',
+  'ONE-LINER': 'One-liner',
+};
+
 // Convert markdown observation text to styled HTML.
 function markdownToObservationHtml(text) {
   const lines = text.split('\n');
   const parts = [];
   let inList = false;
+  let listContainer = null;
   let tableBuffer = [];
+  let inCallout = false;
+  let calloutParts = [];
 
   const closeList = () => {
-    if (inList) { parts.push('</ul>'); inList = false; }
+    if (!inList) return;
+    if (listContainer === 'callout') calloutParts.push('</ul>');
+    else parts.push('</ul>');
+    inList = false;
+    listContainer = null;
+  };
+
+  const closeCallout = () => {
+    if (!inCallout) return;
+    parts.push(
+      `<div style="background:#f9f9f7;border-left:4px solid #cc785c;padding:14px 16px;margin:0 0 20px;border-radius:4px;line-height:1.65;">${
+        calloutParts.join('\n')
+      }</div>`
+    );
+    calloutParts = [];
+    inCallout = false;
   };
 
   const flushTable = () => {
@@ -633,11 +793,24 @@ function markdownToObservationHtml(text) {
         parseCells(row).map((c) => `<td style="padding:7px 10px;font-size:13px;border-bottom:1px solid #f0f0f0;">${inlineMd(c)}</td>`).join('')
       }</tr>`
     ).join('');
-    parts.push(`<div style="overflow-x:auto;margin:8px 0 16px;"><table style="width:100%;border-collapse:collapse;">`);
-    parts.push(`<thead><tr>${thCells}</tr></thead>`);
-    if (tdRows) parts.push(`<tbody>${tdRows}</tbody>`);
-    parts.push('</table></div>');
+    const tableHtml = `<div style="overflow-x:auto;margin:8px 0 16px;"><table style="width:100%;border-collapse:collapse;"><thead><tr>${thCells}</tr></thead>${tdRows ? `<tbody>${tdRows}</tbody>` : ''}</table></div>`;
+    if (inCallout) calloutParts.push(tableHtml);
+    else parts.push(tableHtml);
     tableBuffer = [];
+  };
+
+  const pushBlock = (html) => {
+    if (inCallout) calloutParts.push(html);
+    else parts.push(html);
+  };
+
+  const renderSectionHeading = (rawTitle) => {
+    const key = rawTitle.toUpperCase();
+    const label = OBS_SECTION_LABELS[key] || rawTitle;
+    return (
+      `<h3 style="margin:26px 0 10px;font-size:12px;font-weight:700;color:#888;` +
+      `text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #e8e8e4;padding-bottom:6px;">${inlineMd(label)}</h3>`
+    );
   };
 
   for (const raw of lines) {
@@ -645,108 +818,87 @@ function markdownToObservationHtml(text) {
     const trimmed = line.trim();
 
     if (trimmed.startsWith('## ')) {
-      flushTable(); closeList();
-      const heading = inlineMd(trimmed.slice(3));
-      parts.push(
-        `<h3 style="margin:28px 0 10px;font-size:15px;font-weight:700;color:#1a1a1a;` +
-        `border-bottom:2px solid #e8e8e4;padding-bottom:6px;">${heading}</h3>`
-      );
+      flushTable(); closeList(); closeCallout();
+      const rawTitle = trimmed.slice(3).trim();
+      const key = rawTitle.toUpperCase();
+      pushBlock(renderSectionHeading(rawTitle));
+      if (OBS_CALLOUT_SECTIONS.has(key)) inCallout = true;
     } else if (trimmed.startsWith('### ')) {
       flushTable(); closeList();
       const heading = inlineMd(trimmed.slice(4));
-      // Stock sub-headings get a distinct card-like style
-      parts.push(
-        `<h4 style="margin:14px 0 4px;font-size:14px;font-weight:700;color:#1a1a1a;` +
+      pushBlock(
+        `<h4 style="margin:12px 0 4px;font-size:14px;font-weight:700;color:#1a1a1a;` +
         `background:#f5f5f0;padding:6px 10px;border-left:3px solid #cc785c;border-radius:3px;">${heading}</h4>`
       );
     } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       flushTable();
       if (!inList) {
-        parts.push('<ul style="margin:4px 0 8px;padding-left:22px;line-height:1.7;">');
+        const ul = '<ul style="margin:4px 0 10px;padding-left:20px;line-height:1.65;">';
+        if (inCallout) { calloutParts.push(ul); listContainer = 'callout'; }
+        else { parts.push(ul); listContainer = 'parts'; }
         inList = true;
       }
-      parts.push(`<li style="margin:2px 0;">${inlineMd(trimmed.slice(2))}</li>`);
+      const li = `<li style="margin:4px 0;">${inlineMd(trimmed.slice(2))}</li>`;
+      if (listContainer === 'callout') calloutParts.push(li);
+      else parts.push(li);
     } else if (trimmed.startsWith('|')) {
       closeList();
       tableBuffer.push(trimmed);
     } else if (/^\d+\.\s/.test(trimmed)) {
       flushTable(); closeList();
-      parts.push(`<p style="margin:4px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
+      pushBlock(`<p style="margin:4px 0;line-height:1.65;">${inlineMd(trimmed)}</p>`);
     } else if (trimmed === '') {
       flushTable(); closeList();
     } else if (trimmed.startsWith('_') && trimmed.endsWith('_') && trimmed.length > 2) {
       flushTable(); closeList();
-      parts.push(
-        `<p style="color:#888;font-size:12px;font-style:italic;margin:8px 0;">${escapeHtml(trimmed.slice(1, -1))}</p>`
-      );
+      pushBlock(`<p style="color:#888;font-size:12px;font-style:italic;margin:8px 0;">${escapeHtml(trimmed.slice(1, -1))}</p>`);
     } else {
       flushTable(); closeList();
-      parts.push(`<p style="margin:6px 0;line-height:1.7;">${inlineMd(trimmed)}</p>`);
+      pushBlock(`<p style="margin:6px 0;line-height:1.65;">${inlineMd(trimmed)}</p>`);
     }
   }
   flushTable();
   closeList();
+  closeCallout();
   return parts.join('\n');
 }
 
-// Build a grouped sources section from newsItems.
-function buildSourcesHtml(newsItems) {
-  if (!newsItems || !newsItems.length) return '';
-  const bySymbol = {};
-  for (const n of newsItems) {
-    const key = n.symbol === 'SECTOR' ? 'Market / Sector' : `${n.symbol} (${n.exchange || ''})`;
-    if (!bySymbol[key]) bySymbol[key] = [];
-    bySymbol[key].push(n.title);
-  }
-  const rows = Object.entries(bySymbol).map(([label, titles]) => {
-    const items = titles.map((t) => `<li style="margin:2px 0;color:#555;">${escapeHtml(t)}</li>`).join('');
-    return `
-      <tr>
-        <td style="padding:8px 12px;vertical-align:top;font-weight:600;font-size:13px;white-space:nowrap;color:#333;">${escapeHtml(label)}</td>
-        <td style="padding:8px 12px;"><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">${items}</ul></td>
-      </tr>`;
-  }).join('');
-  return `
-    <div style="margin-top:32px;border-top:1px solid #e8e8e4;padding-top:16px;">
-      <h3 style="margin:0 0 10px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;">
-        Sources collected
-      </h3>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        ${rows}
-      </table>
-    </div>`;
+function formatBenchmark(label, pct) {
+  if (pct == null) return `${label} —`;
+  const colour = pct >= 0 ? '#16a34a' : '#dc2626';
+  return `${label} <strong style="color:${colour}">${signedPct(pct)}</strong>`;
 }
 
-function observationHtml(text, { nasdaqPct, soxPct, asxPct, today, newsItems }) {
-  const indexRow = [
-    nasdaqPct != null ? `Nasdaq <strong style="color:${nasdaqPct >= 0 ? '#16a34a' : '#dc2626'}">${nasdaqPct >= 0 ? '+' : ''}${nasdaqPct}%</strong>` : 'Nasdaq —',
-    soxPct   != null ? `SOX <strong style="color:${soxPct   >= 0 ? '#16a34a' : '#dc2626'}">${soxPct   >= 0 ? '+' : ''}${soxPct}%</strong>`   : 'SOX —',
-    asxPct   != null ? `ASX 200 <strong style="color:${asxPct >= 0 ? '#16a34a' : '#dc2626'}">${asxPct >= 0 ? '+' : ''}${asxPct}%</strong>`  : 'ASX 200 —',
+function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, portfolioMove }) {
+  const asxBench = asxPct != null
+    ? formatBenchmark('ASX 200', asxPct)
+    : `ASX 200 <span style="color:#888;">— (${asxProxy?.symbol || 'STW'} proxy n/a)</span>`;
+  const benchmarks = [
+    formatBenchmark('Nasdaq', nasdaqPct),
+    formatBenchmark('SOX', soxPct),
+    asxBench,
   ].join(' &nbsp;·&nbsp; ');
+
+  const portChip = portfolioMove
+    ? `<span style="margin-left:12px;color:${portfolioMove.changePct >= 0 ? '#16a34a' : '#dc2626'};font-weight:600;">Book ${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)})</span>`
+    : '';
 
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:680px;color:#1a1a1a;">
 
-  <!-- Header -->
-  <div style="border-bottom:3px solid #1a1a1a;padding-bottom:12px;margin-bottom:4px;">
-    <h1 style="margin:0;font-size:22px;font-weight:700;">Portfolio Observation</h1>
-    <p style="margin:4px 0 0;font-size:13px;color:#888;">${today}</p>
+  <div style="border-bottom:3px solid #1a1a1a;padding-bottom:12px;margin-bottom:8px;">
+    <h1 style="margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;">PORTFOLIO NOTE — ${today}</h1>
+    <p style="margin:8px 0 0;font-size:13px;color:#555;">
+      <span style="color:#888;">Benchmarks:</span> ${benchmarks}${portChip}
+    </p>
   </div>
 
-  <!-- Index bar -->
-  <div style="background:#f9f9f7;padding:10px 14px;margin:12px 0 20px;border-radius:6px;font-size:13px;">
-    ${indexRow}
-  </div>
-
-  <!-- Body -->
   <div style="font-size:14px;line-height:1.6;">
     ${markdownToObservationHtml(text)}
   </div>
 
-  ${buildSourcesHtml(newsItems)}
-
-  <p style="margin-top:24px;font-size:11px;color:#bbb;border-top:1px solid #e8e8e4;padding-top:12px;">
-    Observations only — not financial advice.
+  <p style="margin-top:28px;font-size:11px;color:#bbb;border-top:1px solid #e8e8e4;padding-top:12px;">
+    Observations and decision framing only — not financial advice.
   </p>
 </div>`;
 }
@@ -783,26 +935,9 @@ async function generateObservation(userId) {
     priceAud: p.priceAud != null ? round2(p.priceAud) : null,
     previousCloseAud: p.previousCloseAud != null ? round2(p.previousCloseAud) : null,
     dayChangePct: p.dayChangePct != null ? round2(p.dayChangePct) : null,
+    dayChangeAud: p.dayChangeAud != null ? round2(p.dayChangeAud) : null,
+    quantity: p.quantity,
   }));
-
-  // News per holding (top holdings by value to keep the prompt bounded) + sector news.
-  const ranked = [...dash.positions]
-    .filter((p) => p.valueAud != null)
-    .sort((a, b) => (b.valueAud || 0) - (a.valueAud || 0))
-    .slice(0, 12);
-  const newsItems = [];
-  await Promise.all(
-    ranked.map(async (p) => {
-      const news = await fetchHoldingNews(p.symbol, p.exchange);
-      news.slice(0, 3).forEach((n) =>
-        newsItems.push({ symbol: p.symbol, exchange: p.exchange, title: n.title, snippet: (n.snippet || '').slice(0, 160) })
-      );
-    })
-  );
-  const sectorNews = await webSearch('AI semiconductor chip stocks Nvidia AMD Broadcom news today');
-  sectorNews.slice(0, 4).forEach((n) =>
-    newsItems.push({ symbol: 'SECTOR', title: n.title, snippet: (n.snippet || '').slice(0, 160) })
-  );
 
   const [nasdaqPct, soxPct, asxPct] = await Promise.all([
     fetchIndexPct(INDEX_PROXIES.nasdaq),
@@ -810,7 +945,49 @@ async function generateObservation(userId) {
     fetchIndexPct(INDEX_PROXIES.asx),
   ]);
 
-  const userPrompt = buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct });
+  const indexPcts = { nasdaq: nasdaqPct, sox: soxPct, asx: asxPct };
+  const holdings = enrichHoldingsForObservation(dash, indexPcts);
+  const movers = selectMoversForReport(holdings);
+  const portfolioMove = computePortfolioDayMovement(dash.positions);
+
+  // News: all holdings + targeted macro/sector searches (not a dumb headline dump in the email).
+  const newsItems = [];
+  await Promise.all(
+    dash.positions.map(async (p) => {
+      const news = await fetchHoldingNews(p.symbol, p.exchange);
+      news.slice(0, 4).forEach((n) =>
+        newsItems.push({
+          symbol: p.symbol,
+          exchange: p.exchange,
+          title: n.title,
+          snippet: (n.snippet || '').slice(0, 200),
+        })
+      );
+    })
+  );
+  const [macroNews, semiNews] = await Promise.all([
+    webSearch('stock market macro news today Federal Reserve rates Reuters Bloomberg'),
+    webSearch('semiconductor chip sector news today SOX Nasdaq Reuters'),
+  ]);
+  macroNews.slice(0, 3).forEach((n) =>
+    newsItems.push({ symbol: 'MACRO', title: n.title, snippet: (n.snippet || '').slice(0, 200) })
+  );
+  semiNews.slice(0, 3).forEach((n) =>
+    newsItems.push({ symbol: 'SECTOR_SEMIS', title: n.title, snippet: (n.snippet || '').slice(0, 200) })
+  );
+
+  const asxNote = asxPct == null ? `${INDEX_PROXIES.asx.symbol} proxy unavailable` : null;
+  const userPrompt = buildObservationPrompt({
+    portfolio,
+    holdings,
+    movers,
+    portfolioMove,
+    newsItems,
+    nasdaqPct,
+    soxPct,
+    asxPct,
+    asxProxy: INDEX_PROXIES.asx,
+  });
 
   const tiers = await getModelsForUser(userId);
   const primaryModel = tiers.standard || tiers.light || tiers.gemini;
@@ -821,7 +998,7 @@ async function generateObservation(userId) {
   let draft = '';
   try {
     const draftRes = await callModel(primaryModel, userPrompt, {
-      maxTokens: 2500,
+      maxTokens: 3500,
       system: OBSERVATION_SYSTEM_PROMPT,
       returnUsage: true,
     });
@@ -835,13 +1012,22 @@ async function generateObservation(userId) {
   let aiUnavailable = false;
   if (!draft) {
     aiUnavailable = true;
-    text = buildFallbackReport({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct });
+    text = buildFallbackReport({
+      portfolio,
+      holdings,
+      movers,
+      portfolioMove,
+      nasdaqPct,
+      soxPct,
+      asxPct,
+      asxNote,
+    });
   } else {
     // Stage 2 — secondary model reflects/augments (fail-open: keep the draft on error).
     let revised = draft;
     try {
       const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
-        maxTokens: 2800,
+        maxTokens: 3800,
         system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -856,7 +1042,7 @@ async function generateObservation(userId) {
     text = revised;
     try {
       const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
-        maxTokens: 2500,
+        maxTokens: 3500,
         system: OBSERVATION_FINAL_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -876,7 +1062,14 @@ async function generateObservation(userId) {
   await pool.query(
     `INSERT INTO share_news_briefings ("userId", date, symbol, exchange, content, signal, headlines, type)
      VALUES ($1,$2,NULL,NULL,$3,NULL,$4,'observation')`,
-    [userId, today, text, JSON.stringify({ nasdaqPct, soxPct, asxPct, holdings: priceData.length, newsCount: newsItems.length, aiUnavailable })]
+    [userId, today, text, JSON.stringify({
+      nasdaqPct, soxPct, asxPct,
+      portfolioMove,
+      movers: movers.map((m) => m.symbol),
+      holdings: holdings.length,
+      newsCount: newsItems.length,
+      aiUnavailable,
+    })]
   );
 
   const cutoff = getDateInTz(tz, 45);
@@ -892,8 +1085,15 @@ async function generateObservation(userId) {
     if (to) {
       await sendEmail({
         to,
-        subject: `Portfolio observation — ${today}`,
-        html: observationHtml(text, { nasdaqPct, soxPct, asxPct, today, newsItems }),
+        subject: `Portfolio note — ${today}`,
+        html: observationHtml(text, {
+          nasdaqPct,
+          soxPct,
+          asxPct,
+          asxProxy: INDEX_PROXIES.asx,
+          today,
+          portfolioMove,
+        }),
       });
       emailed = true;
     }
