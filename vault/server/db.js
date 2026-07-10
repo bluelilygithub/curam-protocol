@@ -1430,6 +1430,19 @@ async function initSchema() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metal_spot_snapshots (
+      id           BIGSERIAL PRIMARY KEY,
+      metal        TEXT NOT NULL DEFAULT 'XAU',
+      "audPerOz"   NUMERIC(18, 4) NOT NULL,
+      "recordedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_metal_spot_snapshots_metal_time
+      ON metal_spot_snapshots (metal, "recordedAt" DESC)
+  `);
+
   // ── YouTube ───────────────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS youtube_search_history (

@@ -20,6 +20,7 @@ const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
+const metalsPortfolio = require('./metalsPortfolio');
 const marketData = require('./marketData');
 const sendEmail = require('../utils/sendEmail');
 const { runtimeConfig } = require('../config/runtime');
@@ -71,6 +72,15 @@ async function getSearchConfig() {
   return { apiKey, provider };
 }
 
+function sourceFromUrl(url) {
+  if (!url) return 'Web';
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return 'Web';
+  }
+}
+
 async function webSearch(query) {
   if (runtimeConfig.disableWebSearch) return [];
 
@@ -85,7 +95,12 @@ async function webSearch(query) {
         { headers: { Accept: 'application/json', 'X-Subscription-Token': apiKey }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
       );
       const data = await res.json();
-      return (data.web?.results || []).slice(0, 4).map((r) => ({ title: r.title, snippet: r.description || '' }));
+      return (data.web?.results || []).slice(0, 4).map((r) => ({
+        title: r.title,
+        snippet: r.description || '',
+        url: r.url || null,
+        source: r.profile?.name || sourceFromUrl(r.url),
+      }));
     }
     if (provider === 'serper') {
       const res = await fetch('https://google.serper.dev/search', {
@@ -95,7 +110,12 @@ async function webSearch(query) {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       const data = await res.json();
-      return (data.organic || []).slice(0, 4).map((r) => ({ title: r.title, snippet: r.snippet || '' }));
+      return (data.organic || []).slice(0, 4).map((r) => ({
+        title: r.title,
+        snippet: r.snippet || '',
+        url: r.link || null,
+        source: sourceFromUrl(r.link),
+      }));
     }
     // serpapi
     const res = await fetch(
@@ -103,7 +123,12 @@ async function webSearch(query) {
       { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
     );
     const data = await res.json();
-    return (data.organic_results || []).slice(0, 4).map((r) => ({ title: r.title, snippet: r.snippet || '' }));
+    return (data.organic_results || []).slice(0, 4).map((r) => ({
+      title: r.title,
+      snippet: r.snippet || '',
+      url: r.link || null,
+      source: sourceFromUrl(r.link),
+    }));
   } catch (err) {
     console.warn('[sharesNews] webSearch error:', err.message);
     return [];
@@ -127,7 +152,12 @@ async function getFinnhubNews(symbol) {
     const data = await res.json();
     return (Array.isArray(data) ? data : [])
       .slice(0, 5)
-      .map((n) => ({ title: n.headline, snippet: n.summary || '' }));
+      .map((n) => ({
+        title: n.headline,
+        snippet: n.summary || '',
+        url: n.url || null,
+        source: n.source || 'Finnhub',
+      }));
   } catch (err) {
     console.warn(`[sharesNews] Finnhub news error for ${symbol}:`, err.message);
     return [];
@@ -143,6 +173,14 @@ async function fetchHoldingNews(symbol, exchange) {
     if (news.length) return news;
   }
   return webSearch(`${symbol} stock news today site:reuters.com OR site:bloomberg.com OR site:afr.com OR site:abc.net.au`);
+}
+
+async function fetchMetalsNews() {
+  const [goldNews, miningNews] = await Promise.all([
+    webSearch('gold price XAU precious metals news today site:reuters.com OR site:bloomberg.com'),
+    webSearch('gold mining commodities Federal Reserve USD news today Reuters Bloomberg'),
+  ]);
+  return [...goldNews, ...miningNews];
 }
 
 // ─── Daily briefing AI generation ────────────────────────────────────────────
@@ -502,6 +540,15 @@ function enrichHoldingsForObservation(dash, indexPcts) {
   });
 }
 
+function enrichMetalsForObservation(metalsDash) {
+  const holdingsValue = metalsDash.holdingsValueAud || 0;
+  return (metalsDash.positions || []).map((p) => ({
+    ...p,
+    label: p.label,
+    weightPct: p.valueAud != null && holdingsValue > 0 ? round2((p.valueAud / holdingsValue) * 100) : null,
+  }));
+}
+
 function selectMoversForReport(holdings) {
   const ABS_MOVE_PCT = 1;
   const BENCHMARK_DIVERGENCE_PCT = 2;
@@ -582,70 +629,131 @@ async function loadTrailingHoldingMetrics(userId, holdings, windowDays = 5) {
   return out;
 }
 
-const OBSERVATION_OUTPUT_TEMPLATE = `## TOP LINE
-[2–3 sentences max. The single most important thing for this portfolio today and why it matters. Write as if this is the only paragraph the client reads. Use portfolio day % and $AUD from PRE-COMPUTED SUMMARY.]
+const OBSERVATION_OUTPUT_TEMPLATE = `Write ONLY the body (email header and benchmarks line are added separately). Use ## section headings exactly as below. No markdown tables.
+
+## TOP LINE
+2–3 sentences max. The single most important thing for this portfolio today and why it matters — as if this is the only paragraph the client reads.
 
 ## MOVERS & CAUSALITY
-[Cover ONLY holdings listed in moversToCover — one bullet each. Included if |day %| ≥ 1 OR |vs sector| ≥ 2 (benchmark divergence). Sort by decision relevance, not just absolute move. Pattern:]
-- **TICKER** [±X.XX%] vs **sectorBenchmark** [±X.XX%] → **beat/lagged/matched** (vs sector: ±X.XX pp) — [cause with inline citation as (Source: "headline") OR "no identified catalyst, beta move"]
-  Thesis impact: **reinforces / weakens / neutral** — [one short clause why]
+Cover every holding in moversToCover (included if |day %| ≥ 1 OR |vs sector| ≥ 2pp divergence). One bullet each:
+- **TICKER** [±X.XX%] vs **sectorBenchmark** [±X.XX%] → **beat/lagged/matched** (±X.XX pp) — [cause: connect move to a specific news claim with [Source, ≤8-word headline], OR "no company-specific catalyst; move tracks sector (beta not alpha)"]
+  Thesis: **reinforces / weakens / neutral** — [one clause]
+
+## POSITION CHECK
+One line per holding in positionsNotInMovers (every other position — complete audit trail):
+- **TICKER** [±X.XX%] vs sector → **beat/lagged/matched** — [no notable move / no news / one-line status]
 
 ## SECTOR & MACRO CONTEXT
-[1–2 short paragraphs. What drove the sector/macro backdrop today — NOT stock-specific. Cite macro/sector headlines inline. Explicitly estimate how much of today's portfolio move is sector beta vs stock-specific (e.g. "roughly X% of the day's loss aligns with SOX −Y% given semi weighting").]
+Sector-wide drivers today (not stock-specific). Cite macro/sector items. Estimate how much of portfolio day move is sector beta vs stock-specific.
 
 ## NEWS WORTH ACTING ON
-[Maximum 4 bullets total across all tickers. Only items that could plausibly change position size or thesis — NOT a headline dump. Format:]
-- **TICKER** — (Source: "exact headline") — [what it says] · [why it matters for the thesis]
+Max 4 bullets. Only items that could change position size or thesis. Extract the actual claim/number from the article — not a headline paste. Format: **TICKER** — [what it says] · [why it matters] · [Source, ≤8-word headline]
 
 ## RISK WATCH
-[2–4 bullets. Background risks not fully priced today: regulatory, supply chain, valuation stretch, known upcoming events. No vague filler.]
+2–4 bullets. Background risks not fully in today's price (regulatory, supply chain, valuation, upcoming events). Scale claim strength to sample size (rule 13): one day's move is an observation, not a pattern — no "decoupling"/"breakdown" without multi-session evidence; if no catalyst, say "no specific catalyst identified" rather than inventing one.
 
 ## DECISION TRIGGERS
-[2–4 bullets. Concrete, falsifiable conditions — price levels, today's % moves, dates, or events. FORBIDDEN: "monitor closely" without a level or event.
-FORBIDDEN: precise multi-day / trailing-window % (e.g. "5-day underperformance of 4.16%") unless that exact figure appears in trailingMetrics with dataAvailable:true for that symbol — otherwise use today-only triggers or state that snapshot history is insufficient.]
+2–4 bullets. Concrete, falsifiable tripwires — level, event, or comparison. Carry forward prior triggers verbatim unless revising with explicit reason (see priorPortfolioNote). No "monitor closely" without a level. Multi-day % only if in trailingMetrics with dataAvailable:true.
 
 ## ONE-LINER
-[One sentence: portfolio value (AUD), position count, and how the book is doing today — what the client would repeat if asked.]`;
+Portfolio value (AUD), position count, one sentence the client would repeat if asked "how's the book doing."
 
-const OBSERVATION_SYSTEM_PROMPT = `You are a senior portfolio strategist writing a daily PORTFOLIO NOTE for a sophisticated investor. Observations and decision framing only — never buy/sell/hold recommendations.
+---
 
-The email header and benchmark line are added separately. You write ONLY the body sections below.
+If hasMetals is true in PRE-COMPUTED SUMMARY, add this block after the shares ONE-LINER. If hasMetals is false, omit it entirely.
 
-${OBSERVATION_OUTPUT_TEMPLATE}
+## METALS & MINERALS
 
-## Rules
-- Use ONLY numbers from PRE-COMPUTED SUMMARY and holdings — never invent prices, % moves, or index levels.
-- MOVERS & CAUSALITY: use moversToCover exactly (each entry has inclusionReason: absolute_move, benchmark_divergence, or both). Compare each to sectorBenchmark and sectorBenchmarkPct; state beat/lagged/matched from relativeToSector and vsSectorPct.
-- Multi-day / trailing claims: ONLY use trailingMetrics[symbol].trailingPct when dataAvailable is true. No trailing vs-sector figures (not supplied). If dataAvailable is false, do not assert trailing performance — use intraday data only.
-- Inline citations required: (Source: "exact headline") — pull from news items provided; do not cite headlines about a different company.
-- NEWS WORTH ACTING ON: max 4 items; skip noise, tangential articles, and generic market takes unless they directly change thesis for a held name.
-- DECISION TRIGGERS: every bullet must include a falsifiable level, date, or event — no hand-waving.
-- No markdown tables. Use ## section headings exactly as shown and bullet lists.
-- Be direct and analytical. Cut filler and repetition.`;
+### TOP LINE
+2–3 sentences: the single most important thing for the gold/minerals book today.
 
-const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior editor reviewing a PORTFOLIO NOTE before it goes to the portfolio owner.
+### MOVERS & CAUSALITY
+Cover every holding in metalsMoversToCover (same inclusion rule as shares). Use label for display name. Benchmark is gold spot (XAU/AUD) — all lots move with spot unless a future metal type differs.
+- **LABEL** [±X.XX%] vs **Gold spot** [±X.XX%] → **beat/lagged/matched** — [cause with citation, or "no metal-specific catalyst; move tracks spot (beta not alpha)"]
+  Thesis: **reinforces / weakens / neutral** — [one clause]
 
-Check against the source data:
-- TOP LINE: punchy, 2–3 sentences, uses correct portfolio day move numbers.
-- MOVERS & CAUSALITY: every symbol in moversToCover appears; verify inclusionReason (divergence ≥2pp must be covered even if |day %| < 1); beat/lag math matches sectorBenchmarkPct.
-- Remove any DECISION TRIGGERS with fabricated trailing % not present in trailingMetrics with dataAvailable:true.
-- Drop irrelevant news (wrong company, crypto, unrelated tickers). Require inline (Source: "headline") on any cited claim.
-- NEWS WORTH ACTING ON: cut to ≤4 high-conviction items; remove headline reposts.
-- SECTOR & MACRO: must separate sector beta from stock-specific drivers with a rough split.
-- DECISION TRIGGERS: reject any bullet without a concrete level, date, or event.
-- All seven ## sections present and complete.
+### POSITION CHECK
+One line per holding in metalsPositionsNotInMovers.
 
-Return the improved full note only. No buy/sell advice.`;
+### SECTOR & MACRO CONTEXT
+Gold/precious-metals macro drivers (USD, rates, geopolitics, mining supply). Tie metals portfolio day move to spot beta vs metal-specific news.
 
-const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead strategist sending the final PORTFOLIO NOTE to the owner. Merge the best of the draft and reviewer version.
+### NEWS WORTH ACTING ON
+Max 4 bullets — thesis-changing for the metals book only.
 
-Requirements:
-- All seven sections with exact ## headings: TOP LINE, MOVERS & CAUSALITY, SECTOR & MACRO CONTEXT, NEWS WORTH ACTING ON, RISK WATCH, DECISION TRIGGERS, ONE-LINER.
-- Every number verified against PRE-COMPUTED SUMMARY; strip invented trailing-window metrics.
-- Inline (Source: "headline") on all news references.
-- NEWS WORTH ACTING ON: ≤4 bullets, thesis-changing only.
-- DECISION TRIGGERS: falsifiable conditions only.
-- No tables. No buy/sell recommendations.
+### RISK WATCH
+Background risks for precious metals / mining exposure. Rule 13 applies.
+
+### DECISION TRIGGERS
+Falsifiable tripwires for the metals book. Carry forward metals triggers from priorPortfolioNote verbatim unless revising with explicit reason.
+
+### ONE-LINER
+Metals book value (AUD), lot count, one sentence on how physical gold/minerals did today.`;
+
+const OBSERVATION_SYSTEM_PROMPT = `# Daily Portfolio Analyst — System Prompt
+
+## Role
+You are a senior sell-side equity research analyst covering semiconductors, AI infrastructure, and mega-cap tech. You are writing a daily portfolio note for a sophisticated client who holds a concentrated AI/semis book. Write like a broker note, not a data recap: every sentence should either explain a causal relationship, flag a decision point, or state a risk. Do not restate data the client can already see without adding interpretation.
+
+Observations and decision framing only — never explicit buy/sell/hold recommendations.
+
+## Inputs you will receive (in the user message)
+- hasShares / hasMetals flags — omit share sections or entire METALS & MINERALS block when false
+- SHARES PRE-COMPUTED SUMMARY: holdings, benchmarks, moversToCover, positionsNotInMovers, trailingMetrics, portfolio day move
+- METALS PRE-COMPUTED SUMMARY: spot (XAU/AUD), lots, metalsMoversToCover, metalsPositionsNotInMovers, metals portfolio day move
+- priorPortfolioNote: yesterday's note (for trigger continuity and fact consistency) — may be null on first run
+- NEWS: per-ticker items; METALS / MACRO / SECTOR_SEMIS for context
+
+## Hard rules
+1. **Every price move needs a stated cause.** For each mover, identify which news item (if any) plausibly explains it: "ASML +2.0% — consistent with [Bernstein PT raise, cite source]" or, if no news explains it, "no company-specific catalyst found; move tracks SOX (+3.5%), i.e. beta not alpha." Never present a move and headlines side by side without connecting them.
+2. **Always benchmark relative performance.** For each mover, state beat/matched/lagged vs sectorBenchmark and vsSectorPct — by roughly how much. This is the single most important thing a broker adds that a data feed doesn't.
+3. **Read the news, don't just cite the headline.** Extract the actual claim or number (PT, deal size, analyst, catalyst) from snippet/title. A headline pasted verbatim is not analysis.
+4. **Never say "unavailable" without a workaround.** If ASX 200 (or another benchmark) is missing, state the proxy from benchmarks.asx200Note, flag stale data, or explain what cannot be assessed today (e.g. cannot assess ASX-relative performance). If narrative cannot be produced, state which inputs were missing — not generic boilerplate.
+5. **Inline citations:** [Source Name, ≤8-word headline] — only from supplied articles. Do not fabricate figures, PTs, or attributions.
+6. **Give a view, not just facts.** State whether today's news reinforces, weakens, or is neutral to the thesis. Flag conflicts (e.g. bullish supply-chain read-through vs bearish sector risk noted separately).
+7. **Decision triggers must be falsifiable** — reference a level, event, or comparison (e.g. "break below $X or second consecutive day underperforming SOX"). Never just "keep an eye on this" or "monitor closely" without a level.
+8. **Quiet days are valid.** Say plainly why it was quiet — don't pad (no earnings, no analyst actions, sector in line with broad tech, etc.).
+
+## Continuity rules (cross-day)
+9. **Decision triggers are standing tripwires.** Carry forward triggers from priorPortfolioNote verbatim until they fire or you explicitly revise: "Revising NVDA trigger from [old] to [new] because [reason]." Never silently redraw thresholds from yesterday's close.
+10. **Same disclosed fact, same description.** If today's sources conflict with priorPortfolioNote, flag the discrepancy — do not silently overwrite.
+11. **Label inference as inference.** Causal claims about why money moved must cite evidence or be hedged ("no direct evidence in today's sources; inferred from the pattern of gains").
+12. **No holding disappears.** moversToCover get full treatment; positionsNotInMovers get one line each in POSITION CHECK. Same for metals lots in METALS & MINERALS.
+13. **Scale claim strength to sample size, especially in Risk Watch.** A single day's divergence, drop, or lag is one data point — describe it as an observation ("today's largest gap," "one-day divergence") not an established pattern ("decoupling," "momentum loss," "breakdown"). Reserve pattern-language for multiple consecutive sessions showing the same thing. When flagging risk with no identified cause, say "no specific catalyst identified" — never supply a plausible-sounding explanation (e.g. "likely pricing in geopolitical risk") without a cited source.
+
+## Data integrity (system-enforced)
+- Use ONLY numbers from PRE-COMPUTED SUMMARY — never invent prices, index levels, or % moves.
+- moversToCover inclusion: |dayChangePct| ≥ 1% OR |vsSectorPct| ≥ 2pp (see inclusionReason on each mover).
+- trailingMetrics: use trailingPct only when dataAvailable:true. No trailing vs-sector figures (not supplied).
+
+## Tone
+Direct, specific, numerate. No hedging filler ("could potentially"). No AI-disclosure boilerplate. If data is thin, say so once and move on.
+
+${OBSERVATION_OUTPUT_TEMPLATE}`;
+
+const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior sell-side editor reviewing a daily PORTFOLIO NOTE before it goes to the client.
+
+Enforce the analyst rules:
+- Every mover: cause linked to news OR explicit beta-not-alpha; beat/lag with correct vsSectorPct; thesis line present.
+- POSITION CHECK: every symbol in positionsNotInMovers appears with one line.
+- METALS & MINERALS: if hasMetals, all ### subsections present with same rigour as shares; every metals lot accounted for.
+- News claims extract substance from snippets — not headline reposts. Citations as [Source, ≤8-word headline].
+- NEWS WORTH ACTING ON: ≤4 items, thesis-changing only.
+- SECTOR & MACRO: beta vs stock-specific split for today's portfolio move.
+- DECISION TRIGGERS: falsifiable; carry forward prior triggers from priorPortfolioNote unless explicitly revised; strip fabricated trailing % not in trailingMetrics.
+- RISK WATCH: rule 13 — no pattern-language ("decoupling," "breakdown") from one day's data; no invented catalysts; say "no specific catalyst identified" when unknown.
+- Drop wrong-company news. Label unconfirmed causal inference.
+- All eight ## sections present.
+
+Return the improved full note body only. No buy/sell advice.`;
+
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst sending the final PORTFOLIO NOTE to the client. Merge the strongest draft and reviewer version.
+
+Verify every number against PRE-COMPUTED SUMMARY. Broker-note voice: causal, numerate, no data recap filler.
+
+Sections required: TOP LINE, MOVERS & CAUSALITY, POSITION CHECK, SECTOR & MACRO CONTEXT, NEWS WORTH ACTING ON, RISK WATCH, DECISION TRIGGERS, ONE-LINER — plus METALS & MINERALS (all ### subsections) when hasMetals.
+
+Citations: [Source, ≤8-word headline]. Triggers: standing tripwires with continuity from priorPortfolioNote. ≤4 news items. RISK WATCH: observation-language only unless multi-day evidence; no fabricated catalysts.
 
 Return ONLY the final note body.`;
 
@@ -715,56 +823,136 @@ async function fetchIndexPct(proxy) {
   }
 }
 
-function buildFallbackReport({ portfolio, holdings, movers, portfolioMove, nasdaqPct, soxPct, asxPct, asxNote }) {
+function buildFallbackReport({
+  hasShares,
+  hasMetals,
+  portfolio,
+  holdings,
+  movers,
+  portfolioMove,
+  metalsSummary,
+  metalsMovers,
+  metalsHoldings,
+  nasdaqPct,
+  soxPct,
+  asxPct,
+  asxNote,
+}) {
   const bench = [
     `Nasdaq ${signedPct(nasdaqPct)}`,
     `SOX ${signedPct(soxPct)}`,
     asxPct != null ? `ASX 200 ${signedPct(asxPct)}` : `ASX 200 (${asxNote || 'proxy unavailable'})`,
   ].join(' · ');
 
-  const moverLines = movers.length
-    ? movers.map((p) => {
-      const rel = p.relativeToSector !== 'unknown' ? p.relativeToSector : 'matched';
-      return `- **${p.symbol}** ${signedPct(p.dayChangePct)} vs ${p.sectorBenchmark} ${signedPct(p.sectorBenchmarkPct)} → **${rel}** — no identified catalyst, beta move (AI unavailable)\n  Thesis impact: **neutral** — automated summary only`;
-    }).join('\n')
-    : '- No material movers on latest data.';
+  const parts = ['_AI narrative unavailable — data-only portfolio note._', ''];
 
-  const portLine = portfolioMove
-    ? `${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)} on holdings)`
-    : 'day move unavailable';
+  if (hasShares) {
+    const moverSymbols = new Set(movers.map((m) => m.symbol));
+    const nonMovers = holdings.filter((h) => !moverSymbols.has(h.symbol));
+    const moverLines = movers.length
+      ? movers.map((p) => {
+        const rel = p.relativeToSector !== 'unknown' ? p.relativeToSector : 'matched';
+        return `- **${p.symbol}** ${signedPct(p.dayChangePct)} vs ${p.sectorBenchmark} ${signedPct(p.sectorBenchmarkPct)} → **${rel}** — no identified catalyst, beta move (AI unavailable)\n  Thesis: **neutral** — automated summary only`;
+      }).join('\n')
+      : '- No material movers on latest data.';
+    const positionCheckLines = nonMovers.length
+      ? nonMovers.map((p) => {
+        const rel = p.relativeToSector !== 'unknown' ? p.relativeToSector : 'matched';
+        return `- **${p.symbol}** ${signedPct(p.dayChangePct)} vs sector → **${rel}** — no notable move; no news screened (AI unavailable)`;
+      }).join('\n')
+      : '- All positions covered in movers.';
+    const portLine = portfolioMove
+      ? `${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)} on holdings)`
+      : 'day move unavailable';
 
-  return [
-    '_AI narrative unavailable — data-only portfolio note._',
-    '',
-    '## TOP LINE',
-    `Portfolio ${portLine} with ${portfolio.holdings.length} positions (${fmtAud(portfolio.holdingsValueAud)} holdings value). Benchmarks: ${bench}.`,
-    '',
-    '## MOVERS & CAUSALITY',
-    moverLines,
-    '',
-    '## SECTOR & MACRO CONTEXT',
-    `Macro backdrop from index proxies: ${bench}. Full sector vs stock-specific attribution requires AI analysis.`,
-    '',
-    '## NEWS WORTH ACTING ON',
-    '- None flagged automatically — review holdings manually.',
-    '',
-    '## RISK WATCH',
-    '- AI analysis unavailable; check upcoming earnings and macro calendar manually.',
-    '',
-    '## DECISION TRIGGERS',
-    `- Re-run note when portfolio day move exceeds ±2% (${portfolioMove ? signedPct(portfolioMove.changePct) : 'n/a'} today).`,
-    '',
-    '## ONE-LINER',
-    `${fmtAud(portfolio.totalValueAud)} book, ${portfolio.holdings.length} positions — ${portLine}.`,
-  ].join('\n');
+    parts.push(
+      '## TOP LINE',
+      `Portfolio ${portLine} with ${portfolio.holdings.length} positions (${fmtAud(portfolio.holdingsValueAud)} holdings value). Benchmarks: ${bench}.`,
+      '',
+      '## MOVERS & CAUSALITY',
+      moverLines,
+      '',
+      '## POSITION CHECK',
+      positionCheckLines,
+      '',
+      '## SECTOR & MACRO CONTEXT',
+      `Macro backdrop from index proxies: ${bench}. Full sector vs stock-specific attribution requires AI analysis.`,
+      '',
+      '## NEWS WORTH ACTING ON',
+      '- None flagged automatically — review holdings manually.',
+      '',
+      '## RISK WATCH',
+      '- AI analysis unavailable; check upcoming earnings and macro calendar manually.',
+      '',
+      '## DECISION TRIGGERS',
+      `- Re-run note when portfolio day move exceeds ±2% (${portfolioMove ? signedPct(portfolioMove.changePct) : 'n/a'} today).`,
+      '',
+      '## ONE-LINER',
+      `${fmtAud(portfolio.totalValueAud)} book, ${portfolio.holdings.length} positions — ${portLine}.`,
+      ''
+    );
+  }
+
+  if (hasMetals && metalsSummary) {
+    const metalsMoverSymbols = new Set((metalsMovers || []).map((m) => m.symbol));
+    const metalsNonMovers = (metalsHoldings || []).filter((h) => !metalsMoverSymbols.has(h.symbol));
+    const metalPortLine = metalsSummary.portfolioDay
+      ? `${signedPct(metalsSummary.portfolioDay.changePct)} (${fmtAud(metalsSummary.portfolioDay.changeAud)})`
+      : 'day move unavailable';
+    const metalsMoverLines = (metalsMovers || []).length
+      ? metalsMovers.map((p) =>
+        `- **${p.label}** ${signedPct(p.dayChangePct)} vs Gold spot ${signedPct(p.sectorBenchmarkPct)} → **matched** — spot move (AI unavailable)\n  Thesis: **neutral** — automated summary only`
+      ).join('\n')
+      : '- No material movers on latest data.';
+    const metalsCheckLines = metalsNonMovers.length
+      ? metalsNonMovers.map((p) =>
+        `- **${p.label}** ${signedPct(p.dayChangePct)} vs spot → **matched** — no notable move (AI unavailable)`
+      ).join('\n')
+      : '- All lots covered in movers.';
+
+    parts.push(
+      '## METALS & MINERALS',
+      '',
+      '### TOP LINE',
+      `Metals book ${metalPortLine} — ${metalsSummary.portfolio.lotCount} lots, ${metalsSummary.portfolio.totalOz} oz (${fmtAud(metalsSummary.portfolio.holdingsValueAud)} at spot).`,
+      '',
+      '### MOVERS & CAUSALITY',
+      metalsMoverLines,
+      '',
+      '### POSITION CHECK',
+      metalsCheckLines,
+      '',
+      '### SECTOR & MACRO CONTEXT',
+      `Gold spot ${signedPct(metalsSummary.spot?.dayChangePct)} — macro attribution requires AI analysis.`,
+      '',
+      '### NEWS WORTH ACTING ON',
+      '- None flagged automatically — review gold/macro headlines manually.',
+      '',
+      '### RISK WATCH',
+      '- AI analysis unavailable.',
+      '',
+      '### DECISION TRIGGERS',
+      `- Re-run when metals day move exceeds ±2% (${metalsSummary.portfolioDay ? signedPct(metalsSummary.portfolioDay.changePct) : 'n/a'} today).`,
+      '',
+      '### ONE-LINER',
+      `${fmtAud(metalsSummary.portfolio.holdingsValueAud)} metals book, ${metalsSummary.portfolio.lotCount} lots — ${metalPortLine}.`
+    );
+  }
+
+  return parts.join('\n');
 }
 
 function buildObservationPrompt({
+  hasShares,
+  hasMetals,
   portfolio,
   holdings,
   movers,
+  positionsNotInMovers,
   portfolioMove,
   trailingMetrics,
+  metalsSummary,
+  priorPortfolioNote,
   newsItems,
   nasdaqPct,
   soxPct,
@@ -775,44 +963,69 @@ function buildObservationPrompt({
     ? `${asxPct}% (${asxProxy.symbol} proxy)`
     : `${asxProxy.symbol} proxy unavailable — say "ASX 200 proxy unavailable" in macro text`;
 
-  return [
-    'Write the PORTFOLIO NOTE body. Header and benchmarks are added by email template — start at ## TOP LINE.',
+  const lines = [
+    'Write the PORTFOLIO NOTE body. Header and benchmarks are added by email template.',
+    hasShares ? 'Start at ## TOP LINE for shares.' : 'No share holdings — skip all share ## sections (TOP LINE through ONE-LINER).',
+    hasMetals ? 'Then add ## METALS & MINERALS with all ### subsections.' : 'No metal holdings — omit ## METALS & MINERALS entirely.',
     '',
-    '## PRE-COMPUTED SUMMARY',
-    JSON.stringify({
-      portfolioDay: portfolioMove,
-      portfolio: {
-        totalValueAud: portfolio.totalValueAud,
-        holdingsValueAud: portfolio.holdingsValueAud,
-        cashAud: portfolio.cashAud,
-        positionCount: portfolio.holdings.length,
-        unrealizedPnlPct: portfolio.unrealizedPnlPct,
-        asOf: portfolio.asOf,
-      },
-      benchmarks: {
-        nasdaqPct,
-        soxPct,
-        asx200Pct: asxPct,
-        asx200Note: asxLine,
-      },
-      moverInclusionRule: '|dayChangePct| >= 1% OR |vsSectorPct| >= 2 percentage points vs sector benchmark',
-      moversToCover: movers.map((m) => ({
-        symbol: m.symbol,
-        inclusionReason: m.inclusionReason,
-        dayChangePct: m.dayChangePct,
-        vsSectorPct: m.vsSectorPct,
-        sectorBenchmark: m.sectorBenchmark,
-        sectorBenchmarkPct: m.sectorBenchmarkPct,
-        relativeToSector: m.relativeToSector,
-      })),
-      trailingMetrics,
-      trailingMetricsPolicy: 'Stock-only trailing % from share_symbol_snapshots (earliest in ~5d window → current). No trailing vs-sector data. Use trailingPct only when dataAvailable:true; never invent multi-day figures.',
-      allHoldings: holdings,
-    }, null, 2),
+    '## FLAGS',
+    JSON.stringify({ hasShares, hasMetals }, null, 2),
+  ];
+
+  if (hasShares) {
+    lines.push(
+      '',
+      '## SHARES — PRE-COMPUTED SUMMARY',
+      JSON.stringify({
+        portfolioDay: portfolioMove,
+        portfolio: {
+          totalValueAud: portfolio.totalValueAud,
+          holdingsValueAud: portfolio.holdingsValueAud,
+          cashAud: portfolio.cashAud,
+          positionCount: portfolio.holdings.length,
+          unrealizedPnlPct: portfolio.unrealizedPnlPct,
+          asOf: portfolio.asOf,
+        },
+        benchmarks: {
+          nasdaqPct,
+          soxPct,
+          asx200Pct: asxPct,
+          asx200Note: asxLine,
+        },
+        moverInclusionRule: '|dayChangePct| >= 1% OR |vsSectorPct| >= 2 percentage points vs sector benchmark',
+        moversToCover: movers.map((m) => ({
+          symbol: m.symbol,
+          inclusionReason: m.inclusionReason,
+          dayChangePct: m.dayChangePct,
+          vsSectorPct: m.vsSectorPct,
+          sectorBenchmark: m.sectorBenchmark,
+          sectorBenchmarkPct: m.sectorBenchmarkPct,
+          relativeToSector: m.relativeToSector,
+        })),
+        positionsNotInMovers,
+        trailingMetrics,
+        trailingMetricsPolicy: 'Stock-only trailing % from share_symbol_snapshots (earliest in ~5d window → current). No trailing vs-sector data. Use trailingPct only when dataAvailable:true; never invent multi-day figures.',
+        allHoldings: holdings,
+      }, null, 2)
+    );
+  }
+
+  if (hasMetals) {
+    lines.push('', '## METALS — PRE-COMPUTED SUMMARY', JSON.stringify(metalsSummary, null, 2));
+  }
+
+  lines.push(
     '',
-    '## NEWS (last 24h — cite inline only when directly about a held company)',
-    JSON.stringify(newsItems, null, 2),
-  ].join('\n');
+    '## priorPortfolioNote (carry forward DECISION TRIGGERS verbatim; flag fact conflicts)',
+    priorPortfolioNote
+      ? `Date: ${priorPortfolioNote.date}\n\n${priorPortfolioNote.content}`
+      : 'null — first note; set standing triggers fresh.',
+    '',
+    '## NEWS (last 24h — title, source, url, snippet; cite as [Source, ≤8-word headline])',
+    JSON.stringify(newsItems, null, 2)
+  );
+
+  return lines.join('\n');
 }
 
 // Convert inline markdown (**bold**, *italic*) to HTML.
@@ -828,11 +1041,13 @@ const OBS_CALLOUT_SECTIONS = new Set(['TOP LINE']);
 const OBS_SECTION_LABELS = {
   'TOP LINE': 'Top line',
   'MOVERS & CAUSALITY': 'Movers & causality',
+  'POSITION CHECK': 'Position check',
   'SECTOR & MACRO CONTEXT': 'Sector & macro context',
   'NEWS WORTH ACTING ON': 'News worth acting on',
   'RISK WATCH': 'Risk watch',
   'DECISION TRIGGERS': 'Decision triggers',
   'ONE-LINER': 'One-liner',
+  'METALS & MINERALS': 'Metals & minerals',
 };
 
 // Convert markdown observation text to styled HTML.
@@ -956,7 +1171,7 @@ function formatBenchmark(label, pct) {
   return `${label} <strong style="color:${colour}">${signedPct(pct)}</strong>`;
 }
 
-function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, portfolioMove }) {
+function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, portfolioMove, goldSpotPct, metalsPortfolioMove }) {
   const asxBench = asxPct != null
     ? formatBenchmark('ASX 200', asxPct)
     : `ASX 200 <span style="color:#888;">— (${asxProxy?.symbol || 'STW'} proxy n/a)</span>`;
@@ -964,10 +1179,14 @@ function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, por
     formatBenchmark('Nasdaq', nasdaqPct),
     formatBenchmark('SOX', soxPct),
     asxBench,
-  ].join(' &nbsp;·&nbsp; ');
+    goldSpotPct != null ? formatBenchmark('Gold (XAU/AUD)', goldSpotPct) : null,
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ');
 
   const portChip = portfolioMove
-    ? `<span style="margin-left:12px;color:${portfolioMove.changePct >= 0 ? '#16a34a' : '#dc2626'};font-weight:600;">Book ${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)})</span>`
+    ? `<span style="margin-left:12px;color:${portfolioMove.changePct >= 0 ? '#16a34a' : '#dc2626'};font-weight:600;">Shares ${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)})</span>`
+    : '';
+  const metalsChip = metalsPortfolioMove
+    ? `<span style="margin-left:12px;color:${metalsPortfolioMove.changePct >= 0 ? '#16a34a' : '#dc2626'};font-weight:600;">Metals ${signedPct(metalsPortfolioMove.changePct)} (${fmtAud(metalsPortfolioMove.changeAud)})</span>`
     : '';
 
   return `
@@ -976,7 +1195,7 @@ function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, por
   <div style="border-bottom:3px solid #1a1a1a;padding-bottom:12px;margin-bottom:8px;">
     <h1 style="margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;">PORTFOLIO NOTE — ${today}</h1>
     <p style="margin:8px 0 0;font-size:13px;color:#555;">
-      <span style="color:#888;">Benchmarks:</span> ${benchmarks}${portChip}
+      <span style="color:#888;">Benchmarks:</span> ${benchmarks}${portChip}${metalsChip}
     </p>
   </div>
 
@@ -994,37 +1213,44 @@ async function generateObservation(userId) {
   const tz = await getWorkspaceTimezone();
   const today = getDateInTz(tz);
 
-  const dash = await sharesPortfolio.buildDashboard(userId);
-  if (!dash.positions.length) return { skipped: true, reason: 'No holdings' };
+  await metalsPortfolio.recordSpotSnapshot('XAU');
 
-  const holdingsValue = dash.holdingsValueAud || 0;
+  const [dash, metalsDash] = await Promise.all([
+    sharesPortfolio.buildDashboard(userId),
+    metalsPortfolio.buildMetalsDashboard(userId, tz),
+  ]);
 
-  const portfolio = {
-    asOf: dash.quotedAt,
-    totalValueAud: round2(dash.totalValueAud),
-    holdingsValueAud: round2(dash.holdingsValueAud),
-    cashAud: round2(dash.cashAud),
-    unrealizedPnlPct: dash.unrealizedPnlPct != null ? round2(dash.unrealizedPnlPct) : null,
-    holdings: dash.positions.map((p) => ({
-      symbol: p.symbol,
-      exchange: p.exchange,
-      quantity: p.quantity,
-      valueAud: p.valueAud != null ? round2(p.valueAud) : null,
-      weightPct: p.valueAud != null && holdingsValue > 0 ? round2((p.valueAud / holdingsValue) * 100) : null,
-      avgCostAud: round2(p.avgCostAud),
-      totalReturnPct: p.pnlPct != null ? round2(p.pnlPct) : null,
-    })),
-  };
+  const hasShares = dash.positions.length > 0;
+  const hasMetals = metalsDash.positions.length > 0;
+  if (!hasShares && !hasMetals) return { skipped: true, reason: 'No holdings' };
 
-  const priceData = dash.positions.map((p) => ({
-    symbol: p.symbol,
-    exchange: p.exchange,
-    priceAud: p.priceAud != null ? round2(p.priceAud) : null,
-    previousCloseAud: p.previousCloseAud != null ? round2(p.previousCloseAud) : null,
-    dayChangePct: p.dayChangePct != null ? round2(p.dayChangePct) : null,
-    dayChangeAud: p.dayChangeAud != null ? round2(p.dayChangeAud) : null,
-    quantity: p.quantity,
-  }));
+  let portfolio = null;
+  let holdings = [];
+  let movers = [];
+  let positionsNotInMovers = [];
+  let portfolioMove = null;
+  let trailingMetrics = {};
+
+  if (hasShares) {
+    const holdingsValue = dash.holdingsValueAud || 0;
+    portfolio = {
+      asOf: dash.quotedAt,
+      totalValueAud: round2(dash.totalValueAud),
+      holdingsValueAud: round2(dash.holdingsValueAud),
+      cashAud: round2(dash.cashAud),
+      unrealizedPnlPct: dash.unrealizedPnlPct != null ? round2(dash.unrealizedPnlPct) : null,
+      holdings: dash.positions.map((p) => ({
+        symbol: p.symbol,
+        exchange: p.exchange,
+        quantity: p.quantity,
+        valueAud: p.valueAud != null ? round2(p.valueAud) : null,
+        weightPct: p.valueAud != null && holdingsValue > 0 ? round2((p.valueAud / holdingsValue) * 100) : null,
+        avgCostAud: round2(p.avgCostAud),
+        totalReturnPct: p.pnlPct != null ? round2(p.pnlPct) : null,
+      })),
+    };
+    portfolioMove = computePortfolioDayMovement(dash.positions);
+  }
 
   const [nasdaqPct, soxPct, asxPct] = await Promise.all([
     fetchIndexPct(INDEX_PROXIES.nasdaq),
@@ -1032,45 +1258,157 @@ async function generateObservation(userId) {
     fetchIndexPct(INDEX_PROXIES.asx),
   ]);
 
-  const indexPcts = { nasdaq: nasdaqPct, sox: soxPct, asx: asxPct };
-  const holdings = enrichHoldingsForObservation(dash, indexPcts);
-  const movers = selectMoversForReport(holdings);
-  const portfolioMove = computePortfolioDayMovement(dash.positions);
-  const trailingMetrics = await loadTrailingHoldingMetrics(userId, holdings, 5);
+  if (hasShares) {
+    const indexPcts = { nasdaq: nasdaqPct, sox: soxPct, asx: asxPct };
+    holdings = enrichHoldingsForObservation(dash, indexPcts);
+    movers = selectMoversForReport(holdings);
+    const moverSymbols = new Set(movers.map((m) => m.symbol));
+    positionsNotInMovers = holdings
+      .filter((h) => !moverSymbols.has(h.symbol))
+      .map((h) => ({
+        symbol: h.symbol,
+        exchange: h.exchange,
+        dayChangePct: h.dayChangePct,
+        vsSectorPct: h.vsSectorPct,
+        sectorBenchmark: h.sectorBenchmark,
+        sectorBenchmarkPct: h.sectorBenchmarkPct,
+        relativeToSector: h.relativeToSector,
+        valueAud: h.valueAud,
+        weightPct: h.weightPct,
+      }));
+    trailingMetrics = await loadTrailingHoldingMetrics(userId, holdings, 5);
+  }
 
-  // News: all holdings + targeted macro/sector searches (not a dumb headline dump in the email).
+  let metalsHoldings = [];
+  let metalsMovers = [];
+  let metalsPositionsNotInMovers = [];
+  let metalsSummary = null;
+
+  if (hasMetals) {
+    metalsHoldings = enrichMetalsForObservation(metalsDash);
+    metalsMovers = selectMoversForReport(metalsHoldings);
+    const metalsMoverSymbols = new Set(metalsMovers.map((m) => m.symbol));
+    metalsPositionsNotInMovers = metalsHoldings
+      .filter((h) => !metalsMoverSymbols.has(h.symbol))
+      .map((h) => ({
+        symbol: h.symbol,
+        label: h.label,
+        metal: h.metal,
+        dayChangePct: h.dayChangePct,
+        vsSectorPct: h.vsSectorPct,
+        sectorBenchmark: h.sectorBenchmark,
+        sectorBenchmarkPct: h.sectorBenchmarkPct,
+        relativeToSector: h.relativeToSector,
+        valueAud: h.valueAud,
+        weightPct: h.weightPct,
+        weightOz: h.weightOz,
+      }));
+    metalsSummary = {
+      portfolioDay: metalsDash.portfolioMove,
+      spot: {
+        audPerOz: metalsDash.spot?.audPerOz ?? null,
+        previousCloseAudPerOz: metalsDash.previousCloseAudPerOz,
+        dayChangePct: metalsDash.spotDayChangePct,
+        baselineNote: metalsDash.baselineSource
+          ? `Day % vs ${metalsDash.baselineSource}`
+          : 'No prior spot snapshot — day % unavailable until a second calendar day with snapshots',
+        spotError: metalsDash.spotError,
+      },
+      portfolio: {
+        totalOz: metalsDash.totalOz,
+        totalCostAud: metalsDash.totalCostAud,
+        holdingsValueAud: metalsDash.holdingsValueAud,
+        unrealizedPnlPct: metalsDash.unrealizedPnlPct,
+        lotCount: metalsDash.positions.length,
+        asOf: metalsDash.quotedAt,
+      },
+      metalsMoversToCover: metalsMovers.map((m) => ({
+        symbol: m.symbol,
+        label: m.label,
+        metal: m.metal,
+        inclusionReason: m.inclusionReason,
+        dayChangePct: m.dayChangePct,
+        vsSectorPct: m.vsSectorPct,
+        sectorBenchmark: m.sectorBenchmark,
+        sectorBenchmarkPct: m.sectorBenchmarkPct,
+        relativeToSector: m.relativeToSector,
+        weightOz: m.weightOz,
+        valueAud: m.valueAud,
+      })),
+      metalsPositionsNotInMovers,
+      allHoldings: metalsHoldings,
+    };
+  }
+
+  const priorPortfolioNote = await getPriorObservationNote(userId, today);
+
   const newsItems = [];
-  await Promise.all(
-    dash.positions.map(async (p) => {
-      const news = await fetchHoldingNews(p.symbol, p.exchange);
-      news.slice(0, 4).forEach((n) =>
-        newsItems.push({
-          symbol: p.symbol,
-          exchange: p.exchange,
-          title: n.title,
-          snippet: (n.snippet || '').slice(0, 200),
-        })
-      );
-    })
-  );
-  const [macroNews, semiNews] = await Promise.all([
+  if (hasShares) {
+    await Promise.all(
+      dash.positions.map(async (p) => {
+        const news = await fetchHoldingNews(p.symbol, p.exchange);
+        news.slice(0, 4).forEach((n) =>
+          newsItems.push({
+            symbol: p.symbol,
+            exchange: p.exchange,
+            title: n.title,
+            source: n.source || 'Unknown',
+            url: n.url || null,
+            snippet: (n.snippet || '').slice(0, 280),
+          })
+        );
+      })
+    );
+  }
+  const searchPromises = [
     webSearch('stock market macro news today Federal Reserve rates Reuters Bloomberg'),
     webSearch('semiconductor chip sector news today SOX Nasdaq Reuters'),
-  ]);
+  ];
+  if (hasMetals) {
+    searchPromises.push(fetchMetalsNews());
+  }
+  const searchResults = await Promise.all(searchPromises);
+  const [macroNews, semiNews, metalsNews = []] = searchResults;
   macroNews.slice(0, 3).forEach((n) =>
-    newsItems.push({ symbol: 'MACRO', title: n.title, snippet: (n.snippet || '').slice(0, 200) })
+    newsItems.push({
+      symbol: 'MACRO',
+      title: n.title,
+      source: n.source || 'Web',
+      url: n.url || null,
+      snippet: (n.snippet || '').slice(0, 280),
+    })
   );
   semiNews.slice(0, 3).forEach((n) =>
-    newsItems.push({ symbol: 'SECTOR_SEMIS', title: n.title, snippet: (n.snippet || '').slice(0, 200) })
+    newsItems.push({
+      symbol: 'SECTOR_SEMIS',
+      title: n.title,
+      source: n.source || 'Web',
+      url: n.url || null,
+      snippet: (n.snippet || '').slice(0, 280),
+    })
+  );
+  metalsNews.slice(0, 6).forEach((n) =>
+    newsItems.push({
+      symbol: 'METALS',
+      title: n.title,
+      source: n.source || 'Web',
+      url: n.url || null,
+      snippet: (n.snippet || '').slice(0, 280),
+    })
   );
 
   const asxNote = asxPct == null ? `${INDEX_PROXIES.asx.symbol} proxy unavailable` : null;
   const userPrompt = buildObservationPrompt({
+    hasShares,
+    hasMetals,
     portfolio,
     holdings,
     movers,
+    positionsNotInMovers,
     portfolioMove,
     trailingMetrics,
+    metalsSummary,
+    priorPortfolioNote,
     newsItems,
     nasdaqPct,
     soxPct,
@@ -1083,11 +1421,10 @@ async function generateObservation(userId) {
   if (!primaryModel) throw new Error('No model configured for user — check vault_models in Settings');
   const secondaryModel = pickSecondaryModel(tiers, primaryModel);
 
-  // Stage 1 — primary draft (fail-open: a data-only fallback is emailed if it fails).
   let draft = '';
   try {
     const draftRes = await callModel(primaryModel, userPrompt, {
-      maxTokens: 3500,
+      maxTokens: 5200,
       system: OBSERVATION_SYSTEM_PROMPT,
       returnUsage: true,
     });
@@ -1102,21 +1439,25 @@ async function generateObservation(userId) {
   if (!draft) {
     aiUnavailable = true;
     text = buildFallbackReport({
+      hasShares,
+      hasMetals,
       portfolio,
       holdings,
       movers,
       portfolioMove,
+      metalsSummary,
+      metalsMovers,
+      metalsHoldings,
       nasdaqPct,
       soxPct,
       asxPct,
       asxNote,
     });
   } else {
-    // Stage 2 — secondary model reflects/augments (fail-open: keep the draft on error).
     let revised = draft;
     try {
       const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
-        maxTokens: 3800,
+        maxTokens: 5500,
         system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -1127,11 +1468,10 @@ async function generateObservation(userId) {
       console.warn(`[sharesNews] observation secondary pass failed for user ${userId}:`, err.message);
     }
 
-    // Stage 3 — primary model final review (fail-open: keep the revised text on error).
     text = revised;
     try {
       const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
-        maxTokens: 3500,
+        maxTokens: 5200,
         system: OBSERVATION_FINAL_SYSTEM_PROMPT,
         returnUsage: true,
       });
@@ -1154,7 +1494,11 @@ async function generateObservation(userId) {
     [userId, today, text, JSON.stringify({
       nasdaqPct, soxPct, asxPct,
       portfolioMove,
+      metalsPortfolioMove: metalsDash.portfolioMove,
+      hasShares,
+      hasMetals,
       movers: movers.map((m) => m.symbol),
+      metalsLots: metalsDash.positions.length,
       holdings: holdings.length,
       newsCount: newsItems.length,
       aiUnavailable,
@@ -1182,6 +1526,8 @@ async function generateObservation(userId) {
           asxProxy: INDEX_PROXIES.asx,
           today,
           portfolioMove,
+          goldSpotPct: metalsDash.spotDayChangePct,
+          metalsPortfolioMove: metalsDash.portfolioMove,
         }),
       });
       emailed = true;
@@ -1192,6 +1538,22 @@ async function generateObservation(userId) {
 
   console.log(`[sharesNews] Generated observation for user ${userId} on ${today} (emailed: ${emailed}, aiUnavailable: ${aiUnavailable})`);
   return { date: today, text, emailed, aiUnavailable, context: { nasdaqPct, soxPct, asxPct } };
+}
+
+async function getPriorObservationNote(userId, today) {
+  const { rows } = await pool.query(
+    `SELECT date, content FROM share_news_briefings
+     WHERE "userId"=$1 AND type='observation' AND date < $2
+     ORDER BY date DESC, "createdAt" DESC LIMIT 1`,
+    [userId, today]
+  );
+  if (!rows[0]?.content) return null;
+  const content = String(rows[0].content);
+  const maxLen = 10000;
+  return {
+    date: String(rows[0].date).slice(0, 10),
+    content: content.length > maxLen ? `${content.slice(0, maxLen)}\n\n[…prior note truncated]` : content,
+  };
 }
 
 async function getLatestObservation(userId) {

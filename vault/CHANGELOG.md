@@ -296,6 +296,10 @@ The daily observation email is now a structured **Portfolio Note** with seven se
 
 **Docs:** `docs/shares-portfolio-note.md` — full spec for both email types, cron schedule, API, env vars, and LLM pipeline.
 
+**Sell-side analyst prompt:** System/review/final prompts rewritten to broker-note rules (causality, beat/lag, `[Source, ≤8-word headline]` citations, inference labelling). Added **POSITION CHECK** (one line per non-mover). Prior day’s note injected for trigger continuity (rules 9–12). News items now include `source` and `url`. Token limits raised to 4200/4500. Rule 13: scale claim strength to sample size in Risk Watch — no pattern-language from single-day moves, no invented catalysts.
+
+**Metals in portfolio emails:** Hourly email adds Gold & minerals summary + per-lot table. Daily Portfolio Note adds `## METALS & MINERALS` with full analyst subsections. New `metalsPortfolio.js` + `metal_spot_snapshots` for XAU/AUD day moves.
+
 ---
 
 ## 2026-06-25 (6)

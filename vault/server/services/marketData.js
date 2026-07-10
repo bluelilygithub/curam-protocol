@@ -121,6 +121,10 @@ async function getGoldSpotAud({ force = false } = {}) {
   return result;
 }
 
+function canFetchGoldSpot() {
+  return Boolean(String(process.env.METAL_PRICE_API_KEY || '').trim());
+}
+
 // ─── public API ─────────────────────────────────────────────────────────────
 
 async function getQuote(symbol, exchange) {
@@ -173,4 +177,5 @@ module.exports = {
   isUsExchange,
   canFetchQuotes,
   canFetchExchange,
+  canFetchGoldSpot,
 };

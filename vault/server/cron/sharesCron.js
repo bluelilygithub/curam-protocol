@@ -3,6 +3,7 @@
 const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
+const metalsPortfolio = require('../services/metalsPortfolio');
 const marketData = require('../services/marketData');
 const { generateDailyBriefing, generateMonthlySummary, generateObservation } = require('../services/sharesNewsService');
 const { reportSharesCron } = require('../services/SuggestionService');
@@ -35,6 +36,8 @@ async function getActiveShareUserIds() {
     SELECT DISTINCT "userId" AS id FROM share_trades
     UNION
     SELECT DISTINCT "userId" AS id FROM share_cash_ledger
+    UNION
+    SELECT DISTINCT "userId" AS id FROM metal_purchases
   `);
   return rows.map((r) => r.id);
 }
@@ -100,46 +103,35 @@ function pctColour(n) {
   return v >= 0 ? '#16a34a' : '#dc2626';
 }
 
-function buildHourlyHtml({ movement, threshold, testMode, positions }) {
-  const pct = movement.changePct;
-  const now = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
-
-  // Per-stock rows — sorted by absolute day change desc
+function buildHoldingTableRows(positions, { nameKey = 'symbol' } = {}) {
   const rows = [...(positions || [])]
     .filter((p) => p.priceAud != null && p.previousCloseAud != null)
     .map((p) => {
       const qty = Number(p.quantity) || 0;
       const dayAud = (Number(p.priceAud) - Number(p.previousCloseAud)) * qty;
-      return { ...p, _dayAud: dayAud };
+      return { ...p, _dayAud: dayAud, _name: p[nameKey] || p.symbol };
     })
     .sort((a, b) => Math.abs(b.dayChangePct || 0) - Math.abs(a.dayChangePct || 0));
 
-  const stockRows = rows.map((p) => `
+  return rows.map((p) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;">${p.symbol}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;">${p._name}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#888;font-size:12px;">${p.exchange}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;">${fmtAud(p.priceAud)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p.dayChangePct)};font-weight:600;">${signedPct(p.dayChangePct)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p._dayAud)};font-weight:600;">${fmtAud(p._dayAud)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#555;">${fmtAud(p.valueAud)}</td>
     </tr>`).join('');
+}
 
+function buildPortfolioSummaryTable(movement, label) {
+  if (!movement) return '';
+  const pct = movement.changePct;
   return `
-<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:660px;color:#1a1a1a;">
-
-  <h2 style="margin:0 0 4px;font-size:18px;">
-    Portfolio Update — ${now} ET
-  </h2>
-  <p style="margin:0 0 20px;font-size:13px;color:#888;">
-    ${testMode
-      ? 'Test mode — sent after every market poll.'
-      : `Alert: portfolio dropped ${Math.abs(pct).toFixed(2)}% today (threshold ${threshold}%).`}
-  </p>
-
-  <!-- Portfolio summary -->
+  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">${label}</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#f9f9f7;border-radius:8px;">
     <tr>
-      <td style="padding:12px 16px;font-size:13px;color:#555;">Portfolio change</td>
+      <td style="padding:12px 16px;font-size:13px;color:#555;">Day change</td>
       <td style="padding:12px 16px;font-weight:700;font-size:20px;color:${pctColour(pct)};text-align:right;">
         ${signedPct(pct)} &nbsp; <span style="font-size:15px;">${fmtAud(movement.changeAud)}</span>
       </td>
@@ -152,14 +144,17 @@ function buildHourlyHtml({ movement, threshold, testMode, positions }) {
       <td style="padding:8px 16px 12px;font-size:13px;color:#555;">Current value</td>
       <td style="padding:8px 16px 12px;text-align:right;">${fmtAud(movement.currentValueAud)}</td>
     </tr>
-  </table>
+  </table>`;
+}
 
-  <!-- Per-stock table -->
-  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">Holdings</h3>
-  <table style="width:100%;border-collapse:collapse;">
+function buildHoldingsTable(positions, label, nameKey = 'symbol') {
+  const stockRows = buildHoldingTableRows(positions, { nameKey });
+  return `
+  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">${label}</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
     <thead>
       <tr style="background:#f0f0ec;">
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Symbol</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Holding</th>
         <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Exch</th>
         <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Price</th>
         <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day %</th>
@@ -168,19 +163,46 @@ function buildHourlyHtml({ movement, threshold, testMode, positions }) {
       </tr>
     </thead>
     <tbody>${stockRows || '<tr><td colspan="6" style="padding:12px 10px;color:#888;">No priced holdings.</td></tr>'}</tbody>
-  </table>
+  </table>`;
+}
+
+function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions }) {
+  const pct = movement?.changePct;
+  const now = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+  const hasShares = movement && (positions || []).length > 0;
+  const hasMetals = metalsMovement && (metalsPositions || []).length > 0;
+
+  return `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:660px;color:#1a1a1a;">
+
+  <h2 style="margin:0 0 4px;font-size:18px;">
+    Portfolio Update — ${now} ET
+  </h2>
+  <p style="margin:0 0 20px;font-size:13px;color:#888;">
+    ${testMode
+      ? 'Test mode — sent after every market poll.'
+      : `Alert: shares portfolio dropped ${Math.abs(pct).toFixed(2)}% today (threshold ${threshold}%).`}
+  </p>
+
+  ${hasShares ? buildPortfolioSummaryTable(movement, 'Shares') : ''}
+  ${hasShares ? buildHoldingsTable(positions, 'Share holdings') : ''}
+
+  ${hasMetals ? buildPortfolioSummaryTable(metalsMovement, 'Gold & minerals') : ''}
+  ${hasMetals ? buildHoldingsTable(metalsPositions, 'Metal holdings', 'label') : ''}
+
+  ${!hasShares && !hasMetals ? '<p style="color:#888;">No priced holdings.</p>' : ''}
 
   <p style="margin-top:20px;font-size:11px;color:#aaa;">Observations only — not financial advice.</p>
 </div>`;
 }
 
-async function sendDropAlertEmail(to, { movement, threshold, testMode, positions }) {
-  const pct = movement.changePct;
-  const signed = signedPct(pct);
+async function sendDropAlertEmail(to, { movement, threshold, testMode, positions, metalsMovement, metalsPositions }) {
+  const sharePct = movement?.changePct;
+  const metalPct = metalsMovement?.changePct;
   const subject = testMode
-    ? `Shares update ${signed} (test mode)`
-    : `Shares alert — portfolio down ${Math.abs(pct).toFixed(2)}% today`;
-  const html = buildHourlyHtml({ movement, threshold, testMode, positions });
+    ? `Portfolio update ${signedPct(sharePct ?? metalPct)} (test mode)`
+    : `Shares alert — portfolio down ${Math.abs(sharePct).toFixed(2)}% today`;
+  const html = buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions });
   await sendEmail({ to, subject, html });
 }
 
@@ -189,6 +211,9 @@ async function sendDropAlertEmail(to, { movement, threshold, testMode, positions
 async function checkDailyDropAlerts() {
   const threshold = await getDailyDropThresholdPct();
   const testMode = threshold <= 0;
+  const tz = await getWorkspaceTimezone();
+
+  await metalsPortfolio.recordSpotSnapshot('XAU');
 
   let admins;
   try {
@@ -203,13 +228,26 @@ async function checkDailyDropAlerts() {
     try {
       const dashboard = await portfolio.buildDashboard(admin.id);
       const movement = computeDayMovement(dashboard);
-      if (!movement) continue;
+      const metalsDash = await metalsPortfolio.buildMetalsDashboard(admin.id, tz);
+      const metalsMovement = metalsDash.portfolioMove;
+      const metalsPositions = metalsDash.positions || [];
 
-      const dropPct = -movement.changePct; // positive when the portfolio is down
-      if (!testMode && dropPct < threshold) continue;
+      if (!movement && !metalsMovement) continue;
 
-      await sendDropAlertEmail(admin.email, { movement, threshold, testMode, positions: dashboard.positions || [] });
-      console.log(`[shares-cron] drop-alert sent to ${admin.email} (${movement.changePct.toFixed(2)}%, threshold ${threshold}%)`);
+      const dropPct = movement ? -movement.changePct : 0;
+      if (!testMode && (!movement || dropPct < threshold)) continue;
+
+      await sendDropAlertEmail(admin.email, {
+        movement,
+        threshold,
+        testMode,
+        positions: dashboard.positions || [],
+        metalsMovement,
+        metalsPositions,
+      });
+      const sharePct = movement ? movement.changePct.toFixed(2) : 'n/a';
+      const metalPct = metalsMovement ? metalsMovement.changePct.toFixed(2) : 'n/a';
+      console.log(`[shares-cron] drop-alert sent to ${admin.email} (shares ${sharePct}%, metals ${metalPct}%, threshold ${threshold}%)`);
     } catch (err) {
       console.error(`[shares-cron] drop-alert user ${admin.id}:`, err.message);
     }
