@@ -69,9 +69,9 @@ Observations and decision framing only — not buy/sell advice.
 The service computes structured inputs so the model does not invent numbers:
 
 - **Portfolio day move:** holdings value now vs previous close (`computePortfolioDayMovement`)
-- **Per holding:** day %, day $AUD, weight %, total return %
-- **Sector benchmark:** SOX for semiconductor symbols (TSM, NVDA, ASML, etc.), Nasdaq for other US names, ASX 200 proxy for ASX — with `sectorBenchmarkPct`, `vsSectorPct`, `relativeToSector` (beat/lagged/matched)
-- **Movers list:** `selectMoversForReport()` — >1% movers, else top 3 by absolute move
+- **Per holding:** day %, day $AUD, weight %, total return %, sector benchmark, `vsSectorPct`, beat/lagged/matched
+- **Movers list:** `selectMoversForReport()` — `|dayChangePct| ≥ 1%` **OR** `|vsSectorPct| ≥ 2` pp vs sector benchmark; else top 3 by max(|day %|, |divergence|). Each mover has `inclusionReason`.
+- **Trailing metrics:** `loadTrailingHoldingMetrics()` — stock-only % from `share_symbol_snapshots` (~5d window). No trailing vs-sector. LLM may only cite `trailingPct` when `dataAvailable: true`.
 
 ### News inputs
 

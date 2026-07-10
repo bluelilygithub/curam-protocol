@@ -503,19 +503,91 @@ function enrichHoldingsForObservation(dash, indexPcts) {
 }
 
 function selectMoversForReport(holdings) {
+  const ABS_MOVE_PCT = 1;
+  const BENCHMARK_DIVERGENCE_PCT = 2;
+
+  const qualifies = (h) => {
+    if (h.dayChangePct == null) return false;
+    const absMove = Math.abs(h.dayChangePct);
+    const absDiv = h.vsSectorPct != null ? Math.abs(h.vsSectorPct) : 0;
+    return absMove >= ABS_MOVE_PCT || absDiv >= BENCHMARK_DIVERGENCE_PCT;
+  };
+
+  const moverScore = (h) =>
+    Math.max(Math.abs(h.dayChangePct || 0), Math.abs(h.vsSectorPct || 0));
+
   const ranked = [...holdings]
     .filter((h) => h.dayChangePct != null)
-    .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct));
-  const overThreshold = ranked.filter((h) => Math.abs(h.dayChangePct) >= 1);
-  return (overThreshold.length ? overThreshold : ranked.slice(0, 3));
+    .sort((a, b) => moverScore(b) - moverScore(a));
+
+  const qualified = ranked.filter(qualifies);
+  const selected = qualified.length ? qualified : ranked.slice(0, 3);
+
+  return selected.map((h) => ({
+    ...h,
+    inclusionReason: moverInclusionReason(h, ABS_MOVE_PCT, BENCHMARK_DIVERGENCE_PCT),
+  }));
+}
+
+function moverInclusionReason(h, absMovePct, divergencePct) {
+  const absMove = Math.abs(h.dayChangePct ?? 0);
+  const absDiv = Math.abs(h.vsSectorPct ?? 0);
+  const reasons = [];
+  if (absMove >= absMovePct) reasons.push('absolute_move');
+  if (absDiv >= divergencePct) reasons.push('benchmark_divergence');
+  return reasons.length ? reasons.join('+') : 'fallback_top_mover';
+}
+
+/** Earliest snapshot price in window → current price. No benchmark trailing (not stored). */
+async function loadTrailingHoldingMetrics(userId, holdings, windowDays = 5) {
+  const symbols = [...new Set(holdings.map((h) => h.symbol).filter(Boolean))];
+  if (!symbols.length) return {};
+
+  // Extra calendar days so a Mon run still finds Fri's snapshot after a weekend.
+  const cutoff = new Date(Date.now() - (windowDays + 3) * 24 * 60 * 60 * 1000);
+
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (symbol) symbol, "priceAud", "recordedAt"
+     FROM share_symbol_snapshots
+     WHERE "userId"=$1 AND symbol = ANY($2::text[]) AND "recordedAt" >= $3
+     ORDER BY symbol, "recordedAt" ASC`,
+    [userId, symbols, cutoff]
+  );
+
+  const startBySym = Object.fromEntries(
+    rows.map((r) => [r.symbol, { priceAud: Number(r.priceAud), recordedAt: r.recordedAt }])
+  );
+
+  const out = {};
+  for (const h of holdings) {
+    const start = startBySym[h.symbol];
+    const current = h.priceAud;
+    if (!start?.priceAud || !current || start.priceAud <= 0) {
+      out[h.symbol] = {
+        dataAvailable: false,
+        windowDays,
+        reason: 'insufficient_snapshot_history',
+      };
+      continue;
+    }
+    out[h.symbol] = {
+      dataAvailable: true,
+      windowDays,
+      trailingPct: round2(((current - start.priceAud) / start.priceAud) * 100),
+      startPriceAud: round2(start.priceAud),
+      startRecordedAt: start.recordedAt,
+      currentPriceAud: current,
+    };
+  }
+  return out;
 }
 
 const OBSERVATION_OUTPUT_TEMPLATE = `## TOP LINE
 [2–3 sentences max. The single most important thing for this portfolio today and why it matters. Write as if this is the only paragraph the client reads. Use portfolio day % and $AUD from PRE-COMPUTED SUMMARY.]
 
 ## MOVERS & CAUSALITY
-[Cover ONLY holdings listed in moversToCover in the data — one bullet each, exactly this pattern:]
-- **TICKER** [±X.XX%] vs **sectorBenchmark** [±X.XX%] → **beat/lagged/matched** — [cause with inline citation as (Source: "headline") OR "no identified catalyst, beta move"]
+[Cover ONLY holdings listed in moversToCover — one bullet each. Included if |day %| ≥ 1 OR |vs sector| ≥ 2 (benchmark divergence). Sort by decision relevance, not just absolute move. Pattern:]
+- **TICKER** [±X.XX%] vs **sectorBenchmark** [±X.XX%] → **beat/lagged/matched** (vs sector: ±X.XX pp) — [cause with inline citation as (Source: "headline") OR "no identified catalyst, beta move"]
   Thesis impact: **reinforces / weakens / neutral** — [one short clause why]
 
 ## SECTOR & MACRO CONTEXT
@@ -529,7 +601,8 @@ const OBSERVATION_OUTPUT_TEMPLATE = `## TOP LINE
 [2–4 bullets. Background risks not fully priced today: regulatory, supply chain, valuation stretch, known upcoming events. No vague filler.]
 
 ## DECISION TRIGGERS
-[2–4 bullets. Concrete, falsifiable conditions — price levels, % moves, dates, or events. FORBIDDEN: "monitor closely" without a level or event. Examples: "Add only if ASML reclaims prior close +X% on volume"; "Revisit NVDA if SOX closes below −3% two sessions running".]
+[2–4 bullets. Concrete, falsifiable conditions — price levels, today's % moves, dates, or events. FORBIDDEN: "monitor closely" without a level or event.
+FORBIDDEN: precise multi-day / trailing-window % (e.g. "5-day underperformance of 4.16%") unless that exact figure appears in trailingMetrics with dataAvailable:true for that symbol — otherwise use today-only triggers or state that snapshot history is insufficient.]
 
 ## ONE-LINER
 [One sentence: portfolio value (AUD), position count, and how the book is doing today — what the client would repeat if asked.]`;
@@ -542,7 +615,8 @@ ${OBSERVATION_OUTPUT_TEMPLATE}
 
 ## Rules
 - Use ONLY numbers from PRE-COMPUTED SUMMARY and holdings — never invent prices, % moves, or index levels.
-- MOVERS & CAUSALITY: use moversToCover exactly; compare each to its sectorBenchmark and sectorBenchmarkPct; state beat/lagged/matched from relativeToSector.
+- MOVERS & CAUSALITY: use moversToCover exactly (each entry has inclusionReason: absolute_move, benchmark_divergence, or both). Compare each to sectorBenchmark and sectorBenchmarkPct; state beat/lagged/matched from relativeToSector and vsSectorPct.
+- Multi-day / trailing claims: ONLY use trailingMetrics[symbol].trailingPct when dataAvailable is true. No trailing vs-sector figures (not supplied). If dataAvailable is false, do not assert trailing performance — use intraday data only.
 - Inline citations required: (Source: "exact headline") — pull from news items provided; do not cite headlines about a different company.
 - NEWS WORTH ACTING ON: max 4 items; skip noise, tangential articles, and generic market takes unless they directly change thesis for a held name.
 - DECISION TRIGGERS: every bullet must include a falsifiable level, date, or event — no hand-waving.
@@ -553,7 +627,8 @@ const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior editor reviewing a PO
 
 Check against the source data:
 - TOP LINE: punchy, 2–3 sentences, uses correct portfolio day move numbers.
-- MOVERS & CAUSALITY: every symbol in moversToCover appears; beat/lag math matches sectorBenchmarkPct; thesis line present (reinforces/weakens/neutral).
+- MOVERS & CAUSALITY: every symbol in moversToCover appears; verify inclusionReason (divergence ≥2pp must be covered even if |day %| < 1); beat/lag math matches sectorBenchmarkPct.
+- Remove any DECISION TRIGGERS with fabricated trailing % not present in trailingMetrics with dataAvailable:true.
 - Drop irrelevant news (wrong company, crypto, unrelated tickers). Require inline (Source: "headline") on any cited claim.
 - NEWS WORTH ACTING ON: cut to ≤4 high-conviction items; remove headline reposts.
 - SECTOR & MACRO: must separate sector beta from stock-specific drivers with a rough split.
@@ -566,7 +641,7 @@ const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead strategist sending the
 
 Requirements:
 - All seven sections with exact ## headings: TOP LINE, MOVERS & CAUSALITY, SECTOR & MACRO CONTEXT, NEWS WORTH ACTING ON, RISK WATCH, DECISION TRIGGERS, ONE-LINER.
-- Every number verified against PRE-COMPUTED SUMMARY.
+- Every number verified against PRE-COMPUTED SUMMARY; strip invented trailing-window metrics.
 - Inline (Source: "headline") on all news references.
 - NEWS WORTH ACTING ON: ≤4 bullets, thesis-changing only.
 - DECISION TRIGGERS: falsifiable conditions only.
@@ -689,6 +764,7 @@ function buildObservationPrompt({
   holdings,
   movers,
   portfolioMove,
+  trailingMetrics,
   newsItems,
   nasdaqPct,
   soxPct,
@@ -719,7 +795,18 @@ function buildObservationPrompt({
         asx200Pct: asxPct,
         asx200Note: asxLine,
       },
-      moversToCover: movers.map((m) => m.symbol),
+      moverInclusionRule: '|dayChangePct| >= 1% OR |vsSectorPct| >= 2 percentage points vs sector benchmark',
+      moversToCover: movers.map((m) => ({
+        symbol: m.symbol,
+        inclusionReason: m.inclusionReason,
+        dayChangePct: m.dayChangePct,
+        vsSectorPct: m.vsSectorPct,
+        sectorBenchmark: m.sectorBenchmark,
+        sectorBenchmarkPct: m.sectorBenchmarkPct,
+        relativeToSector: m.relativeToSector,
+      })),
+      trailingMetrics,
+      trailingMetricsPolicy: 'Stock-only trailing % from share_symbol_snapshots (earliest in ~5d window → current). No trailing vs-sector data. Use trailingPct only when dataAvailable:true; never invent multi-day figures.',
       allHoldings: holdings,
     }, null, 2),
     '',
@@ -949,6 +1036,7 @@ async function generateObservation(userId) {
   const holdings = enrichHoldingsForObservation(dash, indexPcts);
   const movers = selectMoversForReport(holdings);
   const portfolioMove = computePortfolioDayMovement(dash.positions);
+  const trailingMetrics = await loadTrailingHoldingMetrics(userId, holdings, 5);
 
   // News: all holdings + targeted macro/sector searches (not a dumb headline dump in the email).
   const newsItems = [];
@@ -982,6 +1070,7 @@ async function generateObservation(userId) {
     holdings,
     movers,
     portfolioMove,
+    trailingMetrics,
     newsItems,
     nasdaqPct,
     soxPct,
