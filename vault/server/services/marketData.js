@@ -58,6 +58,34 @@ async function getFinnhubQuote(symbol) {
   return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'USD', source: 'finnhub' };
 }
 
+async function getEarningsCalendar(symbol, fromDate, toDate) {
+  const token = getFinnhubToken();
+  if (!token) return [];
+  const sym = toUsSymbol(symbol);
+  const from = String(fromDate).slice(0, 10);
+  const to = String(toDate).slice(0, 10);
+  try {
+    const url = `https://finnhub.io/api/v1/calendar/earnings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return (body.earningsCalendar || [])
+      .filter((e) => String(e.symbol || sym).toUpperCase() === sym)
+      .map((e) => ({
+        symbol: sym,
+        date: String(e.date).slice(0, 10),
+        hour: e.hour || null,
+        quarter: e.quarter,
+        year: e.year,
+        epsEstimate: e.epsEstimate != null ? Number(e.epsEstimate) : null,
+        source: 'Finnhub',
+      }));
+  } catch (err) {
+    console.warn(`[marketData] earnings calendar ${sym}:`, err.message);
+    return [];
+  }
+}
+
 // ─── Alpha Vantage (ASX) ────────────────────────────────────────────────────
 
 function getAlphaVantageKey() {
@@ -172,6 +200,7 @@ module.exports = {
   getQuote,
   getUsdToAudRate,
   getGoldSpotAud,
+  getEarningsCalendar,
   priceToAud,
   normalizeExchange,
   isUsExchange,

@@ -300,6 +300,16 @@ The daily observation email is now a structured **Portfolio Note** with seven se
 
 **Metals in portfolio emails:** Hourly email adds Gold & minerals summary + per-lot table. Daily Portfolio Note adds `## METALS & MINERALS` with full analyst subsections. New `metalsPortfolio.js` + `metal_spot_snapshots` for XAU/AUD day moves.
 
+**Upcoming Catalysts:** New `## UPCOMING CATALYSTS` section (rules 14–15) between Risk Watch and Decision Triggers; Finnhub earnings calendar for US symbols; calendar carries forward from prior note like triggers.
+
+**Alert-first report:** Pre-rendered alert status table (peak HWM, % off peak/cost, flags); CROSS-POSITION PATTERNS leads narrative; INTERNAL CONSISTENCY CHECK for baseline/currency contradictions. No recommendations.
+
+---
+
+## 2026-07-11
+
+**Hourly portfolio poll columns:** Removed Exch column from share and metal holdings tables. Added **% off Peak**, **% off Cost**, and **Alert** (⚠️ within 1pp of 10%/4% triggers · 🔴 breached). Rolling high-water marks persisted in settings key `shares_high_water_marks` via shared `portfolioAlerts.js` (hourly + daily note stay in sync).
+
 ---
 
 ## 2026-06-25 (6)

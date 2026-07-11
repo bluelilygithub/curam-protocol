@@ -29,15 +29,54 @@ const fmtPct = (n) => {
   return `${sign}${n.toFixed(2)}%`;
 };
 
+const positionKey = (symbol, exchange) => `${symbol}:${exchange}`;
+
+/** FIFO lot view for display — helps verify each purchase package vs today's price. */
+function fifoOpenLots(symbol, exchange, trades) {
+  const key = positionKey(symbol, exchange);
+  const sorted = [...(trades || [])]
+    .filter((t) => positionKey(t.symbol, t.exchange) === key)
+    .sort((a, b) => new Date(a.tradedAt) - new Date(b.tradedAt) || a.id - b.id);
+
+  const lots = [];
+  for (const t of sorted) {
+    const qty = Number(t.quantity) || 0;
+    const price = Number(t.pricePerShare) || 0;
+    const fees = Number(t.feesAud) || 0;
+    if (t.side === 'buy') {
+      lots.push({
+        tradeId: t.id,
+        purchasedAt: t.tradedAt,
+        quantity: qty,
+        pricePerShare: price,
+        feesAud: fees,
+        costAud: qty * price + fees,
+      });
+    } else {
+      let sellQty = qty;
+      while (sellQty > 0 && lots.length) {
+        const lot = lots[0];
+        const take = Math.min(sellQty, lot.quantity);
+        const costPerShare = lot.quantity > 0 ? lot.costAud / lot.quantity : 0;
+        lot.costAud -= costPerShare * take;
+        lot.quantity -= take;
+        sellQty -= take;
+        if (lot.quantity < 1e-8) lots.shift();
+      }
+    }
+  }
+  return lots.filter((l) => l.quantity > 0);
+}
+
 const holdingsColumns = [
-  { label: 'Symbol', help: 'Share ticker.' },
+  { label: 'Symbol', help: 'Share ticker. Click a row to see each purchase package.' },
   { label: 'Exch', help: 'Exchange used for quote lookup.' },
   { label: 'Qty', help: 'Open shares still held after buys and sells.' },
-  { label: 'Avg cost / share', help: 'Remaining cost basis divided by open quantity. Buy fees are included in cost basis.' },
-  { label: 'Market price / share', help: 'Latest quoted price converted to AUD.' },
-  { label: 'Market value', help: 'Open quantity multiplied by latest AUD market price.' },
-  { label: 'Unrealised P&L', help: 'Market value minus remaining cost basis, shown before tax.' },
-  { label: 'Day movement', help: 'Today/last quote movement from previous close, shown as AUD impact and percent.' },
+  { label: 'Current value', help: 'What this holding is worth right now at the live AUD price (true market value).' },
+  { label: 'Price / share', help: 'Latest quoted price in AUD, with previous close below.' },
+  { label: 'Avg cost / share', help: 'Blended average across all packages still held. Buy fees included in cost basis.' },
+  { label: 'Return vs cost', help: 'Gain or loss versus what you paid (not the same as current value). Negative means underwater on cost; you still own the shares at market value.' },
+  { label: 'Today', help: 'Movement since the previous close — AUD impact and percent.' },
 ];
 
 function todayInputValue() {
@@ -314,6 +353,7 @@ export default function SharesPage() {
   const [editingCashId, setEditingCashId] = useState(null);
   const [deleteTradeId, setDeleteTradeId] = useState(null);
   const [deleteCashId, setDeleteCashId] = useState(null);
+  const [expandedPositionKey, setExpandedPositionKey] = useState(null);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -712,13 +752,19 @@ export default function SharesPage() {
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                   {[
-                    { label: 'Total (AUD)', value: fmtAud(dashboard?.totalValueAud) },
-                    { label: 'Holdings', value: fmtAud(dashboard?.holdingsValueAud) },
+                    { label: 'Total (AUD)', value: fmtAud(dashboard?.totalValueAud), sub: 'Holdings + cash' },
+                    {
+                      label: 'Holdings value',
+                      value: fmtAud(dashboard?.holdingsValueAud),
+                      sub: 'True market value of all open positions',
+                    },
                     { label: 'Cash', value: fmtAud(dashboard?.cashAud) },
                     {
-                      label: 'Unrealised P&L',
+                      label: 'Return vs cost',
                       value: fmtPct(dashboard?.unrealizedPnlPct),
-                      sub: fmtAud(dashboard?.unrealizedPnlAud),
+                      sub: dashboard?.unrealizedPnlAud != null
+                        ? `${fmtAud(dashboard.unrealizedPnlAud)} on ${fmtAud(dashboard.costBasisAud)} invested`
+                        : null,
                     },
                   ].map((card) => (
                     <div
@@ -751,8 +797,9 @@ export default function SharesPage() {
                   <>
                     <div className="mb-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
                       <p>
-                        Open holdings use average-cost accounting. Buy fees are included in cost basis; sell fees reduce realised proceeds.
-                        Unrealised P&L is market value minus remaining cost basis.
+                        <strong style={{ color: 'var(--color-text)' }}>Current value</strong> is what your shares are worth today.
+                        <strong style={{ color: 'var(--color-text)' }}> Return vs cost</strong> compares that to what you paid (average across all buys, fees included) — a small negative return does not mean the holding has no value.
+                        Click a row to see each purchase package.
                       </p>
                     </div>
                     <div className="overflow-x-auto border rounded-lg" style={{ borderColor: 'var(--color-border)' }}>
@@ -767,30 +814,95 @@ export default function SharesPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {dashboard.positions.map((p) => (
-                            <tr key={`${p.symbol}-${p.exchange}`} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                              <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{p.symbol}</td>
-                              <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{p.exchange}</td>
-                              <td className="px-3 py-2">{p.quantity}</td>
-                              <td className="px-3 py-2">
-                                <p>{fmtAud(p.avgCostAud)}</p>
-                                <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>basis {fmtAud(p.costBasisAud)}</p>
-                              </td>
-                              <td className="px-3 py-2">
-                                <p>{fmtAud(p.priceAud)}</p>
-                                <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>prev {fmtAud(p.previousCloseAud)}</p>
-                              </td>
-                              <td className="px-3 py-2">{fmtAud(p.valueAud)}</td>
-                              <td className="px-3 py-2" style={{ color: (p.pnlAud ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                                <p>{fmtAud(p.pnlAud)}</p>
-                                <p className="text-[11px]">{fmtPct(p.pnlPct)}</p>
-                              </td>
-                              <td className="px-3 py-2" style={{ color: (p.dayChangeAud ?? p.dayChangePct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                                <p>{fmtAud(p.dayChangeAud)}</p>
-                                <p className="text-[11px]">{fmtPct(p.dayChangePct)}</p>
-                              </td>
-                            </tr>
-                          ))}
+                          {dashboard.positions.map((p) => {
+                            const key = positionKey(p.symbol, p.exchange);
+                            const expanded = expandedPositionKey === key;
+                            const lots = expanded ? fifoOpenLots(p.symbol, p.exchange, trades) : [];
+                            return (
+                              <React.Fragment key={key}>
+                                <tr
+                                  className="border-t cursor-pointer hover:opacity-70 transition-opacity duration-200"
+                                  style={{ borderColor: 'var(--color-border)' }}
+                                  onClick={() => setExpandedPositionKey(expanded ? null : key)}
+                                >
+                                  <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>
+                                    <span className="mr-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>{expanded ? '▼' : '▶'}</span>
+                                    {p.symbol}
+                                  </td>
+                                  <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{p.exchange}</td>
+                                  <td className="px-3 py-2">{p.quantity}</td>
+                                  <td className="px-3 py-2 font-semibold" style={{ color: 'var(--color-text)' }}>
+                                    <p>{fmtAud(p.valueAud)}</p>
+                                    <p className="text-[11px] font-normal" style={{ color: 'var(--color-muted)' }}>worth now</p>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <p>{fmtAud(p.priceAud)}</p>
+                                    <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>prev {fmtAud(p.previousCloseAud)}</p>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <p>{fmtAud(p.avgCostAud)}</p>
+                                    <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>paid {fmtAud(p.costBasisAud)}</p>
+                                  </td>
+                                  <td className="px-3 py-2" style={{ color: (p.pnlAud ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                    <p>{fmtAud(p.pnlAud)}</p>
+                                    <p className="text-[11px]">{fmtPct(p.pnlPct)}</p>
+                                  </td>
+                                  <td className="px-3 py-2" style={{ color: (p.dayChangeAud ?? p.dayChangePct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                    <p>{fmtAud(p.dayChangeAud)}</p>
+                                    <p className="text-[11px]">{fmtPct(p.dayChangePct)}</p>
+                                  </td>
+                                </tr>
+                                {expanded && (
+                                  <tr className="border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                                    <td colSpan={holdingsColumns.length} className="px-3 py-3">
+                                      <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+                                        Purchase packages (FIFO view) — {lots.length} lot{lots.length === 1 ? '' : 's'}
+                                      </p>
+                                      {lots.length ? (
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-xs">
+                                            <thead>
+                                              <tr>
+                                                {['Date', 'Qty', 'Paid / share', 'Fees', 'Total paid', 'Worth now', 'Return'].map((h) => (
+                                                  <th key={h} className="text-left py-1 pr-3 font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {lots.map((lot) => {
+                                                const worthNow = p.priceAud != null ? lot.quantity * p.priceAud : null;
+                                                const lotPnl = worthNow != null ? worthNow - lot.costAud : null;
+                                                const lotPnlPct = lot.costAud > 0 && lotPnl != null ? (lotPnl / lot.costAud) * 100 : null;
+                                                return (
+                                                  <tr key={lot.tradeId}>
+                                                    <td className="py-1 pr-3">{String(lot.purchasedAt).slice(0, 10)}</td>
+                                                    <td className="py-1 pr-3">{lot.quantity}</td>
+                                                    <td className="py-1 pr-3">{fmtAud(lot.pricePerShare)}</td>
+                                                    <td className="py-1 pr-3">{fmtAud(lot.feesAud)}</td>
+                                                    <td className="py-1 pr-3">{fmtAud(lot.costAud)}</td>
+                                                    <td className="py-1 pr-3 font-medium">{fmtAud(worthNow)}</td>
+                                                    <td className="py-1 pr-3" style={{ color: (lotPnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                                      {fmtAud(lotPnl)}
+                                                      {lotPnlPct != null && <span className="ml-1 opacity-80">({fmtPct(lotPnlPct)})</span>}
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No buy lots found in trade history.</p>
+                                      )}
+                                      <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
+                                        Row total uses average-cost accounting; package returns above use FIFO for transparency. Edit trades under the Trades tab if paid amounts look wrong.
+                                      </p>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
                           {/* Totals row */}
                           {(() => {
                             const totalValue = dashboard.holdingsValueAud;
@@ -806,14 +918,17 @@ export default function SharesPage() {
                                 <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>TOTAL</td>
                                 <td className="px-3 py-2" />
                                 <td className="px-3 py-2" />
-                                <td className="px-3 py-2">
-                                  <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>basis {fmtAud(totalCost)}</p>
+                                <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>
+                                  <p>{fmtAud(totalValue)}</p>
+                                  <p className="text-[11px] font-normal" style={{ color: 'var(--color-muted)' }}>worth now</p>
                                 </td>
                                 <td className="px-3 py-2" />
-                                <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{fmtAud(totalValue)}</td>
+                                <td className="px-3 py-2">
+                                  <p className="text-[11px] font-normal" style={{ color: 'var(--color-muted)' }}>paid {fmtAud(totalCost)}</p>
+                                </td>
                                 <td className="px-3 py-2" style={{ color: (totalPnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
                                   <p>{fmtAud(totalPnl)}</p>
-                                  <p className="text-[11px]">{fmtPct(totalPnlPct)}</p>
+                                  <p className="text-[11px] font-normal">{fmtPct(totalPnlPct)}</p>
                                 </td>
                                 <td className="px-3 py-2" style={{ color: hasDayData ? (totalDayAud >= 0 ? '#22c55e' : '#ef4444') : 'var(--color-muted)' }}>
                                   {hasDayData ? (

@@ -5,6 +5,11 @@ const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const metalsPortfolio = require('../services/metalsPortfolio');
 const marketData = require('../services/marketData');
+const {
+  holdingKey,
+  formatPctOffDisplay,
+  refreshHighWaterMarksAndAlerts,
+} = require('../services/portfolioAlerts');
 const { generateDailyBriefing, generateMonthlySummary, generateObservation } = require('../services/sharesNewsService');
 const { reportSharesCron } = require('../services/SuggestionService');
 const sendEmail = require('../utils/sendEmail');
@@ -103,25 +108,60 @@ function pctColour(n) {
   return v >= 0 ? '#16a34a' : '#dc2626';
 }
 
-function buildHoldingTableRows(positions, { nameKey = 'symbol' } = {}) {
+function buildHoldingTableRows(positions, { nameKey = 'symbol', alertByKey = {} } = {}) {
+  const rowKeyFor = (p) => (p.symbol && String(p.symbol).startsWith('M')
+    ? p.symbol
+    : holdingKey(p.symbol, p.exchange));
+
   const rows = [...(positions || [])]
     .filter((p) => p.priceAud != null && p.previousCloseAud != null)
     .map((p) => {
       const qty = Number(p.quantity) || 0;
       const dayAud = (Number(p.priceAud) - Number(p.previousCloseAud)) * qty;
-      return { ...p, _dayAud: dayAud, _name: p[nameKey] || p.symbol };
+      const key = rowKeyFor(p);
+      const alert = alertByKey[key] || {};
+      return { ...p, _dayAud: dayAud, _name: p[nameKey] || p.symbol, _alert: alert };
     })
     .sort((a, b) => Math.abs(b.dayChangePct || 0) - Math.abs(a.dayChangePct || 0));
 
-  return rows.map((p) => `
-    <tr>
+  return rows.map((p) => {
+    const flagStyle = p._alert.flag === '🔴' ? 'background:#fef2f2;' : p._alert.flag === '⚠️' ? 'background:#fffbeb;' : '';
+    const flagCell = p._alert.flag
+      ? `<span style="font-size:16px;">${p._alert.flag}</span>`
+      : '<span style="color:#ccc;">—</span>';
+    return `
+    <tr style="${flagStyle}">
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;">${p._name}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#888;font-size:12px;">${p.exchange}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;">${fmtAud(p.priceAud)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;">${formatPctOffDisplay(p._alert.pctOffPeak)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;">${formatPctOffDisplay(p._alert.pctOffAvgCost)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p.dayChangePct)};font-weight:600;">${signedPct(p.dayChangePct)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:${pctColour(p._dayAud)};font-weight:600;">${fmtAud(p._dayAud)}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;color:#555;">${fmtAud(p.valueAud)}</td>
-    </tr>`).join('');
+      <td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:center;">${flagCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+function buildHoldingsTable(positions, label, { nameKey = 'symbol', alertByKey = {} } = {}) {
+  const stockRows = buildHoldingTableRows(positions, { nameKey, alertByKey });
+  return `
+  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">${label}</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+    <thead>
+      <tr style="background:#f0f0ec;">
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Holding</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Price</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">% off Peak</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">% off Cost</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day %</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day $</th>
+        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Value</th>
+        <th style="padding:7px 10px;text-align:center;font-size:12px;color:#888;font-weight:600;">Alert</th>
+      </tr>
+    </thead>
+    <tbody>${stockRows || '<tr><td colspan="8" style="padding:12px 10px;color:#888;">No priced holdings.</td></tr>'}</tbody>
+  </table>`;
 }
 
 function buildPortfolioSummaryTable(movement, label) {
@@ -147,33 +187,15 @@ function buildPortfolioSummaryTable(movement, label) {
   </table>`;
 }
 
-function buildHoldingsTable(positions, label, nameKey = 'symbol') {
-  const stockRows = buildHoldingTableRows(positions, { nameKey });
-  return `
-  <h3 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.05em;">${label}</h3>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-    <thead>
-      <tr style="background:#f0f0ec;">
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Holding</th>
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Exch</th>
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Price</th>
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day %</th>
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Day $</th>
-        <th style="padding:7px 10px;text-align:left;font-size:12px;color:#888;font-weight:600;">Value</th>
-      </tr>
-    </thead>
-    <tbody>${stockRows || '<tr><td colspan="6" style="padding:12px 10px;color:#888;">No priced holdings.</td></tr>'}</tbody>
-  </table>`;
-}
-
-function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions }) {
+function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey }) {
   const pct = movement?.changePct;
   const now = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
   const hasShares = movement && (positions || []).length > 0;
   const hasMetals = metalsMovement && (metalsPositions || []).length > 0;
+  const alerts = alertByKey || {};
 
   return `
-<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:660px;color:#1a1a1a;">
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:720px;color:#1a1a1a;">
 
   <h2 style="margin:0 0 4px;font-size:18px;">
     Portfolio Update — ${now} ET
@@ -185,10 +207,10 @@ function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovem
   </p>
 
   ${hasShares ? buildPortfolioSummaryTable(movement, 'Shares') : ''}
-  ${hasShares ? buildHoldingsTable(positions, 'Share holdings') : ''}
+  ${hasShares ? buildHoldingsTable(positions, 'Share holdings', { alertByKey: alerts }) : ''}
 
   ${hasMetals ? buildPortfolioSummaryTable(metalsMovement, 'Gold & minerals') : ''}
-  ${hasMetals ? buildHoldingsTable(metalsPositions, 'Metal holdings', 'label') : ''}
+  ${hasMetals ? buildHoldingsTable(metalsPositions, 'Metal holdings', { nameKey: 'label', alertByKey: alerts }) : ''}
 
   ${!hasShares && !hasMetals ? '<p style="color:#888;">No priced holdings.</p>' : ''}
 
@@ -196,13 +218,13 @@ function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovem
 </div>`;
 }
 
-async function sendDropAlertEmail(to, { movement, threshold, testMode, positions, metalsMovement, metalsPositions }) {
+async function sendDropAlertEmail(to, { movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey }) {
   const sharePct = movement?.changePct;
   const metalPct = metalsMovement?.changePct;
   const subject = testMode
     ? `Portfolio update ${signedPct(sharePct ?? metalPct)} (test mode)`
     : `Shares alert — portfolio down ${Math.abs(sharePct).toFixed(2)}% today`;
-  const html = buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions });
+  const html = buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey });
   await sendEmail({ to, subject, html });
 }
 
@@ -224,6 +246,13 @@ async function checkDailyDropAlerts() {
   }
   if (!admins.length) return;
 
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
   for (const admin of admins) {
     try {
       const dashboard = await portfolio.buildDashboard(admin.id);
@@ -231,6 +260,13 @@ async function checkDailyDropAlerts() {
       const metalsDash = await metalsPortfolio.buildMetalsDashboard(admin.id, tz);
       const metalsMovement = metalsDash.portfolioMove;
       const metalsPositions = metalsDash.positions || [];
+
+      const { alertByKey } = await refreshHighWaterMarksAndAlerts(admin.id, {
+        sharePositions: dashboard.positions || [],
+        metalsPositions,
+        metalsSpotAud: metalsDash.spot?.audPerOz ?? null,
+        asOfDate: today,
+      });
 
       if (!movement && !metalsMovement) continue;
 
@@ -244,6 +280,7 @@ async function checkDailyDropAlerts() {
         positions: dashboard.positions || [],
         metalsMovement,
         metalsPositions,
+        alertByKey,
       });
       const sharePct = movement ? movement.changePct.toFixed(2) : 'n/a';
       const metalPct = metalsMovement ? metalsMovement.changePct.toFixed(2) : 'n/a';

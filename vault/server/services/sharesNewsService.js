@@ -24,6 +24,13 @@ const metalsPortfolio = require('./metalsPortfolio');
 const marketData = require('./marketData');
 const sendEmail = require('../utils/sendEmail');
 const { runtimeConfig } = require('../config/runtime');
+const {
+  ALERT_PEAK_TRIGGER_OFF_PCT,
+  ALERT_AVG_COST_TRIGGER_OFF_PCT,
+  ALERT_PROXIMITY_PP,
+  formatPctOffDisplay,
+  refreshHighWaterMarksAndAlerts,
+} = require('./portfolioAlerts');
 
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -527,6 +534,8 @@ function enrichHoldingsForObservation(dash, indexPcts) {
       quantity: qty,
       priceAud: p.priceAud != null ? round2(p.priceAud) : null,
       previousCloseAud: p.previousCloseAud != null ? round2(p.previousCloseAud) : null,
+      avgCostAud: p.avgCostAud != null ? round2(p.avgCostAud) : null,
+      costBasisAud: p.costBasisAud != null ? round2(p.costBasisAud) : null,
       dayChangePct,
       dayChangeAud,
       valueAud: p.valueAud != null ? round2(p.valueAud) : null,
@@ -629,10 +638,167 @@ async function loadTrailingHoldingMetrics(userId, holdings, windowDays = 5) {
   return out;
 }
 
-const OBSERVATION_OUTPUT_TEMPLATE = `Write ONLY the body (email header and benchmarks line are added separately). Use ## section headings exactly as below. No markdown tables.
+/** Finnhub earnings calendar for US holdings — next ~90 days. ASX dates not supplied. */
+async function loadUpcomingEarnings(holdings, today, tz, windowDays = 90) {
+  const to = getDateInTz(tz, windowDays);
+  const bySymbol = {};
+  const seen = new Set();
+  const tasks = [];
+  for (const h of holdings || []) {
+    const ex = String(h.exchange || '').toUpperCase();
+    if (ex !== 'NYSE' && ex !== 'NASDAQ') continue;
+    if (!h.symbol || seen.has(h.symbol)) continue;
+    seen.add(h.symbol);
+    tasks.push(
+      marketData.getEarningsCalendar(h.symbol, today, to).then((events) => {
+        if (events.length) bySymbol[h.symbol] = events;
+      })
+    );
+  }
+  await Promise.all(tasks);
+  return {
+    bySymbol,
+    windowDays,
+    from: today,
+    to,
+    policy: 'Own-report dates from Finnhub for US symbols only. Read-through events: carry forward from priorPortfolioNote UPCOMING CATALYSTS unless today\'s news confirms a new date. Never invent dates.',
+  };
+}
 
-## TOP LINE
-2–3 sentences max. The single most important thing for this portfolio today and why it matters — as if this is the only paragraph the client reads.
+// ─── Alert status (high-water mark + trigger proximity) ───────────────────────
+// Shared logic: server/services/portfolioAlerts.js
+
+function parseObservationHeadlines(val) {
+  if (!val) return {};
+  if (typeof val === 'object' && !Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val); } catch { return {}; }
+  }
+  return {};
+}
+
+function isMaterialMove(h) {
+  return Math.abs(h.dayChangePct ?? 0) >= 1 || Math.abs(h.vsSectorPct ?? 0) >= 2;
+}
+
+function hasTickerNews(symbol, newsItems) {
+  return (newsItems || []).some((n) => n.symbol === symbol);
+}
+
+function updateUnexplainedHistory(priorHistory, holdings, newsItems, today) {
+  const history = JSON.parse(JSON.stringify(priorHistory || {}));
+  for (const h of holdings || []) {
+    if (!isMaterialMove(h)) continue;
+    if (hasTickerNews(h.symbol, newsItems)) continue;
+    const sym = h.symbol;
+    if (!history[sym]) history[sym] = [];
+    if (history[sym].some((e) => e.date === today)) continue;
+    history[sym].push({
+      date: today,
+      dayChangePct: h.dayChangePct,
+      vsSectorPct: h.vsSectorPct,
+      direction: (h.dayChangePct ?? 0) >= 0 ? 'up' : 'down',
+    });
+    if (history[sym].length > 14) history[sym] = history[sym].slice(-14);
+  }
+  return history;
+}
+
+function buildPatternHints(holdings, newsItems, unexplainedHistory) {
+  const material = (holdings || []).filter(isMaterialMove);
+  const noNewsMovers = material.filter((h) => !hasTickerNews(h.symbol, newsItems));
+  const up = noNewsMovers.filter((h) => (h.dayChangePct ?? 0) > 0);
+  const down = noNewsMovers.filter((h) => (h.dayChangePct ?? 0) < 0);
+
+  const lagging = holdings.filter(
+    (h) => h.relativeToSector === 'lagged' && (h.vsSectorPct ?? 0) < -0.25
+  );
+  const laggingNoNews = lagging.filter((h) => !hasTickerNews(h.symbol, newsItems));
+
+  const recurringUnexplained = [];
+  for (const [sym, entries] of Object.entries(unexplainedHistory || {})) {
+    const recent = (entries || []).slice(-5);
+    if (recent.length >= 2) {
+      recurringUnexplained.push({ symbol: sym, recentDays: recent.length, entries: recent });
+    }
+  }
+
+  return {
+    alertThresholds: {
+      peakOffPct: ALERT_PEAK_TRIGGER_OFF_PCT,
+      avgCostOffPct: ALERT_AVG_COST_TRIGGER_OFF_PCT,
+      proximityPp: ALERT_PROXIMITY_PP,
+    },
+    sameDirectionNoNews: {
+      upSymbols: up.map((h) => h.symbol),
+      downSymbols: down.map((h) => h.symbol),
+      upCount: up.length,
+      downCount: down.length,
+      totalMaterialNoNews: noNewsMovers.length,
+      note: 'If ≥3 names share direction with no ticker news in feed, treat as correlation/concentration — not independent anecdotes.',
+    },
+    laggingCluster: {
+      laggingSymbols: lagging.map((h) => h.symbol),
+      laggingNoNews: laggingNoNews.map((h) => ({
+        symbol: h.symbol,
+        dayChangePct: h.dayChangePct,
+        vsSectorPct: h.vsSectorPct,
+      })),
+      note: 'Multiple laggers with no negative catalyst may share a macro factor.',
+    },
+    recurringUnexplained,
+  };
+}
+
+function buildAlertStatusHtml(alertRows) {
+  if (!alertRows?.length) {
+    return '<p style="font-size:13px;color:#888;margin:0 0 20px;">No priced positions for alert table.</p>';
+  }
+  const rows = alertRows.map((r) => {
+    const flagCell = r.flag
+      ? `<span style="font-size:16px;">${r.flag}</span>`
+      : '<span style="color:#ccc;">—</span>';
+    const flagStyle = r.flag === '🔴' ? 'background:#fef2f2;' : r.flag === '⚠️' ? 'background:#fffbeb;' : '';
+    return `<tr style="${flagStyle}">
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;font-weight:600;">${escapeHtml(r.label)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;color:#888;font-size:12px;">${escapeHtml(r.exchange || '')}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;">${fmtAud(r.currentAud)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;">${fmtAud(r.peakAud)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;">${formatPctOffDisplay(r.pctOffPeak)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;">${formatPctOffDisplay(r.pctOffAvgCost)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0;text-align:center;">${flagCell}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <h3 style="margin:0 0 10px;font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #e8e8e4;padding-bottom:6px;">Alert status</h3>
+  <p style="margin:0 0 10px;font-size:12px;color:#888;">Peak = rolling high-water mark since purchase (carried forward). Triggers: ${ALERT_PEAK_TRIGGER_OFF_PCT}% off peak · ${ALERT_AVG_COST_TRIGGER_OFF_PCT}% off avg cost. ⚠️ = within ${ALERT_PROXIMITY_PP}pp of a trigger.</p>
+  <div style="overflow-x:auto;margin:0 0 24px;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#f0f0ec;">
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Position</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Exch</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Current</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Peak</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Off peak</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#888;">Off avg cost</th>
+          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#888;">Flag</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+const OBSERVATION_OUTPUT_TEMPLATE = `Write ONLY the narrative body (ALERT STATUS table is rendered separately in the email — do NOT duplicate it). Use ## section headings exactly as below. No markdown tables.
+
+## CROSS-POSITION PATTERNS
+Lead with portfolio-level patterns — not single-stock vs benchmark anecdotes:
+- **Correlation / concentration:** Use patternHints.sameDirectionNoNews — if multiple positions moved the same direction with no ticker news in feed, state count and names as one correlation signal (not N separate unexplained stories).
+- **Recurring unexplained:** Use patternHints.recurringUnexplained + unexplainedMoveHistory — flag names with back-to-back material moves without news (e.g. NVDA ±4pp swings); carry forward from prior note.
+- **Shared macro lag:** Use patternHints.laggingCluster — if multiple "no negative catalyst" names lag together (TSM/ASML-type), frame as possible shared macro factor.
+Label inference explicitly. No buy/sell recommendations.
 
 ## MOVERS & CAUSALITY
 Cover every holding in moversToCover (included if |day %| ≥ 1 OR |vs sector| ≥ 2pp divergence). One bullet each:
@@ -650,22 +816,35 @@ Sector-wide drivers today (not stock-specific). Cite macro/sector items. Estimat
 Max 4 bullets. Only items that could change position size or thesis. Extract the actual claim/number from the article — not a headline paste. Format: **TICKER** — [what it says] · [why it matters] · [Source, ≤8-word headline]
 
 ## RISK WATCH
-2–4 bullets. Background risks not fully in today's price (regulatory, supply chain, valuation, upcoming events). Scale claim strength to sample size (rule 13): one day's move is an observation, not a pattern — no "decoupling"/"breakdown" without multi-session evidence; if no catalyst, say "no specific catalyst identified" rather than inventing one.
+2–4 bullets. Background risks not fully in today's price (regulatory, supply chain, valuation). Scale claim strength to sample size (rule 13): one day's move is an observation, not a pattern — no "decoupling"/"breakdown" without multi-session evidence; if no catalyst, say "no specific catalyst identified" rather than inventing one. Distinct from UPCOMING CATALYSTS — no dated event calendar here.
+
+## UPCOMING CATALYSTS
+Forward-looking calendar (rules 14–15). One line per held ticker in allHoldings:
+- **TICKER**: next own report [date or "not in upcomingEarnings — carry from prior note or state unconfirmed"] · before that: [read-through event, date] — why it matters for this holding
+
+Carry forward the catalyst calendar from priorPortfolioNote verbatim; only add/revise when upcomingEarnings or today's news confirms a date, or mark passed events as "passed — see Movers." Include supplier/customer/competitor earnings as read-throughs where relevant to semis/AI names. Do not regenerate the full calendar from scratch daily.
 
 ## DECISION TRIGGERS
-2–4 bullets. Concrete, falsifiable tripwires — level, event, or comparison. Carry forward prior triggers verbatim unless revising with explicit reason (see priorPortfolioNote). No "monitor closely" without a level. Multi-day % only if in trailingMetrics with dataAvailable:true.
+2–4 bullets. Concrete, falsifiable tripwires — level, event, or comparison. Carry forward prior triggers verbatim unless revising with explicit reason (see priorPortfolioNote). State baseline explicitly (% off peak, % off avg cost, vs sector, AUD price). No "monitor closely" without a level. Multi-day % only if in trailingMetrics with dataAvailable:true.
+
+## INTERNAL CONSISTENCY CHECK
+Before finishing, audit this note:
+- Any DECISION TRIGGER whose reference baseline contradicts alertStatus or alert table (% off peak vs % off avg cost vs AUD price — must not mix silently).
+- Any figure mixing USD and AUD without conversion shown.
+- Any trigger that contradicts another figure in the same report.
+If none found: one line "No internal contradictions flagged." If found: bullet each with location and conflicting baselines. No recommendations.
 
 ## ONE-LINER
 Portfolio value (AUD), position count, one sentence the client would repeat if asked "how's the book doing."
 
 ---
 
-If hasMetals is true in PRE-COMPUTED SUMMARY, add this block after the shares ONE-LINER. If hasMetals is false, omit it entirely.
+If hasMetals is true, add after shares ONE-LINER:
 
 ## METALS & MINERALS
 
-### TOP LINE
-2–3 sentences: the single most important thing for the gold/minerals book today.
+### CROSS-POSITION PATTERNS
+Metals/macro correlation only — spot beta vs macro news.
 
 ### MOVERS & CAUSALITY
 Cover every holding in metalsMoversToCover (same inclusion rule as shares). Use label for display name. Benchmark is gold spot (XAU/AUD) — all lots move with spot unless a future metal type differs.
@@ -682,10 +861,19 @@ Gold/precious-metals macro drivers (USD, rates, geopolitics, mining supply). Tie
 Max 4 bullets — thesis-changing for the metals book only.
 
 ### RISK WATCH
-Background risks for precious metals / mining exposure. Rule 13 applies.
+Background risks for precious metals / mining exposure. Rule 13 applies. Not the event calendar.
+
+### UPCOMING CATALYSTS
+Macro/metals read-throughs (Fed, CPI, USD, geopolitical summits) — carry forward from prior note; one line per lot or book-level if events affect all holdings equally.
 
 ### DECISION TRIGGERS
 Falsifiable tripwires for the metals book. Carry forward metals triggers from priorPortfolioNote verbatim unless revising with explicit reason.
+
+### DECISION TRIGGERS
+Falsifiable tripwires for metals book. State baseline (spot AUD/oz, off peak, off avg cost). Carry forward from priorPortfolioNote.
+
+### INTERNAL CONSISTENCY CHECK
+Same audit rules for metals triggers vs alert table.
 
 ### ONE-LINER
 Metals book value (AUD), lot count, one sentence on how physical gold/minerals did today.`;
@@ -693,69 +881,57 @@ Metals book value (AUD), lot count, one sentence on how physical gold/minerals d
 const OBSERVATION_SYSTEM_PROMPT = `# Daily Portfolio Analyst — System Prompt
 
 ## Role
-You are a senior sell-side equity research analyst covering semiconductors, AI infrastructure, and mega-cap tech. You are writing a daily portfolio note for a sophisticated client who holds a concentrated AI/semis book. Write like a broker note, not a data recap: every sentence should either explain a causal relationship, flag a decision point, or state a risk. Do not restate data the client can already see without adding interpretation.
+You are a senior sell-side equity research analyst covering semiconductors, AI infrastructure, and mega-cap tech. The **alert status table is pre-rendered** — your job is cross-position pattern recognition, causality where it exists, and consistency auditing. Write like a broker note: causal relationships, decision points, risks. No buy/sell/hold recommendations.
 
-Observations and decision framing only — never explicit buy/sell/hold recommendations.
-
-## Inputs you will receive (in the user message)
-- hasShares / hasMetals flags — omit share sections or entire METALS & MINERALS block when false
-- SHARES PRE-COMPUTED SUMMARY: holdings, benchmarks, moversToCover, positionsNotInMovers, trailingMetrics, portfolio day move
-- METALS PRE-COMPUTED SUMMARY: spot (XAU/AUD), lots, metalsMoversToCover, metalsPositionsNotInMovers, metals portfolio day move
-- priorPortfolioNote: yesterday's note (for trigger continuity and fact consistency) — may be null on first run
-- NEWS: per-ticker items; METALS / MACRO / SECTOR_SEMIS for context
+## Inputs you will receive
+- **alertStatus** — pre-computed per position (current, peak HWM, % off peak, % off avg cost, flag). Do NOT recalculate or duplicate in prose.
+- **patternHints** — correlation clusters, lagging groups, recurring unexplained movers
+- **unexplainedMoveHistory** — cross-day log of material moves without ticker news (carry forward patterns)
+- hasShares / hasMetals, holdings, movers, priorPortfolioNote, upcomingEarnings, NEWS
 
 ## Hard rules
-1. **Every price move needs a stated cause.** For each mover, identify which news item (if any) plausibly explains it: "ASML +2.0% — consistent with [Bernstein PT raise, cite source]" or, if no news explains it, "no company-specific catalyst found; move tracks SOX (+3.5%), i.e. beta not alpha." Never present a move and headlines side by side without connecting them.
-2. **Always benchmark relative performance.** For each mover, state beat/matched/lagged vs sectorBenchmark and vsSectorPct — by roughly how much. This is the single most important thing a broker adds that a data feed doesn't.
-3. **Read the news, don't just cite the headline.** Extract the actual claim or number (PT, deal size, analyst, catalyst) from snippet/title. A headline pasted verbatim is not analysis.
-4. **Never say "unavailable" without a workaround.** If ASX 200 (or another benchmark) is missing, state the proxy from benchmarks.asx200Note, flag stale data, or explain what cannot be assessed today (e.g. cannot assess ASX-relative performance). If narrative cannot be produced, state which inputs were missing — not generic boilerplate.
-5. **Inline citations:** [Source Name, ≤8-word headline] — only from supplied articles. Do not fabricate figures, PTs, or attributions.
-6. **Give a view, not just facts.** State whether today's news reinforces, weakens, or is neutral to the thesis. Flag conflicts (e.g. bullish supply-chain read-through vs bearish sector risk noted separately).
-7. **Decision triggers must be falsifiable** — reference a level, event, or comparison (e.g. "break below $X or second consecutive day underperforming SOX"). Never just "keep an eye on this" or "monitor closely" without a level.
-8. **Quiet days are valid.** Say plainly why it was quiet — don't pad (no earnings, no analyst actions, sector in line with broad tech, etc.).
+1. **Lead with CROSS-POSITION PATTERNS** — correlation, recurring unexplained divergence, shared macro lag clusters. Not six separate unexplained anecdotes when the same direction + no news affects multiple names.
+2. **Every price move needs a stated cause** in MOVERS (news linked or explicit beta-not-alpha).
+3. **Benchmark relative performance** on movers (beat/lag vs sector, pp).
+4. **Read news substance** — not headline paste. Citations: [Source, ≤8-word headline].
+5. **Never say unavailable without workaround.**
+6. **Decision triggers** — falsifiable; carry forward; state baseline (% off peak / % off avg cost / AUD / vs sector) explicitly.
+7. **INTERNAL CONSISTENCY CHECK** — flag mixed baselines (e.g. trigger vs "% off cost" in alert table vs "% off peak") and USD/AUD without conversion.
+8. **No recommendations** — surface patterns, trigger proximity, contradictions only.
 
-## Continuity rules (cross-day)
-9. **Decision triggers are standing tripwires.** Carry forward triggers from priorPortfolioNote verbatim until they fire or you explicitly revise: "Revising NVDA trigger from [old] to [new] because [reason]." Never silently redraw thresholds from yesterday's close.
-10. **Same disclosed fact, same description.** If today's sources conflict with priorPortfolioNote, flag the discrepancy — do not silently overwrite.
-11. **Label inference as inference.** Causal claims about why money moved must cite evidence or be hedged ("no direct evidence in today's sources; inferred from the pattern of gains").
-12. **No holding disappears.** moversToCover get full treatment; positionsNotInMovers get one line each in POSITION CHECK. Same for metals lots in METALS & MINERALS.
-13. **Scale claim strength to sample size, especially in Risk Watch.** A single day's divergence, drop, or lag is one data point — describe it as an observation ("today's largest gap," "one-day divergence") not an established pattern ("decoupling," "momentum loss," "breakdown"). Reserve pattern-language for multiple consecutive sessions showing the same thing. When flagging risk with no identified cause, say "no specific catalyst identified" — never supply a plausible-sounding explanation (e.g. "likely pricing in geopolitical risk") without a cited source.
+## Continuity (cross-day)
+9. Decision triggers = standing tripwires (carry forward verbatim unless revised with reason).
+10. Same facts described consistently; flag conflicts with prior note.
+11. Label inference as inference.
+12. No holding disappears (POSITION CHECK).
+13. Risk Watch: one-day = observation not pattern; no invented catalysts.
+14–15. UPCOMING CATALYSTS: carry forward calendar; mark passed events.
 
-## Data integrity (system-enforced)
-- Use ONLY numbers from PRE-COMPUTED SUMMARY — never invent prices, index levels, or % moves.
-- moversToCover inclusion: |dayChangePct| ≥ 1% OR |vsSectorPct| ≥ 2pp (see inclusionReason on each mover).
-- trailingMetrics: use trailingPct only when dataAvailable:true. No trailing vs-sector figures (not supplied).
-
-## Tone
-Direct, specific, numerate. No hedging filler ("could potentially"). No AI-disclosure boilerplate. If data is thin, say so once and move on.
+## Alert flags (pre-computed — do not override)
+🔴 = ≥${ALERT_PEAK_TRIGGER_OFF_PCT}% off peak OR ≥${ALERT_AVG_COST_TRIGGER_OFF_PCT}% off avg cost. ⚠️ = within ${ALERT_PROXIMITY_PP}pp of either trigger.
 
 ${OBSERVATION_OUTPUT_TEMPLATE}`;
 
 const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior sell-side editor reviewing a daily PORTFOLIO NOTE before it goes to the client.
 
-Enforce the analyst rules:
-- Every mover: cause linked to news OR explicit beta-not-alpha; beat/lag with correct vsSectorPct; thesis line present.
-- POSITION CHECK: every symbol in positionsNotInMovers appears with one line.
-- METALS & MINERALS: if hasMetals, all ### subsections present with same rigour as shares; every metals lot accounted for.
-- News claims extract substance from snippets — not headline reposts. Citations as [Source, ≤8-word headline].
-- NEWS WORTH ACTING ON: ≤4 items, thesis-changing only.
-- SECTOR & MACRO: beta vs stock-specific split for today's portfolio move.
-- DECISION TRIGGERS: falsifiable; carry forward prior triggers from priorPortfolioNote unless explicitly revised; strip fabricated trailing % not in trailingMetrics.
-- RISK WATCH: rule 13 — no pattern-language ("decoupling," "breakdown") from one day's data; no invented catalysts; say "no specific catalyst identified" when unknown.
-- Drop wrong-company news. Label unconfirmed causal inference.
-- All eight ## sections present.
+The ALERT STATUS table is pre-rendered — do NOT add a duplicate table.
 
-Return the improved full note body only. No buy/sell advice.`;
+Enforce:
+- CROSS-POSITION PATTERNS leads: correlation clusters, recurring unexplained, shared macro lag — not isolated anecdotes.
+- MOVERS: cause or beta-not-alpha; beat/lag; POSITION CHECK complete.
+- DECISION TRIGGERS: explicit baseline (% off peak / avg cost / AUD); carry forward from prior note.
+- INTERNAL CONSISTENCY CHECK present; flag baseline/currency contradictions.
+- No buy/sell recommendations. METALS block when hasMetals.
 
-const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst sending the final PORTFOLIO NOTE to the client. Merge the strongest draft and reviewer version.
+Return the improved full note body only.`;
 
-Verify every number against PRE-COMPUTED SUMMARY. Broker-note voice: causal, numerate, no data recap filler.
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst sending the final PORTFOLIO NOTE. Merge draft + reviewer.
 
-Sections required: TOP LINE, MOVERS & CAUSALITY, POSITION CHECK, SECTOR & MACRO CONTEXT, NEWS WORTH ACTING ON, RISK WATCH, DECISION TRIGGERS, ONE-LINER — plus METALS & MINERALS (all ### subsections) when hasMetals.
+Verify numbers against PRE-COMPUTED SUMMARY and alertStatus. Do NOT duplicate the alert table.
 
-Citations: [Source, ≤8-word headline]. Triggers: standing tripwires with continuity from priorPortfolioNote. ≤4 news items. RISK WATCH: observation-language only unless multi-day evidence; no fabricated catalysts.
+Sections: CROSS-POSITION PATTERNS, MOVERS & CAUSALITY, POSITION CHECK, SECTOR & MACRO, NEWS WORTH ACTING ON, RISK WATCH, UPCOMING CATALYSTS, DECISION TRIGGERS, INTERNAL CONSISTENCY CHECK, ONE-LINER (+ METALS when hasMetals).
 
-Return ONLY the final note body.`;
+No recommendations. Return ONLY the final note body.`;
 
 function pickSecondaryModel(tiers, primaryModel) {
   const candidates = [tiers.gemini, tiers.light, tiers.deepseek, tiers.standard].filter(Boolean);
@@ -833,6 +1009,8 @@ function buildFallbackReport({
   metalsSummary,
   metalsMovers,
   metalsHoldings,
+  patternHints,
+  alertRows,
   nasdaqPct,
   soxPct,
   asxPct,
@@ -865,9 +1043,17 @@ function buildFallbackReport({
       ? `${signedPct(portfolioMove.changePct)} (${fmtAud(portfolioMove.changeAud)} on holdings)`
       : 'day move unavailable';
 
+    const corr = patternHints?.sameDirectionNoNews;
+    const corrLine = corr && (corr.upCount >= 2 || corr.downCount >= 2)
+      ? `- ${corr.upCount} names up / ${corr.downCount} down on no ticker news — possible correlation (see alert table).`
+      : '- Insufficient cross-position pattern data in fallback mode.';
+
     parts.push(
-      '## TOP LINE',
-      `Portfolio ${portLine} with ${portfolio.holdings.length} positions (${fmtAud(portfolio.holdingsValueAud)} holdings value). Benchmarks: ${bench}.`,
+      '## CROSS-POSITION PATTERNS',
+      corrLine,
+      patternHints?.recurringUnexplained?.length
+        ? `- Recurring unexplained: ${patternHints.recurringUnexplained.map((r) => r.symbol).join(', ')}.`
+        : '- No recurring unexplained pattern in history.',
       '',
       '## MOVERS & CAUSALITY',
       moverLines,
@@ -884,8 +1070,16 @@ function buildFallbackReport({
       '## RISK WATCH',
       '- AI analysis unavailable; check upcoming earnings and macro calendar manually.',
       '',
+      '## UPCOMING CATALYSTS',
+      '- Carry forward from prior note when available; Finnhub dates not loaded in fallback mode.',
+      '',
       '## DECISION TRIGGERS',
-      `- Re-run note when portfolio day move exceeds ±2% (${portfolioMove ? signedPct(portfolioMove.changePct) : 'n/a'} today).`,
+      `- Re-run note when portfolio day move exceeds ±2% (${portfolioMove ? signedPct(portfolioMove.changePct) : 'n/a'} today). Reference alert table baselines (% off peak / avg cost).`,
+      '',
+      '## INTERNAL CONSISTENCY CHECK',
+      alertRows?.some((r) => r.flag)
+        ? `- Alert flags present (${alertRows.filter((r) => r.flag).map((r) => r.label).join(', ')}) — verify triggers use same baseline as alert table.`
+        : '- No alert flags; no baseline conflicts detected in fallback mode.',
       '',
       '## ONE-LINER',
       `${fmtAud(portfolio.totalValueAud)} book, ${portfolio.holdings.length} positions — ${portLine}.`,
@@ -913,8 +1107,8 @@ function buildFallbackReport({
     parts.push(
       '## METALS & MINERALS',
       '',
-      '### TOP LINE',
-      `Metals book ${metalPortLine} — ${metalsSummary.portfolio.lotCount} lots, ${metalsSummary.portfolio.totalOz} oz (${fmtAud(metalsSummary.portfolio.holdingsValueAud)} at spot).`,
+      '### CROSS-POSITION PATTERNS',
+      '- Spot-driven; see alert table for off-peak / off-cost flags.',
       '',
       '### MOVERS & CAUSALITY',
       metalsMoverLines,
@@ -931,8 +1125,14 @@ function buildFallbackReport({
       '### RISK WATCH',
       '- AI analysis unavailable.',
       '',
+      '### UPCOMING CATALYSTS',
+      '- Carry forward macro/metals calendar from prior note.',
+      '',
       '### DECISION TRIGGERS',
       `- Re-run when metals day move exceeds ±2% (${metalsSummary.portfolioDay ? signedPct(metalsSummary.portfolioDay.changePct) : 'n/a'} today).`,
+      '',
+      '### INTERNAL CONSISTENCY CHECK',
+      '- Verify metals triggers use AUD/oz baselines consistent with alert table.',
       '',
       '### ONE-LINER',
       `${fmtAud(metalsSummary.portfolio.holdingsValueAud)} metals book, ${metalsSummary.portfolio.lotCount} lots — ${metalPortLine}.`
@@ -952,6 +1152,10 @@ function buildObservationPrompt({
   portfolioMove,
   trailingMetrics,
   metalsSummary,
+  upcomingEarnings,
+  alertStatus,
+  patternHints,
+  unexplainedMoveHistory,
   priorPortfolioNote,
   newsItems,
   nasdaqPct,
@@ -964,12 +1168,21 @@ function buildObservationPrompt({
     : `${asxProxy.symbol} proxy unavailable — say "ASX 200 proxy unavailable" in macro text`;
 
   const lines = [
-    'Write the PORTFOLIO NOTE body. Header and benchmarks are added by email template.',
-    hasShares ? 'Start at ## TOP LINE for shares.' : 'No share holdings — skip all share ## sections (TOP LINE through ONE-LINER).',
-    hasMetals ? 'Then add ## METALS & MINERALS with all ### subsections.' : 'No metal holdings — omit ## METALS & MINERALS entirely.',
+    'Write the PORTFOLIO NOTE narrative body. ALERT STATUS table is pre-rendered in email — do NOT duplicate it.',
+    hasShares ? 'Start at ## CROSS-POSITION PATTERNS for shares.' : 'No share holdings — skip share ## sections.',
+    hasMetals ? 'Add ## METALS & MINERALS after shares ONE-LINER.' : 'Omit METALS block.',
     '',
     '## FLAGS',
     JSON.stringify({ hasShares, hasMetals }, null, 2),
+    '',
+    '## alertStatus (pre-computed — authoritative for peak, off-peak, off-cost, flags)',
+    JSON.stringify(alertStatus, null, 2),
+    '',
+    '## patternHints (use for CROSS-POSITION PATTERNS)',
+    JSON.stringify(patternHints, null, 2),
+    '',
+    '## unexplainedMoveHistory (cross-day — recurring unexplained pattern detection)',
+    JSON.stringify(unexplainedMoveHistory, null, 2),
   ];
 
   if (hasShares) {
@@ -1014,6 +1227,10 @@ function buildObservationPrompt({
     lines.push('', '## METALS — PRE-COMPUTED SUMMARY', JSON.stringify(metalsSummary, null, 2));
   }
 
+  if (hasShares) {
+    lines.push('', '## upcomingEarnings (Finnhub — US own-report dates only)', JSON.stringify(upcomingEarnings, null, 2));
+  }
+
   lines.push(
     '',
     '## priorPortfolioNote (carry forward DECISION TRIGGERS verbatim; flag fact conflicts)',
@@ -1037,15 +1254,17 @@ function inlineMd(text) {
 }
 
 // Section headings that get distinct email styling.
-const OBS_CALLOUT_SECTIONS = new Set(['TOP LINE']);
+const OBS_CALLOUT_SECTIONS = new Set([]);
 const OBS_SECTION_LABELS = {
-  'TOP LINE': 'Top line',
+  'CROSS-POSITION PATTERNS': 'Cross-position patterns',
   'MOVERS & CAUSALITY': 'Movers & causality',
   'POSITION CHECK': 'Position check',
   'SECTOR & MACRO CONTEXT': 'Sector & macro context',
   'NEWS WORTH ACTING ON': 'News worth acting on',
   'RISK WATCH': 'Risk watch',
+  'UPCOMING CATALYSTS': 'Upcoming catalysts',
   'DECISION TRIGGERS': 'Decision triggers',
+  'INTERNAL CONSISTENCY CHECK': 'Internal consistency check',
   'ONE-LINER': 'One-liner',
   'METALS & MINERALS': 'Metals & minerals',
 };
@@ -1171,7 +1390,7 @@ function formatBenchmark(label, pct) {
   return `${label} <strong style="color:${colour}">${signedPct(pct)}</strong>`;
 }
 
-function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, portfolioMove, goldSpotPct, metalsPortfolioMove }) {
+function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, portfolioMove, goldSpotPct, metalsPortfolioMove, alertRows }) {
   const asxBench = asxPct != null
     ? formatBenchmark('ASX 200', asxPct)
     : `ASX 200 <span style="color:#888;">— (${asxProxy?.symbol || 'STW'} proxy n/a)</span>`;
@@ -1200,6 +1419,7 @@ function observationHtml(text, { nasdaqPct, soxPct, asxPct, asxProxy, today, por
   </div>
 
   <div style="font-size:14px;line-height:1.6;">
+    ${buildAlertStatusHtml(alertRows)}
     ${markdownToObservationHtml(text)}
   </div>
 
@@ -1340,7 +1560,10 @@ async function generateObservation(userId) {
     };
   }
 
-  const priorPortfolioNote = await getPriorObservationNote(userId, today);
+  const [priorPortfolioNote, upcomingEarnings] = await Promise.all([
+    getPriorObservationNote(userId, today),
+    hasShares ? loadUpcomingEarnings(holdings, today, tz) : Promise.resolve(null),
+  ]);
 
   const newsItems = [];
   if (hasShares) {
@@ -1397,6 +1620,33 @@ async function generateObservation(userId) {
     })
   );
 
+  const {
+    highWaterMarks,
+    shareAlerts: shareAlertRows,
+    metalsAlerts: metalsAlertRows,
+  } = await refreshHighWaterMarksAndAlerts(userId, {
+    sharePositions: holdings,
+    metalsPositions: metalsHoldings,
+    metalsSpotAud: metalsDash.spot?.audPerOz ?? null,
+    asOfDate: today,
+  });
+  const alertRows = [...shareAlertRows, ...metalsAlertRows];
+  const priorUnexplained = priorPortfolioNote?.headlines?.unexplainedMoveHistory || {};
+  const unexplainedMoveHistory = hasShares
+    ? updateUnexplainedHistory(priorUnexplained, holdings, newsItems, today)
+    : priorUnexplained;
+  const patternHints = hasShares
+    ? buildPatternHints(holdings, newsItems, unexplainedMoveHistory)
+    : { note: 'No share holdings' };
+  const alertStatus = {
+    rows: alertRows,
+    thresholds: {
+      peakOffPct: ALERT_PEAK_TRIGGER_OFF_PCT,
+      avgCostOffPct: ALERT_AVG_COST_TRIGGER_OFF_PCT,
+      proximityPp: ALERT_PROXIMITY_PP,
+    },
+  };
+
   const asxNote = asxPct == null ? `${INDEX_PROXIES.asx.symbol} proxy unavailable` : null;
   const userPrompt = buildObservationPrompt({
     hasShares,
@@ -1408,6 +1658,10 @@ async function generateObservation(userId) {
     portfolioMove,
     trailingMetrics,
     metalsSummary,
+    upcomingEarnings,
+    alertStatus,
+    patternHints,
+    unexplainedMoveHistory,
     priorPortfolioNote,
     newsItems,
     nasdaqPct,
@@ -1448,6 +1702,8 @@ async function generateObservation(userId) {
       metalsSummary,
       metalsMovers,
       metalsHoldings,
+      patternHints,
+      alertRows,
       nasdaqPct,
       soxPct,
       asxPct,
@@ -1502,6 +1758,9 @@ async function generateObservation(userId) {
       holdings: holdings.length,
       newsCount: newsItems.length,
       aiUnavailable,
+      highWaterMarks,
+      unexplainedMoveHistory,
+      alertSnapshot: alertRows,
     })]
   );
 
@@ -1528,6 +1787,7 @@ async function generateObservation(userId) {
           portfolioMove,
           goldSpotPct: metalsDash.spotDayChangePct,
           metalsPortfolioMove: metalsDash.portfolioMove,
+          alertRows,
         }),
       });
       emailed = true;
@@ -1542,7 +1802,7 @@ async function generateObservation(userId) {
 
 async function getPriorObservationNote(userId, today) {
   const { rows } = await pool.query(
-    `SELECT date, content FROM share_news_briefings
+    `SELECT date, content, headlines FROM share_news_briefings
      WHERE "userId"=$1 AND type='observation' AND date < $2
      ORDER BY date DESC, "createdAt" DESC LIMIT 1`,
     [userId, today]
@@ -1553,6 +1813,7 @@ async function getPriorObservationNote(userId, today) {
   return {
     date: String(rows[0].date).slice(0, 10),
     content: content.length > maxLen ? `${content.slice(0, maxLen)}\n\n[…prior note truncated]` : content,
+    headlines: parseObservationHeadlines(rows[0].headlines),
   };
 }
 

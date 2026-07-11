@@ -23,11 +23,15 @@ Runs after each NYSE/NASDAQ quote poll (`runSharesPoll(['NYSE','NASDAQ'])`).
 
 **Threshold:** Admin setting `shares_daily_drop_alert_pct` (Settings → Shares). When `0`, test mode — emails after every poll with the current day move. When `> 0`, emails only when the portfolio has dropped by at least that % vs previous close.
 
-**Content:**
-- **Shares:** portfolio summary (day % and $AUD change vs previous close; cash excluded) + per-holding table (symbol, exchange, price, day %, day $AUD, position value) — sorted by largest mover
-- **Gold & minerals:** same layout for physical metal lots from `metal_purchases` (description, SPOT, $/oz, day %, day $AUD, value). Day % uses XAU/AUD spot vs prior-day snapshot (`metal_spot_snapshots`).
+**Content (raw data tables only — no commentary or news):**
+- **Shares:** portfolio summary (day % and $AUD change vs previous close; cash excluded) + per-holding table: Holding · Price · **% off Peak** · **% off Cost** · Day % · Day $AUD · Value · **Alert** — sorted by largest day mover
+- **Gold & minerals:** same column layout for physical metal lots from `metal_purchases` (description as holding name). Day % uses XAU/AUD spot vs prior-day snapshot (`metal_spot_snapshots`).
 
-**Code:** `buildHourlyHtml()` / `sendDropAlertEmail()` in `sharesCron.js`. Spot recorded each US poll via `metalsPortfolio.recordSpotSnapshot()`.
+**% off Peak / % off Cost:** `(current − reference) ÷ reference × 100`. Peak = rolling high-water mark since purchase, persisted in settings key `shares_high_water_marks` (updated every US poll; seeded from prior marks, snapshot peaks, and max buy price). Cost = average cost per share/oz.
+
+**Alert column:** blank when clear; ⚠️ when within 1pp of either trigger (10% off peak · 4% off cost); 🔴 when either trigger is breached. Row background tinted to match flag.
+
+**Code:** `buildHourlyHtml()` / `sendDropAlertEmail()` in `sharesCron.js`; alert math in `portfolioAlerts.js`. Spot recorded each US poll via `metalsPortfolio.recordSpotSnapshot()`.
 
 ---
 
@@ -52,16 +56,20 @@ Runs after the 4 AM daily per-stock briefing cron and after the overnight US clo
 
 ### Report structure
 
-The email subject is `Portfolio note — YYYY-MM-DD`. Header shows benchmarks and book day move. Body sections:
+The email subject is `Portfolio note — YYYY-MM-DD`. Header shows benchmarks and book day move. **Alert status table** (pre-rendered, first) — per position: current price, peak HWM since purchase, % off peak, % off avg cost, flag (⚠️ within 1pp of trigger · 🔴 triggered). Triggers: 10% off peak · 4% off avg cost. High-water marks persist in observation `headlines` JSONB.
 
-1. **TOP LINE** — 2–3 sentences: the single most important thing for the portfolio today
-2. **MOVERS & CAUSALITY** — holdings with |day %| ≥ 1 **or** |vs sector| ≥ 2pp; each line: move vs sector benchmark → beat/lagged/matched, cause with inline `[Source, ≤8-word headline]` or “no company-specific catalyst; beta not alpha”, thesis (reinforces / weakens / neutral)
-3. **POSITION CHECK** — one line per holding *not* in movers (complete audit trail; rule 12)
-4. **SECTOR & MACRO CONTEXT** — sector-wide drivers; explicit split of portfolio move explained by sector beta vs stock-specific news
-5. **NEWS WORTH ACTING ON** — max 4 items that could change position size or thesis; extract claims from snippets, not headline reposts
-6. **RISK WATCH** — background risks not fully in today’s price; rule 13: one-day moves are observations not patterns; no invented catalysts
-7. **DECISION TRIGGERS** — falsifiable tripwires; **carry forward** from prior day’s note verbatim unless explicitly revised (continuity rules 9–12)
-8. **ONE-LINER** — book value, position count, how the day went
+Narrative sections:
+
+1. **CROSS-POSITION PATTERNS** — correlation/concentration, recurring unexplained movers, shared macro lag clusters (not single-stock anecdotes)
+2. **MOVERS & CAUSALITY** — per-mover cause + beat/lag vs sector
+3. **POSITION CHECK** — one line per non-mover
+4. **SECTOR & MACRO CONTEXT**
+5. **NEWS WORTH ACTING ON** — max 4 thesis-changing items
+6. **RISK WATCH**
+7. **UPCOMING CATALYSTS**
+8. **DECISION TRIGGERS** — must state baseline (% off peak / avg cost / AUD)
+9. **INTERNAL CONSISTENCY CHECK** — baseline and currency contradictions
+10. **ONE-LINER**
 
 **Metals & minerals (when `metal_purchases` exist):** full parallel analyst block under `## METALS & MINERALS` with ### subsections (TOP LINE through ONE-LINER). Gold spot day % from `metal_spot_snapshots` baseline; per-lot movers/position check; `METALS` news tag in LLM inputs. Email header adds Gold (XAU/AUD) benchmark and metals day-move chip.
 
@@ -75,6 +83,9 @@ The service computes structured inputs so the model does not invent numbers:
 - **Per holding:** day %, day $AUD, weight %, total return %, sector benchmark, `vsSectorPct`, beat/lagged/matched
 - **Movers list:** `selectMoversForReport()` — `|dayChangePct| ≥ 1%` **OR** `|vsSectorPct| ≥ 2` pp vs sector benchmark; else top 3 by max(|day %|, |divergence|). Each mover has `inclusionReason`.
 - **Trailing metrics:** `loadTrailingHoldingMetrics()` — stock-only % from `share_symbol_snapshots` (~5d window). No trailing vs-sector. LLM may only cite `trailingPct` when `dataAvailable: true`.
+- **Upcoming earnings:** `loadUpcomingEarnings()` — Finnhub calendar for US symbols (~90d window).
+- **Alert status:** `portfolioAlerts.refreshHighWaterMarksAndAlerts()` — peak HWM in settings `shares_high_water_marks` (fallback: prior observation `headlines`), flags at 10% off peak / 4% off avg cost. Same module powers hourly email Alert column.
+- **Pattern hints:** `buildPatternHints()` + `unexplainedMoveHistory` in `headlines` — cross-day unexplained move log.
 
 ### News inputs
 
