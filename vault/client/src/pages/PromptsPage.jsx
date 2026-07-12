@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Plus, Trash2, Copy, Check, Play } from 'lucide-react';
 import api from '../utils/apiClient';
+import { useIcon } from '../providers/IconProvider';
 import PromptVariableModal from '../components/PromptVariableModal';
 import { extractVariables } from '../utils/promptVariables';
 import useProjectStore from '../store/projectStore';
@@ -9,6 +9,7 @@ import useToastStore from '../store/toastStore';
 
 function PromptsPage() {
   const navigate = useNavigate();
+  const getIcon = useIcon();
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const [prompts, setPrompts] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -83,7 +84,7 @@ function PromptsPage() {
           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
         >
-          <BookOpen size={18} />
+          {getIcon('book', { size: 18 })}
         </div>
         <div className="flex-1">
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Prompt Library</h1>
@@ -94,7 +95,7 @@ function PromptsPage() {
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white"
           style={{ background: 'var(--color-primary)' }}
         >
-          <Plus size={14} />
+          {getIcon('plus', { size: 14 })}
           New Prompt
         </button>
       </div>
@@ -158,7 +159,7 @@ function PromptsPage() {
           className="text-center py-16 rounded-2xl border"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
         >
-          <BookOpen size={32} className="mx-auto mb-3 opacity-30" />
+          {getIcon('book', { size: 32, className: 'mx-auto mb-3 opacity-30' })}
           <p className="text-sm">{prompts.length === 0 ? 'No saved prompts yet.' : 'No prompts match your search.'}</p>
         </div>
       ) : (
@@ -179,13 +180,13 @@ function PromptsPage() {
                   )}
                 </span>
                 <button type="button" onClick={() => handleUse(p.content)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-primary)' }} title="Open in chat">
-                  <Play size={14} />
+                  {getIcon('play', { size: 14 })}
                 </button>
                 <button type="button" onClick={() => handleCopy(p.id, p.content)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-muted)' }} title="Copy to clipboard">
-                  {copiedId === p.id ? <Check size={14} style={{ color: 'var(--color-primary)' }} /> : <Copy size={14} />}
+                  {copiedId === p.id ? getIcon('check', { size: 14, style: { color: 'var(--color-primary)' } }) : getIcon('copy', { size: 14 })}
                 </button>
                 <button type="button" onClick={() => handleDelete(p.id)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-muted)' }} title="Delete">
-                  <Trash2 size={14} />
+                  {getIcon('trash', { size: 14 })}
                 </button>
               </div>
               <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--color-muted)' }}>{p.content}</p>

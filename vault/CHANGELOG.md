@@ -4,6 +4,19 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12
+
+**Feature:** Navigation and information architecture redesign.
+
+- **Top bar** — reduced to Search, Tasks, Chat History, Suggestions, Apps launcher, Settings, and Sign out. All other features moved into grouped Apps panel (`AppsLauncher.jsx`, `config/appNavigation.js`).
+- **Icons** — emoji nav glyphs replaced with Lucide via `IconProvider`: chains, finance, shares, youtube, usage, mood, news.
+- **Sidebar** — new Workspace section (Tasks, Notes, Goals, Clients). Expanding a project shows task/note/file counts with deep links.
+- **Project hub** — `ProjectDetail.jsx` Overview tab with stat cards and recent chats, tasks, notes; Brief & settings tab for context editing.
+- **Deep links** — `/tasks?project={id}` and `/notes?project={id}` filter by project.
+- **Docs** — `docs/navigation-ia.md`, User Guide Navigation section, `DESIGN.md` layout notes.
+
+---
+
 ## 2026-06-29 (27)
 
 **Feature:** Graphics — batch 5 (Perspective Correct, Smart Crop, Color Grading, Batch Text, Blur Detection, Auto-enhance) + sidebar reorganisation.

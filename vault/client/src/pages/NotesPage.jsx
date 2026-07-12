@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
@@ -13,9 +13,11 @@ const AUTOSAVE_DELAY = 1000; // ms after last keystroke
 export default function NotesPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { projects, fetchProjects, create: createProject } = useProjectStore();
 
   const [notes, setNotes] = useState([]);
+  const [filterProject, setFilterProject] = useState('');
   const [selected, setSelected] = useState(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -87,13 +89,21 @@ export default function NotesPage() {
     return () => document.removeEventListener('vault:task-created', handler);
   }, []);
 
-  const loadNotes = useCallback(async (q = '') => {
-    const url = q ? `/api/notes?q=${encodeURIComponent(q)}` : '/api/notes';
+  const loadNotes = useCallback(async (q = '', projectId = '') => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (projectId) params.set('project_id', projectId);
+    const qs = params.toString();
+    const url = qs ? `/api/notes?${qs}` : '/api/notes';
     const res = await api.get(url);
     setNotes(await res.json());
   }, []);
 
-  useEffect(() => { loadNotes(); }, [loadNotes]);
+  useEffect(() => {
+    const projectParam = searchParams.get('project') || '';
+    setFilterProject(projectParam);
+    loadNotes('', projectParam);
+  }, [loadNotes, searchParams]);
 
   // Keep value refs current for mic callbacks (avoids stale closures)
   useEffect(() => { bodyValueRef.current = body; }, [body]);
@@ -233,7 +243,7 @@ export default function NotesPage() {
       try {
         await api.put(`/api/notes/${noteId}`, { title: newTitle, body: newBody });
         setDirty(false);
-        loadNotes(search);
+        loadNotes(search, filterProject);
       } catch (_) {}
       setSaving(false);
     }, AUTOSAVE_DELAY);
@@ -251,7 +261,7 @@ export default function NotesPage() {
   async function createNote() {
     const res = await api.post('/api/notes', { title: 'Untitled', body: '' });
     const note = await res.json();
-    await loadNotes(search);
+    await loadNotes(search, filterProject);
     selectNote(note);
     if (viewportMobile) setMobileListOpen(false);
   }
@@ -264,7 +274,7 @@ export default function NotesPage() {
       setTitle('');
       setBody('');
     }
-    loadNotes(search);
+    loadNotes(search, filterProject);
   }
 
   function handleTitleChange(e) {
@@ -490,7 +500,7 @@ export default function NotesPage() {
 
   function handleSearchChange(e) {
     setSearch(e.target.value);
-    loadNotes(e.target.value);
+    loadNotes(e.target.value, filterProject);
   }
 
   function convertToTask(note, e) {
@@ -534,7 +544,7 @@ export default function NotesPage() {
     const pid = e.target.value ? Number(e.target.value) : null;
     await api.put(`/api/notes/${selected.id}`, { project_id: pid });
     setSelected(prev => ({ ...prev, project_id: pid }));
-    loadNotes(search);
+    loadNotes(search, filterProject);
   }
 
   return (
@@ -589,6 +599,25 @@ export default function NotesPage() {
             </button>
           </div>
         </div>
+
+        {filterProject && (() => {
+          const proj = projects.find(p => String(p.id) === String(filterProject));
+          return (
+            <div className="mx-2 mt-2 mb-1 px-2 py-1.5 rounded-lg border flex items-center justify-between gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
+                Project: <strong style={{ color: 'var(--color-text)' }}>{proj?.name || `#${filterProject}`}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/notes')}
+                className="text-xs flex-shrink-0 hover:opacity-70 transition-opacity"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                Clear
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Search */}
         <div className="px-2 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>

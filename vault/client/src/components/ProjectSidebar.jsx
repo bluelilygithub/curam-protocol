@@ -5,6 +5,8 @@ import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 import { formatSessionLabel } from '../utils/sessionDisplay';
+import { SIDEBAR_WORKSPACE_LINKS } from '../config/appNavigation';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
@@ -42,6 +44,8 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
   const [tpSaving, setTpSaving] = useState(false);
   const [railTip, setRailTip] = useState(null); // collapsed icon-rail tooltips (must be top-level — Rules of Hooks)
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [projectStats, setProjectStats] = useState({}); // { [projectId]: { tasks, notes, files } }
 
   useEffect(() => {
     const loadSessionLists = () => {
@@ -60,6 +64,39 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
     document.addEventListener('vault:sessions-changed', loadSessionLists);
     return () => document.removeEventListener('vault:sessions-changed', loadSessionLists);
   }, [expandedProjectId, fetchProjects]);
+
+  useEffect(() => {
+    api.get('/api/settings/feature-access')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.flags && typeof data.flags === 'object') {
+          setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const canUseFeature = (key) => featureAccess[key] !== false;
+
+  const loadProjectStats = async (projectId) => {
+    if (!projectId || projectStats[projectId]) return;
+    try {
+      const [tasksRes, notesRes, filesRes] = await Promise.all([
+        api.get('/api/tasks').then(r => r.json()).catch(() => []),
+        api.get(`/api/notes?project_id=${projectId}`).then(r => r.json()).catch(() => []),
+        api.get(`/api/files/${projectId}`).then(r => r.json()).catch(() => []),
+      ]);
+      const tasks = Array.isArray(tasksRes) ? tasksRes.filter(t => t.projectId === projectId) : [];
+      const notes = Array.isArray(notesRes) ? notesRes : [];
+      const files = Array.isArray(filesRes) ? filesRes : [];
+      setProjectStats(prev => ({
+        ...prev,
+        [projectId]: { tasks: tasks.length, notes: notes.length, files: files.length },
+      }));
+    } catch {
+      setProjectStats(prev => ({ ...prev, [projectId]: { tasks: 0, notes: 0, files: 0 } }));
+    }
+  };
 
   // Tour: expand 7 Habits section on request
   useEffect(() => {
@@ -84,11 +121,14 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const toggleProjectSessions = (projectId) => {
     const opening = expandedProjectId !== projectId;
     setExpandedProjectId(opening ? projectId : null);
-    if (opening && !projectSessions[projectId]) {
-      api.get(`/api/chat/sessions/${projectId}`)
-        .then(r => r.json())
-        .then(sessions => setProjectSessions(prev => ({ ...prev, [projectId]: sessions })))
-        .catch(() => {});
+    if (opening) {
+      if (!projectSessions[projectId]) {
+        api.get(`/api/chat/sessions/${projectId}`)
+          .then(r => r.json())
+          .then(sessions => setProjectSessions(prev => ({ ...prev, [projectId]: sessions })))
+          .catch(() => {});
+      }
+      loadProjectStats(projectId);
     }
   };
 
@@ -360,6 +400,40 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
         <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
       </div>
 
+      {/* Workspace shortcuts */}
+      <div className="px-2 pb-2">
+        <p className="px-1 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+          Workspace
+        </p>
+        <div className="grid grid-cols-2 gap-0.5">
+          {SIDEBAR_WORKSPACE_LINKS.filter(link => !link.featureKey || canUseFeature(link.featureKey)).map(link => {
+            const active = link.matchPrefix
+              ? location.pathname.startsWith('/clients')
+              : location.pathname === link.path;
+            return (
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => { navigate(link.path); if (onClose) onClose(); }}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70 text-left"
+                style={{
+                  color: active ? 'var(--color-primary)' : 'var(--color-text)',
+                  background: active ? 'var(--color-bg)' : 'transparent',
+                  fontWeight: active ? 500 : 400,
+                }}
+              >
+                {getIcon(link.icon, { size: 12, style: { color: active ? 'var(--color-primary)' : 'var(--color-muted)' } })}
+                <span className="truncate">{link.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="px-3 pb-1">
+        <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
+      </div>
+
       {/* Projects header */}
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
@@ -608,6 +682,39 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                             No chats yet
                           </p>
                         )}
+                        {(() => {
+                          const stats = projectStats[project.id];
+                          if (!stats) return null;
+                          const pad = indent ? '3rem' : '2.25rem';
+                          const links = [
+                            { label: `${stats.tasks} task${stats.tasks !== 1 ? 's' : ''}`, path: `/tasks?project=${project.id}` },
+                            { label: `${stats.notes} note${stats.notes !== 1 ? 's' : ''}`, path: `/notes?project=${project.id}` },
+                            { label: `${stats.files} file${stats.files !== 1 ? 's' : ''}`, path: `/projects/${project.id}#files` },
+                          ];
+                          return (
+                            <div className="flex flex-wrap gap-1 py-1" style={{ paddingLeft: pad }}>
+                              {links.map(l => (
+                                <button
+                                  key={l.path}
+                                  type="button"
+                                  onClick={() => { navigate(l.path); if (onClose) onClose(); }}
+                                  className="text-[10px] px-1.5 py-0.5 rounded-md border hover:opacity-70 transition-opacity"
+                                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                                >
+                                  {l.label}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => { navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
+                                className="text-[10px] px-1.5 py-0.5 rounded-md hover:opacity-70 transition-opacity"
+                                style={{ color: 'var(--color-primary)' }}
+                              >
+                                Overview →
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </>

@@ -42,6 +42,10 @@ Five themes live in `src/themes.js` (default **warm-sand**: terracotta primary `
 - Sidebar: expanded (180–520px) · collapsed icon rail (48px) · hidden overlay on mobile
 - Page content: usually `flex flex-col flex-1 min-h-0 overflow-hidden`
 
+**Top bar:** Search, Tasks, Chat History, Suggestions, **Apps launcher** (`AppsLauncher.jsx`), Settings, Sign out. All other features live in the grouped Apps panel — see `config/appNavigation.js` and `docs/navigation-ia.md`.
+
+**Sidebar sections:** Quick chat → Workspace (Tasks/Notes/Goals/Clients) → Projects (collections) → optional 7 Habits / Client context.
+
 **Page toolbar:** Use `PageToolbar` when a page has view modes, overflow actions, or a primary CTA. Simple settings-style pages can use a custom header (see `MemoryPage.jsx`).
 
 ---

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const SECTIONS = [
   { id: 'overview',        label: 'Overview' },
+  { id: 'navigation',      label: 'Navigation' },
   { id: 'getting-started', label: 'Getting Started' },
   { id: 'projects',        label: 'Projects' },
   { id: 'chat',            label: 'Chat' },
@@ -23,7 +24,7 @@ const SECTIONS = [
   { id: 'shortcuts',       label: 'Keyboard Shortcuts' },
   { id: 'personas',        label: 'Personas' },
   { id: 'pinned-context',  label: 'Pinned Context' },
-  { id: 'folders',         label: 'Folders' },
+  { id: 'folders',         label: 'Collections' },
   { id: 'branching',       label: 'Conversation Branching' },
   { id: 'regenerate',      label: 'Regenerating Responses' },
   { id: 'reasoning',       label: 'Reasoning Mode' },
@@ -237,6 +238,39 @@ function UserGuidePage() {
 
         <Divider />
 
+        {/* ── Navigation ── */}
+        <SectionHeading id="navigation">Navigation</SectionHeading>
+        <P>
+          Vault uses two persistent areas: the <strong>top bar</strong> for frequent actions and an
+          <strong> Apps</strong> launcher for everything else, plus the <strong>left sidebar</strong> for
+          chat, workspace shortcuts, and projects.
+        </P>
+
+        <SubHeading>Top bar</SubHeading>
+        <UL>
+          <LI><strong>Search</strong> (<Kbd>⌘K</Kbd>) — projects, files, and messages.</LI>
+          <LI><strong>Tasks</strong> and <strong>Chat History</strong> — always one click away.</LI>
+          <LI><strong>Suggestions</strong> — agent findings inbox (badge when new items exist).</LI>
+          <LI><strong>Apps</strong> (grid icon) — grouped menu: Productivity, AI tools, Content tools, Money &amp; data, Personal, plus Workspace links (Personas, Memory, Prompt Library, User Guide).</LI>
+        </UL>
+
+        <SubHeading>Sidebar</SubHeading>
+        <UL>
+          <LI><strong>Quick chat</strong> — ad-hoc conversations without project context.</LI>
+          <LI><strong>Workspace</strong> — Tasks, Notes, Goals, Clients.</LI>
+          <LI><strong>Projects</strong> — collections, project list, recent chats. Expand a project (chevron) to see task/note/file counts.</LI>
+        </UL>
+
+        <SubHeading>How content fits together</SubHeading>
+        <P>
+          An optional <strong>Client</strong> can own one or more <strong>Projects</strong>. Projects may sit
+          inside a <strong>Collection</strong> (sidebar grouping only). Each project holds <strong>chats</strong>,
+          <strong>files</strong> (always project-scoped), and optionally linked <strong>tasks</strong> and
+          <strong>notes</strong>. Open a project's <strong>Overview</strong> tab to see counts and recent activity.
+        </P>
+
+        <Divider />
+
         {/* ── Getting Started ── */}
         <SectionHeading id="getting-started">Getting Started</SectionHeading>
         <P>
@@ -281,7 +315,15 @@ function UserGuidePage() {
         <P>
           A project is a persistent workspace that bundles together context, files, chat history,
           and AI behaviour settings. All of these are passed to Claude on every message, so responses
-          stay grounded in your actual work.
+          stay grounded in your actual work. Tasks and notes can optionally link to a project; files
+          always belong to one project.
+        </P>
+
+        <SubHeading>Project overview</SubHeading>
+        <P>
+          The project detail page opens on <strong>Overview</strong>: stat cards for chats, tasks, notes, and files,
+          plus recent items with links to filtered Tasks/Notes pages or the chat view. Use <strong>Brief &amp; settings</strong>
+          to edit context fields, model, collection, pinned URLs, and uploads.
         </P>
 
         <SubHeading>Context fields</SubHeading>

@@ -61,6 +61,12 @@ function ProjectDetail() {
   const [refreshingUrls, setRefreshingUrls] = useState({}); // { [id]: true }
   const [urlErrors, setUrlErrors] = useState({});           // { [id]: errorString }
   const [urlRefreshed, setUrlRefreshed] = useState({});     // { [id]: true } — brief success state
+  const [activeTab, setActiveTab] = useState('overview');
+  const [hubLoading, setHubLoading] = useState(true);
+  const [hubStats, setHubStats] = useState({ tasks: 0, notes: 0, files: 0, chats: 0 });
+  const [hubTasks, setHubTasks] = useState([]);
+  const [hubNotes, setHubNotes] = useState([]);
+  const [hubSessions, setHubSessions] = useState([]);
 
   const project = projects.find((p) => p.id === Number(id));
 
@@ -87,6 +93,38 @@ function ProjectDetail() {
       .then(r => r.json())
       .then(d => setProjectEmotions(d.emotions || []))
       .catch(() => {});
+    loadHubData();
+  }, [id]);
+
+  const loadHubData = async () => {
+    setHubLoading(true);
+    try {
+      const [tasksRes, notesRes, filesRes, sessionsRes] = await Promise.all([
+        api.get('/api/tasks').then(r => r.json()).catch(() => []),
+        api.get(`/api/notes?project_id=${id}`).then(r => r.json()).catch(() => []),
+        api.get(`/api/files/${id}`).then(r => r.json()).catch(() => []),
+        api.get(`/api/chat/sessions/${id}`).then(r => r.json()).catch(() => []),
+      ]);
+      const projectTasks = Array.isArray(tasksRes) ? tasksRes.filter(t => t.projectId === Number(id)) : [];
+      const notes = Array.isArray(notesRes) ? notesRes : [];
+      const files = Array.isArray(filesRes) ? filesRes : [];
+      const chats = Array.isArray(sessionsRes) ? sessionsRes : [];
+      setHubStats({
+        tasks: projectTasks.length,
+        notes: notes.length,
+        files: files.length,
+        chats: chats.length,
+      });
+      setHubTasks(projectTasks.slice(0, 5));
+      setHubNotes(notes.slice(0, 5));
+      setHubSessions(chats.slice(0, 5));
+    } finally {
+      setHubLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (window.location.hash === '#files') setActiveTab('brief');
   }, [id]);
 
   useEffect(() => {
@@ -250,6 +288,118 @@ function ProjectDetail() {
           </button>
         </div>
 
+        {/* Tab switcher */}
+        <div className="flex gap-1 mb-6 p-1 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          {[
+            { key: 'overview', label: 'Overview' },
+            { key: 'brief', label: 'Brief & settings' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className="flex-1 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+              style={{
+                background: activeTab === tab.key ? 'var(--color-primary)' : 'transparent',
+                color: activeTab === tab.key ? '#fff' : 'var(--color-muted)',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'overview' && (
+          <div className="mb-8 space-y-6">
+            {hubLoading ? (
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading overview…</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Chats', count: hubStats.chats, path: `/projects/${id}/chat`, icon: 'chat' },
+                    { label: 'Tasks', count: hubStats.tasks, path: `/tasks?project=${id}`, icon: 'list-checks' },
+                    { label: 'Notes', count: hubStats.notes, path: `/notes?project=${id}`, icon: 'pen-line' },
+                    { label: 'Files', count: hubStats.files, path: `#files`, icon: 'file-text', onClick: () => setActiveTab('brief') },
+                  ].map(card => (
+                    <button
+                      key={card.label}
+                      type="button"
+                      onClick={() => {
+                        if (card.onClick) card.onClick();
+                        else navigate(card.path);
+                      }}
+                      className="rounded-xl border p-4 text-left hover:opacity-70 transition-opacity"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-2" style={{ color: 'var(--color-muted)' }}>
+                        {getIcon(card.icon, { size: 14 })}
+                        <span className="text-xs font-semibold uppercase tracking-wider">{card.label}</span>
+                      </div>
+                      <p className="text-2xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{card.count}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {hubSessions.length > 0 && (
+                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Recent chats</span>
+                      <button type="button" onClick={() => navigate(`/projects/${id}/chat`)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Open chat →</button>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                      {hubSessions.map(s => (
+                        <button key={s.sessionId} type="button" onClick={() => goToSession(s.sessionId)} className="w-full px-4 py-3 text-left text-sm hover:opacity-70 transition-opacity truncate" style={{ color: 'var(--color-text)' }}>
+                          {formatSessionLabel(s)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hubTasks.length > 0 && (
+                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Tasks</span>
+                      <button type="button" onClick={() => navigate(`/tasks?project=${id}`)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>View all →</button>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                      {hubTasks.map(t => (
+                        <div key={t.id} className="px-4 py-3 flex items-center gap-2">
+                          <span className="text-sm flex-1 truncate" style={{ color: 'var(--color-text)' }}>{t.title}</span>
+                          <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{t.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hubNotes.length > 0 && (
+                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Notes</span>
+                      <button type="button" onClick={() => navigate(`/notes?project=${id}`)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>View all →</button>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                      {hubNotes.map(n => (
+                        <button key={n.id} type="button" onClick={() => navigate(`/notes?project=${id}`)} className="w-full px-4 py-3 text-left hover:opacity-70 transition-opacity">
+                          <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>{n.title || 'Untitled'}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hubStats.chats === 0 && hubStats.tasks === 0 && hubStats.notes === 0 && hubStats.files === 0 && (
+                  <p className="text-sm text-center py-8 rounded-xl border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>
+                    Nothing linked to this project yet. Start a chat, add a task, or upload a file from the Brief tab.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {confirmDelete && (
           <div className="mb-6 p-4 rounded-xl border" style={{ borderColor: '#fca5a5', background: '#fff1f2' }}>
             <p className="text-sm font-semibold text-red-700 mb-1">Delete "{project.name}"?</p>
@@ -265,6 +415,8 @@ function ProjectDetail() {
           </div>
         )}
 
+        {activeTab === 'brief' && (
+        <>
         {/* Sessions panel */}
         {showSessions && (
           <div className="mb-6 rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
@@ -378,14 +530,14 @@ function ProjectDetail() {
             <div className="grid grid-cols-2 gap-4">
               {folders.length > 0 && (
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Folder</label>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Collection</label>
                   <select
                     value={form.folderId || ''}
                     onChange={e => setForm({ ...form, folderId: e.target.value ? Number(e.target.value) : null })}
                     className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    <option value="">No folder</option>
+                    <option value="">No collection</option>
                     {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                 </div>
@@ -575,11 +727,13 @@ function ProjectDetail() {
         </div>
 
         {/* Files */}
-        <div data-tour="rag-files" className="mt-10">
+        <div id="files" data-tour="rag-files" className="mt-10">
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Files</h2>
-          <FileUploader projectId={id} onUpload={() => setFilesKey((k) => k + 1)} />
+          <FileUploader projectId={id} onUpload={() => { setFilesKey((k) => k + 1); loadHubData(); }} />
           <FileList key={filesKey} projectId={id} />
         </div>
+        </>
+        )}
       </div>
     </div>
   );

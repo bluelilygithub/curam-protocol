@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
@@ -531,6 +531,7 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, on
 export default function TasksPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const searchInputRef = useRef(null);
 
   const [tasks, setTasks] = useState([]);
@@ -690,7 +691,7 @@ export default function TasksPage() {
     api.get('/api/projects').then(r => r.json()).then(setProjects).catch(() => {});
   }, [fetchTasks]);
 
-  // Read ?view query param on mount to override viewMode
+  // Read ?view and ?project query params on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const v = params.get('view');
@@ -698,7 +699,9 @@ export default function TasksPage() {
       setViewMode(v);
       localStorage.setItem('tasksViewMode', v);
     }
-  }, []);
+    const projectParam = params.get('project');
+    if (projectParam) setFilterProject(projectParam);
+  }, [searchParams]);
 
   useEffect(() => {
     if (showTemplates) fetchTemplates();

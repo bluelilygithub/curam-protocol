@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Brain, Trash2, Plus } from 'lucide-react';
 import api from '../utils/apiClient';
+import { useIcon } from '../providers/IconProvider';
 
 const FIELD = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none';
 const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -26,7 +26,7 @@ function Section({ title, children }) {
   );
 }
 
-function MemoryRow({ memory, onDelete, deleting }) {
+function MemoryRow({ memory, onDelete, deleting, getIcon }) {
   const [expanded, setExpanded] = useState(false);
   const content = memory.content ?? '';
   const long = content.length > 220;
@@ -49,7 +49,7 @@ function MemoryRow({ memory, onDelete, deleting }) {
           style={{ color: 'var(--color-muted)' }}
           title="Delete memory"
         >
-          <Trash2 size={14} />
+          {getIcon('trash', { size: 14 })}
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -71,6 +71,7 @@ function MemoryRow({ memory, onDelete, deleting }) {
 }
 
 function MemoryPage() {
+  const getIcon = useIcon();
   const [memories, setMemories] = useState([]);
   const [stats, setStats] = useState(null);
   const [input, setInput] = useState('');
@@ -178,7 +179,7 @@ function MemoryPage() {
           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
         >
-          <Brain size={18} />
+          {getIcon('brain', { size: 18 })}
         </div>
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Memory</h1>
@@ -252,7 +253,7 @@ function MemoryPage() {
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40"
             style={{ background: 'var(--color-primary)' }}
           >
-            <Plus size={14} />
+            {getIcon('plus', { size: 14 })}
             {saving ? 'Saving…' : 'Add'}
           </button>
         </form>
@@ -297,7 +298,7 @@ function MemoryPage() {
             className="text-center py-12 rounded-xl border"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
           >
-            <Brain size={32} className="mx-auto mb-3 opacity-30" />
+            {getIcon('brain', { size: 32, className: 'mx-auto mb-3 opacity-30' })}
             <p className="text-sm">{inSearchMode ? 'No matching memories.' : 'No memories yet.'}</p>
             <p className="text-xs mt-1 opacity-60">
               {inSearchMode ? 'Try different wording.' : 'Add a fact above or ask Claude to remember something in chat.'}
@@ -311,6 +312,7 @@ function MemoryPage() {
                 memory={m}
                 onDelete={handleDelete}
                 deleting={deletingId === m.id}
+                getIcon={getIcon}
               />
             ))}
           </div>
