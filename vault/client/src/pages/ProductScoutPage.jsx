@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import ProductScoutResults from '../components/productScout/ProductScoutResults';
 import ProductScoutUrlCompare from '../components/productScout/ProductScoutUrlCompare';
+import ProductScoutModeToggle from '../components/productScout/ProductScoutModeToggle';
+import ProductScoutGuidePanel from '../components/productScout/ProductScoutGuidePanel';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
@@ -35,8 +37,10 @@ export default function ProductScoutPage() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.productScout !== false;
 
+  const [mode, setMode] = useState('scout');
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
+  const [guideLoadedResult, setGuideLoadedResult] = useState(null);
   const [runs, setRuns] = useState([]);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,7 @@ export default function ProductScoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Scout failed');
       setResult(data);
+      setGuideLoadedResult(null);
       setLoadedRunId(data.runId ?? null);
       await loadMeta();
       addToast('Comparison ready', 'success');
@@ -114,12 +119,22 @@ export default function ProductScoutPage() {
       const res = await api.get(`/api/product-scout/runs/${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load run');
-      setResult(data.result);
+      const runResult = data.result;
       setQuery(data.query || '');
       setLoadedRunId(data.id);
-      if (data.result?.filters) {
-        setFreeDelivery(Boolean(data.result.filters.freeDelivery));
-        setWithin2Days(Boolean(data.result.filters.within2Days));
+
+      if (runResult?.mode === 'guide') {
+        setMode('guide');
+        setGuideLoadedResult(runResult);
+        setResult(null);
+      } else {
+        setMode('scout');
+        setResult(runResult);
+        setGuideLoadedResult(null);
+        if (runResult?.filters) {
+          setFreeDelivery(Boolean(runResult.filters.freeDelivery));
+          setWithin2Days(Boolean(runResult.filters.within2Days));
+        }
       }
     } catch (err) {
       addToast(err.message, 'error');
@@ -151,6 +166,7 @@ export default function ProductScoutPage() {
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       if (loadedRunId && ids.includes(loadedRunId)) {
         setResult(null);
+        setGuideLoadedResult(null);
         setLoadedRunId(null);
       }
       clearSelection();
@@ -164,9 +180,21 @@ export default function ProductScoutPage() {
     }
   };
 
+  const handleModeChange = (next) => {
+    setMode(next);
+    setError(null);
+  };
+
+  const handleGuideSaved = async (data) => {
+    setGuideLoadedResult(data);
+    setLoadedRunId(data.runId ?? null);
+    await loadMeta();
+  };
+
   if (!canUse) return <Navigate to="/" replace />;
 
   const hasSelection = selectedRunIds.size > 0;
+  const countryLabel = config?.amazonCountry ? `Amazon ${config.amazonCountry}` : 'Amazon';
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -177,13 +205,16 @@ export default function ProductScoutPage() {
         >
           {getIcon('productScout', { size: 18 })}
         </div>
-        <div>
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            {config?.amazonCountry
-              ? `Amazon ${config.amazonCountry} — value scoring plus non-Amazon alternatives.`
-              : 'Amazon comparison — value scoring plus non-Amazon alternatives.'}
-          </p>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div>
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+              {mode === 'guide'
+                ? `${countryLabel} — feature-led buying guide with four price tiers.`
+                : `${countryLabel} — value scoring plus non-Amazon alternatives.`}
+            </p>
+          </div>
+          <ProductScoutModeToggle mode={mode} onChange={handleModeChange} />
         </div>
       </div>
 
@@ -199,77 +230,92 @@ export default function ProductScoutPage() {
         </div>
       )}
 
-      <form onSubmit={handleRun} className="space-y-3">
-        <label className="block space-y-1">
-          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What are you shopping for?</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. wireless noise cancelling earbuds under $150"
-            className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
-            Max price (optional)
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              placeholder="e.g. 150"
-              className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            {config?.priceVariancePct != null && (
-              <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                Stretch variance: {config.priceVariancePct}% above max
+      {mode === 'scout' ? (
+        <>
+          <form onSubmit={handleRun} className="space-y-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What are you shopping for?</span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. wireless noise cancelling earbuds under $150"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+                Max price (optional)
               </span>
-            )}
-          </div>
-        </label>
-        <div className="flex flex-wrap gap-2">
-          <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
-          <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
-        </div>
-        <button
-          type="submit"
-          className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          Scout products
-        </button>
-      </form>
+              <div className="flex items-center gap-2">
+                <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="e.g. 150"
+                  className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+                {config?.priceVariancePct != null && (
+                  <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    Stretch variance: {config.priceVariancePct}% above max
+                  </span>
+                )}
+              </div>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
+              <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Scout products
+            </button>
+          </form>
 
-      {error && (
-        <div
-          className="rounded-xl border p-4 text-xs"
-          style={{ borderColor: '#ef4444', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          {error}
-        </div>
-      )}
+          {error && (
+            <div
+              className="rounded-xl border p-4 text-xs"
+              style={{ borderColor: '#ef4444', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              {error}
+            </div>
+          )}
 
-      {result?.comparison && (
+          {result?.comparison && (
+            <section
+              className="rounded-2xl border p-6"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            >
+              <ProductScoutResults result={result} />
+              <ProductScoutUrlCompare
+                runId={result.runId ?? loadedRunId}
+                comparisons={result.url_comparisons || []}
+                onCompared={(entry) => {
+                  setResult((prev) => ({
+                    ...prev,
+                    url_comparisons: [...(prev?.url_comparisons || []), entry],
+                  }));
+                }}
+              />
+            </section>
+          )}
+        </>
+      ) : (
         <section
           className="rounded-2xl border p-6"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
-          <ProductScoutResults result={result} />
-          <ProductScoutUrlCompare
-            runId={result.runId ?? loadedRunId}
-            comparisons={result.url_comparisons || []}
-            onCompared={(entry) => {
-              setResult((prev) => ({
-                ...prev,
-                url_comparisons: [...(prev?.url_comparisons || []), entry],
-              }));
-            }}
+          <ProductScoutGuidePanel
+            onRunSaved={handleGuideSaved}
+            loadedResult={guideLoadedResult}
+            loadedRunId={loadedRunId}
           />
         </section>
       )}
@@ -329,6 +375,7 @@ export default function ProductScoutPage() {
             {runs.map((r) => {
               const selected = selectedRunIds.has(r.id);
               const isLoaded = loadedRunId === r.id;
+              const isGuide = r.mode === 'guide';
               return (
                 <li key={r.id} className="group flex items-stretch gap-2">
                   <label
@@ -354,6 +401,15 @@ export default function ProductScoutPage() {
                       background: isLoaded ? 'var(--color-bg)' : 'transparent',
                     }}
                   >
+                    <span
+                      className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded mr-1.5"
+                      style={{
+                        background: isGuide ? 'rgba(204, 120, 92, 0.15)' : 'var(--color-surface)',
+                        color: isGuide ? 'var(--color-primary)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {isGuide ? 'Guide' : 'Scout'}
+                    </span>
                     <span className="font-medium">{r.query}</span>
                     <span className="ml-2" style={{ color: 'var(--color-muted)' }}>
                       {r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}

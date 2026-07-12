@@ -4,7 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-12 (product-scout-compare-url)
+## 2026-07-12 (product-scout-buy-guide)
+
+**Feature:** Product Scout Buy guide — mode toggle with feature brief (editable must/nice/skip) and 4-tier price ladder (Essentials → Pro) with best pick per tier.
+
+---
 
 **Feature:** Product Scout URL compare — paste an Amazon product link after a scout run; AI compares it to budget picks with upgrade benefits, missing features, and suggested mid-range budget.
 

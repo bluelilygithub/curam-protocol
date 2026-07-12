@@ -39,12 +39,23 @@ GET  /api/product-scout/settings       — price variance % + amazon domain (adm
 GET  /api/product-scout/runs           — recent runs for user
 GET  /api/product-scout/runs/:id       — single run
 POST /api/product-scout/run            — { query, maxPrice?, freeDelivery?, within2Days? }
+POST /api/product-scout/guide/brief       — { query, userFeatures?, budgetHint? } → feature brief + tier framework
+POST /api/product-scout/guide/run         — { query, userFeatures?, budgetHint?, featureBrief } → tier ladder
 POST /api/product-scout/compare-url    — { url, runId } — compare Amazon URL vs budget picks from a run
 POST /api/product-scout/runs/delete    — { ids: [1, 2, …] }
 POST /api/product-scout/settings       — admin: { priceVariancePct?, amazonDomain? }
 ```
 
 Feature flag: `productScout` in Settings → Feature Access.
+
+## Modes (Vault UI)
+
+| Mode | Tab | Flow |
+|------|-----|------|
+| **Quick scout** | Default | Query + optional max price → top 3 value picks |
+| **Buy guide** | Buy guide | Query + features → editable feature brief → 4-tier ladder (Essentials → Pro) |
+
+Runs store `result.mode` as `scout` or `guide`. History list shows a **Scout** / **Guide** badge.
 
 ### Run body
 

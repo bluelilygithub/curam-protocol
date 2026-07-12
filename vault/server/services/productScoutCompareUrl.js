@@ -83,10 +83,23 @@ function parseCompareUrlResponse(text) {
   return parsed;
 }
 
-function resolveBudgetPicks(comparison) {
+function resolveBudgetPicks(scout) {
+  if (scout?.mode === 'guide') {
+    return (scout.tiers || [])
+      .filter((t) => t.pick?.title)
+      .map((t, i) => ({ ...t.pick, rank: i + 1, tier_label: t.label }));
+  }
+  const comparison = scout?.comparison;
   const top3 = comparison?.top3 || [];
   if (top3.length) return top3;
   return comparison?.stretch_suggestions || [];
+}
+
+function resolveBudgetContext(scout) {
+  if (scout?.mode === 'guide' && scout.budgetHint) {
+    return { maxPrice: scout.budgetHint, note: 'buy guide budget hint' };
+  }
+  return scout?.budget || null;
 }
 
 /**
@@ -104,11 +117,11 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
     if (!run) throw new Error('Scout run not found');
     scout = run.result;
   }
-  if (!scout?.comparison) {
+  if (!scout || (scout.mode !== 'guide' && !scout.comparison)) {
     throw new Error('Run a Product Scout search first, then compare a URL against those picks');
   }
 
-  const budgetPicks = resolveBudgetPicks(scout.comparison);
+  const budgetPicks = resolveBudgetPicks(scout);
   if (!budgetPicks.length) {
     throw new Error('No budget picks to compare against — run a scout with in-budget results');
   }
@@ -119,7 +132,7 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
 
   const prompt = buildCompareUrlPrompt({
     query: scout.query,
-    budget: scout.budget,
+    budget: resolveBudgetContext(scout),
     urlProduct: product,
     budgetPicks,
   });

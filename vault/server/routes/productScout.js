@@ -5,6 +5,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { runProductScout, listRuns, getRun, deleteRuns } = require('../services/productScoutService');
 const { compareUrlToScout } = require('../services/productScoutCompareUrl');
+const { buildGuideBrief, runBuyGuide } = require('../services/productScoutGuideService');
 const {
   getPriceVariancePct,
   setPriceVariancePct,
@@ -60,6 +61,29 @@ router.post('/settings', async (req, res) => {
     res.status(err.message.includes('Invalid') ? 400 : 500).json({ error: err.message || 'Failed to save settings' });
   }
 });
+
+router.post('/guide/brief', handle(async (req) => {
+  const { query, userFeatures, budgetHint } = req.body || {};
+  if (!query?.trim()) throw new Error('query is required');
+  const hint = budgetHint != null && budgetHint !== '' ? Number(budgetHint) : null;
+  if (hint != null && (!Number.isFinite(hint) || hint <= 0)) {
+    throw new Error('budgetHint must be a positive number');
+  }
+  return buildGuideBrief(req.user.id, query.trim(), userFeatures, hint);
+}));
+
+router.post('/guide/run', handle(async (req) => {
+  const { query, userFeatures, budgetHint, featureBrief } = req.body || {};
+  if (!query?.trim()) throw new Error('query is required');
+  if (!featureBrief) throw new Error('featureBrief is required');
+  const hint = budgetHint != null && budgetHint !== '' ? Number(budgetHint) : null;
+  return runBuyGuide(req.user.id, {
+    query: query.trim(),
+    userFeatures: userFeatures || [],
+    budgetHint: hint,
+    featureBrief,
+  });
+}));
 
 router.post('/compare-url', handle(async (req) => {
   const { url, runId } = req.body || {};

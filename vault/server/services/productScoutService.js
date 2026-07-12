@@ -258,6 +258,7 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
   const external_alternatives = winner ? await crossMarketAlternatives(winner, q) : [];
 
   const result = {
+    mode: 'scout',
     query: q,
     candidates_fetched: allCandidates.length,
     amazonDomain,
@@ -293,7 +294,8 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
 
 async function listRuns(userId, limit = 20) {
   const { rows } = await pool.query(
-    `SELECT id, query, "createdAt"
+    `SELECT id, query, "createdAt",
+            COALESCE(result->>'mode', 'scout') AS mode
      FROM product_scout_runs WHERE "userId"=$1
      ORDER BY "createdAt" DESC LIMIT $2`,
     [userId, limit]
