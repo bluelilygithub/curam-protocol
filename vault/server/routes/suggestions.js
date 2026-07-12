@@ -10,6 +10,7 @@ const {
   isValidStatus,
 } = require('../constants/suggestionInbox');
 const SuggestionService = require('../services/SuggestionService');
+const { implementSuggestion, parseResult } = require('../services/suggestionImplement');
 
 // GET /api/suggestions/meta — categories, statuses, counts by status/category
 router.get('/meta', async (req, res) => {
@@ -73,7 +74,7 @@ router.get('/', async (req, res) => {
   const { category, status, q } = req.query;
 
   let sql = `
-    SELECT id, category, status, title, body, context, source, "createdAt", "updatedAt"
+    SELECT id, category, status, title, body, context, source, "implementationResult", "createdAt", "updatedAt"
     FROM agent_suggestions
     WHERE "userId" = $1
   `;
@@ -115,7 +116,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, category, status, title, body, context, source, "createdAt", "updatedAt"
+      `SELECT id, category, status, title, body, context, source, "implementationResult", "createdAt", "updatedAt"
        FROM agent_suggestions
        WHERE id = $1 AND "userId" = $2`,
       [req.params.id, req.user.id],
@@ -157,6 +158,26 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /api/suggestions/:id/implement — create task/note/nav target and mark implemented
+router.post('/:id/implement', async (req, res) => {
+  try {
+    const outcome = await implementSuggestion(Number(req.params.id), req.user.id);
+    if (outcome.error === 'not_found') return res.status(404).json({ error: 'Not found' });
+    if (outcome.error) return res.status(400).json({ error: outcome.error });
+
+    const suggestion = outcome.suggestion;
+    const result = parseResult(suggestion) || outcome.result;
+
+    res.json({
+      already: !!outcome.already,
+      suggestion,
+      result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/suggestions/:id
 router.patch('/:id', async (req, res) => {
   const userId = req.user.id;
@@ -176,6 +197,9 @@ router.patch('/:id', async (req, res) => {
   if (status !== undefined) {
     if (!isValidStatus(status)) {
       return res.status(400).json({ error: 'Invalid status' });
+    }
+    if (status === 'implement') {
+      return res.status(400).json({ error: 'Use POST /api/suggestions/:id/implement to implement a suggestion' });
     }
     updates.push(`status = $${idx++}`);
     params.push(status);
@@ -207,7 +231,7 @@ router.patch('/:id', async (req, res) => {
       `UPDATE agent_suggestions
        SET ${updates.join(', ')}
        WHERE id = $1 AND "userId" = $2
-       RETURNING id, category, status, title, body, context, "createdAt", "updatedAt"`,
+       RETURNING id, category, status, title, body, context, source, "implementationResult", "createdAt", "updatedAt"`,
       params,
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });

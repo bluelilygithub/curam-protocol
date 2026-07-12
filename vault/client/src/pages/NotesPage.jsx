@@ -105,6 +105,13 @@ export default function NotesPage() {
     loadNotes('', projectParam);
   }, [loadNotes, searchParams]);
 
+  useEffect(() => {
+    const noteId = searchParams.get('note');
+    if (!noteId || notes.length === 0) return;
+    const match = notes.find(n => String(n.id) === String(noteId));
+    if (match) selectNote(match);
+  }, [notes, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep value refs current for mic callbacks (avoids stale closures)
   useEffect(() => { bodyValueRef.current = body; }, [body]);
   useEffect(() => { titleValueRef.current = title; }, [title]);

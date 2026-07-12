@@ -756,10 +756,24 @@ function UserGuidePage() {
         <UL>
           <LI><strong>New</strong> — just added (default)</LI>
           <LI><strong>Opened</strong> — you've seen it</LI>
-          <LI><strong>Apply</strong> — you plan to act on it</LI>
+          <LI><strong>Implement</strong> — creates a task or note (or opens the relevant page) and marks the item done</LI>
           <LI><strong>Learn</strong> — revisit later</LI>
           <LI><strong>Ignore</strong> — dismiss</LI>
         </UL>
+
+        <SubHeading>What Implement does</SubHeading>
+        <UL>
+          <LI><strong>Rule</strong> — draft note with suggested Cursor rule text and save path</LI>
+          <LI><strong>Skill</strong> — draft note with SKILL.md outline</LI>
+          <LI><strong>Automation</strong> — high-priority task tagged for automation work</LI>
+          <LI><strong>Source</strong> — task with file/context in the description</LI>
+          <LI><strong>Alert</strong> — opens the relevant settings page when Vault can detect it; otherwise a fix task</LI>
+          <LI><strong>Other</strong> — standard task with the suggestion details</LI>
+        </UL>
+        <P>
+          After Implement, use <strong>Open task</strong> or <strong>Open note</strong> on the card to jump to what was created.
+          Clicking Implement again on the same item reopens the existing result without duplicating.
+        </P>
 
         <SubHeading>How items arrive</SubHeading>
         <P>

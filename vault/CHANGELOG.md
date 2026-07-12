@@ -4,6 +4,17 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (implement)
+
+**Feature:** Suggestions **Implement** action — creates tasks/notes instead of label-only triage.
+
+- Renamed status `apply` → `implement` (DB migration on boot).
+- `POST /api/suggestions/:id/implement` — category-specific: rule/skill → note draft, automation/source/alert/other → task (alert may navigate to settings).
+- UI: primary **Implement** button; **Open task/note/page** link after completion.
+- Notes deep link: `/notes?note={id}`.
+
+---
+
 ## 2026-07-12
 
 **Feature:** Navigation and information architecture redesign.

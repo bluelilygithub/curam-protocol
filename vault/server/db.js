@@ -994,6 +994,8 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_suggestions_user_category ON agent_suggestions("userId", category, "createdAt" DESC)`);
   await pool.query(`ALTER TABLE agent_suggestions ADD COLUMN IF NOT EXISTS source TEXT`);
   await pool.query(`ALTER TABLE agent_suggestions ADD COLUMN IF NOT EXISTS fingerprint TEXT`);
+  await pool.query(`ALTER TABLE agent_suggestions ADD COLUMN IF NOT EXISTS "implementationResult" JSONB`);
+  await pool.query(`UPDATE agent_suggestions SET status = 'implement' WHERE status = 'apply'`);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_agent_suggestions_fingerprint
       ON agent_suggestions("userId", fingerprint)

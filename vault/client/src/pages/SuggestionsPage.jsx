@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 
 const CATEGORIES = ['rule', 'skill', 'automation', 'source', 'alert', 'other'];
-const STATUSES = ['new', 'opened', 'ignore', 'apply', 'learn'];
+const TRIAGE_STATUSES = ['new', 'opened', 'ignore', 'learn'];
+const ALL_STATUSES = [...TRIAGE_STATUSES, 'implement'];
 
 const FIELD = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none';
 const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -13,9 +15,28 @@ const STATUS_STYLE = {
   new: { bg: 'var(--color-primary)', color: '#fff' },
   opened: { bg: 'var(--color-surface)', color: 'var(--color-text)', border: 'var(--color-border)' },
   ignore: { bg: 'var(--color-bg)', color: 'var(--color-muted)', border: 'var(--color-border)' },
-  apply: { bg: '#dcfce7', color: '#166534', border: '#86efac' },
+  implement: { bg: '#dcfce7', color: '#166534', border: '#86efac' },
   learn: { bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
 };
+
+function parseImplementationResult(item) {
+  const raw = item?.implementationResult;
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function implementationLinkLabel(result) {
+  if (!result) return null;
+  if (result.type === 'task') return 'Open task';
+  if (result.type === 'note') return 'Open note';
+  if (result.type === 'navigate') return 'Open page';
+  return null;
+}
 
 function formatWhen(iso) {
   if (!iso) return '';
@@ -48,9 +69,12 @@ function FilterChip({ active, onClick, children, count }) {
   );
 }
 
-function SuggestionCard({ item, onStatusChange, onDelete, updating }) {
+function SuggestionCard({ item, onStatusChange, onImplement, onDelete, updating, onOpenResult }) {
   const [expanded, setExpanded] = useState(false);
   const statusStyle = STATUS_STYLE[item.status] || STATUS_STYLE.opened;
+  const impl = parseImplementationResult(item);
+  const implLink = implementationLinkLabel(impl);
+  const isImplemented = item.status === 'implement';
 
   return (
     <div
@@ -135,8 +159,37 @@ function SuggestionCard({ item, onStatusChange, onDelete, updating }) {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           {formatWhen(item.createdAt)}
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map((status) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!isImplemented && (
+            <button
+              type="button"
+              disabled={updating}
+              onClick={() => onImplement(item.id)}
+              className="px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{
+                background: '#dcfce7',
+                color: '#166534',
+                borderColor: '#86efac',
+              }}
+            >
+              Implement
+            </button>
+          )}
+          {isImplemented && implLink && (
+            <button
+              type="button"
+              onClick={() => onOpenResult(impl)}
+              className="px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-opacity hover:opacity-80"
+              style={{
+                background: '#dcfce7',
+                color: '#166534',
+                borderColor: '#86efac',
+              }}
+            >
+              {implLink} →
+            </button>
+          )}
+          {TRIAGE_STATUSES.map((status) => (
             <button
               key={status}
               type="button"
@@ -160,6 +213,7 @@ function SuggestionCard({ item, onStatusChange, onDelete, updating }) {
 
 function SuggestionsPage() {
   const getIcon = useIcon();
+  const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
 
   const [loading, setLoading] = useState(true);
@@ -211,6 +265,31 @@ function SuggestionsPage() {
     }
     return 'Nothing here yet. Agents and routines will add suggestions after substantial work.';
   }, [categoryFilter, statusFilter, search]);
+
+  const handleImplement = async (id) => {
+    setUpdatingId(id);
+    try {
+      const res = await api.post(`/api/suggestions/${id}/implement`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Implement failed');
+      await load();
+      const result = data.result;
+      const label = result?.type === 'note' ? 'Note created'
+        : result?.type === 'task' ? 'Task created'
+          : result?.type === 'navigate' ? 'Ready to open'
+            : 'Implemented';
+      addToast(data.already ? 'Already implemented — opening result' : label, 'success');
+      if (result?.path) navigate(result.path);
+    } catch (err) {
+      addToast(err.message || 'Implement failed', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleOpenResult = (result) => {
+    if (result?.path) navigate(result.path);
+  };
 
   const handleStatusChange = async (id, status) => {
     setUpdatingId(id);
@@ -303,7 +382,7 @@ function SuggestionsPage() {
       >
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
           After substantial work, agents flag anomalies or ideas here. Use status to triage:
-          <strong style={{ color: 'var(--color-text)' }}> Apply</strong> when you will act,
+          <strong style={{ color: 'var(--color-text)' }}> Implement</strong> creates a task or note (or opens the relevant page) and marks the item done,
           <strong style={{ color: 'var(--color-text)' }}> Learn</strong> to revisit,
           <strong style={{ color: 'var(--color-text)' }}> Ignore</strong> to dismiss.
         </p>
@@ -389,7 +468,7 @@ function SuggestionsPage() {
             <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} count={meta?.total}>
               All
             </FilterChip>
-            {STATUSES.map((s) => (
+            {ALL_STATUSES.map((s) => (
               <FilterChip
                 key={s}
                 active={statusFilter === s}
@@ -414,7 +493,9 @@ function SuggestionsPage() {
               key={item.id}
               item={item}
               onStatusChange={handleStatusChange}
+              onImplement={handleImplement}
               onDelete={handleDelete}
+              onOpenResult={handleOpenResult}
               updating={updatingId === item.id}
             />
           ))}

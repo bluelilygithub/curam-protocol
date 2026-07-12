@@ -248,7 +248,7 @@ After **substantial** vault work (new feature, refactor, routine, migration, rep
 
 **When not to:** trivial typos you already fixed; normal chat Q&A; every minor observation.
 
-User triages with status: `new` → `opened` → `apply` | `learn` | `ignore`. Do not change status via API — user owns triage.
+User triages with status: `new` → `opened` → `implement` | `learn` | `ignore`. Use `POST /api/suggestions/:id/implement` to act — do not set `implement` via PATCH.
 
 If the dev server is running locally, agents may POST via curl with the user's session token. Otherwise note the suggestion in chat and offer to add it when the server is up.
 

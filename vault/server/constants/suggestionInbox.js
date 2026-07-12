@@ -2,7 +2,7 @@
 
 const SUGGESTION_CATEGORIES = ['rule', 'skill', 'automation', 'source', 'alert', 'other'];
 
-const SUGGESTION_STATUSES = ['new', 'opened', 'ignore', 'apply', 'learn'];
+const SUGGESTION_STATUSES = ['new', 'opened', 'ignore', 'implement', 'learn'];
 
 function isValidCategory(value) {
   return SUGGESTION_CATEGORIES.includes(value);

@@ -44,9 +44,24 @@ Suggestions are **per user** (`userId`). Workspace-wide issues (missing pgvector
 |--------|---------|
 | `new` | Just added — shows nav badge |
 | `opened` | Seen, not yet decided |
-| `apply` | Will act on this |
+| `implement` | Acted on — task/note created or page opened |
 | `learn` | Revisit later |
 | `ignore` | Dismissed (same fingerprint can be suggested again later) |
+
+## Implement action
+
+`POST /api/suggestions/:id/implement` creates a concrete artifact based on category:
+
+| Category | Action |
+|----------|--------|
+| `rule` | Note with Cursor rule draft + save path |
+| `skill` | Note with SKILL.md outline |
+| `automation` | High-priority task tagged `automation` |
+| `source` | Task with file/context in notes |
+| `alert` | Navigate to relevant settings page when detectable; else high-priority task |
+| `other` | Standard task |
+
+Status is set to `implement` and `implementationResult` JSON stores `{ type, taskId?, noteId?, path? }`. Re-clicking Implement returns the existing result without duplicating.
 
 User owns triage — automated emitters create only; they do not change status.
 
@@ -91,7 +106,8 @@ await captureIf(condition, {
 | `GET` | `/api/suggestions/meta` | Category/status counts |
 | `GET` | `/api/suggestions/count?status=new` | Badge count |
 | `POST` | `/api/suggestions` | Create (uses SuggestionService) |
-| `PATCH` | `/api/suggestions/:id` | Update fields or status |
+| `PATCH` | `/api/suggestions/:id` | Update fields or status (not `implement` — use implement endpoint) |
+| `POST` | `/api/suggestions/:id/implement` | Create task/note/nav target and mark implemented |
 | `DELETE` | `/api/suggestions/:id` | Remove |
 
 ## UI
