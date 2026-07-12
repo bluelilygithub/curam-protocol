@@ -4,6 +4,7 @@ import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
+import { formatSessionLabel } from '../utils/sessionDisplay';
 
 function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
@@ -88,6 +89,30 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
         .then(sessions => setProjectSessions(prev => ({ ...prev, [projectId]: sessions })))
         .catch(() => {});
     }
+  };
+
+  const enterProject = async (projectId) => {
+    setActive(projectId);
+    let sessions = projectSessions[projectId];
+    if (!sessions) {
+      sessions = await api.get(`/api/chat/sessions/${projectId}`).then(r => r.json()).catch(() => []);
+      setProjectSessions(prev => ({ ...prev, [projectId]: sessions }));
+    }
+    navigate(`/projects/${projectId}/chat`);
+    if (onClose) onClose();
+    setTimeout(() => {
+      if (sessions?.length > 0) {
+        document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessions[0].sessionId }));
+      } else {
+        document.dispatchEvent(new CustomEvent('vault:new-chat'));
+      }
+    }, 80);
+  };
+
+  const startQuickChat = () => {
+    document.dispatchEvent(new CustomEvent('vault:new-chat'));
+    navigate('/chat');
+    if (onClose) onClose();
   };
 
   const handleDragStart = (e, id) => { setDraggedId(id); e.dataTransfer.effectAllowed = 'move'; };
@@ -210,7 +235,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
 
   if (collapsed) {
     const railItems = [
-      { icon: 'message-circle', title: 'New Chat', action: () => { document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate('/chat'); }, active: location.pathname === '/chat' },
+      { icon: 'message-circle', title: 'Quick chat', action: startQuickChat, active: location.pathname === '/chat' },
       { icon: 'home', title: 'Home', action: () => navigate('/'), active: location.pathname === '/' },
       { icon: 'list-checks', title: 'Tasks', action: () => navigate('/tasks'), active: location.pathname === '/tasks' },
       { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
@@ -263,11 +288,11 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* General section */}
+      {/* Quick chat section */}
       <div className="px-2 pt-2 pb-1">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => { navigate('/chat'); if (onClose) onClose(); }}
+            onClick={startQuickChat}
             className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors text-left"
             style={{
               background: isGeneralActive ? 'var(--color-bg)' : 'transparent',
@@ -278,7 +303,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             <span style={{ flexShrink: 0, opacity: isGeneralActive ? 1 : 0.5 }}>
               {getIcon('message-circle', { size: 14 })}
             </span>
-            <span className="flex-1 truncate">General</span>
+            <span className="flex-1 truncate">Quick chat</span>
             {generalSessions.length > 0 && (
               <span
                 onClick={(e) => { e.stopPropagation(); setGeneralExpanded(v => !v); }}
@@ -290,10 +315,10 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             )}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate('/chat'); if (onClose) onClose(); }}
+            onClick={(e) => { e.stopPropagation(); startQuickChat(); }}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
             style={{ color: 'var(--color-primary)' }}
-            data-tip="New general chat"
+            data-tip="New quick chat"
           >
             {getIcon('plus', { size: 14 })}
           </button>
@@ -317,7 +342,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                   className="flex-1 text-left px-3 py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
                   style={{ color: 'var(--color-muted)', paddingLeft: '2rem' }}
                 >
-                  {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+                  {formatSessionLabel(s)}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
@@ -347,7 +372,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             onClick={() => setShowFolderInput(v => !v)}
             className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
-            data-tip="New folder"
+            data-tip="New collection (groups projects only)"
           >
             {getIcon('folder-plus', { size: 13 })}
           </button>
@@ -361,6 +386,9 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
           </button>
         </div>
       </div>
+      <p className="px-3 pb-2 text-[11px] leading-snug" style={{ color: 'var(--color-muted)' }}>
+        Collections group projects in the sidebar — not individual chats.
+      </p>
       {showFolderInput && (
         <div className="px-2 pb-2">
           <input
@@ -368,7 +396,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
             value={newFolderName}
             onChange={e => setNewFolderName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') { setShowFolderInput(false); setNewFolderName(''); } }}
-            placeholder="Folder name…"
+            placeholder="Collection name…"
             className="w-full px-3 py-1.5 text-xs rounded-lg border outline-none"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}
           />
@@ -408,7 +436,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-              Move "{moveSessionTarget.title || `Session ${moveSessionTarget.sessionId.slice(-6)}`}" out of General.
+              Move "{formatSessionLabel(moveSessionTarget)}" into a project for brief and file context.
             </p>
             <select
               value={moveSessionProjectId}
@@ -484,47 +512,60 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                   />
                 ) : (
                   <>
-                    <button
-                      onClick={() => toggleProjectSessions(project.id)}
-                      className="w-full text-left rounded-lg text-sm flex items-center gap-2 transition-colors"
+                    <div
+                      className="w-full rounded-lg text-sm flex items-center gap-1 transition-colors"
                       style={{
-                        padding: indent ? '0.5rem 0.75rem 0.5rem 1.5rem' : '0.5rem 0.75rem',
+                        padding: indent ? '0.25rem 0.5rem 0.25rem 1rem' : '0.25rem 0.5rem',
                         background: isActive ? 'var(--color-bg)' : 'transparent',
-                        color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                        fontWeight: isActive ? 500 : 400,
                       }}
                     >
-                      <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); toggleProjectSessions(project.id); }}
+                        className="w-6 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
+                        style={{ color: 'var(--color-muted)' }}
+                        data-tip={isExpanded ? 'Collapse chats' : 'Show recent chats'}
+                      >
                         {getIcon(isExpanded ? 'chevron-down' : 'chevron-right', { size: 12 })}
-                      </span>
-                      <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
-                        {getIcon('folder', { size: 14 })}
-                      </span>
-                      <span className="truncate flex-1">{project.name}</span>
-                      {project.chatCount > 0 && !isExpanded && (
-                        <span className="flex-shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                          {project.chatCount}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => enterProject(project.id)}
+                        className="flex-1 min-w-0 flex items-center gap-2 py-1.5 text-left rounded-md hover:opacity-70 transition-opacity"
+                        style={{
+                          color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+                          fontWeight: isActive ? 500 : 400,
+                        }}
+                      >
+                        <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
+                          {getIcon('folder', { size: 14 })}
                         </span>
-                      )}
+                        <span className="truncate flex-1">{project.name}</span>
+                        {project.chatCount > 0 && !isExpanded && (
+                          <span className="flex-shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+                            {project.chatCount}
+                          </span>
+                        )}
+                      </button>
                       <span
                         onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: 'var(--color-muted)' }}
-                        data-tip="Open project"
+                        data-tip="Project settings"
                       >
                         {getIcon('external-link', { size: 11 })}
                       </span>
                       <span
-                        onClick={(e) => { e.stopPropagation(); setActive(project.id); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setActive(project.id); document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: 'var(--color-primary)' }}
-                        data-tip="New chat"
+                        data-tip="New chat in project"
                       >
                         {getIcon('plus', { size: 11 })}
                       </span>
                       <span
                         onClick={(e) => startRename(e, project)}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: 'var(--color-muted)' }}
                         data-tip="Rename"
                       >
@@ -532,7 +573,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                       </span>
                       <span
                         onClick={async (e) => { e.stopPropagation(); await archive(project.id); if (activeProjectId === project.id) navigate('/'); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: 'var(--color-muted)' }}
                         data-tip="Archive project"
                       >
@@ -540,13 +581,13 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                       </span>
                       <span
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: '#ef4444' }}
                         data-tip="Delete project"
                       >
                         {getIcon('trash', { size: 11 })}
                       </span>
-                    </button>
+                    </div>
                     {isExpanded && (
                       <div className="mt-0.5 space-y-0.5">
                         {sessions.slice(0, 10).map(s => (
@@ -561,7 +602,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                             className="w-full text-left py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
                             style={{ color: 'var(--color-muted)', paddingLeft: indent ? '3rem' : '2.25rem' }}
                           >
-                            {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+                            {formatSessionLabel(s)}{s.isSummarized ? ' ✦' : ''}
                           </button>
                         ))}
                         {sessions.length === 0 && (

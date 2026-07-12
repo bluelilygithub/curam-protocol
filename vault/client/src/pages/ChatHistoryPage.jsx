@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
 import useProjectStore from '../store/projectStore';
+import { formatSessionLabel, formatSessionLocation } from '../utils/sessionDisplay';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -401,7 +402,7 @@ export default function ChatHistoryPage() {
                 >
                   <div className="flex-shrink-0 w-28 text-right">
                     <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
-                      {s.projectName || 'General'}
+                      {formatSessionLocation(s)}
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                       {s.lastAt ? new Date(s.lastAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
@@ -409,7 +410,7 @@ export default function ChatHistoryPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                      {s.title || `Session ${s.sessionId.slice(-8)}`}
+                      {formatSessionLabel(s)}
                     </div>
                     {s.lastMsg && (
                       <div className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>
@@ -424,7 +425,7 @@ export default function ChatHistoryPage() {
                         onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
                         className="px-2 py-1 rounded-md border text-xs hover:opacity-70 transition-opacity"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-                        title="Move General chat to a project"
+                        title="Move quick chat to a project"
                       >
                         Move
                       </button>
@@ -532,7 +533,7 @@ export default function ChatHistoryPage() {
                 >
                   <div className="flex-shrink-0 w-28 text-right">
                     <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
-                      {s.projectName || 'General'}
+                      {formatSessionLocation(s)}
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                       {s.deletedAt ? `Deleted ${new Date(s.deletedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
@@ -540,7 +541,7 @@ export default function ChatHistoryPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                      {s.title || `Session ${s.sessionId.slice(-8)}`}
+                      {formatSessionLabel(s)}
                     </div>
                     {s.lastMsg && (
                       <div className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>
@@ -609,7 +610,7 @@ export default function ChatHistoryPage() {
                     <span style={{ color: '#f59e0b', fontSize: '14px' }}>★</span>
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-semibold block truncate" style={{ color: 'var(--color-text)' }}>
-                        {group.sessionTitle || `Session ${group.sessionId.slice(-8)}`}
+                        {formatSessionLabel({ title: group.sessionTitle, firstUserMsg: group.preview })}
                       </span>
                       {group.projectName && (
                         <span className="text-xs" style={{ color: 'var(--color-primary)' }}>
@@ -667,7 +668,7 @@ export default function ChatHistoryPage() {
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-              Move "{moveSessionTarget.title || `Session ${moveSessionTarget.sessionId.slice(-8)}`}" out of General.
+              Move "{formatSessionLabel(moveSessionTarget)}" into a project.
             </p>
             <select
               value={moveSessionProjectId}

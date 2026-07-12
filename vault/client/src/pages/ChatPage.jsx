@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice, LOCAL_CLONE_VOICE_URI, LOCAL_CLONE_VOICE_LABEL } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
@@ -29,6 +29,7 @@ import { extractVariables } from '../utils/promptVariables';
 import ModelAdvisorModal from '../components/ModelAdvisorModal';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { formatSessionLabel } from '../utils/sessionDisplay';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -184,6 +185,7 @@ function ChatPage({ general = false }) {
   // Session deletion
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
+  const [showChatSettings, setShowChatSettings] = useState(false);
   const [confirmDeleteSid, setConfirmDeleteSid] = useState(null);
 
   // Model + temperature
@@ -1003,6 +1005,20 @@ function ChatPage({ general = false }) {
     ? prompts.filter(p => p.title.toLowerCase().includes(promptSearch.toLowerCase()) || p.content.toLowerCase().includes(promptSearch.toLowerCase()))
     : prompts;
 
+  const sessionListLabel = (s) => {
+    const base = formatSessionLabel(s);
+    return `${s.starred ? '⭐ ' : ''}${base}${s.isSummarized ? ' ✦' : ''}`;
+  };
+
+  const closeHeaderMenus = () => {
+    setShowChatSettings(false);
+    setShowModelPicker(false);
+    setShowTempPicker(false);
+    setShowVoicePicker(false);
+    setShowPersonaPicker(false);
+    setShowSessionPicker(false);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
@@ -1014,9 +1030,18 @@ function ChatPage({ general = false }) {
           background: MODELS.find(x => x.id === effectiveModel)?.label === 'Premium' ? '#fee2e2' : undefined,
         }}
       >
+        <Link
+          to="/"
+          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity"
+          style={{ color: 'var(--color-muted)' }}
+          title="Home — continue recent chats"
+        >
+          {getIcon('home', { size: 16 })}
+        </Link>
+
         {general ? (
           <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>
-            General
+            Quick chat
           </span>
         ) : project ? (
           <span className="text-sm font-medium flex-shrink-0 truncate max-w-[120px]" style={{ color: 'var(--color-text)' }}>
@@ -1046,7 +1071,7 @@ function ChatPage({ general = false }) {
               style={{ color: 'var(--color-muted)' }}
               title="Click to rename"
             >
-              {sessionTitle || (sessions.length > 0 ? 'Untitled chat' : '')}
+              {sessionTitle || formatSessionLabel(currentSession || { firstUserMsg: messages.find((m) => m.role === 'user')?.content }) || 'New chat'}
             </button>
           )
         )}
@@ -1060,7 +1085,7 @@ function ChatPage({ general = false }) {
             >
               <span className="truncate">
                 {currentSession
-                  ? (currentSession.starred ? '⭐ ' : '') + (currentSession.title || `${new Date(currentSession.startedAt).toLocaleDateString()} · ${currentSession.sessionId.slice(-6)}`) + (currentSession.isSummarized ? ' ✦' : '')
+                  ? sessionListLabel(currentSession)
                   : '+ New chat'}
               </span>
               {getIcon('chevron-down', { size: 10 })}
@@ -1098,7 +1123,7 @@ function ChatPage({ general = false }) {
                             className="flex-1 text-left text-xs truncate"
                             style={{ color: 'var(--color-text)' }}
                           >
-                            {s.starred ? '⭐ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}{s.isSummarized ? ' ✦' : ''}
+                            {sessionListLabel(s)}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmDeleteSid(s.sessionId); }}
@@ -1120,290 +1145,6 @@ function ChatPage({ general = false }) {
 
         <div className="flex-1" />
 
-        {/* Usage display */}
-        {costDisplay && (
-          <span className="text-xs hidden md:block" style={{ color: 'var(--color-muted)', opacity: 0.6 }}>
-            {costDisplay}
-          </span>
-        )}
-
-        {/* Temperature picker */}
-        <div className="relative hidden sm:block">
-          <button
-            onClick={() => { setShowTempPicker(v => !v); setShowModelPicker(false); setShowVoicePicker(false); }}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-            title="Response temperature"
-          >
-            {getIcon('flame', { size: 12 })}
-            {currentTempLabel}
-          </button>
-          {showTempPicker && (
-            <div
-              className="absolute right-0 top-full mt-1 w-44 rounded-xl border shadow-lg py-1.5 z-40"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              {TEMPERATURES.map(t => (
-                <button
-                  key={t.value}
-                  onClick={() => { setTemperature(t.value); setShowTempPicker(false); }}
-                  className="w-full text-left px-3 py-2 flex items-center justify-between hover:opacity-70 transition-opacity"
-                >
-                  <div>
-                    <div className="text-xs font-medium" style={{ color: temperature === t.value ? 'var(--color-primary)' : 'var(--color-text)' }}>{t.label}</div>
-                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{t.desc}</div>
-                  </div>
-                  {temperature === t.value && <span className="text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Voice picker */}
-        {isTTSAvailable && (
-          <div className="relative hidden sm:block">
-            <button
-              onClick={() => { setShowVoicePicker(v => !v); setShowTempPicker(false); setShowModelPicker(false); }}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-              style={{ borderColor: selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-border)', color: selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-muted)', background: 'var(--color-surface)' }}
-              title="Choose read-aloud voice"
-            >
-              {getIcon('speaker', { size: 12 })}
-              {voiceLabel}
-            </button>
-            {showVoicePicker && (
-              <div
-                className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-y-auto rounded-xl border shadow-lg py-1.5 z-40"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-              >
-                <button
-                  onClick={() => { setSelectedVoiceURI(''); setShowVoicePicker(false); }}
-                  className="w-full text-left px-3 py-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="text-xs font-medium" style={{ color: !selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>System default</div>
-                  <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Use the browser/device default voice</div>
-                </button>
-                {isLocalVoiceAvailable && (
-                  <button
-                    onClick={() => { setSelectedVoiceURI(LOCAL_CLONE_VOICE_URI); setShowVoicePicker(false); }}
-                    className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity border-b"
-                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate" style={{ color: selectedVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                        {LOCAL_CLONE_VOICE_LABEL}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {isLocalCloneConfigured
-                          ? `F5-TTS clone · offline${isGeneratingSpeech ? ' · generating…' : ''}`
-                          : 'Set up in Settings → Profile first'}
-                      </div>
-                    </div>
-                    {selectedVoiceURI === LOCAL_CLONE_VOICE_URI && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                  </button>
-                )}
-                {voices.map((voice) => (
-                  <button
-                    key={voice.voiceURI}
-                    onClick={() => { setSelectedVoiceURI(voice.voiceURI); setShowVoicePicker(false); }}
-                    className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate" style={{ color: selectedVoiceURI === voice.voiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                        {voice.name}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {voice.lang}{voice.localService ? ' · local/offline capable' : ' · browser/network voice'}
-                      </div>
-                    </div>
-                    {selectedVoiceURI === voice.voiceURI && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                  </button>
-                ))}
-                {voices.length === 0 && (
-                  <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    No browser voices reported yet. Try refreshing after the page loads.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Model picker (admin or member-enabled) */}
-        {canSelectModel && (
-          <div className="relative">
-            <button
-              onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); setShowVoicePicker(false); }}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-              style={{
-                borderColor: modelStatus[effectiveProvider] === false ? '#f59e0b' : 'var(--color-border)',
-                color: 'var(--color-muted)',
-                background: 'var(--color-surface)',
-              }}
-              title={modelStatus[effectiveProvider] === false ? `${providerKeyName(effectiveProvider)} not configured — click to switch model` : 'Switch AI model'}
-            >
-              {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
-              {modelStatus[effectiveProvider] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
-            </button>
-            {showModelPicker && (
-              <div
-                className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg py-1.5 z-40"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-              >
-                {MODELS.map(m => {
-                  const unavailable = modelStatus[m.provider] === false;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
-                      className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
-                      title={unavailable ? `${providerKeyName(m.provider)} not configured` : undefined}
-                    >
-                      <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : unavailable ? 'var(--color-muted)' : 'var(--color-text)' }}>
-                          {m.label} · {m.name}
-                          {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>⚠️</span>}
-                        </div>
-                        <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{unavailable ? 'API key not configured' : m.tagline}</div>
-                      </div>
-                      {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Reasoning mode toggle — only for sonnet/opus, hidden on mobile */}
-        {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
-          <button
-            onClick={() => setReasoning(v => !v)}
-            className="hidden sm:flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
-            style={{
-              borderColor: reasoning ? 'var(--color-primary)' : 'var(--color-border)',
-              color: reasoning ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: reasoning ? 'var(--color-primary)10' : 'var(--color-surface)',
-            }}
-            title={reasoning ? 'Disable extended reasoning' : 'Enable extended reasoning (slower, more thorough)'}
-          >
-            {getIcon('cpu', { size: 12 })}
-            Reason
-          </button>
-        )}
-
-        {/* Web search toggle */}
-        <button
-          onClick={() => setWebSearch(v => !v)}
-          className="hidden sm:flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
-          style={{
-            borderColor: webSearch ? 'var(--color-primary)' : 'var(--color-border)',
-            color: webSearch ? 'var(--color-primary)' : 'var(--color-muted)',
-            background: webSearch ? 'var(--color-primary)10' : 'var(--color-surface)',
-          }}
-          title={webSearch ? 'Disable web search' : 'Enable web search'}
-        >
-          {getIcon('globe', { size: 12 })}
-          Search
-        </button>
-
-        {/* Persona picker — hidden on mobile */}
-        <div className="relative hidden sm:block">
-          <button
-            onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); setShowVoicePicker(false); }}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-            style={{
-              borderColor: selectedPersonaId ? 'var(--color-primary)' : 'var(--color-border)',
-              color: selectedPersonaId ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: 'var(--color-surface)',
-            }}
-            title="Select persona"
-          >
-            {getIcon('user', { size: 12 })}
-            {selectedPersonaId ? (personas.find(p => p.id === selectedPersonaId)?.name || 'Persona') : 'Persona'}
-          </button>
-          {showPersonaPicker && (
-            <div
-              className="absolute right-0 top-full mt-1 w-56 rounded-xl border shadow-lg py-1.5 z-40"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <button
-                onClick={() => { setSelectedPersonaId(null); setShowPersonaPicker(false); }}
-                className="w-full text-left px-3 py-2 text-xs hover:opacity-70 transition-opacity"
-                style={{ color: selectedPersonaId === null ? 'var(--color-primary)' : 'var(--color-muted)' }}
-              >
-                {selectedPersonaId === null ? '✓ ' : ''}No persona
-              </button>
-              {personas.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => { setSelectedPersonaId(p.id); setShowPersonaPicker(false); }}
-                  className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium" style={{ color: selectedPersonaId === p.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                      {selectedPersonaId === p.id ? '✓ ' : ''}{p.name}
-                    </div>
-                    {p.description && (
-                      <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.description}</div>
-                    )}
-                  </div>
-                </button>
-              ))}
-              {personas.length === 0 && (
-                <p className="text-xs px-3 py-2" style={{ color: 'var(--color-muted)' }}>No personas yet. Create some in Personas.</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Feeling button — project chats only, hidden on mobile */}
-        {projectId && (
-          <>
-            <button
-              onClick={() => setShowFeelingModal(true)}
-              className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-              style={{
-                borderColor: projectDominant ? (EMOTION_COLOURS[projectDominant.coreEmotion] || 'var(--color-border)') : 'var(--color-border)',
-                color: projectDominant ? (EMOTION_COLOURS[projectDominant.coreEmotion] || 'var(--color-muted)') : 'var(--color-muted)',
-                background: 'var(--color-surface)',
-              }}
-              title="Log how you're feeling about this project"
-            >
-              {projectDominant ? (
-                <>
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: EMOTION_COLOURS[projectDominant.coreEmotion] || '#888' }} />
-                  <span className="capitalize">{projectDominant.coreEmotion}</span>
-                </>
-              ) : (
-                <>
-                  {getIcon('smile', { size: 12 })}
-                  Feeling
-                </>
-              )}
-            </button>
-            {showFeelingModal && (
-              <CheckinModal
-                entityType="project"
-                entityId={projectId}
-                entityTitle={project?.name || 'Project'}
-                onClose={() => setShowFeelingModal(false)}
-                onSave={() => {
-                  setShowFeelingModal(false);
-                  api.get(`/api/mood/dominant/project/${projectId}`)
-                    .then(r => r.json())
-                    .then(d => setProjectDominant(d.coreEmotion ? d : null))
-                    .catch(() => {});
-                }}
-              />
-            )}
-          </>
-        )}
-
-        <div className="hidden sm:block"><ExportMenu sessionId={sessionId} projectId={projectId} /></div>
-
         {projectId && (
           <button
             onClick={() => setShowFilesPanel(v => !v)}
@@ -1418,6 +1159,184 @@ function ChatPage({ general = false }) {
             {getIcon('files', { size: 13 })}
             <span className="hidden sm:inline">Files</span>
           </button>
+        )}
+
+        {/* Chat settings — model, temperature, persona, etc. */}
+        <div className="relative hidden sm:block">
+          <button
+            onClick={() => {
+              setShowChatSettings(v => !v);
+              if (!showChatSettings) loadPersonas();
+            }}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+            style={{
+              borderColor: showChatSettings ? 'var(--color-primary)' : 'var(--color-border)',
+              color: showChatSettings ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: 'var(--color-surface)',
+            }}
+            title="Chat settings"
+          >
+            {getIcon('settings', { size: 13 })}
+            Settings
+          </button>
+          {showChatSettings && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={closeHeaderMenus} />
+              <div
+                className="absolute right-0 top-full mt-1 z-40 w-80 max-h-[min(70vh,520px)] overflow-y-auto rounded-xl border shadow-lg p-3 space-y-3"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                {costDisplay && (
+                  <p className="text-xs px-1" style={{ color: 'var(--color-muted)' }}>{costDisplay}</p>
+                )}
+
+                {canSelectModel && (
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 px-1" style={{ color: 'var(--color-muted)' }}>Model</div>
+                    <div className="space-y-1">
+                      {MODELS.map(m => {
+                        const unavailable = modelStatus[m.provider] === false;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => { setChatModel(m.id); }}
+                            className="w-full text-left px-2 py-1.5 rounded-lg flex items-start gap-2 hover:opacity-70 transition-opacity"
+                            style={{ background: effectiveModel === m.id ? 'var(--color-bg)' : 'transparent' }}
+                          >
+                            <span className="text-base flex-shrink-0">{m.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                                {m.label} · {m.name}{unavailable ? ' ⚠️' : ''}
+                              </div>
+                            </div>
+                            {effectiveModel === m.id && <span className="text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 px-1" style={{ color: 'var(--color-muted)' }}>Temperature</div>
+                  <div className="flex gap-1">
+                    {TEMPERATURES.map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setTemperature(t.value)}
+                        className="flex-1 px-2 py-1.5 rounded-lg border text-xs transition-opacity hover:opacity-70"
+                        style={{
+                          borderColor: temperature === t.value ? 'var(--color-primary)' : 'var(--color-border)',
+                          color: temperature === t.value ? 'var(--color-primary)' : 'var(--color-muted)',
+                          background: temperature === t.value ? 'var(--color-bg)' : 'transparent',
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWebSearch(v => !v)}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: webSearch ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: webSearch ? 'var(--color-primary)' : 'var(--color-muted)',
+                    }}
+                  >
+                    {getIcon('globe', { size: 12 })}
+                    Web search {webSearch ? 'on' : 'off'}
+                  </button>
+                  {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
+                    <button
+                      type="button"
+                      onClick={() => setReasoning(v => !v)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                      style={{
+                        borderColor: reasoning ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: reasoning ? 'var(--color-primary)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {getIcon('cpu', { size: 12 })}
+                      Reasoning {reasoning ? 'on' : 'off'}
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 px-1" style={{ color: 'var(--color-muted)' }}>Persona</div>
+                  <select
+                    value={selectedPersonaId ?? ''}
+                    onChange={(e) => setSelectedPersonaId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">No persona</option>
+                    {personas.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {isTTSAvailable && (
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 px-1" style={{ color: 'var(--color-muted)' }}>Read-aloud voice</div>
+                    <select
+                      value={selectedVoiceURI}
+                      onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      <option value="">System default</option>
+                      {isLocalVoiceAvailable && (
+                        <option value={LOCAL_CLONE_VOICE_URI}>{LOCAL_CLONE_VOICE_LABEL}</option>
+                      )}
+                      {voices.map(v => (
+                        <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {projectId && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowFeelingModal(true); setShowChatSettings(false); }}
+                    className="w-full flex items-center gap-2 text-xs px-2 py-2 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                  >
+                    {getIcon('smile', { size: 12 })}
+                    {projectDominant ? `Feeling: ${projectDominant.coreEmotion}` : 'Log project feeling'}
+                  </button>
+                )}
+
+                <div className="pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <ExportMenu sessionId={sessionId} projectId={projectId} />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {showFeelingModal && projectId && (
+          <CheckinModal
+            entityType="project"
+            entityId={projectId}
+            entityTitle={project?.name || 'Project'}
+            onClose={() => setShowFeelingModal(false)}
+            onSave={() => {
+              setShowFeelingModal(false);
+              api.get(`/api/mood/dominant/project/${projectId}`)
+                .then(r => r.json())
+                .then(d => setProjectDominant(d.coreEmotion ? d : null))
+                .catch(() => {});
+            }}
+          />
         )}
 
         {/* Session actions — star, summarize, download, delete */}
@@ -1608,10 +1527,10 @@ function ChatPage({ general = false }) {
                   {getIcon('chat', { size: 22 })}
                 </div>
                 <p className="text-base font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                  {project ? `Chat with ${project.name}` : 'Start a conversation'}
+                  {project ? `Chat with ${project.name}` : 'Quick chat'}
                 </p>
                 <p className="text-sm max-w-xs" style={{ color: 'var(--color-muted)' }}>
-                  {project ? 'Claude has full context of your project. Attach files, ask anything.' : 'Select a project from the sidebar to load context.'}
+                  {project ? 'Uses your project brief, files, and pinned URLs.' : 'Ask anything — no project files or brief. Global memory and persona still apply.'}
                 </p>
               </div>
             ) : (

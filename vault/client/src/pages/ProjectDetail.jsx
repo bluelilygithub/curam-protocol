@@ -9,6 +9,7 @@ import FileList from '../components/FileList';
 import { downloadProjectMd } from '../utils/exportMd';
 import { TYPE_FIELDS } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { formatSessionLabel } from '../utils/sessionDisplay';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
 
@@ -292,7 +293,7 @@ function ProjectDetail() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>
-                        {s.starred ? '★ ' : ''}{s.title || 'Untitled chat'}
+                        {s.starred ? '★ ' : ''}{formatSessionLabel(s)}
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                         {new Date(s.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}

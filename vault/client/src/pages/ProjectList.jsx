@@ -4,8 +4,10 @@ import useProjectStore from '../store/projectStore';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from '../components/NewProjectModal';
+import NewChatModal from '../components/NewChatModal';
 import { getModelShortName } from '../utils/models';
 import api from '../utils/apiClient';
+import { formatSessionLabel, formatSessionLocation, formatSessionWhen, sessionPreviewText } from '../utils/sessionDisplay';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
@@ -273,6 +275,9 @@ function ProjectList() {
   const [moodMap, setMoodMap] = useState(null);
   const [feelingModalProjectId, setFeelingModalProjectId] = useState(null);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   const canUseFeature = useCallback((key) => {
     if (user?.isAdmin) return true;
@@ -299,7 +304,25 @@ function ProjectList() {
   useEffect(() => {
     fetchProjects();
     fetchArchived();
+    setRecentLoading(true);
+    api.get('/api/chat/recent?limit=20')
+      .then((r) => r.json())
+      .then((data) => setRecentSessions(Array.isArray(data) ? data : []))
+      .catch(() => setRecentSessions([]))
+      .finally(() => setRecentLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openRecentSession = (s) => {
+    if (s.projectId) {
+      setActive(s.projectId);
+      navigate(`/projects/${s.projectId}/chat`);
+    } else {
+      navigate('/chat');
+    }
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId }));
+    }, 80);
+  };
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -494,9 +517,73 @@ function ProjectList() {
   }
 
   // ── Active projects view ──────────────────────────────────────────────────────
+  const continueSection = (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Continue</h2>
+        <Link to="/history" className="text-xs hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+          All history →
+        </Link>
+      </div>
+      {recentLoading ? (
+        <p className="text-sm py-6 text-center" style={{ color: 'var(--color-muted)' }}>Loading…</p>
+      ) : recentSessions.length === 0 ? (
+        <div
+          className="rounded-2xl border px-4 py-8 text-center"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        >
+          <p className="text-sm mb-1" style={{ color: 'var(--color-text)' }}>No conversations yet</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Start a quick chat or open a project to begin.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          {recentSessions.map((s, i) => (
+            <button
+              key={s.sessionId}
+              type="button"
+              onClick={() => openRecentSession(s)}
+              className="w-full text-left px-4 py-3 flex items-start gap-3 transition-opacity hover:opacity-70 border-b last:border-b-0"
+              style={{
+                borderColor: 'var(--color-border)',
+                background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                  {formatSessionLabel(s)}
+                </div>
+                {(s.firstUserMsg || s.lastMsg) && !s.title && (
+                  <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>
+                    {sessionPreviewText(s.firstUserMsg || s.lastMsg, 72)}
+                  </div>
+                )}
+                {s.title && s.lastMsg && (
+                  <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>
+                    {sessionPreviewText(s.lastMsg, 72)}
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <div className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
+                  {formatSessionLocation(s)}
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  {formatSessionWhen(s.lastAt)}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full">
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
+      {showNewChatModal && (
+        <NewChatModal projects={projects} onClose={() => setShowNewChatModal(false)} />
+      )}
 
       {feelingModalProjectId && (() => {
         const proj = projects.find(p => p.id === feelingModalProjectId);
@@ -559,47 +646,74 @@ function ProjectList() {
       )}
 
       {projects.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
-            style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
-          >
-            {getIcon('folder', { size: 24 })}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-4xl mx-auto">
+            {continueSection}
+            <div className="flex flex-col items-center px-6 pb-16 pt-4">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
+                style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
+              >
+                {getIcon('folder', { size: 24 })}
+              </div>
+              <h1 className="text-2xl font-semibold mb-2 text-center" style={{ color: 'var(--color-text)' }}>
+                Welcome to Vault
+              </h1>
+              <p className="text-sm mb-8 text-center max-w-sm" style={{ color: 'var(--color-muted)' }}>
+                Start with a quick chat, or create a project when you want files and a brief to follow every conversation.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowNewChatModal(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {getIcon('message-square', { size: 14, color: 'white' })}
+                  New chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium border transition-opacity hover:opacity-80"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {getIcon('plus', { size: 14 })}
+                  New project
+                </button>
+              </div>
+            </div>
           </div>
-          <h1 className="text-2xl font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
-            Welcome to Project Vault
-          </h1>
-          <p className="text-sm mb-8 text-center max-w-xs" style={{ color: 'var(--color-muted)' }}>
-            Create a project to give Claude focused context for your work.
-          </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {getIcon('plus', { size: 14, color: 'white' })}
-            New Project
-          </button>
         </div>
       ) : (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Home</h1>
+              <button
+                type="button"
+                onClick={() => setShowNewChatModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {getIcon('plus', { size: 13, color: 'white' })}
+                New chat
+              </button>
+            </div>
+
+            {continueSection}
+
             <GoalsWidget enabled={canUseFeature('goals')} />
-
-            <button
-              onClick={() => navigate('/chat')}
-              className="w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl border mb-6 transition-opacity hover:opacity-70"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              {getIcon('message-square', { size: 15, style: { color: 'var(--color-primary)' } })}
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>New Chat</span>
-              <span className="ml-auto text-xs" style={{ color: 'var(--color-muted)' }}>Start a conversation →</span>
-            </button>
-
             <TasksWidget />
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h1>
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  Optional context — brief, files, and pinned URLs for focused work.
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-primary)' }}

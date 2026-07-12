@@ -312,6 +312,14 @@ The daily observation email is now a structured **Portfolio Note** with seven se
 
 ---
 
+## 2026-07-12
+
+**Chat navigation UX:** Recents-first home with **Continue** list (`GET /api/chat/recent`). **New chat** modal chooses Quick chat vs project. Renamed General → **Quick chat**; session labels use title or first-message preview (no session-id suffixes). Sidebar: click project name to enter (resume latest), chevron to expand sessions; collections helper text. Chat header: Home link, **Settings** menu (model/temp/persona/voice/search/reasoning/export), slimmer toolbar.
+
+**Docs:** `docs/chat-navigation.md`.
+
+---
+
 ## 2026-06-25 (6)
 
 **Robustness:** Shares observation — never silently drop the report email.

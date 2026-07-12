@@ -32,7 +32,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', enabled: true },
   { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing',   enabled: true },
   { id: 'gmailIntel', label: 'Inbox Intel',   path: '/gmail-intel', enabled: true },
-  { id: 'chat',      label: 'General Chat',    path: '/chat',        enabled: true },
+  { id: 'chat',      label: 'Quick chat',    path: '/chat',        enabled: true },
   { id: 'history',   label: 'Chat History',    path: '/history',     enabled: true },
   { id: 'studentSection', label: 'Student',    path: '/student/quiz', enabled: true },
   { id: 'clients',   label: 'Clients',         path: '/clients',     enabled: true },

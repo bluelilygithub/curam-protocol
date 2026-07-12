@@ -1314,15 +1314,46 @@ router.post('/sessions/:sessionId/branch-response', async (req, res) => {
   }
 });
 
+// GET /api/chat/recent — cross-workspace recents for home Continue list
+router.get('/recent', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 50);
+    const { rows } = await pool.query(`
+      SELECT
+        m."sessionId",
+        MIN(s.title) as title,
+        MIN(m."projectId") as "projectId",
+        MIN(p.name) as "projectName",
+        MAX(m."createdAt") as "lastAt",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'user' ORDER BY m2."createdAt" ASC LIMIT 1) as "firstUserMsg",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'assistant' ORDER BY m2."createdAt" DESC LIMIT 1) as "lastMsg"
+      FROM messages m
+      LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
+      LEFT JOIN projects p ON p.id = m."projectId"
+      WHERE s."deletedAt" IS NULL
+        AND (s."userId" = $1 OR (m."projectId" IS NOT NULL AND p."userId" = $1))
+      GROUP BY m."sessionId"
+      ORDER BY MAX(m."createdAt") DESC
+      LIMIT $2
+    `, [req.user.id, limit]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[recent]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/chat/sessions/general — sessions with no project (must be before :projectId)
 router.get('/sessions/general', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT m."sessionId", MIN(m."createdAt") as "startedAt",
+        MAX(m."createdAt") as "lastAt",
         s.title, COALESCE(s."isSummarized", 0) as "isSummarized",
         COALESCE(s.starred, 0) as starred,
         COALESCE(s."inputTokens", 0) as "inputTokens",
-        COALESCE(s."outputTokens", 0) as "outputTokens"
+        COALESCE(s."outputTokens", 0) as "outputTokens",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'user' ORDER BY m2."createdAt" ASC LIMIT 1) as "firstUserMsg"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       WHERE m."projectId" IS NULL AND s."userId"=$1 AND s."deletedAt" IS NULL
@@ -1350,6 +1381,7 @@ router.get('/all-history', async (req, res) => {
         MIN(m."projectId") as "projectId",
         MIN(p.name) as "projectName",
         MAX(m."createdAt") as "lastAt",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'user' ORDER BY m2."createdAt" ASC LIMIT 1) as "firstUserMsg",
         (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'assistant' ORDER BY m2."createdAt" DESC LIMIT 1) as "lastMsg"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
@@ -1405,16 +1437,18 @@ router.get('/sessions/:projectId', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT m."sessionId", MIN(m."createdAt") as "startedAt",
+        MAX(m."createdAt") as "lastAt",
         s.title, COALESCE(s."isSummarized", 0) as "isSummarized",
         COALESCE(s.starred, 0) as starred,
         COALESCE(s."inputTokens", 0) as "inputTokens",
-        COALESCE(s."outputTokens", 0) as "outputTokens"
+        COALESCE(s."outputTokens", 0) as "outputTokens",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'user' ORDER BY m2."createdAt" ASC LIMIT 1) as "firstUserMsg"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       LEFT JOIN projects p ON p.id = m."projectId"
       WHERE m."projectId"=$1 AND p."userId"=$2 AND s."deletedAt" IS NULL
       GROUP BY m."sessionId", s."sessionId"
-      ORDER BY MIN(m."createdAt") ASC
+      ORDER BY MAX(m."createdAt") DESC
     `, [req.params.projectId, req.user.id]);
     res.json(rows);
   } catch (err) {

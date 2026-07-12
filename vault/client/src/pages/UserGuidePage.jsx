@@ -7,7 +7,7 @@ const SECTIONS = [
   { id: 'getting-started', label: 'Getting Started' },
   { id: 'projects',        label: 'Projects' },
   { id: 'chat',            label: 'Chat' },
-  { id: 'general-chat',    label: 'General Chat' },
+  { id: 'general-chat',    label: 'Quick chat' },
   { id: 'history',         label: 'Chat History' },
   { id: 'web-search',      label: 'Web Search' },
   { id: 'files',           label: 'Files & Attachments' },
@@ -219,8 +219,8 @@ function UserGuidePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-6">
           <FeatureCard emoji="📁" title="Projects" desc="Organise work into projects. Each project carries its own context, model, and behaviour settings." />
           <FeatureCard emoji="💬" title="Chat" desc="Stream responses from Claude or Gemini with full project context. Switch models, temperature, and sessions on the fly." />
-          <FeatureCard emoji="🗨️" title="General Chat" desc="A project-free workspace for ad-hoc questions and quick tasks. Sessions are saved and searchable like any project chat." />
-          <FeatureCard emoji="🕐" title="Chat History" desc="Browse every session across all projects and General Chat, filtered by date range or searched by content." />
+          <FeatureCard emoji="🗨️" title="Quick chat" desc="A project-free workspace for ad-hoc questions. Sessions appear on Home → Continue and in the sidebar under Quick chat." />
+          <FeatureCard emoji="🕐" title="Chat History" desc="Browse every session across all projects and Quick chat, filtered by date range or searched by content." />
           <FeatureCard emoji="📎" title="Files & URLs" desc="Attach PDFs, images, documents, and live web pages directly into the conversation." />
           <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
           <FeatureCard emoji="🧠" title="Memory" desc="Semantic personal notes — relevant facts recalled per message, not the full list every turn." />
@@ -229,7 +229,7 @@ function UserGuidePage() {
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />
           <FeatureCard emoji="🎭" title="Personas" desc="Give Claude a custom personality per project — Tech Lead, Copywriter, Devil's Advocate — with a reusable system prompt." />
           <FeatureCard emoji="📌" title="Pinned Context" desc="Pin files and web pages to a project so their content is always injected into every chat, automatically." />
-          <FeatureCard emoji="🗂️" title="Folders" desc="Group projects into collapsible folders in the sidebar to keep your workspace tidy." />
+          <FeatureCard emoji="🗂️" title="Collections" desc="Group projects in the sidebar (folder-plus icon). Collections organise projects only — not individual chats." />
           <FeatureCard emoji="🌿" title="Branching" desc="Fork any conversation at any message to explore alternative paths without losing the original thread." />
           <FeatureCard emoji="🔁" title="Regenerate" desc="Re-generate the last response with one click — no retyping required." />
           <FeatureCard emoji="🧮" title="Reasoning Mode" desc="Activate extended thinking for deep, step-by-step reasoning on complex problems (Sonnet & Opus only)." />
@@ -431,31 +431,30 @@ function UserGuidePage() {
 
         <Divider />
 
-        {/* ── General Chat ── */}
-        <SectionHeading id="general-chat">General Chat</SectionHeading>
+        {/* ── Quick chat ── */}
+        <SectionHeading id="general-chat">Quick chat</SectionHeading>
         <P>
-          <strong>General Chat</strong> is a project-free workspace for ad-hoc conversations — questions,
-          quick tasks, and anything that does not belong to a specific project. Sessions created here are
-          stored just like project sessions, but have no project context injected.
+          <strong>Quick chat</strong> is a project-free workspace for ad-hoc conversations — questions,
+          quick tasks, and anything that does not need a project brief or pinned files. Sessions created here are
+          stored like project sessions, but have no project context injected.
         </P>
 
-        <SubHeading>Opening General Chat</SubHeading>
+        <SubHeading>Starting a chat</SubHeading>
         <UL>
-          <LI>Click <strong>General</strong> at the top of the left sidebar.</LI>
-          <LI>Click the <strong>+</strong> icon next to <em>General</em> to start a fresh session immediately.</LI>
+          <LI>From <strong>Home</strong>, click <strong>New chat</strong> and choose Quick chat or a project.</LI>
+          <LI>Click <strong>Quick chat</strong> at the top of the left sidebar (or the <strong>+</strong> beside it).</LI>
           <LI>Navigate directly to <code>/chat</code>.</LI>
         </UL>
 
         <SubHeading>Session list</SubHeading>
         <P>
-          The sidebar shows your most recent general sessions under the <em>General</em> heading.
-          Click any session title to jump straight into it. The session count badge on the right can be
-          clicked to expand or collapse the list.
+          The sidebar shows your most recent quick chats under the <em>Quick chat</em> heading.
+          Click any session to open it. The count badge expands or collapses the list.
+          Session titles use the auto-generated name or the first line of your message — not internal IDs.
         </P>
 
         <Callout type="tip">
-          General Chat still respects your active Persona and your global Memory — so Claude still knows
-          your preferences even without a project context.
+          Quick chat still respects your active Persona and global Memory — preferences apply even without project context.
         </Callout>
 
         <Divider />
@@ -464,7 +463,7 @@ function UserGuidePage() {
         <SectionHeading id="history">Chat History</SectionHeading>
         <P>
           The <strong>Chat History</strong> browser shows every chat session across all projects and
-          General Chat in one place, filterable by date and searchable by content.
+          Quick chat in one place, filterable by date and searchable by content.
         </P>
 
         <SubHeading>Opening Chat History</SubHeading>
@@ -999,31 +998,38 @@ function UserGuidePage() {
 
         <Divider />
 
-        {/* ── Folders ── */}
-        <SectionHeading id="folders">Folders</SectionHeading>
+        {/* ── Collections (folders) ── */}
+        <SectionHeading id="folders">Collections</SectionHeading>
         <P>
-          Folders let you organise projects into groups in the sidebar, collapsing clutter when you
-          have many projects.
+          <strong>Collections</strong> (sidebar folders) group projects in the sidebar. They do <em>not</em>
+          organise individual chats — only project rows. Use projects (or move a quick chat into a project)
+          when you want brief and file context.
         </P>
 
-        <SubHeading>Creating a Folder</SubHeading>
+        <SubHeading>Creating a collection</SubHeading>
         <UL>
-          <LI>In the sidebar, click the <strong>folder-plus</strong> icon (next to the + button).</LI>
+          <LI>In the sidebar, click the <strong>folder-plus</strong> icon (next to the project + button).</LI>
           <LI>Type a name and press Enter.</LI>
-          <LI>The folder appears in the sidebar with a chevron toggle.</LI>
+          <LI>The collection appears in the sidebar with a chevron toggle.</LI>
         </UL>
 
-        <SubHeading>Assigning Projects to Folders</SubHeading>
+        <SubHeading>Assigning projects to collections</SubHeading>
         <UL>
           <LI>Open a project's detail page.</LI>
-          <LI>In the <strong>Organisation</strong> section, choose a folder from the dropdown.</LI>
-          <LI>Save the project — it will appear nested under the folder in the sidebar.</LI>
+          <LI>In the <strong>Organisation</strong> section, choose a collection from the dropdown.</LI>
+          <LI>Save — the project appears nested under that collection in the sidebar.</LI>
+          <LI>Or drag a project row onto a collection header in the sidebar.</LI>
         </UL>
 
-        <SubHeading>Collapsing Folders</SubHeading>
+        <SubHeading>Opening a project from the sidebar</SubHeading>
         <P>
-          Click any folder header in the sidebar to collapse or expand its projects. Folders remember
-          their collapsed state during the session.
+          Click the <strong>project name</strong> to enter the project (opens the latest chat, or a new chat if none exist).
+          Click the <strong>chevron</strong> to expand recent sessions without leaving the sidebar.
+        </P>
+
+        <SubHeading>Collapsing collections</SubHeading>
+        <P>
+          Click a collection header to collapse or expand its projects. Collapse state resets on page reload.
         </P>
 
         <Divider />
