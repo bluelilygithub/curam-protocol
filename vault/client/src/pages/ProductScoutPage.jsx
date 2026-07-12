@@ -8,12 +8,6 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
-const EXAMPLE_QUERIES = [
-  'wireless noise cancelling earbuds under $150',
-  'standing desk converter 2024',
-  'robot vacuum pet hair',
-];
-
 export default function ProductScoutPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -115,7 +109,7 @@ export default function ProductScoutPage() {
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Unbiased Amazon comparison — value scoring plus non-Amazon alternatives.
+            Amazon Australia comparison — value scoring plus non-Amazon alternatives.
           </p>
         </div>
       </div>
@@ -166,19 +160,6 @@ export default function ProductScoutPage() {
             )}
           </div>
         </label>
-        <div className="flex flex-wrap gap-2">
-          {EXAMPLE_QUERIES.map((ex) => (
-            <button
-              key={ex}
-              type="button"
-              onClick={() => setQuery(ex)}
-              className="text-[10px] px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              {ex}
-            </button>
-          ))}
-        </div>
         <button
           type="submit"
           className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"

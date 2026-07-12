@@ -334,7 +334,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
 | `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
-| `AMAZON_DOMAIN` | Product Scout — optional Amazon locale (default `amazon.com`; e.g. `amazon.com.au`) |
+| `AMAZON_DOMAIN` | Product Scout — Amazon locale (default `amazon.com.au`) |
 
 ---
 

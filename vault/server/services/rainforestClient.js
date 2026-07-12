@@ -11,7 +11,7 @@ function apiKey() {
 }
 
 function amazonDomain() {
-  return (process.env.AMAZON_DOMAIN || 'amazon.com').trim() || 'amazon.com';
+  return (process.env.AMAZON_DOMAIN || 'amazon.com.au').trim() || 'amazon.com.au';
 }
 
 /**

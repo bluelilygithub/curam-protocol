@@ -33,7 +33,7 @@ router.get('/config-check', handle(async () => {
     rainforest,
     llm: anthropic || gemini,
     search,
-    amazonDomain: process.env.AMAZON_DOMAIN || 'amazon.com',
+    amazonDomain: process.env.AMAZON_DOMAIN || 'amazon.com.au',
     priceVariancePct,
     defaultPriceVariancePct: DEFAULT_VARIANCE_PCT,
   };

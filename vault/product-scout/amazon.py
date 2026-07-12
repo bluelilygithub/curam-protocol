@@ -25,7 +25,7 @@ def _api_key() -> str:
 
 
 def _domain() -> str:
-    return os.getenv("AMAZON_DOMAIN", "amazon.com").strip() or "amazon.com"
+    return os.getenv("AMAZON_DOMAIN", "amazon.com.au").strip() or "amazon.com.au"
 
 
 def search_products(query: str, *, max_results: int = 10) -> list[dict[str, Any]]:

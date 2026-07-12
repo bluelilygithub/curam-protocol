@@ -22,7 +22,7 @@ Both CLI and Vault API implement the same pipeline:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `RAINFOREST_API_KEY` | Yes | Amazon product/search data |
-| `AMAZON_DOMAIN` | No | Default `amazon.com` (use `amazon.com.au` for AU) |
+| `AMAZON_DOMAIN` | No | Default `amazon.com.au` |
 | `ANTHROPIC_API_KEY` | Yes* | LLM scoring (*or Gemini via vault_models) |
 | `SEARCH_API_KEY` | Recommended | Cross-market step |
 | `SEARCH_PROVIDER` | No | `brave` \| `serper` \| `serpapi` |
