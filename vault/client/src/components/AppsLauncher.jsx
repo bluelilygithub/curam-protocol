@@ -7,6 +7,7 @@ export default function AppsLauncher({
   canUseFeature,
   isAdmin = false,
   missionReminderDue = false,
+  newSuggestionCount = 0,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -47,12 +48,19 @@ export default function AppsLauncher({
         aria-haspopup="true"
       >
         {getIcon('layout-grid', { size: 16 })}
-        {missionReminderDue && (
+        {newSuggestionCount > 0 ? (
+          <span
+            className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
+          </span>
+        ) : missionReminderDue ? (
           <span
             className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
             style={{ background: '#f59e0b' }}
           />
-        )}
+        ) : null}
       </button>
 
       {open && (
@@ -62,7 +70,7 @@ export default function AppsLauncher({
         >
           <div
             className="px-3 py-2 border-b text-xs font-semibold uppercase tracking-wider"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             Apps
           </div>
@@ -70,8 +78,8 @@ export default function AppsLauncher({
             {groups.map(group => (
               <div key={group.id}>
                 <p
-                  className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider"
-                  style={{ color: 'var(--color-muted)' }}
+                  className="px-1 pb-1.5 pt-0.5 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: '#166534' }}
                 >
                   {group.label}
                 </p>
@@ -79,6 +87,7 @@ export default function AppsLauncher({
                   {group.items.map(item => {
                     const active = isNavItemActive(item, location.pathname);
                     const showMissionDot = item.badgeKey === 'missionReminder' && missionReminderDue;
+                    const showSuggestionBadge = item.badgeKey === 'suggestions' && newSuggestionCount > 0;
                     return (
                       <Link
                         key={item.id}
@@ -101,6 +110,14 @@ export default function AppsLauncher({
                             className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
                             style={{ background: '#f59e0b' }}
                           />
+                        )}
+                        {showSuggestionBadge && (
+                          <span
+                            className="absolute top-1 right-1 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+                            style={{ background: 'var(--color-primary)', color: '#fff' }}
+                          >
+                            {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
+                          </span>
                         )}
                       </Link>
                     );

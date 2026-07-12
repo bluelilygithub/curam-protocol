@@ -250,8 +250,8 @@ function UserGuidePage() {
         <UL>
           <LI><strong>Search</strong> (<Kbd>⌘K</Kbd>) — projects, files, and messages.</LI>
           <LI><strong>Tasks</strong> and <strong>Chat History</strong> — always one click away.</LI>
-          <LI><strong>Suggestions</strong> — agent findings inbox (badge when new items exist).</LI>
-          <LI><strong>Apps</strong> (grid icon) — grouped menu: Productivity, AI tools, Content tools, Money &amp; data, Personal, plus Workspace links (Personas, Memory, Prompt Library, User Guide).</LI>
+          <LI><strong>Notes</strong> — always visible on the top bar for quick capture.</LI>
+          <LI><strong>Apps</strong> (grid icon) — grouped menu: Workspace, Productivity, AI tools, Content tools, Money &amp; data, Personal, and Admin (Suggestions, Clients, Dashboard). Badge on Apps when new Suggestions exist.</LI>
         </UL>
 
         <SubHeading>Sidebar</SubHeading>
@@ -735,8 +735,8 @@ function UserGuidePage() {
 
         <SubHeading>Accessing Suggestions</SubHeading>
         <P>
-          Click the <strong>📥 inbox icon</strong> in the top navigation bar, next to Memory
-          (or navigate to <code>/suggestions</code>). A badge shows how many items are still <strong>new</strong>.
+          Open <strong>Apps</strong> (grid icon) in the top bar → <strong>Admin</strong> → <strong>Suggestions</strong>
+          (or navigate to <code>/suggestions</code>). A badge on the Apps icon shows how many items are still <strong>new</strong>.
         </P>
 
         <SubHeading>Categories</SubHeading>

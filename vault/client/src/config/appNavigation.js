@@ -15,9 +15,7 @@ export const APP_NAV_GROUPS = [
     id: 'productivity',
     label: 'Productivity',
     items: [
-      { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', featureKey: null },
       { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals', badgeKey: 'missionReminder' },
-      { id: 'clients', label: 'Clients', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
       { id: 'student', label: 'Student', path: '/student/quiz', icon: 'graduation-cap', featureKey: 'student', matchPrefix: true },
     ],
   },
@@ -39,6 +37,7 @@ export const APP_NAV_GROUPS = [
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'domains', label: 'Domain & Brand', path: '/domains', icon: 'globe', featureKey: 'domains' },
       { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', icon: 'blocks', featureKey: 'themeBuilder' },
+      { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
     ],
   },
   {
@@ -58,15 +57,15 @@ export const APP_NAV_GROUPS = [
       { id: 'mood', label: 'Mood', path: '/mood', icon: 'mood', featureKey: 'mood' },
       { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing', icon: 'heart-pulse', featureKey: 'wellbeing' },
       { id: 'gmailIntel', label: 'Inbox Intel', path: '/gmail-intel', icon: 'inbox', featureKey: 'gmailIntel' },
-      { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
     ],
   },
   {
     id: 'admin',
     label: 'Admin',
-    adminOnly: true,
     items: [
-      { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null },
+      { id: 'suggestions', label: 'Suggestions', path: '/suggestions', icon: 'inbox', featureKey: null, badgeKey: 'suggestions' },
+      { id: 'clients', label: 'Clients', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+      { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
     ],
   },
 ];
@@ -75,15 +74,16 @@ export function isNavItemActive(item, pathname) {
   if (item.matchPrefix) return pathname.startsWith(item.path.replace(/\/[^/]+$/, '') || item.path);
   if (item.path === '/student/quiz') return pathname.startsWith('/student');
   if (item.path === '/clients') return pathname.startsWith('/clients');
+  if (item.path === '/suggestions') return pathname === '/suggestions';
   return pathname === item.path;
 }
 
 export function filterNavGroups({ groups = APP_NAV_GROUPS, canUseFeature, isAdmin = false }) {
   return groups
-    .filter(g => !g.adminOnly || isAdmin)
     .map(g => ({
       ...g,
       items: g.items.filter(item => {
+        if (item.adminOnly && !isAdmin) return false;
         if (!item.featureKey) return true;
         return canUseFeature(item.featureKey);
       }),

@@ -13,8 +13,8 @@ Persistent chrome in [`Layout.jsx`](../client/src/components/Layout.jsx):
 | **Search** | Global search (`⌘K`) |
 | **Tasks** | Task board/list |
 | **Chat History** | All sessions; bookmark badge when starred sessions exist |
-| **Suggestions** | Agent inbox; count badge for `new` items |
-| **Apps** | Grouped launcher — all other features |
+| **Notes** | Quick access to notes (encouraged daily use) |
+| **Apps** | Grouped launcher — all other features; badge when new Suggestions exist |
 | **Settings** | Workspace settings |
 | **Sign out** | End session |
 
@@ -27,10 +27,10 @@ Catalog lives in [`client/src/config/appNavigation.js`](../client/src/config/app
 - **Workspace** — Personas, Memory, Prompt Library, User Guide
 - **Productivity** — Notes, Goals, Clients, Student
 - **AI tools** — Prompt Chains, Knowledge Graph, Debate, Document Compare
-- **Content tools** — PDF, Graphics, Domain & Brand, WP Theme Builder
+- **Content tools** — PDF, Graphics, Domain & Brand, WP Theme Builder, YouTube
 - **Money & data** — Finance, Shares, Usage & Cost, News Digest
-- **Personal** — Mood, Wellbeing, Inbox Intel, YouTube
-- **Admin** — Dashboard (admins only)
+- **Personal** — Mood, Wellbeing, Inbox Intel
+- **Admin** — Suggestions (agent inbox), Clients, Dashboard (admins only)
 
 Feature flags from Settings → Feature Access hide items workspace-wide (`canUseFeature`).
 

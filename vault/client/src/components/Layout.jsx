@@ -436,26 +436,19 @@ function Layout() {
           </Link>
 
           <Link
-            to="/suggestions"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
-            style={{ color: location.pathname === '/suggestions' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            data-tip="Suggestions"
+            to="/notes"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/notes' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            data-tip="Notes"
           >
-            {getIcon('inbox', { size: 16 })}
-            {newSuggestionCount > 0 && (
-              <span
-                className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}
-              >
-                {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
-              </span>
-            )}
+            {getIcon('pen-line', { size: 16 })}
           </Link>
 
           <AppsLauncher
             canUseFeature={canUseFeature}
             isAdmin={!!user?.isAdmin}
             missionReminderDue={missionReminderDue}
+            newSuggestionCount={newSuggestionCount}
           />
 
           <Link
