@@ -43,7 +43,14 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
       generationConfig: { maxOutputTokens: maxTokens },
     });
     const result = await gModel.generateContent(userPrompt);
-    const text = result.response.text().trim();
+    let text = '';
+    try {
+      text = result.response.text().trim();
+    } catch {
+      const parts = result.response.candidates?.[0]?.content?.parts || [];
+      text = parts.map((p) => p.text || '').join('').trim();
+    }
+    if (!text) throw new Error('Gemini returned an empty response');
     if (!returnUsage) return text;
     return {
       text,

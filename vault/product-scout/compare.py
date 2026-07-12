@@ -3,82 +3,88 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
-from llm import LLMError, generate_json
+from llm import LLMError, generate
 
 COMPARE_SYSTEM = """You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Identify which product features matter most for the user's specific query before ranking.
-Return ONLY valid JSON matching the schema requested. No markdown fences. No prose outside JSON."""
+Return ONLY a single valid JSON object. No markdown fences. No prose before or after the JSON."""
 
 
-def score_and_rank(query: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    """Send candidates to the LLM; return structured comparison with top 3."""
-    payload = {
-        "user_query": query,
-        "candidates": [
-            {
-                "id": i + 1,
-                "asin": c.get("asin"),
-                "title": c.get("title"),
-                "price": c.get("price_display") or c.get("price"),
-                "rating": c.get("rating"),
-                "review_count": c.get("review_count"),
-                "feature_bullets": c.get("feature_bullets") or [],
-            }
-            for i, c in enumerate(candidates)
-        ],
-    }
+def _compact_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": i + 1,
+            "asin": c.get("asin"),
+            "title": str(c.get("title") or "")[:100],
+            "price": c.get("price_display") or c.get("price"),
+            "rating": c.get("rating"),
+            "review_count": c.get("review_count"),
+            "feature_bullets": (c.get("feature_bullets") or [])[:3],
+        }
+        for i, c in enumerate(candidates)
+    ]
 
-    prompt = f"""The user is shopping for: {query}
 
-Here are Amazon search results (plain search, not sponsored):
-{json.dumps(payload, indent=2)}
+def _build_prompt(query: str, candidates: list[dict[str, Any]], *, compact: bool = False) -> str:
+    payload = {"user_query": query, "candidates": _compact_candidates(candidates)}
+    summary_limit = (
+        "selection_summary: max 80 words total (one short paragraph). value_rationale: max 20 words each."
+        if compact
+        else "selection_summary: max 150 words total. value_rationale: max 30 words each."
+    )
+    return f"""The user is shopping for: {query}
 
-Analyze all candidates. Score each 0–100 on VALUE (features/specs vs price, adjusted for review quality).
-Pick the top 3 by value score.
+Amazon search results (plain search, not sponsored):
+{json.dumps(payload)}
 
-Also:
-1. List 4–6 priority_features — the specs that matter most for THIS query (not generic marketing fluff), each with why_it_matters and importance ("high" or "medium").
-2. Write selection_summary — 2–3 short paragraphs explaining why you chose these three as a set: what tradeoffs each represents, how they differ, and who each pick suits best.
+Score each candidate 0–100 on VALUE (features/specs vs price, adjusted for review quality). Pick the top 3.
 
-Return JSON exactly in this shape:
-{{
-  "summary": "One sentence overall recommendation framing",
-  "priority_features": [
-    {{ "feature": "Active noise cancellation", "why_it_matters": "...", "importance": "high" }}
-  ],
-  "selection_summary": "Paragraph 1...\\n\\nParagraph 2...",
-  "top3": [
-    {{
-      "rank": 1,
-      "candidate_id": 1,
-      "asin": "...",
-      "title": "...",
-      "price": "...",
-      "rating": 4.5,
-      "review_count": 1234,
-      "key_features": ["bullet1", "bullet2", "bullet3"],
-      "value_score": 87,
-      "value_rationale": "Short why this score"
-    }}
-  ],
-  "all_scores": [
-    {{ "candidate_id": 1, "value_score": 87, "title": "..." }}
-  ]
-}}"""
+Also provide:
+1. priority_features — 4–5 specs that matter most for THIS query (not marketing fluff), with why_it_matters and importance ("high" or "medium").
+2. selection_summary — why you chose these three as a set: tradeoffs, differences, who each suits.
 
+{summary_limit}
+
+Return JSON only:
+{{"summary":"...","priority_features":[{{"feature":"...","why_it_matters":"...","importance":"high"}}],"selection_summary":"...","top3":[{{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}}]}}"""
+
+
+def _parse_comparison(text: str) -> dict[str, Any]:
+    raw = (text or "").strip()
+    if not raw:
+        raise LLMError("LLM returned an empty response — try again or check your model config")
+
+    cleaned = raw
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned, re.I)
+    if fence:
+        cleaned = fence.group(1).strip()
+
+    parsed = None
     try:
-        result = generate_json(prompt, system=COMPARE_SYSTEM, max_tokens=4096)
-    except LLMError:
-        raise
-    except Exception as err:
-        raise LLMError(f"Comparison failed: {err}") from err
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        obj_start = cleaned.find("{")
+        obj_end = cleaned.rfind("}")
+        if obj_start != -1 and obj_end > obj_start:
+            try:
+                parsed = json.loads(cleaned[obj_start : obj_end + 1])
+            except json.JSONDecodeError:
+                parsed = None
 
-    if not isinstance(result, dict) or not result.get("top3"):
+    if not isinstance(parsed, dict):
+        preview = re.sub(r"\s+", " ", raw[:200])
+        raise LLMError(f"LLM did not return valid JSON. Preview: {preview or '(empty)'}")
+
+    if not isinstance(parsed.get("top3"), list) or not parsed["top3"]:
         raise LLMError("LLM comparison missing top3 array")
 
-    # Enrich top3 with links from original candidates
+    return parsed
+
+
+def _enrich_top3(result: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any]:
     by_asin = {c.get("asin"): c for c in candidates if c.get("asin")}
     by_id = {i + 1: c for i, c in enumerate(candidates)}
 
@@ -90,3 +96,24 @@ Return JSON exactly in this shape:
             item.setdefault("feature_bullets", src.get("feature_bullets"))
 
     return result
+
+
+def score_and_rank(query: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Send candidates to the LLM; return structured comparison with top 3."""
+    attempts = [
+        _build_prompt(query, candidates, compact=False),
+        _build_prompt(query, candidates, compact=True),
+    ]
+
+    last_err: Exception | None = None
+    for i, prompt in enumerate(attempts):
+        try:
+            text = generate(prompt, system=COMPARE_SYSTEM, max_tokens=8192)
+            parsed = _parse_comparison(text)
+            return _enrich_top3(parsed, candidates)
+        except (LLMError, Exception) as err:
+            last_err = err
+            if i == len(attempts) - 1:
+                break
+
+    raise last_err or LLMError("Product comparison failed")

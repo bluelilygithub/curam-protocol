@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout-json)
+
+**Fix:** Product Scout LLM parsing — retry on empty/truncated JSON, compact prompt, 8192 max tokens, shared `parseModelJson` extractor.
+
+---
+
 ## 2026-07-12 (product-scout-output)
 
 **Enhancement:** Product Scout results — structured UI cards, priority features section, "Why these three?" summary, fixed markdown tables for CLI.

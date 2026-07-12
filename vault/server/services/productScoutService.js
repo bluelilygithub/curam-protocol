@@ -8,75 +8,66 @@ const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
+const { parseModelJson } = require('../utils/parseModelJson');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Identify which product features matter most for the user's specific query before ranking.
-Return ONLY valid JSON matching the schema requested. No markdown fences. No prose outside JSON.`;
+Return ONLY a single valid JSON object. No markdown fences. No prose before or after the JSON.`;
 
-function parseJsonFromModel(text) {
-  let cleaned = String(text || '').trim();
-  if (cleaned.startsWith('```')) {
-    const lines = cleaned.split('\n');
-    lines.shift();
-    if (lines.length && lines[lines.length - 1].trim() === '```') lines.pop();
-    cleaned = lines.join('\n').trim();
-  }
-  return JSON.parse(cleaned);
+function compactCandidates(candidates) {
+  return candidates.map((c, i) => ({
+    id: i + 1,
+    asin: c.asin,
+    title: String(c.title || '').slice(0, 100),
+    price: c.price_display || c.price,
+    rating: c.rating,
+    review_count: c.review_count,
+    feature_bullets: (c.feature_bullets || []).slice(0, 3),
+  }));
 }
 
-async function scoreAndRank(userId, query, candidates, modelId) {
-  const payload = {
-    user_query: query,
-    candidates: candidates.map((c, i) => ({
-      id: i + 1,
-      asin: c.asin,
-      title: c.title,
-      price: c.price_display || c.price,
-      rating: c.rating,
-      review_count: c.review_count,
-      feature_bullets: c.feature_bullets || [],
-    })),
-  };
+function buildComparePrompt(query, candidates, { compact = false } = {}) {
+  const payload = { user_query: query, candidates: compactCandidates(candidates) };
+  const summaryLimit = compact
+    ? 'selection_summary: max 80 words total (one short paragraph). value_rationale: max 20 words each.'
+    : 'selection_summary: max 150 words total. value_rationale: max 30 words each.';
 
-  const prompt = `The user is shopping for: ${query}
+  return `The user is shopping for: ${query}
 
-Here are Amazon search results (plain search, not sponsored):
-${JSON.stringify(payload, null, 2)}
+Amazon search results (plain search, not sponsored):
+${JSON.stringify(payload)}
 
-Analyze all candidates. Score each 0–100 on VALUE (features/specs vs price, adjusted for review quality).
-Pick the top 3 by value score.
+Score each candidate 0–100 on VALUE (features/specs vs price, adjusted for review quality). Pick the top 3.
 
-Also:
-1. List 4–6 priority_features — the specs that matter most for THIS query (not generic marketing fluff), each with why_it_matters and importance ("high" or "medium").
-2. Write selection_summary — 2–3 short paragraphs explaining why you chose these three as a set: what tradeoffs each represents, how they differ, and who each pick suits best.
+Also provide:
+1. priority_features — 4–5 specs that matter most for THIS query (not marketing fluff), with why_it_matters and importance ("high" or "medium").
+2. selection_summary — why you chose these three as a set: tradeoffs, differences, who each suits.
 
-Return JSON exactly in this shape:
-{
-  "summary": "One sentence overall recommendation framing",
-  "priority_features": [
-    { "feature": "Active noise cancellation", "why_it_matters": "...", "importance": "high" }
-  ],
-  "selection_summary": "Paragraph 1...\\n\\nParagraph 2...",
-  "top3": [
-    {
-      "rank": 1,
-      "candidate_id": 1,
-      "asin": "...",
-      "title": "...",
-      "price": "...",
-      "rating": 4.5,
-      "review_count": 1234,
-      "key_features": ["bullet1", "bullet2"],
-      "value_score": 87,
-      "value_rationale": "Short why this score"
-    }
-  ],
-  "all_scores": [{ "candidate_id": 1, "value_score": 87, "title": "..." }]
-}`;
+${summaryLimit}
 
+Return JSON only:
+{"summary":"...","priority_features":[{"feature":"...","why_it_matters":"...","importance":"high"}],"selection_summary":"...","top3":[{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}]}`;
+}
+
+function parseComparisonResponse(text) {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('LLM returned an empty response — try again or use a different model in Settings');
+
+  const parsed = parseModelJson(raw);
+  if (!parsed || typeof parsed !== 'object') {
+    const preview = raw.slice(0, 200).replace(/\s+/g, ' ');
+    throw new Error(`LLM did not return valid JSON. Preview: ${preview || '(empty)'}`);
+  }
+  if (!Array.isArray(parsed.top3) || !parsed.top3.length) {
+    throw new Error('LLM comparison missing top3 array');
+  }
+  return parsed;
+}
+
+async function callCompareModel(userId, modelId, prompt, maxTokens) {
   const result = await callModel(modelId, prompt, {
     system: COMPARE_SYSTEM,
-    maxTokens: 4096,
+    maxTokens,
     returnUsage: true,
   });
 
@@ -88,14 +79,33 @@ Return JSON exactly in this shape:
     feature: 'product_scout',
   });
 
-  let parsed;
-  try {
-    parsed = parseJsonFromModel(result.text);
-  } catch (err) {
-    throw new Error(`LLM did not return valid JSON: ${err.message}`);
-  }
-  if (!parsed?.top3?.length) throw new Error('LLM comparison missing top3 array');
+  return result;
+}
 
+async function scoreAndRank(userId, query, candidates, modelId) {
+  const attempts = [
+    { prompt: buildComparePrompt(query, candidates), maxTokens: 8192, compact: false },
+    { prompt: buildComparePrompt(query, candidates, { compact: true }), maxTokens: 8192, compact: true },
+  ];
+
+  let lastErr;
+  for (let i = 0; i < attempts.length; i += 1) {
+    try {
+      const { prompt, maxTokens } = attempts[i];
+      const result = await callCompareModel(userId, modelId, prompt, maxTokens);
+      const parsed = parseComparisonResponse(result.text);
+      return enrichTop3(parsed, candidates);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[productScout] compare attempt ${i + 1} failed:`, err.message);
+      if (i === attempts.length - 1) break;
+    }
+  }
+
+  throw lastErr || new Error('Product comparison failed');
+}
+
+function enrichTop3(parsed, candidates) {
   const byAsin = Object.fromEntries(candidates.filter((c) => c.asin).map((c) => [c.asin, c]));
   const byId = Object.fromEntries(candidates.map((c, i) => [i + 1, c]));
 
