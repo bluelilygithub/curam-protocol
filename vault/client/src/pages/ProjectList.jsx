@@ -4,7 +4,7 @@ import useProjectStore from '../store/projectStore';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from '../components/NewProjectModal';
-import NewChatModal from '../components/NewChatModal';
+import { openNewChatModal } from '../utils/openNewChatModal';
 import { getModelShortName } from '../utils/models';
 import api from '../utils/apiClient';
 import { formatSessionLabel, formatSessionLocation, formatSessionWhen, sessionPreviewText } from '../utils/sessionDisplay';
@@ -277,7 +277,6 @@ function ProjectList() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [recentSessions, setRecentSessions] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   const canUseFeature = useCallback((key) => {
     if (user?.isAdmin) return true;
@@ -581,9 +580,6 @@ function ProjectList() {
   return (
     <div className="flex flex-col h-full">
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
-      {showNewChatModal && (
-        <NewChatModal projects={projects} onClose={() => setShowNewChatModal(false)} />
-      )}
 
       {feelingModalProjectId && (() => {
         const proj = projects.find(p => p.id === feelingModalProjectId);
@@ -665,7 +661,7 @@ function ProjectList() {
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowNewChatModal(true)}
+                  onClick={() => openNewChatModal()}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
                   style={{ background: 'var(--color-primary)' }}
                 >
@@ -692,7 +688,7 @@ function ProjectList() {
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Home</h1>
               <button
                 type="button"
-                onClick={() => setShowNewChatModal(true)}
+                onClick={() => openNewChatModal()}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-primary)' }}
               >

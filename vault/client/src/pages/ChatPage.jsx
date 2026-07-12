@@ -30,6 +30,7 @@ import ModelAdvisorModal from '../components/ModelAdvisorModal';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatSessionLabel } from '../utils/sessionDisplay';
+import { openNewChatModal } from '../utils/openNewChatModal';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -1076,7 +1077,7 @@ function ChatPage({ general = false }) {
           )
         )}
 
-        {sessions.length > 0 && (
+        {sessions.length > 0 ? (
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowSessionPicker(v => !v)}
@@ -1098,7 +1099,14 @@ function ChatPage({ general = false }) {
                   style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '220px', maxWidth: '300px', maxHeight: '320px', overflowY: 'auto' }}
                 >
                   <button
-                    onClick={() => { clearMessages(); setShowSummaryPanel(false); setSummaryText(''); setSuggestions([]); setActiveArtifacts(null); setShowSessionPicker(false); }}
+                    onClick={() => {
+                      setShowSessionPicker(false);
+                      openNewChatModal(
+                        general
+                          ? { defaultMode: 'quick' }
+                          : { defaultMode: 'project', defaultProjectId: String(projectId) }
+                      );
+                    }}
                     className="w-full text-left px-3 py-2 text-xs hover:opacity-70 border-b"
                     style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
                   >
@@ -1141,6 +1149,19 @@ function ChatPage({ general = false }) {
               </>
             )}
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openNewChatModal(
+              general
+                ? { defaultMode: 'quick' }
+                : { defaultMode: 'project', defaultProjectId: String(projectId) }
+            )}
+            className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex-shrink-0"
+            style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+          >
+            + New chat
+          </button>
         )}
 
         <div className="flex-1" />

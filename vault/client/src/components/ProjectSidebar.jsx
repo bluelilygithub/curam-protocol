@@ -5,6 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 import { formatSessionLabel } from '../utils/sessionDisplay';
+import { openNewChatModal } from '../utils/openNewChatModal';
 import { SIDEBAR_WORKSPACE_LINKS } from '../config/appNavigation';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
@@ -145,14 +146,13 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       if (sessions?.length > 0) {
         document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessions[0].sessionId }));
       } else {
-        document.dispatchEvent(new CustomEvent('vault:new-chat'));
+        openNewChatModal({ defaultMode: 'project', defaultProjectId: String(projectId) });
       }
     }, 80);
   };
 
   const startQuickChat = () => {
-    document.dispatchEvent(new CustomEvent('vault:new-chat'));
-    navigate('/chat');
+    openNewChatModal();
     if (onClose) onClose();
   };
 
@@ -628,7 +628,12 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                         {getIcon('external-link', { size: 11 })}
                       </span>
                       <span
-                        onClick={(e) => { e.stopPropagation(); setActive(project.id); document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActive(project.id);
+                          openNewChatModal({ defaultMode: 'project', defaultProjectId: String(project.id) });
+                          if (onClose) onClose();
+                        }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
                         style={{ color: 'var(--color-primary)' }}
                         data-tip="New chat in project"

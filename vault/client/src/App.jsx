@@ -50,8 +50,10 @@ import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
+import { openNewChatModal } from './utils/openNewChatModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ProcessingModal from './components/ProcessingModal';
+import NewChatModalHost from './components/NewChatModalHost';
 import useAuthStore from './store/authStore';
 
 function HomeRoute() {
@@ -80,7 +82,7 @@ function App() {
       }
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
-        document.dispatchEvent(new CustomEvent('vault:new-chat'));
+        openNewChatModal();
       }
     };
     document.addEventListener('keydown', handler);
@@ -93,6 +95,7 @@ function App() {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <SearchPalette />
           <ProcessingModal />
+          <NewChatModalHost />
           {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
           <Routes>
             <Route path="/login" element={<LoginPage />} />

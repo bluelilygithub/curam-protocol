@@ -10,6 +10,7 @@ import { downloadProjectMd } from '../utils/exportMd';
 import { TYPE_FIELDS } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatSessionLabel } from '../utils/sessionDisplay';
+import { openNewChatModal } from '../utils/openNewChatModal';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
 
@@ -423,7 +424,7 @@ function ProjectDetail() {
             <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Chat Sessions</span>
               <button
-                onClick={() => navigate(`/projects/${id}/chat`)}
+                onClick={() => openNewChatModal({ defaultMode: 'project', defaultProjectId: String(id) })}
                 className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70 font-medium"
                 style={{ background: 'var(--color-primary)', color: '#fff' }}
               >

@@ -1,12 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 
-export default function NewChatModal({ projects = [], onClose }) {
+export default function NewChatModal({
+  projects = [],
+  onClose,
+  defaultMode = 'quick',
+  defaultProjectId = '',
+}) {
   const navigate = useNavigate();
   const getIcon = useIcon();
-  const [mode, setMode] = useState('quick');
-  const [projectId, setProjectId] = useState(projects[0]?.id ? String(projects[0].id) : '');
+  const [mode, setMode] = useState(defaultMode);
+  const [projectId, setProjectId] = useState(
+    defaultProjectId || (projects[0]?.id ? String(projects[0].id) : '')
+  );
+
+  useEffect(() => {
+    setMode(defaultMode);
+    setProjectId(defaultProjectId || (projects[0]?.id ? String(projects[0].id) : ''));
+  }, [defaultMode, defaultProjectId, projects]);
 
   const startQuick = () => {
     document.dispatchEvent(new CustomEvent('vault:new-chat'));
@@ -22,10 +34,15 @@ export default function NewChatModal({ projects = [], onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-2xl border shadow-xl p-6"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New chat</h2>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import { openNewChatModal } from '../../utils/openNewChatModal';
 
 function fmtDate(str) {
   if (!str) return '';
@@ -74,7 +75,7 @@ export default function ChatHistoryTile() {
 
       <div className="flex border-t" style={{ borderColor: 'var(--color-border)' }}>
         <button
-          onClick={() => navigate('/chat')}
+          onClick={() => openNewChatModal()}
           className="flex-1 px-3 py-2.5 text-sm flex items-center justify-center gap-1.5 border-r hover:opacity-70 transition-opacity"
           style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
         >
