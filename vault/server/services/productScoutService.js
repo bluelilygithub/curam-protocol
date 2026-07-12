@@ -10,9 +10,13 @@ const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { getPriceVariancePct, getAmazonDomain, applyBudgetFilter, marketplaceLabel } = require('./productScoutSettings');
+const { attachPreScores, blendValueScore } = require('./productScoutScoring');
+const { sanitizeFeatureTable, cleanDeliveryDisplay } = require('./productScoutTableSanitize');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
-Identify which product features matter most for the user's specific query before ranking.
+Each candidate includes a pre_score (0–100) computed from price, star rating, and review count. Use it as your baseline.
+Your value_score for each pick should stay within ±12 of that product's pre_score unless listing bullets clearly justify a larger move — explain why in value_rationale.
+Do not reorder products dramatically without feature evidence in the bullets provided.
 When a budget is set, top3 must come only from in-budget candidates. Stretch suggestions must come only from the stretch list.
 Return ONLY a single valid JSON object. No markdown fences. No prose before or after the JSON.`;
 
@@ -24,6 +28,7 @@ function compactCandidates(candidates) {
     price: c.price_display || c.price,
     rating: c.rating,
     review_count: c.review_count,
+    pre_score: c.pre_score,
     feature_bullets: (c.feature_bullets || []).slice(0, 3),
     ...(c.over_budget_pct != null ? { over_budget_pct: c.over_budget_pct } : {}),
   }));
@@ -59,7 +64,7 @@ ${top3Rule}
 Also provide:
 1. priority_features — 4–5 specs that matter most for THIS query (not marketing fluff), with why_it_matters and importance ("high" or "medium").
 2. selection_summary — why you chose these picks: tradeoffs, differences, who each suits. Mention budget if set.
-3. feature_table — 6–10 spec rows comparing top3 (+ first stretch if returned). Column order: top3 rank 1, 2, 3, then stretch if any. Each row: {"feature":"Battery life","values":["50h","30h","80h"]} — one value per product column.
+3. feature_table — 6–10 spec rows for product-specific specs ONLY (battery, ANC type, connectivity, etc.). Do NOT include price, delivery, rating, review count, or value score — those are shown separately. Column order: top3 rank 1, 2, 3, then stretch if any. Values must align with the product in that column. Use "—" when unknown.
 
 ${summaryLimit}
 
@@ -135,24 +140,59 @@ async function scoreAndRank(userId, query, primary, stretch, budget, modelId) {
 }
 
 function enrichComparison(parsed, primary, stretch) {
-  const enrichList = (items, pool) => {
+  const primaryScored = attachPreScores(primary);
+  const stretchScored = attachPreScores(stretch);
+  const preByAsin = Object.fromEntries(
+    [...primaryScored, ...stretchScored].filter((c) => c.asin).map((c) => [c.asin, c.pre_score])
+  );
+  const preById = Object.fromEntries(
+    primaryScored.map((c, i) => [i + 1, c.pre_score])
+  );
+  const stretchPreById = Object.fromEntries(
+    stretchScored.map((c, i) => [i + 1, c.pre_score])
+  );
+
+  const enrichList = (items, pool, preMap) => {
     const byAsin = Object.fromEntries(pool.filter((c) => c.asin).map((c) => [c.asin, c]));
     const byId = Object.fromEntries(pool.map((c, i) => [i + 1, c]));
 
     for (const item of items) {
       const src = byAsin[item.asin] || byId[item.candidate_id];
       if (src) {
-      item.link = item.link || src.link;
-      item.feature_bullets = item.feature_bullets || src.feature_bullets;
-      item.delivery_display = item.delivery_display || src.delivery_display;
-      if (src.over_budget_amount != null) item.over_budget_amount = src.over_budget_amount;
+        item.link = item.link || src.link;
+        item.feature_bullets = item.feature_bullets || src.feature_bullets;
+        item.rating = src.rating ?? item.rating;
+        item.review_count = src.review_count ?? item.review_count;
+        item.price = src.price_display || src.price || item.price;
+        item.pre_score = src.pre_score ?? preMap[item.asin] ?? preMap[item.candidate_id];
+        item.delivery_display = cleanDeliveryDisplay(
+          item.delivery_display || src.delivery_display,
+          src.price ?? item.price
+        );
+        if (src.over_budget_amount != null) item.over_budget_amount = src.over_budget_amount;
         if (src.over_budget_pct != null) item.over_budget_pct = src.over_budget_pct;
       }
+
+      const llmScore = item.llm_value_score ?? item.value_score;
+      item.llm_value_score = llmScore;
+      item.value_score = blendValueScore(item.pre_score, llmScore);
     }
   };
 
-  enrichList(parsed.top3 || [], primary);
-  enrichList(parsed.stretch_suggestions || [], stretch);
+  enrichList(parsed.top3 || [], primaryScored, { ...preByAsin, ...preById });
+  enrichList(parsed.stretch_suggestions || [], stretchScored, { ...preByAsin, ...stretchPreById });
+
+  if (Array.isArray(parsed.top3) && parsed.top3.length > 1) {
+    parsed.top3.sort((a, b) => (b.value_score ?? 0) - (a.value_score ?? 0));
+    parsed.top3.forEach((item, i) => { item.rank = i + 1; });
+  }
+
+  const tableProducts = [
+    ...(parsed.top3 || []),
+    ...(parsed.stretch_suggestions?.length ? [parsed.stretch_suggestions[0]] : []),
+  ].slice(0, 4);
+  parsed.feature_table = sanitizeFeatureTable(parsed.feature_table, tableProducts);
+
   return parsed;
 }
 
@@ -199,7 +239,10 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
     variancePct
   );
 
-  if (!primary.length && !stretch.length) {
+  const primaryScored = attachPreScores(primary);
+  const stretchScored = attachPreScores(stretch);
+
+  if (!primaryScored.length && !stretchScored.length) {
     const ceiling = budget?.ceiling;
     throw new Error(
       ceiling
@@ -208,7 +251,7 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
     );
   }
 
-  const comparison = await scoreAndRank(userId, q, primary, stretch, budget, modelId);
+  const comparison = await scoreAndRank(userId, q, primaryScored, stretchScored, budget, modelId);
   const top3 = comparison.top3 || [];
   const stretchSuggestions = comparison.stretch_suggestions || [];
   const winner = top3[0] || stretchSuggestions[0] || null;

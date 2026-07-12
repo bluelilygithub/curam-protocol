@@ -116,14 +116,27 @@ function inferWithin2Days(text, deliveryObj) {
   return false;
 }
 
+function isBarePriceSnippet(raw) {
+  const s = String(raw || '').trim();
+  return /^\$[\d,.]+$/.test(s) && !/\bdelivery\b/i.test(s) && !/\bfree\b/i.test(s);
+}
+
+function deliveryDisplayParts(option) {
+  const parts = [];
+  const add = (v) => {
+    const s = String(v || '').trim();
+    if (s && !isBarePriceSnippet(s)) parts.push(s);
+  };
+  add(option?.tagline);
+  add(option?.price?.raw);
+  add(option?.date?.raw);
+  add(option?.message);
+  add(option?.type);
+  return parts;
+}
+
 function optionSignals(option, isPrime) {
-  const parts = [
-    option?.tagline,
-    option?.price?.raw,
-    option?.date?.raw,
-    option?.message,
-    option?.type,
-  ].filter(Boolean);
+  const parts = deliveryDisplayParts(option);
   const text = parts.join(' ');
   return {
     text,

@@ -50,8 +50,10 @@ function ProductCard({ item, variant = 'top' }) {
               <span
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
                 style={{ background: 'rgba(204, 120, 92, 0.15)', color: 'var(--color-primary)' }}
+                title={item.pre_score != null ? `Pre-score ${item.pre_score} from price, rating & reviews; AI adjusted to ${item.value_score}` : undefined}
               >
                 Value {item.value_score}
+                {item.pre_score != null ? ` (pre ${item.pre_score})` : ''}
               </span>
             )}
           </div>
@@ -109,7 +111,8 @@ function FeatureCompareTable({ comparison }) {
         Feature comparison
       </h2>
       <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-        Side-by-side specs for your top picks{products.some((p) => p.isStretch) ? ' (includes one stretch option)' : ''}.
+        Verified rows use Amazon listing data. Spec rows below are inferred from listing bullets — treat as approximate.
+        {products.some((p) => p.isStretch) ? ' Includes one stretch option.' : ''}
       </p>
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
         <table className="w-full text-xs border-collapse min-w-[480px]">
@@ -121,18 +124,37 @@ function FeatureCompareTable({ comparison }) {
               >
                 Feature
               </th>
-              {products.map((p) => (
+              {products.map((p) => {
+                const rationale = p.isStretch
+                  ? (p.stretch_rationale || p.value_rationale)
+                  : p.value_rationale;
+                return (
                 <th
                   key={p.asin || p.rank || p.title}
                   className="text-left p-2.5 font-medium align-bottom"
-                  style={{ color: 'var(--color-text)', minWidth: 120, maxWidth: 160 }}
+                  style={{ color: 'var(--color-text)', minWidth: 120, maxWidth: 180 }}
                 >
                   <span className="block text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
                     {p.isStretch ? 'Stretch' : `#${p.rank}`}
+                    {p.value_score != null && (
+                      <> · Value {p.value_score}</>
+                    )}
+                    {p.pre_score != null && (
+                      <> (pre {p.pre_score})</>
+                    )}
                   </span>
                   <span className="line-clamp-2 leading-snug">{shortTitle(p.title, 48)}</span>
+                  {rationale && (
+                    <span
+                      className="block mt-1 line-clamp-3 text-[10px] font-normal leading-snug"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {rationale}
+                    </span>
+                  )}
                 </th>
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -147,7 +169,11 @@ function FeatureCompareTable({ comparison }) {
                     background: 'var(--color-surface)',
                     color: 'var(--color-text)',
                   }}
-                  title={row.feature === 'Listing ratings' ? LISTING_RATINGS_HINT : undefined}
+                  title={
+                    row.hint
+                    || (row.feature === 'Listing ratings' ? LISTING_RATINGS_HINT : undefined)
+                    || (row.inferred ? 'Inferred from listing text — not verified' : undefined)
+                  }
                 >
                   {row.feature}
                 </td>
