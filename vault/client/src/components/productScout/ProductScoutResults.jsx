@@ -1,4 +1,12 @@
 import React from 'react';
+import {
+  buildFeatureTable,
+  formatListingRatings,
+  shortTitle,
+} from '../../utils/productScoutCompareTable';
+
+const LISTING_RATINGS_HINT =
+  'Star ratings for this Amazon listing (may roll up variants; not brand-wide reviews).';
 
 function importanceStyle(level) {
   if (level === 'high') return { bg: 'rgba(204, 120, 92, 0.15)', color: 'var(--color-primary)' };
@@ -55,7 +63,8 @@ function ProductCard({ item, variant = 'top' }) {
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{item.price ?? '—'}</p>
           {item.rating != null && (
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
-              {item.rating}★ · {item.review_count != null ? `${Number(item.review_count).toLocaleString()} reviews` : '—'}
+              {item.rating}★ ·{' '}
+              <span title={LISTING_RATINGS_HINT}>{formatListingRatings(item.review_count)}</span>
             </p>
           )}
         </div>
@@ -87,6 +96,76 @@ function ProductCard({ item, variant = 'top' }) {
         </a>
       )}
     </article>
+  );
+}
+
+function FeatureCompareTable({ comparison }) {
+  const { products, rows } = buildFeatureTable(comparison);
+  if (!products.length || !rows.length) return null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+        Feature comparison
+      </h2>
+      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+        Side-by-side specs for your top picks{products.some((p) => p.isStretch) ? ' (includes one stretch option)' : ''}.
+      </p>
+      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+        <table className="w-full text-xs border-collapse min-w-[480px]">
+          <thead>
+            <tr style={{ background: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>
+              <th
+                className="text-left p-2.5 font-medium sticky left-0 z-10"
+                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', minWidth: 100 }}
+              >
+                Feature
+              </th>
+              {products.map((p) => (
+                <th
+                  key={p.asin || p.rank || p.title}
+                  className="text-left p-2.5 font-medium align-bottom"
+                  style={{ color: 'var(--color-text)', minWidth: 120, maxWidth: 160 }}
+                >
+                  <span className="block text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {p.isStretch ? 'Stretch' : `#${p.rank}`}
+                  </span>
+                  <span className="line-clamp-2 leading-snug">{shortTitle(p.title, 48)}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.feature}
+                style={{ borderBottom: '1px solid var(--color-border)' }}
+              >
+                <td
+                  className="p-2.5 font-medium sticky left-0 z-10 align-top"
+                  style={{
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text)',
+                  }}
+                  title={row.feature === 'Listing ratings' ? LISTING_RATINGS_HINT : undefined}
+                >
+                  {row.feature}
+                </td>
+                {row.values.map((val, i) => (
+                  <td
+                    key={`${row.feature}-${products[i]?.asin || i}`}
+                    className="p-2.5 align-top leading-relaxed"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {val}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -169,12 +248,19 @@ export default function ProductScoutResults({ result }) {
         </section>
       )}
 
+      {(top3.length > 0 || stretch.length > 0) && (
+        <FeatureCompareTable comparison={comp} />
+      )}
+
       {top3.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
             Top 3 on Amazon
             {budget ? ' (within budget)' : ''}
           </h2>
+          <p className="text-[10px]" style={{ color: 'var(--color-muted)' }} title={LISTING_RATINGS_HINT}>
+            Ratings shown are Amazon listing ratings (may include variant rollup).
+          </p>
           <div className="space-y-3">
             {top3.map((item) => (
               <ProductCard key={item.asin || item.rank} item={item} variant="top" />

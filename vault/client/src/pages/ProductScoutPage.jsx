@@ -25,6 +25,9 @@ export default function ProductScoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [maxPrice, setMaxPrice] = useState('');
+  const [selectedRunIds, setSelectedRunIds] = useState(new Set());
+  const [loadedRunId, setLoadedRunId] = useState(null);
+  const [deletingRuns, setDeletingRuns] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -71,6 +74,7 @@ export default function ProductScoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Scout failed');
       setResult(data);
+      setLoadedRunId(data.runId ?? null);
       await loadMeta();
       addToast('Comparison ready', 'success');
     } catch (err) {
@@ -90,8 +94,43 @@ export default function ProductScoutPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to load run');
       setResult(data.result);
       setQuery(data.query || '');
+      setLoadedRunId(data.id);
     } catch (err) {
       addToast(err.message, 'error');
+    }
+  };
+
+  const toggleRunSelection = (id) => {
+    setSelectedRunIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteSelectedRuns = async () => {
+    const ids = [...selectedRunIds];
+    if (!ids.length) {
+      addToast('Select scouts to delete', 'error');
+      return;
+    }
+    setDeletingRuns(true);
+    try {
+      const res = await api.post('/api/product-scout/runs/delete', { ids });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (loadedRunId && ids.includes(loadedRunId)) {
+        setResult(null);
+        setLoadedRunId(null);
+      }
+      setSelectedRunIds(new Set());
+      await loadMeta();
+      addToast(`Deleted ${data.deleted ?? ids.length} scout${ids.length === 1 ? '' : 's'}`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Delete failed', 'error');
+    } finally {
+      setDeletingRuns(false);
     }
   };
 
@@ -191,23 +230,55 @@ export default function ProductScoutPage() {
 
       {!loading && runs.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent scouts</h2>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent scouts</h2>
+            {selectedRunIds.size > 0 && (
+              <button
+                type="button"
+                disabled={deletingRuns}
+                onClick={deleteSelectedRuns}
+                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
+                style={{ borderColor: '#ef4444', color: '#ef4444' }}
+              >
+                {deletingRuns ? 'Deleting…' : `Delete selected (${selectedRunIds.size})`}
+              </button>
+            )}
+          </div>
           <ul className="space-y-1">
-            {runs.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => loadRun(r.id)}
-                  className="w-full text-left px-3 py-2 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <span className="font-medium">{r.query}</span>
-                  <span className="ml-2" style={{ color: 'var(--color-muted)' }}>
-                    {r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {runs.map((r) => {
+              const selected = selectedRunIds.has(r.id);
+              const isLoaded = loadedRunId === r.id;
+              return (
+                <li key={r.id} className="flex items-stretch gap-2">
+                  <label
+                    className="flex items-center px-2 shrink-0 cursor-pointer"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleRunSelection(r.id)}
+                      className="rounded"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => loadRun(r.id)}
+                    className="flex-1 text-left px-3 py-2 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: isLoaded ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: 'var(--color-text)',
+                      background: isLoaded ? 'var(--color-bg)' : 'transparent',
+                    }}
+                  >
+                    <span className="font-medium">{r.query}</span>
+                    <span className="ml-2" style={{ color: 'var(--color-muted)' }}>
+                      {r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

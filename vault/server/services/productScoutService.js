@@ -59,11 +59,12 @@ ${top3Rule}
 Also provide:
 1. priority_features — 4–5 specs that matter most for THIS query (not marketing fluff), with why_it_matters and importance ("high" or "medium").
 2. selection_summary — why you chose these picks: tradeoffs, differences, who each suits. Mention budget if set.
+3. feature_table — 6–10 spec rows comparing top3 (+ first stretch if returned). Column order: top3 rank 1, 2, 3, then stretch if any. Each row: {"feature":"Battery life","values":["50h","30h","80h"]} — one value per product column.
 
 ${summaryLimit}
 
 Return JSON only:
-{"summary":"...","priority_features":[{"feature":"...","why_it_matters":"...","importance":"high"}],"selection_summary":"...","top3":[{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}],"stretch_suggestions":[{"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":85,"stretch_rationale":"..."}]}`;
+{"summary":"...","priority_features":[{"feature":"...","why_it_matters":"...","importance":"high"}],"selection_summary":"...","feature_table":[{"feature":"Battery","values":["50h","30h"]}],"top3":[{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}],"stretch_suggestions":[{"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":85,"stretch_rationale":"..."}]}`;
 }
 
 function parseComparisonResponse(text, { primary, stretch } = {}) {
@@ -262,4 +263,14 @@ async function getRun(userId, id) {
   return { ...row, result };
 }
 
-module.exports = { runProductScout, listRuns, getRun };
+async function deleteRuns(userId, ids) {
+  const clean = [...new Set((ids || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+  if (!clean.length) return { deleted: 0 };
+  const { rowCount } = await pool.query(
+    `DELETE FROM product_scout_runs WHERE "userId"=$1 AND id = ANY($2::int[])`,
+    [userId, clean]
+  );
+  return { deleted: rowCount };
+}
+
+module.exports = { runProductScout, listRuns, getRun, deleteRuns };

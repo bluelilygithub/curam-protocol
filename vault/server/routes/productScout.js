@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { runProductScout, listRuns, getRun } = require('../services/productScoutService');
+const { runProductScout, listRuns, getRun, deleteRuns } = require('../services/productScoutService');
 const {
   getPriceVariancePct,
   setPriceVariancePct,
@@ -61,6 +61,14 @@ router.post('/settings', async (req, res) => {
 });
 
 router.get('/runs', handle(async (req) => listRuns(req.user.id)));
+
+router.post('/runs/delete', handle(async (req) => {
+  const ids = req.body?.ids;
+  if (!Array.isArray(ids) || !ids.length) {
+    throw new Error('ids array is required');
+  }
+  return deleteRuns(req.user.id, ids);
+}));
 
 router.get('/runs/:id', async (req, res) => {
   try {
