@@ -30,6 +30,7 @@ export default function ProductScoutPage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [maxPrice, setMaxPrice] = useState('');
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -69,7 +70,10 @@ export default function ProductScoutPage() {
     startProcessing('Scouting products…', 'Fetching Amazon results, scoring with AI, and checking external alternatives.');
     setError(null);
     try {
-      const res = await api.post('/api/product-scout/run', { query: q });
+      const res = await api.post('/api/product-scout/run', {
+        query: q,
+        ...(maxPrice.trim() ? { maxPrice: Number(maxPrice) } : {}),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Scout failed');
       setResult(data);
@@ -138,6 +142,29 @@ export default function ProductScoutPage() {
             className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+            Max price (optional)
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              placeholder="e.g. 150"
+              className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+            {config?.priceVariancePct != null && (
+              <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                Stretch variance: {config.priceVariancePct}% above max
+              </span>
+            )}
+          </div>
         </label>
         <div className="flex flex-wrap gap-2">
           {EXAMPLE_QUERIES.map((ex) => (

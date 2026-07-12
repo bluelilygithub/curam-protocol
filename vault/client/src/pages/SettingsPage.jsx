@@ -125,6 +125,10 @@ function SettingsPage() {
   // Shares alerts
   const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
 
+  // Product Scout
+  const [productScoutVariancePct, setProductScoutVariancePct] = useState('10');
+  const [productScoutVarianceSaved, setProductScoutVarianceSaved] = useState(false);
+
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
   const [mobileSaved, setMobileSaved] = useState(false);
@@ -155,6 +159,7 @@ function SettingsPage() {
         'Integrations',
         'News Digest',
         'Shares',
+        'Product Scout',
         'Mobile',
         'Members',
         'Feature Access',
@@ -182,6 +187,7 @@ function SettingsPage() {
           'Integrations',
           'News Digest',
           'Shares',
+          'Product Scout',
           'Mobile',
           'Members',
           'Feature Access',
@@ -326,6 +332,10 @@ function SettingsPage() {
       if (data.mobile_nav_items) {
         try { setMobileNavItems(mergeWithDefaults(JSON.parse(data.mobile_nav_items), DEFAULT_NAV_ITEMS)); } catch {}
       }
+    }).catch(() => {});
+
+    api.get('/api/product-scout/settings').then(r => r.json()).then((data) => {
+      if (data?.priceVariancePct != null) setProductScoutVariancePct(String(data.priceVariancePct));
     }).catch(() => {});
 
     api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
@@ -2419,6 +2429,51 @@ function SettingsPage() {
             {Number(sharesDropAlertPct) > 0
               ? `Alert when holdings drop ${Number(sharesDropAlertPct)}% or more in a day`
               : 'Test mode — email after every poll'}
+          </span>
+        </div>
+      </section>
+      )}
+
+      {tab === 'Product Scout' && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Price variance
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          When a user sets a max price on Product Scout, products slightly above that budget can still appear as
+          <strong> stretch suggestions</strong> if they fall within this variance. Example: max $150 with 10% variance
+          allows stretch picks up to $165.
+        </p>
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+          Variance above max price (%)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={productScoutVariancePct}
+            onChange={(e) => {
+              setProductScoutVariancePct(e.target.value);
+              setProductScoutVarianceSaved(false);
+            }}
+            onBlur={async () => {
+              const n = Math.min(100, Math.max(0, Number(productScoutVariancePct) || 0));
+              setProductScoutVariancePct(String(n));
+              try {
+                await api.post('/api/product-scout/settings', { priceVariancePct: n });
+                setProductScoutVarianceSaved(true);
+                setTimeout(() => setProductScoutVarianceSaved(false), 2000);
+              } catch { /* ignore */ }
+            }}
+            className="w-28 px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <span className="text-xs" style={{ color: productScoutVarianceSaved ? '#22c55e' : 'var(--color-muted)' }}>
+            {productScoutVarianceSaved
+              ? 'Saved ✓'
+              : `Stretch ceiling = max price × ${1 + (Number(productScoutVariancePct) || 0) / 100}`}
           </span>
         </div>
       </section>

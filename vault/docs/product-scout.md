@@ -32,13 +32,21 @@ CLI-only LLM vars: see `product-scout/.env.example` (`LLM_PROVIDER`, `LLM_MODEL`
 ## API
 
 ```
-GET  /api/product-scout/config-check   — key presence (no secrets)
+GET  /api/product-scout/config-check   — key presence + variance %
+GET  /api/product-scout/settings       — price variance % (admin write via POST)
 GET  /api/product-scout/runs           — recent runs for user
 GET  /api/product-scout/runs/:id       — single run
-POST /api/product-scout/run            — { "query": "..." }
+POST /api/product-scout/run            — { "query": "...", "maxPrice": 150 }
+POST /api/product-scout/settings       — admin: { "priceVariancePct": 10 }
 ```
 
 Feature flag: `productScout` in Settings → Feature Access.
+
+## Budget & variance
+
+- **Max price** — optional per-search field on `/product-scout`. Top 3 are chosen only from products at or below this price.
+- **Variance %** — admin setting in **Settings → Product Scout** (`workspace_settings.product_scout_price_variance_pct`, default 10%). Products above max price but within `max × (1 + variance/100)` are scored separately as **stretch suggestions** (up to 2) when value justifies the extra cost.
+- Products above the variance ceiling are excluded entirely.
 
 ## Suggestions inbox
 

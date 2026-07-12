@@ -5,28 +5,47 @@ function importanceStyle(level) {
   return { bg: 'var(--color-bg)', color: 'var(--color-muted)' };
 }
 
-function ProductCard({ item }) {
+function ProductCard({ item, variant = 'top' }) {
   const features = item.key_features || item.feature_bullets || [];
+  const isStretch = variant === 'stretch';
+  const rationale = isStretch ? (item.stretch_rationale || item.value_rationale) : item.value_rationale;
+
   return (
     <article
       className="rounded-xl border p-4 space-y-3"
-      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+      style={{
+        borderColor: isStretch ? '#f59e0b' : 'var(--color-border)',
+        background: 'var(--color-bg)',
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-              style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
-            >
-              #{item.rank}
-            </span>
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-              style={{ background: 'rgba(204, 120, 92, 0.15)', color: 'var(--color-primary)' }}
-            >
-              Value {item.value_score ?? '—'}
-            </span>
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            {!isStretch && item.rank != null && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}
+              >
+                #{item.rank}
+              </span>
+            )}
+            {isStretch && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}
+              >
+                Over budget
+                {item.over_budget_pct != null ? ` +${item.over_budget_pct}%` : ''}
+              </span>
+            )}
+            {item.value_score != null && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: 'rgba(204, 120, 92, 0.15)', color: 'var(--color-primary)' }}
+              >
+                Value {item.value_score}
+              </span>
+            )}
           </div>
           <h3 className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)' }}>
             {item.title}
@@ -50,9 +69,9 @@ function ProductCard({ item }) {
         </ul>
       )}
 
-      {item.value_rationale && (
+      {rationale && (
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
-          {item.value_rationale}
+          {rationale}
         </p>
       )}
 
@@ -74,11 +93,21 @@ function ProductCard({ item }) {
 export default function ProductScoutResults({ result }) {
   const comp = result?.comparison || {};
   const top3 = comp.top3 || [];
+  const stretch = comp.stretch_suggestions || [];
   const priorityFeatures = comp.priority_features || [];
   const externals = result?.external_alternatives || [];
+  const budget = result?.budget;
 
   return (
     <div className="space-y-6">
+      {budget && (
+        <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+          Budget: <strong style={{ color: 'var(--color-text)' }}>${budget.maxPrice}</strong>
+          {' · '}
+          Variance {budget.variancePct}% (stretch up to ${budget.ceiling})
+        </p>
+      )}
+
       {(comp.summary || comp.selection_summary) && (
         <section className="space-y-2">
           {comp.summary && (
@@ -92,7 +121,7 @@ export default function ProductScoutResults({ result }) {
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
             >
               <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                Why these three?
+                Why these picks?
               </h2>
               {comp.selection_summary.split('\n').filter(Boolean).map((para) => (
                 <p key={para.slice(0, 40)} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
@@ -144,10 +173,35 @@ export default function ProductScoutResults({ result }) {
         <section className="space-y-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
             Top 3 on Amazon
+            {budget ? ' (within budget)' : ''}
           </h2>
           <div className="space-y-3">
             {top3.map((item) => (
-              <ProductCard key={item.asin || item.rank} item={item} />
+              <ProductCard key={item.asin || item.rank} item={item} variant="top" />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {top3.length === 0 && budget && (
+        <p className="text-xs rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+          No products within your max price of ${budget.maxPrice}. See stretch suggestions below if any qualify.
+        </p>
+      )}
+
+      {stretch.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            Worth considering (slightly over budget)
+          </h2>
+          {budget && (
+            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+              Above ${budget.maxPrice} but within the {budget.variancePct}% admin variance — included because value may justify the extra cost.
+            </p>
+          )}
+          <div className="space-y-3">
+            {stretch.map((item) => (
+              <ProductCard key={item.asin || item.title} item={item} variant="stretch" />
             ))}
           </div>
         </section>

@@ -49,6 +49,25 @@ function formatMarkdown(result) {
     if (item.link) lines.push(`[View on Amazon](${item.link})`, '');
   }
 
+  const stretch = comp.stretch_suggestions || [];
+  if (stretch.length) {
+    const budget = result.budget;
+    lines.push('## Slightly over budget (within variance)', '');
+    if (budget) {
+      lines.push(
+        `_Above $${budget.maxPrice} but within ${budget.variancePct}% variance (up to $${budget.ceiling})._`,
+        ''
+      );
+    }
+    for (const item of stretch) {
+      const over = item.over_budget_pct != null ? ` (+${item.over_budget_pct}%)` : '';
+      lines.push(`### ${mdCell(item.title)} — ${mdCell(item.price)}${over}`, '');
+      if (item.stretch_rationale) lines.push(item.stretch_rationale, '');
+      else if (item.value_rationale) lines.push(item.value_rationale, '');
+      if (item.link) lines.push(`[View on Amazon](${item.link})`, '');
+    }
+  }
+
   const ext = result.external_alternatives || [];
   if (ext.length) {
     lines.push('## External alternatives (non-Amazon)', '');

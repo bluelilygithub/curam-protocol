@@ -9,9 +9,14 @@ const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
 const { parseModelJson } = require('../utils/parseModelJson');
+const {
+  getPriceVariancePct,
+  applyBudgetFilter,
+} = require('./productScoutBudget');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Identify which product features matter most for the user's specific query before ranking.
+When a budget is set, top3 must come only from in-budget candidates. Stretch suggestions must come only from the stretch list.
 Return ONLY a single valid JSON object. No markdown fences. No prose before or after the JSON.`;
 
 function compactCandidates(candidates) {
@@ -23,33 +28,48 @@ function compactCandidates(candidates) {
     rating: c.rating,
     review_count: c.review_count,
     feature_bullets: (c.feature_bullets || []).slice(0, 3),
+    ...(c.over_budget_pct != null ? { over_budget_pct: c.over_budget_pct } : {}),
   }));
 }
 
-function buildComparePrompt(query, candidates, { compact = false } = {}) {
-  const payload = { user_query: query, candidates: compactCandidates(candidates) };
+function buildComparePrompt(query, primary, stretch, budget, { compact = false } = {}) {
   const summaryLimit = compact
     ? 'selection_summary: max 80 words total (one short paragraph). value_rationale: max 20 words each.'
     : 'selection_summary: max 150 words total. value_rationale: max 30 words each.';
 
+  const budgetBlock = budget
+    ? `Budget: max price ${budget.maxPrice}. Variance ${budget.variancePct}% allows stretch picks up to ${budget.ceiling} (above budget but within tolerance).\n`
+    : '';
+
+  const stretchBlock = stretch.length
+    ? `\nSTRETCH candidates (above budget, within variance — pick up to 2 only if value clearly justifies the extra cost):
+${JSON.stringify({ stretch_candidates: compactCandidates(stretch) })}
+
+For stretch_suggestions use candidate_id from the stretch list. Include stretch_rationale explaining why the extra spend is worth it.\n`
+    : '\nNo stretch candidates. Return "stretch_suggestions": [].\n';
+
+  const top3Rule = primary.length
+    ? 'Pick the top 3 by value from IN-BUDGET candidates only.'
+    : 'No in-budget candidates — return "top3": [].';
+
   return `The user is shopping for: ${query}
-
-Amazon search results (plain search, not sponsored):
-${JSON.stringify(payload)}
-
-Score each candidate 0–100 on VALUE (features/specs vs price, adjusted for review quality). Pick the top 3.
+${budgetBlock}
+IN-BUDGET candidates:
+${JSON.stringify({ candidates: compactCandidates(primary) })}
+${stretchBlock}
+${top3Rule}
 
 Also provide:
 1. priority_features — 4–5 specs that matter most for THIS query (not marketing fluff), with why_it_matters and importance ("high" or "medium").
-2. selection_summary — why you chose these three as a set: tradeoffs, differences, who each suits.
+2. selection_summary — why you chose these picks: tradeoffs, differences, who each suits. Mention budget if set.
 
 ${summaryLimit}
 
 Return JSON only:
-{"summary":"...","priority_features":[{"feature":"...","why_it_matters":"...","importance":"high"}],"selection_summary":"...","top3":[{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}]}`;
+{"summary":"...","priority_features":[{"feature":"...","why_it_matters":"...","importance":"high"}],"selection_summary":"...","top3":[{"rank":1,"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":87,"value_rationale":"..."}],"stretch_suggestions":[{"candidate_id":1,"asin":"...","title":"...","price":"...","rating":4.5,"review_count":1234,"key_features":["..."],"value_score":85,"stretch_rationale":"..."}]}`;
 }
 
-function parseComparisonResponse(text) {
+function parseComparisonResponse(text, { primary, stretch } = {}) {
   const raw = String(text || '').trim();
   if (!raw) throw new Error('LLM returned an empty response — try again or use a different model in Settings');
 
@@ -58,9 +78,20 @@ function parseComparisonResponse(text) {
     const preview = raw.slice(0, 200).replace(/\s+/g, ' ');
     throw new Error(`LLM did not return valid JSON. Preview: ${preview || '(empty)'}`);
   }
-  if (!Array.isArray(parsed.top3) || !parsed.top3.length) {
+
+  if (!Array.isArray(parsed.top3)) parsed.top3 = [];
+  if (!Array.isArray(parsed.stretch_suggestions)) parsed.stretch_suggestions = [];
+
+  const hasPrimary = primary?.length > 0;
+  const hasStretch = stretch?.length > 0;
+
+  if (hasPrimary && !parsed.top3.length) {
     throw new Error('LLM comparison missing top3 array');
   }
+  if (!hasPrimary && !hasStretch && !parsed.top3.length && !parsed.stretch_suggestions.length) {
+    throw new Error('LLM returned no product recommendations');
+  }
+
   return parsed;
 }
 
@@ -82,19 +113,19 @@ async function callCompareModel(userId, modelId, prompt, maxTokens) {
   return result;
 }
 
-async function scoreAndRank(userId, query, candidates, modelId) {
+async function scoreAndRank(userId, query, primary, stretch, budget, modelId) {
   const attempts = [
-    { prompt: buildComparePrompt(query, candidates), maxTokens: 8192, compact: false },
-    { prompt: buildComparePrompt(query, candidates, { compact: true }), maxTokens: 8192, compact: true },
+    { prompt: buildComparePrompt(query, primary, stretch, budget), compact: false },
+    { prompt: buildComparePrompt(query, primary, stretch, budget, { compact: true }), compact: true },
   ];
 
   let lastErr;
   for (let i = 0; i < attempts.length; i += 1) {
     try {
-      const { prompt, maxTokens } = attempts[i];
-      const result = await callCompareModel(userId, modelId, prompt, maxTokens);
-      const parsed = parseComparisonResponse(result.text);
-      return enrichTop3(parsed, candidates);
+      const { prompt } = attempts[i];
+      const result = await callCompareModel(userId, modelId, prompt, 8192);
+      const parsed = parseComparisonResponse(result.text, { primary, stretch });
+      return enrichComparison(parsed, primary, stretch);
     } catch (err) {
       lastErr = err;
       console.warn(`[productScout] compare attempt ${i + 1} failed:`, err.message);
@@ -105,18 +136,24 @@ async function scoreAndRank(userId, query, candidates, modelId) {
   throw lastErr || new Error('Product comparison failed');
 }
 
-function enrichTop3(parsed, candidates) {
-  const byAsin = Object.fromEntries(candidates.filter((c) => c.asin).map((c) => [c.asin, c]));
-  const byId = Object.fromEntries(candidates.map((c, i) => [i + 1, c]));
+function enrichComparison(parsed, primary, stretch) {
+  const enrichList = (items, pool) => {
+    const byAsin = Object.fromEntries(pool.filter((c) => c.asin).map((c) => [c.asin, c]));
+    const byId = Object.fromEntries(pool.map((c, i) => [i + 1, c]));
 
-  for (const item of parsed.top3) {
-    const src = byAsin[item.asin] || byId[item.candidate_id];
-    if (src) {
-      item.link = item.link || src.link;
-      item.feature_bullets = item.feature_bullets || src.feature_bullets;
+    for (const item of items) {
+      const src = byAsin[item.asin] || byId[item.candidate_id];
+      if (src) {
+        item.link = item.link || src.link;
+        item.feature_bullets = item.feature_bullets || src.feature_bullets;
+        if (src.over_budget_amount != null) item.over_budget_amount = src.over_budget_amount;
+        if (src.over_budget_pct != null) item.over_budget_pct = src.over_budget_pct;
+      }
     }
-  }
+  };
 
+  enrichList(parsed.top3 || [], primary);
+  enrichList(parsed.stretch_suggestions || [], stretch);
   return parsed;
 }
 
@@ -137,24 +174,45 @@ async function crossMarketAlternatives(winner, originalQuery) {
 }
 
 /**
- * Full product-scout pipeline.
  * @param {number} userId
  * @param {string} query
+ * @param {{ maxPrice?: number|null }} [opts]
  */
-async function runProductScout(userId, query) {
+async function runProductScout(userId, query, { maxPrice } = {}) {
   const q = String(query || '').trim();
   if (!q) throw new Error('Query is required');
 
+  const variancePct = await getPriceVariancePct(pool);
+  const max = Number(maxPrice);
+  const hasBudget = Number.isFinite(max) && max > 0;
+
   const { standard: modelId } = await getModelsForUser(userId);
-  const candidates = await searchProducts(q, { maxResults: 10 });
-  const comparison = await scoreAndRank(userId, q, candidates, modelId);
+  const allCandidates = await searchProducts(q, { maxResults: 10 });
+  const { primary, stretch, budget } = applyBudgetFilter(
+    allCandidates,
+    hasBudget ? max : null,
+    variancePct
+  );
+
+  if (!primary.length && !stretch.length) {
+    const ceiling = budget?.ceiling;
+    throw new Error(
+      ceiling
+        ? `No products found within your max price ($${max}) or variance ceiling ($${ceiling}). Try raising your budget.`
+        : 'No Amazon search results matched your query.'
+    );
+  }
+
+  const comparison = await scoreAndRank(userId, q, primary, stretch, budget, modelId);
   const top3 = comparison.top3 || [];
-  const winner = top3[0] || null;
+  const stretchSuggestions = comparison.stretch_suggestions || [];
+  const winner = top3[0] || stretchSuggestions[0] || null;
   const external_alternatives = winner ? await crossMarketAlternatives(winner, q) : [];
 
   const result = {
     query: q,
-    candidates_fetched: candidates.length,
+    candidates_fetched: allCandidates.length,
+    budget,
     comparison,
     external_alternatives,
     markdown: null,

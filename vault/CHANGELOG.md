@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout-budget)
+
+**Feature:** Product Scout budget filtering — per-search max price, admin variance % for stretch suggestions above budget.
+
+---
+
 ## 2026-07-12 (product-scout-json)
 
 **Fix:** Product Scout LLM parsing — retry on empty/truncated JSON, compact prompt, 8192 max tokens, shared `parseModelJson` extractor.
