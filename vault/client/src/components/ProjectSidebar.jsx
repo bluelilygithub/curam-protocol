@@ -41,6 +41,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const [clientOpen, setClientOpen] = useState(false);
   const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
   const [tpSaving, setTpSaving] = useState(false);
+  const [railTip, setRailTip] = useState(null); // collapsed icon-rail tooltips (must be top-level — Rules of Hooks)
 
   useEffect(() => {
     const loadSessionLists = () => {
@@ -241,9 +242,6 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
       { icon: 'settings', title: 'Settings', action: () => navigate('/settings'), active: location.pathname === '/settings' },
     ];
-
-    // Fixed-position tooltip state — CSS ::after can't escape overflow:hidden on the sidebar
-    const [railTip, setRailTip] = useState(null);
 
     return (
       <div className="flex flex-col h-full w-full items-center py-3 gap-1">
