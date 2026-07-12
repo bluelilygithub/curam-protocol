@@ -4,7 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-12 (product-scout-delivery)
+## 2026-07-12 (product-scout-compare-url)
+
+**Feature:** Product Scout URL compare — paste an Amazon product link after a scout run; AI compares it to budget picks with upgrade benefits, missing features, and suggested mid-range budget.
+
+---
 
 **Enhancement:** Product Scout delivery filters — optional **Free delivery** and **Within 2 days** toggles on search; Rainforest delivery fields parsed in `productScoutDelivery.js`. Comparison table always shows price and delivery rows first.
 

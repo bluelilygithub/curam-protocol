@@ -39,6 +39,7 @@ GET  /api/product-scout/settings       — price variance % + amazon domain (adm
 GET  /api/product-scout/runs           — recent runs for user
 GET  /api/product-scout/runs/:id       — single run
 POST /api/product-scout/run            — { query, maxPrice?, freeDelivery?, within2Days? }
+POST /api/product-scout/compare-url    — { url, runId } — compare Amazon URL vs budget picks from a run
 POST /api/product-scout/runs/delete    — { ids: [1, 2, …] }
 POST /api/product-scout/settings       — admin: { priceVariancePct?, amazonDomain? }
 ```
@@ -53,6 +54,15 @@ Feature flag: `productScout` in Settings → Feature Access.
 | `maxPrice` | number | Optional budget ceiling (AUD for AU marketplace) |
 | `freeDelivery` | boolean | Filter to listings with free delivery signal |
 | `within2Days` | boolean | Filter to listings with today/tomorrow/2-day delivery signal |
+
+### Compare URL (after a scout run)
+
+Paste an Amazon product URL to compare it against the ranked budget picks from that run. Returns two AI paragraphs:
+
+1. **upgrade_benefits** — major advantages over your picks; whether stretching budget is worth it  
+2. **budget_guidance** — features missing on budget picks + suggested mid-range budget (AUD)
+
+Also: `feature_gaps`, `worth_stretching`, `recommended_budget_min/max`. Saved on the run as `url_comparisons[]`.
 
 ## Budget & variance
 

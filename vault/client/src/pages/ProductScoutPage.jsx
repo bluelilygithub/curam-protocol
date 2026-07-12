@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import ProductScoutResults from '../components/productScout/ProductScoutResults';
+import ProductScoutUrlCompare from '../components/productScout/ProductScoutUrlCompare';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
@@ -260,6 +261,16 @@ export default function ProductScoutPage() {
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
           <ProductScoutResults result={result} />
+          <ProductScoutUrlCompare
+            runId={result.runId ?? loadedRunId}
+            comparisons={result.url_comparisons || []}
+            onCompared={(entry) => {
+              setResult((prev) => ({
+                ...prev,
+                url_comparisons: [...(prev?.url_comparisons || []), entry],
+              }));
+            }}
+          />
         </section>
       )}
 

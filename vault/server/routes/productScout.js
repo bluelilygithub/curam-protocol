@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { runProductScout, listRuns, getRun, deleteRuns } = require('../services/productScoutService');
+const { compareUrlToScout } = require('../services/productScoutCompareUrl');
 const {
   getPriceVariancePct,
   setPriceVariancePct,
@@ -20,7 +21,7 @@ function handle(fn) {
       res.json(data);
     } catch (err) {
       console.error('[productScout]', err.message);
-      const status = err.message.includes('not set') ? 503 : 500;
+      const status = err.status || (err.message.includes('not set') ? 503 : 500);
       res.status(status).json({ error: err.message || 'Product Scout failed' });
     }
   };
@@ -59,6 +60,14 @@ router.post('/settings', async (req, res) => {
     res.status(err.message.includes('Invalid') ? 400 : 500).json({ error: err.message || 'Failed to save settings' });
   }
 });
+
+router.post('/compare-url', handle(async (req) => {
+  const { url, runId } = req.body || {};
+  if (!url?.trim()) throw new Error('url is required');
+  const id = runId != null && runId !== '' ? Number(runId) : null;
+  if (!id || !Number.isFinite(id)) throw new Error('runId is required — run a scout search first');
+  return compareUrlToScout(req.user.id, { url: url.trim(), runId: id });
+}));
 
 router.get('/runs', handle(async (req) => listRuns(req.user.id)));
 
