@@ -19,7 +19,7 @@ async function searchProducts(query, {
   within2Days = false,
 } = {}) {
   const domain = String(amazonDomain || 'amazon.com.au').trim() || 'amazon.com.au';
-  const fetchCount = (freeDelivery || within2Days) ? Math.max(maxResults, 25) : maxResults;
+  const fetchCount = (freeDelivery || within2Days) ? Math.max(maxResults, 40) : maxResults;
 
   const params = new URLSearchParams({
     api_key: apiKey(),
