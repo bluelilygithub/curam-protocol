@@ -4,8 +4,26 @@ import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 
+const SUGGESTION_QUEUES = ['inbox', 'implemented', 'ignored', 'all'];
+
+const QUEUE_LABELS = {
+  inbox: 'Inbox',
+  implemented: 'Implemented',
+  ignored: 'Ignored',
+  all: 'All',
+};
+
+const STATUS_LABELS = {
+  new: 'New',
+  opened: 'Opened',
+  ignore: 'Ignored',
+  implement: 'Implemented',
+  learn: 'Learn',
+};
+
 const CATEGORIES = ['rule', 'skill', 'automation', 'source', 'alert', 'other'];
 const TRIAGE_STATUSES = ['new', 'opened', 'ignore', 'learn'];
+const INBOX_STATUSES = ['new', 'opened', 'learn'];
 const ALL_STATUSES = [...TRIAGE_STATUSES, 'implement'];
 
 const FIELD = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none';
@@ -48,7 +66,7 @@ function formatWhen(iso) {
 }
 
 function labelize(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  return STATUS_LABELS[value] || value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function FilterChip({ active, onClick, children, count }) {
@@ -220,6 +238,7 @@ function SuggestionsPage() {
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [queueFilter, setQueueFilter] = useState('inbox');
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
@@ -230,6 +249,7 @@ function SuggestionsPage() {
   const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (categoryFilter !== 'all') params.set('category', categoryFilter);
+    if (queueFilter !== 'all') params.set('queue', queueFilter);
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (search.trim()) params.set('q', search.trim());
 
@@ -247,7 +267,7 @@ function SuggestionsPage() {
     setItems(Array.isArray(list) ? list : []);
     setMeta(metaData);
     window.dispatchEvent(new CustomEvent('vault:suggestions-changed'));
-  }, [categoryFilter, statusFilter, search]);
+  }, [categoryFilter, queueFilter, statusFilter, search]);
 
   useEffect(() => {
     setLoading(true);
@@ -258,13 +278,29 @@ function SuggestionsPage() {
 
   const statusCounts = meta?.statusCounts ?? {};
   const categoryCounts = meta?.categoryCounts ?? {};
+  const queueCounts = meta?.queueCounts ?? {};
+
+  const visibleStatusFilters = useMemo(() => {
+    if (queueFilter === 'implemented' || queueFilter === 'ignored') return [];
+    if (queueFilter === 'inbox') return INBOX_STATUSES;
+    return ALL_STATUSES;
+  }, [queueFilter]);
 
   const emptyMessage = useMemo(() => {
-    if (categoryFilter !== 'all' || statusFilter !== 'all' || search.trim()) {
+    if (categoryFilter !== 'all' || queueFilter !== 'inbox' || statusFilter !== 'all' || search.trim()) {
       return 'No suggestions match your filters.';
     }
     return 'Nothing here yet. Agents and routines will add suggestions after substantial work.';
-  }, [categoryFilter, statusFilter, search]);
+  }, [categoryFilter, queueFilter, statusFilter, search]);
+
+  const setQueue = (queue) => {
+    setQueueFilter(queue);
+    if (queue === 'implemented' || queue === 'ignored') {
+      setStatusFilter('all');
+    } else if (statusFilter === 'implement' || statusFilter === 'ignore') {
+      setStatusFilter('all');
+    }
+  };
 
   const handleImplement = async (id) => {
     setUpdatingId(id);
@@ -388,7 +424,7 @@ function SuggestionsPage() {
         </p>
         {meta && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            {meta.total} total · {statusCounts.new ?? 0} new
+            {meta.total} total · {queueCounts.inbox ?? 0} in inbox · {queueCounts.implemented ?? 0} implemented · {queueCounts.ignored ?? 0} ignored
           </p>
         )}
       </div>
@@ -444,6 +480,22 @@ function SuggestionsPage() {
         />
 
         <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>View</p>
+          <div className="flex flex-wrap gap-2">
+            {SUGGESTION_QUEUES.map((q) => (
+              <FilterChip
+                key={q}
+                active={queueFilter === q}
+                onClick={() => setQueue(q)}
+                count={queueCounts[q]}
+              >
+                {QUEUE_LABELS[q]}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Category</p>
           <div className="flex flex-wrap gap-2">
             <FilterChip active={categoryFilter === 'all'} onClick={() => setCategoryFilter('all')} count={meta?.total}>
@@ -462,24 +514,26 @@ function SuggestionsPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Status</p>
-          <div className="flex flex-wrap gap-2">
-            <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} count={meta?.total}>
-              All
-            </FilterChip>
-            {ALL_STATUSES.map((s) => (
-              <FilterChip
-                key={s}
-                active={statusFilter === s}
-                onClick={() => setStatusFilter(s)}
-                count={statusCounts[s]}
-              >
-                {labelize(s)}
+        {visibleStatusFilters.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Status</p>
+            <div className="flex flex-wrap gap-2">
+              <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
+                Any
               </FilterChip>
-            ))}
+              {visibleStatusFilters.map((s) => (
+                <FilterChip
+                  key={s}
+                  active={statusFilter === s}
+                  onClick={() => setStatusFilter(s)}
+                  count={statusCounts[s]}
+                >
+                  {labelize(s)}
+                </FilterChip>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {loading ? (

@@ -9,6 +9,25 @@ const {
   isValidCategory,
   isValidStatus,
 } = require('../constants/suggestionInbox');
+
+const SUGGESTION_QUEUES = ['inbox', 'implemented', 'ignored', 'all'];
+
+function isValidQueue(value) {
+  return SUGGESTION_QUEUES.includes(value);
+}
+
+function queueWhereClause(queue) {
+  switch (queue) {
+    case 'inbox':
+      return ` AND status NOT IN ('implement', 'ignore')`;
+    case 'implemented':
+      return ` AND status = 'implement'`;
+    case 'ignored':
+      return ` AND status = 'ignore'`;
+    default:
+      return '';
+  }
+}
 const SuggestionService = require('../services/SuggestionService');
 const { implementSuggestion, parseResult } = require('../services/suggestionImplement');
 
@@ -35,12 +54,21 @@ router.get('/meta', async (req, res) => {
     const categoryCounts = Object.fromEntries(SUGGESTION_CATEGORIES.map((c) => [c, 0]));
     for (const row of categoryRows) categoryCounts[row.category] = row.count;
 
+    const queueCounts = {
+      inbox: (statusCounts.new ?? 0) + (statusCounts.opened ?? 0) + (statusCounts.learn ?? 0),
+      implemented: statusCounts.implement ?? 0,
+      ignored: statusCounts.ignore ?? 0,
+      all: Object.values(statusCounts).reduce((a, b) => a + b, 0),
+    };
+
     res.json({
       categories: SUGGESTION_CATEGORIES,
       statuses: SUGGESTION_STATUSES,
+      queues: SUGGESTION_QUEUES,
       statusCounts,
       categoryCounts,
-      total: Object.values(statusCounts).reduce((a, b) => a + b, 0),
+      queueCounts,
+      total: queueCounts.all,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -68,10 +96,10 @@ router.get('/count', async (req, res) => {
   }
 });
 
-// GET /api/suggestions?category=rule&status=new
+// GET /api/suggestions?category=rule&status=new&queue=inbox
 router.get('/', async (req, res) => {
   const userId = req.user.id;
-  const { category, status, q } = req.query;
+  const { category, status, queue, q } = req.query;
 
   let sql = `
     SELECT id, category, status, title, body, context, source, "implementationResult", "createdAt", "updatedAt"
@@ -87,6 +115,12 @@ router.get('/', async (req, res) => {
     }
     sql += ` AND category = $${idx++}`;
     params.push(category);
+  }
+  if (queue) {
+    if (!isValidQueue(queue)) {
+      return res.status(400).json({ error: 'Invalid queue' });
+    }
+    sql += queueWhereClause(queue);
   }
   if (status) {
     if (!isValidStatus(status)) {
