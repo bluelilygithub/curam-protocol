@@ -34,7 +34,10 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
-- `server/routes/shares.js` — CRUD for trades + cash, dashboard, charts (`?days=`), refresh
+- `server/routes/productScout.js` — Product Scout run/history API
+- `server/services/productScoutService.js` — comparison pipeline (Rainforest + callModel + web search)
+- `server/services/rainforestClient.js` — Amazon search via Rainforest API
+- `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
 
@@ -287,9 +290,11 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
+
+**Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
@@ -328,6 +333,8 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `FINNHUB_API_KEY` | Shares — NYSE/NASDAQ quotes + company news (free tier, no IP block on Railway) |
 | `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
+| `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
+| `AMAZON_DOMAIN` | Product Scout — optional Amazon locale (default `amazon.com`; e.g. `amazon.com.au`) |
 
 ---
 

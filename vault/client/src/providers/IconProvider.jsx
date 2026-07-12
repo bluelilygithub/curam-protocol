@@ -43,6 +43,7 @@ const semanticMap = {
   'alert-triangle': { lucide: 'AlertTriangle' },
   compress: { lucide: 'Minimize2' },
   globe: { lucide: 'Globe' },
+  productScout: { lucide: 'ShoppingCart' },
   'shield-check': { lucide: 'ShieldCheck' },
   radar: { lucide: 'Radar' },
   'trending-up': { lucide: 'TrendingUp' },

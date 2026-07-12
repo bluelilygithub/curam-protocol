@@ -36,6 +36,7 @@ export const APP_NAV_GROUPS = [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'domains', label: 'Domain & Brand', path: '/domains', icon: 'globe', featureKey: 'domains' },
+      { id: 'productScout', label: 'Product Scout', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
       { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', icon: 'blocks', featureKey: 'themeBuilder' },
       { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
     ],

@@ -34,6 +34,7 @@ import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
+import ProductScoutPage from './pages/ProductScoutPage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
@@ -144,6 +145,7 @@ function App() {
               <Route path="/graphics" element={<GraphicsPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
+              <Route path="/product-scout" element={<ProductScoutPage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />

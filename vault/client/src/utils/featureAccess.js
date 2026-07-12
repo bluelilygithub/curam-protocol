@@ -20,6 +20,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   wellbeing: true,
   gmailIntel: true,
   domains: true,
+  productScout: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -44,5 +45,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'wellbeing', label: 'Wellbeing Check' },
   { key: 'gmailIntel', label: 'Inbox Intel' },
   { key: 'domains', label: 'Domain & Brand' },
+  { key: 'productScout', label: 'Product Scout' },
 ];
 

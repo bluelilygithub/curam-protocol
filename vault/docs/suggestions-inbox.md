@@ -89,6 +89,7 @@ await captureIf(condition, {
 | `newsDigestCron` | No articles, topic failures, all-empty run, high cost |
 | `sharesCron` | Missing ASX API key, poll/briefing failures |
 | `MemoryService` | Embeddings down, memories not searchable |
+| `productScout` | Cross-market search returned no external alternatives |
 | `manual` | User adds via UI |
 
 ### Adding a new emitter

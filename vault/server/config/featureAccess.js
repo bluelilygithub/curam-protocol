@@ -19,6 +19,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
+  productScout: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

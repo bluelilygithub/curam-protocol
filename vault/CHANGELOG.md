@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout)
+
+**Feature:** Product Scout — unbiased Amazon comparison agent.
+
+- **CLI** (`product-scout/`) — Python tool: Rainforest API → LLM value scoring → cross-market web search.
+- **Vault UI** — `/product-scout` in Apps → Content tools; markdown results + run history.
+- **API** — `POST /api/product-scout/run`; stores runs in `product_scout_runs`.
+- **Feature flag** — `productScout` in Feature Access.
+- **Docs** — `docs/product-scout.md`, `product-scout/README.md`.
+
+**New env:** `RAINFOREST_API_KEY`, optional `AMAZON_DOMAIN`.
+
+---
+
 ## 2026-07-12 (shares-charts)
 
 **Feature:** Shares Charts tab — observation-aligned analytics.

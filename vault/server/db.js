@@ -1496,6 +1496,20 @@ async function initSchema() {
   // Force re-classify rows without isExpense so LLM re-evaluates them with the new field
   await pool.query(`UPDATE gmail_classifications SET "lastMessageId" = '' WHERE "isExpense" IS NULL`);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS product_scout_runs (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      query       TEXT NOT NULL,
+      result      JSONB NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_product_scout_runs_user_time
+      ON product_scout_runs ("userId", "createdAt" DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

@@ -121,6 +121,7 @@ app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), require('./routes/graphics'));
 app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
+app.use('/api/product-scout', requireFeature('productScout'), require('./routes/productScout'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 
 if (process.env.NODE_ENV === 'production') {
