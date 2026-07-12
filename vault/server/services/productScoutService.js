@@ -7,8 +7,10 @@ const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
+const { formatMarkdown } = require('./productScoutFormat');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
+Identify which product features matter most for the user's specific query before ranking.
 Return ONLY valid JSON matching the schema requested. No markdown fences. No prose outside JSON.`;
 
 function parseJsonFromModel(text) {
@@ -44,9 +46,17 @@ ${JSON.stringify(payload, null, 2)}
 Analyze all candidates. Score each 0–100 on VALUE (features/specs vs price, adjusted for review quality).
 Pick the top 3 by value score.
 
+Also:
+1. List 4–6 priority_features — the specs that matter most for THIS query (not generic marketing fluff), each with why_it_matters and importance ("high" or "medium").
+2. Write selection_summary — 2–3 short paragraphs explaining why you chose these three as a set: what tradeoffs each represents, how they differ, and who each pick suits best.
+
 Return JSON exactly in this shape:
 {
   "summary": "One sentence overall recommendation framing",
+  "priority_features": [
+    { "feature": "Active noise cancellation", "why_it_matters": "...", "importance": "high" }
+  ],
+  "selection_summary": "Paragraph 1...\\n\\nParagraph 2...",
   "top3": [
     {
       "rank": 1,
@@ -114,35 +124,6 @@ async function crossMarketAlternatives(winner, originalQuery) {
       return [];
     }
   }
-}
-
-function formatMarkdown(result) {
-  const lines = [`# Product Scout — ${result.query}\n`];
-  const comp = result.comparison || {};
-  if (comp.summary) lines.push(`${comp.summary}\n`);
-  lines.push('## Top 3 on Amazon\n');
-  lines.push('| Rank | Product | Price | Rating | Reviews | Value | Key features |');
-  lines.push('|------|---------|-------|--------|---------|-------|--------------|');
-  for (const item of comp.top3 || []) {
-    const rating = item.rating != null ? `${item.rating}★` : '—';
-    const features = (item.key_features || []).slice(0, 3).join('; ') || '—';
-    const title = String(item.title || '').slice(0, 60);
-    lines.push(
-      `| ${item.rank ?? '—'} | ${title} | ${item.price ?? '—'} | ${rating} | ${item.review_count ?? '—'} | **${item.value_score ?? '—'}** | ${features} |`
-    );
-  }
-  for (const item of comp.top3 || []) {
-    if (item.value_rationale) lines.push(`\n**#${item.rank} rationale:** ${item.value_rationale}`);
-    if (item.link) lines.push(`- [Amazon link](${item.link})`);
-  }
-  const ext = result.external_alternatives || [];
-  if (ext.length) {
-    lines.push('\n## External alternatives (non-Amazon)\n');
-    for (const alt of ext.slice(0, 6)) {
-      lines.push(`- [${alt.title}](${alt.url}) — ${(alt.snippet || '').slice(0, 120)}`);
-    }
-  }
-  return `${lines.join('\n')}\n`;
 }
 
 /**
@@ -213,4 +194,4 @@ async function getRun(userId, id) {
   return { ...row, result };
 }
 
-module.exports = { runProductScout, listRuns, getRun, formatMarkdown };
+module.exports = { runProductScout, listRuns, getRun };

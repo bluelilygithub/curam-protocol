@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
+import ProductScoutResults from '../components/productScout/ProductScoutResults';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
@@ -170,12 +170,12 @@ export default function ProductScoutPage() {
         </div>
       )}
 
-      {result?.markdown && (
+      {result?.comparison && (
         <section
-          className="rounded-2xl border p-6 prose prose-sm max-w-none"
-          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+          className="rounded-2xl border p-6"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
-          <ReactMarkdown>{result.markdown}</ReactMarkdown>
+          <ProductScoutResults result={result} />
         </section>
       )}
 

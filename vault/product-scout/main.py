@@ -38,49 +38,7 @@ def run_pipeline(query: str) -> dict:
     }
 
 
-def format_markdown(result: dict) -> str:
-    lines = [f"# Product Scout — {result['query']}\n"]
-    comp = result.get("comparison") or {}
-    if comp.get("summary"):
-        lines.append(f"{comp['summary']}\n")
-
-    lines.append("## Top 3 on Amazon\n")
-    lines.append("| Rank | Product | Price | Rating | Reviews | Value | Key features |")
-    lines.append("|------|---------|-------|--------|---------|-------|--------------|")
-
-    for item in comp.get("top3") or []:
-        rating = item.get("rating")
-        rating_str = f"{rating}★" if rating is not None else "—"
-        reviews = item.get("review_count") or "—"
-        features = "; ".join((item.get("key_features") or [])[:3]) or "—"
-        title = (item.get("title") or "")[:60]
-        lines.append(
-            f"| {item.get('rank', '—')} | {title} | {item.get('price', '—')} | "
-            f"{rating_str} | {reviews} | **{item.get('value_score', '—')}** | {features} |"
-        )
-
-    for item in comp.get("top3") or []:
-        if item.get("value_rationale"):
-            lines.append(f"\n**#{item.get('rank')} rationale:** {item['value_rationale']}")
-        if item.get("link"):
-            lines.append(f"- [Amazon link]({item['link']})")
-
-    externals = result.get("external_alternatives") or []
-    if externals:
-        lines.append("\n## External alternatives (non-Amazon)\n")
-        for alt in externals[:6]:
-            title = alt.get("title") or alt.get("url") or "Result"
-            url = alt.get("url") or ""
-            snippet = (alt.get("snippet") or "")[:120]
-            lines.append(f"- [{title}]({url}) — {snippet}")
-    else:
-        lines.append("\n## External alternatives\n")
-        lines.append("_No cross-market results (SEARCH_API_KEY not set or search failed)._")
-
-    return "\n".join(lines) + "\n"
-
-
-def main() -> int:
+from format_output import format_markdown
     parser = argparse.ArgumentParser(
         description="Compare Amazon products and find external alternatives."
     )

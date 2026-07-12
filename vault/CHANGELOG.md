@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout-output)
+
+**Enhancement:** Product Scout results — structured UI cards, priority features section, "Why these three?" summary, fixed markdown tables for CLI.
+
+---
+
 ## 2026-07-12 (product-scout-fix)
 
 **Fix:** Rainforest search — removed invalid `sort_by=relevanceblender` (API rejected requests); use default sort + `exclude_sponsored=true`.
