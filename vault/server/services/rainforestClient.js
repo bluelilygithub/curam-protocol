@@ -24,7 +24,8 @@ async function searchProducts(query, { maxResults = 10 } = {}) {
     type: 'search',
     amazon_domain: amazonDomain(),
     search_term: query.trim(),
-    sort_by: 'relevanceblender',
+    number_of_results: String(maxResults),
+    exclude_sponsored: 'true',
   });
 
   const res = await fetch(`${RAINFOREST_URL}?${params}`, { signal: AbortSignal.timeout(45000) });

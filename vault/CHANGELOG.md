@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout-fix)
+
+**Fix:** Rainforest search — removed invalid `sort_by=relevanceblender` (API rejected requests); use default sort + `exclude_sponsored=true`.
+
+---
+
 ## 2026-07-12 (product-scout)
 
 **Feature:** Product Scout — unbiased Amazon comparison agent.

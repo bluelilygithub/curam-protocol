@@ -35,7 +35,8 @@ def search_products(query: str, *, max_results: int = 10) -> list[dict[str, Any]
         "type": "search",
         "amazon_domain": _domain(),
         "search_term": query.strip(),
-        "sort_by": "relevanceblender",
+        "number_of_results": str(max_results),
+        "exclude_sponsored": "true",
     }
 
     try:

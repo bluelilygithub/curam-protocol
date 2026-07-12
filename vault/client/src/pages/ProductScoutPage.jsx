@@ -29,6 +29,7 @@ export default function ProductScoutPage() {
   const [runs, setRuns] = useState([]);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -66,6 +67,7 @@ export default function ProductScoutPage() {
       return;
     }
     startProcessing('Scouting products…', 'Fetching Amazon results, scoring with AI, and checking external alternatives.');
+    setError(null);
     try {
       const res = await api.post('/api/product-scout/run', { query: q });
       const data = await res.json();
@@ -74,7 +76,10 @@ export default function ProductScoutPage() {
       await loadMeta();
       addToast('Comparison ready', 'success');
     } catch (err) {
-      addToast(err.message || 'Scout failed', 'error');
+      const msg = err.message || 'Scout failed';
+      setError(msg);
+      addToast(msg, 'error');
+      setResult(null);
     } finally {
       stopProcessing();
     }
@@ -155,6 +160,15 @@ export default function ProductScoutPage() {
           Scout products
         </button>
       </form>
+
+      {error && (
+        <div
+          className="rounded-xl border p-4 text-xs"
+          style={{ borderColor: '#ef4444', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+        >
+          {error}
+        </div>
+      )}
 
       {result?.markdown && (
         <section
