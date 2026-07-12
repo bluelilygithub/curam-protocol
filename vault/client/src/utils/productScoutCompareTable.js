@@ -39,19 +39,15 @@ function normalizeLlmTable(featureTable, productCount) {
   return rows.length ? rows : null;
 }
 
-export function buildFeatureTable(comparison) {
-  const top3 = comparison?.top3 || [];
-  const stretch = comparison?.stretch_suggestions || [];
-  const products = getCompareProducts(top3, stretch);
-  if (!products.length) return { products: [], rows: [] };
-
-  const fromLlm = normalizeLlmTable(comparison?.feature_table, products.length);
-  if (fromLlm) return { products, rows: fromLlm };
-
-  const rows = [
+function coreMetricRows(products) {
+  return [
     {
       feature: 'Price',
-      values: products.map((p) => p.price ?? '—'),
+      values: products.map((p) => p.price ?? p.price_display ?? '—'),
+    },
+    {
+      feature: 'Delivery',
+      values: products.map((p) => p.delivery_display || '—'),
     },
     {
       feature: 'Star rating',
@@ -68,16 +64,39 @@ export function buildFeatureTable(comparison) {
       values: products.map((p) => (p.value_score != null ? String(p.value_score) : '—')),
     },
   ];
+}
+
+function mergeTableRows(products, llmRows) {
+  const core = coreMetricRows(products);
+  const coreNames = new Set(core.map((r) => r.feature.toLowerCase()));
+  const extra = (llmRows || []).filter(
+    (row) => !coreNames.has(String(row.feature).toLowerCase())
+  );
+  return [...core, ...extra];
+}
+
+export function buildFeatureTable(comparison) {
+  const top3 = comparison?.top3 || [];
+  const stretch = comparison?.stretch_suggestions || [];
+  const products = getCompareProducts(top3, stretch);
+  if (!products.length) return { products: [], rows: [] };
+
+  const fromLlm = normalizeLlmTable(comparison?.feature_table, products.length);
+  const rows = mergeTableRows(products, fromLlm);
 
   const priority = comparison?.priority_features || [];
+  const existing = new Set(rows.map((r) => r.feature.toLowerCase()));
+
   for (const pf of priority) {
+    if (existing.has(pf.feature.toLowerCase())) continue;
     rows.push({
       feature: pf.feature,
       values: products.map((p) => matchFeatureValue(p, pf.feature) || '—'),
     });
+    existing.add(pf.feature.toLowerCase());
   }
 
-  if (!priority.length) {
+  if (!fromLlm && !priority.length) {
     const maxBullets = Math.max(...products.map((p) => (p.key_features || p.feature_bullets || []).length), 0);
     for (let i = 0; i < Math.min(maxBullets, 4); i += 1) {
       rows.push({

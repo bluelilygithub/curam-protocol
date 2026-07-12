@@ -176,9 +176,18 @@ export default function ProductScoutResults({ result }) {
   const priorityFeatures = comp.priority_features || [];
   const externals = result?.external_alternatives || [];
   const budget = result?.budget;
+  const filters = result?.filters;
 
   return (
     <div className="space-y-6">
+      {(filters?.freeDelivery || filters?.within2Days) && (
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          Filters:
+          {filters.freeDelivery && ' free delivery'}
+          {filters.freeDelivery && filters.within2Days && ' ·'}
+          {filters.within2Days && ' within 2 days'}
+        </p>
+      )}
       {budget && (
         <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
           Budget: <strong style={{ color: 'var(--color-text)' }}>${budget.maxPrice}</strong>

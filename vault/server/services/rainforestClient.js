@@ -1,5 +1,7 @@
 'use strict';
 
+const { parseDeliveryInfo, applyDeliveryFilters } = require('./productScoutDelivery');
+
 const RAINFOREST_URL = 'https://api.rainforestapi.com/request';
 
 function apiKey() {
@@ -10,14 +12,21 @@ function apiKey() {
   return k.trim();
 }
 
-async function searchProducts(query, { maxResults = 10, amazonDomain = 'amazon.com.au' } = {}) {
+async function searchProducts(query, {
+  maxResults = 10,
+  amazonDomain = 'amazon.com.au',
+  freeDelivery = false,
+  within2Days = false,
+} = {}) {
   const domain = String(amazonDomain || 'amazon.com.au').trim() || 'amazon.com.au';
+  const fetchCount = (freeDelivery || within2Days) ? Math.max(maxResults, 25) : maxResults;
+
   const params = new URLSearchParams({
     api_key: apiKey(),
     type: 'search',
     amazon_domain: domain,
     search_term: query.trim(),
-    number_of_results: String(maxResults),
+    number_of_results: String(fetchCount),
     exclude_sponsored: 'true',
   });
 
@@ -36,10 +45,11 @@ async function searchProducts(query, { maxResults = 10, amazonDomain = 'amazon.c
 
   const candidates = [];
   for (const item of data.search_results || []) {
-    if (candidates.length >= maxResults) break;
+    if (candidates.length >= fetchCount) break;
     if (!item?.title?.trim()) continue;
     const priceObj = item.price || {};
     const bullets = item.feature_bullets?.length ? item.feature_bullets : (item.description ? [item.description] : []);
+    const delivery_info = parseDeliveryInfo(item);
     candidates.push({
       asin: item.asin,
       title: item.title.trim(),
@@ -52,11 +62,21 @@ async function searchProducts(query, { maxResults = 10, amazonDomain = 'amazon.c
       link: item.link,
       is_prime: Boolean(item.is_prime),
       position: item.position,
+      delivery_display: delivery_info.delivery_display,
+      delivery_info,
     });
   }
 
-  if (!candidates.length) throw new Error(`No Amazon search results for: ${query}`);
-  return candidates;
+  const filtered = applyDeliveryFilters(candidates, { freeDelivery, within2Days }).slice(0, maxResults);
+
+  if (!filtered.length) {
+    const parts = [];
+    if (freeDelivery) parts.push('free delivery');
+    if (within2Days) parts.push('delivery within 2 days');
+    throw new Error(`No Amazon results matched filters: ${parts.join(' + ')}. Try turning off a filter.`);
+  }
+
+  return filtered;
 }
 
 module.exports = { searchProducts };

@@ -142,9 +142,10 @@ function enrichComparison(parsed, primary, stretch) {
     for (const item of items) {
       const src = byAsin[item.asin] || byId[item.candidate_id];
       if (src) {
-        item.link = item.link || src.link;
-        item.feature_bullets = item.feature_bullets || src.feature_bullets;
-        if (src.over_budget_amount != null) item.over_budget_amount = src.over_budget_amount;
+      item.link = item.link || src.link;
+      item.feature_bullets = item.feature_bullets || src.feature_bullets;
+      item.delivery_display = item.delivery_display || src.delivery_display;
+      if (src.over_budget_amount != null) item.over_budget_amount = src.over_budget_amount;
         if (src.over_budget_pct != null) item.over_budget_pct = src.over_budget_pct;
       }
     }
@@ -176,7 +177,7 @@ async function crossMarketAlternatives(winner, originalQuery) {
  * @param {string} query
  * @param {{ maxPrice?: number|null }} [opts]
  */
-async function runProductScout(userId, query, { maxPrice } = {}) {
+async function runProductScout(userId, query, { maxPrice, freeDelivery = false, within2Days = false } = {}) {
   const q = String(query || '').trim();
   if (!q) throw new Error('Query is required');
 
@@ -186,7 +187,12 @@ async function runProductScout(userId, query, { maxPrice } = {}) {
   const hasBudget = Number.isFinite(max) && max > 0;
 
   const { standard: modelId } = await getModelsForUser(userId);
-  const allCandidates = await searchProducts(q, { maxResults: 10, amazonDomain });
+  const allCandidates = await searchProducts(q, {
+    maxResults: 10,
+    amazonDomain,
+    freeDelivery,
+    within2Days,
+  });
   const { primary, stretch, budget } = applyBudgetFilter(
     allCandidates,
     hasBudget ? max : null,
@@ -213,6 +219,7 @@ async function runProductScout(userId, query, { maxPrice } = {}) {
     candidates_fetched: allCandidates.length,
     amazonDomain,
     amazonCountry: marketplaceLabel(amazonDomain),
+    filters: { freeDelivery, within2Days },
     budget,
     comparison,
     external_alternatives,

@@ -8,6 +8,22 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
+function FilterToggle({ label, checked, onChange }) {
+  return (
+    <label
+      className="flex items-center gap-2 text-xs cursor-pointer select-none px-3 py-2 rounded-xl border transition-opacity hover:opacity-70"
+      style={{
+        borderColor: checked ? 'var(--color-primary)' : 'var(--color-border)',
+        background: checked ? 'var(--color-bg)' : 'transparent',
+        color: 'var(--color-text)',
+      }}
+    >
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="rounded" />
+      {label}
+    </label>
+  );
+}
+
 export default function ProductScoutPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -25,8 +41,11 @@ export default function ProductScoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [maxPrice, setMaxPrice] = useState('');
+  const [freeDelivery, setFreeDelivery] = useState(false);
+  const [within2Days, setWithin2Days] = useState(false);
   const [selectedRunIds, setSelectedRunIds] = useState(new Set());
   const [loadedRunId, setLoadedRunId] = useState(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [deletingRuns, setDeletingRuns] = useState(false);
 
   useEffect(() => {
@@ -70,6 +89,8 @@ export default function ProductScoutPage() {
       const res = await api.post('/api/product-scout/run', {
         query: q,
         ...(maxPrice.trim() ? { maxPrice: Number(maxPrice) } : {}),
+        freeDelivery,
+        within2Days,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Scout failed');
@@ -95,6 +116,10 @@ export default function ProductScoutPage() {
       setResult(data.result);
       setQuery(data.query || '');
       setLoadedRunId(data.id);
+      if (data.result?.filters) {
+        setFreeDelivery(Boolean(data.result.filters.freeDelivery));
+        setWithin2Days(Boolean(data.result.filters.within2Days));
+      }
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -107,14 +132,17 @@ export default function ProductScoutPage() {
       else next.add(id);
       return next;
     });
+    setBulkDeleteConfirm(false);
   };
 
-  const deleteSelectedRuns = async () => {
+  const clearSelection = () => {
+    setSelectedRunIds(new Set());
+    setBulkDeleteConfirm(false);
+  };
+
+  const handleBulkDelete = async () => {
     const ids = [...selectedRunIds];
-    if (!ids.length) {
-      addToast('Select scouts to delete', 'error');
-      return;
-    }
+    if (!ids.length) return;
     setDeletingRuns(true);
     try {
       const res = await api.post('/api/product-scout/runs/delete', { ids });
@@ -124,17 +152,20 @@ export default function ProductScoutPage() {
         setResult(null);
         setLoadedRunId(null);
       }
-      setSelectedRunIds(new Set());
+      clearSelection();
       await loadMeta();
       addToast(`Deleted ${data.deleted ?? ids.length} scout${ids.length === 1 ? '' : 's'}`, 'success');
     } catch (err) {
       addToast(err.message || 'Delete failed', 'error');
     } finally {
       setDeletingRuns(false);
+      setBulkDeleteConfirm(false);
     }
   };
 
   if (!canUse) return <Navigate to="/" replace />;
+
+  const hasSelection = selectedRunIds.size > 0;
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -201,6 +232,10 @@ export default function ProductScoutPage() {
             )}
           </div>
         </label>
+        <div className="flex flex-wrap gap-2">
+          <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
+          <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
+        </div>
         <button
           type="submit"
           className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
@@ -230,28 +265,65 @@ export default function ProductScoutPage() {
 
       {!loading && runs.length > 0 && (
         <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent scouts</h2>
-            {selectedRunIds.size > 0 && (
-              <button
-                type="button"
-                disabled={deletingRuns}
-                onClick={deleteSelectedRuns}
-                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
-                style={{ borderColor: '#ef4444', color: '#ef4444' }}
-              >
-                {deletingRuns ? 'Deleting…' : `Delete selected (${selectedRunIds.size})`}
+          <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent scouts</h2>
+
+          {hasSelection && (
+            <div
+              className="flex flex-wrap items-center gap-2 px-3 py-2.5 rounded-xl border"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+            >
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                {selectedRunIds.size} selected
+              </span>
+              <div className="flex-1" />
+              {bulkDeleteConfirm ? (
+                <>
+                  <span className="text-xs" style={{ color: '#ef4444' }}>
+                    Delete {selectedRunIds.size} scout{selectedRunIds.size !== 1 ? 's' : ''}?
+                  </span>
+                  <button
+                    type="button"
+                    disabled={deletingRuns}
+                    onClick={handleBulkDelete}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-red-500 text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkDeleteConfirm(false)}
+                    className="text-xs"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteConfirm(true)}
+                  className="text-xs px-2.5 py-1 rounded-lg border border-red-400"
+                  style={{ color: '#ef4444' }}
+                >
+                  Delete
+                </button>
+              )}
+              <button type="button" onClick={clearSelection} className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Clear
               </button>
-            )}
-          </div>
+            </div>
+          )}
+
           <ul className="space-y-1">
             {runs.map((r) => {
               const selected = selectedRunIds.has(r.id);
               const isLoaded = loadedRunId === r.id;
               return (
-                <li key={r.id} className="flex items-stretch gap-2">
+                <li key={r.id} className="group flex items-stretch gap-2">
                   <label
-                    className="flex items-center px-2 shrink-0 cursor-pointer"
+                    className={`flex items-center px-2 shrink-0 cursor-pointer transition-opacity ${
+                      selected || hasSelection ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
                     style={{ color: 'var(--color-muted)' }}
                   >
                     <input

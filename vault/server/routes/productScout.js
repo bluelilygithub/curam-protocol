@@ -82,7 +82,7 @@ router.get('/runs/:id', async (req, res) => {
 });
 
 router.post('/run', handle(async (req) => {
-  const { query, maxPrice } = req.body || {};
+  const { query, maxPrice, freeDelivery, within2Days } = req.body || {};
   if (!query?.trim()) {
     const err = new Error('query is required');
     err.status = 400;
@@ -92,7 +92,11 @@ router.post('/run', handle(async (req) => {
   if (max != null && (!Number.isFinite(max) || max <= 0)) {
     throw new Error('maxPrice must be a positive number');
   }
-  return runProductScout(req.user.id, query.trim(), { maxPrice: max });
+  return runProductScout(req.user.id, query.trim(), {
+    maxPrice: max,
+    freeDelivery: Boolean(freeDelivery),
+    within2Days: Boolean(within2Days),
+  });
 }));
 
 module.exports = router;
