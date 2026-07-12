@@ -138,11 +138,15 @@ async function fetchProduct(input, defaultDomain = 'amazon.com.au') {
   const params = new URLSearchParams({
     api_key: apiKey(),
     type: 'product',
-    amazon_domain: amazonDomain,
   });
 
-  if (parsed.url) params.set('url', parsed.url);
-  else params.set('asin', parsed.asin);
+  // Rainforest: url defines the domain — do not combine with amazon_domain
+  if (parsed.url) {
+    params.set('url', parsed.url);
+  } else {
+    params.set('amazon_domain', amazonDomain);
+    params.set('asin', parsed.asin);
+  }
 
   const data = await rainforestRequest(params);
   const product = normalizeProductPayload(data, amazonDomain, parsed.asin);
