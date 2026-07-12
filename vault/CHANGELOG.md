@@ -4,6 +4,24 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (shares-charts)
+
+**Feature:** Shares Charts tab — observation-aligned analytics.
+
+Rebuilt the Charts tab to use the same pre-computed metrics as the daily Portfolio Note email (benchmarks, beat/lag, drawdown alerts, trailing returns, patterns).
+
+- **`GET /api/shares/charts?days=1|7|30|90`** — new `sharesChartData.js` service; legacy fields retained.
+- **Today:** portfolio vs Nasdaq/SOX/ASX 200; day movers with beat/lag; drawdown & alert status (% off peak / avg cost).
+- **Performance:** rebased relative performance from stored observations; multi-day portfolio value with optional cash line.
+- **Holdings:** allocation by benchmark bucket; 5-day trailing; total return vs cost; price-by-holding lines.
+- **Calendar & patterns:** US earnings timeline; move heatmap with unexplained-move highlights.
+- **Metals:** gold book day move, spot history, metals drawdown (when holdings exist).
+- **Docs:** `docs/shares-charts.md`, CLAUDE.md Charts summary.
+
+**New files:** `server/services/sharesChartData.js`, `client/src/components/shares/{SharesChartsTab,MultiLineChart,BenchmarkBarChart,DayMoversChart,DrawdownBars,MoveHeatmap,EarningsTimeline}.jsx`.
+
+---
+
 ## 2026-07-12 (implement)
 
 **Feature:** Suggestions **Implement** action — creates tasks/notes instead of label-only triage.

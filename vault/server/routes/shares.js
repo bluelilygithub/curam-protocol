@@ -63,10 +63,11 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// GET /api/shares/charts
+// GET /api/shares/charts?days=30
 router.get('/charts', async (req, res) => {
   try {
-    const data = await portfolio.getChartData(req.user.id);
+    const chartData = require('../services/sharesChartData');
+    const data = await chartData.getChartData(req.user.id, req.query.days);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

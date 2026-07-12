@@ -34,7 +34,8 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
-- `server/routes/shares.js` — CRUD for trades + cash, dashboard, charts, refresh
+- `server/routes/shares.js` — CRUD for trades + cash, dashboard, charts (`?days=`), refresh
+- `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
 
 ---
@@ -291,6 +292,8 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
+
+- **Charts tab** — observation-aligned analytics: portfolio vs benchmark day move, beat/lag movers, HWM drawdown alerts, 5-day trailing returns, allocation by sector proxy, relative performance from stored observations, earnings timeline, move heatmap, metals spot/book. See **`docs/shares-charts.md`**. API: `GET /api/shares/charts?days=1|7|30|90`.
 
 - **Holdings + P&L:** `computeHoldingsAndRealized()` in `sharesPortfolio.js` processes trades chronologically (avg-cost method). Returns open holdings + realized P&L per sell. `buildDashboard()` fetches live quotes and returns `positions`, `realized`, `totalRealizedPnlAud`, `unrealizedPnlAud`.
 - **Quotes:** Finnhub (`FINNHUB_API_KEY`) for NYSE/NASDAQ; Alpha Vantage (`ALPHA_VANTAGE_API_KEY`) for ASX. Frankfurter for USD→AUD. In-memory quote cache (15 min for user page loads) prevents burning Alpha Vantage's 25 req/day free-tier limit.

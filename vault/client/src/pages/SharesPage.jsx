@@ -5,9 +5,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
-import SimpleLineChart from '../components/shares/SimpleLineChart';
-import AllocationPie from '../components/shares/AllocationPie';
-import HorizontalBars from '../components/shares/HorizontalBars';
+import SharesChartsTab from '../components/shares/SharesChartsTab';
 
 const TABS = [
   { id: 'portfolio', label: 'Portfolio' },
@@ -338,6 +336,8 @@ export default function SharesPage() {
   const [tab, setTab] = useState('portfolio');
   const [dashboard, setDashboard] = useState(null);
   const [charts, setCharts] = useState(null);
+  const [chartDays, setChartDays] = useState(30);
+  const [chartsLoading, setChartsLoading] = useState(false);
   const [trades, setTrades] = useState([]);
   const [cashRows, setCashRows] = useState([]);
   const [newsBriefings, setNewsBriefings] = useState([]);
@@ -364,20 +364,32 @@ export default function SharesPage() {
       .catch(() => {});
   }, []);
 
+  const loadCharts = useCallback(async (days) => {
+    setChartsLoading(true);
+    try {
+      const chartRes = await api.get(`/api/shares/charts?days=${days}`);
+      const chartData = await chartRes.json();
+      if (!chartRes.ok) throw new Error(chartData.error || 'Failed to load charts');
+      setCharts(chartData);
+    } catch (err) {
+      addToast(err.message || 'Failed to load charts', 'error');
+    } finally {
+      setChartsLoading(false);
+    }
+  }, [addToast]);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, chartRes, tradesRes, cashRes, newsRes, tzRes] = await Promise.all([
+      const [dashRes, tradesRes, cashRes, newsRes, tzRes] = await Promise.all([
         api.get('/api/shares/dashboard'),
-        api.get('/api/shares/charts'),
         api.get('/api/shares/trades'),
         api.get('/api/shares/cash'),
         api.get('/api/shares/news'),
         api.get('/api/settings/workspace-timezone'),
       ]);
-      const [dash, chartData, tradeList, cashList, newsList, tzData] = await Promise.all([
+      const [dash, tradeList, cashList, newsList, tzData] = await Promise.all([
         dashRes.json(),
-        chartRes.json(),
         tradesRes.json(),
         cashRes.json(),
         newsRes.json(),
@@ -385,7 +397,6 @@ export default function SharesPage() {
       ]);
       if (!dashRes.ok) throw new Error(dash.error || 'Failed to load dashboard');
       setDashboard(dash);
-      setCharts(chartData);
       setTrades(Array.isArray(tradeList) ? tradeList : []);
       setCashRows(Array.isArray(cashList) ? cashList : []);
       setNewsBriefings(Array.isArray(newsList) ? newsList : []);
@@ -436,6 +447,10 @@ export default function SharesPage() {
     if (canUseShares) loadAll();
   }, [canUseShares, loadAll]);
 
+  useEffect(() => {
+    if (canUseShares && tab === 'charts') loadCharts(chartDays);
+  }, [canUseShares, tab, chartDays, loadCharts]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -443,8 +458,7 @@ export default function SharesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Refresh failed');
       setDashboard(data.dashboard);
-      const chartRes = await api.get('/api/shares/charts');
-      setCharts(await chartRes.json());
+      await loadCharts(chartDays);
       addToast('Quotes updated', 'success');
     } catch (err) {
       addToast(err.message || 'Refresh failed', 'error');
@@ -700,7 +714,9 @@ export default function SharesPage() {
     return <Navigate to="/" replace />;
   }
 
-  const symbolChartKeys = charts?.bySymbol ? Object.keys(charts.bySymbol) : [];
+  const handleChartDaysChange = (days) => {
+    setChartDays(days);
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -1112,42 +1128,16 @@ export default function SharesPage() {
               </>
             )}
 
-            {tab === 'charts' && charts && (
-              <>
-                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <h2 className="text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Portfolio P&L by stock</h2>
-                  <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-                    Open positions use unrealised P&L; closed positions use realised P&L from sell trades. Bars are based on the current portfolio tables.
-                  </p>
-                  <PortfolioPnlBarChart positions={dashboard?.positions || []} realized={dashboard?.realized || []} />
-                </section>
-                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Portfolio value (today)</h2>
-                  <SimpleLineChart points={charts.portfolioLine} valueKey="totalValueAud" label="Total AUD" />
-                </section>
-                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Holdings value (today)</h2>
-                  <SimpleLineChart points={charts.portfolioLine} valueKey="holdingsValueAud" label="Holdings AUD" />
-                </section>
-                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Allocation</h2>
-                  <AllocationPie slices={charts.allocation} />
-                </section>
-                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Unrealised P&L by holding</h2>
-                  <HorizontalBars items={charts.holdingPnl} valueKey="pnlPct" />
-                </section>
-                {symbolChartKeys.map((sym) => (
-                  <section
-                    key={sym}
-                    className="mb-6 p-4 rounded-lg border"
-                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-                  >
-                    <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>{sym} value (today)</h2>
-                    <SimpleLineChart points={charts.bySymbol[sym]} valueKey="valueAud" label={`${sym} AUD`} />
-                  </section>
-                ))}
-              </>
+            {tab === 'charts' && (
+              <SharesChartsTab
+                charts={charts}
+                days={chartDays}
+                onDaysChange={handleChartDaysChange}
+                loading={chartsLoading}
+                positions={dashboard?.positions || []}
+                realized={dashboard?.realized || []}
+                PortfolioPnlBarChart={PortfolioPnlBarChart}
+              />
             )}
 
             {tab === 'news' && (

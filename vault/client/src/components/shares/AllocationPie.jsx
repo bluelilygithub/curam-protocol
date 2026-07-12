@@ -43,6 +43,11 @@ export default function AllocationPie({ slices = [], size = 200 }) {
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: a.color }} />
             <span className="font-medium">{a.symbol}</span>
             <span style={{ color: 'var(--color-muted)' }}>{Number(a.pct).toFixed(1)}%</span>
+            {slices[i]?.detail && (
+              <span className="truncate max-w-[140px]" style={{ color: 'var(--color-muted)', fontSize: 10 }}>
+                {slices[i].detail}
+              </span>
+            )}
           </li>
         ))}
       </ul>

@@ -56,7 +56,7 @@ Runs after the 4 AM daily per-stock briefing cron and after the overnight US clo
 
 ### Report structure
 
-The email subject is `Portfolio note — YYYY-MM-DD`. Header shows benchmarks and book day move. **Alert status table** (pre-rendered, first) — per position: current price, peak HWM since purchase, % off peak, % off avg cost, flag (⚠️ within 1pp of trigger · 🔴 triggered). Triggers: 10% off peak · 4% off avg cost. High-water marks persist in observation `headlines` JSONB.
+The email subject is `Portfolio note — YYYY-MM-DD`. Header shows benchmarks and book day move. **Alert status table** (pre-rendered, first) — per position: current price, peak HWM since purchase, % off peak, % off avg cost, flag (⚠️ within 1pp of trigger · 🔴 triggered). Triggers: 10% off peak · 4% off avg cost. High-water marks persist in observation `headlines` JSONB. The **Charts** tab visualises these metrics — see **`docs/shares-charts.md`**.
 
 Narrative sections:
 
