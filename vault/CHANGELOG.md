@@ -4,6 +4,26 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-12 (product-scout-delivery)
+
+**Enhancement:** Product Scout delivery filters — optional **Free delivery** and **Within 2 days** toggles on search; Rainforest delivery fields parsed in `productScoutDelivery.js`. Comparison table always shows price and delivery rows first.
+
+**Enhancement:** History bulk delete — Tasks-style multi-select + `POST /api/product-scout/runs/delete`.
+
+---
+
+## 2026-07-12 (product-scout-compare)
+
+**Enhancement:** Product Scout results — side-by-side feature comparison table (top 3 + optional stretch), **listing ratings** label on review counts, bulk delete for run history.
+
+---
+
+## 2026-07-12 (product-scout-marketplace)
+
+**Feature:** Admin Amazon marketplace — Settings → Product Scout country dropdown (`product_scout_amazon_domain` in `workspace_settings`); `productScoutSettings.js` centralises variance + domain; env `AMAZON_DOMAIN` overrides.
+
+---
+
 ## 2026-07-12 (product-scout-budget)
 
 **Feature:** Product Scout budget filtering — per-search max price, admin variance % for stretch suggestions above budget.

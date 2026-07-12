@@ -34,9 +34,12 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
-- `server/routes/productScout.js` — Product Scout run/history API
+- `server/routes/productScout.js` — Product Scout run/history/settings API
 - `server/services/productScoutService.js` — comparison pipeline (Rainforest + callModel + web search)
+- `server/services/productScoutSettings.js` — variance % + Amazon marketplace (`workspace_settings`)
+- `server/services/productScoutDelivery.js` — free delivery / within-2-days parse + filter
 - `server/services/rainforestClient.js` — Amazon search via Rainforest API
+- `client/src/utils/productScoutCompareTable.js` — side-by-side feature table (price/delivery first)
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
@@ -294,7 +297,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 
-**Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`**.
+**Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
