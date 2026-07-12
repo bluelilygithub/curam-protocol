@@ -7,8 +7,11 @@ const { runProductScout, listRuns, getRun } = require('../services/productScoutS
 const {
   getPriceVariancePct,
   setPriceVariancePct,
-  DEFAULT_VARIANCE_PCT,
-} = require('../services/productScoutBudget');
+  getAmazonDomain,
+  setAmazonDomain,
+  getProductScoutSettings,
+  marketplaceLabel,
+} = require('../services/productScoutSettings');
 
 function handle(fn) {
   return async (req, res) => {
@@ -28,30 +31,32 @@ router.get('/config-check', handle(async () => {
   const anthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
   const gemini = Boolean(process.env.GEMINI_API_KEY?.trim());
   const search = Boolean(process.env.SEARCH_API_KEY?.trim());
-  const priceVariancePct = await getPriceVariancePct(pool);
+  const settings = await getProductScoutSettings(pool);
   return {
     rainforest,
     llm: anthropic || gemini,
     search,
-    amazonDomain: process.env.AMAZON_DOMAIN || 'amazon.com.au',
-    priceVariancePct,
-    defaultPriceVariancePct: DEFAULT_VARIANCE_PCT,
+    ...settings,
   };
 }));
 
-router.get('/settings', handle(async () => ({
-  priceVariancePct: await getPriceVariancePct(pool),
-  defaultPriceVariancePct: DEFAULT_VARIANCE_PCT,
-})));
+router.get('/settings', handle(async () => getProductScoutSettings(pool)));
 
 router.post('/settings', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
   try {
-    const pct = await setPriceVariancePct(pool, req.body?.priceVariancePct);
-    res.json({ ok: true, priceVariancePct: pct });
+    const out = {};
+    if (req.body?.priceVariancePct != null) {
+      out.priceVariancePct = await setPriceVariancePct(pool, req.body.priceVariancePct);
+    }
+    if (req.body?.amazonDomain != null) {
+      out.amazonDomain = await setAmazonDomain(pool, req.body.amazonDomain);
+      out.amazonCountry = marketplaceLabel(out.amazonDomain);
+    }
+    res.json({ ok: true, ...(await getProductScoutSettings(pool)), ...out });
   } catch (err) {
     console.error('[productScout]', err.message);
-    res.status(500).json({ error: err.message || 'Failed to save settings' });
+    res.status(err.message.includes('Invalid') ? 400 : 500).json({ error: err.message || 'Failed to save settings' });
   }
 });
 

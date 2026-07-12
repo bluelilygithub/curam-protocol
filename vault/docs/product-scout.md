@@ -46,6 +46,7 @@ Feature flag: `productScout` in Settings → Feature Access.
 
 - **Max price** — optional per-search field on `/product-scout`. Top 3 are chosen only from products at or below this price.
 - **Variance %** — admin setting in **Settings → Product Scout** (`workspace_settings.product_scout_price_variance_pct`, default 10%). Products above max price but within `max × (1 + variance/100)` are scored separately as **stretch suggestions** (up to 2) when value justifies the extra cost.
+- **Amazon marketplace** — admin setting in **Settings → Product Scout** (`product_scout_amazon_domain`, default `amazon.com.au`). Overridden if `AMAZON_DOMAIN` env var is set in Railway.
 - Products above the variance ceiling are excluded entirely.
 
 ## Suggestions inbox

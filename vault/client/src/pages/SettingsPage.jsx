@@ -128,6 +128,10 @@ function SettingsPage() {
   // Product Scout
   const [productScoutVariancePct, setProductScoutVariancePct] = useState('10');
   const [productScoutVarianceSaved, setProductScoutVarianceSaved] = useState(false);
+  const [productScoutAmazonDomain, setProductScoutAmazonDomain] = useState('amazon.com.au');
+  const [productScoutAmazonSaved, setProductScoutAmazonSaved] = useState(false);
+  const [productScoutMarketplaces, setProductScoutMarketplaces] = useState([]);
+  const [productScoutDomainFromEnv, setProductScoutDomainFromEnv] = useState(false);
 
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
@@ -336,6 +340,9 @@ function SettingsPage() {
 
     api.get('/api/product-scout/settings').then(r => r.json()).then((data) => {
       if (data?.priceVariancePct != null) setProductScoutVariancePct(String(data.priceVariancePct));
+      if (data?.amazonDomain) setProductScoutAmazonDomain(data.amazonDomain);
+      if (Array.isArray(data?.marketplaces)) setProductScoutMarketplaces(data.marketplaces);
+      if (data?.amazonDomainFromEnv) setProductScoutDomainFromEnv(true);
     }).catch(() => {});
 
     api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
@@ -2435,6 +2442,48 @@ function SettingsPage() {
       )}
 
       {tab === 'Product Scout' && (
+      <>
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Amazon marketplace
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Which Amazon country Product Scout searches. Applies to all workspace users.
+        </p>
+        {productScoutDomainFromEnv && (
+          <p className="text-xs mb-3" style={{ color: '#f59e0b' }}>
+            Overridden by <strong>AMAZON_DOMAIN</strong> in Railway — remove that env var to use this setting.
+          </p>
+        )}
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+          Country
+        </label>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={productScoutAmazonDomain}
+            disabled={productScoutDomainFromEnv}
+            onChange={async (e) => {
+              const domain = e.target.value;
+              setProductScoutAmazonDomain(domain);
+              setProductScoutAmazonSaved(false);
+              try {
+                await api.post('/api/product-scout/settings', { amazonDomain: domain });
+                setProductScoutAmazonSaved(true);
+                setTimeout(() => setProductScoutAmazonSaved(false), 2000);
+              } catch { /* ignore */ }
+            }}
+            className="px-3 py-1.5 rounded-lg border text-sm outline-none min-w-[200px]"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {(productScoutMarketplaces.length ? productScoutMarketplaces : [{ domain: 'amazon.com.au', label: 'Australia' }]).map((m) => (
+              <option key={m.domain} value={m.domain}>{m.label}</option>
+            ))}
+          </select>
+          <span className="text-xs" style={{ color: productScoutAmazonSaved ? '#22c55e' : 'var(--color-muted)' }}>
+            {productScoutAmazonSaved ? 'Saved ✓' : productScoutAmazonDomain}
+          </span>
+        </div>
+      </section>
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
           Price variance
@@ -2477,6 +2526,7 @@ function SettingsPage() {
           </span>
         </div>
       </section>
+      </>
       )}
 
       {/* Mobile tab */}

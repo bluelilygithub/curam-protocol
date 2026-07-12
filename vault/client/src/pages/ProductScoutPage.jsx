@@ -109,7 +109,9 @@ export default function ProductScoutPage() {
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Amazon Australia comparison — value scoring plus non-Amazon alternatives.
+            {config?.amazonCountry
+              ? `Amazon ${config.amazonCountry} — value scoring plus non-Amazon alternatives.`
+              : 'Amazon comparison — value scoring plus non-Amazon alternatives.'}
           </p>
         </div>
       </div>

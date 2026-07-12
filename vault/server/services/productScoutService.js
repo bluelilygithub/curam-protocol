@@ -9,10 +9,7 @@ const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
 const { parseModelJson } = require('../utils/parseModelJson');
-const {
-  getPriceVariancePct,
-  applyBudgetFilter,
-} = require('./productScoutBudget');
+const { getPriceVariancePct, getAmazonDomain, applyBudgetFilter, marketplaceLabel } = require('./productScoutSettings');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Identify which product features matter most for the user's specific query before ranking.
@@ -183,11 +180,12 @@ async function runProductScout(userId, query, { maxPrice } = {}) {
   if (!q) throw new Error('Query is required');
 
   const variancePct = await getPriceVariancePct(pool);
+  const amazonDomain = await getAmazonDomain(pool);
   const max = Number(maxPrice);
   const hasBudget = Number.isFinite(max) && max > 0;
 
   const { standard: modelId } = await getModelsForUser(userId);
-  const allCandidates = await searchProducts(q, { maxResults: 10 });
+  const allCandidates = await searchProducts(q, { maxResults: 10, amazonDomain });
   const { primary, stretch, budget } = applyBudgetFilter(
     allCandidates,
     hasBudget ? max : null,
@@ -212,6 +210,8 @@ async function runProductScout(userId, query, { maxPrice } = {}) {
   const result = {
     query: q,
     candidates_fetched: allCandidates.length,
+    amazonDomain,
+    amazonCountry: marketplaceLabel(amazonDomain),
     budget,
     comparison,
     external_alternatives,

@@ -10,19 +10,12 @@ function apiKey() {
   return k.trim();
 }
 
-function amazonDomain() {
-  return (process.env.AMAZON_DOMAIN || 'amazon.com.au').trim() || 'amazon.com.au';
-}
-
-/**
- * @param {string} query
- * @param {{ maxResults?: number }} [opts]
- */
-async function searchProducts(query, { maxResults = 10 } = {}) {
+async function searchProducts(query, { maxResults = 10, amazonDomain = 'amazon.com.au' } = {}) {
+  const domain = String(amazonDomain || 'amazon.com.au').trim() || 'amazon.com.au';
   const params = new URLSearchParams({
     api_key: apiKey(),
     type: 'search',
-    amazon_domain: amazonDomain(),
+    amazon_domain: domain,
     search_term: query.trim(),
     number_of_results: String(maxResults),
     exclude_sponsored: 'true',
