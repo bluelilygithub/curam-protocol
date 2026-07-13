@@ -9,7 +9,7 @@ import { getScoutedTierKeys } from '../../utils/productScoutGuide';
 
 const STEPS = { form: 'form', brief: 'brief', selectTiers: 'selectTiers', results: 'results' };
 
-export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loadedRunId }) {
+export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loadedRunId, searchEnabled = false }) {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
@@ -24,6 +24,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   const [mergeMode, setMergeMode] = useState(false);
   const [scoutingTierKey, setScoutingTierKey] = useState(null);
   const [refreshingRecommendation, setRefreshingRecommendation] = useState(false);
+  const [checkingExternal, setCheckingExternal] = useState(false);
 
   useEffect(() => {
     if (loadedResult?.mode === 'guide') {
@@ -137,6 +138,26 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast(err.message, 'error');
     } finally {
       setRefreshingRecommendation(false);
+      stopProcessing();
+    }
+  };
+
+  const handleRunExternalCheck = async () => {
+    const runId = result?.runId ?? loadedRunId;
+    if (!runId) return;
+    setCheckingExternal(true);
+    startProcessing('Checking non-Amazon options…', 'Searching retailers using your recommended product specs.');
+    try {
+      const res = await api.post('/api/product-scout/guide/external-check', { runId });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'External check failed');
+      setResult(data);
+      onRunSaved?.(data);
+      addToast('Non-Amazon check complete', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setCheckingExternal(false);
       stopProcessing();
     }
   };
@@ -282,6 +303,9 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
             scoutingTierKey={scoutingTierKey}
             onRefreshRecommendation={handleRefreshRecommendation}
             refreshingRecommendation={refreshingRecommendation}
+            onRunExternalCheck={handleRunExternalCheck}
+            checkingExternal={checkingExternal}
+            searchEnabled={searchEnabled}
           />
         </div>
       )}

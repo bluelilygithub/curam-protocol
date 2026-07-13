@@ -6,6 +6,7 @@ const { pool } = require('../db');
 const { runProductScout, listRuns, getRun, deleteRuns } = require('../services/productScoutService');
 const { compareUrlToScout } = require('../services/productScoutCompareUrl');
 const { buildGuideBrief, runBuyGuide, refreshGuideRecommendation } = require('../services/productScoutGuideService');
+const { runExternalPriceCheck } = require('../services/productScoutExternalCheck');
 const {
   getPriceVariancePct,
   setPriceVariancePct,
@@ -92,6 +93,12 @@ router.post('/guide/recommendation', handle(async (req) => {
   const id = req.body?.runId != null && req.body.runId !== '' ? Number(req.body.runId) : null;
   if (!id || !Number.isFinite(id)) throw new Error('runId is required');
   return refreshGuideRecommendation(req.user.id, id);
+}));
+
+router.post('/guide/external-check', handle(async (req) => {
+  const id = req.body?.runId != null && req.body.runId !== '' ? Number(req.body.runId) : null;
+  if (!id || !Number.isFinite(id)) throw new Error('runId is required');
+  return runExternalPriceCheck(req.user.id, id);
 }));
 
 router.post('/compare-url', handle(async (req) => {

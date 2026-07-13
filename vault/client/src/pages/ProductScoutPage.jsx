@@ -236,6 +236,7 @@ export default function ProductScoutPage() {
           onRunSaved={handleGuideSaved}
           loadedResult={guideResult}
           loadedRunId={loadedRunId}
+          searchEnabled={Boolean(config?.search)}
         />
       </section>
 

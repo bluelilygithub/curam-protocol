@@ -144,6 +144,9 @@ export default function ProductScoutTierLadder({
   scoutingTierKey,
   onRefreshRecommendation,
   refreshingRecommendation = false,
+  onRunExternalCheck,
+  checkingExternal = false,
+  searchEnabled = false,
 }) {
   const tiers = result?.tiers || [];
   const brief = result?.feature_brief;
@@ -176,6 +179,10 @@ export default function ProductScoutTierLadder({
         onRefresh={onRefreshRecommendation}
         refreshing={refreshingRecommendation}
         canRefresh={canRecommend}
+        externalCheck={result?.external_price_check}
+        onRunExternalCheck={onRunExternalCheck}
+        checkingExternal={checkingExternal}
+        searchEnabled={searchEnabled}
       />
 
       {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (

@@ -463,6 +463,7 @@ module.exports = {
   buildGuideBrief,
   runBuyGuide,
   refreshGuideRecommendation,
+  saveGuideResult,
   parseFeaturesInput,
   normalizeSelectedTierKeys,
   TIER_KEYS,
