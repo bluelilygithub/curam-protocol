@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-tools-references)
+
+**Enhancement:** Video Tools Generate — optional reference image (animate as first frame or style suggestion via Gemini) and YouTube example URL (title, transcript, thumbnail analysis; optional thumbnail as seed). `POST /api/videos/youtube-preview`.
+
+---
+
 ## 2026-07-13 (video-tools-phase1)
 
 **Feature:** Video Tools at `/videos` — Phase 1 suite mirroring Graphics: grouped searchable sidebar, Generate clip (LLM brief + FAL), ffmpeg clip/convert/extract-audio/annotate/captions/probe/thumbnail, ProcessingModal + “Use in another tool” chaining. Feature flag `videos`. `ffmpeg` added to Dockerfile. Docs: `docs/video-tools.md`.

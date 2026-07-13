@@ -39,7 +39,15 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ### Create
 
-- **Generate clip** — describe a short clip (style, aspect, 3–10 s). Vault expands the brief with the workspace `light` model, then calls FAL (`VIDEO_GENERATE_MODEL`, default `fal-ai/minimax/video-01-live`). `POST /api/videos/generate`. Inline base64 or provider URL in the response.
+- **Generate clip** — describe a short clip (style, aspect, 3–10 s). Vault expands the brief with the workspace `light` model, then calls FAL. `POST /api/videos/generate`.
+
+  **Reference image (optional):** upload or paste a URL.
+  - **Animate this image** — `VIDEO_GENERATE_I2V_MODEL` (default `fal-ai/minimax/video-01-live/image-to-video`) uses the image as the first frame.
+  - **Style suggestion only** — Gemini describes the image; description is woven into the text prompt.
+
+  **YouTube example (optional):** paste a URL and **Load** (`POST /api/videos/youtube-preview`). Uses title, transcript excerpt (when captions exist), and optional Gemini thumbnail analysis. **Use YouTube thumbnail as starting frame** enables image-to-video from the thumbnail.
+
+  Brief is optional when an image or YouTube reference is provided. `GEMINI_API_KEY` required for image/YouTube visual analysis.
 
 ### Optimise
 
@@ -66,12 +74,13 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ```
 GET  /api/videos/status
-POST /api/videos/generate          JSON { brief, style, aspect, durationSec }
+POST /api/videos/youtube-preview   JSON { url }
+POST /api/videos/generate          JSON { brief?, style, aspect, durationSec, seedImageDataUrl?, seedImageMode?, youtubeUrl?, useYoutubeThumbnailAsSeed? }
 POST /api/videos/probe|clip|convert|extract-audio|thumbnail|annotate|transcribe|burn-captions
                                    multipart field `video` (+ tool-specific fields)
 ```
 
-**Status** (`GET /api/videos/status`): `ffmpeg`, `maxUploadMb`, `generate.available` / `generate.model`, `transcribe.available` / `transcribe.note`.
+**Status** (`GET /api/videos/status`): `ffmpeg`, `maxUploadMb`, `generate.available` / `generate.model` / `generate.imageToVideoModel`, `transcribe.available` / `transcribe.note`.
 
 ---
 
@@ -80,8 +89,10 @@ POST /api/videos/probe|clip|convert|extract-audio|thumbnail|annotate|transcribe|
 | Var | Purpose |
 |---|---|
 | `FAL_API_KEY` | Enable Generate clip |
-| `VIDEO_GENERATE_MODEL` | FAL model id (default `fal-ai/minimax/video-01-live`) |
+| `VIDEO_GENERATE_MODEL` | FAL text-to-video model (default `fal-ai/minimax/video-01-live`) |
+| `VIDEO_GENERATE_I2V_MODEL` | FAL image-to-video when animating a seed (default `fal-ai/minimax/video-01-live/image-to-video`) |
 | `VIDEO_MAX_UPLOAD_MB` | Upload size cap (default 80) |
+| `GEMINI_API_KEY` | Reference image / YouTube thumbnail visual analysis |
 | `LOCAL_WHISPER_COMMAND` | whisper binary (default `whisper-cli`) |
 | `LOCAL_WHISPER_MODEL` | Path to ggml model for local transcribe |
 

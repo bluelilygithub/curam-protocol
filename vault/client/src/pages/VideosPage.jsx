@@ -12,7 +12,7 @@ const TOOL_GROUPS = [
     id: 'create',
     label: 'Create',
     tools: [
-      { id: 'generate', label: 'Generate clip', desc: 'LLM brief → short AI video (FAL)' },
+      { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed or YouTube example' },
     ],
   },
   {
@@ -60,6 +60,49 @@ function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ImageReferenceUpload({ file, previewUrl, onFile, onClear }) {
+  const inputRef = useRef(null);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          {file ? 'Change image' : 'Upload image'}
+        </button>
+        {file && (
+          <>
+            <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
+              {file.name} · {formatBytes(file.size)}
+            </span>
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-xs transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              Remove
+            </button>
+          </>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files?.[0] || null)}
+      />
+      {previewUrl && (
+        <img src={previewUrl} alt="Reference" className="max-h-32 rounded-lg border object-contain" style={{ borderColor: 'var(--color-border)' }} />
+      )}
+    </div>
+  );
 }
 
 function VideoUpload({ file, onFile, label = 'Video file' }) {
@@ -150,6 +193,17 @@ export default function VideosPage() {
   const [durationSec, setDurationSec] = useState(5);
   const [generateResult, setGenerateResult] = useState(null);
 
+  // Reference image
+  const [seedImageFile, setSeedImageFile] = useState(null);
+  const [seedImageUrl, setSeedImageUrl] = useState('');
+  const [seedImageMode, setSeedImageMode] = useState('animate');
+
+  // YouTube example
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubePreview, setYoutubePreview] = useState(null);
+  const [useYoutubeThumbnailAsSeed, setUseYoutubeThumbnailAsSeed] = useState(false);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+
   // Clip
   const [startSec, setStartSec] = useState(0);
   const [endSec, setEndSec] = useState('');
@@ -175,11 +229,18 @@ export default function VideosPage() {
     return null;
   }, [sourceFile]);
 
+  const seedImagePreview = useMemo(() => {
+    if (seedImageFile) return URL.createObjectURL(seedImageFile);
+    if (seedImageUrl.trim()) return seedImageUrl.trim();
+    return youtubePreview?.thumbnailUrl || null;
+  }, [seedImageFile, seedImageUrl, youtubePreview?.thumbnailUrl]);
+
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (resultBlob) URL.revokeObjectURL(resultBlob);
     if (thumbUrl) URL.revokeObjectURL(thumbUrl);
-  }, [previewUrl, resultBlob, thumbUrl]);
+    if (seedImageFile && seedImagePreview?.startsWith('blob:')) URL.revokeObjectURL(seedImagePreview);
+  }, [previewUrl, resultBlob, thumbUrl, seedImageFile, seedImagePreview]);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -276,14 +337,61 @@ export default function VideosPage() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!brief.trim()) {
-      addToast('Describe the clip you want', 'error');
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleLoadYoutube = async () => {
+    if (!youtubeUrl.trim()) {
+      addToast('Paste a YouTube URL', 'error');
       return;
     }
-    startProcessing('Generating clip…', 'Expanding your brief, then calling the video model.');
+    setYoutubeLoading(true);
     try {
-      const res = await api.post('/api/videos/generate', { brief, style, aspect, durationSec });
+      const res = await api.post('/api/videos/youtube-preview', { url: youtubeUrl.trim() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load video');
+      setYoutubePreview(data);
+      addToast('YouTube example loaded', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+      setYoutubePreview(null);
+    } finally {
+      setYoutubeLoading(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    const hasBrief = Boolean(brief.trim());
+    const hasImage = Boolean(seedImageFile || seedImageUrl.trim());
+    const hasYoutube = Boolean(youtubeUrl.trim());
+    if (!hasBrief && !hasImage && !hasYoutube) {
+      addToast('Add a brief, reference image, or YouTube example', 'error');
+      return;
+    }
+
+    startProcessing('Generating clip…', 'Analysing references, expanding your brief, then calling the video model.');
+    try {
+      let seedImageDataUrl = '';
+      if (seedImageFile) {
+        seedImageDataUrl = await readFileAsDataUrl(seedImageFile);
+      } else if (seedImageUrl.trim()) {
+        seedImageDataUrl = seedImageUrl.trim();
+      }
+
+      const res = await api.post('/api/videos/generate', {
+        brief,
+        style,
+        aspect,
+        durationSec,
+        seedImageDataUrl: seedImageDataUrl || undefined,
+        seedImageMode,
+        youtubeUrl: youtubeUrl.trim() || undefined,
+        useYoutubeThumbnailAsSeed,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
       setGenerateResult(data);
@@ -291,7 +399,7 @@ export default function VideosPage() {
         const bin = Uint8Array.from(atob(data.inline.base64), (c) => c.charCodeAt(0));
         setResultFromBlob(new Blob([bin], { type: data.inline.contentType || 'video/mp4' }), 'generated.mp4');
       }
-      addToast('Clip generated', 'success');
+      addToast(data.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -370,12 +478,12 @@ export default function VideosPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Generate clip</h2>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Describe a short clip. Vault expands your brief, then calls a hosted video model ({status?.generate?.model || 'FAL'}).
+                Describe a short clip. Optionally upload a reference image (animate it or use as style inspiration) or paste a YouTube example.
               </p>
             </div>
             {!generateOk && (
               <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
-                Add <strong>FAL_API_KEY</strong> in Railway to enable generation. Set <strong>VIDEO_GENERATE_MODEL</strong> to override the default model.
+                Add <strong>FAL_API_KEY</strong> in Railway to enable generation. Image seeds use <strong>{status?.generate?.imageToVideoModel || 'image-to-video'}</strong>.
               </p>
             )}
             <label className="block space-y-1">
@@ -384,11 +492,102 @@ export default function VideosPage() {
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
                 rows={4}
-                placeholder="A calm product shot of wireless earbuds rotating on a marble surface, soft studio lighting…"
+                placeholder="A calm product shot of wireless earbuds rotating on a marble surface… (optional if you provide an image or YouTube example)"
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               />
             </label>
+
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Reference image (optional)</p>
+              <ImageReferenceUpload
+                file={seedImageFile}
+                previewUrl={seedImageFile ? seedImagePreview : (seedImageUrl.trim() ? seedImagePreview : null)}
+                onFile={(f) => { setSeedImageFile(f); if (f) setSeedImageUrl(''); }}
+                onClear={() => { setSeedImageFile(null); setSeedImageUrl(''); }}
+              />
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Or paste image URL</span>
+                <input
+                  type="url"
+                  value={seedImageUrl}
+                  onChange={(e) => { setSeedImageUrl(e.target.value); if (e.target.value) setSeedImageFile(null); }}
+                  placeholder="https://…"
+                  className="w-full px-3 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </label>
+              {(seedImageFile || seedImageUrl.trim()) && (
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'animate', label: 'Animate this image' },
+                    { id: 'suggest', label: 'Style suggestion only' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSeedImageMode(opt.id)}
+                      className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                      style={{
+                        borderColor: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-muted)',
+                        background: seedImageMode === opt.id ? 'var(--color-surface)' : 'transparent',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>YouTube example (optional)</p>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleLoadYoutube}
+                  disabled={youtubeLoading}
+                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70 disabled:opacity-40"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {youtubeLoading ? 'Loading…' : 'Load'}
+                </button>
+              </div>
+              {youtubePreview && (
+                <div className="space-y-2">
+                  <div className="flex gap-3 items-start">
+                    <img src={youtubePreview.thumbnailUrl} alt="" className="w-24 rounded-lg border shrink-0" style={{ borderColor: 'var(--color-border)' }} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{youtubePreview.title}</p>
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+                        {youtubePreview.hasTranscript ? 'Transcript available for style matching' : 'No captions — thumbnail + title used'}
+                      </p>
+                    </div>
+                  </div>
+                  {youtubePreview.transcriptExcerpt && (
+                    <p className="text-[10px] line-clamp-3" style={{ color: 'var(--color-muted)' }}>{youtubePreview.transcriptExcerpt}</p>
+                  )}
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                    <input
+                      type="checkbox"
+                      checked={useYoutubeThumbnailAsSeed}
+                      onChange={(e) => setUseYoutubeThumbnailAsSeed(e.target.checked)}
+                    />
+                    Use YouTube thumbnail as starting frame
+                  </label>
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Style</span>
@@ -440,9 +639,17 @@ export default function VideosPage() {
               Generate clip
             </button>
             {generateResult?.video_prompt && (
-              <div className="rounded-xl border p-3 text-xs space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <p className="font-medium" style={{ color: 'var(--color-text)' }}>Model prompt</p>
+              <div className="rounded-xl border p-3 text-xs space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="font-medium" style={{ color: 'var(--color-text)' }}>
+                  Model prompt {generateResult.mode === 'image-to-video' ? '(image-to-video)' : '(text-to-video)'}
+                </p>
                 <p style={{ color: 'var(--color-muted)' }}>{generateResult.video_prompt}</p>
+                {generateResult.references?.imageDescription && (
+                  <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>Image style:</span> {generateResult.references.imageDescription}</p>
+                )}
+                {generateResult.references?.youtube && (
+                  <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>YouTube ref:</span> {generateResult.references.youtube.title}</p>
+                )}
               </div>
             )}
             <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />

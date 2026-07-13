@@ -181,4 +181,30 @@ async function fetchYoutubeTranscript(url) {
   return { title, content };
 }
 
-module.exports = { isYoutubeUrl, fetchYoutubeTranscript, extractVideoId };
+async function fetchYoutubeReference(url) {
+  const videoId = extractVideoId(url);
+  if (!videoId) throw new Error('Not a valid YouTube URL');
+
+  const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const title = (await fetchVideoTitle(videoId)) || 'YouTube video';
+  let transcriptExcerpt = '';
+  try {
+    const t = await fetchYoutubeTranscript(url);
+    transcriptExcerpt = String(t.content || '')
+      .replace(/^\[YouTube Transcript:[^\]]*\]\s*/i, '')
+      .trim()
+      .slice(0, 2000);
+  } catch {
+    // Captions optional — title + thumbnail still useful
+  }
+
+  return {
+    videoId,
+    title,
+    thumbnailUrl,
+    transcriptExcerpt,
+    url: `https://www.youtube.com/watch?v=${videoId}`,
+  };
+}
+
+module.exports = { isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference };

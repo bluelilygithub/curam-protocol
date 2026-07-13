@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const { runtimeConfig } = require('../config/runtime');
-const { generateVideo, DEFAULT_VIDEO_MODEL } = require('../services/videoGenerateService');
+const { generateVideo, DEFAULT_VIDEO_MODEL, DEFAULT_VIDEO_I2V_MODEL, buildYoutubeContext } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
   MAX_VIDEO_BYTES,
@@ -89,6 +89,7 @@ router.get('/status', async (req, res) => {
     generate: {
       available: Boolean(process.env.FAL_API_KEY?.trim()),
       model: DEFAULT_VIDEO_MODEL,
+      imageToVideoModel: DEFAULT_VIDEO_I2V_MODEL,
     },
     transcribe: {
       available: runtimeConfig.isLocal && ffmpeg,
@@ -99,15 +100,49 @@ router.get('/status', async (req, res) => {
   });
 });
 
+router.post('/youtube-preview', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url?.trim()) return res.status(400).json({ error: 'url is required' });
+    const ref = await buildYoutubeContext(req.user.id, url.trim(), { describeThumbnail: false });
+    res.json({
+      videoId: ref.videoId,
+      title: ref.title,
+      url: ref.url,
+      thumbnailUrl: ref.thumbnailUrl,
+      transcriptExcerpt: ref.transcriptExcerpt,
+      hasTranscript: Boolean(ref.transcriptExcerpt),
+    });
+  } catch (err) {
+    console.error('[videos/youtube-preview]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/generate', async (req, res) => {
   try {
-    const { brief, style, aspect, durationSec } = req.body || {};
-    if (!brief?.trim()) return res.status(400).json({ error: 'brief is required' });
+    const {
+      brief,
+      style,
+      aspect,
+      durationSec,
+      seedImage,
+      seedImageDataUrl,
+      seedImageUrl,
+      seedImageMode,
+      youtubeUrl,
+      useYoutubeThumbnailAsSeed,
+    } = req.body || {};
+
     const result = await generateVideo(req.user.id, {
-      brief: brief.trim(),
+      brief: brief?.trim() || '',
       style,
       aspect: aspect || '16:9',
       durationSec,
+      seedImage: seedImageDataUrl || seedImageUrl || seedImage,
+      seedImageMode: seedImageMode === 'suggest' ? 'suggest' : 'animate',
+      youtubeUrl: youtubeUrl?.trim() || '',
+      useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
     });
     res.json(result);
   } catch (err) {
