@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const { runtimeConfig } = require('../config/runtime');
-const { startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext } = require('../services/videoGenerateService');
+const { startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
   MAX_VIDEO_BYTES,
@@ -134,6 +134,20 @@ router.post('/youtube-preview', async (req, res) => {
     });
   } catch (err) {
     console.error('[videos/youtube-preview]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/playback', async (req, res) => {
+  try {
+    const url = String(req.body?.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const { buffer, contentType } = await fetchPlaybackVideo(url);
+    res.setHeader('Content-Type', contentType || 'video/mp4');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  } catch (err) {
+    console.error('[videos/playback]', err.message);
     res.status(400).json({ error: err.message });
   }
 });

@@ -360,6 +360,24 @@ async function downloadVideoBuffer(url) {
   return { buffer: buf, contentType: res.headers.get('content-type') || 'video/mp4' };
 }
 
+const PLAYBACK_HOST_SUFFIXES = ['replicate.delivery', 'fal.media', 'fal.ai'];
+
+function isAllowedPlaybackUrl(url) {
+  try {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return PLAYBACK_HOST_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+  } catch {
+    return false;
+  }
+}
+
+async function fetchPlaybackVideo(url) {
+  if (!isAllowedPlaybackUrl(url)) throw new Error('Video URL is not from an allowed provider');
+  return downloadVideoBuffer(url);
+}
+
 function resolveFalEndpoint({ imageToVideo }) {
   const raw = imageToVideo ? DEFAULT_VIDEO_I2V_MODEL : DEFAULT_VIDEO_MODEL;
   return String(raw).replace(/^https:\/\/fal\.run\//, '').replace(/^\/+/, '');
@@ -620,6 +638,8 @@ module.exports = {
   pollVideoGeneration,
   getVideoGenerateConfig,
   resolveVideoProvider,
+  fetchPlaybackVideo,
+  isAllowedPlaybackUrl,
   expandVideoPrompt,
   buildYoutubeContext,
   toImageDataUrl,

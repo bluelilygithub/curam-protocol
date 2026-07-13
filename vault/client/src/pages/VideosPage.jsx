@@ -141,7 +141,13 @@ function ResultVideo({ blobUrl, downloadName, onUse }) {
   return (
     <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
       <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
-      <video src={blobUrl} controls className="w-full max-h-64 rounded-lg bg-black" />
+      <video
+        src={blobUrl}
+        controls
+        playsInline
+        preload="metadata"
+        className="w-full max-h-64 rounded-lg bg-black"
+      />
       <div className="flex flex-wrap gap-2">
         <a
           href={blobUrl}
@@ -344,6 +350,16 @@ export default function VideosPage() {
     reader.readAsDataURL(file);
   });
 
+  const hydrateRemoteVideo = useCallback(async (videoUrl) => {
+    const res = await api.post('/api/videos/playback', { url: videoUrl });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Could not load video for playback');
+    }
+    const blob = await res.blob();
+    setResultFromBlob(blob, 'generated.mp4');
+  }, [setResultFromBlob]);
+
   const handleLoadYoutube = async () => {
     if (!youtubeUrl.trim()) {
       addToast('Paste a YouTube URL', 'error');
@@ -427,8 +443,8 @@ export default function VideosPage() {
         const bin = Uint8Array.from(atob(completed.inline.base64), (c) => c.charCodeAt(0));
         setResultFromBlob(new Blob([bin], { type: completed.inline.contentType || 'video/mp4' }), 'generated.mp4');
       } else if (completed.videoUrl) {
-        setResultFromBlob(null);
-        setResultName('generated.mp4');
+        startProcessing('Preparing playback…', 'Downloading your clip for in-browser preview.');
+        await hydrateRemoteVideo(completed.videoUrl);
       }
       addToast(completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
     } catch (err) {
@@ -684,21 +700,6 @@ export default function VideosPage() {
               </div>
             )}
             <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
-            {generateResult?.videoUrl && !resultBlob && (
-              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
-                <video src={generateResult.videoUrl} controls className="w-full max-h-64 rounded-lg bg-black" />
-                <a
-                  href={generateResult.videoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-lg text-white inline-block transition-opacity hover:opacity-80"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  Download from provider
-                </a>
-              </div>
-            )}
           </section>
         )}
 
