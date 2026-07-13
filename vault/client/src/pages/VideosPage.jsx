@@ -7,6 +7,16 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
+const FONT_OPTIONS = [
+  { id: 'dejavu-sans', label: 'DejaVu Sans' },
+  { id: 'liberation-sans', label: 'Liberation Sans' },
+];
+
+const FONT_WEIGHTS = [
+  { id: 'normal', label: 'Regular' },
+  { id: 'bold', label: 'Bold' },
+];
+
 const TOOL_GROUPS = [
   {
     id: 'create',
@@ -35,7 +45,14 @@ const TOOL_GROUPS = [
     label: 'Compose',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
-      { id: 'captions', label: 'Captions', desc: 'Paste SRT or auto-transcribe (local)' },
+      { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
+    ],
+  },
+  {
+    id: 'library',
+    label: 'Library',
+    tools: [
+      { id: 'saved-library', label: 'Saved media', desc: 'Your saved videos, images, and tool runs' },
     ],
   },
   {
@@ -47,6 +64,11 @@ const TOOL_GROUPS = [
     ],
   },
 ];
+
+function assFontLabel(fontId) {
+  if (fontId === 'liberation-sans') return 'Liberation Sans';
+  return 'DejaVu Sans';
+}
 
 function formatDuration(sec) {
   if (!Number.isFinite(sec)) return '—';
@@ -136,7 +158,39 @@ function VideoUpload({ file, onFile, label = 'Video file' }) {
   );
 }
 
-function ResultVideo({ blobUrl, downloadName, onUse }) {
+function CaptionStyleFields({
+  fontFamily, setFontFamily, fontSize, setFontSize, fontColor, setFontColor, fontWeight, setFontWeight,
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Font</span>
+        <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+        </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Weight</span>
+        <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          {FONT_WEIGHTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+        </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (px)</span>
+        <input type="number" min={12} max={72} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</span>
+        <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+      </label>
+    </div>
+  );
+}
+
+function ResultVideo({
+  blobUrl, downloadName, onUse, onSave, saveLabel = 'Save to library',
+  saveTitle, onSaveTitleChange,
+}) {
   if (!blobUrl) return null;
   return (
     <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -148,6 +202,18 @@ function ResultVideo({ blobUrl, downloadName, onUse }) {
         preload="metadata"
         className="w-full max-h-64 rounded-lg bg-black"
       />
+      {onSave && onSaveTitleChange && (
+        <label className="block space-y-1">
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Library title (optional)</span>
+          <input
+            value={saveTitle || ''}
+            onChange={(e) => onSaveTitleChange(e.target.value)}
+            placeholder="Defaults to tool name and date"
+            className="w-full px-3 py-2 rounded-xl border text-xs"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </label>
+      )}
       <div className="flex flex-wrap gap-2">
         <a
           href={blobUrl}
@@ -157,6 +223,16 @@ function ResultVideo({ blobUrl, downloadName, onUse }) {
         >
           Download
         </a>
+        {onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+          >
+            {saveLabel}
+          </button>
+        )}
         {onUse && (
           <button
             type="button"
@@ -230,6 +306,21 @@ export default function VideosPage() {
   const [thumbTime, setThumbTime] = useState(1);
   const [thumbUrl, setThumbUrl] = useState(null);
 
+  // Library
+  const [libraryItems, setLibraryItems] = useState([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [saveTitle, setSaveTitle] = useState('');
+  const [lastTransaction, setLastTransaction] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+  // Caption studio
+  const [captionLibraryId, setCaptionLibraryId] = useState('');
+  const [captionFontFamily, setCaptionFontFamily] = useState('dejavu-sans');
+  const [captionFontSize, setCaptionFontSize] = useState(28);
+  const [captionFontColor, setCaptionFontColor] = useState('#FFFFFF');
+  const [captionFontWeight, setCaptionFontWeight] = useState('normal');
+  const [captionSaveToLibrary, setCaptionSaveToLibrary] = useState(true);
+
   const previewUrl = useMemo(() => {
     if (sourceFile) return URL.createObjectURL(sourceFile);
     return null;
@@ -280,6 +371,157 @@ export default function VideosPage() {
     if (name) setResultName(name);
   }, []);
 
+  const loadLibrary = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      const res = await api.get('/api/videos/library');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load library');
+      setLibraryItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    if (!canUse) return;
+    if (tool === 'saved-library' || tool === 'caption-studio') loadLibrary();
+  }, [canUse, tool, loadLibrary]);
+
+  const saveToLibrary = useCallback(async ({
+    title,
+    transaction,
+    mediaType = 'video',
+    blobUrl = null,
+    fileName = resultName,
+    toolId = tool,
+  } = {}) => {
+    const src = blobUrl || resultBlob;
+    if (!src) {
+      addToast('Nothing to save yet', 'error');
+      return;
+    }
+    startProcessing('Saving to library…', 'Storing file and tool settings.');
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const fd = new FormData();
+      fd.append('file', blob, fileName);
+      fd.append('title', title || saveTitle || `${toolId} · ${new Date().toLocaleDateString()}`);
+      fd.append('tool', toolId);
+      fd.append('mediaType', mediaType);
+      fd.append('transaction', JSON.stringify(transaction || lastTransaction || {}));
+      const saveRes = await api.postForm('/api/videos/library', fd);
+      const item = await saveRes.json();
+      if (!saveRes.ok) throw new Error(item.error || 'Save failed');
+      addToast('Saved to library', 'success');
+      await loadLibrary();
+      return item;
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [resultBlob, resultName, tool, saveTitle, lastTransaction, startProcessing, stopProcessing, loadLibrary, addToast]);
+
+  const deleteLibraryItem = useCallback(async (id) => {
+    try {
+      const res = await api.delete(`/api/videos/library/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      setLibraryItems((prev) => prev.filter((i) => i.id !== id));
+      setDeleteConfirmId(null);
+      addToast('Deleted from library', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  }, [addToast]);
+
+  const previewLibraryItem = useCallback(async (item) => {
+    startProcessing('Loading preview…', '');
+    try {
+      const res = await api.get(item.streamUrl);
+      if (!res.ok) throw new Error('Could not load saved file');
+      const blob = await res.blob();
+      if (item.mediaType === 'image') {
+        if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+        setThumbUrl(URL.createObjectURL(blob));
+      } else {
+        setResultFromBlob(blob, `${item.title || 'video'}.mp4`);
+      }
+      setLastTransaction(item.transaction || { savedId: item.id, tool: item.tool });
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, setResultFromBlob, thumbUrl, addToast]);
+
+  const handleCaptionStudio = async () => {
+    if (!srtText.trim()) {
+      addToast('Paste SRT content', 'error');
+      return;
+    }
+    if (!captionLibraryId && !sourceFile) {
+      addToast('Choose a library video or upload a file', 'error');
+      return;
+    }
+    const styleFields = {
+      fontFamily: assFontLabel(captionFontFamily),
+      fontSize: captionFontSize,
+      fontColor: captionFontColor,
+      fontWeight: captionFontWeight,
+    };
+    startProcessing('Burning captions…', 'Applying styled subtitles with ffmpeg.');
+    try {
+      if (captionLibraryId) {
+        const fd = new FormData();
+        fd.append('srtText', srtText);
+        fd.append('saveToLibrary', String(captionSaveToLibrary));
+        Object.entries(styleFields).forEach(([k, v]) => fd.append(k, String(v)));
+        const res = await api.postForm(`/api/videos/library/${captionLibraryId}/captions`, fd);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Caption burn failed');
+        }
+        const blob = await res.blob();
+        setResultFromBlob(blob, 'captioned.mp4');
+        if (captionSaveToLibrary) await loadLibrary();
+      } else {
+        const fd = new FormData();
+        fd.append('video', sourceFile);
+        fd.append('srtText', srtText);
+        Object.entries(styleFields).forEach(([k, v]) => fd.append(k, String(v)));
+        const res = await api.postForm('/api/videos/burn-captions', fd);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Caption burn failed');
+        }
+        const blob = await res.blob();
+        setResultFromBlob(blob, 'captioned.mp4');
+        if (captionSaveToLibrary) {
+          const tmpUrl = URL.createObjectURL(blob);
+          await saveToLibrary({
+            title: saveTitle || 'Captioned video',
+            blobUrl: tmpUrl,
+            fileName: 'captioned.mp4',
+            toolId: 'caption-studio',
+            transaction: { tool: 'caption-studio', captionStyle: styleFields },
+          });
+          URL.revokeObjectURL(tmpUrl);
+        }
+      }
+      setLastTransaction({ tool: 'caption-studio', captionStyle: styleFields });
+      addToast('Captions applied', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
   const useResultAsSource = useCallback(async () => {
     if (!resultBlob) return;
     try {
@@ -307,6 +549,7 @@ export default function VideosPage() {
       }
       const blob = await res.blob();
       setResultFromBlob(blob, resultFilename);
+      setLastTransaction({ tool: endpoint });
       addToast('Done', 'success');
       return blob;
     } catch (err) {
@@ -446,6 +689,18 @@ export default function VideosPage() {
         startProcessing('Preparing playback…', 'Downloading your clip for in-browser preview.');
         await hydrateRemoteVideo(completed.videoUrl);
       }
+      setLastTransaction({
+        tool: 'generate',
+        brief,
+        style,
+        aspect,
+        durationSec,
+        seedImageMode,
+        youtubeUrl: youtubeUrl.trim() || undefined,
+        video_prompt: completed.video_prompt,
+        mode: completed.mode,
+        provider: completed.provider || started.provider,
+      });
       addToast(completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
     } catch (err) {
       addToast(err.message, 'error');
@@ -454,10 +709,44 @@ export default function VideosPage() {
     }
   };
 
+  const libraryVideoItems = useMemo(
+    () => libraryItems.filter((i) => i.mediaType === 'video'),
+    [libraryItems],
+  );
+
+  const handleSaveResult = useCallback(() => {
+    saveToLibrary({ title: saveTitle });
+  }, [saveToLibrary, saveTitle]);
+
+  const handleSaveThumbnail = useCallback(async () => {
+    if (!thumbUrl) return;
+    await saveToLibrary({
+      title: saveTitle || 'Thumbnail',
+      mediaType: 'image',
+      blobUrl: thumbUrl,
+      fileName: 'thumbnail.jpg',
+      toolId: 'thumbnail',
+      transaction: { tool: 'thumbnail', thumbTime },
+    });
+  }, [thumbUrl, saveTitle, saveToLibrary, thumbTime]);
+
+  const openCaptionStudioFor = useCallback((item) => {
+    setCaptionLibraryId(String(item.id));
+    setSourceFile(null);
+    setSrtText('');
+    setTool('caption-studio');
+    setOpenGroup('compose');
+  }, []);
+
   if (!canUse) return <Navigate to="/" replace />;
 
   const ffmpegOk = status?.ffmpeg;
   const generateOk = status?.generate?.available;
+  const resultSaveProps = {
+    onSave: handleSaveResult,
+    saveTitle,
+    onSaveTitleChange: setSaveTitle,
+  };
 
   return (
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
@@ -699,15 +988,20 @@ export default function VideosPage() {
                 )}
               </div>
             )}
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            <ResultVideo
+              blobUrl={resultBlob}
+              downloadName={resultName}
+              onUse={useResultAsSource}
+              {...resultSaveProps}
+            />
           </section>
         )}
 
-        {tool !== 'generate' && (
-          <VideoUpload file={sourceFile} onFile={setSourceFile} />
+        {tool !== 'generate' && tool !== 'saved-library' && !(tool === 'caption-studio' && captionLibraryId) && (
+          <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
         )}
 
-        {previewUrl && tool !== 'generate' && (
+        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && (
           <video src={previewUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
         )}
 
@@ -727,7 +1021,7 @@ export default function VideosPage() {
             <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Export clip
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
           </section>
         )}
 
@@ -747,7 +1041,7 @@ export default function VideosPage() {
             <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('crf', String(crf)); if (maxWidth) fd.append('maxWidth', maxWidth); runFormVideo('convert', fd, { label: 'Converting…', resultFilename: 'converted.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Convert
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
           </section>
         )}
 
@@ -774,29 +1068,224 @@ export default function VideosPage() {
             <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Apply label
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
           </section>
         )}
 
-        {tool === 'captions' && (
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Captions</h2>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              {status?.transcribe?.note || 'Paste SRT subtitles or auto-transcribe locally.'}
-            </p>
-            {status?.transcribe?.available && (
-              <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); startProcessing('Transcribing…', ''); try { const res = await api.postForm('/api/videos/transcribe', fd); const data = await res.json(); if (!res.ok) throw new Error(data.error); setTranscript(data.text || ''); addToast('Transcript ready — convert to SRT or paste into box', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
-                Auto-transcribe (local)
-              </button>
-            )}
-            {transcript && (
-              <textarea value={transcript} readOnly rows={3} className="w-full text-xs rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
-            )}
-            <textarea value={srtText} onChange={(e) => setSrtText(e.target.value)} rows={8} placeholder="Paste SRT content here…" className="w-full px-3 py-2 rounded-xl border text-xs font-mono" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-            <button type="button" onClick={() => { if (!requireFile() || !srtText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('srtText', srtText); runFormVideo('burn-captions', fd, { label: 'Burning captions…', resultFilename: 'captioned.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Burn captions
+        {tool === 'caption-studio' && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Caption studio</h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Pick a saved video or upload one, then burn styled SRT subtitles. Return later to add or update captions on library items.
+              </p>
+            </div>
+
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Video source</p>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>From library (optional)</span>
+                <select
+                  value={captionLibraryId}
+                  onChange={(e) => {
+                    setCaptionLibraryId(e.target.value);
+                    if (e.target.value) setSourceFile(null);
+                  }}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="">Upload a file instead</option>
+                  {libraryVideoItems.map((item) => (
+                    <option key={item.id} value={String(item.id)}>{item.title} · {item.tool || 'video'}</option>
+                  ))}
+                </select>
+              </label>
+              {captionLibraryId && (
+                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  Using saved video #{captionLibraryId}. Upload below to switch to a new file.
+                </p>
+              )}
+            </div>
+
+            <CaptionStyleFields
+              fontFamily={captionFontFamily}
+              setFontFamily={setCaptionFontFamily}
+              fontSize={captionFontSize}
+              setFontSize={setCaptionFontSize}
+              fontColor={captionFontColor}
+              setFontColor={setCaptionFontColor}
+              fontWeight={captionFontWeight}
+              setFontWeight={setCaptionFontWeight}
+            />
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Subtitles (SRT)</p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {status?.transcribe?.note || 'Paste SRT content or auto-transcribe when uploading a file.'}
+              </p>
+              {status?.transcribe?.available && !captionLibraryId && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!requireFile()) return;
+                    const fd = new FormData();
+                    fd.append('video', sourceFile);
+                    startProcessing('Transcribing…', '');
+                    try {
+                      const res = await api.postForm('/api/videos/transcribe', fd);
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      setTranscript(data.text || '');
+                      addToast('Transcript ready — convert to SRT or paste below', 'success');
+                    } catch (e) {
+                      addToast(e.message, 'error');
+                    } finally {
+                      stopProcessing();
+                    }
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                >
+                  Auto-transcribe (local)
+                </button>
+              )}
+              {transcript && (
+                <textarea value={transcript} readOnly rows={3} className="w-full text-xs rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
+              )}
+              <textarea
+                value={srtText}
+                onChange={(e) => setSrtText(e.target.value)}
+                rows={8}
+                placeholder="Paste SRT content here…"
+                className="w-full px-3 py-2 rounded-xl border text-xs font-mono"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+              <input
+                type="checkbox"
+                checked={captionSaveToLibrary}
+                onChange={(e) => setCaptionSaveToLibrary(e.target.checked)}
+              />
+              Save captioned result to library
+            </label>
+
+            <button
+              type="button"
+              onClick={handleCaptionStudio}
+              disabled={!ffmpegOk || (!captionLibraryId && !sourceFile)}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Apply captions
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+          </section>
+        )}
+
+        {tool === 'saved-library' && (
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Saved media</h2>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Videos and images from tool runs — preview, delete, or open in Caption studio.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadLibrary}
+                disabled={libraryLoading}
+                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {libraryLoading ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </div>
+
+            {libraryLoading && libraryItems.length === 0 && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
+            )}
+
+            {!libraryLoading && libraryItems.length === 0 && (
+              <p className="text-xs rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                Nothing saved yet. Run a tool and use <strong>Save to library</strong> on the result.
+              </p>
+            )}
+
+            <ul className="space-y-2">
+              {libraryItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-xl border p-3 space-y-2"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.title}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                        {item.tool || '—'} · {item.mediaType} · {formatBytes(item.fileSize)} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : '—'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => previewLibraryItem(item)}
+                        className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        Preview
+                      </button>
+                      {item.mediaType === 'video' && (
+                        <button
+                          type="button"
+                          onClick={() => openCaptionStudioFor(item)}
+                          className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                          style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                        >
+                          Add captions
+                        </button>
+                      )}
+                      {deleteConfirmId === item.id ? (
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span style={{ color: 'var(--color-muted)' }}>Delete?</span>
+                          <button type="button" onClick={() => deleteLibraryItem(item.id)} className="font-medium" style={{ color: '#ef4444' }}>Yes</button>
+                          <button type="button" onClick={() => setDeleteConfirmId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(item.id)}
+                          className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {item.transaction && Object.keys(item.transaction).length > 0 && (
+                    <details className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                      <summary className="cursor-pointer transition-opacity hover:opacity-70">Tool settings</summary>
+                      <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[10px] p-2 rounded-lg" style={{ background: 'var(--color-surface)' }}>
+                        {JSON.stringify(item.transaction, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {resultBlob && tool === 'saved-library' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            )}
+            {thumbUrl && tool === 'saved-library' && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Image preview</p>
+                <img src={thumbUrl} alt="" className="max-w-full rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+              </div>
+            )}
           </section>
         )}
 
@@ -830,9 +1319,22 @@ export default function VideosPage() {
               Export JPG
             </button>
             {thumbUrl && (
-              <div className="space-y-2">
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
                 <img src={thumbUrl} alt="Thumbnail" className="max-w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
-                <a href={thumbUrl} download="thumbnail.jpg" className="text-xs" style={{ color: 'var(--color-primary)' }}>Download JPG</a>
+                <div className="flex flex-wrap gap-2">
+                  <a href={thumbUrl} download="thumbnail.jpg" className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
+                    Download JPG
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleSaveThumbnail}
+                    className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                  >
+                    Save to library
+                  </button>
+                </div>
               </div>
             )}
           </section>

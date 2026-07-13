@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-tools-library)
+
+**Feature:** Video Tools library — save tool results (video/image) + transaction metadata to `video_library`, preview/stream, delete. **Caption studio** replaces basic Captions: upload or library source, styled SRT (font, weight, size, colour), optional save captioned output. `videoLibraryService.js`, `POST/GET/DELETE /api/videos/library`.
+
+---
+
 ## 2026-07-13 (video-tools-replicate)
 
 **Fix:** Video Generate now prefers **Replicate** (`minimax/hailuo-2.3`) when `REPLICATE_API_TOKEN` is set — avoids FAL issues. Set `VIDEO_GENERATE_PROVIDER=fal` to force FAL.

@@ -113,6 +113,50 @@ async function captureThumbnail(inputPath, outputPath, timeSec = 1) {
   ]);
 }
 
+const FONT_FILES = {
+  'dejavu-sans': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  'dejavu-sans-bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+  'liberation-sans': '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+  'liberation-sans-bold': '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+};
+
+function resolveFontFile(fontFamily = 'dejavu-sans', fontWeight = 'normal') {
+  const bold = fontWeight === 'bold' || fontWeight === '700' || Number(fontWeight) >= 600;
+  const base = String(fontFamily || 'dejavu-sans').toLowerCase().replace(/\s+/g, '-');
+  const key = bold ? `${base}-bold` : base;
+  if (FONT_FILES[key]) return FONT_FILES[key];
+  if (FONT_FILES[base]) return FONT_FILES[base];
+  return bold ? FONT_FILES['dejavu-sans-bold'] : FONT_FILES['dejavu-sans'];
+}
+
+function normalizeDrawtextColor(color = 'white') {
+  const raw = String(color || 'white').trim();
+  if (raw.startsWith('0x')) return raw;
+  if (raw.startsWith('#') && raw.length === 7) return `0x${raw.slice(1)}`;
+  return raw;
+}
+
+function hexToAssColor(hex) {
+  const h = String(hex || '#FFFFFF').replace('#', '').trim();
+  if (h.length !== 6) return '&H00FFFFFF';
+  return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase();
+}
+
+function buildSubtitleForceStyle({
+  fontFamily = 'DejaVu Sans',
+  fontSize = 24,
+  fontColor = '#FFFFFF',
+  fontWeight = 'normal',
+  outlineColor = '#000000',
+  outline = 2,
+} = {}) {
+  const bold = fontWeight === 'bold' || fontWeight === '700' || Number(fontWeight) >= 600 ? 1 : 0;
+  const name = String(fontFamily || 'DejaVu Sans').replace(/,/g, '');
+  const primary = hexToAssColor(fontColor);
+  const outlineAss = hexToAssColor(outlineColor);
+  return `FontName=${name},FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))},PrimaryColour=${primary},OutlineColour=${outlineAss},Outline=${Math.min(6, Math.max(0, Number(outline) || 2))},Bold=${bold}`;
+}
+
 function escapeDrawtext(text) {
   return String(text || '')
     .replace(/\\/g, '\\\\')
@@ -126,8 +170,13 @@ async function annotateVideo(inputPath, outputPath, {
   position = 'bottom',
   fontSize = 28,
   fontColor = 'white',
+  fontFamily = 'dejavu-sans',
+  fontWeight = 'normal',
+  boxColor = 'black@0.55',
 }) {
   const escaped = escapeDrawtext(text);
+  const fontfile = resolveFontFile(fontFamily, fontWeight).replace(/:/g, '\\:');
+  const color = normalizeDrawtextColor(fontColor);
   const y = position === 'top'
     ? '40'
     : position === 'center'
@@ -135,18 +184,19 @@ async function annotateVideo(inputPath, outputPath, {
       : 'h-th-48';
   await execFileAsync(FFMPEG, [
     '-y', '-i', inputPath,
-    '-vf', `drawtext=text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:box=1:boxcolor=black@0.55:boxborderw=10:x=(w-text_w)/2:y=${y}`,
+    '-vf', `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=10:x=(w-text_w)/2:y=${y}`,
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'copy', '-movflags', '+faststart',
     outputPath,
   ]);
 }
 
-async function burnSubtitles(inputPath, srtPath, outputPath) {
+async function burnSubtitles(inputPath, srtPath, outputPath, style = {}) {
   const sub = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+  const forceStyle = buildSubtitleForceStyle(style).replace(/'/g, "'\\''");
   await execFileAsync(FFMPEG, [
     '-y', '-i', inputPath,
-    '-vf', `subtitles='${sub}'`,
+    '-vf', `subtitles='${sub}':force_style='${forceStyle}'`,
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'copy', '-movflags', '+faststart',
     outputPath,

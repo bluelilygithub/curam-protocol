@@ -5,7 +5,8 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 **Frontend:** `vault/client/src/pages/VideosPage.jsx`  
 **Backend:** `vault/server/routes/videos.js` (mounted at `/api/videos`)  
 **ffmpeg helpers:** `vault/server/services/videoFfmpeg.js`  
-**AI generate:** `vault/server/services/videoGenerateService.js`
+**AI generate:** `vault/server/services/videoGenerateService.js`  
+**Library storage:** `vault/server/services/videoLibraryService.js`
 
 ---
 
@@ -14,7 +15,8 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
-| Server (ffmpeg) | Clip, Convert, Extract audio, Annotate, Captions (burn), Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
+| Server (ffmpeg) | Clip, Convert, Extract audio, Annotate, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
+| Library (disk + DB) | Saved media, Caption studio (library source) | `video_library` table + files under `{UPLOAD_DIR}/video-library/{userId}/` |
 | Local dev only | Auto-transcribe | `whisper-cli` + model file; hosted Vault → paste SRT instead |
 
 Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return as binary (`video/mp4`, `image/jpeg`, `audio/mpeg`) — not JSON data URLs.
@@ -28,7 +30,8 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | **Create** | Generate clip |
 | **Optimise** | Convert / compress, Extract audio |
 | **Transform** | Clip / trim |
-| **Compose** | Annotate, Captions |
+| **Compose** | Annotate, Caption studio |
+| **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
 
 Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** loads the result blob back as the source file for chaining.
@@ -61,7 +64,11 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 ### Compose
 
 - **Annotate** — burn a single full-duration text label (top / center / bottom) via ffmpeg `drawtext`. `POST /api/videos/annotate`.
-- **Captions** — paste SRT text (or upload `.srt`) and burn subtitles. Local dev: optional **Auto-transcribe** via whisper-cli. `POST /api/videos/transcribe`, `POST /api/videos/burn-captions`.
+- **Caption studio** — upload a video or pick one from **Saved media**, paste SRT (or auto-transcribe on upload in local dev), and burn styled subtitles. Controls: font family (DejaVu / Liberation), weight, size, colour. Optional **Save captioned result to library**. `POST /api/videos/burn-captions` (upload) or `POST /api/videos/library/:id/captions` (library item).
+
+### Library
+
+- **Saved media** — list, preview, and delete videos/images saved from any tool. Each item stores the output file on disk plus JSON **transaction** metadata (tool settings: brief, style, caption style, etc.). **Save to library** on any tool result; thumbnails save as `mediaType: image`. **Add captions** opens Caption studio with that video pre-selected.
 
 ### Analyse
 
@@ -79,7 +86,16 @@ POST /api/videos/generate          JSON { brief?, … } → submits FAL queue jo
 GET  /api/videos/generate/status   `?requestId=&endpoint=` → poll until `COMPLETED` (client polls every 3s)
 POST /api/videos/probe|clip|convert|extract-audio|thumbnail|annotate|transcribe|burn-captions
                                    multipart field `video` (+ tool-specific fields)
+GET  /api/videos/library
+POST /api/videos/library            multipart `file` + `title`, `tool`, `mediaType`, `transaction` (JSON string)
+GET  /api/videos/library/:id/stream authenticated file stream
+DELETE /api/videos/library/:id
+POST /api/videos/library/:id/captions  `srtText` or `srt` file + style fields + optional `saveToLibrary`
 ```
+
+**Caption style fields** (burn-captions + library captions): `fontFamily`, `fontSize`, `fontColor`, `fontWeight` (`normal` | `bold`).
+
+**Library** (`video_library` table): per-user rows with `title`, `tool`, `mediaType` (`video` | `image`), `transaction` JSONB, file on disk at `video-library/{userId}/{id}.mp4|.jpg`.
 
 **Status** (`GET /api/videos/status`): `ffmpeg`, `maxUploadMb`, `generate.available` / `generate.model` / `generate.imageToVideoModel`, `transcribe.available` / `transcribe.note`.
 

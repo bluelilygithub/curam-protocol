@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const { runtimeConfig } = require('../config/runtime');
+const { saveAsset, listAssets, getAsset, deleteAsset } = require('../services/videoLibraryService');
 const { startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
@@ -45,6 +46,27 @@ function getVideoJob(requestId, userId) {
 
 function forgetVideoJob(requestId) {
   videoJobCache.delete(requestId);
+}
+
+function parseJsonBodyField(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return null;
+  }
+}
+
+function captionStyleFromBody(body) {
+  return {
+    fontFamily: body?.fontFamily || 'DejaVu Sans',
+    fontSize: Number(body?.fontSize) || 24,
+    fontColor: body?.fontColor || '#FFFFFF',
+    fontWeight: body?.fontWeight || 'normal',
+    outlineColor: body?.outlineColor || '#000000',
+    outline: Number(body?.outline) || 2,
+  };
 }
 
 const upload = multer({
@@ -149,6 +171,107 @@ router.post('/playback', async (req, res) => {
   } catch (err) {
     console.error('[videos/playback]', err.message);
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/library', async (req, res) => {
+  try {
+    const items = await listAssets(req.user.id);
+    res.json(items);
+  } catch (err) {
+    console.error('[videos/library]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/library', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file?.buffer?.length) return res.status(400).json({ error: 'file is required' });
+
+    const item = await saveAsset(req.user.id, file.buffer, {
+      title: req.body?.title,
+      tool: req.body?.tool,
+      mediaType: req.body?.mediaType === 'image' ? 'image' : 'video',
+      mimeType: file.mimetype,
+      transaction: parseJsonBodyField(req.body?.transaction),
+      metadata: parseJsonBodyField(req.body?.metadata),
+    });
+    res.status(201).json(item);
+  } catch (err) {
+    console.error('[videos/library POST]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/library/:id/stream', async (req, res) => {
+  try {
+    const asset = await getAsset(req.user.id, Number(req.params.id));
+    if (!asset) return res.status(404).json({ error: 'Not found' });
+    const buf = await fs.readFile(asset.filePath);
+    res.setHeader('Content-Type', asset.mimeType || (asset.mediaType === 'image' ? 'image/jpeg' : 'video/mp4'));
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buf);
+  } catch (err) {
+    console.error('[videos/library/stream]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }]), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const asset = await getAsset(req.user.id, Number(req.params.id));
+    if (!asset || asset.mediaType !== 'video') return res.status(404).json({ error: 'Video not found in library' });
+
+    const srtFile = req.files?.srt?.[0];
+    const srtText = req.body?.srtText;
+    if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+
+    const style = captionStyleFromBody(req.body);
+    const saveToLibrary = req.body?.saveToLibrary === 'true' || req.body?.saveToLibrary === true;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = asset.filePath;
+      const srtPath = path.join(dir, 'captions.srt');
+      if (srtFile) {
+        await fs.writeFile(srtPath, srtFile.buffer);
+      } else {
+        await fs.writeFile(srtPath, String(srtText), 'utf8');
+      }
+      const outputPath = path.join(dir, 'captioned.mp4');
+      await burnSubtitles(inputPath, srtPath, outputPath, style);
+      return readOutputFile(outputPath);
+    });
+
+    if (saveToLibrary) {
+      await saveAsset(req.user.id, buffer, {
+        title: `${asset.title} (captioned)`,
+        tool: 'caption-studio',
+        mediaType: 'video',
+        mimeType: 'video/mp4',
+        transaction: { sourceLibraryId: asset.id, captionStyle: style },
+        metadata: { parentId: asset.id },
+      });
+    }
+
+    sendVideoBuffer(res, buffer, 'captioned.mp4');
+  } catch (err) {
+    console.error('[videos/library/captions]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/library/:id', async (req, res) => {
+  try {
+    const ok = await deleteAsset(req.user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[videos/library DELETE]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -364,6 +487,8 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
         position: req.body?.position || 'bottom',
         fontSize: Number(req.body?.fontSize) || 28,
         fontColor: req.body?.fontColor || 'white',
+        fontFamily: req.body?.fontFamily || 'dejavu-sans',
+        fontWeight: req.body?.fontWeight || 'normal',
       });
       return readOutputFile(outputPath);
     });
@@ -411,6 +536,8 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
     if (!videoFile) return res.status(400).json({ error: 'video is required' });
     if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
 
+    const style = captionStyleFromBody(req.body);
+
     const buffer = await withTempDir(async (dir) => {
       const inputPath = await writeUpload(dir, videoFile);
       const srtPath = path.join(dir, 'captions.srt');
@@ -420,7 +547,7 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
         await fs.writeFile(srtPath, String(srtText), 'utf8');
       }
       const outputPath = path.join(dir, 'captioned.mp4');
-      await burnSubtitles(inputPath, srtPath, outputPath);
+      await burnSubtitles(inputPath, srtPath, outputPath, style);
       return readOutputFile(outputPath);
     });
 

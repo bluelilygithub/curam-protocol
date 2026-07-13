@@ -741,6 +741,28 @@ async function initSchema() {
       )
     `);
 
+    // ── Video library (saved tool outputs) ────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS video_library (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title         TEXT NOT NULL DEFAULT 'Untitled',
+        tool          TEXT,
+        "mediaType"   TEXT NOT NULL DEFAULT 'video' CHECK ("mediaType" IN ('video', 'image')),
+        "filePath"    TEXT NOT NULL,
+        "thumbPath"   TEXT,
+        "fileSize"    INTEGER,
+        "mimeType"    TEXT,
+        transaction   JSONB,
+        metadata      JSONB,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_video_library_user_created
+        ON video_library ("userId", "createdAt" DESC)
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (

@@ -16,7 +16,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 ## Key Files
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
-- `server/db.js` — all 44 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
+- `server/db.js` — all 45 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
 - `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
 - `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
@@ -43,9 +43,10 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
-- `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg clip/convert/annotate + FAL generate
-- `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, captions, thumbnail)
-- `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + FAL text-to-video
+- `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn
+- `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, styled captions, thumbnail)
+- `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
+- `server/services/videoLibraryService.js` — saved videos/images on disk + `video_library` metadata
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
 
 ---
@@ -281,7 +282,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Schema Notes
 
-- 44 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
+- 45 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
 - `sessions."deletedAt"` is a soft-delete timestamp. Chat delete moves sessions to Deleted; messages remain for restore. Normal lists/search/RAG must filter `s."deletedAt" IS NULL`.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
@@ -303,7 +304,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
 
-**Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), burn SRT captions, probe, thumbnail. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
+**Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Library / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), probe, thumbnail. **Caption studio** — upload or library video + styled SRT (font, weight, size, colour). **Saved media** — save tool results (video/image) + transaction JSON to `video_library` (disk + DB), preview, delete, re-caption later. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
