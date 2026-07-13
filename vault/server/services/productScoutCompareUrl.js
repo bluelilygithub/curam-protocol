@@ -85,9 +85,14 @@ function parseCompareUrlResponse(text) {
 
 function resolveBudgetPicks(scout) {
   if (scout?.mode === 'guide') {
-    return (scout.tiers || [])
-      .filter((t) => t.pick?.title)
-      .map((t, i) => ({ ...t.pick, rank: i + 1, tier_label: t.label }));
+    const picks = [];
+    for (const tier of scout.tiers || []) {
+      const top = tier.scout?.comparison?.top3?.[0] || tier.pick;
+      if (top?.title) {
+        picks.push({ ...top, rank: picks.length + 1, tier_label: tier.label });
+      }
+    }
+    return picks;
   }
   const comparison = scout?.comparison;
   const top3 = comparison?.top3 || [];

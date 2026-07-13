@@ -34,13 +34,17 @@ function compactCandidates(candidates) {
   }));
 }
 
-function buildComparePrompt(query, primary, stretch, budget, { compact = false } = {}) {
+function buildComparePrompt(query, primary, stretch, budget, { compact = false, tierLabel, tierFeatures } = {}) {
   const summaryLimit = compact
     ? 'selection_summary: max 80 words total (one short paragraph). value_rationale: max 20 words each.'
     : 'selection_summary: max 150 words total. value_rationale: max 30 words each.';
 
   const budgetBlock = budget
     ? `Budget: max price ${budget.maxPrice}. Variance ${budget.variancePct}% allows stretch picks up to ${budget.ceiling} (above budget but within tolerance).\n`
+    : '';
+
+  const tierBlock = tierLabel
+    ? `Price tier: ${tierLabel}. Weight value for: ${(tierFeatures || []).slice(0, 5).join(', ') || 'this tier'}.\n`
     : '';
 
   const stretchBlock = stretch.length
@@ -55,7 +59,7 @@ For stretch_suggestions use candidate_id from the stretch list. Include stretch_
     : 'No in-budget candidates — return "top3": [].';
 
   return `The user is shopping for: ${query}
-${budgetBlock}
+${tierBlock}${budgetBlock}
 IN-BUDGET candidates:
 ${JSON.stringify({ candidates: compactCandidates(primary) })}
 ${stretchBlock}
@@ -116,10 +120,10 @@ async function callCompareModel(userId, modelId, prompt, maxTokens) {
   return result;
 }
 
-async function scoreAndRank(userId, query, primary, stretch, budget, modelId) {
+async function scoreAndRank(userId, query, primary, stretch, budget, modelId, tierOpts = {}) {
   const attempts = [
-    { prompt: buildComparePrompt(query, primary, stretch, budget), compact: false },
-    { prompt: buildComparePrompt(query, primary, stretch, budget, { compact: true }), compact: true },
+    { prompt: buildComparePrompt(query, primary, stretch, budget, { ...tierOpts, compact: false }), compact: false },
+    { prompt: buildComparePrompt(query, primary, stretch, budget, { ...tierOpts, compact: true }), compact: true },
   ];
 
   let lastErr;
@@ -213,6 +217,86 @@ async function crossMarketAlternatives(winner, originalQuery) {
 }
 
 /**
+ * Run comparison on a candidate pool (search optional). Used by scout + buy-guide tiers.
+ */
+async function executeScoutComparison(userId, query, {
+  maxPrice,
+  freeDelivery = false,
+  within2Days = false,
+  amazonDomain,
+  variancePct,
+  modelId,
+  candidates: poolIn,
+  tierLabel,
+  tierFeatures,
+  includeExternals = true,
+} = {}) {
+  const q = String(query || '').trim();
+  const domain = amazonDomain || await getAmazonDomain(pool);
+  const variance = variancePct ?? await getPriceVariancePct(pool);
+  const model = modelId || (await getModelsForUser(userId)).standard;
+
+  let allCandidates = poolIn;
+  if (!allCandidates?.length) {
+    allCandidates = await searchProducts(q, {
+      maxResults: 10,
+      amazonDomain: domain,
+      freeDelivery,
+      within2Days,
+    });
+  }
+
+  const max = Number(maxPrice);
+  const hasBudget = Number.isFinite(max) && max > 0;
+
+  const { primary, stretch, budget } = applyBudgetFilter(
+    allCandidates,
+    hasBudget ? max : null,
+    variance
+  );
+
+  const primaryScored = attachPreScores(primary);
+  const stretchScored = attachPreScores(stretch);
+
+  if (!primaryScored.length && !stretchScored.length) {
+    return {
+      error: hasBudget
+        ? `No products in this price band (max $${max}).`
+        : 'No products matched this tier.',
+      candidates_fetched: allCandidates.length,
+      comparison: { top3: [], stretch_suggestions: [] },
+      budget,
+      external_alternatives: [],
+    };
+  }
+
+  const comparison = await scoreAndRank(
+    userId,
+    q,
+    primaryScored,
+    stretchScored,
+    budget,
+    model,
+    { tierLabel, tierFeatures }
+  );
+  const top3 = comparison.top3 || [];
+  const stretchSuggestions = comparison.stretch_suggestions || [];
+  const winner = top3[0] || stretchSuggestions[0] || null;
+  const external_alternatives = includeExternals && winner
+    ? await crossMarketAlternatives(winner, q)
+    : [];
+
+  return {
+    candidates_fetched: allCandidates.length,
+    amazonDomain: domain,
+    filters: { freeDelivery, within2Days },
+    budget,
+    comparison,
+    external_alternatives,
+  };
+}
+
+/**
  * @param {number} userId
  * @param {string} query
  * @param {{ maxPrice?: number|null }} [opts]
@@ -226,47 +310,34 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
   const max = Number(maxPrice);
   const hasBudget = Number.isFinite(max) && max > 0;
 
-  const { standard: modelId } = await getModelsForUser(userId);
-  const allCandidates = await searchProducts(q, {
-    maxResults: 10,
-    amazonDomain,
+  const scout = await executeScoutComparison(userId, q, {
+    maxPrice: hasBudget ? max : null,
     freeDelivery,
     within2Days,
+    amazonDomain,
+    variancePct,
+    includeExternals: true,
   });
-  const { primary, stretch, budget } = applyBudgetFilter(
-    allCandidates,
-    hasBudget ? max : null,
-    variancePct
-  );
 
-  const primaryScored = attachPreScores(primary);
-  const stretchScored = attachPreScores(stretch);
-
-  if (!primaryScored.length && !stretchScored.length) {
-    const ceiling = budget?.ceiling;
+  if (scout.error) {
+    const ceiling = scout.budget?.ceiling;
     throw new Error(
       ceiling
         ? `No products found within your max price ($${max}) or variance ceiling ($${ceiling}). Try raising your budget.`
-        : 'No Amazon search results matched your query.'
+        : scout.error
     );
   }
-
-  const comparison = await scoreAndRank(userId, q, primaryScored, stretchScored, budget, modelId);
-  const top3 = comparison.top3 || [];
-  const stretchSuggestions = comparison.stretch_suggestions || [];
-  const winner = top3[0] || stretchSuggestions[0] || null;
-  const external_alternatives = winner ? await crossMarketAlternatives(winner, q) : [];
 
   const result = {
     mode: 'scout',
     query: q,
-    candidates_fetched: allCandidates.length,
+    candidates_fetched: scout.candidates_fetched,
     amazonDomain,
     amazonCountry: marketplaceLabel(amazonDomain),
-    filters: { freeDelivery, within2Days },
-    budget,
-    comparison,
-    external_alternatives,
+    filters: scout.filters,
+    budget: scout.budget,
+    comparison: scout.comparison,
+    external_alternatives: scout.external_alternatives,
     markdown: null,
   };
   result.markdown = formatMarkdown(result);
@@ -279,7 +350,7 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
   result.runId = rows[0]?.id;
   result.createdAt = rows[0]?.createdAt;
 
-  await captureIf(!external_alternatives.length, {
+  await captureIf(!scout.external_alternatives.length, {
     userId,
     source: 'productScout',
     category: 'source',
@@ -325,4 +396,10 @@ async function deleteRuns(userId, ids) {
   return { deleted: rowCount };
 }
 
-module.exports = { runProductScout, listRuns, getRun, deleteRuns };
+module.exports = {
+  runProductScout,
+  executeScoutComparison,
+  listRuns,
+  getRun,
+  deleteRuns,
+};

@@ -1,63 +1,13 @@
 import React, { useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
-import { formatListingRatings } from '../../utils/productScoutCompareTable';
-
-function TierPickCard({ pick }) {
-  if (!pick) {
-    return (
-      <p className="text-xs rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-        No strong match in search results for this tier — try a broader product phrase.
-      </p>
-    );
-  }
-
-  const bullets = pick.key_features || pick.feature_bullets || [];
-
-  return (
-    <div
-      className="rounded-xl border p-4 space-y-2"
-      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-    >
-      <div className="flex justify-between gap-3">
-        <h4 className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)' }}>
-          {pick.title}
-        </h4>
-        <p className="text-sm font-semibold shrink-0" style={{ color: 'var(--color-text)' }}>
-          {pick.price ?? pick.price_display ?? '—'}
-        </p>
-      </div>
-      {pick.rating != null && (
-        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-          {pick.rating}★ · {formatListingRatings(pick.review_count)}
-          {pick.pre_score != null && <> · pre-score {pick.pre_score}</>}
-        </p>
-      )}
-      {bullets.length > 0 && (
-        <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
-          {bullets.slice(0, 3).map((b) => (
-            <li key={b}>{b}</li>
-          ))}
-        </ul>
-      )}
-      {pick.link && (
-        <a
-          href={pick.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block text-xs font-medium transition-opacity hover:opacity-70"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          View on Amazon →
-        </a>
-      )}
-    </div>
-  );
-}
+import ProductScoutResults from './ProductScoutResults';
 
 function TierStep({ tier, isLast, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   const band = formatPriceBand(tier.price_min, tier.price_max);
   const gains = tier.gains_vs_below || tier.feature_adds || [];
+  const scout = tier.scout;
+  const hasScout = scout?.comparison?.top3?.length > 0;
 
   return (
     <div className="relative pl-4 sm:pl-6">
@@ -87,20 +37,20 @@ function TierStep({ tier, isLast, defaultOpen }) {
             <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
               {band}
             </span>
+            {hasScout && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                Top {scout.comparison.top3.length} scouted
+              </span>
+            )}
           </div>
           {tier.subtitle && (
             <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>{tier.subtitle}</p>
           )}
-          {tier.tier_rationale && (
-            <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-text)' }}>
-              {tier.tier_rationale}
-            </p>
-          )}
         </button>
         {open && (
-          <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
             {gains.length > 0 && (
-              <div>
+              <div className="pt-3">
                 <p className="text-[10px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
                   What you gain at this step
                 </p>
@@ -111,17 +61,24 @@ function TierStep({ tier, isLast, defaultOpen }) {
                 </ul>
               </div>
             )}
-            <TierPickCard pick={tier.pick} />
-            {tier.alternate?.title && (
-              <div className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                Alternate:{' '}
-                {tier.alternate.link ? (
-                  <a href={tier.alternate.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }}>
-                    {tier.alternate.title}
-                  </a>
-                ) : tier.alternate.title}
-                {tier.alternate.price ? ` · ${tier.alternate.price}` : ''}
+
+            {tier.scout_error && (
+              <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
+                {tier.scout_error}
+              </p>
+            )}
+
+            {hasScout ? (
+              <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium mb-3 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                  Product scout · max ~${scout.budget?.maxPrice ?? tier.price_max ?? '—'}
+                </p>
+                <ProductScoutResults result={scout} compact />
               </div>
+            ) : !tier.scout_error && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                No products found in this price band.
+              </p>
             )}
           </div>
         )}
@@ -149,7 +106,7 @@ export default function ProductScoutTierLadder({ result }) {
           className="rounded-xl border p-3 text-xs leading-relaxed"
           style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
         >
-          {result.budget_fit_note}
+          {result.budget_fit_note.replace(/\*\*/g, '')}
         </div>
       )}
 

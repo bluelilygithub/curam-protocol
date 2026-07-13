@@ -4,7 +4,6 @@ import useToastStore from '../../store/toastStore';
 import useProcessingStore from '../../store/processingStore';
 import ProductScoutFeatureBrief from './ProductScoutFeatureBrief';
 import ProductScoutTierLadder from './ProductScoutTierLadder';
-import ProductScoutUrlCompare from './ProductScoutUrlCompare';
 
 const STEPS = { form: 'form', brief: 'brief', results: 'results' };
 
@@ -29,8 +28,12 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
       setBudgetHint(loadedResult.budgetHint != null ? String(loadedResult.budgetHint) : '');
       setFeatureBrief(loadedResult.feature_brief || null);
       setStep(STEPS.results);
+    } else if (!loadedResult && !loadedRunId) {
+      setStep(STEPS.form);
+      setResult(null);
+      setFeatureBrief(null);
     }
-  }, [loadedResult]);
+  }, [loadedResult, loadedRunId]);
 
   const handleBuildBrief = async (e) => {
     e.preventDefault();
@@ -61,7 +64,7 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
 
   const handleRunGuide = async (confirmedBrief) => {
     setRunning(true);
-    startProcessing('Finding tier picks…', 'Searching Amazon and matching best value at each price step.');
+    startProcessing('Scouting each price tier…', 'Running a full Product Scout comparison for Essentials through Pro — about a minute.');
     setError(null);
     try {
       const res = await api.post('/api/product-scout/guide/run', {
@@ -91,14 +94,13 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
     setFeatureBrief(null);
     setResult(null);
     setError(null);
+    onRunSaved?.(null);
   };
-
-  const runId = result?.runId ?? loadedRunId;
 
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-        Describe what you want and which features matter — we will suggest what to consider, then show the best pick at four price steps from essentials to pro.
+        Step 1: describe what you want. Step 2: review features to consider. Step 3: we run a Product Scout at each price tier so you see the best picks at every step up.
       </p>
 
       {step === STEPS.form && (
@@ -179,16 +181,6 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
             </button>
           </div>
           <ProductScoutTierLadder result={result} />
-          <ProductScoutUrlCompare
-            runId={runId}
-            comparisons={result.url_comparisons || []}
-            onCompared={(entry) => {
-              setResult((prev) => ({
-                ...prev,
-                url_comparisons: [...(prev?.url_comparisons || []), entry],
-              }));
-            }}
-          />
         </div>
       )}
 

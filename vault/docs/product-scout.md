@@ -50,12 +50,15 @@ Feature flag: `productScout` in Settings → Feature Access.
 
 ## Modes (Vault UI)
 
-| Mode | Tab | Flow |
-|------|-----|------|
-| **Quick scout** | Default | Query + optional max price → top 3 value picks |
-| **Buy guide** | Buy guide | Query + features → editable feature brief → 4-tier ladder (Essentials → Pro) |
+**Primary journey:** Buy guide → Product Scout per price tier.
 
-Runs store `result.mode` as `scout` or `guide`. History list shows a **Scout** / **Guide** badge.
+1. Describe product + features → **feature brief** (editable)
+2. **Scout products for each tier** — full top-3 comparison at Essentials, Smart upgrade, Enthusiast, and Pro price bands
+3. Optional **Compare URL** against tier picks
+
+**Quick scout** (collapsed): single max-price comparison without the guide — for when you already know your budget.
+
+Runs store `result.mode` as `scout` or `guide`. Guide runs include `tiers[].scout` with full comparison payloads.
 
 ### Run body
 

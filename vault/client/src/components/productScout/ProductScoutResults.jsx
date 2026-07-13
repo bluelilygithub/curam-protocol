@@ -195,17 +195,17 @@ function FeatureCompareTable({ comparison }) {
   );
 }
 
-export default function ProductScoutResults({ result }) {
+export default function ProductScoutResults({ result, compact = false }) {
   const comp = result?.comparison || {};
   const top3 = comp.top3 || [];
   const stretch = comp.stretch_suggestions || [];
-  const priorityFeatures = comp.priority_features || [];
-  const externals = result?.external_alternatives || [];
+  const priorityFeatures = compact ? [] : (comp.priority_features || []);
+  const externals = compact ? [] : (result?.external_alternatives || []);
   const budget = result?.budget;
   const filters = result?.filters;
 
   return (
-    <div className="space-y-6">
+    <div className={compact ? 'space-y-4' : 'space-y-6'}>
       {(filters?.freeDelivery || filters?.within2Days) && (
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
           Filters:
@@ -224,7 +224,7 @@ export default function ProductScoutResults({ result }) {
 
       {(comp.summary || comp.selection_summary) && (
         <section className="space-y-2">
-          {comp.summary && (
+          {!compact && comp.summary && (
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
               {comp.summary}
             </p>
@@ -234,8 +234,8 @@ export default function ProductScoutResults({ result }) {
               className="rounded-xl border p-4 space-y-2"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
             >
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                Why these picks?
+              <h2 className={`font-semibold ${compact ? 'text-xs' : 'text-sm'}`} style={{ color: 'var(--color-text)' }}>
+                {compact ? 'Why these picks' : 'Why these picks?'}
               </h2>
               {comp.selection_summary.split('\n').filter(Boolean).map((para) => (
                 <p key={para.slice(0, 40)} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>

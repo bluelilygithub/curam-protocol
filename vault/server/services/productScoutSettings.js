@@ -133,6 +133,52 @@ function applyBudgetFilter(candidates, maxPrice, variancePct) {
   };
 }
 
+/** Keep listings within a tier's price band (inclusive). */
+function filterByPriceBand(candidates, minPrice, maxPrice) {
+  const min = minPrice != null && Number.isFinite(Number(minPrice)) ? Number(minPrice) : null;
+  const max = maxPrice != null && Number.isFinite(Number(maxPrice)) ? Number(maxPrice) : null;
+
+  if (min == null && max == null) return [...candidates];
+
+  return candidates.filter((c) => {
+    const p = parseNumericPrice(c);
+    if (p == null) return min == null;
+    if (min != null && p < min) return false;
+    if (max != null && p > max) return false;
+    return true;
+  });
+}
+
+function buildBudgetFitNote(budgetHint, tierFramework) {
+  if (!Number.isFinite(budgetHint) || budgetHint <= 0 || !tierFramework?.length) return '';
+
+  const match = tierFramework.find((t) => {
+    const min = Number(t.price_min);
+    const max = Number(t.price_max);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      return budgetHint >= min && budgetHint <= max;
+    }
+    if (Number.isFinite(max)) return budgetHint <= max;
+    if (Number.isFinite(min)) return budgetHint >= min;
+    return false;
+  });
+
+  if (match) {
+    return `Your ~$${budgetHint} budget aligns with the **${match.label}** tier — scout results below are tuned to that price band.`;
+  }
+
+  const below = tierFramework.filter((t) => Number(t.price_max) < budgetHint);
+  const above = tierFramework.find((t) => Number(t.price_min) > budgetHint);
+  if (above) {
+    return `Your ~$${budgetHint} budget sits below **${above.label}** (${above.price_min != null ? `$${above.price_min}+` : 'higher tier'}). Essentials or Smart upgrade scouts are your best starting points.`;
+  }
+  if (below.length) {
+    const top = below[below.length - 1];
+    return `Your ~$${budgetHint} budget can reach **${top.label}** or above — compare scouts at each step to see what extra spend buys.`;
+  }
+  return '';
+}
+
 module.exports = {
   VARIANCE_KEY,
   AMAZON_DOMAIN_KEY,
@@ -147,4 +193,6 @@ module.exports = {
   getProductScoutSettings,
   parseNumericPrice,
   applyBudgetFilter,
+  filterByPriceBand,
+  buildBudgetFitNote,
 };

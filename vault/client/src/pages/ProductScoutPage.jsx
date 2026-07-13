@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import ProductScoutResults from '../components/productScout/ProductScoutResults';
 import ProductScoutUrlCompare from '../components/productScout/ProductScoutUrlCompare';
-import ProductScoutModeToggle from '../components/productScout/ProductScoutModeToggle';
 import ProductScoutGuidePanel from '../components/productScout/ProductScoutGuidePanel';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
@@ -37,14 +36,14 @@ export default function ProductScoutPage() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.productScout !== false;
 
-  const [mode, setMode] = useState('scout');
-  const [query, setQuery] = useState('');
-  const [result, setResult] = useState(null);
-  const [guideLoadedResult, setGuideLoadedResult] = useState(null);
+  const [scoutResult, setScoutResult] = useState(null);
+  const [guideResult, setGuideResult] = useState(null);
   const [runs, setRuns] = useState([]);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [scoutError, setScoutError] = useState(null);
+  const [quickScoutOpen, setQuickScoutOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [freeDelivery, setFreeDelivery] = useState(false);
   const [within2Days, setWithin2Days] = useState(false);
@@ -81,15 +80,15 @@ export default function ProductScoutPage() {
     if (canUse) loadMeta();
   }, [canUse, loadMeta]);
 
-  const handleRun = async (e) => {
+  const handleQuickScout = async (e) => {
     e.preventDefault();
     const q = query.trim();
     if (!q) {
       addToast('Enter a product search query', 'error');
       return;
     }
-    startProcessing('Scouting products…', 'Fetching Amazon results, scoring with AI, and checking external alternatives.');
-    setError(null);
+    startProcessing('Scouting products…', 'Single-budget comparison — skip the guide if you already know your max price.');
+    setScoutError(null);
     try {
       const res = await api.post('/api/product-scout/run', {
         query: q,
@@ -99,16 +98,17 @@ export default function ProductScoutPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Scout failed');
-      setResult(data);
-      setGuideLoadedResult(null);
+      setScoutResult(data);
+      setGuideResult(null);
       setLoadedRunId(data.runId ?? null);
+      setQuickScoutOpen(true);
       await loadMeta();
       addToast('Comparison ready', 'success');
     } catch (err) {
       const msg = err.message || 'Scout failed';
-      setError(msg);
+      setScoutError(msg);
       addToast(msg, 'error');
-      setResult(null);
+      setScoutResult(null);
     } finally {
       stopProcessing();
     }
@@ -124,13 +124,13 @@ export default function ProductScoutPage() {
       setLoadedRunId(data.id);
 
       if (runResult?.mode === 'guide') {
-        setMode('guide');
-        setGuideLoadedResult(runResult);
-        setResult(null);
+        setGuideResult(runResult);
+        setScoutResult(null);
+        setQuickScoutOpen(false);
       } else {
-        setMode('scout');
-        setResult(runResult);
-        setGuideLoadedResult(null);
+        setScoutResult(runResult);
+        setGuideResult(null);
+        setQuickScoutOpen(true);
         if (runResult?.filters) {
           setFreeDelivery(Boolean(runResult.filters.freeDelivery));
           setWithin2Days(Boolean(runResult.filters.within2Days));
@@ -165,8 +165,8 @@ export default function ProductScoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       if (loadedRunId && ids.includes(loadedRunId)) {
-        setResult(null);
-        setGuideLoadedResult(null);
+        setScoutResult(null);
+        setGuideResult(null);
         setLoadedRunId(null);
       }
       clearSelection();
@@ -180,13 +180,14 @@ export default function ProductScoutPage() {
     }
   };
 
-  const handleModeChange = (next) => {
-    setMode(next);
-    setError(null);
-  };
-
   const handleGuideSaved = async (data) => {
-    setGuideLoadedResult(data);
+    if (!data) {
+      setGuideResult(null);
+      setLoadedRunId(null);
+      return;
+    }
+    setGuideResult(data);
+    setScoutResult(null);
     setLoadedRunId(data.runId ?? null);
     await loadMeta();
   };
@@ -195,6 +196,8 @@ export default function ProductScoutPage() {
 
   const hasSelection = selectedRunIds.size > 0;
   const countryLabel = config?.amazonCountry ? `Amazon ${config.amazonCountry}` : 'Amazon';
+  const activeResult = guideResult || scoutResult;
+  const runId = activeResult?.runId ?? loadedRunId;
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -205,16 +208,11 @@ export default function ProductScoutPage() {
         >
           {getIcon('productScout', { size: 18 })}
         </div>
-        <div className="flex-1 min-w-0 space-y-2">
-          <div>
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-              {mode === 'guide'
-                ? `${countryLabel} — feature-led buying guide with four price tiers.`
-                : `${countryLabel} — value scoring plus non-Amazon alternatives.`}
-            </p>
-          </div>
-          <ProductScoutModeToggle mode={mode} onChange={handleModeChange} />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            {countryLabel} — start with a buying guide, then scout the best products at each price tier.
+          </p>
         </div>
       </div>
 
@@ -230,99 +228,120 @@ export default function ProductScoutPage() {
         </div>
       )}
 
-      {mode === 'scout' ? (
-        <>
-          <form onSubmit={handleRun} className="space-y-3">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What are you shopping for?</span>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. wireless noise cancelling earbuds under $150"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
-                Max price (optional)
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  placeholder="e.g. 150"
-                  className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                {config?.priceVariancePct != null && (
-                  <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                    Stretch variance: {config.priceVariancePct}% above max
-                  </span>
-                )}
-              </div>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
-              <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Scout products
-            </button>
-          </form>
+      <section
+        className="rounded-2xl border p-6"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      >
+        <ProductScoutGuidePanel
+          onRunSaved={handleGuideSaved}
+          loadedResult={guideResult}
+          loadedRunId={loadedRunId}
+        />
+      </section>
 
-          {error && (
-            <div
-              className="rounded-xl border p-4 text-xs"
-              style={{ borderColor: '#ef4444', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              {error}
-            </div>
-          )}
-
-          {result?.comparison && (
-            <section
-              className="rounded-2xl border p-6"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-            >
-              <ProductScoutResults result={result} />
-              <ProductScoutUrlCompare
-                runId={result.runId ?? loadedRunId}
-                comparisons={result.url_comparisons || []}
-                onCompared={(entry) => {
-                  setResult((prev) => ({
-                    ...prev,
-                    url_comparisons: [...(prev?.url_comparisons || []), entry],
-                  }));
-                }}
-              />
-            </section>
-          )}
-        </>
-      ) : (
+      {guideResult && (
         <section
-          className="rounded-2xl border p-6"
+          className="rounded-2xl border p-6 space-y-4"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
-          <ProductScoutGuidePanel
-            onRunSaved={handleGuideSaved}
-            loadedResult={guideLoadedResult}
-            loadedRunId={loadedRunId}
+          <ProductScoutUrlCompare
+            runId={runId}
+            comparisons={guideResult.url_comparisons || []}
+            onCompared={(entry) => {
+              setGuideResult((prev) => ({
+                ...prev,
+                url_comparisons: [...(prev?.url_comparisons || []), entry],
+              }));
+            }}
           />
         </section>
       )}
 
+      <section className="space-y-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+        <button
+          type="button"
+          onClick={() => setQuickScoutOpen((v) => !v)}
+          className="text-xs font-medium transition-opacity hover:opacity-70"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {quickScoutOpen ? '▼' : '▶'} Quick scout — single budget, skip the guide
+        </button>
+
+        {quickScoutOpen && (
+          <div className="space-y-4 pt-2">
+            <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+              Already know your max price? Run one comparison without the tier guide.
+            </p>
+            <form onSubmit={handleQuickScout} className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Search query</span>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="e.g. wireless noise cancelling earbuds"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Max price (optional)</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    placeholder="150"
+                    className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </div>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
+                <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
+              </div>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl text-sm font-medium border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+              >
+                Scout at this budget
+              </button>
+            </form>
+
+            {scoutError && (
+              <div className="rounded-xl border p-4 text-xs" style={{ borderColor: '#ef4444', color: 'var(--color-text)' }}>
+                {scoutError}
+              </div>
+            )}
+
+            {scoutResult?.comparison && (
+              <section
+                className="rounded-2xl border p-6"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+              >
+                <ProductScoutResults result={scoutResult} />
+                <ProductScoutUrlCompare
+                  runId={scoutResult.runId ?? loadedRunId}
+                  comparisons={scoutResult.url_comparisons || []}
+                  onCompared={(entry) => {
+                    setScoutResult((prev) => ({
+                      ...prev,
+                      url_comparisons: [...(prev?.url_comparisons || []), entry],
+                    }));
+                  }}
+                />
+              </section>
+            )}
+          </div>
+        )}
+      </section>
+
       {!loading && runs.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent scouts</h2>
+          <h2 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recent runs</h2>
 
           {hasSelection && (
             <div
@@ -336,7 +355,7 @@ export default function ProductScoutPage() {
               {bulkDeleteConfirm ? (
                 <>
                   <span className="text-xs" style={{ color: '#ef4444' }}>
-                    Delete {selectedRunIds.size} scout{selectedRunIds.size !== 1 ? 's' : ''}?
+                    Delete {selectedRunIds.size} run{selectedRunIds.size !== 1 ? 's' : ''}?
                   </span>
                   <button
                     type="button"
@@ -346,12 +365,7 @@ export default function ProductScoutPage() {
                   >
                     Confirm
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setBulkDeleteConfirm(false)}
-                    className="text-xs"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
+                  <button type="button" onClick={() => setBulkDeleteConfirm(false)} className="text-xs" style={{ color: 'var(--color-muted)' }}>
                     Cancel
                   </button>
                 </>
@@ -384,12 +398,7 @@ export default function ProductScoutPage() {
                     }`}
                     style={{ color: 'var(--color-muted)' }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleRunSelection(r.id)}
-                      className="rounded"
-                    />
+                    <input type="checkbox" checked={selected} onChange={() => toggleRunSelection(r.id)} className="rounded" />
                   </label>
                   <button
                     type="button"
@@ -421,10 +430,6 @@ export default function ProductScoutPage() {
           </ul>
         </section>
       )}
-
-      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-        CLI: <code className="font-mono">product-scout/main.py</code> — see product-scout/README.md
-      </p>
     </div>
   );
 }

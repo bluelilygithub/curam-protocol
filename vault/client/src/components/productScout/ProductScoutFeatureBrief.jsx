@@ -120,7 +120,7 @@ export default function ProductScoutFeatureBrief({
           className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
           style={{ background: 'var(--color-primary)' }}
         >
-          {loading ? 'Searching…' : 'Find products by tier'}
+          {loading ? 'Scouting tiers…' : 'Scout products for each tier'}
         </button>
         {onBack && (
           <button
