@@ -7,9 +7,27 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
-const FONT_OPTIONS = [
-  { id: 'dejavu-sans', label: 'DejaVu Sans' },
-  { id: 'liberation-sans', label: 'Liberation Sans' },
+const VIDEO_GOOGLE_FONTS = [
+  'Roboto',
+  'Inter',
+  'Open Sans',
+  'Lato',
+  'Montserrat',
+  'Poppins',
+  'Nunito',
+  'Raleway',
+  'Oswald',
+  'Bebas Neue',
+  'Anton',
+  'Playfair Display',
+  'Merriweather',
+  'Lora',
+  'PT Serif',
+  'Pacifico',
+  'Dancing Script',
+  'Caveat',
+  'Roboto Mono',
+  'Space Mono',
 ];
 
 const FONT_WEIGHTS = [
@@ -65,9 +83,42 @@ const TOOL_GROUPS = [
   },
 ];
 
-function assFontLabel(fontId) {
-  if (fontId === 'liberation-sans') return 'Liberation Sans';
-  return 'DejaVu Sans';
+function TextStyleFields({
+  fontFamily, setFontFamily, fontSize, setFontSize, fontColor, setFontColor,
+  fontWeight, setFontWeight, backgroundColor, setBackgroundColor,
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="block space-y-1 sm:col-span-2">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Font (Google Fonts)</span>
+        <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          {VIDEO_GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Weight</span>
+        <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          {FONT_WEIGHTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+        </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (px)</span>
+        <input type="number" min={12} max={72} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Text colour</span>
+        <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background colour</span>
+        <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+      </label>
+    </div>
+  );
+}
+
+function CaptionStyleFields(props) {
+  return <TextStyleFields {...props} />;
 }
 
 function formatDuration(sec) {
@@ -158,35 +209,6 @@ function VideoUpload({ file, onFile, label = 'Video file' }) {
   );
 }
 
-function CaptionStyleFields({
-  fontFamily, setFontFamily, fontSize, setFontSize, fontColor, setFontColor, fontWeight, setFontWeight,
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <label className="block space-y-1">
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Font</span>
-        <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-        </select>
-      </label>
-      <label className="block space-y-1">
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Weight</span>
-        <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {FONT_WEIGHTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-        </select>
-      </label>
-      <label className="block space-y-1">
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (px)</span>
-        <input type="number" min={12} max={72} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</span>
-        <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
-      </label>
-    </div>
-  );
-}
-
 function ResultVideo({
   blobUrl, downloadName, onUse, onSave, saveLabel = 'Save to library',
   saveTitle, onSaveTitleChange,
@@ -267,6 +289,7 @@ export default function VideosPage() {
   const [resultBlob, setResultBlob] = useState(null);
   const resultBlobRef = useRef(null);
   const thumbBlobRef = useRef(null);
+  const [resultForTool, setResultForTool] = useState(null);
   const [resultName, setResultName] = useState('output.mp4');
   const [probe, setProbe] = useState(null);
 
@@ -317,10 +340,11 @@ export default function VideosPage() {
 
   // Caption studio
   const [captionLibraryId, setCaptionLibraryId] = useState('');
-  const [captionFontFamily, setCaptionFontFamily] = useState('dejavu-sans');
-  const [captionFontSize, setCaptionFontSize] = useState(28);
-  const [captionFontColor, setCaptionFontColor] = useState('#FFFFFF');
-  const [captionFontWeight, setCaptionFontWeight] = useState('normal');
+  const [textFontFamily, setTextFontFamily] = useState('Roboto');
+  const [textFontSize, setTextFontSize] = useState(28);
+  const [textFontColor, setTextFontColor] = useState('#FFFFFF');
+  const [textFontWeight, setTextFontWeight] = useState('normal');
+  const [textBackgroundColor, setTextBackgroundColor] = useState('#000000');
   const [captionSaveToLibrary, setCaptionSaveToLibrary] = useState(true);
 
   const previewUrl = useMemo(() => {
@@ -365,14 +389,40 @@ export default function VideosPage() {
     })).filter((g) => g.tools.length > 0);
   }, [search]);
 
-  const setResultFromBlob = useCallback((blob, name) => {
+  const clearComposeResult = useCallback(() => {
+    setResultBlob((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    resultBlobRef.current = null;
+    setResultForTool(null);
+  }, []);
+
+  useEffect(() => {
+    if (tool === 'annotate' || tool === 'caption-studio') clearComposeResult();
+  }, [tool, clearComposeResult]);
+
+  const setResultFromBlob = useCallback((blob, name, forTool = null) => {
     resultBlobRef.current = blob;
     setResultBlob((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return blob ? URL.createObjectURL(blob) : null;
     });
     if (name) setResultName(name);
+    setResultForTool(forTool);
   }, []);
+
+  const textStyleFields = useCallback(() => ({
+    fontFamily: textFontFamily,
+    fontSize: textFontSize,
+    fontColor: textFontColor,
+    fontWeight: textFontWeight,
+    backgroundColor: textBackgroundColor,
+  }), [textFontFamily, textFontSize, textFontColor, textFontWeight, textBackgroundColor]);
+
+  const appendTextStyleFields = useCallback((fd) => {
+    Object.entries(textStyleFields()).forEach(([k, v]) => fd.append(k, String(v)));
+  }, [textStyleFields]);
 
   const loadLibrary = useCallback(async () => {
     setLibraryLoading(true);
@@ -459,7 +509,7 @@ export default function VideosPage() {
         thumbBlobRef.current = blob;
         setThumbUrl(URL.createObjectURL(blob));
       } else {
-        setResultFromBlob(blob, `${item.title || 'video'}.mp4`);
+        setResultFromBlob(blob, `${item.title || 'video'}.mp4`, 'saved-library');
       }
       setLastTransaction(item.transaction || { savedId: item.id, tool: item.tool });
     } catch (err) {
@@ -478,12 +528,7 @@ export default function VideosPage() {
       addToast('Choose a library video or upload a file', 'error');
       return;
     }
-    const styleFields = {
-      fontFamily: assFontLabel(captionFontFamily),
-      fontSize: captionFontSize,
-      fontColor: captionFontColor,
-      fontWeight: captionFontWeight,
-    };
+    const styleFields = textStyleFields();
     startProcessing('Burning captions…', 'Applying styled subtitles with ffmpeg.');
     try {
       if (captionLibraryId) {
@@ -497,20 +542,20 @@ export default function VideosPage() {
           throw new Error(err.error || 'Caption burn failed');
         }
         const blob = await res.blob();
-        setResultFromBlob(blob, 'captioned.mp4');
+        setResultFromBlob(blob, 'captioned.mp4', 'caption-studio');
         if (captionSaveToLibrary) await loadLibrary();
       } else {
         const fd = new FormData();
         fd.append('video', sourceFile);
         fd.append('srtText', srtText);
-        Object.entries(styleFields).forEach(([k, v]) => fd.append(k, String(v)));
+        appendTextStyleFields(fd);
         const res = await api.postForm('/api/videos/burn-captions', fd);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || 'Caption burn failed');
         }
         const blob = await res.blob();
-        setResultFromBlob(blob, 'captioned.mp4');
+        setResultFromBlob(blob, 'captioned.mp4', 'caption-studio');
         if (captionSaveToLibrary) {
           await saveToLibrary({
             title: saveTitle || 'Captioned video',
@@ -545,7 +590,7 @@ export default function VideosPage() {
     }
   }, [resultName, addToast]);
 
-  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson }) => {
+  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson, forTool }) => {
     startProcessing(label, 'Processing on the server with ffmpeg.');
     try {
       const res = await api.postForm(`/api/videos/${endpoint}`, formData);
@@ -558,8 +603,8 @@ export default function VideosPage() {
         return data;
       }
       const blob = await res.blob();
-      setResultFromBlob(blob, resultFilename);
-      setLastTransaction({ tool: endpoint });
+      setResultFromBlob(blob, resultFilename, forTool ?? tool);
+      setLastTransaction({ tool: forTool ?? endpoint });
       addToast('Done', 'success');
       return blob;
     } catch (err) {
@@ -568,7 +613,7 @@ export default function VideosPage() {
     } finally {
       stopProcessing();
     }
-  }, [startProcessing, stopProcessing, setResultFromBlob, addToast]);
+  }, [startProcessing, stopProcessing, setResultFromBlob, addToast, tool]);
 
   const requireFile = () => {
     if (!sourceFile) {
@@ -610,7 +655,7 @@ export default function VideosPage() {
       throw new Error(err.error || 'Could not load video for playback');
     }
     const blob = await res.blob();
-    setResultFromBlob(blob, 'generated.mp4');
+    setResultFromBlob(blob, 'generated.mp4', 'generate');
   }, [setResultFromBlob]);
 
   const handleLoadYoutube = async () => {
@@ -694,7 +739,7 @@ export default function VideosPage() {
       setGenerateResult(completed);
       if (completed.inline?.base64) {
         const bin = Uint8Array.from(atob(completed.inline.base64), (c) => c.charCodeAt(0));
-        setResultFromBlob(new Blob([bin], { type: completed.inline.contentType || 'video/mp4' }), 'generated.mp4');
+        setResultFromBlob(new Blob([bin], { type: completed.inline.contentType || 'video/mp4' }), 'generated.mp4', 'generate');
       } else if (completed.videoUrl) {
         startProcessing('Preparing playback…', 'Downloading your clip for in-browser preview.');
         await hydrateRemoteVideo(completed.videoUrl);
@@ -998,12 +1043,14 @@ export default function VideosPage() {
                 )}
               </div>
             )}
-            <ResultVideo
-              blobUrl={resultBlob}
-              downloadName={resultName}
-              onUse={useResultAsSource}
-              {...resultSaveProps}
-            />
+            {resultForTool === 'generate' && (
+              <ResultVideo
+                blobUrl={resultBlob}
+                downloadName={resultName}
+                onUse={useResultAsSource}
+                {...resultSaveProps}
+              />
+            )}
           </section>
         )}
 
@@ -1031,11 +1078,9 @@ export default function VideosPage() {
             <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Export clip
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
-          </section>
-        )}
-
-        {tool === 'convert' && (
+            {resultForTool === 'clip' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Convert / compress</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -1051,34 +1096,44 @@ export default function VideosPage() {
             <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('crf', String(crf)); if (maxWidth) fd.append('maxWidth', maxWidth); runFormVideo('convert', fd, { label: 'Converting…', resultFilename: 'converted.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Convert
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
-          </section>
-        )}
-
-        {tool === 'extract-audio' && (
+            {resultForTool === 'convert' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Extract audio</h2>
             <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Export MP3
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
-          </section>
-        )}
-
-        {tool === 'annotate' && (
+            {resultForTool === 'extract-audio' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
+            )}
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a single text label into the full clip (full-duration overlay).</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
             <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
             <select value={overlayPos} onChange={(e) => setOverlayPos(e.target.value)} className="px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
               <option value="bottom">Bottom</option>
               <option value="center">Center</option>
               <option value="top">Top</option>
             </select>
-            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+            <TextStyleFields
+              fontFamily={textFontFamily}
+              setFontFamily={setTextFontFamily}
+              fontSize={textFontSize}
+              setFontSize={setTextFontSize}
+              fontColor={textFontColor}
+              setFontColor={setTextFontColor}
+              fontWeight={textFontWeight}
+              setFontWeight={setTextFontWeight}
+              backgroundColor={textBackgroundColor}
+              setBackgroundColor={setTextBackgroundColor}
+            />
+            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); appendTextStyleFields(fd); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Apply label
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            {resultForTool === 'annotate' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
           </section>
         )}
 
@@ -1118,14 +1173,16 @@ export default function VideosPage() {
             </div>
 
             <CaptionStyleFields
-              fontFamily={captionFontFamily}
-              setFontFamily={setCaptionFontFamily}
-              fontSize={captionFontSize}
-              setFontSize={setCaptionFontSize}
-              fontColor={captionFontColor}
-              setFontColor={setCaptionFontColor}
-              fontWeight={captionFontWeight}
-              setFontWeight={setCaptionFontWeight}
+              fontFamily={textFontFamily}
+              setFontFamily={setTextFontFamily}
+              fontSize={textFontSize}
+              setFontSize={setTextFontSize}
+              fontColor={textFontColor}
+              setFontColor={setTextFontColor}
+              fontWeight={textFontWeight}
+              setFontWeight={setTextFontWeight}
+              backgroundColor={textBackgroundColor}
+              setBackgroundColor={setTextBackgroundColor}
             />
 
             <div className="space-y-2">
@@ -1190,7 +1247,9 @@ export default function VideosPage() {
             >
               Apply captions
             </button>
-            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            {resultForTool === 'caption-studio' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
           </section>
         )}
 
@@ -1287,7 +1346,7 @@ export default function VideosPage() {
               ))}
             </ul>
 
-            {resultBlob && tool === 'saved-library' && (
+            {resultForTool === 'saved-library' && resultBlob && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
             )}
             {thumbUrl && tool === 'saved-library' && (

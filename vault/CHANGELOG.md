@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-annotate-fonts)
+
+**Enhancement:** Annotate + Caption studio — Google Fonts picker (20 curated), text/background colour, weight, size. Compose tools clear stale result preview until processing completes. Server downloads Google Font TTFs for ffmpeg.
+
+---
+
 ## 2026-07-13 (video-library-csp)
 
 **Fix:** Save to library failed in production — `fetch(blob:)` blocked by CSP `connect-src`. Added `blob:` to `connect-src`; VideosPage now keeps Blobs in refs to avoid re-fetching object URLs.

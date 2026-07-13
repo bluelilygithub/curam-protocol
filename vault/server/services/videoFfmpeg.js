@@ -4,6 +4,7 @@ const { execFile } = require('child_process');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+const { writeFontToDir } = require('./googleFonts');
 
 const FFMPEG = process.env.LOCAL_FFMPEG_COMMAND || 'ffmpeg';
 const FFPROBE = process.env.LOCAL_FFPROBE_COMMAND || 'ffprobe';
@@ -113,20 +114,20 @@ async function captureThumbnail(inputPath, outputPath, timeSec = 1) {
   ]);
 }
 
-const FONT_FILES = {
+const SYSTEM_FONT_FILES = {
   'dejavu-sans': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
   'dejavu-sans-bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
   'liberation-sans': '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
   'liberation-sans-bold': '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
 };
 
-function resolveFontFile(fontFamily = 'dejavu-sans', fontWeight = 'normal') {
+async function resolveFontFilePath(fontFamily = 'Roboto', fontWeight = 'normal', workDir) {
   const bold = fontWeight === 'bold' || fontWeight === '700' || Number(fontWeight) >= 600;
-  const base = String(fontFamily || 'dejavu-sans').toLowerCase().replace(/\s+/g, '-');
+  const base = String(fontFamily || 'Roboto').toLowerCase().replace(/\s+/g, '-');
   const key = bold ? `${base}-bold` : base;
-  if (FONT_FILES[key]) return FONT_FILES[key];
-  if (FONT_FILES[base]) return FONT_FILES[base];
-  return bold ? FONT_FILES['dejavu-sans-bold'] : FONT_FILES['dejavu-sans'];
+  if (SYSTEM_FONT_FILES[key]) return SYSTEM_FONT_FILES[key];
+  if (SYSTEM_FONT_FILES[base]) return SYSTEM_FONT_FILES[base];
+  return writeFontToDir(fontFamily, fontWeight, workDir);
 }
 
 function normalizeDrawtextColor(color = 'white') {
@@ -142,19 +143,36 @@ function hexToAssColor(hex) {
   return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase();
 }
 
+function hexToDrawtextBoxColor(hex, alpha = 0.75) {
+  const h = String(hex || '#000000').replace('#', '').trim();
+  if (h.length === 6) return `0x${h}@${alpha}`;
+  return `black@${alpha}`;
+}
+
 function buildSubtitleForceStyle({
-  fontFamily = 'DejaVu Sans',
+  fontFamily = 'Roboto',
   fontSize = 24,
   fontColor = '#FFFFFF',
   fontWeight = 'normal',
+  backgroundColor = '#000000',
   outlineColor = '#000000',
-  outline = 2,
+  outline = 1,
 } = {}) {
   const bold = fontWeight === 'bold' || fontWeight === '700' || Number(fontWeight) >= 600 ? 1 : 0;
-  const name = String(fontFamily || 'DejaVu Sans').replace(/,/g, '');
+  const name = String(fontFamily || 'Roboto').replace(/,/g, '');
   const primary = hexToAssColor(fontColor);
+  const back = hexToAssColor(backgroundColor);
   const outlineAss = hexToAssColor(outlineColor);
-  return `FontName=${name},FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))},PrimaryColour=${primary},OutlineColour=${outlineAss},Outline=${Math.min(6, Math.max(0, Number(outline) || 2))},Bold=${bold}`;
+  return [
+    `FontName=${name}`,
+    `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
+    `PrimaryColour=${primary}`,
+    `BackColour=${back}`,
+    `BorderStyle=3`,
+    `OutlineColour=${outlineAss}`,
+    `Outline=${Math.min(6, Math.max(0, Number(outline) || 1))}`,
+    `Bold=${bold}`,
+  ].join(',');
 }
 
 function escapeDrawtext(text) {
@@ -165,18 +183,24 @@ function escapeDrawtext(text) {
     .slice(0, 120);
 }
 
+function escapeFilterPath(filePath) {
+  return String(filePath).replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+}
+
 async function annotateVideo(inputPath, outputPath, {
   text,
   position = 'bottom',
   fontSize = 28,
   fontColor = 'white',
-  fontFamily = 'dejavu-sans',
+  fontFamily = 'Roboto',
   fontWeight = 'normal',
-  boxColor = 'black@0.55',
-}) {
+  backgroundColor = '#000000',
+  backgroundAlpha = 0.75,
+}, workDir) {
   const escaped = escapeDrawtext(text);
-  const fontfile = resolveFontFile(fontFamily, fontWeight).replace(/:/g, '\\:');
+  const fontfile = escapeFilterPath(await resolveFontFilePath(fontFamily, fontWeight, workDir));
   const color = normalizeDrawtextColor(fontColor);
+  const boxColor = hexToDrawtextBoxColor(backgroundColor, backgroundAlpha);
   const y = position === 'top'
     ? '40'
     : position === 'center'
@@ -191,12 +215,14 @@ async function annotateVideo(inputPath, outputPath, {
   ]);
 }
 
-async function burnSubtitles(inputPath, srtPath, outputPath, style = {}) {
-  const sub = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+async function burnSubtitles(inputPath, srtPath, outputPath, style = {}, workDir) {
+  await writeFontToDir(style.fontFamily || 'Roboto', style.fontWeight, workDir);
+  const fontsDir = escapeFilterPath(workDir);
+  const sub = escapeFilterPath(srtPath);
   const forceStyle = buildSubtitleForceStyle(style).replace(/'/g, "'\\''");
   await execFileAsync(FFMPEG, [
     '-y', '-i', inputPath,
-    '-vf', `subtitles='${sub}':force_style='${forceStyle}'`,
+    '-vf', `subtitles='${sub}':fontsdir='${fontsDir}':force_style='${forceStyle}'`,
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'copy', '-movflags', '+faststart',
     outputPath,

@@ -60,12 +60,13 @@ function parseJsonBodyField(val) {
 
 function captionStyleFromBody(body) {
   return {
-    fontFamily: body?.fontFamily || 'DejaVu Sans',
+    fontFamily: body?.fontFamily || 'Roboto',
     fontSize: Number(body?.fontSize) || 24,
     fontColor: body?.fontColor || '#FFFFFF',
     fontWeight: body?.fontWeight || 'normal',
+    backgroundColor: body?.backgroundColor || '#000000',
     outlineColor: body?.outlineColor || '#000000',
-    outline: Number(body?.outline) || 2,
+    outline: Number(body?.outline) || 1,
   };
 }
 
@@ -242,7 +243,7 @@ router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }
         await fs.writeFile(srtPath, String(srtText), 'utf8');
       }
       const outputPath = path.join(dir, 'captioned.mp4');
-      await burnSubtitles(inputPath, srtPath, outputPath, style);
+      await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
       return readOutputFile(outputPath);
     });
 
@@ -482,14 +483,16 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
     const buffer = await withTempDir(async (dir) => {
       const inputPath = await writeUpload(dir, req.file);
       const outputPath = path.join(dir, 'annotated.mp4');
+      const style = captionStyleFromBody(req.body);
       await annotateVideo(inputPath, outputPath, {
         text,
         position: req.body?.position || 'bottom',
-        fontSize: Number(req.body?.fontSize) || 28,
-        fontColor: req.body?.fontColor || 'white',
-        fontFamily: req.body?.fontFamily || 'dejavu-sans',
-        fontWeight: req.body?.fontWeight || 'normal',
-      });
+        fontSize: style.fontSize,
+        fontColor: style.fontColor,
+        fontFamily: style.fontFamily,
+        fontWeight: style.fontWeight,
+        backgroundColor: style.backgroundColor,
+      }, dir);
       return readOutputFile(outputPath);
     });
 
@@ -547,7 +550,7 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
         await fs.writeFile(srtPath, String(srtText), 'utf8');
       }
       const outputPath = path.join(dir, 'captioned.mp4');
-      await burnSubtitles(inputPath, srtPath, outputPath, style);
+      await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
       return readOutputFile(outputPath);
     });
 

@@ -63,8 +63,8 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ### Compose
 
-- **Annotate** — burn a single full-duration text label (top / center / bottom) via ffmpeg `drawtext`. `POST /api/videos/annotate`.
-- **Caption studio** — upload a video or pick one from **Saved media**, paste SRT (or auto-transcribe on upload in local dev), and burn styled subtitles. Controls: font family (DejaVu / Liberation), weight, size, colour. Optional **Save captioned result to library**. `POST /api/videos/burn-captions` (upload) or `POST /api/videos/library/:id/captions` (library item).
+- **Annotate** — burn a single full-duration text label (top / center / bottom) via ffmpeg `drawtext`. Google Fonts (20 curated), text/background colour, weight, size. `POST /api/videos/annotate`.
+- **Caption studio** — upload a video or pick one from **Saved media**, paste SRT (or auto-transcribe on upload in local dev), and burn styled subtitles. Same typography controls as Annotate (Google Fonts, weight, size, text + background colour). Optional **Save captioned result to library**. `POST /api/videos/burn-captions` (upload) or `POST /api/videos/library/:id/captions` (library item).
 
 ### Library
 
@@ -93,7 +93,7 @@ DELETE /api/videos/library/:id
 POST /api/videos/library/:id/captions  `srtText` or `srt` file + style fields + optional `saveToLibrary`
 ```
 
-**Caption style fields** (burn-captions + library captions): `fontFamily`, `fontSize`, `fontColor`, `fontWeight` (`normal` | `bold`).
+**Caption style fields** (annotate + burn-captions + library captions): `fontFamily` (Google Font name), `fontSize`, `fontColor`, `fontWeight` (`normal` | `bold`), `backgroundColor`. Server fetches TTF from Google Fonts on demand (`server/services/googleFonts.js`).
 
 **Library** (`video_library` table): per-user rows with `title`, `tool`, `mediaType` (`video` | `image`), `transaction` JSONB, file on disk at `video-library/{userId}/{id}.mp4|.jpg`.
 
