@@ -215,9 +215,46 @@ async function fetchJson(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.detail || data?.error?.message || data?.error || `Video provider failed (${res.status})`);
+    const detail = data?.detail;
+    const detailMsg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d) => d?.msg || d).join('; ') : null;
+    throw new Error(detailMsg || data?.error?.message || data?.error || data?.message || `Video provider failed (${res.status})`);
   }
   return data;
+}
+
+function falAuthHeaders(apiKey) {
+  return {
+    Authorization: `Key ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function submitFalVideoRequest(endpoint, body) {
+  const apiKey = process.env.FAL_API_KEY;
+  if (!apiKey) throw new Error('FAL_API_KEY is not configured — required for AI video generation');
+
+  const data = await fetchJson(`https://queue.fal.run/${endpoint}`, {
+    method: 'POST',
+    headers: falAuthHeaders(apiKey),
+    body: JSON.stringify(body),
+  });
+
+  if (!data?.request_id) throw new Error('Video provider did not return a request id');
+  return data;
+}
+
+async function fetchFalQueueStatus(endpoint, requestId) {
+  const apiKey = process.env.FAL_API_KEY;
+  return fetchJson(`https://queue.fal.run/${endpoint}/requests/${encodeURIComponent(requestId)}/status?logs=1`, {
+    headers: { Authorization: `Key ${apiKey}` },
+  });
+}
+
+async function fetchFalQueueResult(endpoint, requestId) {
+  const apiKey = process.env.FAL_API_KEY;
+  return fetchJson(`https://queue.fal.run/${endpoint}/requests/${encodeURIComponent(requestId)}`, {
+    headers: { Authorization: `Key ${apiKey}` },
+  });
 }
 
 function resolveVideoUrl(data) {
@@ -256,18 +293,17 @@ async function buildYoutubeContext(userId, youtubeUrl, { describeThumbnail = tru
   return ref;
 }
 
-async function generateVideo(userId, {
-  brief,
-  style,
-  aspect,
-  durationSec,
-  seedImage,
-  seedImageMode = 'animate',
-  youtubeUrl,
-  useYoutubeThumbnailAsSeed = false,
-}) {
-  const apiKey = process.env.FAL_API_KEY;
-  if (!apiKey) throw new Error('FAL_API_KEY is not configured — required for AI video generation');
+async function buildGenerationPayload(userId, options) {
+  const {
+    brief,
+    style,
+    aspect,
+    durationSec,
+    seedImage,
+    seedImageMode = 'animate',
+    youtubeUrl,
+    useYoutubeThumbnailAsSeed = false,
+  } = options;
 
   let seedImageDataUrl = seedImage ? await toImageDataUrl(seedImage) : null;
   let effectiveSeedMode = seedImageMode === 'suggest' ? 'suggest' : 'animate';
@@ -314,16 +350,52 @@ async function generateVideo(userId, {
     if (durationSec) body.duration = Math.min(10, Math.max(3, Number(durationSec) || 5));
   }
 
-  const data = await fetchJson(`https://fal.run/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Key ${apiKey}`,
-      'Content-Type': 'application/json',
+  return {
+    endpoint,
+    body,
+    imageToVideo,
+    expanded,
+    dims,
+    durationSec: body.duration || durationSec || null,
+    references: {
+      seedImageMode: seedImageDataUrl ? effectiveSeedMode : null,
+      youtube: youtubeRef ? {
+        title: youtubeRef.title,
+        url: youtubeRef.url,
+        thumbnailUrl: youtubeRef.thumbnailUrl,
+        usedThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed && effectiveSeedMode === 'animate' && seedImageDataUrl),
+      } : null,
+      imageDescription,
+      youtubeVisualNotes: youtubeRef?.visualNotes || null,
     },
-    body: JSON.stringify(body),
-  });
+  };
+}
 
-  const videoUrl = resolveVideoUrl(data);
+async function startVideoGeneration(userId, options) {
+  const prepared = await buildGenerationPayload(userId, options);
+  const queue = await submitFalVideoRequest(prepared.endpoint, prepared.body);
+
+  return {
+    provider: 'fal',
+    endpoint: prepared.endpoint,
+    mode: prepared.imageToVideo ? 'image-to-video' : 'text-to-video',
+    requestId: queue.request_id,
+    statusUrl: queue.status_url,
+    responseUrl: queue.response_url,
+    queuePosition: queue.queue_position ?? null,
+    video_prompt: prepared.expanded.video_prompt,
+    negative_prompt: prepared.expanded.negative_prompt,
+    aspect: options.aspect,
+    width: prepared.dims.width,
+    height: prepared.dims.height,
+    durationSec: prepared.durationSec,
+    references: prepared.references,
+    status: 'IN_QUEUE',
+  };
+}
+
+async function finalizeVideoResult(preparedMeta, falResult) {
+  const videoUrl = resolveVideoUrl(falResult);
   if (!videoUrl) throw new Error('Video provider did not return a video URL');
 
   let inline = null;
@@ -339,33 +411,66 @@ async function generateVideo(userId, {
   }
 
   return {
-    provider: 'fal',
-    endpoint,
-    mode: imageToVideo ? 'image-to-video' : 'text-to-video',
+    ...preparedMeta,
     videoUrl,
-    video_prompt: expanded.video_prompt,
-    negative_prompt: expanded.negative_prompt,
-    aspect,
-    width: dims.width,
-    height: dims.height,
-    durationSec: body.duration || durationSec || null,
-    references: {
-      seedImageMode: seedImageDataUrl ? effectiveSeedMode : null,
-      youtube: youtubeRef ? {
-        title: youtubeRef.title,
-        url: youtubeRef.url,
-        thumbnailUrl: youtubeRef.thumbnailUrl,
-        usedThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed && effectiveSeedMode === 'animate' && seedImageDataUrl),
-      } : null,
-      imageDescription,
-      youtubeVisualNotes: youtubeRef?.visualNotes || null,
-    },
     inline,
+    status: 'COMPLETED',
   };
+}
+
+async function pollVideoGeneration({ endpoint, requestId, meta = {} }) {
+  const status = await fetchFalQueueStatus(endpoint, requestId);
+
+  if (status.status === 'FAILED' || (status.status === 'COMPLETED' && status.error)) {
+    throw new Error(status.error || status.error_type || 'Video generation failed');
+  }
+
+  if (status.status !== 'COMPLETED') {
+    return {
+      status: status.status,
+      requestId,
+      endpoint,
+      queuePosition: status.queue_position ?? null,
+      logs: status.logs || [],
+      ...meta,
+    };
+  }
+
+  const falResult = await fetchFalQueueResult(endpoint, requestId);
+  const completed = await finalizeVideoResult(meta, falResult);
+  return completed;
+}
+
+async function generateVideo(userId, options) {
+  const started = await startVideoGeneration(userId, options);
+  const maxAttempts = 120;
+  for (let i = 0; i < maxAttempts; i += 1) {
+    const polled = await pollVideoGeneration({
+      endpoint: started.endpoint,
+      requestId: started.requestId,
+      meta: {
+        provider: started.provider,
+        endpoint: started.endpoint,
+        mode: started.mode,
+        video_prompt: started.video_prompt,
+        negative_prompt: started.negative_prompt,
+        aspect: started.aspect,
+        width: started.width,
+        height: started.height,
+        durationSec: started.durationSec,
+        references: started.references,
+      },
+    });
+    if (polled.status === 'COMPLETED') return polled;
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+  }
+  throw new Error('Video generation timed out — try again or use the provider URL from status');
 }
 
 module.exports = {
   generateVideo,
+  startVideoGeneration,
+  pollVideoGeneration,
   expandVideoPrompt,
   buildYoutubeContext,
   toImageDataUrl,

@@ -75,7 +75,8 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 ```
 GET  /api/videos/status
 POST /api/videos/youtube-preview   JSON { url }
-POST /api/videos/generate          JSON { brief?, style, aspect, durationSec, seedImageDataUrl?, seedImageMode?, youtubeUrl?, useYoutubeThumbnailAsSeed? }
+POST /api/videos/generate          JSON { brief?, … } → submits FAL queue job, returns `{ requestId, endpoint, status }` quickly
+GET  /api/videos/generate/status   `?requestId=&endpoint=` → poll until `COMPLETED` (client polls every 3s)
 POST /api/videos/probe|clip|convert|extract-audio|thumbnail|annotate|transcribe|burn-captions
                                    multipart field `video` (+ tool-specific fields)
 ```

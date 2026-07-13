@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const { runtimeConfig } = require('../config/runtime');
-const { generateVideo, DEFAULT_VIDEO_MODEL, DEFAULT_VIDEO_I2V_MODEL, buildYoutubeContext } = require('../services/videoGenerateService');
+const { startVideoGeneration, pollVideoGeneration, DEFAULT_VIDEO_MODEL, DEFAULT_VIDEO_I2V_MODEL, buildYoutubeContext } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
   MAX_VIDEO_BYTES,
@@ -24,6 +24,28 @@ const {
 } = require('../services/videoFfmpeg');
 
 const router = express.Router();
+
+const videoJobCache = new Map();
+const VIDEO_JOB_TTL_MS = 60 * 60 * 1000;
+
+function rememberVideoJob(requestId, userId, payload) {
+  videoJobCache.set(requestId, { userId, payload, at: Date.now() });
+}
+
+function getVideoJob(requestId, userId) {
+  const entry = videoJobCache.get(requestId);
+  if (!entry) return null;
+  if (Date.now() - entry.at > VIDEO_JOB_TTL_MS) {
+    videoJobCache.delete(requestId);
+    return null;
+  }
+  if (entry.userId !== userId) return null;
+  return entry.payload;
+}
+
+function forgetVideoJob(requestId) {
+  videoJobCache.delete(requestId);
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -119,6 +141,29 @@ router.post('/youtube-preview', async (req, res) => {
   }
 });
 
+router.get('/generate/status', async (req, res) => {
+  try {
+    const requestId = String(req.query?.requestId || '').trim();
+    const endpoint = String(req.query?.endpoint || '').trim();
+    if (!requestId || !endpoint) {
+      return res.status(400).json({ error: 'requestId and endpoint are required' });
+    }
+
+    const cached = getVideoJob(requestId, req.user.id);
+    const polled = await pollVideoGeneration({
+      endpoint,
+      requestId,
+      meta: cached || {},
+    });
+
+    if (polled.status === 'COMPLETED') forgetVideoJob(requestId);
+    res.json(polled);
+  } catch (err) {
+    console.error('[videos/generate/status]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/generate', async (req, res) => {
   try {
     const {
@@ -134,7 +179,7 @@ router.post('/generate', async (req, res) => {
       useYoutubeThumbnailAsSeed,
     } = req.body || {};
 
-    const result = await generateVideo(req.user.id, {
+    const started = await startVideoGeneration(req.user.id, {
       brief: brief?.trim() || '',
       style,
       aspect: aspect || '16:9',
@@ -144,7 +189,21 @@ router.post('/generate', async (req, res) => {
       youtubeUrl: youtubeUrl?.trim() || '',
       useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
     });
-    res.json(result);
+
+    rememberVideoJob(started.requestId, req.user.id, {
+      provider: started.provider,
+      endpoint: started.endpoint,
+      mode: started.mode,
+      video_prompt: started.video_prompt,
+      negative_prompt: started.negative_prompt,
+      aspect: started.aspect,
+      width: started.width,
+      height: started.height,
+      durationSec: started.durationSec,
+      references: started.references,
+    });
+
+    res.json(started);
   } catch (err) {
     console.error('[videos/generate]', err.message);
     res.status(err.message.includes('not configured') ? 503 : 500).json({ error: err.message });

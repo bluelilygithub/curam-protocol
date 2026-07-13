@@ -269,9 +269,9 @@ export default function VideosPage() {
   const setResultFromBlob = useCallback((blob, name) => {
     setResultBlob((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(blob);
+      return blob ? URL.createObjectURL(blob) : null;
     });
-    setResultName(name);
+    if (name) setResultName(name);
   }, []);
 
   const useResultAsSource = useCallback(async () => {
@@ -373,7 +373,7 @@ export default function VideosPage() {
       return;
     }
 
-    startProcessing('Generating clip…', 'Analysing references, expanding your brief, then calling the video model.');
+    startProcessing('Preparing clip…', 'Analysing references and submitting to the video model.');
     try {
       let seedImageDataUrl = '';
       if (seedImageFile) {
@@ -392,14 +392,47 @@ export default function VideosPage() {
         youtubeUrl: youtubeUrl.trim() || undefined,
         useYoutubeThumbnailAsSeed,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generate failed');
-      setGenerateResult(data);
-      if (data.inline?.base64) {
-        const bin = Uint8Array.from(atob(data.inline.base64), (c) => c.charCodeAt(0));
-        setResultFromBlob(new Blob([bin], { type: data.inline.contentType || 'video/mp4' }), 'generated.mp4');
+      const started = await res.json();
+      if (!res.ok) throw new Error(started.error || 'Generate failed');
+
+      setGenerateResult(started);
+
+      const params = new URLSearchParams({
+        requestId: started.requestId,
+        endpoint: started.endpoint,
+      });
+
+      let completed = null;
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const statusRes = await api.get(`/api/videos/generate/status?${params.toString()}`);
+        const statusData = await statusRes.json();
+        if (!statusRes.ok) throw new Error(statusData.error || 'Status check failed');
+
+        const detail = statusData.status === 'IN_QUEUE'
+          ? (statusData.queuePosition != null ? `Queued — position ${statusData.queuePosition + 1}` : 'Queued on FAL…')
+          : statusData.status === 'IN_PROGRESS'
+            ? 'Rendering video (this can take 1–3 minutes)…'
+            : 'Waiting for video model…';
+        startProcessing('Generating clip…', detail);
+
+        if (statusData.status === 'COMPLETED') {
+          completed = statusData;
+          break;
+        }
       }
-      addToast(data.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
+
+      if (!completed) throw new Error('Video generation timed out — try again in a moment');
+
+      setGenerateResult(completed);
+      if (completed.inline?.base64) {
+        const bin = Uint8Array.from(atob(completed.inline.base64), (c) => c.charCodeAt(0));
+        setResultFromBlob(new Blob([bin], { type: completed.inline.contentType || 'video/mp4' }), 'generated.mp4');
+      } else if (completed.videoUrl) {
+        setResultFromBlob(null);
+        setResultName('generated.mp4');
+      }
+      addToast(completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -653,10 +686,20 @@ export default function VideosPage() {
               </div>
             )}
             <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
-            {generateResult?.videoUrl && !generateResult?.inline && (
-              <a href={generateResult.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: 'var(--color-primary)' }}>
-                Open provider video URL
-              </a>
+            {generateResult?.videoUrl && !resultBlob && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+                <video src={generateResult.videoUrl} controls className="w-full max-h-64 rounded-lg bg-black" />
+                <a
+                  href={generateResult.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-3 py-1.5 rounded-lg text-white inline-block transition-opacity hover:opacity-80"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  Download from provider
+                </a>
+              </div>
             )}
           </section>
         )}
