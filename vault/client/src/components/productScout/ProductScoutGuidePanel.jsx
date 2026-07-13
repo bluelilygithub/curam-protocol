@@ -22,6 +22,8 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   const [error, setError] = useState(null);
   const [running, setRunning] = useState(false);
   const [mergeMode, setMergeMode] = useState(false);
+  const [scoutingTierKey, setScoutingTierKey] = useState(null);
+  const [refreshingRecommendation, setRefreshingRecommendation] = useState(false);
 
   useEffect(() => {
     if (loadedResult?.mode === 'guide') {
@@ -74,12 +76,18 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     setStep(STEPS.selectTiers);
   };
 
-  const runScoutForTiers = async (selectedTierKeys, { append = false } = {}) => {
-    setRunning(true);
+  const runScoutForTiers = async (selectedTierKeys, { append = false, singleTier = false } = {}) => {
+    if (singleTier && selectedTierKeys.length === 1) {
+      setScoutingTierKey(selectedTierKeys[0]);
+    } else {
+      setRunning(true);
+    }
     const count = selectedTierKeys.length;
     startProcessing(
-      `Scouting ${count} tier${count !== 1 ? 's' : ''}…`,
-      'Running Product Scout only for the tiers you selected.'
+      singleTier ? 'Scouting tier…' : `Scouting ${count} tier${count !== 1 ? 's' : ''}…`,
+      singleTier
+        ? 'Running Product Scout for this price tier.'
+        : 'Running Product Scout only for the tiers you selected.'
     );
     setError(null);
     try {
@@ -87,22 +95,48 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         query: query.trim(),
         userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
         ...(budgetHint.trim() ? { budgetHint: Number(budgetHint) } : {}),
-        featureBrief,
+        featureBrief: result?.feature_brief || featureBrief,
         selectedTierKeys,
-        ...(append ? { runId: result?.runId ?? loadedRunId } : {}),
+        ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Guide failed');
       setResult(data);
+      setFeatureBrief(data.feature_brief || featureBrief);
       setStep(STEPS.results);
       setMergeMode(false);
       onRunSaved?.(data);
-      addToast(append ? 'Tiers updated' : 'Buy guide ready', 'success');
+      addToast(singleTier || append ? 'Tier updated' : 'Buy guide ready', 'success');
     } catch (err) {
       setError(err.message);
       addToast(err.message, 'error');
     } finally {
       setRunning(false);
+      setScoutingTierKey(null);
+      stopProcessing();
+    }
+  };
+
+  const handleScoutSingleTier = (tierKey) => {
+    runScoutForTiers([tierKey], { append: true, singleTier: true });
+  };
+
+  const handleRefreshRecommendation = async () => {
+    const runId = result?.runId ?? loadedRunId;
+    if (!runId) return;
+    setRefreshingRecommendation(true);
+    startProcessing('Updating recommendation…', 'Comparing tier winners for best overall value.');
+    try {
+      const res = await api.post('/api/product-scout/guide/recommendation', { runId });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Recommendation failed');
+      setResult(data);
+      onRunSaved?.(data);
+      addToast('Recommendation updated', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setRefreshingRecommendation(false);
       stopProcessing();
     }
   };
@@ -242,7 +276,13 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
             )}
           </div>
 
-          <ProductScoutTierLadder result={result} />
+          <ProductScoutTierLadder
+            result={result}
+            onScoutTier={handleScoutSingleTier}
+            scoutingTierKey={scoutingTierKey}
+            onRefreshRecommendation={handleRefreshRecommendation}
+            refreshingRecommendation={refreshingRecommendation}
+          />
         </div>
       )}
 

@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
 import ProductScoutResults from './ProductScoutResults';
+import ProductScoutFinalRecommendation from './ProductScoutFinalRecommendation';
 import { getScoutedTierKeys, tierIsScouted } from '../../utils/productScoutGuide';
 
-function TierStep({ tier, isLast, defaultOpen }) {
+function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
   const [open, setOpen] = useState(defaultOpen);
   const band = formatPriceBand(tier.price_min, tier.price_max);
   const gains = tier.gains_vs_below || tier.feature_adds || [];
   const scout = tier.scout;
   const scouted = tierIsScouted(tier);
   const hasScout = scout?.comparison?.top3?.length > 0;
+  const isScouting = scoutingTierKey === tier.key;
 
   return (
     <div className="relative pl-4 sm:pl-6">
@@ -30,41 +32,54 @@ function TierStep({ tier, isLast, defaultOpen }) {
         className="rounded-2xl border overflow-hidden mb-4"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
       >
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="w-full text-left p-4 transition-opacity hover:opacity-80"
-        >
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              {tier.label}
-            </h3>
-            <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
-              {band}
-            </span>
-            {scouted && hasScout && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
-                Top {scout.comparison.top3.length} scouted
+        <div className="p-4 flex items-start gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex-1 min-w-0 text-left transition-opacity hover:opacity-80"
+          >
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {tier.label}
+              </h3>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
+                {band}
               </span>
+              {scouted && hasScout && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                  Top {scout.comparison.top3.length} scouted
+                </span>
+              )}
+              {scouted && !hasScout && !tier.scout_error && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                  No matches
+                </span>
+              )}
+              {!scouted && (
+                <span
+                  className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+                  style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                >
+                  Not scouted
+                </span>
+              )}
+            </div>
+            {tier.subtitle && (
+              <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>{tier.subtitle}</p>
             )}
-            {scouted && !hasScout && !tier.scout_error && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
-                No matches
-              </span>
-            )}
-            {!scouted && (
-              <span
-                className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
-                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-              >
-                Not scouted
-              </span>
-            )}
-          </div>
-          {tier.subtitle && (
-            <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>{tier.subtitle}</p>
+          </button>
+          {!scouted && onScoutTier && (
+            <button
+              type="button"
+              onClick={() => onScoutTier(tier.key)}
+              disabled={Boolean(scoutingTierKey)}
+              className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {isScouting ? '…' : 'Scout'}
+            </button>
           )}
-        </button>
+        </div>
         {open && (
           <div className="px-4 pb-4 space-y-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
             {gains.length > 0 && (
@@ -94,9 +109,22 @@ function TierStep({ tier, isLast, defaultOpen }) {
                 <ProductScoutResults result={scout} compact />
               </div>
             ) : !tier.scout_error && !scouted && (
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                This tier was not included in the scout run. Use &ldquo;Scout more tiers&rdquo; to gather products here.
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  Products have not been gathered for this tier yet.
+                </p>
+                {onScoutTier && (
+                  <button
+                    type="button"
+                    onClick={() => onScoutTier(tier.key)}
+                    disabled={Boolean(scoutingTierKey)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    {isScouting ? 'Scouting…' : `Scout ${tier.label}`}
+                  </button>
+                )}
+              </div>
             )}
             {!hasScout && !tier.scout_error && scouted && (
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -110,11 +138,19 @@ function TierStep({ tier, isLast, defaultOpen }) {
   );
 }
 
-export default function ProductScoutTierLadder({ result }) {
+export default function ProductScoutTierLadder({
+  result,
+  onScoutTier,
+  scoutingTierKey,
+  onRefreshRecommendation,
+  refreshingRecommendation = false,
+}) {
   const tiers = result?.tiers || [];
   const brief = result?.feature_brief;
   const scoutedTiers = getScoutedTierKeys(result);
   const firstScoutedIndex = tiers.findIndex((t) => tierIsScouted(t));
+  const recommendation = result?.final_recommendation;
+  const canRecommend = scoutedTiers.length > 0;
 
   if (!tiers.length) return null;
 
@@ -135,9 +171,16 @@ export default function ProductScoutTierLadder({ result }) {
         </div>
       )}
 
+      <ProductScoutFinalRecommendation
+        recommendation={recommendation}
+        onRefresh={onRefreshRecommendation}
+        refreshing={refreshingRecommendation}
+        canRefresh={canRecommend}
+      />
+
       {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-          {scoutedTiers.length} of {tiers.length} tiers scouted — unscouted tiers show framework only.
+          {scoutedTiers.length} of {tiers.length} tiers scouted — scout remaining tiers individually below.
         </p>
       )}
 
@@ -148,6 +191,8 @@ export default function ProductScoutTierLadder({ result }) {
             tier={tier}
             isLast={i === tiers.length - 1}
             defaultOpen={i === (firstScoutedIndex >= 0 ? firstScoutedIndex : 0)}
+            onScoutTier={onScoutTier}
+            scoutingTierKey={scoutingTierKey}
           />
         ))}
       </div>

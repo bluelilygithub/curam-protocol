@@ -20,6 +20,148 @@ const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 const BRIEF_SYSTEM = `You are a product buying advisor. Help shoppers understand which features matter for their use case before they choose a price tier.
 Return ONLY valid JSON. No markdown fences.`;
 
+const RECOMMEND_SYSTEM = `You are an unbiased product analyst. Recommend the single best VALUE FOR MONEY pick across price tiers for this shopper — not the most expensive or cheapest by default.
+Judge features, quality, price, and review evidence. No brand loyalty. No Amazon placement bias.
+Return ONLY valid JSON. No markdown fences.`;
+
+function formatPriceBand(min, max) {
+  if (min != null && max != null) return `$${min}–$${max}`;
+  if (max != null) return `up to $${max}`;
+  if (min != null) return `from $${min}`;
+  return '—';
+}
+
+function collectTierPicks(tiers) {
+  return (tiers || [])
+    .filter((t) => tierWasScouted(t.scout))
+    .map((t) => {
+      const top = t.scout?.comparison?.top3?.[0];
+      if (!top) return null;
+      return {
+        tier_key: t.key,
+        tier_label: t.label,
+        price_band: formatPriceBand(t.price_min, t.price_max),
+        asin: top.asin,
+        title: top.title,
+        price: top.price,
+        value_score: top.value_score,
+        pre_score: top.pre_score,
+        rating: top.rating,
+        review_count: top.review_count,
+        key_features: top.key_features || top.feature_bullets || [],
+        value_rationale: top.value_rationale,
+        link: top.link,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks) {
+  const mustFeatures = (featureBrief?.features || [])
+    .filter((f) => f.importance === 'must')
+    .map((f) => f.feature);
+  const niceFeatures = (featureBrief?.features || [])
+    .filter((f) => f.importance === 'nice')
+    .map((f) => f.feature)
+    .slice(0, 5);
+
+  const budgetBlock = budgetHint
+    ? `Budget hint: around $${budgetHint} — factor this in but do not treat as a hard cap.\n`
+    : '';
+
+  const picksBlock = tierPicks.map((p) => (
+    `Tier: ${p.tier_label} (${p.price_band})
+Top pick: ${p.title}
+ASIN: ${p.asin || '—'}
+Price: ${p.price || '—'}
+Value score: ${p.value_score ?? '—'}${p.pre_score != null ? ` (pre-score ${p.pre_score})` : ''}
+Rating: ${p.rating ?? '—'} · ${p.review_count ?? '—'} reviews
+Key features: ${(p.key_features || []).slice(0, 4).join('; ') || '—'}
+Scout rationale: ${p.value_rationale || '—'}`
+  )).join('\n\n');
+
+  return `Shopping goal: ${query}
+${budgetBlock}Brief summary: ${featureBrief?.summary || '—'}
+Must-have features: ${mustFeatures.join(', ') || 'see brief'}
+Nice-to-have: ${niceFeatures.join(', ') || '—'}
+
+One top pick per scouted price tier (already ranked within tier):
+${picksBlock}
+
+Choose ONE overall best value-for-money product for THIS shopper across tiers.
+Explain tradeoffs vs the other tier winners. Say who should step up or stay down.
+
+JSON only:
+{"headline":"One sentence verdict","rationale":"2-3 short paragraphs, plain text, no markdown","pick":{"tier_key":"essentials","tier_label":"Essentials","asin":"...","title":"...","price":"...","value_score":85},"worth_stepping_up":"When paying more is justified, or null","worth_staying_down":"When cheaper is enough, or null"}`;
+}
+
+function parseRecommendationResponse(text, tierPicks) {
+  const parsed = parseModelJson(String(text || '').trim());
+  if (!parsed?.pick?.title) throw new Error('Recommendation missing pick');
+
+  const byAsin = Object.fromEntries(tierPicks.filter((p) => p.asin).map((p) => [p.asin, p]));
+  const byTier = Object.fromEntries(tierPicks.map((p) => [p.tier_key, p]));
+  const src = byAsin[parsed.pick.asin] || byTier[parsed.pick.tier_key];
+
+  if (src) {
+    parsed.pick.link = parsed.pick.link || src.link;
+    parsed.pick.price = parsed.pick.price || src.price;
+    parsed.pick.asin = parsed.pick.asin || src.asin;
+    parsed.pick.tier_key = parsed.pick.tier_key || src.tier_key;
+    parsed.pick.tier_label = parsed.pick.tier_label || src.tier_label;
+    parsed.pick.value_score = parsed.pick.value_score ?? src.value_score;
+  }
+
+  return {
+    headline: String(parsed.headline || '').trim(),
+    rationale: String(parsed.rationale || '').trim(),
+    pick: parsed.pick,
+    worth_stepping_up: parsed.worth_stepping_up || null,
+    worth_staying_down: parsed.worth_staying_down || null,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+async function generateFinalRecommendation(userId, { query, featureBrief, budgetHint, tiers }) {
+  const tierPicks = collectTierPicks(tiers);
+  if (!tierPicks.length) {
+    throw new Error('Scout at least one tier before generating a recommendation');
+  }
+
+  const { standard: modelId } = await getModelsForUser(userId);
+  const text = await callGuideModel(
+    userId,
+    modelId,
+    buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks),
+    { system: RECOMMEND_SYSTEM }
+  );
+  return parseRecommendationResponse(text, tierPicks);
+}
+
+async function saveGuideResult(userId, runId, existing, result) {
+  if (runId && existing) {
+    await pool.query(
+      `UPDATE product_scout_runs SET result = $1 WHERE "userId" = $2 AND id = $3`,
+      [JSON.stringify(result), userId, Number(runId)]
+    );
+    result.runId = Number(runId);
+    const { rows } = await pool.query(
+      `SELECT "createdAt" FROM product_scout_runs WHERE id = $1`,
+      [Number(runId)]
+    );
+    result.createdAt = rows[0]?.createdAt;
+  } else {
+    const { rows } = await pool.query(
+      `INSERT INTO product_scout_runs ("userId", query, result, "createdAt")
+       VALUES ($1, $2, $3, NOW()) RETURNING id, "createdAt"`,
+      [userId, result.query, JSON.stringify(result)]
+    );
+    result.runId = rows[0]?.id;
+    result.createdAt = rows[0]?.createdAt;
+  }
+  return result;
+}
+
 function parseFeaturesInput(raw) {
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
   const s = String(raw || '').trim();
@@ -63,9 +205,9 @@ JSON only:
 {"summary":"...","features":[{"feature":"...","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
 }
 
-async function callGuideModel(userId, modelId, prompt) {
+async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM } = {}) {
   const result = await callModel(modelId, prompt, {
-    system: BRIEF_SYSTEM,
+    system,
     maxTokens: 8192,
     returnUsage: true,
   });
@@ -278,33 +420,49 @@ async function runBuyGuide(userId, {
     url_comparisons: existing?.url_comparisons || [],
   };
 
-  if (runId && existing) {
-    await pool.query(
-      `UPDATE product_scout_runs SET result = $1 WHERE "userId" = $2 AND id = $3`,
-      [JSON.stringify(result), userId, Number(runId)]
-    );
-    result.runId = Number(runId);
-    const { rows } = await pool.query(
-      `SELECT "createdAt" FROM product_scout_runs WHERE id = $1`,
-      [Number(runId)]
-    );
-    result.createdAt = rows[0]?.createdAt;
-  } else {
-    const { rows } = await pool.query(
-      `INSERT INTO product_scout_runs ("userId", query, result, "createdAt")
-       VALUES ($1, $2, $3, NOW()) RETURNING id, "createdAt"`,
-      [userId, q, JSON.stringify(result)]
-    );
-    result.runId = rows[0]?.id;
-    result.createdAt = rows[0]?.createdAt;
+  try {
+    result.final_recommendation = await generateFinalRecommendation(userId, {
+      query: q,
+      featureBrief,
+      budgetHint: hint,
+      tiers,
+    });
+  } catch (err) {
+    console.warn('[productScout] final recommendation failed:', err.message);
+    result.final_recommendation = { error: err.message };
   }
 
-  return result;
+  return saveGuideResult(userId, runId && existing ? Number(runId) : null, existing, result);
+}
+
+async function refreshGuideRecommendation(userId, runId) {
+  const run = await getRun(userId, Number(runId));
+  if (!run?.result || run.result.mode !== 'guide') throw new Error('Guide run not found');
+
+  const existing = run.result;
+  if (!collectScoutedTierKeys(existing.tiers || []).length) {
+    throw new Error('Scout at least one tier first');
+  }
+
+  const result = { ...existing };
+  try {
+    result.final_recommendation = await generateFinalRecommendation(userId, {
+      query: existing.query,
+      featureBrief: existing.feature_brief,
+      budgetHint: existing.budgetHint,
+      tiers: existing.tiers,
+    });
+  } catch (err) {
+    result.final_recommendation = { error: err.message };
+  }
+
+  return saveGuideResult(userId, Number(runId), existing, result);
 }
 
 module.exports = {
   buildGuideBrief,
   runBuyGuide,
+  refreshGuideRecommendation,
   parseFeaturesInput,
   normalizeSelectedTierKeys,
   TIER_KEYS,
