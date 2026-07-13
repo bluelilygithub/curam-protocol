@@ -124,7 +124,7 @@ export default function ProductScoutPage() {
       setLoadedRunId(data.id);
 
       if (runResult?.mode === 'guide') {
-        setGuideResult(runResult);
+        setGuideResult({ ...runResult, runId: data.id });
         setScoutResult(null);
         setQuickScoutOpen(false);
       } else {
@@ -390,6 +390,12 @@ export default function ProductScoutPage() {
               const selected = selectedRunIds.has(r.id);
               const isLoaded = loadedRunId === r.id;
               const isGuide = r.mode === 'guide';
+              const scoutedCount = Array.isArray(r.scoutedTiers) ? r.scoutedTiers.length : 0;
+              const tierLabel = isGuide && scoutedCount > 0
+                ? `Guide · ${scoutedCount}/4`
+                : isGuide
+                  ? 'Guide'
+                  : 'Scout';
               return (
                 <li key={r.id} className="group flex items-stretch gap-2">
                   <label
@@ -417,7 +423,7 @@ export default function ProductScoutPage() {
                         color: isGuide ? 'var(--color-primary)' : 'var(--color-muted)',
                       }}
                     >
-                      {isGuide ? 'Guide' : 'Scout'}
+                      {tierLabel}
                     </span>
                     <span className="font-medium">{r.query}</span>
                     <span className="ml-2" style={{ color: 'var(--color-muted)' }}>

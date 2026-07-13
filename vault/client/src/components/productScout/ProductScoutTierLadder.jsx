@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
 import ProductScoutResults from './ProductScoutResults';
+import { getScoutedTierKeys, tierIsScouted } from '../../utils/productScoutGuide';
 
 function TierStep({ tier, isLast, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   const band = formatPriceBand(tier.price_min, tier.price_max);
   const gains = tier.gains_vs_below || tier.feature_adds || [];
   const scout = tier.scout;
+  const scouted = tierIsScouted(tier);
   const hasScout = scout?.comparison?.top3?.length > 0;
 
   return (
@@ -19,7 +21,10 @@ function TierStep({ tier, isLast, defaultOpen }) {
       )}
       <div
         className="absolute left-0 sm:left-1 top-2 w-4 h-4 rounded-full border-2"
-        style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
+        style={{
+          borderColor: scouted ? 'var(--color-primary)' : 'var(--color-border)',
+          background: scouted ? 'var(--color-primary)' : 'var(--color-surface)',
+        }}
       />
       <article
         className="rounded-2xl border overflow-hidden mb-4"
@@ -37,9 +42,22 @@ function TierStep({ tier, isLast, defaultOpen }) {
             <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>
               {band}
             </span>
-            {hasScout && (
+            {scouted && hasScout && (
               <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
                 Top {scout.comparison.top3.length} scouted
+              </span>
+            )}
+            {scouted && !hasScout && !tier.scout_error && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                No matches
+              </span>
+            )}
+            {!scouted && (
+              <span
+                className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+              >
+                Not scouted
               </span>
             )}
           </div>
@@ -75,7 +93,12 @@ function TierStep({ tier, isLast, defaultOpen }) {
                 </p>
                 <ProductScoutResults result={scout} compact />
               </div>
-            ) : !tier.scout_error && (
+            ) : !tier.scout_error && !scouted && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                This tier was not included in the scout run. Use &ldquo;Scout more tiers&rdquo; to gather products here.
+              </p>
+            )}
+            {!hasScout && !tier.scout_error && scouted && (
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 No products found in this price band.
               </p>
@@ -90,6 +113,8 @@ function TierStep({ tier, isLast, defaultOpen }) {
 export default function ProductScoutTierLadder({ result }) {
   const tiers = result?.tiers || [];
   const brief = result?.feature_brief;
+  const scoutedTiers = getScoutedTierKeys(result);
+  const firstScoutedIndex = tiers.findIndex((t) => tierIsScouted(t));
 
   if (!tiers.length) return null;
 
@@ -110,9 +135,20 @@ export default function ProductScoutTierLadder({ result }) {
         </div>
       )}
 
+      {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          {scoutedTiers.length} of {tiers.length} tiers scouted — unscouted tiers show framework only.
+        </p>
+      )}
+
       <div>
         {tiers.map((tier, i) => (
-          <TierStep key={tier.key || tier.label} tier={tier} isLast={i === tiers.length - 1} defaultOpen={i === 0} />
+          <TierStep
+            key={tier.key || tier.label}
+            tier={tier}
+            isLast={i === tiers.length - 1}
+            defaultOpen={i === (firstScoutedIndex >= 0 ? firstScoutedIndex : 0)}
+          />
         ))}
       </div>
     </div>

@@ -3,11 +3,13 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import useProcessingStore from '../../store/processingStore';
 import ProductScoutFeatureBrief from './ProductScoutFeatureBrief';
+import ProductScoutTierSelect from './ProductScoutTierSelect';
 import ProductScoutTierLadder from './ProductScoutTierLadder';
+import { getScoutedTierKeys } from '../../utils/productScoutGuide';
 
-const STEPS = { form: 'form', brief: 'brief', results: 'results' };
+const STEPS = { form: 'form', brief: 'brief', selectTiers: 'selectTiers', results: 'results' };
 
-export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResult, loadedRunId }) {
+export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loadedRunId }) {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
@@ -19,6 +21,7 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [running, setRunning] = useState(false);
+  const [mergeMode, setMergeMode] = useState(false);
 
   useEffect(() => {
     if (loadedResult?.mode === 'guide') {
@@ -28,10 +31,12 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
       setBudgetHint(loadedResult.budgetHint != null ? String(loadedResult.budgetHint) : '');
       setFeatureBrief(loadedResult.feature_brief || null);
       setStep(STEPS.results);
+      setMergeMode(false);
     } else if (!loadedResult && !loadedRunId) {
       setStep(STEPS.form);
       setResult(null);
       setFeatureBrief(null);
+      setMergeMode(false);
     }
   }, [loadedResult, loadedRunId]);
 
@@ -53,6 +58,7 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Brief failed');
       setFeatureBrief(data.feature_brief);
+      setMergeMode(false);
       setStep(STEPS.brief);
     } catch (err) {
       setError(err.message);
@@ -62,24 +68,36 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
     }
   };
 
-  const handleRunGuide = async (confirmedBrief) => {
+  const handleBriefContinue = (confirmedBrief) => {
+    setFeatureBrief(confirmedBrief);
+    setMergeMode(false);
+    setStep(STEPS.selectTiers);
+  };
+
+  const runScoutForTiers = async (selectedTierKeys, { append = false } = {}) => {
     setRunning(true);
-    startProcessing('Scouting each price tier…', 'Running a full Product Scout comparison for Essentials through Pro — about a minute.');
+    const count = selectedTierKeys.length;
+    startProcessing(
+      `Scouting ${count} tier${count !== 1 ? 's' : ''}…`,
+      'Running Product Scout only for the tiers you selected.'
+    );
     setError(null);
     try {
       const res = await api.post('/api/product-scout/guide/run', {
         query: query.trim(),
         userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
         ...(budgetHint.trim() ? { budgetHint: Number(budgetHint) } : {}),
-        featureBrief: confirmedBrief,
+        featureBrief,
+        selectedTierKeys,
+        ...(append ? { runId: result?.runId ?? loadedRunId } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Guide failed');
       setResult(data);
-      setFeatureBrief(confirmedBrief);
       setStep(STEPS.results);
+      setMergeMode(false);
       onRunSaved?.(data);
-      addToast('Buy guide ready', 'success');
+      addToast(append ? 'Tiers updated' : 'Buy guide ready', 'success');
     } catch (err) {
       setError(err.message);
       addToast(err.message, 'error');
@@ -94,13 +112,18 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
     setFeatureBrief(null);
     setResult(null);
     setError(null);
+    setMergeMode(false);
     onRunSaved?.(null);
   };
+
+  const scoutedTiers = getScoutedTierKeys(result);
+  const tierFramework = featureBrief?.tier_framework || result?.feature_brief?.tier_framework || [];
+  const hasUnscoutedTiers = tierFramework.length > scoutedTiers.length;
 
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-        Step 1: describe what you want. Step 2: review features to consider. Step 3: we run a Product Scout at each price tier so you see the best picks at every step up.
+        Step 1: describe what you want. Step 2: review features. Step 3: pick which price tiers to scout. Step 4: compare results per tier.
       </p>
 
       {step === STEPS.form && (
@@ -144,7 +167,7 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               />
               <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                Anchors tier 1 — not a hard cap
+                Pre-selects matching tier
               </span>
             </div>
           </label>
@@ -162,9 +185,28 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
         <ProductScoutFeatureBrief
           brief={featureBrief}
           tierFramework={featureBrief.tier_framework}
-          onConfirm={handleRunGuide}
+          onConfirm={handleBriefContinue}
           onBack={() => setStep(STEPS.form)}
+          loading={false}
+        />
+      )}
+
+      {step === STEPS.selectTiers && featureBrief && (
+        <ProductScoutTierSelect
+          tiers={featureBrief.tier_framework}
+          budgetHint={budgetHint}
+          previouslyScouted={mergeMode ? scoutedTiers : []}
+          onConfirm={(keys) => runScoutForTiers(keys, { append: mergeMode })}
+          onBack={() => {
+            if (mergeMode) {
+              setMergeMode(false);
+              setStep(STEPS.results);
+            } else {
+              setStep(STEPS.brief);
+            }
+          }}
           loading={running}
+          mergeMode={mergeMode}
         />
       )}
 
@@ -179,7 +221,27 @@ export default function ProductScoutGuidePanel({ config, onRunSaved, loadedResul
             >
               New guide
             </button>
+            {hasUnscoutedTiers && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFeatureBrief(result.feature_brief || featureBrief);
+                  setMergeMode(true);
+                  setStep(STEPS.selectTiers);
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+              >
+                Scout more tiers ({scoutedTiers.length}/4 gathered)
+              </button>
+            )}
+            {scoutedTiers.length > 0 && scoutedTiers.length < 4 && (
+              <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                {scoutedTiers.length} of 4 tiers scouted
+              </span>
+            )}
           </div>
+
           <ProductScoutTierLadder result={result} />
         </div>
       )}

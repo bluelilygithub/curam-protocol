@@ -88,31 +88,6 @@ export default function ProductScoutFeatureBrief({
         </ul>
       </div>
 
-      {(tierFramework.length > 0 || brief?.tier_framework?.length > 0) && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
-            Planned price tiers
-          </h3>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(tierFramework.length ? tierFramework : brief.tier_framework).map((t) => (
-              <div
-                key={t.key || t.label}
-                className="rounded-xl border px-3 py-2"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-              >
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{t.label}</p>
-                <p className="text-[10px]" style={{ color: 'var(--color-primary)' }}>
-                  {formatPriceBand(t.price_min, t.price_max)}
-                </p>
-                {t.subtitle && (
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.subtitle}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
@@ -120,7 +95,7 @@ export default function ProductScoutFeatureBrief({
           className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
           style={{ background: 'var(--color-primary)' }}
         >
-          {loading ? 'Scouting tiers…' : 'Scout products for each tier'}
+          {loading ? 'Saving…' : 'Continue to tier selection'}
         </button>
         {onBack && (
           <button

@@ -73,15 +73,18 @@ router.post('/guide/brief', handle(async (req) => {
 }));
 
 router.post('/guide/run', handle(async (req) => {
-  const { query, userFeatures, budgetHint, featureBrief } = req.body || {};
+  const { query, userFeatures, budgetHint, featureBrief, selectedTierKeys, runId } = req.body || {};
   if (!query?.trim()) throw new Error('query is required');
   if (!featureBrief) throw new Error('featureBrief is required');
   const hint = budgetHint != null && budgetHint !== '' ? Number(budgetHint) : null;
+  const id = runId != null && runId !== '' ? Number(runId) : null;
   return runBuyGuide(req.user.id, {
     query: query.trim(),
     userFeatures: userFeatures || [],
     budgetHint: hint,
     featureBrief,
+    selectedTierKeys: selectedTierKeys || [],
+    runId: Number.isFinite(id) ? id : null,
   });
 }));
 

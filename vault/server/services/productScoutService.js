@@ -366,12 +366,27 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
 async function listRuns(userId, limit = 20) {
   const { rows } = await pool.query(
     `SELECT id, query, "createdAt",
-            COALESCE(result->>'mode', 'scout') AS mode
+            COALESCE(result->>'mode', 'scout') AS mode,
+            CASE
+              WHEN jsonb_typeof(result->'scouted_tiers') = 'array'
+                   AND jsonb_array_length(result->'scouted_tiers') > 0
+              THEN result->'scouted_tiers'
+              ELSE COALESCE((
+                SELECT jsonb_agg(elem->>'key')
+                FROM jsonb_array_elements(COALESCE(result->'tiers', '[]'::jsonb)) AS elem
+                WHERE jsonb_array_length(COALESCE(elem->'scout'->'comparison'->'top3', '[]'::jsonb)) > 0
+              ), '[]'::jsonb)
+            END AS "scoutedTiers"
      FROM product_scout_runs WHERE "userId"=$1
      ORDER BY "createdAt" DESC LIMIT $2`,
     [userId, limit]
   );
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    scoutedTiers: Array.isArray(row.scoutedTiers)
+      ? row.scoutedTiers
+      : (row.scoutedTiers ? JSON.parse(row.scoutedTiers) : []),
+  }));
 }
 
 async function getRun(userId, id) {
