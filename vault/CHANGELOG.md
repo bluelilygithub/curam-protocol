@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-library-csp)
+
+**Fix:** Save to library failed in production — `fetch(blob:)` blocked by CSP `connect-src`. Added `blob:` to `connect-src`; VideosPage now keeps Blobs in refs to avoid re-fetching object URLs.
+
+---
+
 ## 2026-07-13 (video-tools-library)
 
 **Feature:** Video Tools library — save tool results (video/image) + transaction metadata to `video_library`, preview/stream, delete. **Caption studio** replaces basic Captions: upload or library source, styled SRT (font, weight, size, colour), optional save captioned output. `videoLibraryService.js`, `POST/GET/DELETE /api/videos/library`.

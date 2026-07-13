@@ -265,6 +265,8 @@ export default function VideosPage() {
 
   const [sourceFile, setSourceFile] = useState(null);
   const [resultBlob, setResultBlob] = useState(null);
+  const resultBlobRef = useRef(null);
+  const thumbBlobRef = useRef(null);
   const [resultName, setResultName] = useState('output.mp4');
   const [probe, setProbe] = useState(null);
 
@@ -364,6 +366,7 @@ export default function VideosPage() {
   }, [search]);
 
   const setResultFromBlob = useCallback((blob, name) => {
+    resultBlobRef.current = blob;
     setResultBlob((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return blob ? URL.createObjectURL(blob) : null;
@@ -394,19 +397,25 @@ export default function VideosPage() {
     title,
     transaction,
     mediaType = 'video',
+    blob: blobOverride = null,
     blobUrl = null,
     fileName = resultName,
     toolId = tool,
   } = {}) => {
-    const src = blobUrl || resultBlob;
-    if (!src) {
+    let blob = blobOverride;
+    if (!blob && mediaType === 'image') blob = thumbBlobRef.current;
+    if (!blob) blob = resultBlobRef.current;
+    // Fallback for edge cases only — fetch(blob:) needs connect-src blob: in CSP
+    if (!blob && (blobUrl || resultBlob)) {
+      const res = await fetch(blobUrl || resultBlob);
+      blob = await res.blob();
+    }
+    if (!blob) {
       addToast('Nothing to save yet', 'error');
       return;
     }
     startProcessing('Saving to library…', 'Storing file and tool settings.');
     try {
-      const res = await fetch(src);
-      const blob = await res.blob();
       const fd = new FormData();
       fd.append('file', blob, fileName);
       fd.append('title', title || saveTitle || `${toolId} · ${new Date().toLocaleDateString()}`);
@@ -424,7 +433,7 @@ export default function VideosPage() {
     } finally {
       stopProcessing();
     }
-  }, [resultBlob, resultName, tool, saveTitle, lastTransaction, startProcessing, stopProcessing, loadLibrary, addToast]);
+  }, [resultName, tool, saveTitle, lastTransaction, startProcessing, stopProcessing, loadLibrary, addToast, resultBlob]);
 
   const deleteLibraryItem = useCallback(async (id) => {
     try {
@@ -447,6 +456,7 @@ export default function VideosPage() {
       const blob = await res.blob();
       if (item.mediaType === 'image') {
         if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+        thumbBlobRef.current = blob;
         setThumbUrl(URL.createObjectURL(blob));
       } else {
         setResultFromBlob(blob, `${item.title || 'video'}.mp4`);
@@ -502,15 +512,13 @@ export default function VideosPage() {
         const blob = await res.blob();
         setResultFromBlob(blob, 'captioned.mp4');
         if (captionSaveToLibrary) {
-          const tmpUrl = URL.createObjectURL(blob);
           await saveToLibrary({
             title: saveTitle || 'Captioned video',
-            blobUrl: tmpUrl,
+            blob,
             fileName: 'captioned.mp4',
             toolId: 'caption-studio',
             transaction: { tool: 'caption-studio', captionStyle: styleFields },
           });
-          URL.revokeObjectURL(tmpUrl);
         }
       }
       setLastTransaction({ tool: 'caption-studio', captionStyle: styleFields });
@@ -523,17 +531,19 @@ export default function VideosPage() {
   };
 
   const useResultAsSource = useCallback(async () => {
-    if (!resultBlob) return;
+    const blob = resultBlobRef.current;
+    if (!blob) {
+      addToast('Nothing to load as source', 'error');
+      return;
+    }
     try {
-      const res = await fetch(resultBlob);
-      const blob = await res.blob();
       const file = new File([blob], resultName, { type: blob.type || 'video/mp4' });
       setSourceFile(file);
       addToast('Result loaded as source', 'success');
     } catch {
       addToast('Could not load result as source', 'error');
     }
-  }, [resultBlob, resultName, addToast]);
+  }, [resultName, addToast]);
 
   const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson }) => {
     startProcessing(label, 'Processing on the server with ffmpeg.');
@@ -719,16 +729,16 @@ export default function VideosPage() {
   }, [saveToLibrary, saveTitle]);
 
   const handleSaveThumbnail = useCallback(async () => {
-    if (!thumbUrl) return;
+    if (!thumbBlobRef.current) return;
     await saveToLibrary({
       title: saveTitle || 'Thumbnail',
       mediaType: 'image',
-      blobUrl: thumbUrl,
+      blob: thumbBlobRef.current,
       fileName: 'thumbnail.jpg',
       toolId: 'thumbnail',
       transaction: { tool: 'thumbnail', thumbTime },
     });
-  }, [thumbUrl, saveTitle, saveToLibrary, thumbTime]);
+  }, [saveTitle, saveToLibrary, thumbTime]);
 
   const openCaptionStudioFor = useCallback((item) => {
     setCaptionLibraryId(String(item.id));
@@ -1315,7 +1325,7 @@ export default function VideosPage() {
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Frame at (seconds)</span>
               <input type="number" min={0} step={0.1} value={thumbTime} onChange={(e) => setThumbTime(Number(e.target.value))} className="w-32 px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
             </label>
-            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); thumbBlobRef.current = blob; if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Export JPG
             </button>
             {thumbUrl && (
