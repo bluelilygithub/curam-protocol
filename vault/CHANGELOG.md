@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-caption-transparent)
+
+**Fix:** Caption/annotate transparent background — ASS now uses outline-only (BorderStyle=1) instead of opaque box. Higher-fidelity re-encode (CRF 18, preserve fps, copy audio) so captioned output matches source more closely.
+
+---
+
 ## 2026-07-13 (video-annotate-jsx-fix)
 
 **Fix:** Annotate / Caption studio font controls were not visible — tool panels were accidentally nested inside Clip’s JSX block so Annotate never rendered on its own.

@@ -137,10 +137,40 @@ function normalizeDrawtextColor(color = 'white') {
   return raw;
 }
 
-function hexToAssColor(hex) {
+function hexToAssColor(hex, alphaByte = '00') {
   const h = String(hex || '#FFFFFF').replace('#', '').trim();
-  if (h.length !== 6) return '&H00FFFFFF';
-  return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase();
+  if (h.length !== 6) return `&H${alphaByte}FFFFFF`;
+  return `&H${alphaByte}${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase();
+}
+
+function parseFps(fpsStr) {
+  if (!fpsStr || fpsStr === '0/0') return null;
+  const parts = String(fpsStr).split('/');
+  if (parts.length === 2) {
+    const n = Number(parts[0]);
+    const d = Number(parts[1]);
+    if (n > 0 && d > 0) return n / d;
+  }
+  const n = Number(fpsStr);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+async function encodeWithVideoFilter(inputPath, outputPath, vfFilter) {
+  const probe = await probeVideo(inputPath);
+  const fps = parseFps(probe.fps);
+  const args = [
+    '-y', '-i', inputPath,
+    '-map', '0:v:0',
+    '-map', '0:a?',
+    '-vf', vfFilter,
+    '-c:v', 'libx264',
+    '-preset', 'medium',
+    '-crf', '18',
+    '-pix_fmt', 'yuv420p',
+  ];
+  if (fps) args.push('-r', String(fps));
+  args.push('-c:a', 'copy', '-movflags', '+faststart', outputPath);
+  await execFileAsync(FFMPEG, args);
 }
 
 function hexToDrawtextBoxColor(hex, alpha = 0.75) {
@@ -155,14 +185,28 @@ function buildSubtitleForceStyle({
   fontColor = '#FFFFFF',
   fontWeight = 'normal',
   backgroundColor = '#000000',
+  backgroundTransparent = false,
   outlineColor = '#000000',
   outline = 1,
 } = {}) {
   const bold = fontWeight === 'bold' || fontWeight === '700' || Number(fontWeight) >= 600 ? 1 : 0;
   const name = String(fontFamily || 'Roboto').replace(/,/g, '');
   const primary = hexToAssColor(fontColor);
-  const back = hexToAssColor(backgroundColor);
   const outlineAss = hexToAssColor(outlineColor);
+  const outlinePx = Math.min(6, Math.max(0, Number(outline) || 1));
+  if (backgroundTransparent) {
+    return [
+      `FontName=${name}`,
+      `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
+      `PrimaryColour=${primary}`,
+      `BackColour=&HFF000000`,
+      `BorderStyle=1`,
+      `OutlineColour=${outlineAss}`,
+      `Outline=${Math.max(2, outlinePx)}`,
+      `Bold=${bold}`,
+    ].join(',');
+  }
+  const back = hexToAssColor(backgroundColor);
   return [
     `FontName=${name}`,
     `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
@@ -170,7 +214,7 @@ function buildSubtitleForceStyle({
     `BackColour=${back}`,
     `BorderStyle=3`,
     `OutlineColour=${outlineAss}`,
-    `Outline=${Math.min(6, Math.max(0, Number(outline) || 1))}`,
+    `Outline=${outlinePx}`,
     `Bold=${bold}`,
   ].join(',');
 }
@@ -195,24 +239,22 @@ async function annotateVideo(inputPath, outputPath, {
   fontFamily = 'Roboto',
   fontWeight = 'normal',
   backgroundColor = '#000000',
+  backgroundTransparent = false,
   backgroundAlpha = 0.75,
 }, workDir) {
   const escaped = escapeDrawtext(text);
   const fontfile = escapeFilterPath(await resolveFontFilePath(fontFamily, fontWeight, workDir));
   const color = normalizeDrawtextColor(fontColor);
-  const boxColor = hexToDrawtextBoxColor(backgroundColor, backgroundAlpha);
   const y = position === 'top'
     ? '40'
     : position === 'center'
       ? '(h-text_h)/2'
       : 'h-th-48';
-  await execFileAsync(FFMPEG, [
-    '-y', '-i', inputPath,
-    '-vf', `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=10:x=(w-text_w)/2:y=${y}`,
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-    '-c:a', 'copy', '-movflags', '+faststart',
-    outputPath,
-  ]);
+  const boxPart = backgroundTransparent
+    ? 'box=0:borderw=2:bordercolor=black@0.75'
+    : `box=1:boxcolor=${hexToDrawtextBoxColor(backgroundColor, backgroundAlpha)}:boxborderw=10`;
+  const vf = `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:${boxPart}:x=(w-text_w)/2:y=${y}`;
+  await encodeWithVideoFilter(inputPath, outputPath, vf);
 }
 
 async function burnSubtitles(inputPath, srtPath, outputPath, style = {}, workDir) {
@@ -220,13 +262,8 @@ async function burnSubtitles(inputPath, srtPath, outputPath, style = {}, workDir
   const fontsDir = escapeFilterPath(workDir);
   const sub = escapeFilterPath(srtPath);
   const forceStyle = buildSubtitleForceStyle(style).replace(/'/g, "'\\''");
-  await execFileAsync(FFMPEG, [
-    '-y', '-i', inputPath,
-    '-vf', `subtitles='${sub}':fontsdir='${fontsDir}':force_style='${forceStyle}'`,
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-    '-c:a', 'copy', '-movflags', '+faststart',
-    outputPath,
-  ]);
+  const vf = `subtitles='${sub}':fontsdir='${fontsDir}':force_style='${forceStyle}'`;
+  await encodeWithVideoFilter(inputPath, outputPath, vf);
 }
 
 async function extractWav16k(inputPath, wavPath) {

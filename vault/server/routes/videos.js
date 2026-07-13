@@ -59,12 +59,16 @@ function parseJsonBodyField(val) {
 }
 
 function captionStyleFromBody(body) {
+  const transparent = body?.backgroundTransparent === 'true'
+    || body?.backgroundTransparent === true
+    || body?.backgroundColor === 'transparent';
   return {
     fontFamily: body?.fontFamily || 'Roboto',
     fontSize: Number(body?.fontSize) || 24,
     fontColor: body?.fontColor || '#FFFFFF',
     fontWeight: body?.fontWeight || 'normal',
     backgroundColor: body?.backgroundColor || '#000000',
+    backgroundTransparent: transparent,
     outlineColor: body?.outlineColor || '#000000',
     outline: Number(body?.outline) || 1,
   };
@@ -492,6 +496,7 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
         fontFamily: style.fontFamily,
         fontWeight: style.fontWeight,
         backgroundColor: style.backgroundColor,
+        backgroundTransparent: style.backgroundTransparent,
       }, dir);
       return readOutputFile(outputPath);
     });

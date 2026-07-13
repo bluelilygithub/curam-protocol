@@ -86,6 +86,7 @@ const TOOL_GROUPS = [
 function TextStyleFields({
   fontFamily, setFontFamily, fontSize, setFontSize, fontColor, setFontColor,
   fontWeight, setFontWeight, backgroundColor, setBackgroundColor,
+  backgroundTransparent, setBackgroundTransparent,
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -109,10 +110,20 @@ function TextStyleFields({
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Text colour</span>
         <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
       </label>
-      <label className="block space-y-1">
-        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background colour</span>
-        <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+      <label className="flex items-center gap-2 text-xs cursor-pointer sm:col-span-2" style={{ color: 'var(--color-muted)' }}>
+        <input
+          type="checkbox"
+          checked={backgroundTransparent}
+          onChange={(e) => setBackgroundTransparent(e.target.checked)}
+        />
+        Transparent background (text outline only)
       </label>
+      {!backgroundTransparent && (
+        <label className="block space-y-1 sm:col-span-2">
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background colour</span>
+          <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+        </label>
+      )}
     </div>
   );
 }
@@ -345,6 +356,7 @@ export default function VideosPage() {
   const [textFontColor, setTextFontColor] = useState('#FFFFFF');
   const [textFontWeight, setTextFontWeight] = useState('normal');
   const [textBackgroundColor, setTextBackgroundColor] = useState('#000000');
+  const [textBackgroundTransparent, setTextBackgroundTransparent] = useState(false);
   const [captionSaveToLibrary, setCaptionSaveToLibrary] = useState(true);
 
   const previewUrl = useMemo(() => {
@@ -418,7 +430,8 @@ export default function VideosPage() {
     fontColor: textFontColor,
     fontWeight: textFontWeight,
     backgroundColor: textBackgroundColor,
-  }), [textFontFamily, textFontSize, textFontColor, textFontWeight, textBackgroundColor]);
+    backgroundTransparent: textBackgroundTransparent,
+  }), [textFontFamily, textFontSize, textFontColor, textFontWeight, textBackgroundColor, textBackgroundTransparent]);
 
   const appendTextStyleFields = useCallback((fd) => {
     Object.entries(textStyleFields()).forEach(([k, v]) => fd.append(k, String(v)));
@@ -1139,6 +1152,8 @@ export default function VideosPage() {
               setFontWeight={setTextFontWeight}
               backgroundColor={textBackgroundColor}
               setBackgroundColor={setTextBackgroundColor}
+              backgroundTransparent={textBackgroundTransparent}
+              setBackgroundTransparent={setTextBackgroundTransparent}
             />
             <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); appendTextStyleFields(fd); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Apply label
@@ -1195,12 +1210,15 @@ export default function VideosPage() {
               setFontWeight={setTextFontWeight}
               backgroundColor={textBackgroundColor}
               setBackgroundColor={setTextBackgroundColor}
+              backgroundTransparent={textBackgroundTransparent}
+              setBackgroundTransparent={setTextBackgroundTransparent}
             />
 
             <div className="space-y-2">
               <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Subtitles (SRT)</p>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {status?.transcribe?.note || 'Paste SRT content or auto-transcribe when uploading a file.'}
+                {' '}Caption burn re-encodes once to embed text — audio is copied unchanged from your source.
               </p>
               {status?.transcribe?.available && !captionLibraryId && (
                 <button
