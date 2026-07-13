@@ -43,6 +43,10 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
+- `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg clip/convert/annotate + FAL generate
+- `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, captions, thumbnail)
+- `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + FAL text-to-video
+- `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
 
 ---
 
@@ -293,11 +297,13 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 
 **Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
+
+**Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Analyse). **Generate** expands brief via `light` tier then FAL text-to-video (`FAL_API_KEY`). **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), burn SRT captions, probe, thumbnail. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
@@ -338,6 +344,9 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
 | `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
 | `AMAZON_DOMAIN` | Product Scout — Amazon locale (default `amazon.com.au`) |
+| `FAL_API_KEY` | Video Tools — AI clip generation (also used by Graphics FAL provider) |
+| `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
+| `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
 
 ---
 

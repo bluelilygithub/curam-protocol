@@ -1,0 +1,322 @@
+'use strict';
+
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs/promises');
+const { runtimeConfig } = require('../config/runtime');
+const { generateVideo, DEFAULT_VIDEO_MODEL } = require('../services/videoGenerateService');
+const {
+  checkFfmpeg,
+  MAX_VIDEO_BYTES,
+  extensionForMime,
+  probeVideo,
+  clipVideo,
+  convertVideo,
+  extractAudio,
+  captureThumbnail,
+  annotateVideo,
+  burnSubtitles,
+  extractWav16k,
+  withTempDir,
+  readOutputFile,
+  execFileAsync,
+} = require('../services/videoFfmpeg');
+
+const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_VIDEO_BYTES },
+});
+
+function defaultModelPath() {
+  const os = require('os');
+  return path.join(os.homedir(), '.local/share/whisper.cpp/models/ggml-base.en.bin');
+}
+
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function transcribeWav(wavPath) {
+  const whisperCommand = process.env.LOCAL_WHISPER_COMMAND || 'whisper-cli';
+  const modelPath = process.env.LOCAL_WHISPER_MODEL || defaultModelPath();
+  if (!(await pathExists(modelPath))) {
+    throw new Error(`Whisper model not found at ${modelPath}`);
+  }
+  const { stdout } = await execFileAsync(whisperCommand, [
+    '-m', modelPath,
+    '-f', wavPath,
+    '--no-timestamps',
+    '-l', 'en',
+  ]);
+  return String(stdout || '').trim();
+}
+
+function sendVideoBuffer(res, buffer, filename = 'output.mp4', contentType = 'video/mp4') {
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buffer);
+}
+
+function sendImageBuffer(res, buffer, filename = 'thumbnail.jpg') {
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buffer);
+}
+
+async function writeUpload(dir, file) {
+  if (!file?.buffer?.length) throw new Error('Video file is required');
+  const ext = extensionForMime(file.mimetype);
+  const inputPath = path.join(dir, `input${ext}`);
+  await fs.writeFile(inputPath, file.buffer);
+  return inputPath;
+}
+
+router.get('/status', async (req, res) => {
+  const ffmpeg = await checkFfmpeg();
+  res.json({
+    ffmpeg,
+    maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
+    generate: {
+      available: Boolean(process.env.FAL_API_KEY?.trim()),
+      model: DEFAULT_VIDEO_MODEL,
+    },
+    transcribe: {
+      available: runtimeConfig.isLocal && ffmpeg,
+      note: runtimeConfig.isLocal
+        ? 'Local whisper-cli when model is installed'
+        : 'Paste SRT on hosted Vault — auto-transcribe is local-only for now',
+    },
+  });
+});
+
+router.post('/generate', async (req, res) => {
+  try {
+    const { brief, style, aspect, durationSec } = req.body || {};
+    if (!brief?.trim()) return res.status(400).json({ error: 'brief is required' });
+    const result = await generateVideo(req.user.id, {
+      brief: brief.trim(),
+      style,
+      aspect: aspect || '16:9',
+      durationSec,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[videos/generate]', err.message);
+    res.status(err.message.includes('not configured') ? 503 : 500).json({ error: err.message });
+  }
+});
+
+router.post('/probe', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const info = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      return probeVideo(inputPath);
+    });
+
+    res.json({
+      filename: req.file?.originalname || 'video',
+      mime: req.file?.mimetype,
+      uploadSize: req.file?.size,
+      ...info,
+    });
+  } catch (err) {
+    console.error('[videos/probe]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/clip', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const startSec = Number(req.body?.startSec ?? 0);
+    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+    if (!Number.isFinite(startSec) || startSec < 0) {
+      return res.status(400).json({ error: 'startSec must be a non-negative number' });
+    }
+    if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
+      return res.status(400).json({ error: 'endSec must be greater than startSec' });
+    }
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'clip.mp4');
+      await clipVideo(inputPath, outputPath, { startSec, endSec });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'clip.mp4');
+  } catch (err) {
+    console.error('[videos/clip]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/convert', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const crf = Number(req.body?.crf ?? 23);
+    const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : null;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'converted.mp4');
+      await convertVideo(inputPath, outputPath, {
+        crf: Number.isFinite(crf) ? Math.min(35, Math.max(18, crf)) : 23,
+        maxWidth: maxWidth && Number.isFinite(maxWidth) ? maxWidth : null,
+      });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'converted.mp4');
+  } catch (err) {
+    console.error('[videos/convert]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/extract-audio', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const format = req.body?.format === 'wav' ? 'wav' : 'mp3';
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, `audio.${format}`);
+      await extractAudio(inputPath, outputPath, format);
+      return readOutputFile(outputPath);
+    });
+
+    res.setHeader('Content-Type', format === 'wav' ? 'audio/wav' : 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="audio.${format}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (err) {
+    console.error('[videos/extract-audio]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/thumbnail', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const timeSec = Number(req.body?.timeSec ?? 1);
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'thumb.jpg');
+      await captureThumbnail(inputPath, outputPath, timeSec);
+      return readOutputFile(outputPath);
+    });
+
+    sendImageBuffer(res, buffer);
+  } catch (err) {
+    console.error('[videos/thumbnail]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/annotate', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const text = String(req.body?.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'text is required' });
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'annotated.mp4');
+      await annotateVideo(inputPath, outputPath, {
+        text,
+        position: req.body?.position || 'bottom',
+        fontSize: Number(req.body?.fontSize) || 28,
+        fontColor: req.body?.fontColor || 'white',
+      });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'annotated.mp4');
+  } catch (err) {
+    console.error('[videos/annotate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/transcribe', upload.single('video'), async (req, res) => {
+  try {
+    if (!runtimeConfig.isLocal) {
+      return res.status(503).json({
+        error: 'Auto-transcribe is available in local dev with whisper-cli. On hosted Vault, paste an SRT file in Captions.',
+      });
+    }
+
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available' });
+
+    const text = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const wavPath = path.join(dir, 'audio.wav');
+      await extractWav16k(inputPath, wavPath);
+      return transcribeWav(wavPath);
+    });
+
+    res.json({ text });
+  } catch (err) {
+    console.error('[videos/transcribe]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'srt', maxCount: 1 }]), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const videoFile = req.files?.video?.[0];
+    const srtFile = req.files?.srt?.[0];
+    const srtText = req.body?.srtText;
+    if (!videoFile) return res.status(400).json({ error: 'video is required' });
+    if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, videoFile);
+      const srtPath = path.join(dir, 'captions.srt');
+      if (srtFile) {
+        await fs.writeFile(srtPath, srtFile.buffer);
+      } else {
+        await fs.writeFile(srtPath, String(srtText), 'utf8');
+      }
+      const outputPath = path.join(dir, 'captioned.mp4');
+      await burnSubtitles(inputPath, srtPath, outputPath);
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'captioned.mp4');
+  } catch (err) {
+    console.error('[videos/burn-captions]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;

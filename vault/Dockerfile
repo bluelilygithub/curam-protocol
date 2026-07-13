@@ -2,6 +2,7 @@ FROM node:20-slim
 
 # Install LibreOffice and fonts for Office→PDF conversion
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
     libreoffice \
     libreoffice-writer \
     libreoffice-calc \

@@ -1,0 +1,594 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import api from '../utils/apiClient';
+import { useIcon } from '../providers/IconProvider';
+import useAuthStore from '../store/authStore';
+import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+
+const TOOL_GROUPS = [
+  {
+    id: 'create',
+    label: 'Create',
+    tools: [
+      { id: 'generate', label: 'Generate clip', desc: 'LLM brief → short AI video (FAL)' },
+    ],
+  },
+  {
+    id: 'optimise',
+    label: 'Optimise',
+    tools: [
+      { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
+      { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
+    ],
+  },
+  {
+    id: 'transform',
+    label: 'Transform',
+    tools: [
+      { id: 'clip', label: 'Clip / trim', desc: 'Set in and out points' },
+    ],
+  },
+  {
+    id: 'compose',
+    label: 'Compose',
+    tools: [
+      { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
+      { id: 'captions', label: 'Captions', desc: 'Paste SRT or auto-transcribe (local)' },
+    ],
+  },
+  {
+    id: 'analyse',
+    label: 'Analyse',
+    tools: [
+      { id: 'info', label: 'File info', desc: 'Duration, resolution, codec' },
+      { id: 'thumbnail', label: 'Thumbnail', desc: 'Export a JPG frame' },
+    ],
+  },
+];
+
+function formatDuration(sec) {
+  if (!Number.isFinite(sec)) return '—';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function formatBytes(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function VideoUpload({ file, onFile, label = 'Video file' }) {
+  const inputRef = useRef(null);
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          {file ? 'Change file' : 'Choose video'}
+        </button>
+        {file && (
+          <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
+            {file.name} · {formatBytes(file.size)}
+          </span>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files?.[0] || null)}
+      />
+    </label>
+  );
+}
+
+function ResultVideo({ blobUrl, downloadName, onUse }) {
+  if (!blobUrl) return null;
+  return (
+    <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+      <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+      <video src={blobUrl} controls className="w-full max-h-64 rounded-lg bg-black" />
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={blobUrl}
+          download={downloadName}
+          className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          Download
+        </a>
+        {onUse && (
+          <button
+            type="button"
+            onClick={onUse}
+            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Use in another tool
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function VideosPage() {
+  const getIcon = useIcon();
+  const { user } = useAuthStore();
+  const isAdmin = user?.isAdmin;
+  const addToast = useToastStore((s) => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
+
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const canUse = isAdmin || featureAccess.videos !== false;
+
+  const [status, setStatus] = useState(null);
+  const [openGroup, setOpenGroup] = useState('create');
+  const [tool, setTool] = useState('generate');
+  const [search, setSearch] = useState('');
+
+  const [sourceFile, setSourceFile] = useState(null);
+  const [resultBlob, setResultBlob] = useState(null);
+  const [resultName, setResultName] = useState('output.mp4');
+  const [probe, setProbe] = useState(null);
+
+  // Generate
+  const [brief, setBrief] = useState('');
+  const [style, setStyle] = useState('product b-roll');
+  const [aspect, setAspect] = useState('16:9');
+  const [durationSec, setDurationSec] = useState(5);
+  const [generateResult, setGenerateResult] = useState(null);
+
+  // Clip
+  const [startSec, setStartSec] = useState(0);
+  const [endSec, setEndSec] = useState('');
+
+  // Convert
+  const [crf, setCrf] = useState(23);
+  const [maxWidth, setMaxWidth] = useState('');
+
+  // Annotate
+  const [overlayText, setOverlayText] = useState('');
+  const [overlayPos, setOverlayPos] = useState('bottom');
+
+  // Captions
+  const [srtText, setSrtText] = useState('');
+  const [transcript, setTranscript] = useState('');
+
+  // Thumbnail
+  const [thumbTime, setThumbTime] = useState(1);
+  const [thumbUrl, setThumbUrl] = useState(null);
+
+  const previewUrl = useMemo(() => {
+    if (sourceFile) return URL.createObjectURL(sourceFile);
+    return null;
+  }, [sourceFile]);
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (resultBlob) URL.revokeObjectURL(resultBlob);
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+  }, [previewUrl, resultBlob, thumbUrl]);
+
+  useEffect(() => {
+    api.get('/api/settings/feature-access')
+      .then((r) => r.json())
+      .then((d) => { if (d?.flags) setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...d.flags }); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!canUse) return;
+    api.get('/api/videos/status')
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => {});
+  }, [canUse]);
+
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return TOOL_GROUPS;
+    return TOOL_GROUPS.map((g) => ({
+      ...g,
+      tools: g.tools.filter((t) => t.label.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q)),
+    })).filter((g) => g.tools.length > 0);
+  }, [search]);
+
+  const setResultFromBlob = useCallback((blob, name) => {
+    setResultBlob((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(blob);
+    });
+    setResultName(name);
+  }, []);
+
+  const useResultAsSource = useCallback(async () => {
+    if (!resultBlob) return;
+    try {
+      const res = await fetch(resultBlob);
+      const blob = await res.blob();
+      const file = new File([blob], resultName, { type: blob.type || 'video/mp4' });
+      setSourceFile(file);
+      addToast('Result loaded as source', 'success');
+    } catch {
+      addToast('Could not load result as source', 'error');
+    }
+  }, [resultBlob, resultName, addToast]);
+
+  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson }) => {
+    startProcessing(label, 'Processing on the server with ffmpeg.');
+    try {
+      const res = await api.postForm(`/api/videos/${endpoint}`, formData);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Request failed');
+      }
+      if (isJson) {
+        const data = await res.json();
+        return data;
+      }
+      const blob = await res.blob();
+      setResultFromBlob(blob, resultFilename);
+      addToast('Done', 'success');
+      return blob;
+    } catch (err) {
+      addToast(err.message, 'error');
+      throw err;
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, setResultFromBlob, addToast]);
+
+  const requireFile = () => {
+    if (!sourceFile) {
+      addToast('Choose a video file first', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleProbe = async () => {
+    if (!requireFile()) return;
+    const fd = new FormData();
+    fd.append('video', sourceFile);
+    startProcessing('Reading file info…', '');
+    try {
+      const res = await api.postForm('/api/videos/probe', fd);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Probe failed');
+      setProbe(data);
+      if (data.duration) setEndSec(String(Math.floor(data.duration)));
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!brief.trim()) {
+      addToast('Describe the clip you want', 'error');
+      return;
+    }
+    startProcessing('Generating clip…', 'Expanding your brief, then calling the video model.');
+    try {
+      const res = await api.post('/api/videos/generate', { brief, style, aspect, durationSec });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generate failed');
+      setGenerateResult(data);
+      if (data.inline?.base64) {
+        const bin = Uint8Array.from(atob(data.inline.base64), (c) => c.charCodeAt(0));
+        setResultFromBlob(new Blob([bin], { type: data.inline.contentType || 'video/mp4' }), 'generated.mp4');
+      }
+      addToast('Clip generated', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  if (!canUse) return <Navigate to="/" replace />;
+
+  const ffmpegOk = status?.ffmpeg;
+  const generateOk = status?.generate?.available;
+
+  return (
+    <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
+      <aside
+        className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+            {getIcon('film', { size: 16 })}
+          </div>
+          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Video Tools</h1>
+        </div>
+
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search tools…"
+          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        />
+
+        {filteredGroups.map((group) => (
+          <div key={group.id}>
+            <button
+              type="button"
+              onClick={() => setOpenGroup(openGroup === group.id ? null : group.id)}
+              className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              {openGroup === group.id ? '▼' : '▶'} {group.label}
+            </button>
+            {(openGroup === group.id || search.trim()) && (
+              <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+                {group.tools.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => setTool(t.id)}
+                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                      style={{
+                        background: tool === t.id ? 'var(--color-bg)' : 'transparent',
+                        color: tool === t.id ? 'var(--color-text)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </aside>
+
+      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
+        {status && !ffmpegOk && (
+          <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
+            ffmpeg is not available on this server — clip, convert and annotate tools will not work until ffmpeg is installed.
+          </div>
+        )}
+
+        {tool === 'generate' && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Generate clip</h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Describe a short clip. Vault expands your brief, then calls a hosted video model ({status?.generate?.model || 'FAL'}).
+              </p>
+            </div>
+            {!generateOk && (
+              <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
+                Add <strong>FAL_API_KEY</strong> in Railway to enable generation. Set <strong>VIDEO_GENERATE_MODEL</strong> to override the default model.
+              </p>
+            )}
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
+              <textarea
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+                rows={4}
+                placeholder="A calm product shot of wireless earbuds rotating on a marble surface, soft studio lighting…"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Style</span>
+                <select
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value)}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="product b-roll">Product b-roll</option>
+                  <option value="abstract motion">Abstract motion</option>
+                  <option value="UGC social">UGC / social</option>
+                  <option value="cinematic">Cinematic</option>
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Aspect</span>
+                <select
+                  value={aspect}
+                  onChange={(e) => setAspect(e.target.value)}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="16:9">16:9 landscape</option>
+                  <option value="9:16">9:16 story</option>
+                  <option value="1:1">1:1 square</option>
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Duration (s)</span>
+                <input
+                  type="number"
+                  min={3}
+                  max={10}
+                  value={durationSec}
+                  onChange={(e) => setDurationSec(Number(e.target.value))}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={!generateOk}
+              onClick={handleGenerate}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Generate clip
+            </button>
+            {generateResult?.video_prompt && (
+              <div className="rounded-xl border p-3 text-xs space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="font-medium" style={{ color: 'var(--color-text)' }}>Model prompt</p>
+                <p style={{ color: 'var(--color-muted)' }}>{generateResult.video_prompt}</p>
+              </div>
+            )}
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+            {generateResult?.videoUrl && !generateResult?.inline && (
+              <a href={generateResult.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: 'var(--color-primary)' }}>
+                Open provider video URL
+              </a>
+            )}
+          </section>
+        )}
+
+        {tool !== 'generate' && (
+          <VideoUpload file={sourceFile} onFile={setSourceFile} />
+        )}
+
+        {previewUrl && tool !== 'generate' && (
+          <video src={previewUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
+        )}
+
+        {tool === 'clip' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Clip / trim</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
+                <input type="number" min={0} step={0.1} value={startSec} onChange={(e) => setStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds, optional)</span>
+                <input type="number" min={0} step={0.1} value={endSec} onChange={(e) => setEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+            </div>
+            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Export clip
+            </button>
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+          </section>
+        )}
+
+        {tool === 'convert' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Convert / compress</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35, lower = better)</span>
+                <input type="number" min={18} max={35} value={crf} onChange={(e) => setCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (optional)</span>
+                <input type="number" placeholder="1280" value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+            </div>
+            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('crf', String(crf)); if (maxWidth) fd.append('maxWidth', maxWidth); runFormVideo('convert', fd, { label: 'Converting…', resultFilename: 'converted.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Convert
+            </button>
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+          </section>
+        )}
+
+        {tool === 'extract-audio' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Extract audio</h2>
+            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Export MP3
+            </button>
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
+          </section>
+        )}
+
+        {tool === 'annotate' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a single text label into the full clip (full-duration overlay).</p>
+            <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            <select value={overlayPos} onChange={(e) => setOverlayPos(e.target.value)} className="px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <option value="bottom">Bottom</option>
+              <option value="center">Center</option>
+              <option value="top">Top</option>
+            </select>
+            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Apply label
+            </button>
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+          </section>
+        )}
+
+        {tool === 'captions' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Captions</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              {status?.transcribe?.note || 'Paste SRT subtitles or auto-transcribe locally.'}
+            </p>
+            {status?.transcribe?.available && (
+              <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); startProcessing('Transcribing…', ''); try { const res = await api.postForm('/api/videos/transcribe', fd); const data = await res.json(); if (!res.ok) throw new Error(data.error); setTranscript(data.text || ''); addToast('Transcript ready — convert to SRT or paste into box', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
+                Auto-transcribe (local)
+              </button>
+            )}
+            {transcript && (
+              <textarea value={transcript} readOnly rows={3} className="w-full text-xs rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
+            )}
+            <textarea value={srtText} onChange={(e) => setSrtText(e.target.value)} rows={8} placeholder="Paste SRT content here…" className="w-full px-3 py-2 rounded-xl border text-xs font-mono" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            <button type="button" onClick={() => { if (!requireFile() || !srtText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('srtText', srtText); runFormVideo('burn-captions', fd, { label: 'Burning captions…', resultFilename: 'captioned.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Burn captions
+            </button>
+            <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} />
+          </section>
+        )}
+
+        {tool === 'info' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>File info</h2>
+            <button type="button" onClick={handleProbe} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Analyse file
+            </button>
+            {probe && (
+              <dl className="text-xs grid grid-cols-2 gap-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <dt style={{ color: 'var(--color-muted)' }}>Duration</dt><dd>{formatDuration(probe.duration)}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>Resolution</dt><dd>{probe.width && probe.height ? `${probe.width}×${probe.height}` : '—'}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>Codec</dt><dd>{probe.codec || '—'}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>Audio</dt><dd>{probe.hasAudio ? 'Yes' : 'No'}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>Size</dt><dd>{formatBytes(probe.uploadSize || probe.size)}</dd>
+                <dt style={{ color: 'var(--color-muted)' }}>Container</dt><dd>{probe.format || '—'}</dd>
+              </dl>
+            )}
+          </section>
+        )}
+
+        {tool === 'thumbnail' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Thumbnail</h2>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Frame at (seconds)</span>
+              <input type="number" min={0} step={0.1} value={thumbTime} onChange={(e) => setThumbTime(Number(e.target.value))} className="w-32 px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </label>
+            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              Export JPG
+            </button>
+            {thumbUrl && (
+              <div className="space-y-2">
+                <img src={thumbUrl} alt="Thumbnail" className="max-w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                <a href={thumbUrl} download="thumbnail.jpg" className="text-xs" style={{ color: 'var(--color-primary)' }}>Download JPG</a>
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-tools-phase1)
+
+**Feature:** Video Tools at `/videos` — Phase 1 suite mirroring Graphics: grouped searchable sidebar, Generate clip (LLM brief + FAL), ffmpeg clip/convert/extract-audio/annotate/captions/probe/thumbnail, ProcessingModal + “Use in another tool” chaining. Feature flag `videos`. `ffmpeg` added to Dockerfile. Docs: `docs/video-tools.md`.
+
+---
+
 ## 2026-07-13 (product-scout-guide-scout-flow)
 
 **Enhancement:** Buy guide now runs a full Product Scout at each price tier (top 3 per band) instead of a single pick from one search. Unified page: guide first, quick scout collapsed below.
