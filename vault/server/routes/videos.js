@@ -5,7 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
 const { runtimeConfig } = require('../config/runtime');
-const { startVideoGeneration, pollVideoGeneration, DEFAULT_VIDEO_MODEL, DEFAULT_VIDEO_I2V_MODEL, buildYoutubeContext } = require('../services/videoGenerateService');
+const { startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
   MAX_VIDEO_BYTES,
@@ -105,14 +105,11 @@ async function writeUpload(dir, file) {
 
 router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();
+  const generate = getVideoGenerateConfig();
   res.json({
     ffmpeg,
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
-    generate: {
-      available: Boolean(process.env.FAL_API_KEY?.trim()),
-      model: DEFAULT_VIDEO_MODEL,
-      imageToVideoModel: DEFAULT_VIDEO_I2V_MODEL,
-    },
+    generate,
     transcribe: {
       available: runtimeConfig.isLocal && ffmpeg,
       note: runtimeConfig.isLocal
@@ -144,16 +141,21 @@ router.post('/youtube-preview', async (req, res) => {
 router.get('/generate/status', async (req, res) => {
   try {
     const requestId = String(req.query?.requestId || '').trim();
-    const endpoint = String(req.query?.endpoint || '').trim();
-    if (!requestId || !endpoint) {
-      return res.status(400).json({ error: 'requestId and endpoint are required' });
+    if (!requestId) {
+      return res.status(400).json({ error: 'requestId is required' });
     }
 
     const cached = getVideoJob(requestId, req.user.id);
+    if (!cached) {
+      return res.status(404).json({ error: 'Generation job not found or expired — submit again' });
+    }
+
     const polled = await pollVideoGeneration({
-      endpoint,
+      provider: cached.provider,
+      endpoint: cached.endpoint,
       requestId,
-      meta: cached || {},
+      pollUrl: cached.pollUrl,
+      meta: cached,
     });
 
     if (polled.status === 'COMPLETED') forgetVideoJob(requestId);
@@ -192,7 +194,9 @@ router.post('/generate', async (req, res) => {
 
     rememberVideoJob(started.requestId, req.user.id, {
       provider: started.provider,
+      model: started.model,
       endpoint: started.endpoint,
+      pollUrl: started.pollUrl,
       mode: started.mode,
       video_prompt: started.video_prompt,
       negative_prompt: started.negative_prompt,

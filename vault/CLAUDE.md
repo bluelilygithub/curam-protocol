@@ -303,7 +303,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
 
-**Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Analyse). **Generate** expands brief via `light` tier then FAL text-to-video (`FAL_API_KEY`). **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), burn SRT captions, probe, thumbnail. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
+**Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), burn SRT captions, probe, thumbnail. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
@@ -344,7 +344,10 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
 | `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
 | `AMAZON_DOMAIN` | Product Scout — Amazon locale (default `amazon.com.au`) |
-| `FAL_API_KEY` | Video Tools — AI clip generation (also used by Graphics FAL provider) |
+| `FAL_API_KEY` | Video Tools — AI clip generation fallback (also used by Graphics FAL provider) |
+| `REPLICATE_API_TOKEN` | Video Tools — preferred AI clip generation (`minimax/hailuo-2.3`); also Graphics upscale/bg |
+| `VIDEO_GENERATE_PROVIDER` | Force `replicate` or `fal` for video generate |
+| `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
 

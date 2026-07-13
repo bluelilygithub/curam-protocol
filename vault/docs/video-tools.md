@@ -13,7 +13,7 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 
 | Tier | Tools | Notes |
 |---|---|---|
-| Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + FAL text-to-video; needs `FAL_API_KEY` |
+| Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
 | Server (ffmpeg) | Clip, Convert, Extract audio, Annotate, Captions (burn), Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
 | Local dev only | Auto-transcribe | `whisper-cli` + model file; hosted Vault → paste SRT instead |
 
@@ -89,7 +89,11 @@ POST /api/videos/probe|clip|convert|extract-audio|thumbnail|annotate|transcribe|
 
 | Var | Purpose |
 |---|---|
-| `FAL_API_KEY` | Enable Generate clip |
+| `REPLICATE_API_TOKEN` | **Preferred** — video generation via Replicate (`minimax/hailuo-2.3`) |
+| `VIDEO_GENERATE_PROVIDER` | Force `replicate` or `fal` (default: Replicate when token present) |
+| `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
+| `VIDEO_REPLICATE_I2V_MODEL` | Replicate image-to-video model (default `minimax/hailuo-2.3`) |
+| `FAL_API_KEY` | Fallback video provider (also used by Graphics FAL) |
 | `VIDEO_GENERATE_MODEL` | FAL text-to-video model (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_GENERATE_I2V_MODEL` | FAL image-to-video when animating a seed (default `fal-ai/minimax/video-01-live/image-to-video`) |
 | `VIDEO_MAX_UPLOAD_MB` | Upload size cap (default 80) |

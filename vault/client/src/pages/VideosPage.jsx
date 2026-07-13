@@ -397,10 +397,7 @@ export default function VideosPage() {
 
       setGenerateResult(started);
 
-      const params = new URLSearchParams({
-        requestId: started.requestId,
-        endpoint: started.endpoint,
-      });
+      const params = new URLSearchParams({ requestId: started.requestId });
 
       let completed = null;
       for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -409,11 +406,12 @@ export default function VideosPage() {
         const statusData = await statusRes.json();
         if (!statusRes.ok) throw new Error(statusData.error || 'Status check failed');
 
+        const providerLabel = started.provider === 'replicate' ? 'Replicate' : 'FAL';
         const detail = statusData.status === 'IN_QUEUE'
-          ? (statusData.queuePosition != null ? `Queued — position ${statusData.queuePosition + 1}` : 'Queued on FAL…')
+          ? (statusData.queuePosition != null ? `Queued — position ${statusData.queuePosition + 1}` : `Queued on ${providerLabel}…`)
           : statusData.status === 'IN_PROGRESS'
-            ? 'Rendering video (this can take 1–3 minutes)…'
-            : 'Waiting for video model…';
+            ? `Rendering video on ${providerLabel} (this can take 1–3 minutes)…`
+            : `Waiting for ${providerLabel}…`;
         startProcessing('Generating clip…', detail);
 
         if (statusData.status === 'COMPLETED') {
@@ -516,7 +514,7 @@ export default function VideosPage() {
             </div>
             {!generateOk && (
               <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
-                Add <strong>FAL_API_KEY</strong> in Railway to enable generation. Image seeds use <strong>{status?.generate?.imageToVideoModel || 'image-to-video'}</strong>.
+                Add <strong>REPLICATE_API_TOKEN</strong> or <strong>FAL_API_KEY</strong> in Railway. Replicate is preferred when both are set ({status?.generate?.provider || 'replicate'} · {status?.generate?.model || 'minimax/hailuo-2.3'}).
               </p>
             )}
             <label className="block space-y-1">

@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-tools-replicate)
+
+**Fix:** Video Generate now prefers **Replicate** (`minimax/hailuo-2.3`) when `REPLICATE_API_TOKEN` is set — avoids FAL issues. Set `VIDEO_GENERATE_PROVIDER=fal` to force FAL.
+
+---
+
 ## 2026-07-13 (video-tools-references)
 
 **Enhancement:** Video Tools Generate — optional reference image (animate as first frame or style suggestion via Gemini) and YouTube example URL (title, transcript, thumbnail analysis; optional thumbnail as seed). `POST /api/videos/youtube-preview`.
