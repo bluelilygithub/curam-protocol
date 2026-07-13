@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-13 (video-annotate-jsx-fix)
+
+**Fix:** Annotate / Caption studio font controls were not visible — tool panels were accidentally nested inside Clip’s JSX block so Annotate never rendered on its own.
+
+---
+
 ## 2026-07-13 (video-annotate-fonts)
 
 **Enhancement:** Annotate + Caption studio — Google Fonts picker (20 curated), text/background colour, weight, size. Compose tools clear stale result preview until processing completes. Server downloads Google Font TTFs for ffmpeg.

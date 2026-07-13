@@ -1081,6 +1081,10 @@ export default function VideosPage() {
             {resultForTool === 'clip' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
+          </section>
+        )}
+
+        {tool === 'convert' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Convert / compress</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -1099,6 +1103,10 @@ export default function VideosPage() {
             {resultForTool === 'convert' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
+          </section>
+        )}
+
+        {tool === 'extract-audio' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Extract audio</h2>
             <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
@@ -1107,6 +1115,10 @@ export default function VideosPage() {
             {resultForTool === 'extract-audio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
             )}
+          </section>
+        )}
+
+        {tool === 'annotate' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
