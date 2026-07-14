@@ -23,37 +23,62 @@ function fetchJson(url, extraHeaders = {}) {
   });
 }
 
-async function loadSetting(key) {
+async function loadAdminSetting(key) {
   try {
-    const { rows } = await pool.query('SELECT value FROM settings WHERE key=$1', [key]);
+    const { rows } = await pool.query(
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE u."isAdmin" = TRUE AND s.key = $1
+       ORDER BY s."userId" ASC LIMIT 1`,
+      [key],
+    );
     return rows[0]?.value?.trim() || null;
   } catch {
     return null;
   }
 }
 
+/** @deprecated use loadAdminSetting — settings are per-user with composite PK. */
+async function loadSetting(key) {
+  return loadAdminSetting(key);
+}
+
+function isBraveSearchKey(apiKey) {
+  return String(apiKey || '').trim().startsWith('BSA');
+}
+
 async function resolveShoppingSearchProvider() {
-  const raw = (await loadSetting('shopping_search_provider') || '').toLowerCase();
-  if (raw === 'serpapi' || raw === 'serper') return raw;
+  const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
+    || await loadAdminSetting('SERPER_SEARCH_API_KEY');
+  const searchKey = process.env.SEARCH_API_KEY?.trim()
+    || await loadAdminSetting('SEARCH_API_KEY');
+  const serpapiKey = searchKey && !isBraveSearchKey(searchKey) ? searchKey : null;
+
+  const raw = (await loadAdminSetting('shopping_search_provider') || '').toLowerCase();
+  if (raw === 'serper' && serperKey) return 'serper';
+  if (raw === 'serpapi' && serpapiKey) return 'serpapi';
 
   try {
     const { rows } = await pool.query(
       `SELECT s.value FROM settings s
        JOIN users u ON u.id = s."userId"
        WHERE u."isAdmin" = TRUE AND s.key = 'vault_models'
-       ORDER BY s."userId" ASC LIMIT 1`
+       ORDER BY s."userId" ASC LIMIT 1`,
     );
     const catalog = rows[0]?.value;
     if (catalog) {
       const parsed = JSON.parse(catalog);
       if (Array.isArray(parsed)) {
         const entry = parsed.find((m) => m?.provider === 'serper' || m?.provider === 'serpapi');
-        if (entry?.provider === 'serpapi') return 'serpapi';
-        if (entry?.provider === 'serper') return 'serper';
+        if (entry?.provider === 'serper' && serperKey) return 'serper';
+        if (entry?.provider === 'serpapi' && serpapiKey) return 'serpapi';
       }
     }
   } catch { /* ignore */ }
 
+  if (serperKey) return 'serper';
+  if (serpapiKey) return 'serpapi';
+  if (raw === 'serpapi' || raw === 'serper') return raw;
   return 'serper';
 }
 
@@ -63,20 +88,20 @@ async function resolveShoppingSearchProvider() {
  */
 async function getShoppingSearchConfig() {
   const provider = await resolveShoppingSearchProvider();
-  if (provider === 'serpapi') {
-    let apiKey = process.env.SEARCH_API_KEY;
-    const settingsKey = await loadSetting('SEARCH_API_KEY');
-    if (settingsKey) apiKey = settingsKey;
-    if (!apiKey?.trim()) {
-      throw new Error('SEARCH_API_KEY not configured — add on Railway for SerpAPI grocery prices.');
-    }
-    return { apiKey: apiKey.trim(), provider: 'serpapi' };
-  }
   const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
-    || await loadSetting('SERPER_SEARCH_API_KEY');
-  if (serperKey) {
-    return { apiKey: serperKey, provider: 'serper' };
+    || await loadAdminSetting('SERPER_SEARCH_API_KEY');
+  const searchKey = process.env.SEARCH_API_KEY?.trim()
+    || await loadAdminSetting('SEARCH_API_KEY');
+  const serpapiKey = searchKey && !isBraveSearchKey(searchKey) ? searchKey.trim() : null;
+
+  if (provider === 'serpapi') {
+    if (serpapiKey) return { apiKey: serpapiKey, provider: 'serpapi' };
+    if (serperKey) return { apiKey: serperKey, provider: 'serper' };
+    throw new Error('SerpAPI grocery search needs SEARCH_API_KEY (SerpAPI) or SERPER_SEARCH_API_KEY on Railway.');
   }
+
+  if (serperKey) return { apiKey: serperKey, provider: 'serper' };
+  if (serpapiKey) return { apiKey: serpapiKey, provider: 'serpapi' };
   throw new Error('SERPER_SEARCH_API_KEY not configured — add on Railway for grocery prices.');
 }
 
@@ -143,30 +168,7 @@ async function webSearch(query, { num = 8, preferSerper = false } = {}) {
   }
 
   if (provider === 'serper') {
-    const data = await new Promise((resolve, reject) => {
-      const body = JSON.stringify({ q: query.trim(), num });
-      const req2 = https.request({
-        hostname: 'google.serper.dev',
-        path: '/search',
-        method: 'POST',
-        headers: {
-          'X-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-        },
-        timeout: 15000,
-      }, (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
-          catch { reject(new Error('Invalid JSON from Serper')); }
-        });
-      });
-      req2.on('error', reject);
-      req2.write(body);
-      req2.end();
-    });
+    const data = await serperPost('/search', apiKey, { q: query.trim(), gl: 'au', hl: 'en', num });
     return (data.organic || []).slice(0, num).map((r) => ({
       title: r.title || r.link,
       url: r.link,
@@ -207,8 +209,56 @@ function parsePriceString(str) {
 /** Dedicated price field from shopping APIs — must look like currency (≤2 digits before decimal). */
 function parseShoppingPrice(val) {
   if (val == null || val === '') return null;
+  if (typeof val === 'object' && val !== null) {
+    const n = Number(val.value ?? val.amount ?? val.extracted ?? val.raw);
+    if (Number.isFinite(n) && n > 0 && n < 1000) return n;
+    return parsePriceString(String(val.raw ?? val.label ?? val.display ?? ''));
+  }
   if (typeof val === 'number' && Number.isFinite(val) && val > 0 && val < 1000) return val;
-  return parsePriceString(String(val));
+  const s = String(val).trim();
+  const parsed = parsePriceString(s);
+  if (parsed) return parsed;
+  const bare = s.match(/^(\d{1,2}[.,]\d{2})$/);
+  if (bare) {
+    const n = Number(bare[1].replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function serperPost(path, apiKey, bodyObj) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(bodyObj);
+    const req2 = https.request({
+      hostname: 'google.serper.dev',
+      path,
+      method: 'POST',
+      headers: {
+        'X-API-KEY': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 15000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks).toString();
+        let data;
+        try { data = JSON.parse(raw); }
+        catch { reject(new Error(`Invalid JSON from Serper ${path}`)); return; }
+        if (res.statusCode >= 400) {
+          reject(new Error(data.message || data.error || `Serper ${path} HTTP ${res.statusCode}`));
+          return;
+        }
+        resolve(data);
+      });
+    });
+    req2.on('error', reject);
+    req2.on('timeout', () => { req2.destroy(); reject(new Error(`Serper ${path} timed out`)); });
+    req2.write(body);
+    req2.end();
+  });
 }
 
 /**
@@ -222,34 +272,11 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
   const encoded = encodeURIComponent(query.trim());
 
   if (provider === 'serper') {
-    const data = await new Promise((resolve, reject) => {
-      const body = JSON.stringify({ q: query.trim(), gl: country, num });
-      const req2 = https.request({
-        hostname: 'google.serper.dev',
-        path: '/shopping',
-        method: 'POST',
-        headers: {
-          'X-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-        },
-        timeout: 15000,
-      }, (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
-          catch { reject(new Error('Invalid JSON from Serper shopping')); }
-        });
-      });
-      req2.on('error', reject);
-      req2.write(body);
-      req2.end();
-    });
+    const data = await serperPost('/shopping', apiKey, { q: query.trim(), gl: country, hl: 'en', num });
     return (data.shopping || []).slice(0, num).map((r) => ({
       title: r.title || '',
       source: r.source || '',
-      price: parseShoppingPrice(r.price),
+      price: parseShoppingPrice(r.price ?? r.extracted_price),
       url: r.link || r.productLink || null,
       image: r.imageUrl || null,
     })).filter((r) => r.title);
@@ -271,4 +298,12 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
   return null;
 }
 
-module.exports = { webSearch, shoppingSearch, parsePriceString, parseShoppingPrice, getSearchConfig, isSearchConfigured };
+module.exports = {
+  webSearch,
+  shoppingSearch,
+  parsePriceString,
+  parseShoppingPrice,
+  getSearchConfig,
+  getShoppingSearchConfig,
+  isSearchConfigured,
+};

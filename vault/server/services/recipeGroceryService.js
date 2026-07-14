@@ -1,6 +1,6 @@
 'use strict';
 
-const { webSearch, shoppingSearch, parsePriceString, getSearchConfig } = require('./webSearchService');
+const { webSearch, shoppingSearch, parsePriceString, getShoppingSearchConfig } = require('./webSearchService');
 
 const AU_STORES = [
   { id: 'coles', label: 'Coles', domain: 'coles.com.au' },
@@ -37,11 +37,12 @@ function isRejectedUrl(url) {
   return REJECT_URL_PATTERN.test(String(url || ''));
 }
 
-function matchesStore(storeId, source, url) {
+function matchesStore(storeId, source, url, title = '') {
   const src = String(source || '').toLowerCase();
   const u = String(url || '').toLowerCase();
+  const t = String(title || '').toLowerCase();
   const domain = AU_STORES.find((s) => s.id === storeId)?.domain || '';
-  return STORE_MATCH[storeId](src) || (domain && u.includes(domain));
+  return STORE_MATCH[storeId](src) || STORE_MATCH[storeId](t) || (domain && u.includes(domain));
 }
 
 function extractPriceFromResult(r) {
@@ -163,14 +164,22 @@ function storeSearchUrl(storeId, term) {
 /** Google Shopping — Serper/SerpApi only. Matches store by retailer name or product URL domain. */
 async function findViaShopping(storeId, term) {
   const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  const queries = [];
   for (const variant of searchTermVariants(term)) {
+    queries.push(`${variant} ${label}`);
+    if (domain) queries.push(`${variant} site:${domain}`);
+  }
+
+  let lastErr = null;
+  for (const q of [...new Set(queries)]) {
     try {
-      const results = await shoppingSearch(`${variant} ${label}`, { num: 15 });
-      if (!Array.isArray(results)) continue;
+      const results = await shoppingSearch(q, { num: 20 });
+      if (!Array.isArray(results) || !results.length) continue;
       for (const r of results) {
         if (!r.price || r.price > MAX_PLAUSIBLE_ITEM_PRICE) continue;
-        if (!matchesStore(storeId, r.source, r.url)) continue;
-        if (!isRelevantMatch(variant, r.title)) continue;
+        if (!matchesStore(storeId, r.source, r.url, r.title)) continue;
+        if (!isRelevantMatch(term, r.title)) continue;
         return {
           product: r.title,
           price: r.price,
@@ -179,8 +188,12 @@ async function findViaShopping(storeId, term) {
           confidence: 'sourced',
         };
       }
-    } catch { /* shopping API unavailable */ }
+    } catch (err) {
+      lastErr = err;
+      console.warn('[recipeGrocery] shoppingSearch failed:', q, err.message);
+    }
   }
+  if (lastErr) throw lastErr;
   return null;
 }
 
@@ -216,7 +229,13 @@ async function findViaOrganic(storeId, term) {
 }
 
 async function findForStore(storeId, term) {
-  return (await findViaShopping(storeId, term)) || (await findViaOrganic(storeId, term));
+  try {
+    const viaShopping = await findViaShopping(storeId, term);
+    if (viaShopping) return viaShopping;
+  } catch (err) {
+    console.warn(`[recipeGrocery] ${storeId} shopping:`, err.message);
+  }
+  return findViaOrganic(storeId, term);
 }
 
 async function findStorePrices(line) {
@@ -294,16 +313,14 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   }
   if (!lines.length) throw new Error('List at least one ingredient to price');
 
-  let searchAvailable = true;
+  let searchAvailable = false;
   let searchProvider = null;
+  let searchConfigError = null;
   try {
-    ({ provider: searchProvider } = await getSearchConfig({ preferSerper: true }));
-  } catch {
-    try {
-      ({ provider: searchProvider } = await getSearchConfig());
-    } catch {
-      searchAvailable = false;
-    }
+    ({ provider: searchProvider } = await getShoppingSearchConfig());
+    searchAvailable = true;
+  } catch (err) {
+    searchConfigError = err.message;
   }
 
   let items;
@@ -337,11 +354,11 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   const foundCount = items.filter((row) => row.coles.price || row.woolworths.price).length;
 
   let liveFetchNote = null;
-  if (searchAvailable && foundCount === 0) {
-    liveFetchNote = searchProvider === 'brave'
-      ? 'Brave Search has no shopping index — only pages with a visible $ price in the search snippet can be matched. Serper or SerpApi in Settings give better grocery results.'
-      : 'No product listings matched — try simpler ingredient names, or use the store links to search manually.';
-  } else if (searchAvailable && foundCount < items.length) {
+  if (!searchAvailable) {
+    liveFetchNote = searchConfigError || 'Shopping search API not configured.';
+  } else if (foundCount === 0) {
+    liveFetchNote = 'No Coles or Woolworths listings matched — try simpler ingredient names (e.g. "chicken breast" not the full recipe line), or use the store links to search manually.';
+  } else if (foundCount < items.length) {
     liveFetchNote = `Found prices for ${foundCount} of ${items.length} items — the rest need a manual store search.`;
   }
 
@@ -353,6 +370,7 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     sourced: true,
     searchAvailable,
     searchProvider,
+    searchConfigError,
     stores: AU_STORES,
     ingredients: lines,
     items,

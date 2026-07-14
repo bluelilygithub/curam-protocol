@@ -499,8 +499,7 @@ async function getStatus(userId) {
   const textModelStandard = pickTextModel(tiers, 'standard');
   const textModelLight = pickTextModel(tiers, 'light');
   const image = await getImageGenStatus(userId);
-  const webSearchAvailable = (await isSearchConfigured({ preferSerper: true }))
-    || (await isSearchConfigured());
+  const webSearchAvailable = await isSearchConfigured({ preferSerper: true });
   return {
     ai: Boolean(textModelStandard || textModelLight),
     textModel: textModelStandard || textModelLight,

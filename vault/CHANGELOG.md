@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (grocery-search-config-fix)
+
+**Fix:** Grocery prices were silently returning zero results when `shopping_search_provider` pointed at SerpAPI but only `SERPER_SEARCH_API_KEY` (or Brave `SEARCH_API_KEY`) was set. Provider resolution now prefers the key that actually exists, loads admin settings with `userId`, rejects Brave keys for shopping APIs, surfaces Serper HTTP errors, and stops treating chat Brave search as grocery availability.
+
+---
+
 ## 2026-07-14 (shopping-search-backfill)
 
 **Fix:** Auto-append Shopping search to first admin `vault_models` on boot and on model load when missing — existing workspaces no longer need Reset defaults.
