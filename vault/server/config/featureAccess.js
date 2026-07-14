@@ -17,6 +17,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   shares: true,
   graphics: true,
   videos: true,
+  recipes: true,
   themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,

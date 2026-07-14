@@ -16,7 +16,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 ## Key Files
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
-- `server/db.js` — all 45 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
+- `server/db.js` — all 46 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
 - `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
 - `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
@@ -48,6 +48,10 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
 - `server/services/videoLibraryService.js` — saved videos/images on disk + `video_library` metadata
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
+- `server/routes/recipes.js` — Recipes API (`/api/recipes/*`): suggest, expand, image, library CRUD
+- `server/services/recipeService.js` — leftover suggest/expand, dish image via `graphicsImageService`, `recipes` table library
+- `server/services/graphicsImageService.js` — shared FAL image generation using admin `graphics_model` (Graphics + Recipes)
+- `client/src/pages/RecipesPage.jsx` — leftover flow + tagged library at `/recipes`
 
 ---
 
@@ -282,7 +286,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Schema Notes
 
-- 45 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
+- 46 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
 - `sessions."deletedAt"` is a soft-delete timestamp. Chat delete moves sessions to Deleted; messages remain for restore. Normal lists/search/RAG must filter `s."deletedAt" IS NULL`.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
@@ -298,13 +302,15 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 
 **Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
 
 **Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Library / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), probe, thumbnail. **Caption studio** — upload or library video + styled SRT (font, weight, size, colour). **Saved media** — save tool results (video/image) + transaction JSON to `video_library` (disk + DB), preview, delete, re-caption later. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
+
+**Recipes** (`/recipes`): Leftover cooking assistant in Content tools (after Video Tools). Enter ingredients (+ optional notes); AI returns **four recipe cards** (assumes salt, pepper, olive oil). Pick one → full steps, nutrition notes, web links (videos/articles), optional **dish photo** via **`graphicsImageService`** (`graphics_model` + `FAL_API_KEY`). Save favourites to **`recipes`** table with tags (breakfast, lunch, dinner, curry, pasta, fast, slow, etc.). Uses **`standard`** tier for suggest/expand. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
@@ -345,7 +351,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |
 | `RAINFOREST_API_KEY` | Product Scout — Amazon search/product data via Rainforest API |
 | `AMAZON_DOMAIN` | Product Scout — Amazon locale (default `amazon.com.au`) |
-| `FAL_API_KEY` | Video Tools — AI clip generation fallback (also used by Graphics FAL provider) |
+| `FAL_API_KEY` | Graphics, Video Tools (generate fallback), Recipes (dish photos) |
 | `REPLICATE_API_TOKEN` | Video Tools — preferred AI clip generation (`minimax/hailuo-2.3`); also Graphics upscale/bg |
 | `VIDEO_GENERATE_PROVIDER` | Force `replicate` or `fal` for video generate |
 | `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |

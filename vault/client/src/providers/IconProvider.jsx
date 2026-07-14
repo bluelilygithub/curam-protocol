@@ -127,6 +127,7 @@ const semanticMap = {
   'bar-chart': { lucide: 'BarChart3' },
   contrast: { lucide: 'Contrast' },
   film: { lucide: 'Film' },
+  utensils: { lucide: 'UtensilsCrossed' },
   link: { lucide: 'Link' },
   'file-text': { lucide: 'FileText' },
   workflow: { lucide: 'Workflow' },

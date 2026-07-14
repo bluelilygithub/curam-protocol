@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (recipes-leftovers)
+
+**Feature:** Recipes app at `/recipes` — leftover ingredient input → four AI recipe cards → full steps, nutrition, web links, optional dish photo (via **`graphicsImageService`** + admin **`graphics_model`**), save to tagged library (`recipes` table). Feature flag `recipes`. Docs: **`docs/recipes.md`**.
+
+---
+
 ## 2026-07-14 (video-nine-positions-clip-timeline)
 
 **Enhancement:** Annotate + Caption studio — 3×3 position grid (9 placements). Clip / trim — draggable in/out markers on timeline synced with second inputs.

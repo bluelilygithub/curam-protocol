@@ -33,6 +33,7 @@ import SharesPage from './pages/SharesPage';
 import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
 import VideosPage from './pages/VideosPage';
+import RecipesPage from './pages/RecipesPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
@@ -145,6 +146,7 @@ function App() {
               <Route path="/youtube" element={<YoutubePage />} />
               <Route path="/graphics" element={<GraphicsPage />} />
               <Route path="/videos" element={<VideosPage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
               <Route path="/product-scout" element={<ProductScoutPage />} />

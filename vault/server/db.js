@@ -763,6 +763,25 @@ async function initSchema() {
         ON video_library ("userId", "createdAt" DESC)
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recipes (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL DEFAULT 'Untitled',
+        tags            TEXT[] NOT NULL DEFAULT '{}',
+        source          TEXT,
+        payload         JSONB NOT NULL DEFAULT '{}',
+        "imageDataUrl"  TEXT,
+        transaction     JSONB,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_recipes_user_updated
+        ON recipes ("userId", "updatedAt" DESC)
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (
