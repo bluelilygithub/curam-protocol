@@ -485,8 +485,8 @@ function RecipeDetailPanel({
               type="button"
               onClick={onComparePrices}
               disabled={groceryLoading || !status?.webSearch}
-              className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
             >
               {groceryLoading ? 'Finding prices…' : groceryResult ? 'Refresh prices' : 'Get prices'}
             </button>
@@ -1122,7 +1122,7 @@ export default function RecipesPage() {
               className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}
             >
-              Get prices
+              {groceryResult ? 'Refresh prices' : 'Get prices'}
             </button>
 
             {groceryResult && <GroceryPriceResults result={groceryResult} />}
