@@ -8,7 +8,7 @@ A log of bugs found and fixed in the Curam Vault application.
 
 **Feature:** Recipe by name — Basic / Advanced / Master tiers with accessible ingredient swaps, auto dish photo, save to library.
 
-**Fix:** Recipes suggest/expand — validate text model is configured, JSON retry on parse failure, clearer errors. Local TTS status returns 200 on Railway instead of 404.
+**Fix:** Recipes text routing — `light` tier for suggest (matches Video), `standard` for expand; exclude FAL/replicate from text picks; fallback chain like shares/news.
 
 ---
 

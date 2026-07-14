@@ -2,7 +2,7 @@
 
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
-const { getModelsForUser } = require('./modelResolver');
+const { getModelsForUser, pickTextModel } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { webSearch } = require('./webSearchService');
@@ -94,10 +94,11 @@ async function callRecipeJson(userId, modelId, prompt, { system, maxTokens = 200
   return parsed;
 }
 
-async function resolveRecipeTextModel(userId) {
-  const { standard: modelId } = await getModelsForUser(userId);
+async function resolveRecipeTextModel(userId, { prefer = 'standard' } = {}) {
+  const tiers = await getModelsForUser(userId);
+  const modelId = pickTextModel(tiers, prefer);
   if (!modelId) {
-    throw new Error('No text model configured — add a chat model (not image-only) in Settings → AI & Chat');
+    throw new Error('No text model configured — add a chat model (Anthropic, Gemini, or DeepSeek) in Settings → AI & Chat');
   }
   return modelId;
 }
@@ -270,7 +271,7 @@ async function suggestRecipes(userId, { ingredients, notes } = {}) {
   const text = String(ingredients || '').trim();
   if (!text) throw new Error('List at least one ingredient');
 
-  const modelId = await resolveRecipeTextModel(userId);
+  const modelId = await resolveRecipeTextModel(userId, { prefer: 'light' });
   const parsed = await callRecipeJson(userId, modelId, buildSuggestPrompt(text, notes), {
     system: SUGGEST_SYSTEM,
     maxTokens: 2500,
@@ -301,7 +302,7 @@ async function suggestRecipes(userId, { ingredients, notes } = {}) {
 async function expandRecipe(userId, { recipe, ingredients, notes } = {}) {
   if (!recipe?.title) throw new Error('Recipe selection is required');
 
-  const modelId = await resolveRecipeTextModel(userId);
+  const modelId = await resolveRecipeTextModel(userId, { prefer: 'standard' });
   const parsed = await callRecipeJson(userId, modelId, buildExpandPrompt(recipe, ingredients, notes), {
     system: EXPAND_SYSTEM,
     maxTokens: 4000,
@@ -331,7 +332,7 @@ async function suggestNamedRecipe(userId, { name, notes } = {}) {
   const dishName = String(name || '').trim();
   if (!dishName) throw new Error('Enter a dish name');
 
-  const modelId = await resolveRecipeTextModel(userId);
+  const modelId = await resolveRecipeTextModel(userId, { prefer: 'light' });
   const parsed = await callRecipeJson(userId, modelId, buildNamedSuggestPrompt(dishName, notes), {
     system: NAMED_SUGGEST_SYSTEM,
     maxTokens: 2500,
@@ -365,7 +366,7 @@ async function expandNamedRecipe(userId, { name, tier, recipe, notes } = {}) {
   if (!dishName) throw new Error('Dish name is required');
   if (!NAMED_TIERS.some((t) => t.id === tierId)) throw new Error('Select Basic, Advanced, or Master');
 
-  const modelId = await resolveRecipeTextModel(userId);
+  const modelId = await resolveRecipeTextModel(userId, { prefer: 'standard' });
   const parsed = await callRecipeJson(
     userId,
     modelId,
@@ -494,11 +495,15 @@ async function deleteRecipe(userId, id) {
 }
 
 async function getStatus(userId) {
+  const tiers = await getModelsForUser(userId);
+  const textModelStandard = pickTextModel(tiers, 'standard');
+  const textModelLight = pickTextModel(tiers, 'light');
   const image = await getImageGenStatus(userId);
-  const { standard: textModel } = await getModelsForUser(userId);
   return {
-    ai: Boolean(textModel),
-    textModel: textModel || null,
+    ai: Boolean(textModelStandard || textModelLight),
+    textModel: textModelStandard || textModelLight,
+    textModelStandard,
+    textModelLight: tiers.light || textModelLight,
     imageGen: image.available,
     imageModel: image.model,
     imageProvider: image.provider,

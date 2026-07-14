@@ -12,7 +12,18 @@ const EMPTY_MODELS = {
 };
 
 function isImageProvider(provider) {
-  return ['fal', 'seedance'].includes(String(provider || '').trim().toLowerCase());
+  return ['fal', 'seedance', 'replicate'].includes(String(provider || '').trim().toLowerCase());
+}
+
+/** Image/video generation entries in vault_models — not valid for callModel text. */
+function isNonTextModel(entry) {
+  if (!entry) return false;
+  if (isImageProvider(entry.provider)) return true;
+  const id = String(entry.id || '').trim().toLowerCase();
+  if (!id) return false;
+  if (id.startsWith('fal-ai/') || id.startsWith('fal/')) return true;
+  if (/minimax\/|hailuo|video-01|image-to-video|\/flux/.test(id)) return true;
+  return false;
 }
 
 function parseConfiguredModelIds(rawVaultModels) {
@@ -60,7 +71,7 @@ function parseVaultModelsCatalog(rawVaultModels) {
 
 function pickTiers(modelEntries, configuredDefault) {
   if (!Array.isArray(modelEntries) || modelEntries.length === 0) return { ...EMPTY_MODELS };
-  const textModels = modelEntries.filter((m) => !isImageProvider(m.provider));
+  const textModels = modelEntries.filter((m) => !isNonTextModel(m));
   const textModelIds = textModels.map((m) => m.id);
   const anthropicModels = textModels
     .filter((m) => m.provider === 'anthropic' || (!m.provider && !m.id.startsWith('gemini-') && !m.id.startsWith('deepseek-')))
@@ -153,7 +164,7 @@ async function getVaultModelsConfigForUser(userId) {
     const { vault_models, default_model, fromAdmin } = await resolveVaultModelSettings(userId);
     const models = parseVaultModelsCatalog(vault_models);
     const textIds = models
-      .filter((m) => !isImageProvider(m.provider))
+      .filter((m) => !isNonTextModel(m))
       .map((m) => String(m.id).trim())
       .filter(Boolean);
     const defaultModel = (default_model && textIds.includes(default_model))
@@ -165,4 +176,12 @@ async function getVaultModelsConfigForUser(userId) {
   }
 }
 
-module.exports = { getModelsForUser, getVaultModelsConfigForUser };
+/** First usable text model — same fallback chain as shares/news. prefer: 'standard' | 'light' */
+function pickTextModel(tiers, prefer = 'standard') {
+  const chain = prefer === 'light'
+    ? [tiers.light, tiers.standard, tiers.gemini, tiers.deepseek, tiers.ollama]
+    : [tiers.standard, tiers.light, tiers.gemini, tiers.deepseek, tiers.ollama];
+  return chain.find(Boolean) || null;
+}
+
+module.exports = { getModelsForUser, getVaultModelsConfigForUser, pickTextModel, isNonTextModel };

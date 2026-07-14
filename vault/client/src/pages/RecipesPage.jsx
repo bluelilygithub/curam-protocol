@@ -540,9 +540,7 @@ export default function RecipesPage() {
       <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
         {status && !status.ai && (
           <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
-            {status.textModel
-              ? 'Recipe AI is not available.'
-              : 'No text model configured — add a chat model (not image-only) in Settings → AI & Chat.'}
+            No text model available for recipes — add a chat model (Anthropic, Gemini, or DeepSeek) in Settings → AI & Chat. Image models (FAL) are used only for dish photos, same as Graphics.
           </div>
         )}
 

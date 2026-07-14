@@ -53,10 +53,11 @@ Feature flag: **`recipes`** (Settings → Feature Access).
 
 | Step | Resolver | Settings key |
 |---|---|---|
-| Suggest + expand (text) | `getModelsForUser()` → **`standard`** | `default_model` / first in `vault_models` |
+| Suggest / tier preview (text) | `pickTextModel` → **`light`** (same tier as Video prompt expand) | `vault_models` chat models |
+| Expand full recipe (text) | `pickTextModel` → **`standard`** with fallbacks | `default_model` / `vault_models` |
 | Dish photo | **`graphicsImageService.generateImage()`** | **`graphics_model`** (Settings → AI & Chat) |
 
-No hardcoded model ids for text. Images reuse the same FAL endpoint and `graphics_model` as the Graphics app (`FAL_API_KEY` on Railway).
+Image and video generation models (`fal`, `replicate`, etc.) in `vault_models` are excluded from text routing — same rules as chat. Dish photos use **`graphics_model`**, identical to the Graphics app.
 
 ---
 
