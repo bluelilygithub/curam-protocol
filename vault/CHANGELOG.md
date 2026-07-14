@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-backfill)
+
+**Fix:** Auto-append Shopping search to first admin `vault_models` on boot and on model load when missing — existing workspaces no longer need Reset defaults.
+
+---
+
 ## 2026-07-14 (shopping-search-vault-model)
 
 **Fix:** Shopping search is a normal **vault_models** entry (provider `serper` or `serpapi`) in the AI Models list — same Add/Edit/Test/Key set pattern as FAL and chat models. Removed bespoke Shopping search selector card and inline list row.

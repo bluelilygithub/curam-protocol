@@ -160,6 +160,8 @@ async function start() {
   }
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
+  const { ensureShoppingSearchModelInVault } = require('./services/modelResolver');
+  await ensureShoppingSearchModelInVault().catch((err) => console.warn('[boot] shopping model backfill:', err.message));
   await initThemeBuilder().catch(err => console.warn('[theme-builder] init:', err.message));
   const { runStartupChecks } = require('./services/SuggestionService');
   runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));

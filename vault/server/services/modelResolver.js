@@ -19,6 +19,76 @@ function isSearchProvider(provider) {
   return ['serper', 'serpapi'].includes(String(provider || '').trim().toLowerCase());
 }
 
+const SHOPPING_SEARCH_MODEL = {
+  id: 'google-shopping',
+  name: 'Shopping search',
+  label: 'Recipes · Grocery',
+  emoji: '🛒',
+  tagline: 'Grocery prices',
+  desc: 'Google Shopping for Recipes Get prices — Coles & Woolworths. Set SERPER_SEARCH_API_KEY on Railway.',
+  provider: 'serper',
+};
+
+let shoppingEnsurePromise = null;
+
+function catalogHasShoppingModel(models) {
+  return Array.isArray(models) && models.some(
+    (m) => m && (m.provider === 'serper' || m.provider === 'serpapi'),
+  );
+}
+
+/** Append Shopping search to first admin vault_models if missing (existing workspaces). */
+async function ensureShoppingSearchModelInVault() {
+  if (shoppingEnsurePromise) return shoppingEnsurePromise;
+  shoppingEnsurePromise = (async () => {
+    try {
+      const { rows: adminRows } = await pool.query(
+        'SELECT id FROM users WHERE "isAdmin" = TRUE ORDER BY id ASC LIMIT 1',
+      );
+      const adminId = adminRows[0]?.id;
+      if (!adminId) return;
+
+      const { rows } = await pool.query(
+        'SELECT value FROM settings WHERE "userId"=$1 AND key=$2',
+        [adminId, 'vault_models'],
+      );
+
+      let models = [];
+      if (rows[0]?.value) {
+        try {
+          const parsed = JSON.parse(rows[0].value);
+          if (Array.isArray(parsed)) models = parsed;
+        } catch { /* ignore */ }
+      }
+
+      if (catalogHasShoppingModel(models)) return;
+
+      models.push({ ...SHOPPING_SEARCH_MODEL });
+      await pool.query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3)
+         ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+        [adminId, 'vault_models', JSON.stringify(models)],
+      );
+
+      const { rows: provRows } = await pool.query(
+        'SELECT value FROM settings WHERE "userId"=$1 AND key=$2',
+        [adminId, 'shopping_search_provider'],
+      );
+      if (!provRows[0]?.value?.trim()) {
+        await pool.query(
+          `INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3)
+           ON CONFLICT ("userId", key) DO NOTHING`,
+          [adminId, 'shopping_search_provider', 'serper'],
+        );
+      }
+    } catch (err) {
+      shoppingEnsurePromise = null;
+      console.warn('[modelResolver] ensureShoppingSearchModelInVault:', err.message);
+    }
+  })();
+  return shoppingEnsurePromise;
+}
+
 /** Non-chat entries in vault_models (image gen, shopping search, etc.). */
 function isNonTextModel(entry) {
   if (!entry) return false;
@@ -124,6 +194,7 @@ async function loadFirstAdminSettings() {
 
 /** User settings, else first admin's vault_models / default_model. */
 async function resolveVaultModelSettings(userId) {
+  await ensureShoppingSearchModelInVault();
   const userConfig = await loadSettingsForUser(userId);
   const userIds = parseConfiguredModelIds(userConfig.vault_models);
   if (userIds.length > 0) {
@@ -189,4 +260,11 @@ function pickTextModel(tiers, prefer = 'standard') {
   return chain.find(Boolean) || null;
 }
 
-module.exports = { getModelsForUser, getVaultModelsConfigForUser, pickTextModel, isNonTextModel };
+module.exports = {
+  getModelsForUser,
+  getVaultModelsConfigForUser,
+  pickTextModel,
+  isNonTextModel,
+  ensureShoppingSearchModelInVault,
+  SHOPPING_SEARCH_MODEL,
+};
