@@ -30,7 +30,7 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
 4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
-Requires **`SEARCH_API_KEY`** (Settings → Web search or Railway variable). Serper/SerpApi give real prices + retailer name via Google Shopping; Brave falls back to organic search only. Prices reflect the moment of search — always confirm in-store or in-app before buying.
+Requires **`SEARCH_API_KEY`** (Settings → Web search or Railway variable). **Serper or SerpApi strongly recommended for grocery prices** — they expose Google Shopping results with real retailer prices. **Brave Search** (web-only) can only match pages where a `$` price appears in the search snippet, so many ingredients will show "Not found" even when the store sells them.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 

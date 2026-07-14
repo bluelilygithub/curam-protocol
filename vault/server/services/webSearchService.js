@@ -112,15 +112,29 @@ async function webSearch(query, { num = 8 } = {}) {
 }
 
 /**
- * Parses an actual dollar price out of text. Requires a "$" immediately before the
- * number — never matches bare numbers like pack weights ("250g", "400ml") that happen
- * to appear in a product title or search snippet.
+ * Parses a dollar price from search text. Requires "$" (or "A$") before the amount,
+ * or an "X.XX each" pattern — never bare numbers like pack weights ("250g").
  */
 function parsePriceString(str) {
-  const match = String(str || '').match(/\$\s?(\d{1,4}(?:[.,]\d{2})?)/);
-  if (!match) return null;
-  const n = Number(match[1].replace(',', '.'));
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const text = String(str || '');
+  const dollar = text.match(/(?:A?\$)\s?(\d{1,3}(?:[.,]\d{2})?)/);
+  if (dollar) {
+    const n = Number(dollar[1].replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const each = text.match(/\b(\d{1,2}\.\d{2})\s*(?:each|ea)\b/i);
+  if (each) {
+    const n = Number(each[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/** Dedicated price field from shopping APIs — must look like currency (≤2 digits before decimal). */
+function parseShoppingPrice(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'number' && Number.isFinite(val) && val > 0 && val < 1000) return val;
+  return parsePriceString(String(val));
 }
 
 /**
@@ -161,7 +175,7 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
     return (data.shopping || []).slice(0, num).map((r) => ({
       title: r.title || '',
       source: r.source || '',
-      price: parsePriceString(r.price),
+      price: parseShoppingPrice(r.price),
       url: r.link || r.productLink || null,
       image: r.imageUrl || null,
     })).filter((r) => r.title);
@@ -174,7 +188,7 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
     return (data.shopping_results || []).slice(0, num).map((r) => ({
       title: r.title || '',
       source: r.source || '',
-      price: Number.isFinite(Number(r.extracted_price)) ? Number(r.extracted_price) : parsePriceString(r.price),
+      price: Number.isFinite(Number(r.extracted_price)) ? Number(r.extracted_price) : parseShoppingPrice(r.price),
       url: r.product_link || r.link || null,
       image: r.thumbnail || null,
     })).filter((r) => r.title);
@@ -183,4 +197,4 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
   return null;
 }
 
-module.exports = { webSearch, shoppingSearch, parsePriceString, getSearchConfig };
+module.exports = { webSearch, shoppingSearch, parsePriceString, parseShoppingPrice, getSearchConfig };

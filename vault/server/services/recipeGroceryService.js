@@ -13,12 +13,71 @@ const STORE_MATCH = {
   woolworths: (s) => s.includes('woolworths') || s.includes('woolies'),
 };
 
-// Real Coles/Woolworths product-page URL shapes. Anything else indexed on their domain
-// (recipe pages, "how to" guides, category listings) is not a priced product page.
+// Prefer real product pages when present, but don't require them — Brave/organic search
+// rarely returns indexed product URLs, so we reject bad pages instead of demanding good ones.
 const PRODUCT_URL_PATTERN = {
   coles: /coles\.com\.au\/product\//i,
   woolworths: /woolworths\.com\.au\/shop\/productdetails\//i,
 };
+
+const REJECT_URL_PATTERN = /\/(recipe|recipes|how-to|howto|inspire|ideas|magazine|tips|productlist|catalog\/)/i;
+
+function searchTermVariants(term) {
+  const variants = [term];
+  const words = String(term || '').split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    variants.push(words.slice(-2).join(' '));
+    const last = words[words.length - 1];
+    if (last.length >= 3) variants.push(last);
+  }
+  return [...new Set(variants)].slice(0, 3);
+}
+
+function isRejectedUrl(url) {
+  return REJECT_URL_PATTERN.test(String(url || ''));
+}
+
+function matchesStore(storeId, source, url) {
+  const src = String(source || '').toLowerCase();
+  const u = String(url || '').toLowerCase();
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain || '';
+  return STORE_MATCH[storeId](src) || (domain && u.includes(domain));
+}
+
+function extractPriceFromResult(r) {
+  const combined = `${r?.title || ''} ${r?.snippet || ''}`;
+  return parsePriceString(r?.title) || parsePriceString(r?.snippet) || parsePriceString(combined);
+}
+
+function pickFromOrganicResults(results, term, storeId) {
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  const productPattern = PRODUCT_URL_PATTERN[storeId];
+  const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  const candidates = [];
+
+  for (const r of results) {
+    const url = r.url || '';
+    if (!domain || !url.includes(domain)) continue;
+    if (isRejectedUrl(url)) continue;
+    const price = extractPriceFromResult(r);
+    if (!price || price > MAX_PLAUSIBLE_ITEM_PRICE) continue;
+    const isProduct = productPattern?.test(url);
+    const text = `${r.title || ''} ${r.snippet || ''}`;
+    if (!isRelevantMatch(term, text, { isProduct })) continue;
+    candidates.push({ r, price, isProduct });
+  }
+
+  candidates.sort((a, b) => b.isProduct - a.isProduct);
+  if (!candidates.length) return null;
+  const { r, price } = candidates[0];
+  return {
+    product: r.title,
+    price,
+    url: r.url,
+    source: label,
+    confidence: 'sourced',
+  };
+}
 
 // Only ever split on newlines. Recipe ingredient text routinely contains internal commas
 // (e.g. "1 can (400g), drained and rinsed cooked beans (e.g. black or kidney)") — splitting
@@ -49,6 +108,7 @@ function formatRecipeIngredients(ingredients) {
 const FILLER_PHRASES = [
   'to taste', 'adjust to taste', 'drained and rinsed', 'e\\.g\\.', 'eg\\.',
   'finely', 'roughly', 'freshly', 'optional', 'for garnish', 'as needed',
+  'preferably', 'day-old', 'day old', 'skin removed', 'shredded', 'zested', 'about',
 ];
 const CONTAINER_WORDS = ['can', 'cans', 'jar', 'jars', 'packet', 'packets', 'pkt', 'bottle', 'bottles', 'bunch', 'bunches', 'clove', 'cloves', 'large', 'small', 'medium'];
 
@@ -70,22 +130,22 @@ function ingredientSearchTerm(line) {
 
 const STOPWORDS = new Set(['and', 'or', 'the', 'with', 'for', 'from', 'into', 'fresh', 'sliced', 'chopped', 'cooked', 'ground']);
 
-/** Significant words (4+ letters, not a stopword) used to sanity-check a product match. */
-function significantTokens(term) {
+/** Significant words used to sanity-check a product match. Shorter min on product pages. */
+function significantTokens(term, { minLen = 4 } = {}) {
   return String(term || '')
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+    .filter((w) => w.length >= minLen && !STOPWORDS.has(w));
 }
 
-// Collapses doubled letters so US/AU spelling variants match ("chili" vs "chilli", "yogurt" vs "yoghurt"-adjacent cases).
+// Collapses doubled letters so US/AU spelling variants match ("chili" vs "chilli").
 function collapseRepeatedLetters(s) {
   return String(s || '').toLowerCase().replace(/(.)\1+/g, '$1');
 }
 
-/** Guards against matches like "chili" -> screwdriver set just because some number appeared nearby. */
-function isRelevantMatch(term, title) {
-  const tokens = significantTokens(term);
+function isRelevantMatch(term, title, { isProduct = false } = {}) {
+  const minLen = isProduct ? 3 : 4;
+  const tokens = significantTokens(term, { minLen });
   if (!tokens.length) return true;
   const t = collapseRepeatedLetters(title);
   return tokens.some((tok) => t.includes(collapseRepeatedLetters(tok)));
@@ -100,61 +160,63 @@ function storeSearchUrl(storeId, term) {
     : `https://www.woolworths.com.au/shop/search/products?searchTerm=${encoded}`;
 }
 
-/** Google Shopping AU results, filtered to the two chains we care about. */
-async function findViaShopping(term) {
-  const found = {};
-  try {
-    const results = await shoppingSearch(`${term} australia`, { num: 20 });
-    if (!Array.isArray(results)) return found;
-    for (const r of results) {
-      const src = String(r.source || '').toLowerCase();
-      if (!r.price || r.price > MAX_PLAUSIBLE_ITEM_PRICE || !isRelevantMatch(term, r.title)) continue;
-      for (const storeId of STORE_IDS) {
-        if (found[storeId]) continue;
-        if (STORE_MATCH[storeId](src)) {
-          found[storeId] = {
-            product: r.title,
-            price: r.price,
-            url: r.url,
-            source: r.source || AU_STORES.find((s) => s.id === storeId)?.label,
-            confidence: 'sourced',
-          };
-        }
-      }
-    }
-  } catch { /* provider may not support shopping search */ }
-  return found;
-}
-
-/**
- * Fallback: site-restricted search for an actual product page. Google indexes far more
- * recipe/guide pages than product pages on supermarket domains, so a matched result must
- * (a) look like a real product-page URL, (b) contain a genuine "$" price, and
- * (c) be topically relevant to the ingredient — otherwise it's discarded rather than
- * returning a confident-looking but meaningless number.
- */
-async function findViaOrganic(storeId, term) {
-  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
-  const urlPattern = PRODUCT_URL_PATTERN[storeId];
-  if (!domain) return null;
-  try {
-    const results = await webSearch(`${term} site:${domain}`, { num: 8 });
-    for (const r of results) {
-      if (urlPattern && !urlPattern.test(r.url || '')) continue;
-      if (!isRelevantMatch(term, r.title)) continue;
-      const price = parsePriceString(r.title) || parsePriceString(r.snippet);
-      if (price && price <= MAX_PLAUSIBLE_ITEM_PRICE) {
+/** Google Shopping — Serper/SerpApi only. Matches store by retailer name or product URL domain. */
+async function findViaShopping(storeId, term) {
+  const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  for (const variant of searchTermVariants(term)) {
+    try {
+      const results = await shoppingSearch(`${variant} ${label}`, { num: 15 });
+      if (!Array.isArray(results)) continue;
+      for (const r of results) {
+        if (!r.price || r.price > MAX_PLAUSIBLE_ITEM_PRICE) continue;
+        if (!matchesStore(storeId, r.source, r.url)) continue;
+        if (!isRelevantMatch(variant, r.title)) continue;
         return {
           product: r.title,
-          price,
+          price: r.price,
           url: r.url,
-          source: AU_STORES.find((s) => s.id === storeId)?.label,
+          source: r.source || label,
           confidence: 'sourced',
         };
       }
-    }
-  } catch { /* search unavailable */ }
+    } catch { /* shopping API unavailable */ }
+  }
   return null;
+}
+
+/** Site-restricted web search — works with Brave, Serper, and SerpApi. */
+async function findViaOrganic(storeId, term) {
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  if (!domain) return null;
+
+  for (const variant of searchTermVariants(term)) {
+    const productPath = storeId === 'coles' ? 'site:coles.com.au/product/' : 'site:woolworths.com.au/shop/productdetails/';
+    const queries = [
+      `${variant} ${productPath}`,
+      `${variant} price site:${domain}`,
+      `${variant} site:${domain}`,
+      `buy ${variant} site:${domain}`,
+    ];
+    for (const q of queries) {
+      try {
+        const results = await webSearch(q, { num: 8 });
+        const hit = pickFromOrganicResults(results, variant, storeId);
+        if (hit) return hit;
+      } catch { /* continue */ }
+    }
+  }
+
+  try {
+    const results = await webSearch(`${term} ${label} australia price`, { num: 10 });
+    return pickFromOrganicResults(results, term, storeId);
+  } catch { /* search unavailable */ }
+
+  return null;
+}
+
+async function findForStore(storeId, term) {
+  return (await findViaShopping(storeId, term)) || (await findViaOrganic(storeId, term));
 }
 
 async function findStorePrices(line) {
@@ -162,13 +224,9 @@ async function findStorePrices(line) {
   const result = { coles: null, woolworths: null };
   if (!term) return result;
 
-  const viaShopping = await findViaShopping(term);
-  result.coles = viaShopping.coles || null;
-  result.woolworths = viaShopping.woolworths || null;
-
   await Promise.all(
-    STORE_IDS.filter((id) => !result[id]).map(async (id) => {
-      result[id] = await findViaOrganic(id, term);
+    STORE_IDS.map(async (id) => {
+      result[id] = await findForStore(id, term);
     })
   );
 
@@ -237,8 +295,9 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   if (!lines.length) throw new Error('List at least one ingredient to price');
 
   let searchAvailable = true;
+  let searchProvider = null;
   try {
-    await getSearchConfig();
+    ({ provider: searchProvider } = await getSearchConfig());
   } catch {
     searchAvailable = false;
   }
@@ -273,6 +332,15 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
 
   const foundCount = items.filter((row) => row.coles.price || row.woolworths.price).length;
 
+  let liveFetchNote = null;
+  if (searchAvailable && foundCount === 0) {
+    liveFetchNote = searchProvider === 'brave'
+      ? 'Brave Search has no shopping index — only pages with a visible $ price in the search snippet can be matched. Serper or SerpApi in Settings give better grocery results.'
+      : 'No product listings matched — try simpler ingredient names, or use the store links to search manually.';
+  } else if (searchAvailable && foundCount < items.length) {
+    liveFetchNote = `Found prices for ${foundCount} of ${items.length} items — the rest need a manual store search.`;
+  }
+
   return {
     disclaimer: searchAvailable
       ? 'Prices sourced from live product search results — confirm in-app or in-store before you buy, as prices and stock change.'
@@ -280,18 +348,13 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     currency: 'AUD',
     sourced: true,
     searchAvailable,
+    searchProvider,
     stores: AU_STORES,
     ingredients: lines,
     items,
     totals: computeTotals(items),
     missingPrices: items.filter((row) => !row.coles.price && !row.woolworths.price).map((r) => r.ingredient),
-    liveFetchNote: !searchAvailable
-      ? null
-      : foundCount === 0
-        ? 'No product listings matched — try simpler ingredient names, or use the store links to search manually.'
-        : foundCount < items.length
-          ? `Found prices for ${foundCount} of ${items.length} items — the rest need a manual store search.`
-          : null,
+    liveFetchNote,
   };
 }
 
