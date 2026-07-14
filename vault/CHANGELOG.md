@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-model-list-row)
+
+**Fix:** Shopping search appears as a row in the **AI Models** list (same bordered div as Claude/Gemini/FAL) with key status and provider select — not a separate section or selector card. Removed invented **Testing APIs** section; **Test** restored on model rows.
+
+---
+
 ## 2026-07-14 (testing-apis-section)
 
 **UX:** Settings → AI & Chat — model **Test** buttons and **Shopping search** moved into **Testing APIs** section (below AI Models list). Model list is configure-only (key status, Edit, Delete).

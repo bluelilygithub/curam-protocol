@@ -348,7 +348,7 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   return {
     disclaimer: searchAvailable
       ? 'Prices sourced from live product search results — confirm in-app or in-store before you buy, as prices and stock change.'
-      : 'Add SERPER_SEARCH_API_KEY on Railway — Settings → AI & Chat shows key status.',
+      : 'Add SERPER_SEARCH_API_KEY on Railway — key status on Shopping search row in Settings → AI & Chat → AI Models.',
     currency: 'AUD',
     sourced: true,
     searchAvailable,
