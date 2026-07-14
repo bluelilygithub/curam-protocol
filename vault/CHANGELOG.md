@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-ai-chat-tab)
+
+**UX:** Moved Serper shopping search key from Integrations to **Settings → AI & Chat → Shopping search** (admin).
+
+---
+
 ## 2026-07-14 (shopping-search-settings-ui)
 
 **Feature:** Admin **Settings → Integrations → Recipes — shopping prices** — save/clear Serper API key (`SERPER_SEARCH_API_KEY`) in workspace settings. Railway env var still overrides. Backend reads workspace_settings for grocery lookups.
