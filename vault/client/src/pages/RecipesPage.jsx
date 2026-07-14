@@ -185,7 +185,8 @@ const GROCERY_STORES = ['coles', 'woolworths'];
 const STORE_LABELS = { coles: 'Coles', woolworths: 'Woolworths' };
 
 function formatStorePrice(cell) {
-  if (cell?.recipePrice != null) return `$${cell.recipePrice.toFixed(2)}`;
+  if (cell?.recipePrice != null) return cell.recipePriceLabel;
+  if (cell?.checkoutPrice != null) return cell.checkoutPriceLabel;
   if (!cell?.price) return 'Not found';
   return `$${cell.price.toFixed(2)}`;
 }
@@ -289,12 +290,19 @@ function GroceryPriceResults({ result }) {
                   const isCheapest = row.cheapestStore === store && (cell?.recipePrice ?? cell?.price) != null;
                   return (
                     <td key={store} className="p-2 text-right align-top" style={{ color: isCheapest ? 'var(--color-primary)' : 'var(--color-muted)' }}>
-                      <span className="font-medium">{formatStorePrice(cell)}</span>
+                      {cell?.recipePrice != null ? (
+                        <>
+                          <span className="font-medium">{cell.recipePriceLabel}</span>
+                          <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>recipe qty</span>
+                        </>
+                      ) : (
+                        <span className="font-medium">{formatStorePrice(cell)}</span>
+                      )}
+                      {cell?.checkoutPrice != null && cell?.recipePrice != null && (
+                        <span className="block text-[10px] mt-0.5">Pack {cell.checkoutPriceLabel}{cell.packSizeLabel ? ` · ${cell.packSizeLabel}` : ''}</span>
+                      )}
                       {cell?.priceNote && (
                         <span className="block text-[10px] mt-0.5">{cell.priceNote}</span>
-                      )}
-                      {cell?.checkoutPrice != null && cell.checkoutPrice !== cell.recipePrice && (
-                        <span className="block text-[10px] mt-0.5">Pack {cell.checkoutPriceLabel}</span>
                       )}
                       {cell?.product && (
                         <span className="block text-[10px] mt-0.5 line-clamp-2">{cell.product}</span>

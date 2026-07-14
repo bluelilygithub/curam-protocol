@@ -375,6 +375,14 @@ function parseFraction(str) {
   return Number.isFinite(n) ? n : null;
 }
 
+function parseQuantityFromIngredient(ing) {
+  if (!ing || typeof ing !== 'object') return null;
+  const amount = String(ing.amount || '').trim();
+  const item = String(ing.item || ing.name || '').trim();
+  if (!amount) return null;
+  return parseQuantityFromLine(`${amount} ${item}`.trim());
+}
+
 /** Recipe quantity needed — grams, ml, or count. */
 function parseQuantityFromLine(line) {
   const s = String(line || '').trim();
@@ -384,7 +392,7 @@ function parseQuantityFromLine(line) {
     if (val != null) return normalizeQuantity(val, paren[2]);
   }
 
-  const measure = s.match(/(\d+(?:\.\d+)?|\d+\/\d+)\s*(kg|g|ml|l|litre|liters|L|cup|cups|tbsp|tablespoons?|tsp|teaspoons?|clove|cloves|pcs?|each|bunch|can|cans|jar|packet|pkt|bottle|loaf|slice|slices|pinch)?/i);
+  const measure = s.match(/(\d+(?:\.\d+)?|\d+\/\d+)\s*(kg|g|ml|mL|l|litre|liters|L|cup|cups|tbsp|tablespoons?|tsp|teaspoons?|clove|cloves|pcs?|each|bunch|can|cans|jar|packet|pkt|bottle|loaf|slice|slices|pinch)?/i);
   if (measure) {
     const val = parseFraction(measure[1]);
     if (val != null) return normalizeQuantity(val, measure[2] || 'each');
@@ -406,79 +414,134 @@ function normalizeQuantity(value, unitRaw) {
   return { kind: 'count', value, unit: 'each', label: `${value}` };
 }
 
+const DEFAULT_PACK_BY_TERM = [
+  { test: /\bmilk\b/, pack: { kind: 'volume', value: 2000, unit: 'ml', label: '2L', estimated: true } },
+  { test: /\bcream\b/, pack: { kind: 'volume', value: 300, unit: 'ml', label: '300ml', estimated: true } },
+  { test: /\bbutter\b/, pack: { kind: 'mass', value: 500, unit: 'g', label: '500g', estimated: true } },
+  { test: /\bsalt\b/, pack: { kind: 'mass', value: 500, unit: 'g', label: '500g', estimated: true } },
+  { test: /\b(flour|sugar|rice)\b/, pack: { kind: 'mass', value: 1000, unit: 'g', label: '1kg', estimated: true } },
+  { test: /\b(chicken|beef|pork|lamb|mince)\b/, pack: { kind: 'mass', value: 500, unit: 'g', label: '500g', estimated: true } },
+  { test: /\begg/, pack: { kind: 'count', value: 12, unit: 'each', label: '12 eggs', estimated: true } },
+];
+
+function inferDefaultPackSize(spec) {
+  const term = `${spec?.term || ''} ${spec?.raw || ''}`.toLowerCase();
+  for (const row of DEFAULT_PACK_BY_TERM) {
+    if (row.test.test(term)) return { ...row.pack };
+  }
+  return null;
+}
+
+/** Convert tsp/cup of salt, flour, etc. to grams so we can compare to a g pack. */
+function normalizeNeededForPack(needed, spec) {
+  if (!needed) return null;
+  const term = `${spec?.term || ''} ${spec?.raw || ''}`.toLowerCase();
+  if (needed.kind === 'volume' && needed.unit === 'ml') {
+    if (/\bsalt\b/.test(term)) {
+      const grams = Math.max(1, Math.round(needed.value * 1.2));
+      return { kind: 'mass', value: grams, unit: 'g', label: `${needed.label} (~${grams}g)` };
+    }
+    if (/\bflour\b/.test(term)) {
+      const grams = Math.max(1, Math.round(needed.value * 0.5));
+      return { kind: 'mass', value: grams, unit: 'g', label: `${needed.label} (~${grams}g)` };
+    }
+    if (/\bsugar\b/.test(term)) {
+      const grams = Math.max(1, Math.round(needed.value * 0.85));
+      return { kind: 'mass', value: grams, unit: 'g', label: `${needed.label} (~${grams}g)` };
+    }
+  }
+  return needed;
+}
+
 function parsePackSizeFromTitle(title) {
   const t = String(title || '').toLowerCase();
+  const found = [];
 
-  const multi = t.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|litre|liters)\b/);
-  if (multi) {
-    const per = normalizeQuantity(parseFloat(multi[2]), multi[3]);
-    return { ...per, value: per.value * parseInt(multi[1], 10), label: `${multi[1]}×${multi[2]}${multi[3]}` };
+  for (const m of t.matchAll(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|litre|liters|millilitre|millilitres)\b/g)) {
+    const per = normalizeQuantity(parseFloat(m[2]), m[3]);
+    found.push({ ...per, value: per.value * parseInt(m[1], 10), label: `${m[1]}×${m[2]}${m[3]}` });
   }
 
-  const patterns = [
-    /(\d+(?:\.\d+)?)\s*(kg|g)\b/,
-    /(\d+(?:\.\d+)?)\s*(l|litre|liters|ml)\b/,
-    /(\d+)\s*(?:pk|pack)\b/,
-    /(\d+)\s*each\b/,
-  ];
-
-  for (const re of patterns) {
-    const m = t.match(re);
-    if (!m) continue;
-    if (re.source.includes('pk|pack')) {
-      return { kind: 'count', value: parseInt(m[1], 10), unit: 'each', label: `${m[1]} pack` };
-    }
-    if (re.source.includes('each')) {
-      return { kind: 'count', value: 1, unit: 'each', label: '1 each' };
-    }
-    return normalizeQuantity(parseFloat(m[1]), m[2]);
+  for (const m of t.matchAll(/(\d+(?:\.\d+)?)\s*(kg|g)\b/g)) {
+    found.push(normalizeQuantity(parseFloat(m[1]), m[2]));
   }
 
-  return null;
+  for (const m of t.matchAll(/(\d+(?:\.\d+)?)\s*(l|litre|liters|litres|millilitre|millilitres|ml|mL)\b/g)) {
+    found.push(normalizeQuantity(parseFloat(m[1]), m[2]));
+  }
+
+  for (const m of t.matchAll(/(\d+(?:\.\d+)?)(l|ml)\b/g)) {
+    found.push(normalizeQuantity(parseFloat(m[1]), m[2]));
+  }
+
+  const countPack = t.match(/\b(\d+)\s*(?:pk|pack|eggs?)\b/);
+  if (countPack) {
+    found.push({ kind: 'count', value: parseInt(countPack[1], 10), unit: 'each', label: `${countPack[1]} pack` });
+  }
+
+  if (!found.length) return null;
+  return found.sort((a, b) => b.value - a.value)[0];
+}
+
+function resolvePackSize(title, spec) {
+  return parsePackSizeFromTitle(title) || inferDefaultPackSize(spec);
 }
 
 function quantitiesCompatible(needed, pack) {
   if (!needed || !pack) return false;
   if (needed.kind === pack.kind) return true;
-  if (needed.kind === 'count' && pack.kind === 'count') return true;
   return false;
 }
 
-function enrichCellWithQuantity(cell, line) {
+function computeProportionalPrices(packPrice, needed, pack) {
+  const ratio = needed.value / pack.value;
+  const recipePrice = Math.round(packPrice * ratio * 100) / 100;
+  const checkoutPrice = ratio > 1
+    ? Math.round(Math.ceil(ratio) * packPrice * 100) / 100
+    : packPrice;
+  return { ratio, recipePrice, checkoutPrice };
+}
+
+function enrichCellWithQuantity(cell, line, { needed: neededOverride, spec: specOverride } = {}) {
   if (!cell || cell.price == null) return cell;
 
-  const needed = parseQuantityFromLine(line);
-  const pack = parsePackSizeFromTitle(cell.product);
+  const spec = specOverride || buildProductSpec(line);
+  const neededRaw = neededOverride || parseQuantityFromLine(line);
+  const needed = normalizeNeededForPack(neededRaw, spec);
+  let pack = resolvePackSize(cell.product, spec);
+  const packEstimated = !!pack?.estimated;
 
-  cell.quantityNeeded = needed;
+  cell.quantityNeeded = neededRaw || needed;
   cell.packSize = pack;
 
   if (needed && pack && quantitiesCompatible(needed, pack) && pack.value > 0) {
-    const ratio = needed.value / pack.value;
-    cell.recipePrice = Math.round(cell.price * ratio * 100) / 100;
-    cell.recipePriceLabel = `$${cell.recipePrice.toFixed(2)}`;
+    const { ratio, recipePrice, checkoutPrice } = computeProportionalPrices(cell.price, needed, pack);
+    cell.recipePrice = recipePrice;
+    cell.recipePriceLabel = `$${recipePrice.toFixed(2)}`;
     cell.quantityLabel = needed.label;
     cell.packSizeLabel = pack.label;
-    cell.checkoutPrice = ratio > 1
-      ? Math.round(Math.ceil(ratio) * cell.price * 100) / 100
-      : cell.price;
-    cell.checkoutPriceLabel = `$${cell.checkoutPrice.toFixed(2)}`;
+    cell.checkoutPrice = checkoutPrice;
+    cell.checkoutPriceLabel = `$${checkoutPrice.toFixed(2)}`;
+    cell.proportional = ratio < 0.999 || ratio > 1.001;
+    const est = packEstimated ? ' (est. pack)' : '';
     cell.priceNote = ratio <= 1
-      ? `${needed.label} of ${pack.label} pack`
-      : `${needed.label} · ${Math.ceil(ratio)} pack(s)`;
+      ? `${needed.label} of ${pack.label}${est}`
+      : `${needed.label} · ${Math.ceil(ratio)} pack(s)${est}`;
   } else if (needed) {
-    cell.recipePrice = cell.price;
-    cell.recipePriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.recipePrice = null;
+    cell.recipePriceLabel = null;
     cell.quantityLabel = needed.label;
     cell.checkoutPrice = cell.price;
     cell.checkoutPriceLabel = `$${cell.price.toFixed(2)}`;
-    cell.priceNote = pack ? null : `Full pack (size not parsed)`;
+    cell.proportional = false;
+    cell.priceNote = pack ? 'Units not comparable — pack price only' : 'Pack size unknown — pack price only';
   } else {
-    cell.recipePrice = cell.price;
-    cell.recipePriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.recipePrice = null;
+    cell.recipePriceLabel = null;
     cell.checkoutPrice = cell.price;
     cell.checkoutPriceLabel = `$${cell.price.toFixed(2)}`;
-    cell.priceNote = 'Full pack';
+    cell.proportional = false;
+    cell.priceNote = 'Add quantity to ingredient for recipe cost';
   }
 
   return cell;
@@ -593,13 +656,12 @@ function computeTotals(items) {
     for (const row of items) {
       const c = row[store];
       const checkout = c?.checkoutPrice ?? c?.price;
-      const recipe = c?.recipePrice ?? c?.price;
       if (checkout != null && checkout > 0) {
         basketSum += checkout;
         priced += 1;
       }
-      if (recipe != null && recipe > 0) {
-        recipeSum += recipe;
+      if (c?.recipePrice != null && c.recipePrice > 0) {
+        recipeSum += c.recipePrice;
         recipePriced += 1;
       }
     }
@@ -678,23 +740,26 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
       };
     });
   } else {
-    items = await mapWithConcurrency(lines, 3, async (line) => {
-      const term = ingredientSearchTerm(line);
-      const qty = parseQuantityFromLine(line);
+    const lineEntries = lines.map((line, idx) => ({ line, idx }));
+    items = await mapWithConcurrency(lineEntries, 3, async ({ line, idx }) => {
+      const spec = buildProductSpec(line);
+      const needed = parseQuantityFromIngredient(recipeIngredients?.[idx]) || parseQuantityFromLine(line);
+      const qtyLabel = needed?.label || null;
+      const ctx = { needed, spec };
       const found = await findMatchedStorePrices(line);
-      const coles = enrichCellWithQuantity(found.coles || emptyStoreCell('coles', term), line);
-      const woolworths = enrichCellWithQuantity(found.woolworths || emptyStoreCell('woolworths', term), line);
+      const coles = enrichCellWithQuantity(found.coles || emptyStoreCell('coles', spec.term), line, ctx);
+      const woolworths = enrichCellWithQuantity(found.woolworths || emptyStoreCell('woolworths', spec.term), line, ctx);
 
       let cheapestStore = null;
       let min = Infinity;
       for (const [storeId, cell] of [['coles', coles], ['woolworths', woolworths]]) {
-        const p = cell.recipePrice ?? cell.price;
+        const p = cell.recipePrice ?? cell.checkoutPrice ?? cell.price;
         if (p != null && p < min) { min = p; cheapestStore = storeId; }
       }
 
       return {
         ingredient: line,
-        quantity: qty?.label || null,
+        quantity: qtyLabel,
         matched: found.matched,
         coles,
         woolworths,
@@ -742,6 +807,7 @@ module.exports = {
   buildProductSpec,
   parseQuantityFromLine,
   parsePackSizeFromTitle,
+  parseQuantityFromIngredient,
   pickLikeForLikePair,
   scoreProduct,
 };
