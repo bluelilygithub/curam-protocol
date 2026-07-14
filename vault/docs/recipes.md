@@ -30,7 +30,7 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
 4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
-Requires **`SEARCH_API_KEY`** (Settings → Web search or Railway variable). **Serper or SerpApi strongly recommended for grocery prices** — they expose Google Shopping results with real retailer prices. **Brave Search** (web-only) can only match pages where a `$` price appears in the search snippet, so many ingredients will show "Not found" even when the store sells them.
+Requires **`SERPER_SEARCH_API_KEY`** (Railway or Settings) for grocery prices — uses Serper Google Shopping while **`SEARCH_API_KEY`** (e.g. Brave) can stay for chat `@search`. Alternatively set a Serper key as `SEARCH_API_KEY` with `SEARCH_PROVIDER=serper`.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 
@@ -77,7 +77,8 @@ Image and video generation models (`fal`, `replicate`, etc.) in `vault_models` a
 |---|---|
 | `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` | Recipe suggest + expand |
 | `FAL_API_KEY` | Dish image generation (via Graphics model routing) |
-| `SEARCH_API_KEY` | Video/article links on expand, **and required for grocery prices** (Brave/Serper/SerpAPI via `webSearchService`). Serper/SerpApi enable real Google Shopping prices; Brave is organic-search-only fallback. |
+| `SEARCH_API_KEY` | Video/article links on expand (Brave/Serper/SerpAPI via `webSearchService`) |
+| `SERPER_SEARCH_API_KEY` | **Grocery prices** — Serper Google Shopping (recommended; separate from chat search key) |
 
 Dish images use **`graphics_model`** from Settings → AI & Chat (same as the Graphics app), not a separate recipe model.
 

@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (serper-grocery-key)
+
+**Fix:** Grocery prices now read **`SERPER_SEARCH_API_KEY`** (Railway env or Settings) for Serper Google Shopping, separate from **`SEARCH_API_KEY`** (Brave can stay for chat `@search`).
+
+---
+
 ## 2026-07-14 (recipes-grocery-brave-fallback)
 
 **Fix:** Grocery prices returned 0/N after matching hardening — organic fallback had required indexed product-page URLs (rare via Brave) and `$` parsing was too strict. Now rejects recipe/guide URLs instead of requiring product URLs, tries multiple query variants per ingredient (`site:`, `inurl:product`, `buy`, store name), matches shopping results by URL domain as well as retailer name, and surfaces a clear note when **Brave Search** (no shopping index) cannot find `$` prices in snippets. **Serper/SerpApi recommended** for reliable grocery pricing.

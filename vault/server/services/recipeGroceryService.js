@@ -200,7 +200,7 @@ async function findViaOrganic(storeId, term) {
     ];
     for (const q of queries) {
       try {
-        const results = await webSearch(q, { num: 8 });
+        const results = await webSearch(q, { num: 8, preferSerper: true });
         const hit = pickFromOrganicResults(results, variant, storeId);
         if (hit) return hit;
       } catch { /* continue */ }
@@ -208,7 +208,7 @@ async function findViaOrganic(storeId, term) {
   }
 
   try {
-    const results = await webSearch(`${term} ${label} australia price`, { num: 10 });
+    const results = await webSearch(`${term} ${label} australia price`, { num: 10, preferSerper: true });
     return pickFromOrganicResults(results, term, storeId);
   } catch { /* search unavailable */ }
 
@@ -297,9 +297,13 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   let searchAvailable = true;
   let searchProvider = null;
   try {
-    ({ provider: searchProvider } = await getSearchConfig());
+    ({ provider: searchProvider } = await getSearchConfig({ preferSerper: true }));
   } catch {
-    searchAvailable = false;
+    try {
+      ({ provider: searchProvider } = await getSearchConfig());
+    } catch {
+      searchAvailable = false;
+    }
   }
 
   let items;
@@ -344,7 +348,7 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   return {
     disclaimer: searchAvailable
       ? 'Prices sourced from live product search results — confirm in-app or in-store before you buy, as prices and stock change.'
-      : 'Add SEARCH_API_KEY in Settings → Web search to look up real prices. Use the store links below to check manually.',
+      : 'Add SERPER_SEARCH_API_KEY (or SEARCH_API_KEY) in Railway / Settings → Web search to look up prices.',
     currency: 'AUD',
     sourced: true,
     searchAvailable,

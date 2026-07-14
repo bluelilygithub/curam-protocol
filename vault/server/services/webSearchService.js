@@ -23,19 +23,44 @@ function fetchJson(url, extraHeaders = {}) {
   });
 }
 
-async function getSearchConfig() {
+async function loadSetting(key) {
+  try {
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key=$1', [key]);
+    return rows[0]?.value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {{ preferSerper?: boolean }} [opts]
+ * preferSerper — use SERPER_SEARCH_API_KEY (Railway env or Settings) for grocery/shopping lookups
+ * while leaving SEARCH_API_KEY (e.g. Brave) for general chat @search.
+ */
+async function getSearchConfig({ preferSerper = false } = {}) {
   if (runtimeConfig.disableWebSearch) {
     throw new Error('Web search is disabled (DISABLE_WEB_SEARCH).');
   }
+
+  if (preferSerper) {
+    const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
+      || await loadSetting('SERPER_SEARCH_API_KEY');
+    if (serperKey) {
+      return { apiKey: serperKey, provider: 'serper' };
+    }
+  }
+
   let apiKey = process.env.SEARCH_API_KEY;
   let provider = (process.env.SEARCH_PROVIDER || '').toLowerCase();
-  try {
-    const { rows: keyRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_API_KEY'");
-    if (keyRows[0]?.value) apiKey = keyRows[0].value;
-    const { rows: provRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_PROVIDER'");
-    if (provRows[0]?.value) provider = provRows[0].value.toLowerCase();
-  } catch { /* env only */ }
+  const settingsKey = await loadSetting('SEARCH_API_KEY');
+  if (settingsKey) apiKey = settingsKey;
+  const settingsProvider = await loadSetting('SEARCH_PROVIDER');
+  if (settingsProvider) provider = settingsProvider.toLowerCase();
+
   if (!apiKey?.trim()) {
+    if (preferSerper) {
+      throw new Error('SERPER_SEARCH_API_KEY not configured — add in Railway or Settings for grocery prices.');
+    }
     throw new Error('SEARCH_API_KEY not configured — add in Settings or Railway variables.');
   }
   if (!provider) {
@@ -46,13 +71,22 @@ async function getSearchConfig() {
   return { apiKey: apiKey.trim(), provider };
 }
 
+async function isSearchConfigured({ preferSerper = false } = {}) {
+  try {
+    await getSearchConfig({ preferSerper });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {string} query
  * @param {{ num?: number }} [opts]
  * @returns {Promise<Array<{title:string,url:string,snippet:string}>>}
  */
-async function webSearch(query, { num = 8 } = {}) {
-  const { apiKey, provider } = await getSearchConfig();
+async function webSearch(query, { num = 8, preferSerper = false } = {}) {
+  const { apiKey, provider } = await getSearchConfig({ preferSerper });
   const encoded = encodeURIComponent(query.trim());
 
   if (provider === 'brave') {
@@ -144,7 +178,7 @@ function parseShoppingPrice(val) {
  * @returns {Promise<Array<{title:string,source:string,price:number|null,url:string,image?:string}>|null>}
  */
 async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
-  const { apiKey, provider } = await getSearchConfig();
+  const { apiKey, provider } = await getSearchConfig({ preferSerper: true });
   const encoded = encodeURIComponent(query.trim());
 
   if (provider === 'serper') {
@@ -197,4 +231,4 @@ async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
   return null;
 }
 
-module.exports = { webSearch, shoppingSearch, parsePriceString, parseShoppingPrice, getSearchConfig };
+module.exports = { webSearch, shoppingSearch, parsePriceString, parseShoppingPrice, getSearchConfig, isSearchConfigured };

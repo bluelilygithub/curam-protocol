@@ -5,7 +5,7 @@ const { callModel } = require('./callModel');
 const { getModelsForUser, pickTextModel } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
-const { webSearch, getSearchConfig } = require('./webSearchService');
+const { webSearch, isSearchConfigured } = require('./webSearchService');
 const { generateImage, getImageGenStatus } = require('./graphicsImageService');
 
 const PANTRY_STAPLES = ['salt', 'pepper', 'olive oil'];
@@ -499,11 +499,8 @@ async function getStatus(userId) {
   const textModelStandard = pickTextModel(tiers, 'standard');
   const textModelLight = pickTextModel(tiers, 'light');
   const image = await getImageGenStatus(userId);
-  let webSearchAvailable = false;
-  try {
-    await getSearchConfig();
-    webSearchAvailable = true;
-  } catch { /* not configured */ }
+  const webSearchAvailable = (await isSearchConfigured({ preferSerper: true }))
+    || (await isSearchConfigured());
   return {
     ai: Boolean(textModelStandard || textModelLight),
     textModel: textModelStandard || textModelLight,

@@ -431,7 +431,7 @@ function RecipeDetailPanel({
             </p>
             {status && !status.webSearch && (
               <p className="text-[10px] mb-2" style={{ color: '#f59e0b' }}>
-                Add SEARCH_API_KEY in Settings → Web search to look up real prices.
+                Add SERPER_SEARCH_API_KEY in Railway (or Settings → Web search) to look up grocery prices.
               </p>
             )}
             <button
@@ -1041,7 +1041,7 @@ export default function RecipesPage() {
 
             {status && !status.webSearch && (
               <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
-                Add SEARCH_API_KEY in Settings → Web search to look up real prices.
+                Add SERPER_SEARCH_API_KEY in Railway (or Settings → Web search) to look up grocery prices.
               </div>
             )}
 
