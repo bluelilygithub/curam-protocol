@@ -69,6 +69,7 @@ function captionStyleFromBody(body) {
     fontWeight: body?.fontWeight || 'normal',
     backgroundColor: body?.backgroundColor || '#000000',
     backgroundTransparent: transparent,
+    position: body?.position || 'bottom-center',
     outlineColor: body?.outlineColor || '#000000',
     outline: Number(body?.outline) || 1,
   };
@@ -490,7 +491,7 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
       const style = captionStyleFromBody(req.body);
       await annotateVideo(inputPath, outputPath, {
         text,
-        position: req.body?.position || 'bottom',
+        position: style.position || req.body?.position || 'bottom-center',
         fontSize: style.fontSize,
         fontColor: style.fontColor,
         fontFamily: style.fontFamily,

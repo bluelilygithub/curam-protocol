@@ -35,6 +35,165 @@ const FONT_WEIGHTS = [
   { id: 'bold', label: 'Bold' },
 ];
 
+const TEXT_POSITIONS = [
+  { id: 'top-left', label: 'Top left', row: 0, col: 0 },
+  { id: 'top-center', label: 'Top centre', row: 0, col: 1 },
+  { id: 'top-right', label: 'Top right', row: 0, col: 2 },
+  { id: 'center-left', label: 'Centre left', row: 1, col: 0 },
+  { id: 'center', label: 'Centre', row: 1, col: 1 },
+  { id: 'center-right', label: 'Centre right', row: 1, col: 2 },
+  { id: 'bottom-left', label: 'Bottom left', row: 2, col: 0 },
+  { id: 'bottom-center', label: 'Bottom centre', row: 2, col: 1 },
+  { id: 'bottom-right', label: 'Bottom right', row: 2, col: 2 },
+];
+
+function formatClipTime(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return '0:00.0';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const whole = Math.floor(s);
+  const tenth = Math.floor((s - whole) * 10);
+  return m > 0
+    ? `${m}:${String(whole).padStart(2, '0')}.${tenth}`
+    : `${whole}.${tenth}s`;
+}
+
+function PositionGrid({ value, onChange, label = 'Position' }) {
+  const grid = useMemo(() => {
+    const cells = Array.from({ length: 9 }, () => null);
+    TEXT_POSITIONS.forEach((p) => {
+      cells[p.row * 3 + p.col] = p;
+    });
+    return cells;
+  }, []);
+
+  return (
+    <div className="space-y-1">
+      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <div
+        className="inline-grid gap-1 p-1 rounded-xl border"
+        style={{ gridTemplateColumns: 'repeat(3, 2rem)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+      >
+        {grid.map((pos) => (
+          <button
+            key={pos.id}
+            type="button"
+            title={pos.label}
+            aria-label={pos.label}
+            onClick={() => onChange(pos.id)}
+            className="w-8 h-8 rounded-lg border transition-opacity hover:opacity-70 flex items-center justify-center"
+            style={{
+              borderColor: value === pos.id ? 'var(--color-primary)' : 'var(--color-border)',
+              background: value === pos.id ? 'var(--color-surface)' : 'transparent',
+            }}
+          >
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ background: value === pos.id ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ClipTimeline({
+  duration, startSec, endSec, onStartChange, onEndChange,
+}) {
+  const trackRef = useRef(null);
+  const dragRef = useRef(null);
+
+  const end = endSec === '' || endSec == null ? duration : Number(endSec);
+  const dur = Math.max(0, Number(duration) || 0);
+  const start = Math.max(0, Math.min(Number(startSec) || 0, dur));
+  const endVal = dur > 0 ? Math.max(start + 0.1, Math.min(end || dur, dur)) : start + 0.1;
+
+  const secFromClientX = useCallback((clientX) => {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect?.width || !dur) return 0;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * dur * 10) / 10;
+  }, [dur]);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragRef.current || !dur) return;
+      const t = secFromClientX(e.clientX);
+      if (dragRef.current === 'start') {
+        onStartChange(Math.max(0, Math.min(t, endVal - 0.1)));
+      } else {
+        onEndChange(Math.min(dur, Math.max(t, start + 0.1)));
+      }
+    };
+    const onUp = () => { dragRef.current = null; };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [dur, endVal, start, onStartChange, onEndChange, secFromClientX]);
+
+  if (!dur) {
+    return (
+      <p className="text-xs rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+        Load a video to drag in/out markers on the timeline.
+      </p>
+    );
+  }
+
+  const startPct = (start / dur) * 100;
+  const endPct = (endVal / dur) * 100;
+
+  return (
+    <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+      <div className="flex justify-between text-[10px] font-mono" style={{ color: 'var(--color-muted)' }}>
+        <span>In {formatClipTime(start)}</span>
+        <span>Duration {formatClipTime(endVal - start)}</span>
+        <span>Out {formatClipTime(endVal)}</span>
+      </div>
+      <div
+        ref={trackRef}
+        className="relative h-10 rounded-lg cursor-pointer select-none"
+        style={{ background: 'var(--color-surface)' }}
+        onPointerDown={(e) => {
+          if (e.target !== trackRef.current || !dur) return;
+          const t = secFromClientX(e.clientX);
+          const distStart = Math.abs(t - start);
+          const distEnd = Math.abs(t - endVal);
+          if (distStart <= distEnd) onStartChange(Math.max(0, Math.min(t, endVal - 0.1)));
+          else onEndChange(Math.min(dur, Math.max(t, start + 0.1)));
+        }}
+      >
+        <div
+          className="absolute top-1 bottom-1 rounded-md opacity-40"
+          style={{
+            left: `${startPct}%`,
+            width: `${Math.max(0, endPct - startPct)}%`,
+            background: 'var(--color-primary)',
+          }}
+        />
+        <div
+          role="slider"
+          aria-label="Start marker"
+          className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
+          style={{ left: `${startPct}%`, background: 'var(--color-primary)' }}
+          onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'start'; e.currentTarget.setPointerCapture(e.pointerId); }}
+        />
+        <div
+          role="slider"
+          aria-label="End marker"
+          className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
+          style={{ left: `${endPct}%`, background: 'var(--color-primary)' }}
+          onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'end'; e.currentTarget.setPointerCapture(e.pointerId); }}
+        />
+      </div>
+      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Drag the markers or click the bar to set in/out points.</p>
+    </div>
+  );
+}
+
 const TOOL_GROUPS = [
   {
     id: 'create',
@@ -325,6 +484,8 @@ export default function VideosPage() {
   // Clip
   const [startSec, setStartSec] = useState(0);
   const [endSec, setEndSec] = useState('');
+  const [clipDuration, setClipDuration] = useState(0);
+  const clipVideoRef = useRef(null);
 
   // Convert
   const [crf, setCrf] = useState(23);
@@ -332,7 +493,7 @@ export default function VideosPage() {
 
   // Annotate
   const [overlayText, setOverlayText] = useState('');
-  const [overlayPos, setOverlayPos] = useState('bottom');
+  const [textPosition, setTextPosition] = useState('bottom-center');
 
   // Captions
   const [srtText, setSrtText] = useState('');
@@ -414,6 +575,25 @@ export default function VideosPage() {
     if (tool === 'annotate' || tool === 'caption-studio') clearComposeResult();
   }, [tool, clearComposeResult]);
 
+  useEffect(() => {
+    if (!sourceFile || tool !== 'clip') return;
+    setStartSec(0);
+    setEndSec('');
+    setClipDuration(0);
+  }, [sourceFile, tool]);
+
+  const handleClipVideoMeta = useCallback((e) => {
+    const d = e.currentTarget.duration;
+    if (Number.isFinite(d) && d > 0) {
+      setClipDuration(d);
+      setEndSec((prev) => (prev === '' ? String(Math.round(d * 10) / 10) : prev));
+    }
+  }, []);
+
+  const handleClipEndChange = useCallback((val) => {
+    setEndSec(String(Math.round(val * 10) / 10));
+  }, []);
+
   const setResultFromBlob = useCallback((blob, name, forTool = null) => {
     resultBlobRef.current = blob;
     setResultBlob((prev) => {
@@ -431,7 +611,8 @@ export default function VideosPage() {
     fontWeight: textFontWeight,
     backgroundColor: textBackgroundColor,
     backgroundTransparent: textBackgroundTransparent,
-  }), [textFontFamily, textFontSize, textFontColor, textFontWeight, textBackgroundColor, textBackgroundTransparent]);
+    position: textPosition,
+  }), [textFontFamily, textFontSize, textFontColor, textFontWeight, textBackgroundColor, textBackgroundTransparent, textPosition]);
 
   const appendTextStyleFields = useCallback((fd) => {
     Object.entries(textStyleFields()).forEach(([k, v]) => fd.append(k, String(v)));
@@ -1072,23 +1253,41 @@ export default function VideosPage() {
         )}
 
         {previewUrl && tool !== 'generate' && tool !== 'saved-library' && (
-          <video src={previewUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
+          <>
+            <video
+              ref={tool === 'clip' ? clipVideoRef : undefined}
+              src={previewUrl}
+              controls
+              className="w-full max-h-48 rounded-xl bg-black"
+              onLoadedMetadata={tool === 'clip' ? handleClipVideoMeta : undefined}
+            />
+            {tool === 'clip' && (
+              <ClipTimeline
+                duration={clipDuration}
+                startSec={startSec}
+                endSec={endSec}
+                onStartChange={setStartSec}
+                onEndChange={handleClipEndChange}
+              />
+            )}
+          </>
         )}
 
         {tool === 'clip' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Clip / trim</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Drag the timeline markers above, or fine-tune with seconds below.</p>
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
-                <input type="number" min={0} step={0.1} value={startSec} onChange={(e) => setStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={startSec} onChange={(e) => setStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </label>
               <label className="block space-y-1">
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds, optional)</span>
-                <input type="number" min={0} step={0.1} value={endSec} onChange={(e) => setEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds)</span>
+                <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={endSec} onChange={(e) => setEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </label>
             </div>
-            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Export clip
             </button>
             {resultForTool === 'clip' && (
@@ -1136,11 +1335,7 @@ export default function VideosPage() {
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
             <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-            <select value={overlayPos} onChange={(e) => setOverlayPos(e.target.value)} className="px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="bottom">Bottom</option>
-              <option value="center">Center</option>
-              <option value="top">Top</option>
-            </select>
+            <PositionGrid value={textPosition} onChange={setTextPosition} label="Label position" />
             <TextStyleFields
               fontFamily={textFontFamily}
               setFontFamily={setTextFontFamily}
@@ -1155,7 +1350,7 @@ export default function VideosPage() {
               backgroundTransparent={textBackgroundTransparent}
               setBackgroundTransparent={setTextBackgroundTransparent}
             />
-            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', overlayPos); appendTextStyleFields(fd); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Apply label
             </button>
             {resultForTool === 'annotate' && (
@@ -1198,6 +1393,8 @@ export default function VideosPage() {
                 </p>
               )}
             </div>
+
+            <PositionGrid value={textPosition} onChange={setTextPosition} label="Caption position" />
 
             <CaptionStyleFields
               fontFamily={textFontFamily}

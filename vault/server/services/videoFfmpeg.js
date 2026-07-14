@@ -179,6 +179,42 @@ function hexToDrawtextBoxColor(hex, alpha = 0.75) {
   return `black@${alpha}`;
 }
 
+const DRAWTEXT_POSITIONS = {
+  'top-left': { x: '40', y: '40' },
+  'top-center': { x: '(w-text_w)/2', y: '40' },
+  'top-right': { x: 'w-text_w-40', y: '40' },
+  'center-left': { x: '40', y: '(h-text_h)/2' },
+  center: { x: '(w-text_w)/2', y: '(h-text_h)/2' },
+  'center-right': { x: 'w-text_w-40', y: '(h-text_h)/2' },
+  'bottom-left': { x: '40', y: 'h-th-48' },
+  'bottom-center': { x: '(w-text_w)/2', y: 'h-th-48' },
+  'bottom-right': { x: 'w-text_w-40', y: 'h-th-48' },
+  top: { x: '(w-text_w)/2', y: '40' },
+  bottom: { x: '(w-text_w)/2', y: 'h-th-48' },
+};
+
+const ASS_ALIGNMENT = {
+  'bottom-left': 1,
+  'bottom-center': 2,
+  bottom: 2,
+  'bottom-right': 3,
+  'center-left': 4,
+  center: 5,
+  'center-right': 6,
+  'top-left': 7,
+  'top-center': 8,
+  top: 8,
+  'top-right': 9,
+};
+
+function resolveDrawtextPosition(position = 'bottom-center') {
+  return DRAWTEXT_POSITIONS[position] || DRAWTEXT_POSITIONS['bottom-center'];
+}
+
+function resolveAssAlignment(position = 'bottom-center') {
+  return ASS_ALIGNMENT[position] || 2;
+}
+
 function buildSubtitleForceStyle({
   fontFamily = 'Roboto',
   fontSize = 24,
@@ -186,6 +222,7 @@ function buildSubtitleForceStyle({
   fontWeight = 'normal',
   backgroundColor = '#000000',
   backgroundTransparent = false,
+  position = 'bottom-center',
   outlineColor = '#000000',
   outline = 1,
 } = {}) {
@@ -194,28 +231,29 @@ function buildSubtitleForceStyle({
   const primary = hexToAssColor(fontColor);
   const outlineAss = hexToAssColor(outlineColor);
   const outlinePx = Math.min(6, Math.max(0, Number(outline) || 1));
+  const alignment = resolveAssAlignment(position);
+  const base = [
+    `FontName=${name}`,
+    `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
+    `PrimaryColour=${primary}`,
+    `Alignment=${alignment}`,
+    `OutlineColour=${outlineAss}`,
+    `Outline=${outlinePx}`,
+    `Bold=${bold}`,
+  ];
   if (backgroundTransparent) {
     return [
-      `FontName=${name}`,
-      `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
-      `PrimaryColour=${primary}`,
+      ...base,
       `BackColour=&HFF000000`,
       `BorderStyle=1`,
-      `OutlineColour=${outlineAss}`,
       `Outline=${Math.max(2, outlinePx)}`,
-      `Bold=${bold}`,
     ].join(',');
   }
   const back = hexToAssColor(backgroundColor);
   return [
-    `FontName=${name}`,
-    `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
-    `PrimaryColour=${primary}`,
+    ...base,
     `BackColour=${back}`,
     `BorderStyle=3`,
-    `OutlineColour=${outlineAss}`,
-    `Outline=${outlinePx}`,
-    `Bold=${bold}`,
   ].join(',');
 }
 
@@ -233,7 +271,7 @@ function escapeFilterPath(filePath) {
 
 async function annotateVideo(inputPath, outputPath, {
   text,
-  position = 'bottom',
+  position = 'bottom-center',
   fontSize = 28,
   fontColor = 'white',
   fontFamily = 'Roboto',
@@ -245,15 +283,11 @@ async function annotateVideo(inputPath, outputPath, {
   const escaped = escapeDrawtext(text);
   const fontfile = escapeFilterPath(await resolveFontFilePath(fontFamily, fontWeight, workDir));
   const color = normalizeDrawtextColor(fontColor);
-  const y = position === 'top'
-    ? '40'
-    : position === 'center'
-      ? '(h-text_h)/2'
-      : 'h-th-48';
+  const { x, y } = resolveDrawtextPosition(position);
   const boxPart = backgroundTransparent
     ? 'box=0:borderw=2:bordercolor=black@0.75'
     : `box=1:boxcolor=${hexToDrawtextBoxColor(backgroundColor, backgroundAlpha)}:boxborderw=10`;
-  const vf = `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:${boxPart}:x=(w-text_w)/2:y=${y}`;
+  const vf = `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:${boxPart}:x=${x}:y=${y}`;
   await encodeWithVideoFilter(inputPath, outputPath, vf);
 }
 
