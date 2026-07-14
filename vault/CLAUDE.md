@@ -48,10 +48,11 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
 - `server/services/videoLibraryService.js` — saved videos/images on disk + `video_library` metadata
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
-- `server/routes/recipes.js` — Recipes API (`/api/recipes/*`): suggest, expand, image, library CRUD
-- `server/services/recipeService.js` — leftover suggest/expand, dish image via `graphicsImageService`, `recipes` table library
+- `server/routes/recipes.js` — Recipes API: suggest, expand, named tiers, grocery prices, image, library CRUD
+- `server/services/recipeService.js` — leftover + recipe-by-name suggest/expand, auto dish photo via `graphicsImageService`
+- `server/services/recipeGroceryService.js` — Coles/Woolworths/Aldi price comparison (web search + `light` tier)
 - `server/services/graphicsImageService.js` — shared FAL image generation using admin `graphics_model` (Graphics + Recipes)
-- `client/src/pages/RecipesPage.jsx` — leftover flow + tagged library at `/recipes`
+- `client/src/pages/RecipesPage.jsx` — Create (leftovers, by name) · Shop (grocery prices) · library at `/recipes`
 
 ---
 
@@ -310,7 +311,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Library / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), probe, thumbnail. **Caption studio** — upload or library video + styled SRT (font, weight, size, colour). **Saved media** — save tool results (video/image) + transaction JSON to `video_library` (disk + DB), preview, delete, re-caption later. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
-**Recipes** (`/recipes`): Leftover cooking assistant in Content tools (after Video Tools). Enter ingredients (+ optional notes); AI returns **four recipe cards** (assumes salt, pepper, olive oil). Pick one → full steps, nutrition notes, web links (videos/articles), optional **dish photo** via **`graphicsImageService`** (`graphics_model` + `FAL_API_KEY`). Save favourites to **`recipes`** table with tags (breakfast, lunch, dinner, curry, pasta, fast, slow, etc.). Uses **`standard`** tier for suggest/expand. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
+**Recipes** (`/recipes`): Cooking assistant in Content tools. **Leftover recipes** — ingredients in → four cards → full recipe (steps, nutrition, links, auto dish photo). **Recipe by name** — Basic / Advanced / Master with accessible ingredient swaps. **Shop → Grocery prices** — Coles / Woolworths / Aldi comparison (Australia, web search estimates via `SEARCH_API_KEY`). Save to **`recipes`** table with tags. Text: `light`/`standard` tiers; images: **`graphicsImageService`** + **`graphics_model`**. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 

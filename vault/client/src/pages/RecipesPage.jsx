@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -22,6 +22,13 @@ const TOOL_GROUPS = [
     ],
   },
   {
+    id: 'shop',
+    label: 'Shop',
+    tools: [
+      { id: 'grocery-prices', label: 'Grocery prices', desc: 'Coles · Woolworths · Aldi (AU)' },
+    ],
+  },
+  {
     id: 'library',
     label: 'Library',
     tools: [
@@ -38,16 +45,35 @@ function formatMinutes(m) {
   return r ? `${h}h ${r}m` : `${h}h`;
 }
 
-function RecipeCard({ recipe, selected, onSelect }) {
+function mealCardInteractiveStyle({ selected, loading, hovered }) {
+  const active = selected || loading;
+  const lifted = active || hovered;
+  return {
+    borderColor: lifted ? 'var(--color-primary)' : 'var(--color-border)',
+    background: lifted ? 'var(--color-surface)' : 'var(--color-bg)',
+    boxShadow: active
+      ? '0 0 0 2px var(--color-primary), 0 4px 14px rgba(26, 26, 26, 0.12)'
+      : hovered
+        ? '0 8px 24px rgba(26, 26, 26, 0.14)'
+        : 'none',
+    transform: hovered && !active ? 'translateY(-4px) scale(1.015)' : 'none',
+  };
+}
+
+function RecipeCard({ recipe, selected, loading, onSelect }) {
+  const getIcon = useIcon();
+  const [hovered, setHovered] = useState(false);
+  const interactive = mealCardInteractiveStyle({ selected, loading, hovered });
+
   return (
     <button
       type="button"
       onClick={() => onSelect(recipe)}
-      className="text-left rounded-xl border p-4 space-y-2 transition-opacity hover:opacity-80 w-full"
-      style={{
-        borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
-        background: selected ? 'var(--color-surface)' : 'var(--color-bg)',
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label={`View full recipe: ${recipe.title}`}
+      className="text-left rounded-xl border-2 p-4 space-y-2 w-full cursor-pointer transition-all duration-200"
+      style={interactive}
     >
       <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{recipe.title}</p>
       <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{recipe.summary}</p>
@@ -65,6 +91,21 @@ function RecipeCard({ recipe, selected, onSelect }) {
         {(recipe.tags || []).slice(0, 2).map((t) => (
           <span key={t} className="px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>{t}</span>
         ))}
+      </div>
+      <div
+        className="flex items-center justify-between gap-2 pt-2 mt-1 border-t"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <span
+          className="text-xs font-medium"
+          style={{
+            color: loading ? 'var(--color-muted)' : 'var(--color-primary)',
+            textDecoration: hovered && !loading ? 'underline' : 'none',
+          }}
+        >
+          {loading ? 'Loading recipe…' : hovered ? 'Open full recipe →' : 'Tap to view full recipe'}
+        </span>
+        <span style={{ color: 'var(--color-primary)' }}>{getIcon('chevron-right', { size: 14 })}</span>
       </div>
     </button>
   );
@@ -95,16 +136,20 @@ function TagPicker({ selected, onChange }) {
   );
 }
 
-function TierCard({ recipe, selected, onSelect }) {
+function TierCard({ recipe, selected, loading, onSelect }) {
+  const getIcon = useIcon();
+  const [hovered, setHovered] = useState(false);
+  const interactive = mealCardInteractiveStyle({ selected, loading, hovered });
+
   return (
     <button
       type="button"
       onClick={() => onSelect(recipe)}
-      className="text-left rounded-xl border p-4 space-y-2 transition-opacity hover:opacity-80 w-full"
-      style={{
-        borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
-        background: selected ? 'var(--color-surface)' : 'var(--color-bg)',
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label={`View ${recipe.tierLabel || recipe.id} recipe: ${recipe.title}`}
+      className="text-left rounded-xl border-2 p-4 space-y-2 w-full cursor-pointer transition-all duration-200"
+      style={interactive}
     >
       <span
         className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
@@ -117,7 +162,119 @@ function TierCard({ recipe, selected, onSelect }) {
       {recipe.timeMinutes && (
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{formatMinutes(recipe.timeMinutes)}</p>
       )}
+      <div
+        className="flex items-center justify-between gap-2 pt-2 mt-1 border-t"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <span
+          className="text-xs font-medium"
+          style={{
+            color: loading ? 'var(--color-muted)' : 'var(--color-primary)',
+            textDecoration: hovered && !loading ? 'underline' : 'none',
+          }}
+        >
+          {loading ? 'Loading recipe…' : hovered ? 'Open full recipe →' : 'Tap to view full recipe'}
+        </span>
+        <span style={{ color: 'var(--color-primary)' }}>{getIcon('chevron-right', { size: 14 })}</span>
+      </div>
     </button>
+  );
+}
+
+const STORE_LABELS = { coles: 'Coles', woolworths: 'Woolworths', aldi: 'Aldi' };
+
+function GroceryPriceResults({ result }) {
+  if (!result?.items?.length) return null;
+  const cheapest = result.totals?.cheapestStore;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
+        {result.disclaimer}
+        {result.searchError && (
+          <span> Web search was limited ({result.searchError}) — some prices may be missing.</span>
+        )}
+      </p>
+
+      {result.totals && (
+        <div className="grid grid-cols-3 gap-2">
+          {['coles', 'woolworths', 'aldi'].map((store) => {
+            const t = result.totals[store];
+            const isCheapest = cheapest === store;
+            return (
+              <div
+                key={store}
+                className="rounded-xl border p-3 text-center"
+                style={{
+                  borderColor: isCheapest ? 'var(--color-primary)' : 'var(--color-border)',
+                  background: isCheapest ? 'var(--color-surface)' : 'var(--color-bg)',
+                }}
+              >
+                <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--color-muted)' }}>{STORE_LABELS[store]}</p>
+                <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
+                  {t?.label || (t?.total != null ? `$${Number(t.total).toFixed(2)}` : '—')}
+                </p>
+                {isCheapest && (
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-primary)' }}>Lowest total</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+        <table className="w-full text-xs min-w-[520px]">
+          <thead>
+            <tr style={{ background: 'var(--color-surface)' }}>
+              <th className="text-left p-2 font-medium" style={{ color: 'var(--color-text)' }}>Ingredient</th>
+              {['coles', 'woolworths', 'aldi'].map((s) => (
+                <th key={s} className="text-right p-2 font-medium" style={{ color: 'var(--color-text)' }}>{STORE_LABELS[s]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {result.items.map((row) => (
+              <tr key={row.ingredient} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <td className="p-2 align-top" style={{ color: 'var(--color-text)' }}>
+                  <span className="font-medium">{row.ingredient}</span>
+                  {row.quantity && <span className="block text-[10px]" style={{ color: 'var(--color-muted)' }}>{row.quantity}</span>}
+                </td>
+                {['coles', 'woolworths', 'aldi'].map((store) => {
+                  const cell = row[store];
+                  const isCheapest = row.cheapestStore === store && cell?.price != null;
+                  return (
+                    <td key={store} className="p-2 text-right align-top" style={{ color: isCheapest ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                      {cell?.label || (cell?.price != null ? `$${cell.price.toFixed(2)}` : '—')}
+                      {cell?.url && (
+                        <a href={cell.url} target="_blank" rel="noopener noreferrer" className="block text-[10px] mt-0.5 transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                          View
+                        </a>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {result.links?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Store links</p>
+          <ul className="space-y-1">
+            {result.links.map((link) => (
+              <li key={link.url}>
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                  {STORE_LABELS[link.store] || link.store}: {link.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -128,10 +285,23 @@ function RecipeDetailPanel({
   onSaveTagsChange,
   onSave,
   onRegenerateImage,
+  onShopPrices,
   status,
 }) {
+  const imageRef = useRef(null);
+  const imageSrc = dishImage || expanded?.imageDataUrl;
+
+  const scrollToImage = useCallback(() => {
+    imageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const timer = window.setTimeout(scrollToImage, 200);
+    return () => clearTimeout(timer);
+  }, [expanded, expanded?.title, expanded?.tier, expanded?.tierLabel, imageSrc, scrollToImage]);
+
   if (!expanded) return null;
-  const imageSrc = dishImage || expanded.imageDataUrl;
 
   return (
     <div className="rounded-xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -143,9 +313,17 @@ function RecipeDetailPanel({
         </p>
       </div>
 
-      {imageSrc && (
-        <img src={imageSrc} alt="" className="w-full max-h-56 object-cover rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
-      )}
+      <div ref={imageRef} className="scroll-mt-6">
+        {imageSrc && (
+          <img
+            src={imageSrc}
+            alt=""
+            className="w-full max-h-56 object-cover rounded-xl border"
+            style={{ borderColor: 'var(--color-border)' }}
+            onLoad={scrollToImage}
+          />
+        )}
+      </div>
 
       <div>
         <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Ingredients</p>
@@ -225,6 +403,16 @@ function RecipeDetailPanel({
         {status?.imageGen && !imageSrc && expanded.imageError && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{expanded.imageError}</p>
         )}
+        {onShopPrices && (
+          <button
+            type="button"
+            onClick={onShopPrices}
+            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Compare Coles / Woolworths / Aldi
+          </button>
+        )}
         {status?.imageGen && (
           <button
             type="button"
@@ -284,11 +472,34 @@ export default function RecipesPage() {
   const [namedDishImage, setNamedDishImage] = useState(null);
   const [namedSaveTags, setNamedSaveTags] = useState([]);
 
+  const [expandingCardId, setExpandingCardId] = useState(null);
+  const [expandingTierId, setExpandingTierId] = useState(null);
+
   const [libraryItems, setLibraryItems] = useState([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryTagFilter, setLibraryTagFilter] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [viewingSaved, setViewingSaved] = useState(null);
+
+  const [groceryInput, setGroceryInput] = useState('');
+  const [groceryResult, setGroceryResult] = useState(null);
+
+  const activeRecipeForShop = expanded || namedExpanded;
+
+  const importRecipeToGrocery = useCallback(() => {
+    const recipe = expanded || namedExpanded;
+    if (!recipe?.ingredients?.length) {
+      addToast('Generate a recipe first, or type ingredients below', 'error');
+      return;
+    }
+    const lines = recipe.ingredients
+      .map((ing) => `${ing.amount ? `${ing.amount} ` : ''}${ing.item}`)
+      .join('\n');
+    setGroceryInput(lines);
+    setTool('grocery-prices');
+    setOpenGroup('shop');
+    addToast('Ingredients copied — tap Compare prices', 'success');
+  }, [expanded, namedExpanded, addToast]);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -357,6 +568,7 @@ export default function RecipesPage() {
     setSelectedCard(card);
     setExpanded(null);
     setDishImage(null);
+    setExpandingCardId(card.id);
     setSaveTags([...(card.tags || []), card.mealType].filter(Boolean));
     startProcessing('Building recipe…', 'Steps, nutrition, dish photo, and links.');
     try {
@@ -372,6 +584,7 @@ export default function RecipesPage() {
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
+      setExpandingCardId(null);
       stopProcessing();
     }
   };
@@ -447,6 +660,7 @@ export default function RecipesPage() {
     setSelectedTier(tierCard);
     setNamedExpanded(null);
     setNamedDishImage(null);
+    setExpandingTierId(tierCard.id);
     setNamedSaveTags([...(tierCard.tags || []), tierCard.tierLabel?.toLowerCase()].filter(Boolean));
     startProcessing('Building recipe…', 'Steps, swaps, dish photo, and links.');
     try {
@@ -460,6 +674,33 @@ export default function RecipesPage() {
       if (!res.ok) throw new Error(data.error || 'Could not build recipe');
       setNamedExpanded(data);
       setNamedDishImage(data.imageDataUrl || null);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setExpandingTierId(null);
+      stopProcessing();
+    }
+  };
+
+  const handleGroceryPrice = async () => {
+    if (!groceryInput.trim()) {
+      addToast('List ingredients to price', 'error');
+      return;
+    }
+    startProcessing('Checking supermarket prices…', 'Searching Coles, Woolworths, and Aldi.');
+    setGroceryResult(null);
+    try {
+      const recipe = activeRecipeForShop;
+      const res = await api.post('/api/recipes/grocery/price', {
+        ingredients: groceryInput,
+        recipeTitle: recipe?.title,
+        servings: recipe?.servings,
+        recipeIngredients: recipe?.ingredients,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Price check failed');
+      setGroceryResult(data);
+      addToast('Price comparison ready', 'success');
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -592,14 +833,25 @@ export default function RecipesPage() {
             </button>
 
             {suggestions?.recipes?.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Pick a recipe</p>
+              <div className="space-y-3">
+                <div
+                  className="rounded-xl border px-3 py-2.5"
+                  style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                >
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                    Choose one — tap a card below
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    Steps, dish photo, nutrition, and save options load when you select a meal.
+                  </p>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {suggestions.recipes.map((r) => (
                     <RecipeCard
                       key={r.id}
                       recipe={r}
                       selected={selectedCard?.id === r.id}
+                      loading={expandingCardId === r.id}
                       onSelect={handleSelectCard}
                     />
                   ))}
@@ -614,6 +866,7 @@ export default function RecipesPage() {
                 saveTags={saveTags}
                 onSaveTagsChange={setSaveTags}
                 onRegenerateImage={() => handleGenerateImage({ expanded, setImage: setDishImage })}
+                onShopPrices={importRecipeToGrocery}
                 onSave={() => handleSaveRecipe({
                   expanded,
                   dishImage,
@@ -671,14 +924,25 @@ export default function RecipesPage() {
             </button>
 
             {nameSuggestions?.tiers?.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Pick a level</p>
+              <div className="space-y-3">
+                <div
+                  className="rounded-xl border px-3 py-2.5"
+                  style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                >
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                    Choose a level — tap a card below
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    Basic, Advanced, or Master — full recipe loads when you select one.
+                  </p>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {nameSuggestions.tiers.map((t) => (
                     <TierCard
                       key={t.id}
                       recipe={t}
                       selected={selectedTier?.id === t.id}
+                      loading={expandingTierId === t.id}
                       onSelect={handleSelectTier}
                     />
                   ))}
@@ -693,6 +957,7 @@ export default function RecipesPage() {
                 saveTags={namedSaveTags}
                 onSaveTagsChange={setNamedSaveTags}
                 onRegenerateImage={() => handleGenerateImage({ expanded: namedExpanded, setImage: setNamedDishImage })}
+                onShopPrices={importRecipeToGrocery}
                 onSave={() => handleSaveRecipe({
                   expanded: namedExpanded,
                   dishImage: namedDishImage,
@@ -707,6 +972,57 @@ export default function RecipesPage() {
                 status={status}
               />
             )}
+          </section>
+        )}
+
+        {tool === 'grocery-prices' && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Grocery prices</h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Estimate ingredient costs at Coles, Woolworths, and Aldi (Australia). Uses web search — verify in store before shopping.
+              </p>
+            </div>
+
+            {status && !status.webSearch && (
+              <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
+                Add SEARCH_API_KEY in Railway (Settings → Web search) to compare supermarket prices.
+              </div>
+            )}
+
+            {activeRecipeForShop?.ingredients?.length > 0 && (
+              <button
+                type="button"
+                onClick={importRecipeToGrocery}
+                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+              >
+                Use ingredients from {activeRecipeForShop.title || 'current recipe'}
+              </button>
+            )}
+
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Shopping list</span>
+              <textarea
+                value={groceryInput}
+                onChange={(e) => setGroceryInput(e.target.value)}
+                rows={8}
+                placeholder={'500g chicken breast\n400ml coconut milk\n2 tbsp green curry paste\n…'}
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y font-mono"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleGroceryPrice}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Compare Coles / Woolworths / Aldi
+            </button>
+
+            {groceryResult && <GroceryPriceResults result={groceryResult} />}
           </section>
         )}
 

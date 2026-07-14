@@ -128,6 +128,7 @@ const semanticMap = {
   contrast: { lucide: 'Contrast' },
   film: { lucide: 'Film' },
   utensils: { lucide: 'UtensilsCrossed' },
+  'shopping-cart': { lucide: 'ShoppingCart' },
   link: { lucide: 'Link' },
   'file-text': { lucide: 'FileText' },
   workflow: { lucide: 'Workflow' },

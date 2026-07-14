@@ -23,6 +23,14 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. **Pick a level** — `POST /api/recipes/named/expand` returns full recipe with **accessible ingredient alternatives** for exotic items, auto dish photo, nutrition, and links.
 4. **Save** — same library flow with tags.
 
+### Grocery prices (Australia)
+
+1. **Shop → Grocery prices** — paste a shopping list (one ingredient per line).
+2. **Compare** — `POST /api/recipes/grocery/price` web-searches Coles, Woolworths, and Aldi, then AI structures a per-item and total comparison (AUD).
+3. From any open recipe, **Compare Coles / Woolworths / Aldi** copies ingredients into this tool.
+
+Requires **SEARCH_API_KEY** (same as web search). Prices are **estimates from search snippets** — not live API feeds from the supermarkets.
+
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 
 All long operations use the global **ProcessingModal**.
@@ -38,6 +46,7 @@ All long operations use the global **ProcessingModal**.
 | `POST` | `/api/recipes/expand` | `{ recipe, ingredients, notes? }` → full recipe + links |
 | `POST` | `/api/recipes/named/suggest` | `{ name, notes? }` → Basic / Advanced / Master cards |
 | `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes? }` → full recipe + swaps + image |
+| `POST` | `/api/recipes/grocery/price` | `{ ingredients, recipeTitle?, servings?, recipeIngredients? }` → AU store comparison |
 | `POST` | `/api/recipes/image` | Regenerate dish photo `{ title, imagePrompt }` → `{ imageDataUrl }` |
 | `GET` | `/api/recipes/library` | List saved; `?tag=fast` filters |
 | `POST` | `/api/recipes/library` | Save favourite |

@@ -14,6 +14,7 @@ const {
   updateRecipe,
   deleteRecipe,
 } = require('../services/recipeService');
+const { priceIngredients } = require('../services/recipeGroceryService');
 
 const router = express.Router();
 
@@ -76,6 +77,21 @@ router.post('/named/expand', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[recipes/named/expand]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/grocery/price', async (req, res) => {
+  try {
+    const result = await priceIngredients(req.user.id, {
+      ingredients: req.body?.ingredients,
+      recipeTitle: req.body?.recipeTitle,
+      servings: req.body?.servings,
+      recipeIngredients: req.body?.recipeIngredients,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[recipes/grocery/price]', err.message);
     res.status(400).json({ error: err.message });
   }
 });

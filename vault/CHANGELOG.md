@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (recipes-grocery-shop)
+
+**Feature:** Recipes **Shop → Grocery prices** — compare ingredient list across **Coles, Woolworths, Aldi** (Australia) via web search + AI (`POST /api/recipes/grocery/price`). Import from open recipe. Service: **`recipeGroceryService.js`**.
+
+**Enhancement:** Recipe cards — obvious tap-to-view CTA, stronger hover lift, auto-scroll to dish photo after expand.
+
+---
+
 ## 2026-07-14 (recipes-fixes-named)
 
 **Feature:** Recipe by name — Basic / Advanced / Master tiers with accessible ingredient swaps, auto dish photo, save to library.
