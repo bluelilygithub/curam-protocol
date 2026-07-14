@@ -30,7 +30,7 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
 4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
-Requires **`SERPER_SEARCH_API_KEY`** (Railway or Settings) for grocery prices — uses Serper Google Shopping while **`SEARCH_API_KEY`** (e.g. Brave) can stay for chat `@search`. Alternatively set a Serper key as `SEARCH_API_KEY` with `SEARCH_PROVIDER=serper`.
+Requires **`SERPER_SEARCH_API_KEY`** — set in **Settings → Integrations** (admin) or Railway. Uses Serper Google Shopping while **`SEARCH_API_KEY`** (e.g. Brave) can stay for chat `@search`. No special Serper dashboard configuration is needed.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 
@@ -78,7 +78,7 @@ Image and video generation models (`fal`, `replicate`, etc.) in `vault_models` a
 | `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` | Recipe suggest + expand |
 | `FAL_API_KEY` | Dish image generation (via Graphics model routing) |
 | `SEARCH_API_KEY` | Video/article links on expand (Brave/Serper/SerpAPI via `webSearchService`) |
-| `SERPER_SEARCH_API_KEY` | **Grocery prices** — Serper Google Shopping (recommended; separate from chat search key) |
+| `SERPER_SEARCH_API_KEY` | **Grocery prices** — Serper Google Shopping. Set in Settings → Integrations (admin) or Railway env. |
 
 Dish images use **`graphics_model`** from Settings → AI & Chat (same as the Graphics app), not a separate recipe model.
 

@@ -32,6 +32,18 @@ async function loadSetting(key) {
   }
 }
 
+async function loadWorkspaceSetting(key) {
+  try {
+    const { rows } = await pool.query(
+      'SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1',
+      [key]
+    );
+    return rows[0]?.value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {{ preferSerper?: boolean }} [opts]
  * preferSerper — use SERPER_SEARCH_API_KEY (Railway env or Settings) for grocery/shopping lookups
@@ -44,6 +56,7 @@ async function getSearchConfig({ preferSerper = false } = {}) {
 
   if (preferSerper) {
     const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
+      || await loadWorkspaceSetting('SERPER_SEARCH_API_KEY')
       || await loadSetting('SERPER_SEARCH_API_KEY');
     if (serperKey) {
       return { apiKey: serperKey, provider: 'serper' };

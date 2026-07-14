@@ -25,6 +25,14 @@ const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
 const WELLBEING_INVITE_SUBJECT_KEY = 'wellbeing_invite_subject';
 const WELLBEING_INVITE_BODY_KEY = 'wellbeing_invite_body';
 const MOBILE_SETTING_KEYS = ['mobile_dashboard_tiles', 'mobile_nav_items'];
+const SHOPPING_SEARCH_KEY = 'SERPER_SEARCH_API_KEY';
+
+function maskApiKey(key) {
+  if (!key) return null;
+  const s = String(key);
+  if (s.length <= 8) return '••••••••';
+  return `••••${s.slice(-4)}`;
+}
 
 function normalizeContentRestrictions(value) {
   const source = Array.isArray(value) ? value : [];
@@ -343,6 +351,58 @@ router.post('/wellbeing-invite-template', async (req, res) => {
       );
     }
     res.json({ ok: true, subject, body });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/shopping-search — admin Serper key for Recipes grocery prices
+router.get('/shopping-search', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const envKey = process.env.SERPER_SEARCH_API_KEY?.trim() || '';
+    const { rows } = await pool.query(
+      'SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1',
+      [SHOPPING_SEARCH_KEY]
+    );
+    const workspaceKey = rows[0]?.value?.trim() || '';
+    const activeKey = envKey || workspaceKey;
+    res.json({
+      configured: Boolean(activeKey),
+      source: envKey ? 'env' : workspaceKey ? 'workspace' : 'none',
+      masked: maskApiKey(activeKey),
+      envOverridesWorkspace: Boolean(envKey),
+      provider: 'serper',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/shopping-search — body: { key: string | '' } to clear workspace key
+router.post('/shopping-search', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const key = req.body?.key == null ? '' : String(req.body.key).trim();
+  try {
+    if (!key) {
+      await pool.query('DELETE FROM workspace_settings WHERE key=$1', [SHOPPING_SEARCH_KEY]);
+    } else {
+      await pool.query(
+        `INSERT INTO workspace_settings (key, value, "updatedAt")
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+        [SHOPPING_SEARCH_KEY, key]
+      );
+    }
+    const envKey = process.env.SERPER_SEARCH_API_KEY?.trim() || '';
+    const activeKey = envKey || key;
+    res.json({
+      ok: true,
+      configured: Boolean(activeKey),
+      source: envKey ? 'env' : key ? 'workspace' : 'none',
+      masked: maskApiKey(activeKey),
+      envOverridesWorkspace: Boolean(envKey),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-settings-ui)
+
+**Feature:** Admin **Settings → Integrations → Recipes — shopping prices** — save/clear Serper API key (`SERPER_SEARCH_API_KEY`) in workspace settings. Railway env var still overrides. Backend reads workspace_settings for grocery lookups.
+
+---
+
 ## 2026-07-14 (serper-grocery-key)
 
 **Fix:** Grocery prices now read **`SERPER_SEARCH_API_KEY`** (Railway env or Settings) for Serper Google Shopping, separate from **`SEARCH_API_KEY`** (Brave can stay for chat `@search`).
