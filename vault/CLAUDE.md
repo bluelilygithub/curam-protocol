@@ -50,7 +50,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
 - `server/routes/recipes.js` — Recipes API: suggest, expand, named tiers, grocery prices, image, library CRUD
 - `server/services/recipeService.js` — leftover + recipe-by-name suggest/expand, auto dish photo via `graphicsImageService`
-- `server/services/recipeGroceryService.js` — Coles/Woolworths/Aldi price comparison (web search + `light` tier)
+- `server/services/recipeGroceryService.js` — Coles/Woolworths prices sourced from Google Shopping / site-restricted search (`webSearchService.shoppingSearch`), no AI guessing — cites source + link, or "Not found"
 - `server/services/graphicsImageService.js` — shared FAL image generation using admin `graphics_model` (Graphics + Recipes)
 - `client/src/pages/RecipesPage.jsx` — Create (leftovers, by name) · Shop (grocery prices) · library at `/recipes`
 
@@ -311,7 +311,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Library / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, extract audio, annotate (drawtext), probe, thumbnail. **Caption studio** — upload or library video + styled SRT (font, weight, size, colour). **Saved media** — save tool results (video/image) + transaction JSON to `video_library` (disk + DB), preview, delete, re-caption later. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
-**Recipes** (`/recipes`): Cooking assistant in Content tools. **Leftover recipes** — ingredients in → four cards → full recipe (steps, nutrition, links, auto dish photo). **Recipe by name** — Basic / Advanced / Master with accessible ingredient swaps. **Shop → Grocery prices** — Coles / Woolworths / Aldi comparison (Australia, web search estimates via `SEARCH_API_KEY`). Save to **`recipes`** table with tags. Text: `light`/`standard` tiers; images: **`graphicsImageService`** + **`graphics_model`**. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
+**Recipes** (`/recipes`): Cooking assistant in Content tools. **Leftover recipes** — ingredients in → four cards → full recipe (steps, nutrition, links, auto dish photo). **Recipe by name** — Basic / Advanced / Master with accessible ingredient swaps. **Grocery prices** — "Get prices" inline under any open recipe (also standalone in Shop) → Coles/Woolworths prices **sourced from live search** (Google Shopping via Serper/SerpApi, or `site:` organic fallback), each row cites its source link; unmatched items show "Not found" + manual search link, never a guessed price. Requires `SEARCH_API_KEY`; no text model needed for pricing. Save to **`recipes`** table with tags. Text: `light`/`standard` tiers; images: **`graphicsImageService`** + **`graphics_model`**. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 

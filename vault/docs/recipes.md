@@ -25,11 +25,12 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 
 ### Grocery prices (Australia)
 
-1. **Shop → Grocery prices** — paste a shopping list (one ingredient per line).
-2. **Compare** — `POST /api/recipes/grocery/price` web-searches Coles, Woolworths, and Aldi, then AI structures a per-item and total comparison (AUD).
-3. From any open recipe, **Compare Coles / Woolworths / Aldi** copies ingredients into this tool.
+1. From any open recipe (leftovers or by name), tap **Get prices** in the **Grocery prices** section under the recipe — no page change, no second tool.
+2. `POST /api/recipes/grocery/price` looks up each ingredient via **live product search** (Google Shopping via Serper/SerpApi, or organic `site:coles.com.au` / `site:woolworths.com.au` search as fallback) — no AI guessing, no text model required. Each priced row links back to its source listing.
+3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
+4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
-Requires **SEARCH_API_KEY** (same as web search). Prices are **estimates from search snippets** — not live API feeds from the supermarkets.
+Requires **`SEARCH_API_KEY`** (Settings → Web search or Railway variable). Serper/SerpApi give real prices + retailer name via Google Shopping; Brave falls back to organic search only. Prices reflect the moment of search — always confirm in-store or in-app before buying.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 
@@ -46,7 +47,7 @@ All long operations use the global **ProcessingModal**.
 | `POST` | `/api/recipes/expand` | `{ recipe, ingredients, notes? }` → full recipe + links |
 | `POST` | `/api/recipes/named/suggest` | `{ name, notes? }` → Basic / Advanced / Master cards |
 | `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes? }` → full recipe + swaps + image |
-| `POST` | `/api/recipes/grocery/price` | `{ ingredients, recipeTitle?, servings?, recipeIngredients? }` → AU store comparison |
+| `POST` | `/api/recipes/grocery/price` | `{ ingredients, recipeIngredients? }` → sourced Coles/Woolworths prices + links |
 | `POST` | `/api/recipes/image` | Regenerate dish photo `{ title, imagePrompt }` → `{ imageDataUrl }` |
 | `GET` | `/api/recipes/library` | List saved; `?tag=fast` filters |
 | `POST` | `/api/recipes/library` | Save favourite |
@@ -76,7 +77,7 @@ Image and video generation models (`fal`, `replicate`, etc.) in `vault_models` a
 |---|---|
 | `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` | Recipe suggest + expand |
 | `FAL_API_KEY` | Dish image generation (via Graphics model routing) |
-| `SEARCH_API_KEY` | Video/article links on expand (Brave/Serper/SerpAPI via `webSearchService`) |
+| `SEARCH_API_KEY` | Video/article links on expand, **and required for grocery prices** (Brave/Serper/SerpAPI via `webSearchService`). Serper/SerpApi enable real Google Shopping prices; Brave is organic-search-only fallback. |
 
 Dish images use **`graphics_model`** from Settings → AI & Chat (same as the Graphics app), not a separate recipe model.
 

@@ -111,4 +111,71 @@ async function webSearch(query, { num = 8 } = {}) {
   })).filter((r) => r.url);
 }
 
-module.exports = { webSearch, getSearchConfig };
+function parsePriceString(str) {
+  const match = String(str || '').match(/(\d{1,4}(?:[.,]\d{2})?)/);
+  if (!match) return null;
+  const n = Number(match[1].replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Real shopping-engine results (price + retailer name) — Serper and SerpApi only.
+ * Brave has no shopping index; returns null so callers can fall back to organic search.
+ * @param {string} query
+ * @returns {Promise<Array<{title:string,source:string,price:number|null,url:string,image?:string}>|null>}
+ */
+async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
+  const { apiKey, provider } = await getSearchConfig();
+  const encoded = encodeURIComponent(query.trim());
+
+  if (provider === 'serper') {
+    const data = await new Promise((resolve, reject) => {
+      const body = JSON.stringify({ q: query.trim(), gl: country, num });
+      const req2 = https.request({
+        hostname: 'google.serper.dev',
+        path: '/shopping',
+        method: 'POST',
+        headers: {
+          'X-API-KEY': apiKey,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: 15000,
+      }, (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+          catch { reject(new Error('Invalid JSON from Serper shopping')); }
+        });
+      });
+      req2.on('error', reject);
+      req2.write(body);
+      req2.end();
+    });
+    return (data.shopping || []).slice(0, num).map((r) => ({
+      title: r.title || '',
+      source: r.source || '',
+      price: parsePriceString(r.price),
+      url: r.link || r.productLink || null,
+      image: r.imageUrl || null,
+    })).filter((r) => r.title);
+  }
+
+  if (provider === 'serpapi') {
+    const data = await fetchJson(
+      `https://serpapi.com/search.json?q=${encoded}&api_key=${encodeURIComponent(apiKey)}&num=${num}&engine=google_shopping&gl=${country}`
+    );
+    return (data.shopping_results || []).slice(0, num).map((r) => ({
+      title: r.title || '',
+      source: r.source || '',
+      price: Number.isFinite(Number(r.extracted_price)) ? Number(r.extracted_price) : parsePriceString(r.price),
+      url: r.product_link || r.link || null,
+      image: r.thumbnail || null,
+    })).filter((r) => r.title);
+  }
+
+  return null;
+}
+
+module.exports = { webSearch, shoppingSearch, parsePriceString, getSearchConfig };

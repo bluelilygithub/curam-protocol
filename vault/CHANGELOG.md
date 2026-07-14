@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (recipes-grocery-sourced)
+
+**Fix:** Grocery prices rebuilt around **real, cited prices** instead of AI guesses. `recipeGroceryService.js` now looks up each ingredient via **Google Shopping search** (Serper/SerpApi `shoppingSearch()`, new in `webSearchService.js`) filtered to Coles/Woolworths, falling back to `site:coles.com.au` / `site:woolworths.com.au` organic search with price parsed from the listing. Every priced row links to its source; unmatched items show **"Not found"** with a manual store-search link — no fabricated numbers. Removed the text-model/AI pricing path entirely (no chat model required, only `SEARCH_API_KEY`).
+
+**UX:** "Get prices" now runs and renders inline directly beneath the open recipe (leftovers and by-name) — no navigating to a separate Shop tool or extra button press. Shop → Grocery prices remains as a standalone tool for ad-hoc lists.
+
+---
+
+## 2026-07-14 (recipes-grocery-approx)
+
+**Fix:** Grocery prices — Coles & Woolworths **approximate** guide only (AI estimates + optional live store fetch). Removed Aldi; no longer depends on web search snippets (fixed $0 totals).
+
+---
+
 ## 2026-07-14 (recipes-grocery-shop)
 
 **Feature:** Recipes **Shop → Grocery prices** — compare ingredient list across **Coles, Woolworths, Aldi** (Australia) via web search + AI (`POST /api/recipes/grocery/price`). Import from open recipe. Service: **`recipeGroceryService.js`**.

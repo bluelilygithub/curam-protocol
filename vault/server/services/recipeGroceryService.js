@@ -1,29 +1,24 @@
 'use strict';
 
-const { callModel } = require('./callModel');
-const { getModelsForUser, pickTextModel } = require('./modelResolver');
-const { logUsage } = require('../utils/logUsage');
-const { parseModelJson } = require('../utils/parseModelJson');
-const { webSearch } = require('./webSearchService');
+const { webSearch, shoppingSearch, parsePriceString, getSearchConfig } = require('./webSearchService');
 
 const AU_STORES = [
   { id: 'coles', label: 'Coles', domain: 'coles.com.au' },
   { id: 'woolworths', label: 'Woolworths', domain: 'woolworths.com.au' },
-  { id: 'aldi', label: 'Aldi', domain: 'aldi.com.au' },
 ];
 
-const GROCERY_SYSTEM = `You are an Australian supermarket price analyst for Coles, Woolworths, and Aldi.
-Use ONLY prices and product names found in the provided web search snippets — never invent prices.
-If a store price is not in the snippets, set confidence to "unknown" and price null.
-Prefer own-brand and common pack sizes matching the ingredient quantity when possible.
-All prices in AUD. Return ONLY valid JSON. No markdown fences.`;
+const STORE_IDS = AU_STORES.map((s) => s.id);
+const STORE_MATCH = {
+  coles: (s) => s.includes('coles'),
+  woolworths: (s) => s.includes('woolworths') || s.includes('woolies'),
+};
 
 function normalizeIngredientLines(raw) {
   const lines = String(raw || '')
     .split(/\n|,/)
     .map((s) => s.replace(/^[-•*]\s*/, '').trim())
     .filter(Boolean);
-  return [...new Set(lines)].slice(0, 20);
+  return [...new Set(lines)].slice(0, 12);
 }
 
 function formatRecipeIngredients(ingredients) {
@@ -37,182 +32,203 @@ function formatRecipeIngredients(ingredients) {
     .filter(Boolean);
 }
 
-async function callGroceryModel(userId, modelId, prompt, { system, maxTokens = 3500, feature = 'recipes_grocery' } = {}) {
-  if (!modelId) throw new Error('No text model configured — add a chat model in Settings → AI & Chat');
-  const result = await callModel(modelId, prompt, { system, maxTokens, returnUsage: true });
-  logUsage({
-    userId,
-    model: result.model,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-    feature,
-  });
+function ingredientSearchTerm(line) {
+  return String(line || '')
+    .replace(/\d+(\.\d+)?\s*(g|kg|ml|l|tbsp|tsp|cup|cups|oz|lb|pcs?)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || String(line || '').trim().slice(0, 80);
+}
+
+function storeSearchUrl(storeId, term) {
+  const encoded = encodeURIComponent(term);
+  return storeId === 'coles'
+    ? `https://www.coles.com.au/search?q=${encoded}`
+    : `https://www.woolworths.com.au/shop/search/products?searchTerm=${encoded}`;
+}
+
+/** Google Shopping AU results, filtered to the two chains we care about. */
+async function findViaShopping(term) {
+  const found = {};
+  try {
+    const results = await shoppingSearch(`${term} australia`, { num: 20 });
+    if (!Array.isArray(results)) return found;
+    for (const r of results) {
+      const src = String(r.source || '').toLowerCase();
+      for (const storeId of STORE_IDS) {
+        if (found[storeId] || !r.price) continue;
+        if (STORE_MATCH[storeId](src)) {
+          found[storeId] = {
+            product: r.title,
+            price: r.price,
+            url: r.url,
+            source: r.source || AU_STORES.find((s) => s.id === storeId)?.label,
+            confidence: 'sourced',
+          };
+        }
+      }
+    }
+  } catch { /* provider may not support shopping search */ }
+  return found;
+}
+
+/** Fallback: site-restricted organic search, price parsed from title/snippet. */
+async function findViaOrganic(storeId, term) {
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  if (!domain) return null;
+  try {
+    const results = await webSearch(`${term} site:${domain}`, { num: 5 });
+    for (const r of results) {
+      const price = parsePriceString(r.title) || parsePriceString(r.snippet);
+      if (price) {
+        return {
+          product: r.title,
+          price,
+          url: r.url,
+          source: AU_STORES.find((s) => s.id === storeId)?.label,
+          confidence: 'sourced',
+        };
+      }
+    }
+  } catch { /* search unavailable */ }
+  return null;
+}
+
+async function findStorePrices(line) {
+  const term = ingredientSearchTerm(line);
+  const result = { coles: null, woolworths: null };
+  if (!term) return result;
+
+  const viaShopping = await findViaShopping(term);
+  result.coles = viaShopping.coles || null;
+  result.woolworths = viaShopping.woolworths || null;
+
+  await Promise.all(
+    STORE_IDS.filter((id) => !result[id]).map(async (id) => {
+      result[id] = await findViaOrganic(id, term);
+    })
+  );
+
   return result;
 }
 
-async function callGroceryJson(userId, modelId, prompt, opts = {}) {
-  const { text: raw } = await callGroceryModel(userId, modelId, prompt, opts);
-  let parsed = parseModelJson(raw);
-  if (parsed) return parsed;
-
-  const { text: retryRaw } = await callGroceryModel(
-    userId,
-    modelId,
-    `Return ONLY valid JSON. Fix this output:\n${String(raw || '').slice(0, 8000)}`,
-    { system: 'Output valid JSON only.', maxTokens: opts.maxTokens, feature: `${opts.feature || 'recipes_grocery'}_retry` }
-  );
-  parsed = parseModelJson(retryRaw);
-  if (!parsed) throw new Error('Could not parse grocery price response — try again');
-  return parsed;
-}
-
-async function gatherGrocerySearchResults(ingredientLines) {
-  const items = ingredientLines.slice(0, 12);
-  const summary = items.join(', ').slice(0, 280);
-  const queries = [
-    `Coles Australia ${summary} supermarket price`,
-    `Woolworths Australia ${summary} supermarket price`,
-    `Aldi Australia ${summary} supermarket price`,
-  ];
-
-  if (items.length <= 8) {
-    for (const item of items.slice(0, 6)) {
-      queries.push(`${item} price Coles Woolworths Aldi Australia AUD`);
+async function mapWithConcurrency(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx], idx);
     }
   }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 
-  const seen = new Set();
-  const merged = [];
-  for (const query of [...new Set(queries)].slice(0, 8)) {
-    try {
-      const results = await webSearch(query, { num: 5 });
-      for (const row of results) {
-        const key = row.url || row.title;
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        merged.push(row);
+function computeTotals(items) {
+  const totals = {};
+  let cheapestStore = null;
+  let cheapestSum = Infinity;
+
+  for (const store of STORE_IDS) {
+    let sum = 0;
+    let priced = 0;
+    for (const row of items) {
+      const p = row[store]?.price;
+      if (p != null && p > 0) {
+        sum += p;
+        priced += 1;
       }
-    } catch {
-      /* continue other queries */
+    }
+    totals[store] = {
+      total: priced > 0 ? sum : null,
+      label: priced > 0 ? `$${sum.toFixed(2)}` : null,
+      complete: priced === items.length && items.length > 0,
+      pricedCount: priced,
+    };
+    if (priced > 0 && sum < cheapestSum) {
+      cheapestSum = sum;
+      cheapestStore = store;
     }
   }
-  return merged.slice(0, 40);
+
+  return { ...totals, cheapestStore: cheapestStore || null };
 }
 
-function buildGroceryPrompt(ingredientLines, searchResults, { recipeTitle, servings } = {}) {
-  const snippetBlock = searchResults.length
-    ? searchResults.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n')
-    : 'No search results — mark all prices unknown.';
-
-  return `Shopping list (Australia — Coles, Woolworths, Aldi):
-${ingredientLines.map((line, i) => `${i + 1}. ${line}`).join('\n')}
-${recipeTitle ? `\nRecipe: ${recipeTitle}${servings ? ` (serves ${servings})` : ''}` : ''}
-
-Web search snippets:
-${snippetBlock}
-
-Return JSON:
-{
-  "disclaimer": "Short note that prices are estimates from web search",
-  "currency": "AUD",
-  "items": [
-    {
-      "ingredient": "line from list",
-      "quantity": "pack size if known",
-      "coles": { "price": 2.5, "label": "$2.50", "product": "product name", "url": "https://...", "confidence": "high|medium|low|unknown" },
-      "woolworths": { "price": null, "label": null, "product": null, "url": null, "confidence": "unknown" },
-      "aldi": { "price": 2.2, "label": "$2.20", "product": "...", "url": null, "confidence": "medium" },
-      "cheapestStore": "aldi|coles|woolworths|null",
-      "notes": "optional"
-    }
-  ],
-  "totals": {
-    "coles": { "total": 45.2, "label": "$45.20", "complete": false },
-    "woolworths": { "total": 47.1, "label": "$47.10", "complete": false },
-    "aldi": { "total": 42.8, "label": "$42.80", "complete": false },
-    "cheapestStore": "aldi"
-  },
-  "missingPrices": ["ingredients with no reliable price"],
-  "links": [{ "store": "coles", "title": "...", "url": "..." }]
-}
-
-Sum totals only for items with known prices; set complete false if any item missing for that store.`;
-}
-
-function normalizeStorePrice(val) {
-  if (!val || typeof val !== 'object') {
-    return { price: null, label: null, product: null, url: null, confidence: 'unknown' };
-  }
-  const price = Number.isFinite(Number(val.price)) ? Number(val.price) : null;
+function emptyStoreCell(storeId, term) {
   return {
-    price,
-    label: val.label != null ? String(val.label) : (price != null ? `$${price.toFixed(2)}` : null),
-    product: val.product ? String(val.product) : null,
-    url: val.url ? String(val.url) : null,
-    confidence: val.confidence || (price != null ? 'medium' : 'unknown'),
+    price: null,
+    label: null,
+    product: null,
+    url: storeSearchUrl(storeId, term),
+    source: null,
+    confidence: 'not_found',
   };
 }
 
-function normalizeGroceryResult(parsed, ingredientLines) {
-  const items = Array.isArray(parsed?.items) ? parsed.items : [];
-  return {
-    disclaimer: String(parsed?.disclaimer || 'Prices are estimates from web search — check each store before you shop.'),
-    currency: 'AUD',
-    stores: AU_STORES,
-    ingredients: ingredientLines,
-    items: items.map((row, i) => ({
-      ingredient: String(row.ingredient || ingredientLines[i] || '').trim(),
-      quantity: row.quantity ? String(row.quantity) : null,
-      coles: normalizeStorePrice(row.coles),
-      woolworths: normalizeStorePrice(row.woolworths),
-      aldi: normalizeStorePrice(row.aldi),
-      cheapestStore: row.cheapestStore || null,
-      notes: row.notes ? String(row.notes) : null,
-    })),
-    totals: {
-      coles: parsed?.totals?.coles || null,
-      woolworths: parsed?.totals?.woolworths || null,
-      aldi: parsed?.totals?.aldi || null,
-      cheapestStore: parsed?.totals?.cheapestStore || null,
-    },
-    missingPrices: Array.isArray(parsed?.missingPrices) ? parsed.missingPrices.map(String) : [],
-    links: Array.isArray(parsed?.links) ? parsed.links.map((l) => ({
-      store: l.store,
-      title: String(l.title || ''),
-      url: String(l.url || ''),
-    })).filter((l) => l.url) : [],
-  };
-}
-
-async function priceIngredients(userId, { ingredients, recipeTitle, servings, recipeIngredients } = {}) {
+async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}) {
   let lines = normalizeIngredientLines(ingredients);
   if (!lines.length && Array.isArray(recipeIngredients)) {
     lines = formatRecipeIngredients(recipeIngredients);
   }
   if (!lines.length) throw new Error('List at least one ingredient to price');
 
-  const tiers = await getModelsForUser(userId);
-  const modelId = pickTextModel(tiers, 'light');
-
-  let searchResults = [];
-  let searchError = null;
+  let searchAvailable = true;
   try {
-    searchResults = await gatherGrocerySearchResults(lines);
-  } catch (err) {
-    searchError = err.message;
+    await getSearchConfig();
+  } catch {
+    searchAvailable = false;
   }
 
-  const parsed = await callGroceryJson(
-    userId,
-    modelId,
-    buildGroceryPrompt(lines, searchResults, { recipeTitle, servings }),
-    { system: GROCERY_SYSTEM, maxTokens: 4000, feature: 'recipes_grocery' }
-  );
+  let items;
+  if (!searchAvailable) {
+    items = lines.map((line) => {
+      const term = ingredientSearchTerm(line);
+      return {
+        ingredient: line,
+        quantity: null,
+        coles: emptyStoreCell('coles', term),
+        woolworths: emptyStoreCell('woolworths', term),
+        cheapestStore: null,
+        notes: null,
+      };
+    });
+  } else {
+    items = await mapWithConcurrency(lines, 4, async (line) => {
+      const term = ingredientSearchTerm(line);
+      const found = await findStorePrices(line);
+      const coles = found.coles || emptyStoreCell('coles', term);
+      const woolworths = found.woolworths || emptyStoreCell('woolworths', term);
+      let cheapestStore = null;
+      let min = Infinity;
+      for (const [storeId, cell] of [['coles', coles], ['woolworths', woolworths]]) {
+        if (cell.price != null && cell.price < min) { min = cell.price; cheapestStore = storeId; }
+      }
+      return { ingredient: line, quantity: null, coles, woolworths, cheapestStore, notes: null };
+    });
+  }
+
+  const foundCount = items.filter((row) => row.coles.price || row.woolworths.price).length;
 
   return {
-    ...normalizeGroceryResult(parsed, lines),
-    searchResultCount: searchResults.length,
-    searchError,
+    disclaimer: searchAvailable
+      ? 'Prices sourced from live product search results — confirm in-app or in-store before you buy, as prices and stock change.'
+      : 'Add SEARCH_API_KEY in Settings → Web search to look up real prices. Use the store links below to check manually.',
+    currency: 'AUD',
+    sourced: true,
+    searchAvailable,
+    stores: AU_STORES,
+    ingredients: lines,
+    items,
+    totals: computeTotals(items),
+    missingPrices: items.filter((row) => !row.coles.price && !row.woolworths.price).map((r) => r.ingredient),
+    liveFetchNote: !searchAvailable
+      ? null
+      : foundCount === 0
+        ? 'No product listings matched — try simpler ingredient names, or use the store links to search manually.'
+        : foundCount < items.length
+          ? `Found prices for ${foundCount} of ${items.length} items — the rest need a manual store search.`
+          : null,
   };
 }
 
