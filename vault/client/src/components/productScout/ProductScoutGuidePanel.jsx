@@ -16,7 +16,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   const [step, setStep] = useState(STEPS.form);
   const [query, setQuery] = useState('');
   const [userFeatures, setUserFeatures] = useState('');
-  const [budgetHint, setBudgetHint] = useState('');
   const [featureBrief, setFeatureBrief] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -31,7 +30,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       setResult(loadedResult);
       setQuery(loadedResult.query || '');
       setUserFeatures((loadedResult.userFeatures || []).join(', '));
-      setBudgetHint(loadedResult.budgetHint != null ? String(loadedResult.budgetHint) : '');
       setFeatureBrief(loadedResult.feature_brief || null);
       setStep(STEPS.results);
       setMergeMode(false);
@@ -56,7 +54,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       const res = await api.post('/api/product-scout/guide/brief', {
         query: q,
         userFeatures,
-        ...(budgetHint.trim() ? { budgetHint: Number(budgetHint) } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Brief failed');
@@ -85,17 +82,16 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     }
     const count = selectedTierKeys.length;
     startProcessing(
-      singleTier ? 'Scouting tier…' : `Scouting ${count} tier${count !== 1 ? 's' : ''}…`,
+      singleTier ? 'Searching tier…' : `Searching ${count} tier${count !== 1 ? 's' : ''}…`,
       singleTier
-        ? 'Running Product Scout for this price tier.'
-        : 'Running Product Scout only for the tiers you selected.'
+        ? 'Running Amazon search for this price tier.'
+        : 'Searching Amazon only for the tiers you selected.'
     );
     setError(null);
     try {
       const res = await api.post('/api/product-scout/guide/run', {
         query: query.trim(),
         userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
-        ...(budgetHint.trim() ? { budgetHint: Number(budgetHint) } : {}),
         featureBrief: result?.feature_brief || featureBrief,
         selectedTierKeys,
         ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
@@ -178,7 +174,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-        Step 1: describe what you want. Step 2: review features. Step 3: pick which price tiers to scout. Step 4: compare results per tier.
+        Step 1: describe what you want. Step 2: review features. Step 3: pick price tiers to search. Step 4: compare results per tier.
       </p>
 
       {step === STEPS.form && (
@@ -206,26 +202,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
           </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
-              Budget hint (optional)
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
-              <input
-                type="number"
-                min="1"
-                value={budgetHint}
-                onChange={(e) => setBudgetHint(e.target.value)}
-                placeholder="e.g. 80"
-                className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
-              <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                Pre-selects matching tier
-              </span>
-            </div>
-          </label>
           <button
             type="submit"
             className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
@@ -249,7 +225,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       {step === STEPS.selectTiers && featureBrief && (
         <ProductScoutTierSelect
           tiers={featureBrief.tier_framework}
-          budgetHint={budgetHint}
           previouslyScouted={mergeMode ? scoutedTiers : []}
           onConfirm={(keys) => runScoutForTiers(keys, { append: mergeMode })}
           onBack={() => {
@@ -287,12 +262,12 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
                 className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
                 style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
               >
-                Scout more tiers ({scoutedTiers.length}/4 gathered)
+                Search more tiers ({scoutedTiers.length}/4 gathered)
               </button>
             )}
             {scoutedTiers.length > 0 && scoutedTiers.length < 4 && (
               <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                {scoutedTiers.length} of 4 tiers scouted
+                {scoutedTiers.length} of 4 tiers searched
               </span>
             )}
           </div>

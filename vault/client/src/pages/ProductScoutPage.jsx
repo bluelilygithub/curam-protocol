@@ -44,7 +44,6 @@ export default function ProductScoutPage() {
   const [scoutError, setScoutError] = useState(null);
   const [quickScoutOpen, setQuickScoutOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
   const [freeDelivery, setFreeDelivery] = useState(false);
   const [within2Days, setWithin2Days] = useState(false);
   const [selectedRunIds, setSelectedRunIds] = useState(new Set());
@@ -87,17 +86,16 @@ export default function ProductScoutPage() {
       addToast('Enter a product search query', 'error');
       return;
     }
-    startProcessing('Scouting products…', 'Single-budget comparison — skip the guide if you already know your max price.');
+    startProcessing('Searching products…', 'Single comparison without the tier guide.');
     setScoutError(null);
     try {
       const res = await api.post('/api/product-scout/run', {
         query: q,
-        ...(maxPrice.trim() ? { maxPrice: Number(maxPrice) } : {}),
         freeDelivery,
         within2Days,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Scout failed');
+      if (!res.ok) throw new Error(data.error || 'Search failed');
       setScoutResult(data);
       setGuideResult(null);
       setLoadedRunId(data.runId ?? null);
@@ -105,7 +103,7 @@ export default function ProductScoutPage() {
       await loadMeta();
       addToast('Comparison ready', 'success');
     } catch (err) {
-      const msg = err.message || 'Scout failed';
+      const msg = err.message || 'Search failed';
       setScoutError(msg);
       addToast(msg, 'error');
       setScoutResult(null);
@@ -171,7 +169,7 @@ export default function ProductScoutPage() {
       }
       clearSelection();
       await loadMeta();
-      addToast(`Deleted ${data.deleted ?? ids.length} scout${ids.length === 1 ? '' : 's'}`, 'success');
+      addToast(`Deleted ${data.deleted ?? ids.length} search${ids.length === 1 ? '' : 'es'}`, 'success');
     } catch (err) {
       addToast(err.message || 'Delete failed', 'error');
     } finally {
@@ -211,7 +209,7 @@ export default function ProductScoutPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            {countryLabel} — start with a buying guide, then scout the best products at each price tier.
+            {countryLabel} — start with a buying guide, then search the best products at each price tier.
           </p>
         </div>
       </div>
@@ -265,13 +263,13 @@ export default function ProductScoutPage() {
           className="text-xs font-medium transition-opacity hover:opacity-70"
           style={{ color: 'var(--color-muted)' }}
         >
-          {quickScoutOpen ? '▼' : '▶'} Quick scout — single budget, skip the guide
+          {quickScoutOpen ? '▼' : '▶'} Quick search — skip the guide
         </button>
 
         {quickScoutOpen && (
           <div className="space-y-4 pt-2">
             <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-              Already know your max price? Run one comparison without the tier guide.
+              Run one Amazon comparison without the tier guide.
             </p>
             <form onSubmit={handleQuickScout} className="space-y-3">
               <label className="block space-y-1">
@@ -284,31 +282,16 @@ export default function ProductScoutPage() {
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 />
               </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Max price (optional)</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm" style={{ color: 'var(--color-muted)' }}>$</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    placeholder="150"
-                    className="w-32 px-3 py-2.5 rounded-xl border text-sm outline-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              </label>
               <div className="flex flex-wrap gap-2">
                 <FilterToggle label="Free delivery" checked={freeDelivery} onChange={setFreeDelivery} />
                 <FilterToggle label="Within 2 days" checked={within2Days} onChange={setWithin2Days} />
               </div>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl text-sm font-medium border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
               >
-                Scout at this budget
+                Search
               </button>
             </form>
 
@@ -396,7 +379,7 @@ export default function ProductScoutPage() {
                 ? `Guide · ${scoutedCount}/4`
                 : isGuide
                   ? 'Guide'
-                  : 'Scout';
+                  : 'Search';
               return (
                 <li key={r.id} className="group flex items-stretch gap-2">
                   <label

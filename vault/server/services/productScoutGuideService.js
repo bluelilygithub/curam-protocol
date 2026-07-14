@@ -8,7 +8,6 @@ const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const {
   getAmazonDomain,
-  getPriceVariancePct,
   marketplaceLabel,
   filterByPriceBand,
   buildBudgetFitNote,
@@ -289,7 +288,7 @@ function scoutedTierKeysFromExisting(existing) {
 }
 
 async function scoutTier(userId, query, frame, index, framework, allCandidates, opts) {
-  const { amazonDomain, variancePct, modelId } = opts;
+  const { amazonDomain, modelId } = opts;
   const priceMin = tierMinPrice(frame, index, framework);
   const priceMax = frame.price_max != null ? Number(frame.price_max) : null;
   const isPro = frame.key === 'pro' || index === framework.length - 1;
@@ -304,7 +303,6 @@ async function scoutTier(userId, query, frame, index, framework, allCandidates, 
     candidates: band,
     maxPrice: isPro ? null : priceMax,
     amazonDomain,
-    variancePct,
     modelId,
     tierLabel: frame.label,
     tierFeatures: frame.feature_adds,
@@ -371,7 +369,6 @@ async function runBuyGuide(userId, {
   }
 
   const amazonDomain = existing?.amazonDomain || await getAmazonDomain(pool);
-  const variancePct = await getPriceVariancePct(pool);
   const { standard: modelId } = await getModelsForUser(userId);
 
   const allCandidates = await searchProducts(q, { maxResults: 40, amazonDomain });
@@ -389,7 +386,7 @@ async function runBuyGuide(userId, {
       i,
       framework,
       allCandidates,
-      { amazonDomain, variancePct, modelId }
+      { amazonDomain, modelId }
     );
   }
 

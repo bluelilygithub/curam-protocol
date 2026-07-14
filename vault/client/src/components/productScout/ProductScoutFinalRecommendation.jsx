@@ -137,7 +137,7 @@ function ExternalCheckSection({
       )}
 
       <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-        Snippet-based only — prices may be stale. Amazon remains your scouted benchmark.
+        Snippet-based only — prices may be stale. Amazon remains your search benchmark.
       </p>
     </div>
   );
@@ -165,7 +165,7 @@ export default function ProductScoutFinalRecommendation({
           Value recommendation
         </h2>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Get an unbiased best-value pick across the tiers you have scouted.
+          Get an unbiased best-value pick across the tiers you have searched.
         </p>
         {onRefresh && (
           <button

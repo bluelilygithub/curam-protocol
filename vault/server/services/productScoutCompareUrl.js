@@ -43,7 +43,7 @@ function compactUrlProduct(product) {
 
 function buildCompareUrlPrompt({ query, budget, urlProduct, budgetPicks }) {
   const budgetBlock = budget?.maxPrice
-    ? `Shopper budget: max $${budget.maxPrice} (stretch ceiling ~$${budget.ceiling} with ${budget.variancePct}% variance).\n`
+    ? `Shopper budget: max $${budget.maxPrice}.\n`
     : 'Shopper did not set a strict max price — infer sensible budget tiers from the picks.\n';
 
   const picksJson = JSON.stringify(budgetPicks.map(compactPick));

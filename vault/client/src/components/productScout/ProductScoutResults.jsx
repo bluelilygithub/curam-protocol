@@ -216,9 +216,7 @@ export default function ProductScoutResults({ result, compact = false }) {
       )}
       {budget && (
         <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-          Budget: <strong style={{ color: 'var(--color-text)' }}>${budget.maxPrice}</strong>
-          {' · '}
-          Variance {budget.variancePct}% (stretch up to ${budget.ceiling})
+          Max price: <strong style={{ color: 'var(--color-text)' }}>${budget.maxPrice}</strong>
         </p>
       )}
 
@@ -306,18 +304,18 @@ export default function ProductScoutResults({ result, compact = false }) {
 
       {top3.length === 0 && budget && (
         <p className="text-xs rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-          No products within your max price of ${budget.maxPrice}. See stretch suggestions below if any qualify.
+          No products within your max price of ${budget.maxPrice}.
         </p>
       )}
 
       {stretch.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            Worth considering (slightly over budget)
+            Worth considering (over budget)
           </h2>
           {budget && (
             <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-              Above ${budget.maxPrice} but within the {budget.variancePct}% admin variance — included because value may justify the extra cost.
+              Above your max price of ${budget.maxPrice} — from an earlier run.
             </p>
           )}
           <div className="space-y-3">

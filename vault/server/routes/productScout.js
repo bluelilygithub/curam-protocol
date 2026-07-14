@@ -8,8 +8,6 @@ const { compareUrlToScout } = require('../services/productScoutCompareUrl');
 const { buildGuideBrief, runBuyGuide, refreshGuideRecommendation } = require('../services/productScoutGuideService');
 const { runExternalPriceCheck } = require('../services/productScoutExternalCheck');
 const {
-  getPriceVariancePct,
-  setPriceVariancePct,
   getAmazonDomain,
   setAmazonDomain,
   getProductScoutSettings,
@@ -49,9 +47,6 @@ router.post('/settings', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
   try {
     const out = {};
-    if (req.body?.priceVariancePct != null) {
-      out.priceVariancePct = await setPriceVariancePct(pool, req.body.priceVariancePct);
-    }
     if (req.body?.amazonDomain != null) {
       out.amazonDomain = await setAmazonDomain(pool, req.body.amazonDomain);
       out.amazonCountry = marketplaceLabel(out.amazonDomain);

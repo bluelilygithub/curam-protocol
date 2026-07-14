@@ -5,22 +5,10 @@ function tierKey(tier, index) {
   return tier.key || ['essentials', 'smart_upgrade', 'enthusiast', 'pro'][index] || `tier_${index}`;
 }
 
-function defaultSelection(tiers, budgetHint, previouslyScouted = []) {
+function defaultSelection(tiers, previouslyScouted = []) {
   const scouted = new Set(previouslyScouted);
   const available = tiers.filter((t, i) => !scouted.has(tierKey(t, i)));
   if (!available.length) return [];
-
-  const hint = Number(budgetHint);
-  if (Number.isFinite(hint) && hint > 0) {
-    const match = available.find((t) => {
-      const min = Number(t.price_min);
-      const max = Number(t.price_max);
-      if (Number.isFinite(min) && Number.isFinite(max)) return hint >= min && hint <= max;
-      if (Number.isFinite(max)) return hint <= max;
-      return false;
-    });
-    if (match) return [tierKey(match, tiers.indexOf(match))];
-  }
 
   const first = available[0];
   return [tierKey(first, tiers.indexOf(first))];
@@ -28,7 +16,6 @@ function defaultSelection(tiers, budgetHint, previouslyScouted = []) {
 
 export default function ProductScoutTierSelect({
   tiers = [],
-  budgetHint,
   previouslyScouted = [],
   onConfirm,
   onBack,
@@ -37,7 +24,7 @@ export default function ProductScoutTierSelect({
 }) {
   const scoutedSet = useMemo(() => new Set(previouslyScouted), [previouslyScouted]);
 
-  const [selected, setSelected] = useState(() => defaultSelection(tiers, budgetHint, previouslyScouted));
+  const [selected, setSelected] = useState(() => defaultSelection(tiers, previouslyScouted));
 
   const toggle = (key, disabled) => {
     if (disabled) return;
@@ -62,12 +49,12 @@ export default function ProductScoutTierSelect({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-          {mergeMode ? 'Scout more tiers' : 'Choose price tiers to scout'}
+          {mergeMode ? 'Search more tiers' : 'Choose price tiers to search'}
         </h2>
         <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
           {mergeMode
-            ? 'Select tiers that have not been scouted yet. Each tier runs a full Product Scout comparison.'
-            : 'Select one or more tiers. We only search Amazon for the tiers you pick — faster than scouting all four.'}
+            ? 'Select tiers that have not been searched yet. Each tier runs a full Amazon comparison.'
+            : 'Select one or more tiers. We only search Amazon for the tiers you pick — faster than searching all four.'}
         </p>
       </div>
 
@@ -108,7 +95,7 @@ export default function ProductScoutTierSelect({
                         className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
                         style={{ background: 'rgba(22, 163, 74, 0.12)', color: '#166534' }}
                       >
-                        Scouted
+                        Searched
                       </span>
                     )}
                   </div>
@@ -135,10 +122,10 @@ export default function ProductScoutTierSelect({
           style={{ background: 'var(--color-primary)' }}
         >
           {loading
-            ? 'Scouting…'
+            ? 'Searching…'
             : mergeMode
-              ? `Scout ${newCount} tier${newCount !== 1 ? 's' : ''}`
-              : `Scout ${selected.length} tier${selected.length !== 1 ? 's' : ''}`}
+              ? `Search ${newCount} tier${newCount !== 1 ? 's' : ''}`
+              : `Search ${selected.length} tier${selected.length !== 1 ? 's' : ''}`}
         </button>
         {onBack && (
           <button

@@ -47,7 +47,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
               </span>
               {scouted && hasScout && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
-                  Top {scout.comparison.top3.length} scouted
+                  Top {scout.comparison.top3.length} found
                 </span>
               )}
               {scouted && !hasScout && !tier.scout_error && (
@@ -60,7 +60,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
                   className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
                   style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
                 >
-                  Not scouted
+                  Not searched
                 </span>
               )}
             </div>
@@ -76,7 +76,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
               className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}
             >
-              {isScouting ? '…' : 'Scout'}
+              {isScouting ? '…' : 'Search'}
             </button>
           )}
         </div>
@@ -104,7 +104,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
             {hasScout ? (
               <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <p className="text-[10px] font-medium mb-3 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
-                  Product scout · max ~${scout.budget?.maxPrice ?? tier.price_max ?? '—'}
+                  Tier search · max ~${scout.budget?.maxPrice ?? tier.price_max ?? '—'}
                 </p>
                 <ProductScoutResults result={scout} compact />
               </div>
@@ -121,7 +121,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
                     className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                     style={{ background: 'var(--color-primary)' }}
                   >
-                    {isScouting ? 'Scouting…' : `Scout ${tier.label}`}
+                    {isScouting ? 'Searching…' : `Search ${tier.label}`}
                   </button>
                 )}
               </div>
@@ -165,15 +165,6 @@ export default function ProductScoutTierLadder({
         </p>
       )}
 
-      {result.budget_fit_note && (
-        <div
-          className="rounded-xl border p-3 text-xs leading-relaxed"
-          style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          {result.budget_fit_note.replace(/\*\*/g, '')}
-        </div>
-      )}
-
       <ProductScoutFinalRecommendation
         recommendation={recommendation}
         onRefresh={onRefreshRecommendation}
@@ -187,7 +178,7 @@ export default function ProductScoutTierLadder({
 
       {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-          {scoutedTiers.length} of {tiers.length} tiers scouted — scout remaining tiers individually below.
+          {scoutedTiers.length} of {tiers.length} tiers searched — search remaining tiers individually below.
         </p>
       )}
 

@@ -9,7 +9,7 @@ const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
 const { parseModelJson } = require('../utils/parseModelJson');
-const { getPriceVariancePct, getAmazonDomain, applyBudgetFilter, marketplaceLabel } = require('./productScoutSettings');
+const { getAmazonDomain, applyBudgetFilter, marketplaceLabel } = require('./productScoutSettings');
 const { attachPreScores, blendValueScore } = require('./productScoutScoring');
 const { sanitizeFeatureTable, cleanDeliveryDisplay } = require('./productScoutTableSanitize');
 
@@ -17,7 +17,7 @@ const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on V
 Each candidate includes a pre_score (0–100) computed from price, star rating, and review count. Use it as your baseline.
 Your value_score for each pick should stay within ±12 of that product's pre_score unless listing bullets clearly justify a larger move — explain why in value_rationale.
 Do not reorder products dramatically without feature evidence in the bullets provided.
-When a budget is set, top3 must come only from in-budget candidates. Stretch suggestions must come only from the stretch list.
+When a budget is set, top3 must come only from in-budget candidates. Return "stretch_suggestions": [].
 Return ONLY a single valid JSON object. No markdown fences. No prose before or after the JSON.`;
 
 function compactCandidates(candidates) {
@@ -40,7 +40,7 @@ function buildComparePrompt(query, primary, stretch, budget, { compact = false, 
     : 'selection_summary: max 150 words total. value_rationale: max 30 words each.';
 
   const budgetBlock = budget
-    ? `Budget: max price ${budget.maxPrice}. Variance ${budget.variancePct}% allows stretch picks up to ${budget.ceiling} (above budget but within tolerance).\n`
+    ? `Budget: max price $${budget.maxPrice}.\n`
     : '';
 
   const tierBlock = tierLabel
@@ -48,11 +48,11 @@ function buildComparePrompt(query, primary, stretch, budget, { compact = false, 
     : '';
 
   const stretchBlock = stretch.length
-    ? `\nSTRETCH candidates (above budget, within variance — pick up to 2 only if value clearly justifies the extra cost):
+    ? `\nOVER-BUDGET candidates (legacy — pick up to 2 only if value clearly justifies the extra cost):
 ${JSON.stringify({ stretch_candidates: compactCandidates(stretch) })}
 
 For stretch_suggestions use candidate_id from the stretch list. Include stretch_rationale explaining why the extra spend is worth it.\n`
-    : '\nNo stretch candidates. Return "stretch_suggestions": [].\n';
+    : '\nReturn "stretch_suggestions": [].\n';
 
   const top3Rule = primary.length
     ? 'Pick the top 3 by value from IN-BUDGET candidates only.'
@@ -224,7 +224,6 @@ async function executeScoutComparison(userId, query, {
   freeDelivery = false,
   within2Days = false,
   amazonDomain,
-  variancePct,
   modelId,
   candidates: poolIn,
   tierLabel,
@@ -233,7 +232,6 @@ async function executeScoutComparison(userId, query, {
 } = {}) {
   const q = String(query || '').trim();
   const domain = amazonDomain || await getAmazonDomain(pool);
-  const variance = variancePct ?? await getPriceVariancePct(pool);
   const model = modelId || (await getModelsForUser(userId)).standard;
 
   let allCandidates = poolIn;
@@ -251,8 +249,7 @@ async function executeScoutComparison(userId, query, {
 
   const { primary, stretch, budget } = applyBudgetFilter(
     allCandidates,
-    hasBudget ? max : null,
-    variance
+    hasBudget ? max : null
   );
 
   const primaryScored = attachPreScores(primary);
@@ -305,7 +302,6 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
   const q = String(query || '').trim();
   if (!q) throw new Error('Query is required');
 
-  const variancePct = await getPriceVariancePct(pool);
   const amazonDomain = await getAmazonDomain(pool);
   const max = Number(maxPrice);
   const hasBudget = Number.isFinite(max) && max > 0;
@@ -315,15 +311,13 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
     freeDelivery,
     within2Days,
     amazonDomain,
-    variancePct,
     includeExternals: true,
   });
 
   if (scout.error) {
-    const ceiling = scout.budget?.ceiling;
     throw new Error(
-      ceiling
-        ? `No products found within your max price ($${max}) or variance ceiling ($${ceiling}). Try raising your budget.`
+      hasBudget
+        ? `No products found within your max price ($${max}). Try raising your budget.`
         : scout.error
     );
   }

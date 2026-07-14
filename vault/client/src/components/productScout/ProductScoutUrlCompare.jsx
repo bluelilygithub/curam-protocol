@@ -120,7 +120,7 @@ export default function ProductScoutUrlCompare({ runId, comparisons = [], onComp
       return;
     }
     if (!runId) {
-      addToast('Run a scout search first', 'error');
+      addToast('Run a search first', 'error');
       return;
     }
 

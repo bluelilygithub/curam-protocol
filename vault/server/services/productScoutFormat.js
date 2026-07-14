@@ -52,12 +52,9 @@ function formatMarkdown(result) {
   const stretch = comp.stretch_suggestions || [];
   if (stretch.length) {
     const budget = result.budget;
-    lines.push('## Slightly over budget (within variance)', '');
-    if (budget) {
-      lines.push(
-        `_Above $${budget.maxPrice} but within ${budget.variancePct}% variance (up to $${budget.ceiling})._`,
-        ''
-      );
+    lines.push('## Slightly over budget', '');
+    if (budget?.maxPrice) {
+      lines.push(`_Above max price of $${budget.maxPrice}._`, '');
     }
     for (const item of stretch) {
       const over = item.over_budget_pct != null ? ` (+${item.over_budget_pct}%)` : '';
