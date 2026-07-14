@@ -15,10 +15,15 @@ function isImageProvider(provider) {
   return ['fal', 'seedance', 'replicate'].includes(String(provider || '').trim().toLowerCase());
 }
 
-/** Image/video generation entries in vault_models — not valid for callModel text. */
+function isSearchProvider(provider) {
+  return ['serper', 'serpapi'].includes(String(provider || '').trim().toLowerCase());
+}
+
+/** Non-chat entries in vault_models (image gen, shopping search, etc.). */
 function isNonTextModel(entry) {
   if (!entry) return false;
   if (isImageProvider(entry.provider)) return true;
+  if (isSearchProvider(entry.provider)) return true;
   const id = String(entry.id || '').trim().toLowerCase();
   if (!id) return false;
   if (id.startsWith('fal-ai/') || id.startsWith('fal/')) return true;

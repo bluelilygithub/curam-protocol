@@ -33,8 +33,28 @@ async function loadSetting(key) {
 }
 
 async function resolveShoppingSearchProvider() {
-  const raw = (await loadSetting('shopping_search_provider') || 'serper').toLowerCase();
-  return raw === 'serpapi' ? 'serpapi' : 'serper';
+  const raw = (await loadSetting('shopping_search_provider') || '').toLowerCase();
+  if (raw === 'serpapi' || raw === 'serper') return raw;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE u."isAdmin" = TRUE AND s.key = 'vault_models'
+       ORDER BY s."userId" ASC LIMIT 1`
+    );
+    const catalog = rows[0]?.value;
+    if (catalog) {
+      const parsed = JSON.parse(catalog);
+      if (Array.isArray(parsed)) {
+        const entry = parsed.find((m) => m?.provider === 'serper' || m?.provider === 'serpapi');
+        if (entry?.provider === 'serpapi') return 'serpapi';
+        if (entry?.provider === 'serper') return 'serper';
+      }
+    }
+  } catch { /* ignore */ }
+
+  return 'serper';
 }
 
 /**

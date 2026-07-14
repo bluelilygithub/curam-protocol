@@ -152,7 +152,6 @@ function SettingsPage() {
   const [themeBuilderDesignModel, setThemeBuilderDesignModel] = useState('');
   const [themeBuilderDesignMeta, setThemeBuilderDesignMeta] = useState(null);
   const [themeBuilderDesignSaved, setThemeBuilderDesignSaved] = useState(false);
-  const [shoppingSearchProvider, setShoppingSearchProvider] = useState('serper');
 
   const TABS = user?.isAdmin
     ? [
@@ -328,9 +327,6 @@ function SettingsPage() {
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
-      if (data.shopping_search_provider === 'serpapi' || data.shopping_search_provider === 'serper') {
-        setShoppingSearchProvider(data.shopping_search_provider);
-      }
     }).catch(() => {});
 
     api.get('/api/settings/mobile').then(r => r.json()).then(data => {
@@ -428,6 +424,9 @@ function SettingsPage() {
       updated = models.map(m => m.id === editingModel ? { ...modelForm, id: modelForm.id.trim() } : m);
     }
     await saveModels(updated);
+    if (modelForm.provider === 'serper' || modelForm.provider === 'serpapi') {
+      await api.post('/api/settings', { key: 'shopping_search_provider', value: modelForm.provider }).catch(() => {});
+    }
     cancelEdit();
   }
 
@@ -584,11 +583,6 @@ function SettingsPage() {
     setTimeout(() => setThemeBuilderDesignSaved(false), 2000);
   }
 
-  async function saveShoppingSearchProvider(provider) {
-    setShoppingSearchProvider(provider);
-    await api.post('/api/settings', { key: 'shopping_search_provider', value: provider }).catch(() => {});
-  }
-
   async function scanToolMaintenance() {
     setToolMaintenanceLoading(true);
     setToolMaintenanceError('');
@@ -630,17 +624,27 @@ function SettingsPage() {
     ['Web search disabled', runtimeInfo.disableWebSearch],
   ] : [];
 
-  const textModelChoices = models.filter(m => !['fal', 'seedance'].includes(m.provider));
+  const NON_CHAT_PROVIDERS = ['fal', 'seedance', 'serper', 'serpapi'];
+  const textModelChoices = models.filter(m => !NON_CHAT_PROVIDERS.includes(m.provider));
   const graphicsModelChoices = models.filter(m => m.provider === 'fal');
   const graphicsModelOptions = graphicsModel && !graphicsModelChoices.some(m => m.id === graphicsModel)
     ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'fal' }, ...graphicsModelChoices]
     : graphicsModelChoices;
-  const shoppingSearchKeyOk = shoppingSearchProvider === 'serpapi'
-    ? modelStatus?.search
-    : modelStatus?.serper;
-  const shoppingSearchKeyHint = shoppingSearchProvider === 'serpapi'
-    ? 'SEARCH_API_KEY required on Railway (SerpAPI)'
-    : 'SERPER_SEARCH_API_KEY required on Railway';
+
+  function modelProviderStatusKey(provider) {
+    if (provider === 'serpapi') return 'search';
+    return provider;
+  }
+
+  function modelProviderKeyHint(provider) {
+    if (provider === 'gemini') return 'GEMINI_API_KEY not set';
+    if (provider === 'deepseek') return 'DEEPSEEK_API_KEY not set';
+    if (provider === 'ollama') return 'Ollama local server unavailable';
+    if (provider === 'fal') return 'FAL_API_KEY not set';
+    if (provider === 'serper') return 'SERPER_SEARCH_API_KEY not set';
+    if (provider === 'serpapi') return 'SEARCH_API_KEY not set (SerpAPI)';
+    return 'ANTHROPIC_API_KEY not set';
+  }
 
   return (
     <div className={((['Members', 'Environment', 'Wellbeing Invites', 'Tool Maintenance'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
@@ -1413,36 +1417,6 @@ function SettingsPage() {
           )}
         </div>
 
-        {user?.isAdmin && (
-          <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
-              Shopping search
-            </label>
-            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-              Recipes <strong>Get prices</strong> — Google Shopping for Coles & Woolworths. Chat <code className="text-[10px]">@search</code> uses <code className="text-[10px]">SEARCH_API_KEY</code> separately (e.g. Brave).
-            </p>
-            <select
-              value={shoppingSearchProvider}
-              onChange={(e) => saveShoppingSearchProvider(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              <option value="serper">Serper — Google Shopping</option>
-              <option value="serpapi">SerpAPI — Google Shopping</option>
-            </select>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              {shoppingSearchKeyOk ? (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
-              ) : (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
-              )}
-              <span className="text-xs" style={{ color: shoppingSearchKeyOk ? 'var(--color-muted)' : '#b45309' }}>
-                {shoppingSearchKeyOk ? `${shoppingSearchKeyHint.replace(' required on Railway', '')} set on Railway` : shoppingSearchKeyHint}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Add / Edit form */}
         {editingModel && (
           <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
@@ -1493,6 +1467,8 @@ function SettingsPage() {
                   <option value="deepseek">DeepSeek</option>
                   <option value="ollama">Ollama local</option>
                   <option value="fal">FAL</option>
+                  <option value="serper">Serper (Google Shopping)</option>
+                  <option value="serpapi">SerpAPI (Google Shopping)</option>
                 </select>
               </div>
               <div>
@@ -1549,7 +1525,7 @@ function SettingsPage() {
         {/* Model list */}
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
           {models.map((m, i) => {
-            const configured = modelStatus ? modelStatus[m.provider] : null;
+            const configured = modelStatus ? modelStatus[modelProviderStatusKey(m.provider)] : null;
             return (
               <div
                 key={m.id}
@@ -1573,7 +1549,7 @@ function SettingsPage() {
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
                     )}
                     {configured === false && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'ollama' ? 'Ollama local server unavailable' : m.provider === 'fal' ? 'FAL_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={modelProviderKeyHint(m.provider)} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
                     )}
                     <button
                       onClick={() => testModel(m.id)}

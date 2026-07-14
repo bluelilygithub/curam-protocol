@@ -69,6 +69,16 @@ export const MODELS = [
     color: '#7c3aed',
     provider: 'deepseek',
   },
+  {
+    id: 'google-shopping',
+    name: 'Shopping search',
+    label: 'Recipes · Grocery',
+    emoji: '🛒',
+    tagline: 'Grocery prices',
+    desc: 'Google Shopping for Recipes Get prices — Coles & Woolworths. Set SERPER_SEARCH_API_KEY on Railway.',
+    color: '#059669',
+    provider: 'serper',
+  },
 ];
 
 export const PROJECT_TYPES = [

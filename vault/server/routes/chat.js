@@ -50,6 +50,7 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 function isImageModelProvider(provider) { return ['fal', 'seedance'].includes(String(provider || '').trim().toLowerCase()); }
+function isSearchModelProvider(provider) { return ['serper', 'serpapi'].includes(String(provider || '').trim().toLowerCase()); }
 function preferLocalDefaultModel(standardModel) {
   return runtimeConfig.isLocal && isOllamaModel(standardModel);
 }
@@ -527,6 +528,18 @@ router.post('/test-model', async (req, res) => {
     if (isImageModelProvider(configuredProvider)) {
       if (!process.env.FAL_API_KEY) return res.json({ ok: false, code: 'auth', error: 'FAL_API_KEY is not configured.' });
       res.json({ ok: true, response: 'FAL API key configured. This model is available for Graphics generation.' });
+    } else if (isSearchModelProvider(configuredProvider)) {
+      if (configuredProvider === 'serper') {
+        if (!process.env.SERPER_SEARCH_API_KEY?.trim()) {
+          return res.json({ ok: false, code: 'auth', error: 'SERPER_SEARCH_API_KEY is not configured.' });
+        }
+        res.json({ ok: true, response: 'Serper API key configured. Used for Recipes grocery prices.' });
+      } else {
+        if (!process.env.SEARCH_API_KEY?.trim()) {
+          return res.json({ ok: false, code: 'auth', error: 'SEARCH_API_KEY is not configured.' });
+        }
+        res.json({ ok: true, response: 'SerpAPI key configured. Used for Recipes grocery prices.' });
+      }
     } else if (isOllamaModel(modelId, configuredProvider)) {
       if (!await isOllamaAvailable()) return res.json({ ok: false, code: 'auth', error: 'Ollama is not available locally.' });
       const text = await callModel(modelId.startsWith('ollama:') ? modelId : `ollama:${modelId}`, 'Reply with only the word "ok".', { maxTokens: 10 });

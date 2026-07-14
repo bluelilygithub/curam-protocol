@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-vault-model)
+
+**Fix:** Shopping search is a normal **vault_models** entry (provider `serper` or `serpapi`) in the AI Models list — same Add/Edit/Test/Key set pattern as FAL and chat models. Removed bespoke Shopping search selector card and inline list row.
+
+---
+
 ## 2026-07-14 (shopping-search-selector-card)
 
 **Fix:** Shopping search uses the same selector-card pattern as Default model / Graphics model — placed above the AI Models list, not as a row inside it.
