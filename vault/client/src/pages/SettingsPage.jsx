@@ -1413,36 +1413,6 @@ function SettingsPage() {
           )}
         </div>
 
-        {user?.isAdmin && (
-          <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
-              Shopping search
-            </label>
-            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-              Recipes <strong>Get prices</strong> — Google Shopping for Coles & Woolworths. Chat <code className="text-[10px]">@search</code> uses <code className="text-[10px]">SEARCH_API_KEY</code> separately (e.g. Brave).
-            </p>
-            <select
-              value={shoppingSearchProvider}
-              onChange={(e) => saveShoppingSearchProvider(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              <option value="serper">Serper — Google Shopping</option>
-              <option value="serpapi">SerpAPI — Google Shopping</option>
-            </select>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              {shoppingSearchKeyOk ? (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
-              ) : (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
-              )}
-              <span className="text-xs" style={{ color: shoppingSearchKeyOk ? 'var(--color-muted)' : '#b45309' }}>
-                {shoppingSearchKeyOk ? `${shoppingSearchKeyHint.replace(' required on Railway', '')} set on Railway` : shoppingSearchKeyHint}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Add / Edit form */}
         {editingModel && (
           <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
@@ -1576,14 +1546,6 @@ function SettingsPage() {
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'ollama' ? 'Ollama local server unavailable' : m.provider === 'fal' ? 'FAL_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
                     )}
                     <button
-                      onClick={() => testModel(m.id)}
-                      disabled={testResults[m.id]?.status === 'testing'}
-                      className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70 disabled:opacity-50"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                    >
-                      {testResults[m.id]?.status === 'testing' ? 'Testing…' : 'Test'}
-                    </button>
-                    <button
                       onClick={() => openEdit(m)}
                       className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
@@ -1599,19 +1561,6 @@ function SettingsPage() {
                     </button>
                   </div>
                 </div>
-                {testResults[m.id] && testResults[m.id].status !== 'testing' && (
-                  <div
-                    className="mt-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
-                    style={{
-                      background: testResults[m.id].status === 'ok' ? '#f0fdf4' : '#fff1f2',
-                      color: testResults[m.id].status === 'ok' ? '#16a34a' : '#991b1b',
-                    }}
-                  >
-                    <span className="flex-shrink-0">{testResults[m.id].status === 'ok' ? '✓' : '✗'}</span>
-                    <span className="flex-1">{testResults[m.id].message}{testResults[m.id].hint ? ` — ${testResults[m.id].hint}` : ''}</span>
-                    <button onClick={() => setTestResults(r => { const n = { ...r }; delete n[m.id]; return n; })} className="flex-shrink-0 opacity-50 hover:opacity-100">✕</button>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1621,6 +1570,92 @@ function SettingsPage() {
             </div>
           )}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Testing APIs
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Run quick checks that configured models and search providers respond.
+        </p>
+
+        <div className="rounded-2xl border overflow-hidden mb-4" style={{ borderColor: 'var(--color-border)' }}>
+          {models.map((m, i) => (
+            <div
+              key={m.id}
+              className="flex flex-col px-4 py-3"
+              style={{
+                background: 'var(--color-surface)',
+                borderBottom: i < models.length - 1 ? '1px solid var(--color-border)' : 'none',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl flex-shrink-0">{m.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{m.name}</div>
+                  <div className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{m.id}</div>
+                </div>
+                <button
+                  onClick={() => testModel(m.id)}
+                  disabled={testResults[m.id]?.status === 'testing'}
+                  className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70 disabled:opacity-50 flex-shrink-0"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                >
+                  {testResults[m.id]?.status === 'testing' ? 'Testing…' : 'Test'}
+                </button>
+              </div>
+              {testResults[m.id] && testResults[m.id].status !== 'testing' && (
+                <div
+                  className="mt-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
+                  style={{
+                    background: testResults[m.id].status === 'ok' ? '#f0fdf4' : '#fff1f2',
+                    color: testResults[m.id].status === 'ok' ? '#16a34a' : '#991b1b',
+                  }}
+                >
+                  <span className="flex-shrink-0">{testResults[m.id].status === 'ok' ? '✓' : '✗'}</span>
+                  <span className="flex-1">{testResults[m.id].message}{testResults[m.id].hint ? ` — ${testResults[m.id].hint}` : ''}</span>
+                  <button onClick={() => setTestResults(r => { const n = { ...r }; delete n[m.id]; return n; })} className="flex-shrink-0 opacity-50 hover:opacity-100">✕</button>
+                </div>
+              )}
+            </div>
+          ))}
+          {models.length === 0 && (
+            <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>
+              Add models above to test them here.
+            </div>
+          )}
+        </div>
+
+        {user?.isAdmin && (
+          <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Shopping search
+            </label>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Recipes <strong>Get prices</strong> — Google Shopping for Coles & Woolworths. Chat <code className="text-[10px]">@search</code> uses <code className="text-[10px]">SEARCH_API_KEY</code> separately (e.g. Brave).
+            </p>
+            <select
+              value={shoppingSearchProvider}
+              onChange={(e) => saveShoppingSearchProvider(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="serper">Serper — Google Shopping</option>
+              <option value="serpapi">SerpAPI — Google Shopping</option>
+            </select>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {shoppingSearchKeyOk ? (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
+              ) : (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+              )}
+              <span className="text-xs" style={{ color: shoppingSearchKeyOk ? 'var(--color-muted)' : '#b45309' }}>
+                {shoppingSearchKeyOk ? `${shoppingSearchKeyHint.replace(' required on Railway', '')} set on Railway` : shoppingSearchKeyHint}
+              </span>
+            </div>
+          </div>
+        )}
       </section>
       </>)}
 
