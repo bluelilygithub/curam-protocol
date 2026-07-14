@@ -1413,6 +1413,36 @@ function SettingsPage() {
           )}
         </div>
 
+        {user?.isAdmin && (
+          <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Shopping search
+            </label>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Recipes <strong>Get prices</strong> — Google Shopping for Coles & Woolworths. Chat <code className="text-[10px]">@search</code> uses <code className="text-[10px]">SEARCH_API_KEY</code> separately (e.g. Brave).
+            </p>
+            <select
+              value={shoppingSearchProvider}
+              onChange={(e) => saveShoppingSearchProvider(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="serper">Serper — Google Shopping</option>
+              <option value="serpapi">SerpAPI — Google Shopping</option>
+            </select>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {shoppingSearchKeyOk ? (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
+              ) : (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+              )}
+              <span className="text-xs" style={{ color: shoppingSearchKeyOk ? 'var(--color-muted)' : '#b45309' }}>
+                {shoppingSearchKeyOk ? `${shoppingSearchKeyHint.replace(' required on Railway', '')} set on Railway` : shoppingSearchKeyHint}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Add / Edit form */}
         {editingModel && (
           <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
@@ -1520,15 +1550,13 @@ function SettingsPage() {
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
           {models.map((m, i) => {
             const configured = modelStatus ? modelStatus[m.provider] : null;
-            const hasShoppingRow = user?.isAdmin;
-            const isLastModelRow = i === models.length - 1;
             return (
               <div
                 key={m.id}
                 className="flex flex-col px-4 py-3"
                 style={{
                   background: 'var(--color-surface)',
-                  borderBottom: !isLastModelRow || hasShoppingRow ? '1px solid var(--color-border)' : 'none',
+                  borderBottom: i < models.length - 1 ? '1px solid var(--color-border)' : 'none',
                 }}
               >
                 <div className="flex items-center gap-3">
@@ -1587,49 +1615,7 @@ function SettingsPage() {
               </div>
             );
           })}
-          {user?.isAdmin && (
-            <div
-              className="flex flex-col px-4 py-3"
-              style={{ background: 'var(--color-surface)' }}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-xl flex-shrink-0">🛒</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Shopping search</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>Recipes · Grocery</span>
-                  </div>
-                  <div className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                    {shoppingSearchProvider === 'serpapi' ? 'SEARCH_API_KEY · SerpAPI Google Shopping' : 'SERPER_SEARCH_API_KEY · Serper Google Shopping'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {shoppingSearchKeyOk ? (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
-                  ) : (
-                    <span
-                      className="text-xs font-medium px-2 py-0.5 rounded-full"
-                      title={shoppingSearchKeyHint}
-                      style={{ background: '#fef3c7', color: '#b45309' }}
-                    >
-                      ⚠️ Key missing
-                    </span>
-                  )}
-                  <select
-                    value={shoppingSearchProvider}
-                    onChange={(e) => saveShoppingSearchProvider(e.target.value)}
-                    className="text-xs px-2 py-1 rounded border outline-none max-w-[88px]"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                    title="Shopping search provider"
-                  >
-                    <option value="serper">Serper</option>
-                    <option value="serpapi">SerpAPI</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-          {models.length === 0 && !user?.isAdmin && (
+          {models.length === 0 && (
             <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>
               No models configured. Add one above or reset to defaults.
             </div>

@@ -30,7 +30,7 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
 4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
-Requires **`SERPER_SEARCH_API_KEY`** on Railway (default provider **Serper**). Listed in **Settings → AI & Chat → AI Models** list with **Key set / Key missing** like other providers; pick Serper vs SerpAPI on that row. Chat **`SEARCH_API_KEY`** (e.g. Brave) stays separate for `@search`.
+Requires **`SERPER_SEARCH_API_KEY`** on Railway (default provider **Serper**). **Settings → AI & Chat → Shopping search** shows key status and provider (Serper vs SerpAPI). Chat **`SEARCH_API_KEY`** (e.g. Brave) stays separate for `@search`.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 

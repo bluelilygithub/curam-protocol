@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-selector-card)
+
+**Fix:** Shopping search uses the same selector-card pattern as Default model / Graphics model — placed above the AI Models list, not as a row inside it.
+
+---
+
 ## 2026-07-14 (shopping-search-model-list-row)
 
 **Fix:** Shopping search appears as a row in the **AI Models** list (same bordered div as Claude/Gemini/FAL) with key status and provider select — not a separate section or selector card. Removed invented **Testing APIs** section; **Test** restored on model rows.
