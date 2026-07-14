@@ -431,7 +431,7 @@ function RecipeDetailPanel({
             </p>
             {status && !status.webSearch && (
               <p className="text-[10px] mb-2" style={{ color: '#f59e0b' }}>
-                Add a Serper shopping key in Settings → AI & Chat to look up grocery prices.
+                Add <code className="text-[10px]">SERPER_SEARCH_API_KEY</code> on Railway (Settings → AI & Chat shows status).
               </p>
             )}
             <button
@@ -1041,7 +1041,7 @@ export default function RecipesPage() {
 
             {status && !status.webSearch && (
               <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
-                Add a Serper shopping key in Settings → AI & Chat to look up grocery prices.
+                Add <code className="text-[10px]">SERPER_SEARCH_API_KEY</code> on Railway (Settings → AI & Chat shows status).
               </div>
             )}
 

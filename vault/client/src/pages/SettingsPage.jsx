@@ -152,11 +152,7 @@ function SettingsPage() {
   const [themeBuilderDesignModel, setThemeBuilderDesignModel] = useState('');
   const [themeBuilderDesignMeta, setThemeBuilderDesignMeta] = useState(null);
   const [themeBuilderDesignSaved, setThemeBuilderDesignSaved] = useState(false);
-  const [shoppingSearchStatus, setShoppingSearchStatus] = useState(null);
-  const [shoppingSearchKey, setShoppingSearchKey] = useState('');
-  const [showShoppingSearchKey, setShowShoppingSearchKey] = useState(false);
-  const [shoppingSearchSaving, setShoppingSearchSaving] = useState(false);
-  const [shoppingSearchMessage, setShoppingSearchMessage] = useState('');
+  const [shoppingSearchProvider, setShoppingSearchProvider] = useState('serper');
 
   const TABS = user?.isAdmin
     ? [
@@ -332,6 +328,9 @@ function SettingsPage() {
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
+      if (data.shopping_search_provider === 'serpapi' || data.shopping_search_provider === 'serper') {
+        setShoppingSearchProvider(data.shopping_search_provider);
+      }
     }).catch(() => {});
 
     api.get('/api/settings/mobile').then(r => r.json()).then(data => {
@@ -388,10 +387,6 @@ function SettingsPage() {
         setThemeBuilderDesignModel(data.model || '');
         setThemeBuilderDesignMeta(data);
       })
-      .catch(() => {});
-    api.get('/api/settings/shopping-search')
-      .then(r => r.json())
-      .then(setShoppingSearchStatus)
       .catch(() => {});
   }, [user?.isAdmin]);
 
@@ -589,21 +584,9 @@ function SettingsPage() {
     setTimeout(() => setThemeBuilderDesignSaved(false), 2000);
   }
 
-  async function saveShoppingSearchKey() {
-    setShoppingSearchSaving(true);
-    setShoppingSearchMessage('');
-    try {
-      const res = await api.post('/api/settings/shopping-search', { key: shoppingSearchKey.trim() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not save shopping search key');
-      setShoppingSearchStatus(data);
-      setShoppingSearchKey('');
-      setShoppingSearchMessage(data.configured ? 'Shopping search key saved.' : 'Shopping search key cleared.');
-    } catch (err) {
-      setShoppingSearchMessage(err.message || 'Could not save shopping search key');
-    } finally {
-      setShoppingSearchSaving(false);
-    }
+  async function saveShoppingSearchProvider(provider) {
+    setShoppingSearchProvider(provider);
+    await api.post('/api/settings', { key: 'shopping_search_provider', value: provider }).catch(() => {});
   }
 
   async function scanToolMaintenance() {
@@ -652,6 +635,12 @@ function SettingsPage() {
   const graphicsModelOptions = graphicsModel && !graphicsModelChoices.some(m => m.id === graphicsModel)
     ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'fal' }, ...graphicsModelChoices]
     : graphicsModelChoices;
+  const shoppingSearchKeyOk = shoppingSearchProvider === 'serpapi'
+    ? modelStatus?.search
+    : modelStatus?.serper;
+  const shoppingSearchKeyHint = shoppingSearchProvider === 'serpapi'
+    ? 'SEARCH_API_KEY required on Railway (SerpAPI)'
+    : 'SERPER_SEARCH_API_KEY required on Railway';
 
   return (
     <div className={((['Members', 'Environment', 'Wellbeing Invites', 'Tool Maintenance'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
@@ -1424,6 +1413,36 @@ function SettingsPage() {
           )}
         </div>
 
+        {user?.isAdmin && (
+          <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Shopping search
+            </label>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Recipes <strong>Get prices</strong> — Google Shopping for Coles & Woolworths. Chat <code className="text-[10px]">@search</code> uses <code className="text-[10px]">SEARCH_API_KEY</code> separately (e.g. Brave).
+            </p>
+            <select
+              value={shoppingSearchProvider}
+              onChange={(e) => saveShoppingSearchProvider(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="serper">Serper — Google Shopping</option>
+              <option value="serpapi">SerpAPI — Google Shopping</option>
+            </select>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {shoppingSearchKeyOk ? (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
+              ) : (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+              )}
+              <span className="text-xs" style={{ color: shoppingSearchKeyOk ? 'var(--color-muted)' : '#b45309' }}>
+                {shoppingSearchKeyOk ? `${shoppingSearchKeyHint.replace(' required on Railway', '')} set on Railway` : shoppingSearchKeyHint}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Add / Edit form */}
         {editingModel && (
           <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
@@ -1603,100 +1622,6 @@ function SettingsPage() {
           )}
         </div>
       </section>
-
-      {user?.isAdmin && (
-        <section>
-          <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
-            Shopping search
-          </h2>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-            Serper API key for Recipes <strong>Get prices</strong> (Coles & Woolworths via Google Shopping). Chat <code className="text-[10px]">@search</code> still uses your separate <code className="text-[10px]">SEARCH_API_KEY</code> (e.g. Brave). Key from{' '}
-            <a href="https://serper.dev" target="_blank" rel="noopener noreferrer" className="transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>serper.dev</a> — no special account setup required.
-          </p>
-          <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            {shoppingSearchStatus && (
-              <p className="text-xs" style={{ color: shoppingSearchStatus.configured ? '#047857' : 'var(--color-muted)' }}>
-                {shoppingSearchStatus.configured
-                  ? `Configured (${shoppingSearchStatus.source === 'env' ? 'Railway env var' : 'saved here'})${shoppingSearchStatus.masked ? ` · ${shoppingSearchStatus.masked}` : ''}`
-                  : 'Not configured — grocery prices will show Not found.'}
-                {shoppingSearchStatus.envOverridesWorkspace && (
-                  <span> Railway <code className="text-[10px]">SERPER_SEARCH_API_KEY</code> overrides anything saved here.</span>
-                )}
-              </p>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
-                {shoppingSearchStatus?.configured && shoppingSearchStatus.source === 'workspace'
-                  ? 'Replace Serper key'
-                  : shoppingSearchStatus?.configured
-                    ? 'Workspace key (optional — Railway env is active)'
-                    : 'Serper API key'}
-              </label>
-              <div className="relative">
-                <input
-                  type={showShoppingSearchKey ? 'text' : 'password'}
-                  value={shoppingSearchKey}
-                  onChange={(e) => setShoppingSearchKey(e.target.value)}
-                  placeholder={shoppingSearchStatus?.masked || 'Paste Serper API key'}
-                  className="w-full px-3 py-2.5 pr-10 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowShoppingSearchKey((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-                  style={{ color: 'var(--color-muted)' }}
-                >
-                  {getIcon(showShoppingSearchKey ? 'eye-off' : 'eye', { size: 14 })}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 items-center">
-              <button
-                type="button"
-                onClick={saveShoppingSearchKey}
-                disabled={shoppingSearchSaving}
-                className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {shoppingSearchSaving ? 'Saving…' : 'Save key'}
-              </button>
-              {shoppingSearchStatus?.source === 'workspace' && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setShoppingSearchSaving(true);
-                    setShoppingSearchMessage('');
-                    try {
-                      const res = await api.post('/api/settings/shopping-search', { key: '' });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error || 'Could not clear key');
-                      setShoppingSearchStatus(data);
-                      setShoppingSearchMessage('Shopping search key cleared.');
-                    } catch (err) {
-                      setShoppingSearchMessage(err.message || 'Could not clear key');
-                    } finally {
-                      setShoppingSearchSaving(false);
-                    }
-                  }}
-                  disabled={shoppingSearchSaving}
-                  className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Clear saved key
-                </button>
-              )}
-              {shoppingSearchMessage && (
-                <span className="text-xs" style={{ color: /saved|cleared/i.test(shoppingSearchMessage) ? 'var(--color-primary)' : '#ef4444' }}>
-                  {shoppingSearchMessage}
-                </span>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
       </>)}
 
       {/* Change Password — Profile tab */}

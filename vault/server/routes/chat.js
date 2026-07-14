@@ -513,6 +513,8 @@ router.get('/model-status', async (req, res) => {
     deepseek: !!process.env.DEEPSEEK_API_KEY,
     ollama: await isOllamaAvailable(),
     fal: !!process.env.FAL_API_KEY,
+    serper: !!process.env.SERPER_SEARCH_API_KEY?.trim(),
+    search: !!process.env.SEARCH_API_KEY?.trim(),
   });
 });
 

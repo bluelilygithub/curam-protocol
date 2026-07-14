@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (shopping-search-settings-pattern)
+
+**Fix:** Shopping search in **Settings → AI & Chat** now matches other model/provider settings — provider dropdown (`shopping_search_provider`), Railway env key status via `/api/chat/model-status` (✓ Key set / ⚠️ Key missing). Removed custom key-paste UI and `/api/settings/shopping-search` endpoints.
+
+---
+
 ## 2026-07-14 (shopping-search-ai-chat-tab)
 
 **UX:** Moved Serper shopping search key from Integrations to **Settings → AI & Chat → Shopping search** (admin).

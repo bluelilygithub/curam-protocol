@@ -32,22 +32,37 @@ async function loadSetting(key) {
   }
 }
 
-async function loadWorkspaceSetting(key) {
-  try {
-    const { rows } = await pool.query(
-      'SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1',
-      [key]
-    );
-    return rows[0]?.value?.trim() || null;
-  } catch {
-    return null;
+async function resolveShoppingSearchProvider() {
+  const raw = (await loadSetting('shopping_search_provider') || 'serper').toLowerCase();
+  return raw === 'serpapi' ? 'serpapi' : 'serper';
+}
+
+/**
+ * Grocery/shopping lookups — separate from chat @search (Brave etc.).
+ * Provider selected in Settings → AI & Chat; keys are Railway env vars only.
+ */
+async function getShoppingSearchConfig() {
+  const provider = await resolveShoppingSearchProvider();
+  if (provider === 'serpapi') {
+    let apiKey = process.env.SEARCH_API_KEY;
+    const settingsKey = await loadSetting('SEARCH_API_KEY');
+    if (settingsKey) apiKey = settingsKey;
+    if (!apiKey?.trim()) {
+      throw new Error('SEARCH_API_KEY not configured — add on Railway for SerpAPI grocery prices.');
+    }
+    return { apiKey: apiKey.trim(), provider: 'serpapi' };
   }
+  const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
+    || await loadSetting('SERPER_SEARCH_API_KEY');
+  if (serperKey) {
+    return { apiKey: serperKey, provider: 'serper' };
+  }
+  throw new Error('SERPER_SEARCH_API_KEY not configured — add on Railway for grocery prices.');
 }
 
 /**
  * @param {{ preferSerper?: boolean }} [opts]
- * preferSerper — use SERPER_SEARCH_API_KEY (Railway env or Settings) for grocery/shopping lookups
- * while leaving SEARCH_API_KEY (e.g. Brave) for general chat @search.
+ * preferSerper — grocery/shopping path (see getShoppingSearchConfig).
  */
 async function getSearchConfig({ preferSerper = false } = {}) {
   if (runtimeConfig.disableWebSearch) {
@@ -55,12 +70,7 @@ async function getSearchConfig({ preferSerper = false } = {}) {
   }
 
   if (preferSerper) {
-    const serperKey = process.env.SERPER_SEARCH_API_KEY?.trim()
-      || await loadWorkspaceSetting('SERPER_SEARCH_API_KEY')
-      || await loadSetting('SERPER_SEARCH_API_KEY');
-    if (serperKey) {
-      return { apiKey: serperKey, provider: 'serper' };
-    }
+    return getShoppingSearchConfig();
   }
 
   let apiKey = process.env.SEARCH_API_KEY;
@@ -71,10 +81,7 @@ async function getSearchConfig({ preferSerper = false } = {}) {
   if (settingsProvider) provider = settingsProvider.toLowerCase();
 
   if (!apiKey?.trim()) {
-    if (preferSerper) {
-      throw new Error('SERPER_SEARCH_API_KEY not configured — add in Railway or Settings for grocery prices.');
-    }
-    throw new Error('SEARCH_API_KEY not configured — add in Settings or Railway variables.');
+    throw new Error('SEARCH_API_KEY not configured — add on Railway.');
   }
   if (!provider) {
     if (apiKey.startsWith('BSA')) provider = 'brave';
@@ -191,7 +198,7 @@ function parseShoppingPrice(val) {
  * @returns {Promise<Array<{title:string,source:string,price:number|null,url:string,image?:string}>|null>}
  */
 async function shoppingSearch(query, { num = 15, country = 'au' } = {}) {
-  const { apiKey, provider } = await getSearchConfig({ preferSerper: true });
+  const { apiKey, provider } = await getShoppingSearchConfig();
   const encoded = encodeURIComponent(query.trim());
 
   if (provider === 'serper') {
