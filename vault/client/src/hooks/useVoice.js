@@ -140,8 +140,8 @@ export function useVoice() {
       if (cancelled) return;
 
       const savedVoice = settings?.[VOICE_SETTING_KEY] || '';
-      const configured = !!localVoice?.configured;
-      const localAvailable = !!localVoice && !localVoice.error;
+      const configured = !!localVoice?.configured && !localVoice?.localOnly;
+      const localAvailable = !!localVoice && !localVoice.error && !localVoice.localOnly;
       setLocalCloneConfigured(configured);
       setLocalVoiceAvailable(localAvailable);
 

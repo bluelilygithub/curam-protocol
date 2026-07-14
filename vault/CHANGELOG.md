@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (recipes-fixes-named)
+
+**Feature:** Recipe by name — Basic / Advanced / Master tiers with accessible ingredient swaps, auto dish photo, save to library.
+
+**Fix:** Recipes suggest/expand — validate text model is configured, JSON retry on parse failure, clearer errors. Local TTS status returns 200 on Railway instead of 404.
+
+---
+
 ## 2026-07-14 (recipes-leftovers)
 
 **Feature:** Recipes app at `/recipes` — leftover ingredient input → four AI recipe cards → full steps, nutrition, web links, optional dish photo (via **`graphicsImageService`** + admin **`graphics_model`**), save to tagged library (`recipes` table). Feature flag `recipes`. Docs: **`docs/recipes.md`**.

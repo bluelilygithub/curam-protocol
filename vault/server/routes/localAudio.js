@@ -132,7 +132,12 @@ async function generateCloneSpeech(text, refAudioPath, refText, outputPath) {
 
 router.get('/tts/status', async (req, res) => {
   if (!runtimeConfig.isLocal) {
-    return res.status(404).json({ error: 'Local voice cloning is only available in local mode.' });
+    return res.json({
+      available: false,
+      configured: false,
+      localOnly: true,
+      reason: 'Local voice cloning is only available in local dev mode.',
+    });
   }
   try {
     const status = await getLocalVoiceStatus();
@@ -148,7 +153,12 @@ router.get('/tts/status', async (req, res) => {
 
 router.get('/tts/profile', async (req, res) => {
   if (!runtimeConfig.isLocal) {
-    return res.status(404).json({ error: 'Local voice cloning is only available in local mode.' });
+    return res.json({
+      available: false,
+      configured: false,
+      localOnly: true,
+      reason: 'Local voice cloning is only available in local dev mode.',
+    });
   }
   try {
     const status = await getLocalVoiceStatus();

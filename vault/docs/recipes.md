@@ -12,9 +12,16 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 
 1. **Leftover recipes** — enter ingredients (e.g. canned tuna, mushrooms, pasta, milk, rice, eggplant) and optional notes (servings, preferences, no oven, etc.).
 2. **Suggest** — `POST /api/recipes/suggest` returns **four recipe cards** (title, summary, time, meal type, tags). Pantry staples are always assumed: **salt, pepper, olive oil**.
-3. **Pick one** — `POST /api/recipes/expand` returns full **ingredients**, numbered **steps**, **nutrition** (summary, benefits, cautions, rough calories), and **links** from web search (YouTube videos + similar articles).
-4. **Dish photo** — `POST /api/recipes/image` delegates to **`graphicsImageService`** (same **`graphics_model`** as Settings → AI & Chat + `FAL_API_KEY` on Railway).
+3. **Pick one** — `POST /api/recipes/expand` returns full **ingredients**, numbered **steps**, **nutrition** (summary, benefits, cautions, rough calories), **links** from web search (YouTube videos + similar articles), and an **auto-generated dish photo** when Graphics image generation is configured.
+4. **Dish photo** — generated automatically during expand via **`graphicsImageService`** (admin **`graphics_model`** + `FAL_API_KEY`). Use `POST /api/recipes/image` only to regenerate.
 5. **Save** — `POST /api/recipes/library` with chosen **tags** (breakfast, lunch, dinner, curry, pasta, fast, slow, etc.).
+
+### Recipe by name
+
+1. Enter a **dish name** (e.g. Green Curry) and optional notes.
+2. **Show levels** — `POST /api/recipes/named/suggest` returns **Basic**, **Advanced**, and **Master** preview cards.
+3. **Pick a level** — `POST /api/recipes/named/expand` returns full recipe with **accessible ingredient alternatives** for exotic items, auto dish photo, nutrition, and links.
+4. **Save** — same library flow with tags.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
 
@@ -29,7 +36,9 @@ All long operations use the global **ProcessingModal**.
 | `GET` | `/api/recipes/status` | AI, image gen, web search availability + pantry staples |
 | `POST` | `/api/recipes/suggest` | `{ ingredients, notes? }` → four cards |
 | `POST` | `/api/recipes/expand` | `{ recipe, ingredients, notes? }` → full recipe + links |
-| `POST` | `/api/recipes/image` | `{ title, imagePrompt }` → `{ imageDataUrl }` |
+| `POST` | `/api/recipes/named/suggest` | `{ name, notes? }` → Basic / Advanced / Master cards |
+| `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes? }` → full recipe + swaps + image |
+| `POST` | `/api/recipes/image` | Regenerate dish photo `{ title, imagePrompt }` → `{ imageDataUrl }` |
 | `GET` | `/api/recipes/library` | List saved; `?tag=fast` filters |
 | `POST` | `/api/recipes/library` | Save favourite |
 | `GET` | `/api/recipes/library/:id` | Single item |

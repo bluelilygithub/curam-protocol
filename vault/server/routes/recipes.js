@@ -5,6 +5,8 @@ const {
   getStatus,
   suggestRecipes,
   expandRecipe,
+  suggestNamedRecipe,
+  expandNamedRecipe,
   generateDishImage,
   listRecipes,
   getRecipe,
@@ -46,6 +48,34 @@ router.post('/expand', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[recipes/expand]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/named/suggest', async (req, res) => {
+  try {
+    const result = await suggestNamedRecipe(req.user.id, {
+      name: req.body?.name,
+      notes: req.body?.notes,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[recipes/named/suggest]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/named/expand', async (req, res) => {
+  try {
+    const result = await expandNamedRecipe(req.user.id, {
+      name: req.body?.name,
+      tier: req.body?.tier,
+      recipe: req.body?.recipe,
+      notes: req.body?.notes,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[recipes/named/expand]', err.message);
     res.status(400).json({ error: err.message });
   }
 });

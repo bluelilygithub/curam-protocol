@@ -397,6 +397,10 @@ function SettingsPage() {
       })
       .then((data) => {
         if (!data) return;
+        if (data.localOnly) {
+          setLocalVoiceAvailable(false);
+          return;
+        }
         setLocalVoiceAvailable(true);
         setLocalVoiceStatus(data);
         if (data?.refText) setLocalVoiceRefText(data.refText);
