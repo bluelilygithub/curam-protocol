@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (grocery-like-for-like-quantity)
+
+**Feature:** Grocery prices match like-for-like products across Coles/Woolworths (variant rules for milk, salt, cream; title similarity pairing). Shows **recipe cost** (quantity used) and **pack total** (checkout) per store and per ingredient.
+
+---
+
 ## 2026-07-14 (grocery-search-config-fix)
 
 **Fix:** Grocery prices were silently returning zero results when `shopping_search_provider` pointed at SerpAPI but only `SERPER_SEARCH_API_KEY` (or Brave `SEARCH_API_KEY`) was set. Provider resolution now prefers the key that actually exists, loads admin settings with `userId`, rejects Brave keys for shopping APIs, surfaces Serper HTTP errors, and stops treating chat Brave search as grocery availability.

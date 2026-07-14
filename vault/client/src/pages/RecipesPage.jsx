@@ -185,13 +185,15 @@ const GROCERY_STORES = ['coles', 'woolworths'];
 const STORE_LABELS = { coles: 'Coles', woolworths: 'Woolworths' };
 
 function formatStorePrice(cell) {
+  if (cell?.recipePrice != null) return `$${cell.recipePrice.toFixed(2)}`;
   if (!cell?.price) return 'Not found';
   return `$${cell.price.toFixed(2)}`;
 }
 
 function GroceryPriceResults({ result }) {
   if (!result?.items?.length) return null;
-  const cheapest = result.totals?.cheapestStore;
+  const cheapestRecipe = result.totals?.cheapestRecipeStore || result.totals?.cheapestStore;
+  const cheapestBasket = result.totals?.cheapestBasketStore;
 
   return (
     <div className="space-y-3">
@@ -203,39 +205,67 @@ function GroceryPriceResults({ result }) {
       </p>
 
       {result.totals && (
-        <div className="grid grid-cols-2 gap-2">
-          {GROCERY_STORES.map((store) => {
-            const t = result.totals[store];
-            const isCheapest = cheapest === store;
-            return (
-              <div
-                key={store}
-                className="rounded-xl border p-3 text-center"
-                style={{
-                  borderColor: isCheapest ? 'var(--color-primary)' : 'var(--color-border)',
-                  background: isCheapest ? 'var(--color-surface)' : 'var(--color-bg)',
-                }}
-              >
-                <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--color-muted)' }}>{STORE_LABELS[store]}</p>
-                <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
-                  {t?.label || '—'}
-                </p>
-                {t?.pricedCount != null && t.pricedCount < result.items.length && (
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {t.pricedCount}/{result.items.length} found
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Recipe cost (quantity used)</p>
+          <div className="grid grid-cols-2 gap-2">
+            {GROCERY_STORES.map((store) => {
+              const t = result.totals[store];
+              const isCheapest = cheapestRecipe === store;
+              return (
+                <div
+                  key={`recipe-${store}`}
+                  className="rounded-xl border p-3 text-center"
+                  style={{
+                    borderColor: isCheapest ? 'var(--color-primary)' : 'var(--color-border)',
+                    background: isCheapest ? 'var(--color-surface)' : 'var(--color-bg)',
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--color-muted)' }}>{STORE_LABELS[store]}</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
+                    {t?.recipeLabel || t?.label || '—'}
                   </p>
-                )}
-                {isCheapest && t?.total != null && (
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-primary)' }}>Lowest total</p>
-                )}
-              </div>
-            );
-          })}
+                  {t?.recipePricedCount != null && t.recipePricedCount < result.items.length && (
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {t.recipePricedCount}/{result.items.length} priced
+                    </p>
+                  )}
+                  {isCheapest && t?.recipeTotal != null && (
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-primary)' }}>Lowest recipe cost</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider pt-1" style={{ color: 'var(--color-muted)' }}>Pack total (checkout)</p>
+          <div className="grid grid-cols-2 gap-2">
+            {GROCERY_STORES.map((store) => {
+              const t = result.totals[store];
+              const isCheapest = cheapestBasket === store;
+              return (
+                <div
+                  key={`basket-${store}`}
+                  className="rounded-xl border p-3 text-center"
+                  style={{
+                    borderColor: isCheapest ? 'var(--color-primary)' : 'var(--color-border)',
+                    background: 'var(--color-bg)',
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--color-muted)' }}>{STORE_LABELS[store]}</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
+                    {t?.basketLabel || '—'}
+                  </p>
+                  {isCheapest && t?.basketTotal != null && (
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-primary)' }}>Lowest pack total</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-        <table className="w-full text-xs min-w-[420px]">
+        <table className="w-full text-xs min-w-[480px]">
           <thead>
             <tr style={{ background: 'var(--color-surface)' }}>
               <th className="text-left p-2 font-medium" style={{ color: 'var(--color-text)' }}>Ingredient</th>
@@ -249,14 +279,23 @@ function GroceryPriceResults({ result }) {
               <tr key={row.ingredient} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
                 <td className="p-2 align-top" style={{ color: 'var(--color-text)' }}>
                   <span className="font-medium">{row.ingredient}</span>
-                  {row.quantity && <span className="block text-[10px]" style={{ color: 'var(--color-muted)' }}>{row.quantity}</span>}
+                  {row.quantity && <span className="block text-[10px]" style={{ color: 'var(--color-muted)' }}>Qty: {row.quantity}</span>}
+                  {row.matched === false && row.coles?.price && row.woolworths?.price && (
+                    <span className="block text-[10px] mt-0.5" style={{ color: '#b45309' }}>Variant mismatch</span>
+                  )}
                 </td>
                 {GROCERY_STORES.map((store) => {
                   const cell = row[store];
-                  const isCheapest = row.cheapestStore === store && cell?.price != null;
+                  const isCheapest = row.cheapestStore === store && (cell?.recipePrice ?? cell?.price) != null;
                   return (
                     <td key={store} className="p-2 text-right align-top" style={{ color: isCheapest ? 'var(--color-primary)' : 'var(--color-muted)' }}>
-                      <span>{formatStorePrice(cell)}</span>
+                      <span className="font-medium">{formatStorePrice(cell)}</span>
+                      {cell?.priceNote && (
+                        <span className="block text-[10px] mt-0.5">{cell.priceNote}</span>
+                      )}
+                      {cell?.checkoutPrice != null && cell.checkoutPrice !== cell.recipePrice && (
+                        <span className="block text-[10px] mt-0.5">Pack {cell.checkoutPriceLabel}</span>
+                      )}
                       {cell?.product && (
                         <span className="block text-[10px] mt-0.5 line-clamp-2">{cell.product}</span>
                       )}

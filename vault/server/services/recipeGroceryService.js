@@ -13,14 +13,56 @@ const STORE_MATCH = {
   woolworths: (s) => s.includes('woolworths') || s.includes('woolies'),
 };
 
-// Prefer real product pages when present, but don't require them — Brave/organic search
-// rarely returns indexed product URLs, so we reject bad pages instead of demanding good ones.
 const PRODUCT_URL_PATTERN = {
   coles: /coles\.com\.au\/product\//i,
   woolworths: /woolworths\.com\.au\/shop\/productdetails\//i,
 };
 
 const REJECT_URL_PATTERN = /\/(recipe|recipes|how-to|howto|inspire|ideas|magazine|tips|productlist|catalog\/)/i;
+
+const PREMIUM_KEYWORDS = [
+  'himalayan', 'himalaya', 'pink salt', 'rock salt', 'truffle', 'gourmet', 'artisan',
+  'luxury', 'imported', 'handmade', 'single origin', 'wagyu', 'gold label', 'reserve',
+  'premium', 'select', 'finest', 'deluxe',
+];
+
+const VARIANT_RULES = [
+  {
+    id: 'milk-standard',
+    matchLine: (raw) => /\bmilk\b/.test(raw) && !/\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat|full\s*cream|full\s*fat|whole\b/.test(raw),
+    searchSuffix: 'full cream',
+    prefer: ['full cream', 'full fat', 'whole'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', '0 fat', 'low fat', 'fat free', 'trim'],
+  },
+  {
+    id: 'milk-skim',
+    matchLine: (raw) => /\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat\b/.test(raw),
+    searchSuffix: 'light',
+    prefer: ['skim', 'skimmed', 'lite', 'light', 'low fat', 'no fat'],
+    avoid: ['full cream', 'full fat', 'whole'],
+  },
+  {
+    id: 'milk-full',
+    matchLine: (raw) => /\bfull\s*(cream|fat)|whole\s*milk\b/.test(raw),
+    searchSuffix: 'full cream',
+    prefer: ['full cream', 'full fat', 'whole'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', 'low fat'],
+  },
+  {
+    id: 'salt-table',
+    matchLine: (raw) => /\bsalt\b/.test(raw) && !/himalayan|pink|sea|rock|flake|kosher/.test(raw),
+    searchSuffix: 'table',
+    prefer: ['table salt', 'iodised', 'iodized', 'cooking salt'],
+    avoid: ['himalayan', 'pink', 'rock', 'sea salt', 'flake', 'flaky', 'kosher', 'celtic'],
+  },
+  {
+    id: 'cream-pure',
+    matchLine: (raw) => /\bcream\b/.test(raw) && !/\blight|lite|reduced\b/.test(raw),
+    searchSuffix: 'pure',
+    prefer: ['pure cream', 'thickened cream', 'whipping'],
+    avoid: ['light', 'lite', 'reduced fat'],
+  },
+];
 
 function searchTermVariants(term) {
   const variants = [term];
@@ -80,15 +122,9 @@ function pickFromOrganicResults(results, term, storeId) {
   };
 }
 
-// Only ever split on newlines. Recipe ingredient text routinely contains internal commas
-// (e.g. "1 can (400g), drained and rinsed cooked beans (e.g. black or kidney)") — splitting
-// on commas shreds a single ingredient into meaningless fragments like "1 can" or "black or
-// kidney)", which then search for completely unrelated products.
 function normalizeIngredientLines(raw) {
   const text = String(raw || '');
   let lines = text.split('\n').map((s) => s.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
-  // A single comma-separated line (freeform "chicken, rice, coconut milk" paste) is the
-  // one case where commas really do separate distinct ingredients.
   if (lines.length === 1 && lines[0].includes(',') && !/\([^)]*,[^)]*\)/.test(lines[0])) {
     lines = lines[0].split(',').map((s) => s.trim()).filter(Boolean);
   }
@@ -113,25 +149,23 @@ const FILLER_PHRASES = [
 ];
 const CONTAINER_WORDS = ['can', 'cans', 'jar', 'jars', 'packet', 'packets', 'pkt', 'bottle', 'bottles', 'bunch', 'bunches', 'clove', 'cloves', 'large', 'small', 'medium'];
 
-/** Strips quantities, pack sizes, and instructional filler so the search term is the actual food item. */
 function ingredientSearchTerm(line) {
   let s = String(line || '');
-  s = s.replace(/\([^)]*\)/g, ' '); // parenthetical asides ("(e.g. black or kidney)", "(200g)", "(adjust to taste)")
-  s = s.replace(/\d+(\.\d+)?\s*-?\s*\d*(\.\d+)?\s*(g|kg|ml|l|tbsp|tablespoons?|tsp|teaspoons?|cups?|oz|lb|pcs?)\b/gi, ' '); // pack sizes / measures
-  s = s.replace(/\b(tablespoons?|teaspoons?|tbsp|tsp|cups?)\b/gi, ' '); // unit words with no leading number
+  s = s.replace(/\([^)]*\)/g, ' ');
+  s = s.replace(/\d+(\.\d+)?\s*-?\s*\d*(\.\d+)?\s*(g|kg|ml|l|tbsp|tablespoons?|tsp|teaspoons?|cups?|oz|lb|pcs?)\b/gi, ' ');
+  s = s.replace(/\b(tablespoons?|teaspoons?|tbsp|tsp|cups?)\b/gi, ' ');
   for (const phrase of FILLER_PHRASES) {
     s = s.replace(new RegExp(phrase, 'gi'), ' ');
   }
   const wordBoundary = CONTAINER_WORDS.join('|');
   s = s.replace(new RegExp(`\\b(${wordBoundary})\\b`, 'gi'), ' ');
-  s = s.replace(/^[\d\s.,\-]+/, ''); // leading bare numbers/ranges ("1-2 ", "1 ")
+  s = s.replace(/^[\d\s.,\-]+/, '');
   s = s.replace(/[,\s]+/g, ' ').trim();
   return (s || String(line || '').trim()).slice(0, 80);
 }
 
 const STOPWORDS = new Set(['and', 'or', 'the', 'with', 'for', 'from', 'into', 'fresh', 'sliced', 'chopped', 'cooked', 'ground']);
 
-/** Significant words used to sanity-check a product match. Shorter min on product pages. */
 function significantTokens(term, { minLen = 4 } = {}) {
   return String(term || '')
     .toLowerCase()
@@ -139,7 +173,6 @@ function significantTokens(term, { minLen = 4 } = {}) {
     .filter((w) => w.length >= minLen && !STOPWORDS.has(w));
 }
 
-// Collapses doubled letters so US/AU spelling variants match ("chili" vs "chilli").
 function collapseRepeatedLetters(s) {
   return String(s || '').toLowerCase().replace(/(.)\1+/g, '$1');
 }
@@ -161,43 +194,303 @@ function storeSearchUrl(storeId, term) {
     : `https://www.woolworths.com.au/shop/search/products?searchTerm=${encoded}`;
 }
 
-/** Google Shopping — Serper/SerpApi only. Matches store by retailer name or product URL domain. */
-async function findViaShopping(storeId, term) {
-  const label = AU_STORES.find((s) => s.id === storeId)?.label;
-  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
-  const queries = [];
-  for (const variant of searchTermVariants(term)) {
-    queries.push(`${variant} ${label}`);
-    if (domain) queries.push(`${variant} site:${domain}`);
+function buildProductSpec(line) {
+  const raw = String(line || '').toLowerCase();
+  const term = ingredientSearchTerm(line);
+  const rule = VARIANT_RULES.find((r) => r.matchLine(raw)) || null;
+  const variantHints = rule ? [...rule.prefer] : [];
+  const avoidHints = rule ? [...rule.avoid] : [];
+  const searchSuffix = rule?.searchSuffix || null;
+  return {
+    line,
+    term,
+    raw,
+    variantHints,
+    avoidHints,
+    searchSuffix,
+    requiredTokens: significantTokens(term, { minLen: 3 }),
+  };
+}
+
+function normalizeTitleTokens(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/[^\w\s%]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+function titleSimilarity(a, b) {
+  const A = new Set(normalizeTitleTokens(a));
+  const B = new Set(normalizeTitleTokens(b));
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter += 1;
+  const union = A.size + B.size - inter;
+  return union ? inter / union : 0;
+}
+
+function scoreProduct(title, spec, referenceTitle = null) {
+  const t = String(title || '').toLowerCase();
+  let score = 0;
+
+  for (const tok of spec.requiredTokens) {
+    if (t.includes(tok)) score += 12;
+    else score -= 4;
   }
 
+  for (const hint of spec.variantHints) {
+    if (t.includes(hint)) score += 10;
+  }
+
+  for (const avoid of spec.avoidHints) {
+    if (t.includes(avoid)) score -= 22;
+  }
+
+  for (const premium of PREMIUM_KEYWORDS) {
+    if (t.includes(premium) && !spec.variantHints.some((h) => t.includes(h))) score -= 12;
+  }
+
+  if (referenceTitle) {
+    score += titleSimilarity(title, referenceTitle) * 35;
+  }
+
+  return score;
+}
+
+function buildStoreQueries(storeId, spec) {
+  const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  const queries = new Set();
+
+  for (const variant of searchTermVariants(spec.term)) {
+    if (spec.searchSuffix) queries.add(`${variant} ${spec.searchSuffix} ${label}`);
+    queries.add(`${variant} ${label}`);
+    if (domain) {
+      if (spec.searchSuffix) queries.add(`${variant} ${spec.searchSuffix} site:${domain}`);
+      queries.add(`${variant} site:${domain}`);
+    }
+  }
+
+  return [...queries];
+}
+
+async function collectShoppingCandidates(storeId, spec) {
+  const label = AU_STORES.find((s) => s.id === storeId)?.label;
+  const seen = new Set();
+  const candidates = [];
   let lastErr = null;
-  for (const q of [...new Set(queries)]) {
+
+  for (const q of buildStoreQueries(storeId, spec)) {
     try {
-      const results = await shoppingSearch(q, { num: 20 });
-      if (!Array.isArray(results) || !results.length) continue;
+      const results = await shoppingSearch(q, { num: 25 });
+      if (!Array.isArray(results)) continue;
       for (const r of results) {
         if (!r.price || r.price > MAX_PLAUSIBLE_ITEM_PRICE) continue;
         if (!matchesStore(storeId, r.source, r.url, r.title)) continue;
-        if (!isRelevantMatch(term, r.title)) continue;
-        return {
+        if (!isRelevantMatch(spec.term, r.title)) continue;
+        const key = `${r.title}|${r.price}|${r.url || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
           product: r.title,
           price: r.price,
           url: r.url,
           source: r.source || label,
           confidence: 'sourced',
-        };
+        });
       }
     } catch (err) {
       lastErr = err;
       console.warn('[recipeGrocery] shoppingSearch failed:', q, err.message);
     }
   }
-  if (lastErr) throw lastErr;
+
+  if (!candidates.length && lastErr) throw lastErr;
+  return candidates;
+}
+
+function pickBestSingle(candidates, spec, referenceTitle = null) {
+  if (!candidates.length) return null;
+  const ranked = candidates
+    .map((c) => ({ ...c, score: scoreProduct(c.product, spec, referenceTitle) }))
+    .filter((c) => c.score >= 0)
+    .sort((a, b) => b.score - a.score || a.price - b.price);
+  return ranked[0] || null;
+}
+
+function pickLikeForLikePair(colesCandidates, woolworthsCandidates, spec) {
+  const topColes = colesCandidates
+    .map((c) => ({ ...c, score: scoreProduct(c.product, spec) }))
+    .filter((c) => c.score >= 0)
+    .sort((a, b) => b.score - a.score || a.price - b.price)
+    .slice(0, 10);
+  const topWool = woolworthsCandidates
+    .map((c) => ({ ...c, score: scoreProduct(c.product, spec) }))
+    .filter((c) => c.score >= 0)
+    .sort((a, b) => b.score - a.score || a.price - b.price)
+    .slice(0, 10);
+
+  if (!topColes.length && !topWool.length) return { coles: null, woolworths: null, matched: false };
+  if (!topColes.length) return { coles: null, woolworths: topWool[0], matched: false };
+  if (!topWool.length) return { coles: topColes[0], woolworths: null, matched: false };
+
+  let best = null;
+  let bestScore = -Infinity;
+
+  for (const c of topColes) {
+    for (const w of topWool) {
+      const sim = titleSimilarity(c.product, w.product);
+      const pairScore = Math.min(c.score, w.score) + sim * 40 + (c.score + w.score) * 0.15;
+      if (pairScore > bestScore) {
+        bestScore = pairScore;
+        best = { coles: c, woolworths: w, similarity: sim, matched: sim >= 0.2 };
+      }
+    }
+  }
+
+  if (best && best.similarity >= 0.2) return best;
+
+  const anchor = topColes[0].score >= topWool[0].score ? topColes[0] : topWool[0];
+  const anchorStore = topColes[0].score >= topWool[0].score ? 'coles' : 'woolworths';
+  const otherList = anchorStore === 'coles' ? topWool : topColes;
+  const otherBest = pickBestSingle(otherList, spec, anchor.product);
+
+  return {
+    coles: anchorStore === 'coles' ? anchor : otherBest,
+    woolworths: anchorStore === 'woolworths' ? anchor : otherBest,
+    matched: otherBest ? titleSimilarity(anchor.product, otherBest.product) >= 0.2 : false,
+  };
+}
+
+function parseFraction(str) {
+  const s = String(str || '').trim();
+  if (s.includes('/')) {
+    const [a, b] = s.split('/').map(Number);
+    if (b) return a / b;
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Recipe quantity needed — grams, ml, or count. */
+function parseQuantityFromLine(line) {
+  const s = String(line || '').trim();
+  const paren = s.match(/\((\d+(?:\.\d+)?|\d+\/\d+)\s*(g|kg|ml|l|litre|liters|oz|lb)\)/i);
+  if (paren) {
+    const val = parseFraction(paren[1]);
+    if (val != null) return normalizeQuantity(val, paren[2]);
+  }
+
+  const measure = s.match(/(\d+(?:\.\d+)?|\d+\/\d+)\s*(kg|g|ml|l|litre|liters|L|cup|cups|tbsp|tablespoons?|tsp|teaspoons?|clove|cloves|pcs?|each|bunch|can|cans|jar|packet|pkt|bottle|loaf|slice|slices|pinch)?/i);
+  if (measure) {
+    const val = parseFraction(measure[1]);
+    if (val != null) return normalizeQuantity(val, measure[2] || 'each');
+  }
+
   return null;
 }
 
-/** Site-restricted web search — works with Brave, Serper, and SerpApi. */
+function normalizeQuantity(value, unitRaw) {
+  const unit = String(unitRaw || 'each').toLowerCase().replace(/\./g, '');
+  if (unit === 'kg') return { kind: 'mass', value: value * 1000, unit: 'g', label: `${value}kg` };
+  if (unit === 'g') return { kind: 'mass', value, unit: 'g', label: `${value}g` };
+  if (unit === 'l' || unit === 'litre' || unit === 'liters') return { kind: 'volume', value: value * 1000, unit: 'ml', label: `${value}L` };
+  if (unit === 'ml') return { kind: 'volume', value, unit: 'ml', label: `${value}ml` };
+  if (unit === 'cup' || unit === 'cups') return { kind: 'volume', value: value * 250, unit: 'ml', label: `${value} cup${value === 1 ? '' : 's'}` };
+  if (unit === 'tbsp' || unit === 'tablespoon' || unit === 'tablespoons') return { kind: 'volume', value: value * 15, unit: 'ml', label: `${value} tbsp` };
+  if (unit === 'tsp' || unit === 'teaspoon' || unit === 'teaspoons') return { kind: 'volume', value: value * 5, unit: 'ml', label: `${value} tsp` };
+  if (unit === 'pinch') return { kind: 'volume', value: 1, unit: 'ml', label: 'pinch' };
+  return { kind: 'count', value, unit: 'each', label: `${value}` };
+}
+
+function parsePackSizeFromTitle(title) {
+  const t = String(title || '').toLowerCase();
+
+  const multi = t.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|litre|liters)\b/);
+  if (multi) {
+    const per = normalizeQuantity(parseFloat(multi[2]), multi[3]);
+    return { ...per, value: per.value * parseInt(multi[1], 10), label: `${multi[1]}×${multi[2]}${multi[3]}` };
+  }
+
+  const patterns = [
+    /(\d+(?:\.\d+)?)\s*(kg|g)\b/,
+    /(\d+(?:\.\d+)?)\s*(l|litre|liters|ml)\b/,
+    /(\d+)\s*(?:pk|pack)\b/,
+    /(\d+)\s*each\b/,
+  ];
+
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (!m) continue;
+    if (re.source.includes('pk|pack')) {
+      return { kind: 'count', value: parseInt(m[1], 10), unit: 'each', label: `${m[1]} pack` };
+    }
+    if (re.source.includes('each')) {
+      return { kind: 'count', value: 1, unit: 'each', label: '1 each' };
+    }
+    return normalizeQuantity(parseFloat(m[1]), m[2]);
+  }
+
+  return null;
+}
+
+function quantitiesCompatible(needed, pack) {
+  if (!needed || !pack) return false;
+  if (needed.kind === pack.kind) return true;
+  if (needed.kind === 'count' && pack.kind === 'count') return true;
+  return false;
+}
+
+function enrichCellWithQuantity(cell, line) {
+  if (!cell || cell.price == null) return cell;
+
+  const needed = parseQuantityFromLine(line);
+  const pack = parsePackSizeFromTitle(cell.product);
+
+  cell.quantityNeeded = needed;
+  cell.packSize = pack;
+
+  if (needed && pack && quantitiesCompatible(needed, pack) && pack.value > 0) {
+    const ratio = needed.value / pack.value;
+    cell.recipePrice = Math.round(cell.price * ratio * 100) / 100;
+    cell.recipePriceLabel = `$${cell.recipePrice.toFixed(2)}`;
+    cell.quantityLabel = needed.label;
+    cell.packSizeLabel = pack.label;
+    cell.checkoutPrice = ratio > 1
+      ? Math.round(Math.ceil(ratio) * cell.price * 100) / 100
+      : cell.price;
+    cell.checkoutPriceLabel = `$${cell.checkoutPrice.toFixed(2)}`;
+    cell.priceNote = ratio <= 1
+      ? `${needed.label} of ${pack.label} pack`
+      : `${needed.label} · ${Math.ceil(ratio)} pack(s)`;
+  } else if (needed) {
+    cell.recipePrice = cell.price;
+    cell.recipePriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.quantityLabel = needed.label;
+    cell.checkoutPrice = cell.price;
+    cell.checkoutPriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.priceNote = pack ? null : `Full pack (size not parsed)`;
+  } else {
+    cell.recipePrice = cell.price;
+    cell.recipePriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.checkoutPrice = cell.price;
+    cell.checkoutPriceLabel = `$${cell.price.toFixed(2)}`;
+    cell.priceNote = 'Full pack';
+  }
+
+  return cell;
+}
+
+async function findViaShopping(storeId, term) {
+  const spec = buildProductSpec(term);
+  spec.term = ingredientSearchTerm(term);
+  const candidates = await collectShoppingCandidates(storeId, spec);
+  return pickBestSingle(candidates, spec);
+}
+
 async function findViaOrganic(storeId, term) {
   const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
   const label = AU_STORES.find((s) => s.id === storeId)?.label;
@@ -228,28 +521,47 @@ async function findViaOrganic(storeId, term) {
   return null;
 }
 
-async function findForStore(storeId, term) {
+async function findMatchedStorePrices(line) {
+  const spec = buildProductSpec(line);
+  spec.term = ingredientSearchTerm(line);
+  if (!spec.term) return { coles: null, woolworths: null, matched: false };
+
+  let colesCandidates = [];
+  let woolCandidates = [];
   try {
-    const viaShopping = await findViaShopping(storeId, term);
-    if (viaShopping) return viaShopping;
+    [colesCandidates, woolCandidates] = await Promise.all([
+      collectShoppingCandidates('coles', spec),
+      collectShoppingCandidates('woolworths', spec),
+    ]);
   } catch (err) {
-    console.warn(`[recipeGrocery] ${storeId} shopping:`, err.message);
+    console.warn('[recipeGrocery] shopping candidates:', err.message);
   }
-  return findViaOrganic(storeId, term);
-}
 
-async function findStorePrices(line) {
-  const term = ingredientSearchTerm(line);
-  const result = { coles: null, woolworths: null };
-  if (!term) return result;
+  let pair = pickLikeForLikePair(colesCandidates, woolCandidates, spec);
 
-  await Promise.all(
-    STORE_IDS.map(async (id) => {
-      result[id] = await findForStore(id, term);
-    })
-  );
+  for (const storeId of STORE_IDS) {
+    if (!pair[storeId]) {
+      try {
+        pair[storeId] = (await findViaOrganic(storeId, spec.term))
+          || pickBestSingle(storeId === 'coles' ? colesCandidates : woolCandidates, spec);
+      } catch { /* ignore */ }
+    }
+  }
 
-  return result;
+  if (pair.coles && pair.woolworths && !pair.matched) {
+    const colesScore = scoreProduct(pair.coles.product, spec);
+    const woolScore = scoreProduct(pair.woolworths.product, spec);
+    const anchor = colesScore >= woolScore ? pair.coles : pair.woolworths;
+    const otherId = anchor === pair.coles ? 'woolworths' : 'coles';
+    const otherList = otherId === 'coles' ? colesCandidates : woolCandidates;
+    const realigned = pickBestSingle(otherList, spec, anchor.product);
+    if (realigned) {
+      pair[otherId] = realigned;
+      pair.matched = titleSimilarity(anchor.product, realigned.product) >= 0.2;
+    }
+  }
+
+  return pair;
 }
 
 async function mapWithConcurrency(items, limit, fn) {
@@ -267,32 +579,59 @@ async function mapWithConcurrency(items, limit, fn) {
 
 function computeTotals(items) {
   const totals = {};
-  let cheapestStore = null;
-  let cheapestSum = Infinity;
+  let cheapestRecipeStore = null;
+  let cheapestRecipeSum = Infinity;
+  let cheapestBasketStore = null;
+  let cheapestBasketSum = Infinity;
 
   for (const store of STORE_IDS) {
-    let sum = 0;
+    let basketSum = 0;
+    let recipeSum = 0;
     let priced = 0;
+    let recipePriced = 0;
+
     for (const row of items) {
-      const p = row[store]?.price;
-      if (p != null && p > 0) {
-        sum += p;
+      const c = row[store];
+      const checkout = c?.checkoutPrice ?? c?.price;
+      const recipe = c?.recipePrice ?? c?.price;
+      if (checkout != null && checkout > 0) {
+        basketSum += checkout;
         priced += 1;
       }
+      if (recipe != null && recipe > 0) {
+        recipeSum += recipe;
+        recipePriced += 1;
+      }
     }
+
     totals[store] = {
-      total: priced > 0 ? sum : null,
-      label: priced > 0 ? `$${sum.toFixed(2)}` : null,
-      complete: priced === items.length && items.length > 0,
+      recipeTotal: recipePriced > 0 ? recipeSum : null,
+      recipeLabel: recipePriced > 0 ? `$${recipeSum.toFixed(2)}` : null,
+      basketTotal: priced > 0 ? basketSum : null,
+      basketLabel: priced > 0 ? `$${basketSum.toFixed(2)}` : null,
+      total: recipePriced > 0 ? recipeSum : (priced > 0 ? basketSum : null),
+      label: recipePriced > 0 ? `$${recipeSum.toFixed(2)}` : (priced > 0 ? `$${basketSum.toFixed(2)}` : null),
+      complete: recipePriced === items.length && items.length > 0,
       pricedCount: priced,
+      recipePricedCount: recipePriced,
     };
-    if (priced > 0 && sum < cheapestSum) {
-      cheapestSum = sum;
-      cheapestStore = store;
+
+    if (recipePriced > 0 && recipeSum < cheapestRecipeSum) {
+      cheapestRecipeSum = recipeSum;
+      cheapestRecipeStore = store;
+    }
+    if (priced > 0 && basketSum < cheapestBasketSum) {
+      cheapestBasketSum = basketSum;
+      cheapestBasketStore = store;
     }
   }
 
-  return { ...totals, cheapestStore: cheapestStore || null };
+  return {
+    ...totals,
+    cheapestStore: cheapestRecipeStore || cheapestBasketStore || null,
+    cheapestRecipeStore: cheapestRecipeStore || null,
+    cheapestBasketStore: cheapestBasketStore || null,
+  };
 }
 
 function emptyStoreCell(storeId, term) {
@@ -327,9 +666,11 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   if (!searchAvailable) {
     items = lines.map((line) => {
       const term = ingredientSearchTerm(line);
+      const qty = parseQuantityFromLine(line);
       return {
         ingredient: line,
-        quantity: null,
+        quantity: qty?.label || null,
+        matched: false,
         coles: emptyStoreCell('coles', term),
         woolworths: emptyStoreCell('woolworths', term),
         cheapestStore: null,
@@ -337,17 +678,29 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
       };
     });
   } else {
-    items = await mapWithConcurrency(lines, 4, async (line) => {
+    items = await mapWithConcurrency(lines, 3, async (line) => {
       const term = ingredientSearchTerm(line);
-      const found = await findStorePrices(line);
-      const coles = found.coles || emptyStoreCell('coles', term);
-      const woolworths = found.woolworths || emptyStoreCell('woolworths', term);
+      const qty = parseQuantityFromLine(line);
+      const found = await findMatchedStorePrices(line);
+      const coles = enrichCellWithQuantity(found.coles || emptyStoreCell('coles', term), line);
+      const woolworths = enrichCellWithQuantity(found.woolworths || emptyStoreCell('woolworths', term), line);
+
       let cheapestStore = null;
       let min = Infinity;
       for (const [storeId, cell] of [['coles', coles], ['woolworths', woolworths]]) {
-        if (cell.price != null && cell.price < min) { min = cell.price; cheapestStore = storeId; }
+        const p = cell.recipePrice ?? cell.price;
+        if (p != null && p < min) { min = p; cheapestStore = storeId; }
       }
-      return { ingredient: line, quantity: null, coles, woolworths, cheapestStore, notes: null };
+
+      return {
+        ingredient: line,
+        quantity: qty?.label || null,
+        matched: found.matched,
+        coles,
+        woolworths,
+        cheapestStore,
+        notes: found.matched ? null : 'Stores may show different variants — check product names.',
+      };
     });
   }
 
@@ -357,14 +710,16 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
   if (!searchAvailable) {
     liveFetchNote = searchConfigError || 'Shopping search API not configured.';
   } else if (foundCount === 0) {
-    liveFetchNote = 'No Coles or Woolworths listings matched — try simpler ingredient names (e.g. "chicken breast" not the full recipe line), or use the store links to search manually.';
+    liveFetchNote = 'No Coles or Woolworths listings matched — try simpler ingredient names (e.g. "500g chicken breast"), or use the store links.';
   } else if (foundCount < items.length) {
     liveFetchNote = `Found prices for ${foundCount} of ${items.length} items — the rest need a manual store search.`;
+  } else {
+    liveFetchNote = 'Recipe cost uses the quantity in your ingredient line; pack total is what you pay at checkout (whole packs). Products are matched like-for-like across stores where possible.';
   }
 
   return {
     disclaimer: searchAvailable
-      ? 'Prices sourced from live product search results — confirm in-app or in-store before you buy, as prices and stock change.'
+      ? 'Prices sourced from live product search — confirm in-store before you buy. Recipe cost is proportional to the quantity listed; pack total assumes whole packs at checkout.'
       : 'Add SERPER_SEARCH_API_KEY on Railway — configure Shopping search in Settings → AI & Chat → AI Models.',
     currency: 'AUD',
     sourced: true,
@@ -384,4 +739,9 @@ module.exports = {
   AU_STORES,
   priceIngredients,
   normalizeIngredientLines,
+  buildProductSpec,
+  parseQuantityFromLine,
+  parsePackSizeFromTitle,
+  pickLikeForLikePair,
+  scoreProduct,
 };
