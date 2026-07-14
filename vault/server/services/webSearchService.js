@@ -111,8 +111,13 @@ async function webSearch(query, { num = 8 } = {}) {
   })).filter((r) => r.url);
 }
 
+/**
+ * Parses an actual dollar price out of text. Requires a "$" immediately before the
+ * number — never matches bare numbers like pack weights ("250g", "400ml") that happen
+ * to appear in a product title or search snippet.
+ */
 function parsePriceString(str) {
-  const match = String(str || '').match(/(\d{1,4}(?:[.,]\d{2})?)/);
+  const match = String(str || '').match(/\$\s?(\d{1,4}(?:[.,]\d{2})?)/);
   if (!match) return null;
   const n = Number(match[1].replace(',', '.'));
   return Number.isFinite(n) && n > 0 ? n : null;

@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-14 (recipes-grocery-matching-fix)
+
+**Fix:** Grocery price matching was badly broken and produced nonsense results (e.g. a can opener for "1 can", a screwdriver set for "chili", $250 for avocado slices). Root causes, all fixed in `recipeGroceryService.js` / `webSearchService.js`:
+- **Ingredient shredding:** lines were split on commas as well as newlines, so a single ingredient like `"1 can (400g), drained and rinsed cooked beans (e.g. black or kidney)"` broke into meaningless fragments (`"1 can (400g)"`, `"black or kidney)"`) that searched for the wrong thing entirely. Now only newlines split ingredients (comma-splitting only applies to a genuine single-line freeform paste).
+- **Prices parsed from pack weights:** `parsePriceString` matched any bare number in a title/snippet, so `"...250g"` became **$250**, `"...160g"` became **$160**. Now requires an actual `$` before the number.
+- **No relevance check:** nothing verified the matched product was related to the ingredient, so keyword collisions (chocolate for "chili", popcorn for "salt") passed straight through. Added a relevance filter (with US/AU spelling tolerance — "chili"/"chilli") plus a $60 sanity cap on any single ingredient, and the organic-search fallback now requires the URL to look like a real product page rather than a recipe/guide article.
+- Cleaned up search-term extraction to strip parenthetical asides, "to taste"/"e.g."/"drained and rinsed" filler, and container words ("can", "jar", "large") that aren't the actual food item.
+
+---
+
 ## 2026-07-14 (recipes-grocery-sourced)
 
 **Fix:** Grocery prices rebuilt around **real, cited prices** instead of AI guesses. `recipeGroceryService.js` now looks up each ingredient via **Google Shopping search** (Serper/SerpApi `shoppingSearch()`, new in `webSearchService.js`) filtered to Coles/Woolworths, falling back to `site:coles.com.au` / `site:woolworths.com.au` organic search with price parsed from the listing. Every priced row links to its source; unmatched items show **"Not found"** with a manual store-search link — no fabricated numbers. Removed the text-model/AI pricing path entirely (no chat model required, only `SEARCH_API_KEY`).

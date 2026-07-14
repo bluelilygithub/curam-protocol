@@ -13,11 +13,25 @@ const STORE_MATCH = {
   woolworths: (s) => s.includes('woolworths') || s.includes('woolies'),
 };
 
+// Real Coles/Woolworths product-page URL shapes. Anything else indexed on their domain
+// (recipe pages, "how to" guides, category listings) is not a priced product page.
+const PRODUCT_URL_PATTERN = {
+  coles: /coles\.com\.au\/product\//i,
+  woolworths: /woolworths\.com\.au\/shop\/productdetails\//i,
+};
+
+// Only ever split on newlines. Recipe ingredient text routinely contains internal commas
+// (e.g. "1 can (400g), drained and rinsed cooked beans (e.g. black or kidney)") — splitting
+// on commas shreds a single ingredient into meaningless fragments like "1 can" or "black or
+// kidney)", which then search for completely unrelated products.
 function normalizeIngredientLines(raw) {
-  const lines = String(raw || '')
-    .split(/\n|,/)
-    .map((s) => s.replace(/^[-•*]\s*/, '').trim())
-    .filter(Boolean);
+  const text = String(raw || '');
+  let lines = text.split('\n').map((s) => s.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
+  // A single comma-separated line (freeform "chicken, rice, coconut milk" paste) is the
+  // one case where commas really do separate distinct ingredients.
+  if (lines.length === 1 && lines[0].includes(',') && !/\([^)]*,[^)]*\)/.test(lines[0])) {
+    lines = lines[0].split(',').map((s) => s.trim()).filter(Boolean);
+  }
   return [...new Set(lines)].slice(0, 12);
 }
 
@@ -32,13 +46,52 @@ function formatRecipeIngredients(ingredients) {
     .filter(Boolean);
 }
 
+const FILLER_PHRASES = [
+  'to taste', 'adjust to taste', 'drained and rinsed', 'e\\.g\\.', 'eg\\.',
+  'finely', 'roughly', 'freshly', 'optional', 'for garnish', 'as needed',
+];
+const CONTAINER_WORDS = ['can', 'cans', 'jar', 'jars', 'packet', 'packets', 'pkt', 'bottle', 'bottles', 'bunch', 'bunches', 'clove', 'cloves', 'large', 'small', 'medium'];
+
+/** Strips quantities, pack sizes, and instructional filler so the search term is the actual food item. */
 function ingredientSearchTerm(line) {
-  return String(line || '')
-    .replace(/\d+(\.\d+)?\s*(g|kg|ml|l|tbsp|tsp|cup|cups|oz|lb|pcs?)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80) || String(line || '').trim().slice(0, 80);
+  let s = String(line || '');
+  s = s.replace(/\([^)]*\)/g, ' '); // parenthetical asides ("(e.g. black or kidney)", "(200g)", "(adjust to taste)")
+  s = s.replace(/\d+(\.\d+)?\s*-?\s*\d*(\.\d+)?\s*(g|kg|ml|l|tbsp|tablespoons?|tsp|teaspoons?|cups?|oz|lb|pcs?)\b/gi, ' '); // pack sizes / measures
+  s = s.replace(/\b(tablespoons?|teaspoons?|tbsp|tsp|cups?)\b/gi, ' '); // unit words with no leading number
+  for (const phrase of FILLER_PHRASES) {
+    s = s.replace(new RegExp(phrase, 'gi'), ' ');
+  }
+  const wordBoundary = CONTAINER_WORDS.join('|');
+  s = s.replace(new RegExp(`\\b(${wordBoundary})\\b`, 'gi'), ' ');
+  s = s.replace(/^[\d\s.,\-]+/, ''); // leading bare numbers/ranges ("1-2 ", "1 ")
+  s = s.replace(/[,\s]+/g, ' ').trim();
+  return (s || String(line || '').trim()).slice(0, 80);
 }
+
+const STOPWORDS = new Set(['and', 'or', 'the', 'with', 'for', 'from', 'into', 'fresh', 'sliced', 'chopped', 'cooked', 'ground']);
+
+/** Significant words (4+ letters, not a stopword) used to sanity-check a product match. */
+function significantTokens(term) {
+  return String(term || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+}
+
+// Collapses doubled letters so US/AU spelling variants match ("chili" vs "chilli", "yogurt" vs "yoghurt"-adjacent cases).
+function collapseRepeatedLetters(s) {
+  return String(s || '').toLowerCase().replace(/(.)\1+/g, '$1');
+}
+
+/** Guards against matches like "chili" -> screwdriver set just because some number appeared nearby. */
+function isRelevantMatch(term, title) {
+  const tokens = significantTokens(term);
+  if (!tokens.length) return true;
+  const t = collapseRepeatedLetters(title);
+  return tokens.some((tok) => t.includes(collapseRepeatedLetters(tok)));
+}
+
+const MAX_PLAUSIBLE_ITEM_PRICE = 60;
 
 function storeSearchUrl(storeId, term) {
   const encoded = encodeURIComponent(term);
@@ -55,8 +108,9 @@ async function findViaShopping(term) {
     if (!Array.isArray(results)) return found;
     for (const r of results) {
       const src = String(r.source || '').toLowerCase();
+      if (!r.price || r.price > MAX_PLAUSIBLE_ITEM_PRICE || !isRelevantMatch(term, r.title)) continue;
       for (const storeId of STORE_IDS) {
-        if (found[storeId] || !r.price) continue;
+        if (found[storeId]) continue;
         if (STORE_MATCH[storeId](src)) {
           found[storeId] = {
             product: r.title,
@@ -72,15 +126,24 @@ async function findViaShopping(term) {
   return found;
 }
 
-/** Fallback: site-restricted organic search, price parsed from title/snippet. */
+/**
+ * Fallback: site-restricted search for an actual product page. Google indexes far more
+ * recipe/guide pages than product pages on supermarket domains, so a matched result must
+ * (a) look like a real product-page URL, (b) contain a genuine "$" price, and
+ * (c) be topically relevant to the ingredient — otherwise it's discarded rather than
+ * returning a confident-looking but meaningless number.
+ */
 async function findViaOrganic(storeId, term) {
   const domain = AU_STORES.find((s) => s.id === storeId)?.domain;
+  const urlPattern = PRODUCT_URL_PATTERN[storeId];
   if (!domain) return null;
   try {
-    const results = await webSearch(`${term} site:${domain}`, { num: 5 });
+    const results = await webSearch(`${term} site:${domain}`, { num: 8 });
     for (const r of results) {
+      if (urlPattern && !urlPattern.test(r.url || '')) continue;
+      if (!isRelevantMatch(term, r.title)) continue;
       const price = parsePriceString(r.title) || parsePriceString(r.snippet);
-      if (price) {
+      if (price && price <= MAX_PLAUSIBLE_ITEM_PRICE) {
         return {
           product: r.title,
           price,
