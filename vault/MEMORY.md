@@ -98,6 +98,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - **Toolbar system** — `PageToolbar.jsx`: shared toolbar with zones [title][views][children] → [OverflowMenu][?][primary CTA]; view buttons show icon+label (label hidden on mobile); wired into TasksPage. `OverflowMenu.jsx`: standalone `⋯` dropdown (label/icon/shortcut/active/danger/divider/disabled); used by PageToolbar and ChatPage. ChatPage: star/summarize/download/delete moved to `OverflowMenu`; Files button labelled. Two icons added to IconProvider: `more-horizontal`, `help-circle`.
 - **Dashboard New Chat button** — full-width "New Chat" card on home dashboard (`ProjectList.jsx`), placed between GoalsWidget and TasksWidget; navigates to `/chat`.
 - **Sidebar collapsed by default** — desktop sidebar starts as a 48px icon rail (New Chat · Home · Tasks · History · Settings icons) instead of fully expanded. Preference persisted in `localStorage` key `vault:sidebarOpen`. `ProjectSidebar` accepts `collapsed` prop; `Layout` passes `collapsed={!sidebarOpen && !isMobile}`.
+- **Property Scenario** (`/property-scenario`) — mortgage/property free-text scenarios → span pre-extraction → LLM assignment + grounding → clarify → AU calc orchestration; CDR live rates; quarantined T&Cs/PDS insights. Feature flag `propertyScenario`. Docs: `docs/property-scenario.md`. Open items: `server/services/propertyScenario/OPEN_ITEMS.md` (W1 browser click-through still open).
 
 ## DB Tables (additional)
 - `comparisons` — saved comparison results linked to projects

@@ -25,7 +25,7 @@ Last updated: 2026-07-15 (Stage 11 — document insight layer added; W1 browser 
 
 - Some CDR “terms” links are marketing HTML, not full PDS — insight already labels `kind=` and gaps when clause text is missing
 - Browser verification of the Ask panel on Railway (depends on W1 login path)
-- Not yet deployed with Stage 11 commit (ship with next `version-7` push)
+- Stage 11 shipped to `version-7` as `fa2c556` (Ask panel string confirmed in live bundle)
 
 ---
 
@@ -62,7 +62,7 @@ Do **not** treat W1 as fully done from server smoke tests alone. Stages 1–9 al
 
 **Still required to fully close W1**
 
-- Deploy to Railway (`version-7`)
+- ~~Deploy to Railway (`version-7`)~~ — shipped (`1eb4b75` pipeline UI; `fa2c556` insights)
 - Browser walkthrough on production: Describe → analyse → answer form → confirm Stage 6 charts/tables/summary render from the live pipeline (not demo fixture)
 - Only then flip this item to **closed** with date + what was typed / observed
 

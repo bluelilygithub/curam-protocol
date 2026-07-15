@@ -29,6 +29,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
 - `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)
+- `server/services/propertyScenario/` — Mortgage / Property Scenario agent (Stages 1–11); see `docs/property-scenario.md` + `OPEN_ITEMS.md`
 - `server/services/SuggestionService.js` — **all services/crons/agents call this** to emit inbox findings
 - `server/routes/suggestions.js` — agent suggestion inbox API
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
@@ -303,9 +304,11 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
+
+**Property Scenario** (`/property-scenario`): Free-text mortgage/property scenarios → span pre-extraction → LLM field assignment → grounding → clarify loop → deterministic AU calc orchestration (stamp duty, CGT, refinance, early payout, bridging). Stage 6 charts/tables; live CDR PRD lender rates; Stage 11 quarantined T&Cs/PDS insights (cited Q&A, never writes scenario totals). Feature flag `propertyScenario`. Routes: `server/routes/propertyScenario.js`. Docs: **`docs/property-scenario.md`**. Open items: `server/services/propertyScenario/OPEN_ITEMS.md`.
 
 **Product Scout** (`/product-scout`): Amazon value comparison + external alternatives. Rainforest API → LLM scoring (`standard` tier) → web search. Optional max price + stretch variance, free delivery / within-2-days filters, admin marketplace (Settings → Product Scout). UI: cards, listing-ratings label, feature comparison table, Tasks-style history bulk delete. Tables: `product_scout_runs`. Routes: `server/routes/productScout.js`. Docs: **`docs/product-scout.md`**. CLI: **`product-scout/`** (no delivery filters; use `AMAZON_DOMAIN` env).
 

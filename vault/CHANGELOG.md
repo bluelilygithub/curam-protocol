@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-15 (property-scenario-agent)
+
+**Feature:** Property Scenario mortgage agent at `/property-scenario` (feature flag `propertyScenario`). Stages 1–11: free-text parse with deterministic span pre-extraction + grounding, AU calc modules + orchestrator, Stage 6 charts/tables, live CDR PRD lender rates, bridging refuse-default modelling, `POST /parse` + `/clarify` UI path, and quarantined Stage 11 T&Cs/PDS insights (`POST /insights`) that cannot write scenario totals. Docs: `docs/property-scenario.md`. Open items (incl. W1 browser click-through): `server/services/propertyScenario/OPEN_ITEMS.md`.
+
+---
+
 ## 2026-07-14 (grocery-like-for-like-quantity)
 
 **Feature:** Grocery prices match like-for-like products across Coles/Woolworths (variant rules for milk, salt, cream; title similarity pairing). Shows **recipe cost** (quantity used) and **pack total** (checkout) per store and per ingredient.
