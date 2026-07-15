@@ -23,6 +23,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   gmailIntel: true,
   domains: true,
   productScout: true,
+  propertyScenario: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -50,5 +51,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'gmailIntel', label: 'Inbox Intel' },
   { key: 'domains', label: 'Domain & Brand' },
   { key: 'productScout', label: 'Amazon Search' },
+  { key: 'propertyScenario', label: 'Property scenario' },
 ];
 

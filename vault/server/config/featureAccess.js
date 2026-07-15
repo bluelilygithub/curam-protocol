@@ -22,6 +22,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   wellbeing: true,
   gmailIntel: true,
   productScout: true,
+  propertyScenario: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

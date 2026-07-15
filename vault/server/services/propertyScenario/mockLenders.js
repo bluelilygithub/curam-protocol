@@ -1,0 +1,88 @@
+'use strict';
+
+/**
+ * Mock lender / product rates for Stage 6 UI.
+ * Real market feeds land in Stage 7 — keep ids stable for chart stubs.
+ */
+
+const MOCK_LENDERS = [
+  {
+    id: 'bigbank_var',
+    name: 'BigBank Variable',
+    lender: 'BigBank',
+    product: 'Standard Variable',
+    rate: 5.74,
+    comparison_rate: 5.89,
+    fixed_or_variable: 'variable',
+    upfront_fees: 600,
+    ongoing_annual_fees: 0,
+    offset: true,
+    redraw: true,
+    max_lvr: 0.95,
+    notes: 'Current Maple/Randwick fixture lender',
+  },
+  {
+    id: 'online_fixed',
+    name: 'OnlineBank Fixed 3y',
+    lender: 'OnlineBank',
+    product: '3-year Fixed',
+    rate: 5.29,
+    comparison_rate: 5.55,
+    fixed_or_variable: 'fixed',
+    fixed_period_months: 36,
+    upfront_fees: 0,
+    ongoing_annual_fees: 0,
+    offset: false,
+    redraw: false,
+    max_lvr: 0.90,
+    notes: 'Switch target in compound scenario',
+  },
+  {
+    id: 'city_var',
+    name: 'CityBank Variable',
+    lender: 'CityBank',
+    product: 'Flex Variable',
+    rate: 5.65,
+    comparison_rate: 5.78,
+    fixed_or_variable: 'variable',
+    upfront_fees: 450,
+    ongoing_annual_fees: 248,
+    offset: true,
+    redraw: true,
+    max_lvr: 0.95,
+    notes: 'Mock competitor',
+  },
+  {
+    id: 'mutual_var',
+    name: 'Mutual Co Variable',
+    lender: 'Mutual Co',
+    product: 'Member Variable',
+    rate: 5.49,
+    comparison_rate: 5.62,
+    fixed_or_variable: 'variable',
+    upfront_fees: 0,
+    ongoing_annual_fees: 0,
+    offset: true,
+    redraw: true,
+    max_lvr: 0.90,
+    notes: 'Mock credit union',
+  },
+  {
+    id: 'regional_fixed',
+    name: 'Regional Fixed 2y',
+    lender: 'Regional Bank',
+    product: '2-year Fixed',
+    rate: 5.39,
+    comparison_rate: 5.71,
+    fixed_or_variable: 'fixed',
+    fixed_period_months: 24,
+    upfront_fees: 350,
+    ongoing_annual_fees: 0,
+    offset: false,
+    redraw: false,
+    max_lvr: 0.80,
+    notes: 'Mock fixed book',
+  },
+];
+
+module.exports = { MOCK_LENDERS };

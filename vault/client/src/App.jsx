@@ -37,6 +37,7 @@ import RecipesPage from './pages/RecipesPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
+import PropertyScenarioPage from './pages/PropertyScenarioPage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
@@ -150,6 +151,7 @@ function App() {
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
               <Route path="/product-scout" element={<ProductScoutPage />} />
+              <Route path="/property-scenario" element={<PropertyScenarioPage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />

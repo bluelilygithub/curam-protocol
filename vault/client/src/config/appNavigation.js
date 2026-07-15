@@ -48,6 +48,7 @@ export const APP_NAV_GROUPS = [
     label: 'Money & data',
     items: [
       { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
+      { id: 'propertyScenario', label: 'Property scenario', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
       { id: 'usage', label: 'Usage & Cost', path: '/usage', icon: 'usage', featureKey: 'usage' },
       { id: 'newsDigest', label: 'News Digest', path: '/news-digest', icon: 'news', featureKey: 'newsDigest' },
