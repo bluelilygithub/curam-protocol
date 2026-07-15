@@ -15,6 +15,11 @@ const { calculateExtraRepayments } = require('../services/propertyScenario/calc/
 const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/offset');
 const { calculateBorrowingPower } = require('../services/propertyScenario/calc/borrowingPower');
 const { executeParse, executeClarify } = require('../services/propertyScenario/wireApi');
+const {
+  buildInsight,
+  compareInsights,
+  INSIGHT_DISCLAIMER,
+} = require('../services/propertyScenario/insights');
 
 async function loadLiveLenders(req) {
   const force = req.query.refresh === '1' || req.query.force === '1'
@@ -211,6 +216,113 @@ router.post('/cdr/refresh', async (_req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'CDR refresh failed' });
+  }
+});
+
+/**
+ * Resolve a product from the request body or live CDR cache by id.
+ * Insights never touch Scenario/calc — product is CDR-normalized lender row only.
+ */
+async function resolveInsightProducts(body = {}, req) {
+  const livePack = await loadLiveLenders(req);
+  const catalog = [
+    ...(livePack.live?.lenders || []),
+    ...(livePack.live?.all_normalized || []),
+  ];
+  const byId = new Map();
+  catalog.forEach((p) => {
+    if (p?.id) byId.set(p.id, p);
+    if (p?.product_id) byId.set(String(p.product_id), p);
+  });
+
+  const fromBody = [];
+  if (body.product && typeof body.product === 'object') fromBody.push(body.product);
+  if (Array.isArray(body.products)) {
+    body.products.forEach((p) => {
+      if (p && typeof p === 'object') fromBody.push(p);
+    });
+  }
+
+  const ids = []
+    .concat(body.product_id ? [body.product_id] : [])
+    .concat(Array.isArray(body.product_ids) ? body.product_ids : []);
+
+  const resolved = [...fromBody];
+  ids.forEach((id) => {
+    const hit = byId.get(id) || byId.get(String(id));
+    if (hit && !resolved.some((p) => p.id === hit.id)) resolved.push(hit);
+  });
+
+  return { products: resolved, livePack };
+}
+
+/**
+ * POST /api/property-scenario/insights
+ * Body: { question, product? | product_id?, forceRefresh? }
+ * Document Q&A — structurally separate from scenario/calc totals.
+ */
+router.post('/insights', async (req, res) => {
+  try {
+    const question = req.body?.question;
+    const { products } = await resolveInsightProducts(req.body || {}, req);
+    const product = products[0];
+    if (!product) {
+      return res.status(400).json({
+        ok: false,
+        error: 'invalid_request',
+        message: 'product or product_id is required',
+        disclaimer: INSIGHT_DISCLAIMER,
+      });
+    }
+    const result = await buildInsight({
+      product,
+      question,
+      userId: req.user?.id,
+      modelId: req.body?.modelId,
+      forceRefresh: Boolean(req.body?.forceRefresh || req.body?.refresh),
+    });
+    const status = result.ok ? 200 : (result.error === 'invalid_request' ? 400 : 422);
+    return res.status(status).json(result);
+  } catch (err) {
+    console.error('[property-scenario] insights', err);
+    return res.status(422).json({
+      ok: false,
+      error: 'insight_failed',
+      message: err.message || 'Insight request failed',
+      disclaimer: INSIGHT_DISCLAIMER,
+      findings: [],
+      uncited_gaps: [],
+    });
+  }
+});
+
+/**
+ * POST /api/property-scenario/insights/compare
+ * Body: { question, products? | product_ids? }
+ */
+router.post('/insights/compare', async (req, res) => {
+  try {
+    const { products } = await resolveInsightProducts(req.body || {}, req);
+    const result = await compareInsights({
+      products,
+      question: req.body?.question,
+      userId: req.user?.id,
+      modelId: req.body?.modelId,
+      forceRefresh: Boolean(req.body?.forceRefresh || req.body?.refresh),
+    });
+    const status = result.ok ? 200 : (result.error === 'invalid_request' ? 400 : 422);
+    return res.status(status).json(result);
+  } catch (err) {
+    console.error('[property-scenario] insights/compare', err);
+    return res.status(422).json({
+      ok: false,
+      error: 'insight_failed',
+      message: err.message || 'Compare insight failed',
+      disclaimer: INSIGHT_DISCLAIMER,
+      findings: [],
+      uncited_gaps: [],
+      disagreements: [],
+    });
   }
 });
 

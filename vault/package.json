@@ -23,7 +23,9 @@
     "test:property-scenario-presentation": "node server/services/propertyScenario/presentation.test.js",
     "test:property-scenario-cdr": "node server/services/propertyScenario/cdr/normalize.test.js",
     "test:property-scenario-cdr-live": "node server/services/propertyScenario/cdr/live.probe.js",
-    "test:property-scenario-wire": "node server/services/propertyScenario/wireApi.test.js"
+    "test:property-scenario-wire": "node server/services/propertyScenario/wireApi.test.js",
+    "test:property-scenario-insights": "node server/services/propertyScenario/insights/insights.test.js",
+    "test:property-scenario-insights-live": "node server/services/propertyScenario/insights/live.probe.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

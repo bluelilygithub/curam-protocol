@@ -2,7 +2,30 @@
 
 Tracked gaps that are **not blocking** the next independent stage, but must not be silently assumed done.
 
-Last updated: 2026-07-15 (Stage 10 — live NLP pipeline wiring closed)
+Last updated: 2026-07-15 (Stage 11 — document insight layer added; W1 browser click-through still open)
+
+---
+
+## Open — Stage 11 (additive)
+
+### I1. Document / insight reasoning — **shipped; live browser + multi-bank doc fetch still to harden**
+
+**Status:** Module + routes + Lenders-tab UI added. Structurally quarantined from Scenario/calc/orchestrator.
+
+**Done:**
+
+- `server/services/propertyScenario/insights/` — fetch/extract PDF|HTML, cache, `buildInsight`, `compareInsights`
+- Citation enforcement (uncited claims stripped); locked `INSIGHT_DISCLAIMER`
+- Structural isolation test (no imports into `scenario` / `orchestrate` / `calc/`)
+- `POST /api/property-scenario/insights` + `/insights/compare`
+- UI: “Ask about a lender's terms” under Lenders tab only (dashed exploration panel — not Scenario/Charts maths)
+- Live probe (2026-07-15): 3/3 doc fetches (CommBank UTC PDF 35pp + Westpac HTML); Q&A on Digi Home Loan returned cited findings + explicit uncited_gaps; disclaimer locked
+
+**Still watch:**
+
+- Some CDR “terms” links are marketing HTML, not full PDS — insight already labels `kind=` and gaps when clause text is missing
+- Browser verification of the Ask panel on Railway (depends on W1 login path)
+- Not yet deployed with Stage 11 commit (ship with next `version-7` push)
 
 ---
 

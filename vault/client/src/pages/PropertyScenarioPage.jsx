@@ -12,6 +12,7 @@ import {
   AmortizationChart,
   BreakEvenChart,
   LenderComparisonTable,
+  LenderTermsInsight,
   ScenarioSummaryTable,
   AdvicePanel,
   CalculatorSnapshots,
@@ -198,12 +199,20 @@ function ResultsView({ demo, tab, setTab, loading, error }) {
       )}
 
       {!loading && demo && tab === 'lenders' && (
-        <Section
-          title="Lender comparison grid"
-          hint={demo.lenders?.data_note || demo.stub_notice || (demo.lender_source === 'cdr_prd' ? 'Live CDR PRD' : 'Stub data')}
-        >
-          <LenderComparisonTable rows={demo.lenders?.rows || []} />
-        </Section>
+        <>
+          <Section
+            title="Lender comparison grid"
+            hint={demo.lenders?.data_note || demo.stub_notice || (demo.lender_source === 'cdr_prd' ? 'Live CDR PRD' : 'Stub data')}
+          >
+            <LenderComparisonTable rows={demo.lenders?.rows || []} />
+          </Section>
+          <Section
+            title="Ask about a lender's terms"
+            hint="Reads the linked T&Cs/PDS — exploratory only. Never changes scenario totals or charts."
+          >
+            <LenderTermsInsight rows={demo.lenders?.rows || []} />
+          </Section>
+        </>
       )}
 
       {!loading && demo && tab === 'calculators' && (

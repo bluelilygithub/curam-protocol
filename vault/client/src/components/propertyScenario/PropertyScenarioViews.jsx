@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -14,6 +14,8 @@ import {
   Area,
   ReferenceLine,
 } from 'recharts';
+import api from '../../utils/apiClient';
+import useProcessingStore from '../../store/processingStore';
 
 const tooltipStyle = {
   background: 'var(--color-surface)',
@@ -334,6 +336,261 @@ export function LenderComparisonTable({ rows = [] }) {
         Upfront fees are heuristically summed from CDR fee objects (est.), not a bank quote.
         MOCK rows are stub data (fallback), not live market rates.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Stage 11 — Ask about a lender's terms (document insight).
+ * Visually separate from deterministic Scenario/Charts/Tables numbers.
+ */
+export function LenderTermsInsight({ rows = [] }) {
+  const [productId, setProductId] = useState(rows[0]?.id || '');
+  const [question, setQuestion] = useState('');
+  const [compareIds, setCompareIds] = useState([]);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const { startProcessing, stopProcessing } = useProcessingStore();
+
+  useEffect(() => {
+    if (!productId && rows[0]?.id) setProductId(rows[0].id);
+  }, [rows, productId]);
+
+  const productsWithDocs = useMemo(
+    () => rows.filter((r) => r.links?.terms || r.links?.fees || r.links?.overview),
+    [rows]
+  );
+
+  const selected = rows.find((r) => r.id === productId) || null;
+
+  async function askSingle() {
+    if (!selected || !question.trim()) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    startProcessing('Reading lender documents…', 'Fetching T&Cs/PDS and analysing. Please don’t navigate away.');
+    try {
+      const res = await api.post('/api/property-scenario/insights', {
+        product: selected,
+        question: question.trim(),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.message || 'Could not analyse document');
+        setResult(data);
+        return;
+      }
+      setResult(data);
+    } catch (err) {
+      setError(err.message || 'Insight request failed');
+    } finally {
+      stopProcessing();
+      setBusy(false);
+    }
+  }
+
+  async function askCompare() {
+    if (compareIds.length < 2 || !question.trim()) return;
+    const products = rows.filter((r) => compareIds.includes(r.id));
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    startProcessing('Comparing lender documents…', 'Fetching and reading multiple T&Cs/PDS files.');
+    try {
+      const res = await api.post('/api/property-scenario/insights/compare', {
+        products,
+        question: question.trim(),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.message || 'Could not compare documents');
+        setResult(data);
+        return;
+      }
+      setResult({ ...data, _compare: true });
+    } catch (err) {
+      setError(err.message || 'Compare failed');
+    } finally {
+      stopProcessing();
+      setBusy(false);
+    }
+  }
+
+  function toggleCompare(id) {
+    setCompareIds((prev) => (
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(0, 4)
+    ));
+  }
+
+  if (!rows.length) {
+    return (
+      <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+        Load lender rates first to ask about their published terms.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-4"
+      style={{
+        borderColor: 'var(--color-border)',
+        background: 'var(--color-bg)',
+        borderStyle: 'dashed',
+      }}
+    >
+      <div>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          Ask about a lender&apos;s terms
+        </p>
+        <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+          Exploratory document reading (T&amp;Cs / PDS) — not part of scenario maths.
+          Answers must cite the document; gaps are called out instead of invented.
+        </p>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Product</span>
+        <select
+          value={productId}
+          onChange={(e) => setProductId(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+        >
+          {rows.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.lender} — {r.name}
+              {r.links?.terms || r.links?.fees ? '' : ' (no doc link)'}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Your question</span>
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={3}
+          placeholder="e.g. Can I pay this off early without penalty? How does the offset account work here?"
+          className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+        />
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy || !question.trim() || !selected}
+          onClick={askSingle}
+          className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {busy ? 'Reading document…' : 'Ask about this product'}
+        </button>
+      </div>
+
+      {productsWithDocs.length >= 2 && (
+        <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+            Optional compare (select 2+)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {productsWithDocs.slice(0, 8).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => toggleCompare(r.id)}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-opacity duration-200 hover:opacity-70"
+                style={{
+                  background: compareIds.includes(r.id) ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: compareIds.includes(r.id) ? '#fff' : 'var(--color-text)',
+                  border: `1px solid ${compareIds.includes(r.id) ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                }}
+              >
+                {r.lender}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={busy || compareIds.length < 2 || !question.trim()}
+            onClick={askCompare}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Compare selected documents
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="rounded-xl border px-3 py-2 text-sm"
+          style={{ borderColor: '#ef4444', background: '#fff1f2', color: '#991b1b' }}
+        >
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-3">
+          {(result.findings || []).length > 0 && (
+            <ul className="space-y-3">
+              {result.findings.map((f, i) => (
+                <li
+                  key={`${f.claim}-${i}`}
+                  className="rounded-xl border p-3 space-y-1.5"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                >
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{f.claim}</p>
+                  {f.source_quote_or_paraphrase && (
+                    <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>
+                      “{f.source_quote_or_paraphrase}”
+                    </p>
+                  )}
+                  {f.document_section_or_location && (
+                    <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                      Source: {f.document_section_or_location}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {(result.uncited_gaps || []).length > 0 && (
+            <div
+              className="rounded-xl border px-3 py-2 space-y-1"
+              style={{ borderColor: '#f59e0b', background: '#fef3c7', color: '#b45309' }}
+            >
+              <p className="text-xs font-medium">Not addressed / gaps</p>
+              {result.uncited_gaps.map((g) => (
+                <p key={g} className="text-xs">{g}</p>
+              ))}
+            </div>
+          )}
+
+          {(result.disagreements || []).length > 0 && (
+            <div
+              className="rounded-xl border px-3 py-2 space-y-1"
+              style={{ borderColor: '#f59e0b', background: '#fef3c7', color: '#b45309' }}
+            >
+              <p className="text-xs font-medium">Document disagreements</p>
+              {result.disagreements.map((d) => (
+                <p key={d} className="text-xs">{d}</p>
+              ))}
+            </div>
+          )}
+
+          {result.disclaimer && (
+            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              {result.disclaimer}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * Property / Mortgage Scenario Agent — Stages 1–10
+ * Property / Mortgage Scenario Agent — Stages 1–11
  * Data model, NLP parse with deterministic pre-extraction, grounding, scenario calc,
  * orchestration, standalone calculators, presentation, CDR PRD rates, bridging modelling,
- * and live HTTP/UI wiring for runFromText (Stage 10).
+ * live HTTP/UI wiring for runFromText (Stage 10), and quarantined document insights (Stage 11).
  *
  * Open/deferred work: see OPEN_ITEMS.md
  */
@@ -33,6 +33,8 @@ const { MOCK_LENDERS } = require('./mockLenders');
 const cdr = require('./cdr');
 const { extractSpans, formatSpansForPrompt } = require('./extractSpans');
 const { executeParse, executeClarify } = require('./wireApi');
+// Insights are exported as a namespace only — callers must not merge insight claims into calc totals.
+const insights = require('./insights');
 
 module.exports = {
   ...constants,
@@ -62,6 +64,10 @@ module.exports = {
   formatSpansForPrompt,
   executeParse,
   executeClarify,
+  insights,
+  INSIGHT_DISCLAIMER: insights.INSIGHT_DISCLAIMER,
+  buildInsight: insights.buildInsight,
+  compareInsights: insights.compareInsights,
   fixtures,
   GROUND_TRUTH_CASES: fixtures.GROUND_TRUTH_CASES,
   NEGATIVE_CASES: fixtures.NEGATIVE_CASES,
