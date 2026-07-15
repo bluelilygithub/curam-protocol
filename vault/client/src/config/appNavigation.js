@@ -38,7 +38,7 @@ export const APP_NAV_GROUPS = [
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
       { id: 'domains', label: 'Domain & Brand', path: '/domains', icon: 'globe', featureKey: 'domains' },
-      { id: 'productScout', label: 'Product Scout', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
+      { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
       { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', icon: 'blocks', featureKey: 'themeBuilder' },
       { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
     ],

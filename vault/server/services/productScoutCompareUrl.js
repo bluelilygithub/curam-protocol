@@ -123,7 +123,7 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
     scout = run.result;
   }
   if (!scout || (scout.mode !== 'guide' && !scout.comparison)) {
-    throw new Error('Run a Product Scout search first, then compare a URL against those picks');
+    throw new Error('Run an Amazon search first, then compare a URL against those picks');
   }
 
   const budgetPicks = resolveBudgetPicks(scout);

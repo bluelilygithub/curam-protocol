@@ -8,7 +8,7 @@ function mdCell(value) {
  * @param {{ query: string, comparison?: object, external_alternatives?: object[] }} result
  */
 function formatMarkdown(result) {
-  const lines = [`# Product Scout — ${result.query}`, ''];
+  const lines = [`# Amazon Search — ${result.query}`, ''];
   const comp = result.comparison || {};
 
   if (comp.summary) {

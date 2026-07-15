@@ -349,7 +349,7 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
     source: 'productScout',
     category: 'source',
     fingerprint: makeFingerprint('productScout', `no-external:${q.slice(0, 40)}`),
-    title: 'Product Scout: no external alternatives found',
+    title: 'Amazon Search: no external alternatives found',
     body: 'Cross-market search returned nothing. Check SEARCH_API_KEY or try a broader query.',
     context: `query: ${q}`,
   });

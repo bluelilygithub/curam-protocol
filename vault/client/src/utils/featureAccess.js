@@ -49,6 +49,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'wellbeing', label: 'Wellbeing Check' },
   { key: 'gmailIntel', label: 'Inbox Intel' },
   { key: 'domains', label: 'Domain & Brand' },
-  { key: 'productScout', label: 'Product Scout' },
+  { key: 'productScout', label: 'Amazon Search' },
 ];
 

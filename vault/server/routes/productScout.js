@@ -22,7 +22,7 @@ function handle(fn) {
     } catch (err) {
       console.error('[productScout]', err.message);
       const status = err.status || (err.message.includes('not set') ? 503 : 500);
-      res.status(status).json({ error: err.message || 'Product Scout failed' });
+      res.status(status).json({ error: err.message || 'Amazon Search failed' });
     }
   };
 }
@@ -121,7 +121,7 @@ router.get('/runs/:id', async (req, res) => {
     res.json(run);
   } catch (err) {
     console.error('[productScout]', err.message);
-    res.status(500).json({ error: err.message || 'Product Scout failed' });
+    res.status(500).json({ error: err.message || 'Amazon Search failed' });
   }
 });
 

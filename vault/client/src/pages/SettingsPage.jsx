@@ -112,7 +112,10 @@ function SettingsPage() {
   const [modelForm, setModelForm] = useState({});
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
-  const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
+  const [tab, setTab] = useState(() => {
+    const saved = localStorage.getItem('settingsTab') || 'Appearance';
+    return saved === 'Product Scout' ? 'Amazon Search' : saved;
+  });
   const [missionReviewFreq, setMissionReviewFreq] = useState('off');
   const [missionLastReviewed, setMissionLastReviewed] = useState(null);
   const [missionSnoozedUntil, setMissionSnoozedUntil] = useState(null);
@@ -125,7 +128,7 @@ function SettingsPage() {
   // Shares alerts
   const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
 
-  // Product Scout
+  // Amazon Search
   const [productScoutAmazonDomain, setProductScoutAmazonDomain] = useState('amazon.com.au');
   const [productScoutAmazonSaved, setProductScoutAmazonSaved] = useState(false);
   const [productScoutMarketplaces, setProductScoutMarketplaces] = useState([]);
@@ -161,7 +164,7 @@ function SettingsPage() {
         'Integrations',
         'News Digest',
         'Shares',
-        'Product Scout',
+        'Amazon Search',
         'Mobile',
         'Members',
         'Feature Access',
@@ -189,7 +192,7 @@ function SettingsPage() {
           'Integrations',
           'News Digest',
           'Shares',
-          'Product Scout',
+          'Amazon Search',
           'Mobile',
           'Members',
           'Feature Access',
@@ -2463,14 +2466,14 @@ function SettingsPage() {
       </section>
       )}
 
-      {tab === 'Product Scout' && (
+      {tab === 'Amazon Search' && (
       <>
       <section className="mb-8">
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
           Amazon marketplace
         </h2>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          Which Amazon country Product Scout searches. Applies to all workspace users.
+          Which Amazon country Amazon Search uses. Applies to all workspace users.
         </p>
         {productScoutDomainFromEnv && (
           <p className="text-xs mb-3" style={{ color: '#f59e0b' }}>

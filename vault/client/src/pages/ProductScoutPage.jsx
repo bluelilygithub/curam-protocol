@@ -207,7 +207,7 @@ export default function ProductScoutPage() {
           {getIcon('productScout', { size: 18 })}
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Product Scout</h1>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Amazon Search</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {countryLabel} — start with a buying guide, then search the best products at each price tier.
           </p>
