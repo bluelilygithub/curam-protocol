@@ -118,10 +118,11 @@ router.post('/parse', async (req, res) => {
 router.post('/clarify', async (req, res) => {
   try {
     const livePack = await loadLiveLenders(req);
-    const result = executeClarify(
+    const result = await executeClarify(
       {
         scenario: req.body?.scenario,
         answers: req.body?.answers,
+        free_text_clarifications: req.body?.free_text_clarifications,
         selling_cost_pct: req.body?.selling_cost_pct,
         resolve_optional: req.body?.resolve_optional,
         clear_assumptions: req.body?.clear_assumptions,

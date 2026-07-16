@@ -11,53 +11,167 @@ const { applyClarifications, cloneScenario } = require('./clarify');
 const { validateScenario } = require('./validate');
 const { buildPresentationPayload } = require('./presentation');
 
+// ── Label helpers ─────────────────────────────────────────────────────────────
+
+const FIELD_LABEL_OVERRIDES = {
+  state: 'State (NSW, VIC, QLD, SA, WA, TAS, ACT, NT)',
+  ppor: 'Is this your primary place of residence (PPOR)?',
+  is_ppor: 'Is this your primary place of residence (PPOR)?',
+  was_ever_investment_property: 'Was this ever an investment property?',
+  deposit_amount: 'Deposit amount ($)',
+  property_value: 'Property value ($)',
+  purchase_price: 'Original purchase price ($)',
+  purchase_date: 'Date of purchase',
+  settlement_date: 'Settlement date',
+  selling_costs: 'Selling costs ($)',
+  balance: 'Current loan balance ($)',
+  rate: 'Interest rate (%)',
+  fixed_or_variable: 'Rate type',
+  term_remaining_months: 'Loan term remaining (months)',
+  fixed_period_remaining_months: 'Fixed-rate period remaining (months)',
+  cgt_cost_base: 'CGT cost base ($)',
+  years_owned: 'Years owned',
+  property_id: 'Which property',
+  lvr: 'Loan-to-value ratio (LVR %)',
+};
+
+function humanizeLastSegment(fieldPath) {
+  if (!fieldPath || fieldPath === 'clarifying_questions') return '';
+  const parts = String(fieldPath).replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  const last = parts[parts.length - 1];
+  return FIELD_LABEL_OVERRIDES[last]
+    || last.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+// ── Loan object expansion ─────────────────────────────────────────────────────
+
+// Sub-fields required for every loan snapshot (in display order)
+const LOAN_SUB_FIELDS = [
+  { sub: 'balance',                    label: 'Loan balance ($)',                      type: 'number',    placeholder: 'e.g. 520000' },
+  { sub: 'rate',                       label: 'Interest rate (%)',                      type: 'number',    placeholder: 'e.g. 6.10' },
+  { sub: 'fixed_or_variable',          label: 'Rate type',                              type: 'rate_type', placeholder: '' },
+  { sub: 'term_remaining_months',      label: 'Months remaining on loan term',          type: 'number',    placeholder: 'e.g. 300' },
+  { sub: 'fixed_period_remaining_months', label: 'Months remaining on fixed-rate period (if fixed)', type: 'number', placeholder: 'e.g. 24 — leave blank if variable' },
+];
+
+const LOAN_PATH_RE = /\.(current_loan|target_loan|new_loan|refinance_loan|bridging_loan)$/;
+
+function isLoanObjectPath(path) {
+  return LOAN_PATH_RE.test(String(path || ''));
+}
+
+const LOAN_KIND_LABELS = {
+  current_loan: 'Current loan',
+  target_loan: 'Target loan',
+  new_loan: 'New loan',
+  refinance_loan: 'Refinance loan',
+  bridging_loan: 'Bridging loan',
+};
+
+function expandLoanObjectPath(basePath, parentId) {
+  const kindKey = (String(basePath).match(LOAN_PATH_RE) || [])[1] || 'loan';
+  const kindLabel = LOAN_KIND_LABELS[kindKey] || 'Loan';
+  return LOAN_SUB_FIELDS.map(({ sub, label, type, placeholder }) => ({
+    id: `${parentId}_${sub}`,
+    field_path: `${basePath}.${sub}`,
+    label: `${kindLabel} — ${label}`,
+    message: `${kindLabel} — ${label}`,
+    type,
+    placeholder,
+    severity: 'required',
+  }));
+}
+
+// ── Form builder ──────────────────────────────────────────────────────────────
+
 function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
-  const assumptions = (scenario?.unresolved_assumptions || [])
+  const result = [];
+  const byMessage = new Set();
+  const byPath = new Set();
+
+  function addRow(row) {
+    if (byPath.has(row.field_path)) return;
+    if (byMessage.has(String(row.message || '').trim().toLowerCase())) return;
+    result.push(row);
+    if (row.field_path) byPath.add(row.field_path);
+    byMessage.add(String(row.message || '').trim().toLowerCase());
+  }
+
+  // 1. Unresolved assumptions from the scenario
+  (scenario?.unresolved_assumptions || [])
     .filter((a) => a.severity !== 'optional')
-    .map((a) => ({
-      id: a.id,
-      field_path: a.field_path,
-      message: a.message,
-      severity: a.severity || 'required',
-    }));
+    .forEach((a) => {
+      const path = String(a.field_path || '');
 
-  const byMessage = new Set(assumptions.map((a) => String(a.message || '').trim().toLowerCase()));
-  const byPath = new Set(assumptions.map((a) => String(a.field_path || '').trim()));
+      if (isLoanObjectPath(path)) {
+        // Expand object-path loan assumption into individual leaf rows
+        expandLoanObjectPath(path, a.id).forEach((row) => {
+          if (!byPath.has(row.field_path)) {
+            result.push(row);
+            byPath.add(row.field_path);
+          }
+        });
+        return;
+      }
 
+      addRow({
+        id: a.id,
+        field_path: path,
+        label: humanizeLastSegment(path) || a.message,
+        message: a.message,
+        type: undefined,
+        placeholder: '',
+        severity: a.severity || 'required',
+      });
+    });
+
+  // 2. Narrative clarifying questions from the LLM parse (field_path = sentinel)
   clarifyingQuestions.forEach((q, i) => {
     const msg = String(q || '').trim();
     if (!msg) return;
-    if (byMessage.has(msg.toLowerCase())) return;
-    assumptions.push({
+    addRow({
       id: `ass_q_ui_${i + 1}`,
       field_path: 'clarifying_questions',
+      label: msg,
       message: msg,
+      type: undefined,
+      placeholder: 'Your answer',
       severity: 'required',
     });
-    byMessage.add(msg.toLowerCase());
   });
 
-  // When grounding strips values, validation errors can remain with no assumption rows.
-  // Surface them so the clarify form is never empty while ready_for_calculations is false.
+  // 3. Validation errors — surface only when not already covered by an assumption row
   (validation?.errors || []).forEach((err, i) => {
     const path = String(err.path || '').trim();
     const msg = String(err.message || '').trim();
     if (!path && !msg) return;
     if (path && byPath.has(path)) return;
-    const message = path ? `${path}: ${msg}` : msg;
-    if (byMessage.has(message.toLowerCase())) return;
-    assumptions.push({
+
+    if (isLoanObjectPath(path)) {
+      expandLoanObjectPath(path, `val_${i}`).forEach((row) => {
+        if (!byPath.has(row.field_path)) {
+          result.push(row);
+          byPath.add(row.field_path);
+        }
+      });
+      return;
+    }
+
+    addRow({
       id: `ass_val_${i + 1}_${path.replace(/[^a-z0-9]+/gi, '_') || 'x'}`,
       field_path: path || 'clarifying_questions',
-      message,
+      label: path ? humanizeLastSegment(path) : msg,
+      message: msg,          // just the human message, never path-prefixed
+      type: undefined,
+      placeholder: '',
       severity: 'required',
     });
-    byMessage.add(message.toLowerCase());
-    if (path) byPath.add(path);
   });
 
-  return assumptions;
+  return result;
 }
+
+// ── Presentation helper ────────────────────────────────────────────────────────
 
 function withPresentation(base, { scenario, calculation, liveLenders, coverage, lenderFetchError }) {
   if (!calculation || calculation.ok === false) {
@@ -134,6 +248,8 @@ function buildPipelineResponse({
   });
 }
 
+// ── executeParse ─────────────────────────────────────────────────────────────
+
 /**
  * Parse free text through runFromText. Never throws for LLM/parse failures —
  * returns { ok: false, error: 'parse_failed', message }.
@@ -191,13 +307,19 @@ async function executeParse(body = {}, deps = {}) {
   }
 }
 
+// ── executeClarify ─────────────────────────────────────────────────────────────
+
 /**
  * Apply clarification answers; run orchestrator only when ready.
+ * Now async: when free-text clarification answers are present alongside
+ * source_text, re-runs runFromText with the augmented text so the LLM can
+ * pick up values the user described in plain-English answers.
  * Never throws — returns structured ok/error.
  *
  * @param {{
  *   scenario: object,
  *   answers?: Record<string, *>,
+ *   free_text_clarifications?: Array<{ id, question, answer }>,
  *   selling_cost_pct?: number,
  *   resolve_optional?: boolean,
  *   clear_assumptions?: boolean,
@@ -205,9 +327,9 @@ async function executeParse(body = {}, deps = {}) {
  *   replace_scenario?: boolean,
  *   source_text?: string,
  * }} body
- * @param {{ runFromScenario?: Function, livePack?: object|null }} [deps]
+ * @param {{ runFromText?: Function, runFromScenario?: Function, livePack?: object|null }} [deps]
  */
-function executeClarify(body = {}, deps = {}) {
+async function executeClarify(body = {}, deps = {}) {
   if (!body.scenario || typeof body.scenario !== 'object') {
     return {
       ok: false,
@@ -218,6 +340,34 @@ function executeClarify(body = {}, deps = {}) {
 
   try {
     let scenario = cloneScenario(body.scenario);
+
+    // Re-parse with augmented text when the user answered narrative questions
+    // (field_path: 'clarifying_questions') that can't be written to scenario fields directly.
+    const freeTextClarifications = Array.isArray(body.free_text_clarifications)
+      ? body.free_text_clarifications.filter((c) => c && String(c.answer || '').trim())
+      : [];
+
+    if (freeTextClarifications.length > 0 && body.source_text) {
+      const augmentation = freeTextClarifications
+        .map(({ question, answer }) => `${String(question || '').trim()}\n${String(answer).trim()}`)
+        .join('\n\n');
+      const augmentedText = `${body.source_text}\n\nAdditional context from user:\n${augmentation}`;
+      try {
+        const run = deps.runFromText || runFromText;
+        const reparsed = await run(augmentedText, {
+          asOf: body.asOf,
+          userId: body.userId,
+          modelId: body.modelId,
+        });
+        if (reparsed?.scenario) {
+          scenario = reparsed.scenario;
+        }
+      } catch {
+        // Fall through: use the existing scenario and let validation surface remaining gaps
+      }
+    }
+
+    // Apply direct field-path answers on top of the (possibly re-parsed) scenario
     const clarify = applyClarifications(scenario, {
       answers: body.answers || {},
       selling_cost_pct: body.selling_cost_pct,

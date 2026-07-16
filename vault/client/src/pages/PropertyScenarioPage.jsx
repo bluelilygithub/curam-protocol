@@ -60,6 +60,7 @@ function Section({ title, hint, children }) {
 function inferInputType(fieldPath = '', message = '') {
   const path = String(fieldPath).toLowerCase();
   const msg = String(message).toLowerCase();
+  if (/fixed_or_variable/.test(path) || /rate\s*type|fixed or variable/.test(msg)) return 'rate_type';
   if (/date|settlement|purchase_date|payout/.test(path) || /\bdate\b/.test(msg)) return 'date';
   if (/rate|pct|percent|lvr/.test(path) || /%|per\s*cent|rate/.test(msg)) return 'number';
   if (/balance|amount|price|value|cost|deposit|fee/.test(path) || /\$|dollar|deposit|balance|price|cost/.test(msg)) return 'number';
@@ -67,6 +68,14 @@ function inferInputType(fieldPath = '', message = '') {
   if (/state/.test(path) || /\b(nsw|vic|qld|sa|wa|tas|act|nt)\b/.test(msg)) return 'state';
   if (/true|false|yes|no|ppor|first.?home|fhb|investment/.test(path + ' ' + msg)) return 'boolean';
   return 'text';
+}
+
+function coerceRateType(raw) {
+  const v = String(raw || '').toLowerCase().trim();
+  if (v === 'fixed') return 'fixed';
+  if (v === 'variable' || v === 'var') return 'variable';
+  if (v === 'split') return 'split';
+  return raw;
 }
 
 function coerceAnswer(raw, type) {
@@ -82,6 +91,7 @@ function coerceAnswer(raw, type) {
     return Number.isFinite(n) ? n : raw;
   }
   if (type === 'state') return String(raw).trim().toUpperCase();
+  if (type === 'rate_type') return coerceRateType(raw);
   return raw;
 }
 
@@ -472,26 +482,31 @@ export default function PropertyScenarioPage() {
     if (!pipeline?.scenario) return;
     setPipelineError(null);
 
-    const coerced = {};
-      formRows.forEach((row) => {
-      const type = inferInputType(row.field_path, row.message);
+    const fieldAnswers = {};
+    const freeTextClarifications = [];
+
+    formRows.forEach((row) => {
+      const type = row.type || inferInputType(row.field_path, row.message);
       const raw = answers[row.id];
       if (raw === undefined || raw === '') return;
-      const value = coerceAnswer(raw, type);
-      // Prefer field_path so validation-driven rows (not in unresolved_assumptions) still apply
-      const key = row.field_path && row.field_path !== 'clarifying_questions'
-        ? row.field_path
-        : row.id;
-      coerced[key] = value;
-      // Also clear matching assumption id when present
-      if (row.id && row.id !== key) coerced[row.id] = value;
+
+      if (row.field_path === 'clarifying_questions') {
+        // Narrative answer — send separately for re-parse, not as a field write
+        freeTextClarifications.push({ id: row.id, question: row.message, answer: String(raw) });
+      } else {
+        const value = coerceAnswer(raw, type);
+        // Use field_path as key so validation-driven rows (not in unresolved_assumptions) apply
+        const key = row.field_path || row.id;
+        fieldAnswers[key] = value;
+      }
     });
 
     startProcessing('Updating scenario…', 'Applying your answers and recalculating when ready.');
     try {
       const body = {
         scenario: pipeline.scenario,
-        answers: coerced,
+        answers: fieldAnswers,
+        free_text_clarifications: freeTextClarifications.length ? freeTextClarifications : undefined,
         source_text: pipeline.source_text || text,
         resolve_optional: true,
       };
@@ -653,14 +668,15 @@ export default function PropertyScenarioPage() {
               >
                 <div className="space-y-4">
                   {formRows.map((row) => {
-                    const type = inferInputType(row.field_path, row.message);
+                    const type = row.type || inferInputType(row.field_path, row.message);
+                    const displayLabel = row.label || row.message;
+                    const isFreeText = row.field_path === 'clarifying_questions';
+                    const placeholder = row.placeholder
+                      || (type === 'number' ? 'e.g. 650000 or 5.49' : isFreeText ? 'Your answer…' : '');
                     return (
                       <label key={row.id} className="block space-y-1.5">
                         <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                          {row.message}
-                        </span>
-                        <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {row.field_path}
+                          {displayLabel}
                         </span>
                         {type === 'boolean' ? (
                           <select
@@ -683,13 +699,32 @@ export default function PropertyScenarioPage() {
                               <option key={s} value={s}>{s}</option>
                             ))}
                           </select>
+                        ) : type === 'rate_type' ? (
+                          <select
+                            value={answers[row.id] ?? ''}
+                            onChange={(e) => setAnswers((a) => ({ ...a, [row.id]: e.target.value }))}
+                            style={FIELD}
+                          >
+                            <option value="">Select…</option>
+                            <option value="fixed">Fixed</option>
+                            <option value="variable">Variable</option>
+                            <option value="split">Split</option>
+                          </select>
+                        ) : isFreeText ? (
+                          <textarea
+                            rows={2}
+                            value={answers[row.id] ?? ''}
+                            onChange={(e) => setAnswers((a) => ({ ...a, [row.id]: e.target.value }))}
+                            placeholder={placeholder}
+                            style={{ ...FIELD, resize: 'vertical', minHeight: 60 }}
+                          />
                         ) : (
                           <input
-                            type={type === 'date' ? 'date' : type === 'number' ? 'text' : 'text'}
+                            type={type === 'date' ? 'date' : 'text'}
                             inputMode={type === 'number' ? 'decimal' : undefined}
                             value={answers[row.id] ?? ''}
                             onChange={(e) => setAnswers((a) => ({ ...a, [row.id]: e.target.value }))}
-                            placeholder={type === 'number' ? 'e.g. 650000 or 5.49' : 'Your answer'}
+                            placeholder={placeholder}
                             style={FIELD}
                           />
                         )}
