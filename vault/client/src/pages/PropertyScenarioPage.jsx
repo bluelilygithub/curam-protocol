@@ -231,6 +231,145 @@ function ResultsView({ demo, tab, setTab, loading, error }) {
   );
 }
 
+function PropertyScenarioHelp({ onClose, getIcon }) {
+  const BOUNDARY_ROWS = [
+    { crossing: 'Free text → structured Scenario', what: 'Your sentences → events/fields', enforcement: 'Deterministic span extraction runs first (currency, %, dates found in your literal text). The LLM only assigns those spans — it never invents new numbers. Grounding strips anything in the LLM\'s output with no matching span.' },
+    { crossing: 'Structured Scenario → clarifying questions', what: 'Ambiguity → questions', enforcement: 'Pure deterministic logic — if a required field is missing or stripped, a question is generated. No LLM judgment involved in whether to ask.' },
+    { crossing: 'Answered Scenario → calculations', what: 'Confirmed fields → dollar figures', enforcement: 'Hard boundary. Nothing enters calc/* unless ready_for_calculations is true. This is the most protected crossing in the whole system.' },
+    { crossing: 'Shortfall detection → bridging cost', what: 'A structural gap → an indicative cost', enforcement: 'The detection (funding_alert) is deterministic. The cost estimate is deterministic math (rate × amount × time) — no LLM involved. It\'s excluded from totals on principle.' },
+    { crossing: 'CDR rate data → comparison table', what: 'Bank API data → table rows', enforcement: 'Fully deterministic, except one filtering decision: excluding special-purpose products (green loans, staff offers) uses regex pattern matching against product titles — deterministic, but pattern-based. Edge cases are possible.' },
+    { crossing: 'Lender documents → Insight findings', what: 'Real PDS/T&Cs text → answers', enforcement: 'The only genuinely open crossing. The LLM reasons freely here. Enforcement is citation-or-refusal and structural isolation — this layer cannot write back into Scenario/calc/totals no matter what it concludes.' },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 760, maxHeight: '90dvh' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-2">
+            {getIcon('book', { size: 16 })}
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Property Scenario — How it works</span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('close', { size: 18 })}
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto px-6 py-5 space-y-6 text-sm" style={{ color: 'var(--color-text)' }}>
+
+          {/* Intro */}
+          <p style={{ color: 'var(--color-muted)' }}>
+            Two different tools share this page, deliberately kept apart. Understanding which one you're using — and why — is the key to getting the most out of it without being misled.
+          </p>
+
+          {/* Part 1 */}
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 1 — Scenario Engine (Stages 1–10)</h2>
+            <p><strong>What it's for:</strong> "I'm doing X — what will it actually cost, and what should I watch out for?"</p>
+            <p style={{ color: 'var(--color-muted)' }}>Every dollar figure the Scenario Engine produces is exact, reproducible math. The LLM's only job here is turning your sentences into structured inputs for that math — it never touches the numbers themselves.</p>
+            <ol className="space-y-2 list-decimal list-inside" style={{ color: 'var(--color-muted)' }}>
+              <li>Go to <strong style={{ color: 'var(--color-text)' }}>Describe your situation</strong> and write in plain English — compound situations work: <em>"selling in Randwick, buying a new place, and switching from BigBank to OnlineBank."</em></li>
+              <li>The parser extracts events, amounts, rates and dates deterministically, then uses the LLM to assign them to the right fields and judge qualitative things like PPOR status.</li>
+              <li>You'll almost always get a <strong style={{ color: 'var(--color-text)' }}>clarifying questions form</strong> — this is by design. The system refuses to guess your state (stamp duty varies by state), investment history (changes CGT entirely), or fixed-rate period (changes break-cost math by years, not months).</li>
+              <li>Once enough is answered you get a KPI strip, cost/benefit summary, cash-flow timeline, charts and lender comparison — all deterministic.</li>
+            </ol>
+            <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Tips for better results</p>
+              <ul className="space-y-1 text-xs list-disc list-inside" style={{ color: 'var(--color-muted)' }}>
+                <li>Be specific about timing — "selling and buying simultaneously" vs "buying before my sale settles" triggers very different paths (the second triggers the bridging alert).</li>
+                <li>Answer the PPOR/investment-status question carefully — it's the single field that decides whether CGT is $0 or a real number.</li>
+                <li>If you see a <strong style={{ color: '#f59e0b' }}>funding alert banner</strong>, that's the system telling you the scenario isn't resolved yet. The bridging cost shown is informational only, not a green light.</li>
+                <li>Treat every figure as trustworthy math given your inputs. If a number looks wrong, check what you told it — not whether the formula is right.</li>
+              </ul>
+            </div>
+          </section>
+
+          {/* Part 2 */}
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 2 — Insight Layer (Stage 11)</h2>
+            <p><strong>What it's for:</strong> "What does the fine print on this lender's product actually say?" — questions a comparison site's filter UI can't answer.</p>
+            <p style={{ color: 'var(--color-muted)' }}>This layer is open-ended, exploratory, and genuinely allowed to be wrong or incomplete — but it's walled off so it can never feed into the Scenario Engine's numbers.</p>
+            <ol className="space-y-2 list-decimal list-inside" style={{ color: 'var(--color-muted)' }}>
+              <li>Go to the <strong style={{ color: 'var(--color-text)' }}>Lenders tab → Ask about a lender's terms.</strong></li>
+              <li>Pick a product from the live comparison and ask anything genuinely open-ended:<br />
+                <span className="italic">"What's the catch with this rate?" / "Can I make unlimited extra repayments?" / "Would irregular self-employed income qualify under this wording?"</span></li>
+              <li>You get findings with <strong style={{ color: 'var(--color-text)' }}>citations back to the actual document</strong> — and explicit statements when something isn't addressed, rather than a confident guess.</li>
+            </ol>
+            <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Tips for better results</p>
+              <ul className="space-y-1 text-xs list-disc list-inside" style={{ color: 'var(--color-muted)' }}>
+                <li>Ask comparative questions across products — "which of these has no cap on extra repayments" requires reading multiple documents, which is where this earns its keep.</li>
+                <li>Push on marketing-vs-fine-print gaps deliberately — "the headline says unlimited repayments, does the PDS actually say that?" is exactly the question this layer was built for.</li>
+                <li>Treat every answer as a starting point for verification, not a final word. This is the one part of this tool that can be wrong — that's an accepted tradeoff, not an oversight.</li>
+              </ul>
+            </div>
+          </section>
+
+          {/* Crossover map */}
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>The Crossover Map — where probabilistic and deterministic meet</h2>
+            <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)', width: '28%' }}>Boundary</th>
+                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)', width: '22%' }}>What crosses it</th>
+                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)' }}>What's enforced at the crossing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {BOUNDARY_ROWS.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: i < BOUNDARY_ROWS.length - 1 ? `1px solid var(--color-border)` : 'none' }}>
+                      <td className="px-4 py-3 align-top font-medium" style={{ color: 'var(--color-text)' }}>{row.crossing}</td>
+                      <td className="px-4 py-3 align-top" style={{ color: 'var(--color-muted)' }}>{row.what}</td>
+                      <td className="px-4 py-3 align-top" style={{ color: 'var(--color-muted)' }}>{row.enforcement}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* One sentence */}
+          <section className="rounded-xl p-4 border-l-4" style={{ background: 'var(--color-bg)', borderLeftColor: 'var(--color-primary)', borderTopColor: 'var(--color-border)', borderRightColor: 'var(--color-border)', borderBottomColor: 'var(--color-border)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>The one sentence that matters most</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Every dollar figure on the Scenario side has passed through deterministic math and cannot be influenced by the LLM getting something wrong — the LLM's only failure mode there is asking an unnecessary question, never producing a wrong number. The Insight Layer is the opposite: open, capable of being incomplete or wrong, and deliberately kept unable to touch anything on the Scenario side.
+            </p>
+            <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+              If you ever see a number that appears to have come from an open-ended question, that's worth reporting — it means the structural isolation test didn't catch something it was specifically built to catch.
+            </p>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PropertyScenarioPage() {
   const navigate = useNavigate();
   const getIcon = useIcon();
@@ -238,6 +377,7 @@ export default function PropertyScenarioPage() {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const isAdmin = Boolean(user?.isAdmin);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [mode, setMode] = useState('describe');
   const [tab, setTab] = useState('overview');
@@ -390,6 +530,7 @@ export default function PropertyScenarioPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      {helpOpen && <PropertyScenarioHelp onClose={() => setHelpOpen(false)} getIcon={getIcon} />}
       <header
         className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -402,11 +543,20 @@ export default function PropertyScenarioPage() {
             <button
               onClick={() => { localStorage.removeItem(PS_TOUR_KEY); startPropertyScenarioTour(navigate); }}
               title="Take the Property Scenario tour"
-              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'opacity 0.2s' }}
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'color 0.2s' }}
               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
             >
               {getIcon('compass', { size: 15 })}
+            </button>
+            <button
+              onClick={() => setHelpOpen(true)}
+              title="How this tool works"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'color 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('info', { size: 15 })}
             </button>
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
