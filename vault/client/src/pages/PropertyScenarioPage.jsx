@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { startPropertyScenarioTour, TOUR_KEY as PS_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
@@ -231,6 +232,7 @@ function ResultsView({ demo, tab, setTab, loading, error }) {
 }
 
 export default function PropertyScenarioPage() {
+  const navigate = useNavigate();
   const getIcon = useIcon();
   const user = useAuthStore((s) => s.user);
   const addToast = useToastStore((s) => s.addToast);
@@ -393,9 +395,20 @@ export default function PropertyScenarioPage() {
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
       >
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold truncate" style={{ color: 'var(--color-text)' }}>
-            Property scenario
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+              Property scenario
+            </h1>
+            <button
+              onClick={() => { localStorage.removeItem(PS_TOUR_KEY); startPropertyScenarioTour(navigate); }}
+              title="Take the Property Scenario tour"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('compass', { size: 15 })}
+            </button>
+          </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {mode === 'describe'
               ? 'Describe a refinance, sale, purchase, or switch in plain English'

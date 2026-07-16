@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { startProductScoutTour, TOUR_KEY as SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import ProductScoutResults from '../components/productScout/ProductScoutResults';
 import ProductScoutUrlCompare from '../components/productScout/ProductScoutUrlCompare';
 import ProductScoutGuidePanel from '../components/productScout/ProductScoutGuidePanel';
@@ -27,6 +28,7 @@ function FilterToggle({ label, checked, onChange }) {
 }
 
 export default function ProductScoutPage() {
+  const navigate = useNavigate();
   const getIcon = useIcon();
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
@@ -207,7 +209,18 @@ export default function ProductScoutPage() {
           {getIcon('productScout', { size: 18 })}
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Amazon Search</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Amazon Search</h1>
+            <button
+              onClick={() => { localStorage.removeItem(SCOUT_TOUR_KEY); startProductScoutTour(navigate); }}
+              title="Take the Amazon Search tour"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('compass', { size: 14 })}
+            </button>
+          </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {countryLabel} — start with a buying guide, then search the best products at each price tier.
           </p>

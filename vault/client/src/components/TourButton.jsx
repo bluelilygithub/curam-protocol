@@ -7,6 +7,9 @@ import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/cha
 import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
 import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
+import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
+import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
+import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 
 export default function TourButton() {
   const location = useLocation();
@@ -19,8 +22,11 @@ export default function TourButton() {
   const isChains = location.pathname.startsWith('/chains');
   const isProject = /^\/projects\/\d+$/.test(location.pathname);
   const isSettings = location.pathname === '/settings';
+  const isProductScout = location.pathname.startsWith('/product-scout');
+  const isRecipes = location.pathname.startsWith('/recipes');
+  const isPropertyScenario = location.pathname.startsWith('/property-scenario');
 
-  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings) return null;
+  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings && !isProductScout && !isRecipes && !isPropertyScenario) return null;
 
   // On /goals: Getting Started tour takes priority while pending, then Goals tour
   const isGettingStartedPending = isGoals && !localStorage.getItem(GETTING_STARTED_TOUR_KEY);
@@ -32,6 +38,9 @@ export default function TourButton() {
   else if (isChains) tourKey = CHAINS_TOUR_KEY;
   else if (isProject) tourKey = RAG_TOUR_KEY;
   else if (isSettings) tourKey = INTEGRATIONS_TOUR_KEY;
+  else if (isProductScout) tourKey = PRODUCT_SCOUT_TOUR_KEY;
+  else if (isRecipes) tourKey = RECIPES_TOUR_KEY;
+  else if (isPropertyScenario) tourKey = PROPERTY_SCENARIO_TOUR_KEY;
 
   if (localStorage.getItem(tourKey)) return null;
 
@@ -42,6 +51,9 @@ export default function TourButton() {
     else if (isChains) startChainsTour(navigate);
     else if (isProject) startRagTour(navigate, params.id);
     else if (isSettings) startIntegrationsTour(navigate);
+    else if (isProductScout) startProductScoutTour(navigate);
+    else if (isRecipes) startRecipesTour(navigate);
+    else if (isPropertyScenario) startPropertyScenarioTour(navigate);
   };
 
   let label;
@@ -51,6 +63,9 @@ export default function TourButton() {
   else if (isChains) label = 'Chains Tour';
   else if (isProject) label = 'Project Tour';
   else if (isSettings) label = 'Integrations Tour';
+  else if (isProductScout) label = 'Amazon Search Tour';
+  else if (isRecipes) label = 'Recipes Tour';
+  else if (isPropertyScenario) label = 'Property Scenario Tour';
 
   return (
     <button

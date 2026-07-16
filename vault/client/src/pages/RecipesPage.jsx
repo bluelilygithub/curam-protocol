@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
@@ -512,6 +513,7 @@ function RecipeDetailPanel({
 }
 
 export default function RecipesPage() {
+  const navigate = useNavigate();
   const getIcon = useIcon();
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
@@ -833,6 +835,15 @@ export default function RecipesPage() {
             {getIcon('utensils', { size: 16 })}
           </div>
           <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recipes</h1>
+          <button
+            onClick={() => { localStorage.removeItem(RECIPES_TOUR_KEY); startRecipesTour(navigate); }}
+            title="Take the Recipes tour"
+            style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('compass', { size: 13 })}
+          </button>
         </div>
 
         <input
