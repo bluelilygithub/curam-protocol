@@ -1121,7 +1121,7 @@ export default function RecipesPage() {
                 onChange={(e) => setGroceryInput(e.target.value)}
                 rows={8}
                 placeholder={'500g chicken breast\n400ml coconut milk\n2 tbsp green curry paste\n…'}
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y font-mono"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               />
             </label>
