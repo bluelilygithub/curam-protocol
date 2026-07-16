@@ -22,6 +22,9 @@ import { startMoodTour, TOUR_KEY as MOOD_TOUR_KEY } from '../utils/tours/moodTou
 import { startNewsDigestTour, TOUR_KEY as NEWS_DIGEST_TOUR_KEY } from '../utils/tours/newsDigestTour';
 import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours/calendarTour';
 import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
+import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
+import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
+import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 import ConfirmModal from '../components/ConfirmModal';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
@@ -2341,6 +2344,60 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(GRAPH_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Amazon Search Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — search input, value scoring, feature comparison table, cross-market alternatives, history
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(PRODUCT_SCOUT_TOUR_KEY);
+                setTimeout(() => startProductScoutTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(PRODUCT_SCOUT_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Recipes Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step tour — leftover recipes, recipe by name, skill levels, live grocery prices, library
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(RECIPES_TOUR_KEY);
+                setTimeout(() => startRecipesTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(RECIPES_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Property Scenario Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                8-step tour — NLP parse, pre-extraction, clarifying form, calc results, CDR live rates, T&Cs insights
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(PROPERTY_SCENARIO_TOUR_KEY);
+                setTimeout(() => startPropertyScenarioTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(PROPERTY_SCENARIO_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
         </div>
