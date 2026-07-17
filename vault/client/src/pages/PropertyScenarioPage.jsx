@@ -964,6 +964,17 @@ export default function PropertyScenarioPage() {
             {/* ── Structured form results ───────────────────────────── */}
             {calcResult?.ready_for_calculations && (
               <>
+                {calcResult.cdr_rate_used && (
+                  <div className="rounded-xl border px-4 py-3 text-sm space-y-0.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="font-medium" style={{ color: 'var(--color-text)' }}>
+                      Compared against best CDR rate: {calcResult.cdr_rate_used.rate}%
+                      {calcResult.cdr_rate_used.lender ? ` (${calcResult.cdr_rate_used.lender})` : ''}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Lowest advertised rate from live CDR open banking data. Switch to "Lenders" tab to see all options.
+                    </p>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setCalcResult(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                     {getIcon('sliders', { size: 13 })}

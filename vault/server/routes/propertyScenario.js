@@ -339,6 +339,37 @@ router.post('/calculate', async (req, res) => {
     if (!scenario || typeof scenario !== 'object') {
       return res.status(400).json({ ok: false, error: 'invalid_request', message: 'scenario is required' });
     }
+
+    // Load live CDR lenders first — used both for rate substitution and the comparison table
+    const { live, error: lenderFetchError } = await loadLiveLenders(req);
+    const liveLenders = live?.ok ? live.lenders : null;
+
+    // CDR rate substitution: for switch_lender events where target rate = current rate
+    // (CDR comparison mode from the structured form), inject the best live CDR rate.
+    let cdrRateUsed = null;
+    if (Array.isArray(scenario.events)) {
+      for (const event of scenario.events) {
+        if (!['switch_lender', 'refinance'].includes(event.type)) continue;
+        const fields = event.fields || {};
+        const currentRate = fields.current_loan?.rate;
+        const targetRate = fields.target_loan?.rate;
+        if (!currentRate || (targetRate && targetRate !== currentRate)) continue;
+
+        // target rate same as current — use best CDR rate
+        const candidates = (liveLenders || [])
+          .map((l) => ({ rate: Number(l.advertised_rate), lender: l.lender }))
+          .filter((l) => l.rate > 0 && l.rate < currentRate)
+          .sort((a, b) => a.rate - b.rate);
+
+        if (candidates.length) {
+          const best = candidates[0];
+          if (!fields.target_loan) fields.target_loan = {};
+          fields.target_loan = { ...fields.target_loan, rate: best.rate };
+          cdrRateUsed = { rate: best.rate, lender: best.lender };
+        }
+      }
+    }
+
     const { calculation, scenario: resolved } = runFromScenario(scenario, {
       clarifications: {
         selling_cost_pct: req.body?.selling_cost_pct ?? 0.025,
@@ -346,11 +377,10 @@ router.post('/calculate', async (req, res) => {
         clear_assumptions: true,
       },
     });
-    const { live, error: lenderFetchError } = await loadLiveLenders(req);
     const presentation = buildPresentationPayload({
       scenario: resolved,
       calculation,
-      liveLenders: live?.ok ? live.lenders : null,
+      liveLenders,
       coverage: live?.coverage || null,
       lenderFetchError: live?.ok ? null : (lenderFetchError || live?.coverage?.summary || 'CDR unavailable'),
     });
@@ -360,6 +390,7 @@ router.post('/calculate', async (req, res) => {
       scenario: resolved,
       ...presentation,
       cdr_fetched_at: live?.fetched_at || null,
+      cdr_rate_used: cdrRateUsed, // null if user supplied their own rate
     });
   } catch (err) {
     console.error('[property-scenario] calculate', err);
