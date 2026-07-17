@@ -134,7 +134,19 @@ Type-specific fields:
 - sell: property_id, property_value, purchase_price, purchase_date, was_ever_investment_property, state, settlement_date?
 - buy: property_id (new id), property_value, state, is_first_home_buyer, deposit_source?, deposit_amount?, loan?, settlement_date?
 - refinance / switch_lender: property_id, current_loan, target_loan
+  For switch_lender/refinance: target_loan.balance = current_loan.balance and
+  target_loan.term_remaining_months = current_loan.term_remaining_months and
+  target_loan.fixed_or_variable = current_loan.fixed_or_variable unless the user
+  explicitly states a different value. Only target_loan.rate (and optionally lender name)
+  changes. If the user states only a rate improvement delta (e.g. "0.05% better"),
+  leave target_loan.rate as an unresolved_assumption — do not invent the absolute value.
 - early_payout: property_id, current_loan, payout_date, fixed_period_remaining_months?
+
+Loan balance extraction:
+- "$X outstanding" / "$X remaining on the loan" → current_loan.balance = X
+- "$X original loan" / "$X original principal" → context only; do not assign to current_loan.balance
+  unless the user also confirms current balance equals original (e.g. just borrowed).
+- For variable loans, omit fixed_period_remaining_months entirely.
 
 Loan objects:
 - term_remaining_months = months left on the overall loan (amortisation) — NOT the fixed period

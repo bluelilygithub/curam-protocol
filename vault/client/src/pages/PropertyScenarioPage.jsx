@@ -447,6 +447,11 @@ export default function PropertyScenarioPage() {
 
   const formRows = useMemo(() => pipeline?.clarifying_form || [], [pipeline]);
 
+  const hasSellEvent = useMemo(
+    () => (pipeline?.scenario?.events || []).some((e) => e.type === 'sell'),
+    [pipeline]
+  );
+
   const submitParse = async () => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -712,6 +717,16 @@ export default function PropertyScenarioPage() {
                     const isFreeText = row.field_path === 'clarifying_questions';
                     const placeholder = row.placeholder
                       || (type === 'number' ? 'e.g. 650000 or 5.49' : isFreeText ? 'Your answer…' : '');
+
+                    // Suppress fixed_period_remaining_months once user picks "variable"
+                    if (String(row.field_path || '').endsWith('.fixed_period_remaining_months')) {
+                      const parentPath = String(row.field_path).replace(/\.fixed_period_remaining_months$/, '');
+                      const rateTypeRow = formRows.find(
+                        (r) => String(r.field_path || '') === `${parentPath}.fixed_or_variable`
+                      );
+                      if (rateTypeRow && answers[rateTypeRow.id] === 'variable') return null;
+                    }
+
                     return (
                       <label key={row.id} className="block space-y-1.5">
                         <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
@@ -771,20 +786,22 @@ export default function PropertyScenarioPage() {
                     );
                   })}
 
-                  <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
-                    <input
-                      type="checkbox"
-                      checked={assumeSellingCosts}
-                      onChange={(e) => setAssumeSellingCosts(e.target.checked)}
-                      className="mt-1"
-                    />
-                    <span>
-                      Assume selling costs at 2.5% of sale price when not specified
-                      <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                        Agent/advertising estimate only — confirm with your conveyancer.
+                  {hasSellEvent && (
+                    <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                      <input
+                        type="checkbox"
+                        checked={assumeSellingCosts}
+                        onChange={(e) => setAssumeSellingCosts(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span>
+                        Assume selling costs at 2.5% of sale price when not specified
+                        <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                          Agent/advertising estimate only — confirm with your conveyancer.
+                        </span>
                       </span>
-                    </span>
-                  </label>
+                    </label>
+                  )}
 
                   <button
                     type="button"

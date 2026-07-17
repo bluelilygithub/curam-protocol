@@ -142,6 +142,35 @@ function hasRequiredAssumptions(scenario) {
 }
 
 /**
+ * For switch_lender / refinance events, target_loan inherits structural fields
+ * (balance, term, rate type) from current_loan when not independently specified.
+ * Only the rate — and optionally the lender name — changes when switching providers.
+ */
+function inheritTargetLoanFields(scenario) {
+  for (const event of (scenario.events || [])) {
+    if (!['switch_lender', 'refinance'].includes(event.type)) continue;
+    const fields = event.fields || {};
+    const src = fields.current_loan;
+    if (!src) continue;
+    if (!fields.target_loan || typeof fields.target_loan !== 'object') {
+      fields.target_loan = createLoanSnapshot({});
+    }
+    const tgt = fields.target_loan;
+    if (tgt.balance == null && src.balance != null) tgt.balance = src.balance;
+    if (tgt.term_remaining_months == null && src.term_remaining_months != null) {
+      tgt.term_remaining_months = src.term_remaining_months;
+    }
+    if (!tgt.fixed_or_variable && src.fixed_or_variable) {
+      tgt.fixed_or_variable = src.fixed_or_variable;
+    }
+    if (tgt.fixed_period_remaining_months == null && src.fixed_period_remaining_months != null) {
+      tgt.fixed_period_remaining_months = src.fixed_period_remaining_months;
+    }
+    // NOTE: do NOT inherit rate — that is what the user is changing
+  }
+}
+
+/**
  * Resolve which model to call.
  * Avoids requiring modelResolver/DB unless userId is provided (CLI harness stays offline-capable).
  * @param {{ userId?: number, modelId?: string }} opts
@@ -211,6 +240,10 @@ async function parseScenario(text, opts = {}) {
   }
 
   const scenario = normalizeParsedScenario(parsed);
+
+  // For switch_lender/refinance: target_loan inherits structural fields from
+  // current_loan — only rate changes when switching providers.
+  inheritTargetLoanFields(scenario);
 
   // Structural safety net: strip invented state / PPOR / FHB / unspanned numerics
   const grounding = groundScenarioAgainstText(scenario, input, {

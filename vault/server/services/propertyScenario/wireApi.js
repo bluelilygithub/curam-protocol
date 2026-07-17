@@ -103,18 +103,47 @@ function getLoanSubFieldMeta(fieldPath) {
   };
 }
 
-function expandLoanObjectPath(basePath, parentId) {
+/** Navigate a scenario object by a dotted/bracket path string. */
+function getByPath(obj, pathStr) {
+  const parts = String(pathStr || '').replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+/**
+ * Expand a loan object path into individual sub-field rows.
+ * Skips fields that are already resolved in existingLoan, and skips
+ * fixed_period_remaining_months when the loan is known to be variable.
+ */
+function expandLoanObjectPath(basePath, parentId, existingLoan = null) {
   const kindKey = (String(basePath).match(LOAN_PATH_RE) || [])[1] || 'loan';
   const kindLabel = LOAN_KIND_LABELS[kindKey] || 'Loan';
-  return LOAN_SUB_FIELDS.map(({ sub, label, type, placeholder }) => ({
-    id: `${parentId}_${sub}`,
-    field_path: `${basePath}.${sub}`,
-    label: `${kindLabel} — ${label}`,
-    message: `${kindLabel} — ${label}`,
-    type,
-    placeholder,
-    severity: 'required',
-  }));
+  const isVariable = existingLoan?.fixed_or_variable === 'variable';
+
+  return LOAN_SUB_FIELDS
+    .filter(({ sub }) => {
+      // Skip sub-fields already set in the scenario
+      if (existingLoan != null) {
+        const val = existingLoan[sub];
+        if (val != null && val !== '' && val !== false) return false;
+      }
+      // Fixed period only relevant for fixed-rate loans
+      if (sub === 'fixed_period_remaining_months' && isVariable) return false;
+      return true;
+    })
+    .map(({ sub, label, type, placeholder }) => ({
+      id: `${parentId}_${sub}`,
+      field_path: `${basePath}.${sub}`,
+      label: `${kindLabel} — ${label}`,
+      message: `${kindLabel} — ${label}`,
+      type,
+      placeholder,
+      severity: 'required',
+    }));
 }
 
 // ── Form builder ──────────────────────────────────────────────────────────────
@@ -137,7 +166,8 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
   }
 
   function addLoanExpansion(basePath, parentId) {
-    expandLoanObjectPath(basePath, parentId).forEach((row) => {
+    const existingLoan = getByPath(scenario, basePath);
+    expandLoanObjectPath(basePath, parentId, existingLoan).forEach((row) => {
       if (!byPath.has(row.field_path)) {
         result.push(row);
         byPath.add(row.field_path);
