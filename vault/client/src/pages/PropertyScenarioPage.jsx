@@ -399,6 +399,9 @@ export default function PropertyScenarioPage() {
 
   // Live NLP path
   const [text, setText] = useState('');
+  // Pre-parse context (collected before LLM call to reduce clarifying questions)
+  const [preState, setPreState] = useState('');
+  const [prePpor, setPrePpor] = useState('');
   const [pipeline, setPipeline] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -451,9 +454,18 @@ export default function PropertyScenarioPage() {
       return;
     }
     setPipelineError(null);
+    // Append pre-context so the LLM has state/PPOR upfront — reduces clarifying questions
+    const contextParts = [];
+    if (preState) contextParts.push(`State: ${preState}`);
+    if (prePpor === 'ppor') contextParts.push('This is my primary place of residence (PPOR).');
+    if (prePpor === 'investment') contextParts.push('This property has been used as an investment property.');
+    const fullText = contextParts.length
+      ? `${trimmed}\n\nAdditional context: ${contextParts.join(' ')}`
+      : trimmed;
+
     startProcessing('Parsing your scenario…', 'AI is assigning numbers from your text. Please don’t navigate away.');
     try {
-      const res = await api.post('/api/property-scenario/parse', { text: trimmed });
+      const res = await api.post('/api/property-scenario/parse', { text: fullText });
       const data = await res.json();
       if (!data.ok) {
         setPipeline(null);
@@ -539,6 +551,8 @@ export default function PropertyScenarioPage() {
     setPipeline(null);
     setPipelineError(null);
     setAnswers({});
+    setPreState('');
+    setPrePpor('');
   };
 
   if (!canUse) return <Navigate to="/" replace />;
@@ -622,9 +636,34 @@ export default function PropertyScenarioPage() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={6}
-                placeholder={'e.g. I’m selling our NSW PPOR for about $1.45m (bought 2015 for $720k), buying in Sept for $1.8m with 20% deposit, and switching the new loan to a 5.49% variable with OnlineBank…'}
+                placeholder={'e.g. I’m selling our PPOR for about $1.45m (bought 2015 for $720k), buying in Sept for $1.8m with 20% deposit, and switching the new loan to a 5.49% variable with OnlineBank…'}
                 style={{ ...FIELD, resize: 'vertical', minHeight: 120 }}
               />
+
+              {/* Pre-parse context — collected before the LLM call to reduce clarifying questions */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs shrink-0" style={{ color: 'var(--color-muted)' }}>Quick context:</span>
+                <select
+                  value={preState}
+                  onChange={(e) => setPreState(e.target.value)}
+                  style={{ ...FIELD, width: 'auto', padding: '6px 10px', fontSize: 12 }}
+                >
+                  <option value="">State…</option>
+                  {['NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'ACT', 'NT'].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <select
+                  value={prePpor}
+                  onChange={(e) => setPrePpor(e.target.value)}
+                  style={{ ...FIELD, width: 'auto', padding: '6px 10px', fontSize: 12 }}
+                >
+                  <option value="">PPOR or investment?</option>
+                  <option value="ppor">Primary residence (PPOR)</option>
+                  <option value="investment">Investment property</option>
+                </select>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -780,17 +819,14 @@ export default function PropertyScenarioPage() {
               </div>
             )}
 
-            {pipeline?.ok && pipeline.validation && pipeline.validation.ok === false && (
+            {pipeline?.ok && !pipeline.ready_for_calculations && !needsClarify && pipeline.validation && !pipeline.validation.ok && (
               <div
-                className="rounded-xl border px-4 py-3 text-sm space-y-1"
+                className="rounded-xl border px-4 py-3 text-sm"
                 style={{ borderColor: '#f59e0b', background: '#fef3c7', color: '#b45309' }}
               >
-                <p className="font-medium">Validation still incomplete</p>
-                {(pipeline.validation.errors || []).slice(0, 6).map((e) => (
-                  <p key={`${e.code}-${e.path}`} className="text-xs">
-                    {e.path ? `${e.path}: ` : ''}{e.message}
-                  </p>
-                ))}
+                {pipeline.validation.errors?.length
+                  ? `${pipeline.validation.errors.length} field${pipeline.validation.errors.length === 1 ? '' : 's'} still need answers — submit your responses above to continue.`
+                  : 'Scenario isn\u2019t ready yet. Try adding more specifics and analyse again.'}
               </div>
             )}
           </>

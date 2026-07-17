@@ -14,7 +14,7 @@ const { buildPresentationPayload } = require('./presentation');
 // ── Label helpers ─────────────────────────────────────────────────────────────
 
 const FIELD_LABEL_OVERRIDES = {
-  state: 'State (NSW, VIC, QLD, SA, WA, TAS, ACT, NT)',
+  state: 'State',
   ppor: 'Is this your primary place of residence (PPOR)?',
   is_ppor: 'Is this your primary place of residence (PPOR)?',
   was_ever_investment_property: 'Was this ever an investment property?',
@@ -24,7 +24,7 @@ const FIELD_LABEL_OVERRIDES = {
   purchase_date: 'Date of purchase',
   settlement_date: 'Settlement date',
   selling_costs: 'Selling costs ($)',
-  balance: 'Current loan balance ($)',
+  balance: 'Loan balance ($)',
   rate: 'Interest rate (%)',
   fixed_or_variable: 'Rate type',
   term_remaining_months: 'Loan term remaining (months)',
@@ -35,6 +35,19 @@ const FIELD_LABEL_OVERRIDES = {
   lvr: 'Loan-to-value ratio (LVR %)',
 };
 
+const FIELD_PLACEHOLDER_OVERRIDES = {
+  balance: 'e.g. 520000',
+  rate: 'e.g. 6.10',
+  term_remaining_months: 'e.g. 300',
+  fixed_period_remaining_months: 'e.g. 24',
+  deposit_amount: 'e.g. 200000',
+  property_value: 'e.g. 1400000',
+  purchase_price: 'e.g. 720000',
+  cgt_cost_base: 'e.g. 720000',
+  lvr: 'e.g. 80',
+  years_owned: 'e.g. 8',
+};
+
 function humanizeLastSegment(fieldPath) {
   if (!fieldPath || fieldPath === 'clarifying_questions') return '';
   const parts = String(fieldPath).replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
@@ -43,30 +56,52 @@ function humanizeLastSegment(fieldPath) {
     || last.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
+function placeholderForLastSegment(fieldPath) {
+  if (!fieldPath) return '';
+  const parts = String(fieldPath).replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  return FIELD_PLACEHOLDER_OVERRIDES[parts[parts.length - 1]] || '';
+}
+
 // ── Loan object expansion ─────────────────────────────────────────────────────
 
 // Sub-fields required for every loan snapshot (in display order)
 const LOAN_SUB_FIELDS = [
-  { sub: 'balance',                    label: 'Loan balance ($)',                      type: 'number',    placeholder: 'e.g. 520000' },
-  { sub: 'rate',                       label: 'Interest rate (%)',                      type: 'number',    placeholder: 'e.g. 6.10' },
-  { sub: 'fixed_or_variable',          label: 'Rate type',                              type: 'rate_type', placeholder: '' },
-  { sub: 'term_remaining_months',      label: 'Months remaining on loan term',          type: 'number',    placeholder: 'e.g. 300' },
-  { sub: 'fixed_period_remaining_months', label: 'Months remaining on fixed-rate period (if fixed)', type: 'number', placeholder: 'e.g. 24 — leave blank if variable' },
+  { sub: 'balance',                       label: 'Loan balance ($)',                           type: 'number',    placeholder: 'e.g. 520000' },
+  { sub: 'rate',                          label: 'Interest rate (%)',                           type: 'number',    placeholder: 'e.g. 6.10' },
+  { sub: 'fixed_or_variable',             label: 'Rate type',                                  type: 'rate_type', placeholder: '' },
+  { sub: 'term_remaining_months',         label: 'Loan term remaining (months)',                type: 'number',    placeholder: 'e.g. 300' },
+  { sub: 'fixed_period_remaining_months', label: 'Fixed-rate period remaining (months)',        type: 'number',    placeholder: 'e.g. 24 — omit if variable' },
 ];
 
 const LOAN_PATH_RE = /\.(current_loan|target_loan|new_loan|refinance_loan|bridging_loan)$/;
+const LOAN_SUB_PATH_RE = /\.(current_loan|target_loan|new_loan|refinance_loan|bridging_loan)\.(\w+)$/;
+
+const LOAN_KIND_LABELS = {
+  current_loan:   'Current loan',
+  target_loan:    'Target loan',
+  new_loan:       'New loan',
+  refinance_loan: 'Refinance loan',
+  bridging_loan:  'Bridging loan',
+};
 
 function isLoanObjectPath(path) {
   return LOAN_PATH_RE.test(String(path || ''));
 }
 
-const LOAN_KIND_LABELS = {
-  current_loan: 'Current loan',
-  target_loan: 'Target loan',
-  new_loan: 'New loan',
-  refinance_loan: 'Refinance loan',
-  bridging_loan: 'Bridging loan',
-};
+/** Return enriched meta when path is a leaf inside a loan object, e.g. …current_loan.rate */
+function getLoanSubFieldMeta(fieldPath) {
+  const m = String(fieldPath || '').match(LOAN_SUB_PATH_RE);
+  if (!m) return null;
+  const kindLabel = LOAN_KIND_LABELS[m[1]] || 'Loan';
+  const sub = m[2];
+  const def = LOAN_SUB_FIELDS.find((f) => f.sub === sub);
+  if (!def) return null;
+  return {
+    label: `${kindLabel} — ${def.label}`,
+    type: def.type,
+    placeholder: def.placeholder,
+  };
+}
 
 function expandLoanObjectPath(basePath, parentId) {
   const kindKey = (String(basePath).match(LOAN_PATH_RE) || [])[1] || 'loan';
@@ -88,13 +123,27 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
   const result = [];
   const byMessage = new Set();
   const byPath = new Set();
+  const byLabel = new Set(); // also dedup by humanized label to prevent semantic duplicates
 
   function addRow(row) {
-    if (byPath.has(row.field_path)) return;
+    if (row.field_path && byPath.has(row.field_path)) return;
     if (byMessage.has(String(row.message || '').trim().toLowerCase())) return;
+    const lk = String(row.label || '').trim().toLowerCase();
+    if (lk && byLabel.has(lk)) return;
     result.push(row);
     if (row.field_path) byPath.add(row.field_path);
     byMessage.add(String(row.message || '').trim().toLowerCase());
+    if (lk) byLabel.add(lk);
+  }
+
+  function addLoanExpansion(basePath, parentId) {
+    expandLoanObjectPath(basePath, parentId).forEach((row) => {
+      if (!byPath.has(row.field_path)) {
+        result.push(row);
+        byPath.add(row.field_path);
+        byLabel.add(String(row.label || '').trim().toLowerCase());
+      }
+    });
   }
 
   // 1. Unresolved assumptions from the scenario
@@ -104,28 +153,50 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
       const path = String(a.field_path || '');
 
       if (isLoanObjectPath(path)) {
-        // Expand object-path loan assumption into individual leaf rows
-        expandLoanObjectPath(path, a.id).forEach((row) => {
-          if (!byPath.has(row.field_path)) {
-            result.push(row);
-            byPath.add(row.field_path);
-          }
-        });
+        addLoanExpansion(path, a.id);
         return;
       }
 
+      // Enrich loan sub-field assumptions with kind-prefixed label + type + placeholder
+      const loanMeta = getLoanSubFieldMeta(path);
       addRow({
         id: a.id,
         field_path: path,
-        label: humanizeLastSegment(path) || a.message,
+        label: loanMeta?.label || humanizeLastSegment(path) || a.message,
         message: a.message,
-        type: undefined,
-        placeholder: '',
+        type: loanMeta?.type,
+        placeholder: loanMeta?.placeholder || placeholderForLastSegment(path),
         severity: a.severity || 'required',
       });
     });
 
-  // 2. Narrative clarifying questions from the LLM parse (field_path = sentinel)
+  // 2. Validation errors — surface BEFORE narrative questions so real field rows
+  //    take priority and prevent duplicate narrative rows for the same concept.
+  (validation?.errors || []).forEach((err, i) => {
+    const path = String(err.path || '').trim();
+    const msg = String(err.message || '').trim();
+    if (!path && !msg) return;
+    if (path && byPath.has(path)) return;
+
+    if (isLoanObjectPath(path)) {
+      addLoanExpansion(path, `val_${i}`);
+      return;
+    }
+
+    const loanMeta = getLoanSubFieldMeta(path);
+    addRow({
+      id: `ass_val_${i + 1}_${path.replace(/[^a-z0-9]+/gi, '_') || 'x'}`,
+      field_path: path || 'clarifying_questions',
+      label: loanMeta?.label || (path ? humanizeLastSegment(path) : msg),
+      message: msg,
+      type: loanMeta?.type,
+      placeholder: loanMeta?.placeholder || placeholderForLastSegment(path),
+      severity: 'required',
+    });
+  });
+
+  // 3. Narrative clarifying questions LAST — skipped when the concept is already
+  //    covered by a real field-path row (byLabel dedup catches this).
   clarifyingQuestions.forEach((q, i) => {
     const msg = String(q || '').trim();
     if (!msg) return;
@@ -135,35 +206,7 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
       label: msg,
       message: msg,
       type: undefined,
-      placeholder: 'Your answer',
-      severity: 'required',
-    });
-  });
-
-  // 3. Validation errors — surface only when not already covered by an assumption row
-  (validation?.errors || []).forEach((err, i) => {
-    const path = String(err.path || '').trim();
-    const msg = String(err.message || '').trim();
-    if (!path && !msg) return;
-    if (path && byPath.has(path)) return;
-
-    if (isLoanObjectPath(path)) {
-      expandLoanObjectPath(path, `val_${i}`).forEach((row) => {
-        if (!byPath.has(row.field_path)) {
-          result.push(row);
-          byPath.add(row.field_path);
-        }
-      });
-      return;
-    }
-
-    addRow({
-      id: `ass_val_${i + 1}_${path.replace(/[^a-z0-9]+/gi, '_') || 'x'}`,
-      field_path: path || 'clarifying_questions',
-      label: path ? humanizeLastSegment(path) : msg,
-      message: msg,          // just the human message, never path-prefixed
-      type: undefined,
-      placeholder: '',
+      placeholder: 'Your answer…',
       severity: 'required',
     });
   });
