@@ -327,6 +327,50 @@ router.post('/insights/compare', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/property-scenario/calculate
+ * Body: { scenario: Scenario, selling_cost_pct?: number }
+ * Direct orchestration from a pre-built (structured-form) scenario — no LLM parse.
+ * Used by single-event structured inputs (refinance, sell, buy) that bypass NLP.
+ */
+router.post('/calculate', async (req, res) => {
+  try {
+    const scenario = req.body?.scenario;
+    if (!scenario || typeof scenario !== 'object') {
+      return res.status(400).json({ ok: false, error: 'invalid_request', message: 'scenario is required' });
+    }
+    const { calculation, scenario: resolved } = runFromScenario(scenario, {
+      clarifications: {
+        selling_cost_pct: req.body?.selling_cost_pct ?? 0.025,
+        resolve_optional: true,
+        clear_assumptions: true,
+      },
+    });
+    const { live, error: lenderFetchError } = await loadLiveLenders(req);
+    const presentation = buildPresentationPayload({
+      scenario: resolved,
+      calculation,
+      liveLenders: live?.ok ? live.lenders : null,
+      coverage: live?.coverage || null,
+      lenderFetchError: live?.ok ? null : (lenderFetchError || live?.coverage?.summary || 'CDR unavailable'),
+    });
+    return res.json({
+      ok: true,
+      ready_for_calculations: true,
+      scenario: resolved,
+      ...presentation,
+      cdr_fetched_at: live?.fetched_at || null,
+    });
+  } catch (err) {
+    console.error('[property-scenario] calculate', err);
+    return res.status(422).json({
+      ok: false,
+      error: 'calculate_failed',
+      message: err.message || 'Calculation failed',
+    });
+  }
+});
+
 router.post('/calculators/repayment', (req, res) => {
   res.json(calculateRepayment(req.body || {}));
 });

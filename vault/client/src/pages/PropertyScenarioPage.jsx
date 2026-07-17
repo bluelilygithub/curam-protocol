@@ -407,6 +407,37 @@ export default function PropertyScenarioPage() {
   const [answers, setAnswers] = useState({});
   const [assumeSellingCosts, setAssumeSellingCosts] = useState(true);
 
+  // ── Scenario type routing ──────────────────────────────────────────────────
+  // null = type picker · 'refinance' | 'sell' | 'buy' | 'compound' | 'calculators'
+  const [scenarioType, setScenarioType] = useState(null);
+
+  // Refinance form fields
+  const [rfBalance, setRfBalance] = useState('');
+  const [rfRate, setRfRate] = useState('');
+  const [rfRateType, setRfRateType] = useState('variable');
+  const [rfTermMonths, setRfTermMonths] = useState('');
+  const [rfFixedPeriod, setRfFixedPeriod] = useState('');
+  const [rfTargetMode, setRfTargetMode] = useState('cdr');
+  const [rfTargetRate, setRfTargetRate] = useState('');
+
+  // Sell form fields
+  const [sellState, setSellState] = useState('');
+  const [sellPrice, setSellPrice] = useState('');
+  const [sellPurchasePrice, setSellPurchasePrice] = useState('');
+  const [sellPurchaseYear, setSellPurchaseYear] = useState('');
+  const [sellPpor, setSellPpor] = useState('ppor');
+
+  // Buy form fields
+  const [buyState, setBuyState] = useState('');
+  const [buyPrice, setBuyPrice] = useState('');
+  const [buyDeposit, setBuyDeposit] = useState('');
+  const [buyFhb, setBuyFhb] = useState('no');
+  const [buyPpor, setBuyPpor] = useState('ppor');
+
+  // Direct calculation result (structured forms — no LLM)
+  const [calcResult, setCalcResult] = useState(null);
+  const [calcError, setCalcError] = useState(null);
+
   const canUse = isAdmin || featureAccess.propertyScenario !== false;
 
   useEffect(() => {
@@ -560,6 +591,112 @@ export default function PropertyScenarioPage() {
     setPrePpor('');
   };
 
+  const resetAll = () => {
+    resetDescribe();
+    setScenarioType(null);
+    setCalcResult(null);
+    setCalcError(null);
+  };
+
+  const goBack = () => {
+    setScenarioType(null);
+    setCalcResult(null);
+    setCalcError(null);
+  };
+
+  const handleTypePick = useCallback((type) => {
+    if (type === 'calculators') {
+      setMode('example');
+      setTab('calculators');
+      if (!demo && !demoLoading) loadDemo();
+      return;
+    }
+    setScenarioType(type);
+    setCalcError(null);
+  }, [demo, demoLoading, loadDemo]);
+
+  // ── Direct calculation (structured forms → /calculate, no LLM) ────────────
+  const submitDirect = useCallback(async (scenario) => {
+    setCalcError(null);
+    startProcessing('Running calculation…', 'Computing your scenario. Please don\'t navigate away.');
+    try {
+      const res = await api.post('/api/property-scenario/calculate', { scenario });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Calculation failed');
+      setCalcResult(data);
+      setTab('overview');
+      addToast('Results ready', 'success');
+    } catch (err) {
+      setCalcError(err.message || 'Calculation failed');
+      addToast(err.message || 'Calculation failed', 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, addToast]);
+
+  const submitRefinance = () => {
+    const balance = parseFloat(rfBalance);
+    const rate = parseFloat(rfRate);
+    const termMonths = parseInt(rfTermMonths, 10);
+    if (!balance || !rate || !termMonths) {
+      setCalcError('Balance, current rate, and term remaining are required.');
+      return;
+    }
+    const fixedPeriod = rfRateType === 'fixed' && rfFixedPeriod ? parseInt(rfFixedPeriod, 10) : undefined;
+    const currentLoan = {
+      balance, rate, fixed_or_variable: rfRateType, term_remaining_months: termMonths,
+      ...(fixedPeriod ? { fixed_period_remaining_months: fixedPeriod } : {}),
+    };
+    const targetRate = rfTargetMode === 'specific' && rfTargetRate ? parseFloat(rfTargetRate) : rate;
+    const targetLoan = { ...currentLoan, rate: targetRate };
+    submitDirect({
+      id: `sc_${Date.now()}`, title: 'Refinance / switch lender', currency: 'AUD',
+      starting_properties: [{ id: 'prop_1', label: 'Current property', current_loan: currentLoan }],
+      events: [{ id: 'ev_1', type: 'switch_lender', sequence: 1, label: 'Switch lender',
+        fields: { property_id: 'prop_1', current_loan: currentLoan, target_loan: targetLoan } }],
+      unresolved_assumptions: [], dependencies: [],
+    });
+  };
+
+  const submitSell = () => {
+    const salePrice = parseFloat(sellPrice);
+    const purchasePrice = parseFloat(sellPurchasePrice);
+    if (!sellState || !salePrice || !purchasePrice) {
+      setCalcError('State, expected sale price, and original purchase price are required.');
+      return;
+    }
+    const purchaseDate = sellPurchaseYear ? `${sellPurchaseYear}-07-01` : undefined;
+    submitDirect({
+      id: `sc_${Date.now()}`, title: 'Property sale', currency: 'AUD',
+      starting_properties: [{ id: 'prop_1', label: 'Property', state: sellState,
+        is_ppor: sellPpor === 'ppor', was_ever_investment_property: sellPpor !== 'ppor' }],
+      events: [{ id: 'ev_1', type: 'sell', sequence: 1, label: 'Sell',
+        fields: { property_id: 'prop_1', state: sellState, property_value: salePrice,
+          purchase_price: purchasePrice, was_ever_investment_property: sellPpor !== 'ppor',
+          ...(purchaseDate ? { purchase_date: purchaseDate } : {}) } }],
+      unresolved_assumptions: [], dependencies: [],
+    });
+  };
+
+  const submitBuy = () => {
+    const price = parseFloat(buyPrice);
+    const deposit = parseFloat(buyDeposit);
+    if (!buyState || !price || !deposit) {
+      setCalcError('State, purchase price, and deposit are required.');
+      return;
+    }
+    submitDirect({
+      id: `sc_${Date.now()}`, title: 'Property purchase', currency: 'AUD',
+      starting_properties: [],
+      events: [{ id: 'ev_1', type: 'buy', sequence: 1, label: 'Buy',
+        fields: { property_id: 'prop_1', state: buyState, property_value: price,
+          is_first_home_buyer: buyFhb === 'yes', is_ppor: buyPpor === 'ppor',
+          deposit_amount: deposit,
+          loan: { balance: price - deposit, term_remaining_months: 360, fixed_or_variable: 'variable' } } }],
+      unresolved_assumptions: [], dependencies: [],
+    });
+  };
+
   if (!canUse) return <Navigate to="/" replace />;
 
   return (
@@ -594,9 +731,14 @@ export default function PropertyScenarioPage() {
             </button>
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            {mode === 'describe'
-              ? 'Describe a refinance, sale, purchase, or switch in plain English'
-              : (demo?.scenario_meta?.title || 'Compound sell → buy → switch (fixture demo)')}
+            {mode === 'example'
+              ? (demo?.scenario_meta?.title || 'Compound sell → buy → switch (fixture demo)')
+              : scenarioType === 'refinance' ? 'Instant lender comparison — no AI needed'
+              : scenarioType === 'sell' ? 'CGT, selling costs, and net proceeds'
+              : scenarioType === 'buy' ? 'Stamp duty, LMI, and upfront purchase costs'
+              : scenarioType === 'compound' ? 'AI maps your scenario from plain English'
+              : scenarioType === 'calculators' ? 'Repayment, offset, extra repayments, borrowing power'
+              : 'Choose a scenario type to get started'}
           </p>
         </div>
         {mode === 'example' && (
@@ -633,8 +775,223 @@ export default function PropertyScenarioPage() {
       <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
         {mode === 'describe' && (
           <>
+            {/* ── Scenario type picker ──────────────────────────────── */}
+            {scenarioType === null && !calcResult && (
+              <div className="space-y-4">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What would you like to explore?</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: 'refinance', icon: 'refresh-cw', label: 'Compare lenders / refinance', desc: 'See if switching saves money. Instant calculation — no AI, no waiting.' },
+                    { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
+                    { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
+                    { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together. Describe in plain English — AI maps the full scenario.' },
+                    { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleTypePick(t.id)}
+                      className="flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                    >
+                      <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.label}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Back button for structured forms ─────────────────── */}
+            {scenarioType && scenarioType !== 'compound' && !calcResult && (
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-70"
+                style={{ color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                {getIcon('arrow-left', { size: 14 })}
+                Back to scenario types
+              </button>
+            )}
+
+            {/* ── Refinance / compare lenders form ─────────────────── */}
+            {scenarioType === 'refinance' && !calcResult && (
+              <Section title="Refinance / compare lenders" hint="Fill in your current loan — we calculate savings against live market rates instantly. No AI involved.">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current loan balance ($) *</span>
+                      <input type="text" inputMode="decimal" value={rfBalance} onChange={(e) => setRfBalance(e.target.value)} placeholder="e.g. 100000" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *</span>
+                      <input type="text" inputMode="decimal" value={rfRate} onChange={(e) => setRfRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type</span>
+                      <select value={rfRateType} onChange={(e) => setRfRateType(e.target.value)} style={FIELD}>
+                        <option value="variable">Variable</option>
+                        <option value="fixed">Fixed</option>
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Term remaining (months) *</span>
+                      <input type="text" inputMode="numeric" value={rfTermMonths} onChange={(e) => setRfTermMonths(e.target.value)} placeholder="e.g. 240" style={FIELD} />
+                    </label>
+                    {rfRateType === 'fixed' && (
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Fixed period remaining (months)</span>
+                        <input type="text" inputMode="numeric" value={rfFixedPeriod} onChange={(e) => setRfFixedPeriod(e.target.value)} placeholder="e.g. 24" style={FIELD} />
+                      </label>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>Compare against</p>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { v: 'cdr', label: 'Live market rates — 8 major Australian lenders via CDR open banking' },
+                        { v: 'specific', label: 'A specific rate I have in mind' },
+                      ].map(({ v, label }) => (
+                        <label key={v} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                          <input type="radio" name="rfTargetMode" value={v} checked={rfTargetMode === v} onChange={() => setRfTargetMode(v)} />
+                          {label}
+                        </label>
+                      ))}
+                      {rfTargetMode === 'specific' && (
+                        <input type="text" inputMode="decimal" value={rfTargetRate} onChange={(e) => setRfTargetRate(e.target.value)} placeholder="Target rate, e.g. 5.89" style={{ ...FIELD, maxWidth: 220 }} />
+                      )}
+                    </div>
+                  </div>
+                  {calcError && <p className="text-sm" style={{ color: '#ef4444' }}>{calcError}</p>}
+                  <button type="button" onClick={submitRefinance} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    {getIcon('sparkles', { size: 14 })}
+                    Calculate
+                  </button>
+                </div>
+              </Section>
+            )}
+
+            {/* ── Sell a property form ──────────────────────────────── */}
+            {scenarioType === 'sell' && !calcResult && (
+              <Section title="Sell a property" hint="CGT, selling costs, and net proceeds based on your inputs.">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *</span>
+                      <select value={sellState} onChange={(e) => setSellState(e.target.value)} style={FIELD}>
+                        <option value="">Select state…</option>
+                        {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type</span>
+                      <select value={sellPpor} onChange={(e) => setSellPpor(e.target.value)} style={FIELD}>
+                        <option value="ppor">Primary residence (PPOR) — CGT main residence exemption applies</option>
+                        <option value="investment">Investment property — CGT applies</option>
+                        <option value="mixed">Was PPOR then investment (or vice versa) — partial CGT</option>
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected sale price ($) *</span>
+                      <input type="text" inputMode="decimal" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Original purchase price ($) *</span>
+                      <input type="text" inputMode="decimal" value={sellPurchasePrice} onChange={(e) => setSellPurchasePrice(e.target.value)} placeholder="e.g. 750000" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year purchased</span>
+                      <input type="text" inputMode="numeric" value={sellPurchaseYear} onChange={(e) => setSellPurchaseYear(e.target.value)} placeholder="e.g. 2015" style={FIELD} />
+                    </label>
+                  </div>
+                  {calcError && <p className="text-sm" style={{ color: '#ef4444' }}>{calcError}</p>}
+                  <button type="button" onClick={submitSell} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    {getIcon('sparkles', { size: 14 })}
+                    Calculate
+                  </button>
+                </div>
+              </Section>
+            )}
+
+            {/* ── Buy a property form ───────────────────────────────── */}
+            {scenarioType === 'buy' && !calcResult && (
+              <Section title="Buy a property" hint="Stamp duty, LMI, and upfront purchase costs — deterministic AU rules.">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *</span>
+                      <select value={buyState} onChange={(e) => setBuyState(e.target.value)} style={FIELD}>
+                        <option value="">Select state…</option>
+                        {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose</span>
+                      <select value={buyPpor} onChange={(e) => setBuyPpor(e.target.value)} style={FIELD}>
+                        <option value="ppor">Primary residence (PPOR)</option>
+                        <option value="investment">Investment property</option>
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($) *</span>
+                      <input type="text" inputMode="decimal" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($) *</span>
+                      <input type="text" inputMode="decimal" value={buyDeposit} onChange={(e) => setBuyDeposit(e.target.value)} placeholder="e.g. 240000" style={FIELD} />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?</span>
+                      <select value={buyFhb} onChange={(e) => setBuyFhb(e.target.value)} style={FIELD}>
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </label>
+                  </div>
+                  {calcError && <p className="text-sm" style={{ color: '#ef4444' }}>{calcError}</p>}
+                  <button type="button" onClick={submitBuy} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    {getIcon('sparkles', { size: 14 })}
+                    Calculate
+                  </button>
+                </div>
+              </Section>
+            )}
+
+            {/* ── Structured form results ───────────────────────────── */}
+            {calcResult?.ready_for_calculations && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setCalcResult(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                    {getIcon('sliders', { size: 13 })}
+                    Adjust values
+                  </button>
+                  <button type="button" onClick={resetAll} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                    {getIcon('rotate-ccw', { size: 13 })}
+                    New scenario
+                  </button>
+                </div>
+                <ResultsView demo={calcResult} tab={tab} setTab={setTab} loading={false} error={null} />
+              </>
+            )}
+
+            {/* ── Compound NLP path (multiple events) ──────────────── */}
+            {scenarioType === 'compound' && (
+              <>
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-70"
+                  style={{ color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  {getIcon('arrow-left', { size: 14 })}
+                  Back to scenario types
+                </button>
             <Section
-              title="Your situation"
+              title="Describe your situation"
               hint="Numbers are pre-extracted from your text, then assigned to scenario fields. Invented numbers are stripped."
             >
               <textarea
@@ -845,6 +1202,8 @@ export default function PropertyScenarioPage() {
                   ? `${pipeline.validation.errors.length} field${pipeline.validation.errors.length === 1 ? '' : 's'} still need answers — submit your responses above to continue.`
                   : 'Scenario isn\u2019t ready yet. Try adding more specifics and analyse again.'}
               </div>
+            )}
+                </>
             )}
           </>
         )}
