@@ -185,7 +185,7 @@ async function parseScenario(text, opts = {}) {
 
   const result = await callModel(modelId, prompt, {
     system: PARSE_SYSTEM,
-    maxTokens: 4096,
+    maxTokens: 8192,
     returnUsage: true,
   });
 
