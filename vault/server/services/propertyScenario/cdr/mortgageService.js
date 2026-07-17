@@ -62,8 +62,9 @@ async function fetchBankMortgages(bank, opts = {}) {
       category: MORTGAGE_CATEGORY,
       versions: bank.preferredVersions,
       pageSize: 25,
-      maxPages: opts.maxPages || 4,
+      maxPages: bank.maxPages || opts.maxPages || 4,
       timeoutMs: opts.timeoutMs || 20000,
+      skipCategoryFilter: Boolean(bank.skipCategoryFilter),
     });
 
     if (!list.ok && !(list.products || []).length) {

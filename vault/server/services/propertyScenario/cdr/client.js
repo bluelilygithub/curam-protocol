@@ -112,15 +112,16 @@ async function fetchAllProducts(baseUrl, opts = {}) {
   const pageSize = opts.pageSize || 25;
   const maxPages = opts.maxPages || 6;
   const versions = opts.versions;
+  // Some banks (Westpac) ignore product-category and return 0 results when filtered.
+  // For those, fetch all products unfiltered then filter client-side.
+  const skipCategoryFilter = Boolean(opts.skipCategoryFilter);
   const products = [];
   let page = 1;
   let versionUsed = null;
 
   while (page <= maxPages) {
-    const query = {
-      'product-category': category,
-      'page-size': pageSize,
-    };
+    const query = { 'page-size': pageSize };
+    if (!skipCategoryFilter) query['product-category'] = category;
     // CDR standards treat page as 1-based, but some banks (notably Westpac) reject
     // `page=1` with 422 and only accept the first page when `page` is omitted.
     if (page > 1) query.page = page;
@@ -140,10 +141,14 @@ async function fetchAllProducts(baseUrl, opts = {}) {
       };
     }
     versionUsed = result.version;
-    const batch = result.json?.data?.products || [];
+    let batch = result.json?.data?.products || [];
+    // Client-side category filter for banks that don't support server-side filtering
+    if (skipCategoryFilter) {
+      batch = batch.filter((p) => p.productCategory === category);
+    }
     products.push(...batch);
     const totalPages = Number(result.json?.meta?.totalPages) || page;
-    if (page >= totalPages || batch.length === 0) break;
+    if (page >= totalPages || (result.json?.data?.products || []).length === 0) break;
     page += 1;
   }
 

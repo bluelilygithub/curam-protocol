@@ -21,6 +21,11 @@ const CDR_BANKS = [
     brand: 'WBC',
     baseUrl: 'https://digital-api.westpac.com.au/cds-au/v1',
     preferredVersions: [5, 4, 3, 6, 7],
+    // Westpac CDR ignores product-category query param and returns 0 results when
+    // filtered. Must fetch all products unfiltered and filter RESIDENTIAL_MORTGAGES
+    // client-side.
+    skipCategoryFilter: true,
+    maxPages: 15, // ~325 products across 13 pages; need to scan all to find mortgages
   },
   {
     id: 'anz',
