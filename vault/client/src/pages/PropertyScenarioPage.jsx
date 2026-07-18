@@ -67,7 +67,7 @@ function fmt(n) {
   return `$${Math.round(Number(n)).toLocaleString('en-AU')}`;
 }
 
-function RefinanceInterpretation({ calcResult, rfRateType }) {
+function RefinanceInterpretation({ calcResult, rfRateType, rfState }) {
   if (!calcResult?.ready_for_calculations) return null;
 
   const refi = calcResult.calculation?.event_results?.[0]?.outputs?.refinance_break_even;
@@ -1482,7 +1482,7 @@ export default function PropertyScenarioPage() {
                   />
                 </div>
                 {scenarioType === 'refinance' && (
-                  <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} />
+                  <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} rfState={rfState} />
                 )}
                 {scenarioType === 'sell' && (
                   <SellInterpretation calcResult={calcResult} />

@@ -69,7 +69,15 @@ function runFromScenario(scenario, opts = {}) {
   let s = cloneScenario(scenario);
   const clarify = applyClarifications(s, opts.clarifications || {});
   s = clarify.scenario;
-  const calculation = runScenario(s, opts.run || {});
+  // runScenario accepts run-level opts (refinance_fees, selling_cost_pct, comparison_rate, force)
+  // directly on its opts object — accept them either nested under opts.run (legacy) or as
+  // top-level siblings of `clarifications` (used by /calculate route) so callers don't
+  // silently lose overrides depending on which shape they used.
+  const runOpts = { ...(opts.run || {}) };
+  ['refinance_fees', 'selling_cost_pct', 'comparison_rate', 'force'].forEach((key) => {
+    if (opts[key] !== undefined && runOpts[key] === undefined) runOpts[key] = opts[key];
+  });
+  const calculation = runScenario(s, runOpts);
   return {
     clarification: clarify,
     scenario: s,
