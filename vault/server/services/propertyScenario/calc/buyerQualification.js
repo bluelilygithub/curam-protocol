@@ -83,18 +83,24 @@ function hecsAnnualRepayment(grossAnnualIncome) {
 }
 
 // ─── First Home Guarantee property price caps (NHFIC 2024-25) ────────────────
+// FHBG property price caps — effective 1 October 2025 (Housing Australia announcement)
+// Source: housingaustralia.gov.au/media/unlimited-places-higher-property-price-caps-first-home-buyers-1-october-2025
+// Income caps ABOLISHED entirely from 1 October 2025 — no income limit applies.
+// Two-tier structure: capital city / regional centre cap and "other areas" cap.
+// Regional centres defined by scheme: NSW → Illawarra, Newcastle, Lake Macquarie;
+//   VIC → Geelong; QLD → Gold Coast, Sunshine Coast.
+// We collect state only — not postcode — so we use the CAPITAL tier as the primary cap
+// (covers the majority of Australian buyers) and flag the "other" tier as a lower caveat.
 const FHBG_PRICE_CAPS = {
-  NSW: 900000,
-  ACT: 750000,
-  VIC: 800000,
-  QLD: 700000,
-  WA:  600000,
-  SA:  600000,
-  TAS: 600000,
-  NT:  600000,
+  NSW: { capital: 1500000, other: 800000  },
+  VIC: { capital:  950000, other: 650000  },
+  QLD: { capital: 1000000, other: 700000  },
+  WA:  { capital:  850000, other: 600000  },
+  SA:  { capital:  900000, other: 500000  },
+  TAS: { capital:  700000, other: 550000  },
+  ACT: { capital: 1000000, other: 1000000 }, // single tier
+  NT:  { capital:  600000, other: 600000  }, // single tier (Darwin $750k from Jul 2026, conservatively $600k used)
 };
-const FHBG_INCOME_CAP_SINGLE = 125000;
-const FHBG_INCOME_CAP_JOINT  = 200000;
 
 // ─── Repayment formula (P&I, monthly rest) ───────────────────────────────────
 
@@ -362,12 +368,23 @@ function assessBuyerQualification(inputs = {}) {
   });
 
   // ─── 7. First Home Guarantee (FHBG) ─────────────────────────────────────────
+  // Rules effective 1 October 2025:
+  //   • No income cap (removed entirely)
+  //   • No place limit (unlimited guarantees available)
+  //   • Two-tier property price caps by state (capital/regional centre vs other areas)
+  //   • PPOR purchase only; citizenship/prior ownership not checked here
   if (isFhb) {
-    const priceCap = FHBG_PRICE_CAPS[state] || null;
-    const incomeCap = isJoint ? FHBG_INCOME_CAP_JOINT : FHBG_INCOME_CAP_SINGLE;
-    const incomeOk = totalGrossAnnual <= incomeCap;
-    const priceOk = priceCap != null ? propertyValue <= priceCap : null;
+    const capTiers = FHBG_PRICE_CAPS[state] || null;
+    // Use capital-city tier as primary check since we don't have suburb/postcode.
+    // A property above the CAPITAL cap is definitively blocked (even the most generous tier fails).
+    // A property above OTHER but below CAPITAL gets a warn — location determines eligibility.
+    const capitalCap = capTiers?.capital ?? null;
+    const otherCap   = capTiers?.other   ?? null;
     const ppOrOk = isPpor;
+
+    // Whether price fits the capital tier (which covers most of Australia's population)
+    const aboveCapital = capitalCap != null ? propertyValue > capitalCap : false;
+    const aboveOther   = otherCap   != null ? propertyValue > otherCap   : false;
 
     let fhbgStatus, fhbgHeadline, fhbgDetail;
 
@@ -375,25 +392,29 @@ function assessBuyerQualification(inputs = {}) {
       fhbgStatus = 'fail';
       fhbgHeadline = 'FHBG — not eligible (investment property)';
       fhbgDetail = 'The First Home Guarantee requires the property to be purchased as a principal place of residence. Investment properties are excluded.';
-    } else if (!incomeOk) {
-      fhbgStatus = 'fail';
-      fhbgHeadline = `FHBG — income above cap ($${incomeCap.toLocaleString('en-AU')} ${isJoint ? 'combined' : 'individual'})`;
-      fhbgDetail = `Your gross income of $${totalGrossAnnual.toLocaleString('en-AU')} p.a. exceeds the FHBG income cap of $${incomeCap.toLocaleString('en-AU')} for ${isJoint ? 'joint applicants' : 'individual applicants'}. You are not eligible for the guarantee.`;
-    } else if (priceOk === false) {
-      fhbgStatus = 'fail';
-      fhbgHeadline = `FHBG — purchase price above ${state} cap ($${priceCap?.toLocaleString('en-AU')})`;
-      fhbgDetail = `The property price of $${propertyValue.toLocaleString('en-AU')} exceeds the FHBG property price cap for ${state} of $${priceCap?.toLocaleString('en-AU')}. The guarantee is not available for this purchase.`;
-    } else if (priceOk === null) {
+    } else if (capTiers == null) {
+      // Unknown state
       fhbgStatus = 'warn';
-      fhbgHeadline = `FHBG — potentially eligible (state price cap unavailable for ${state})`;
-      fhbgDetail = `Income and PPOR conditions appear met. Verify the current property price cap for ${state} with the NHFIC (Housing Australia) before relying on eligibility.`;
+      fhbgHeadline = 'FHBG — state price cap unavailable; verify manually';
+      fhbgDetail = `No income cap applies (removed 1 Oct 2025) and PPOR condition appears met. Verify the property price cap for your state and postcode at housingaustralia.gov.au.`;
+    } else if (aboveCapital) {
+      // Above even the most generous tier — definitively blocked on price
+      fhbgStatus = 'fail';
+      fhbgHeadline = `FHBG — purchase price above ${state} cap ($${capitalCap.toLocaleString('en-AU')} capital / $${otherCap.toLocaleString('en-AU')} regional)`;
+      fhbgDetail = `The property price of $${propertyValue.toLocaleString('en-AU')} exceeds the FHBG property price cap for ${state} in all areas (capital city / regional centre: $${capitalCap.toLocaleString('en-AU')}; other areas: $${otherCap.toLocaleString('en-AU')}). The guarantee is not available for this purchase. Note: income caps were removed from 1 October 2025 — income is not a limiting factor.`;
+    } else if (aboveOther && !aboveCapital) {
+      // Fits capital/regional-centre tier but not the "other areas" lower tier — location-dependent
+      fhbgStatus = 'warn';
+      fhbgHeadline = `FHBG — eligible if buying in ${state} capital/regional centre; blocked for other areas`;
+      fhbgDetail = `At $${propertyValue.toLocaleString('en-AU')}, you are within the ${state} capital city / regional centre cap ($${capitalCap.toLocaleString('en-AU')}) but above the "other areas" cap ($${otherCap.toLocaleString('en-AU')}). If purchasing in ${state === 'QLD' ? 'Brisbane, Gold Coast, or Sunshine Coast' : state === 'NSW' ? 'Sydney, Illawarra, Newcastle, or Lake Macquarie' : state === 'VIC' ? 'Melbourne or Geelong' : 'the capital city or listed regional centre'}, you are ELIGIBLE. If purchasing in a rural or regional area outside those centres, you are BLOCKED. Verify your specific postcode at housingaustralia.gov.au. No income cap applies (removed 1 Oct 2025).`;
     } else {
+      // Below both caps — eligible on price
       fhbgStatus = 'pass';
-      fhbgHeadline = 'FHBG — appears eligible (5% deposit, no LMI)';
-      fhbgDetail = `Income ($${totalGrossAnnual.toLocaleString('en-AU')} ≤ $${incomeCap.toLocaleString('en-AU')} cap), property price ($${propertyValue.toLocaleString('en-AU')} ≤ $${priceCap?.toLocaleString('en-AU')} ${state} cap), and PPOR requirement all appear met. If eligible, the government guarantees the difference between your deposit and 20%, meaning you can buy with as little as 5% without paying LMI. Applications are processed through participating lenders only — not all lenders offer FHBG. Confirm directly with Housing Australia (housingaustralia.gov.au). This check does not verify all FHBG eligibility criteria (citizenship, prior ownership history, contract date).`;
+      fhbgHeadline = 'FHBG — appears eligible (5% deposit, no LMI, no income cap)';
+      fhbgDetail = `Property price ($${propertyValue.toLocaleString('en-AU')}) is within the ${state} cap ($${capitalCap.toLocaleString('en-AU')} capital / $${otherCap.toLocaleString('en-AU')} other) and PPOR requirement appears met. No income cap applies from 1 October 2025. If eligible, the government guarantees the difference between your deposit and 20% — you can buy with as little as 5% without paying LMI. Applications must be through participating lenders. This check does not verify citizenship, prior property ownership history, or contract date — confirm all criteria at housingaustralia.gov.au before relying on eligibility.`;
     }
 
-    caveats.push('FHBG eligibility check uses published 2024-25 income and property price caps — confirm current caps at housingaustralia.gov.au before applying.');
+    caveats.push('FHBG eligibility check uses property price caps effective 1 October 2025 (Housing Australia). Income caps were abolished 1 October 2025. Caps are split by capital city / regional centre vs other areas — this check uses the capital-city tier as the primary threshold since exact suburb/postcode is not provided. Verify your specific postcode at housingaustralia.gov.au before applying.');
 
     checks.push({
       id: 'fhbg',
@@ -401,7 +422,7 @@ function assessBuyerQualification(inputs = {}) {
       status: fhbgStatus,
       headline: fhbgHeadline,
       detail: fhbgDetail,
-      data: { income_cap: incomeCap, price_cap: priceCap, income_ok: incomeOk, price_ok: priceOk, ppor_ok: ppOrOk },
+      data: { capital_cap: capitalCap, other_cap: otherCap, price_ok: !aboveCapital, ppor_ok: ppOrOk, income_cap_abolished: true },
     });
   }
 

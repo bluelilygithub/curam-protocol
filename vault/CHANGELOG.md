@@ -4,6 +4,35 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (fhbg-caps-oct-2025-fix)
+
+### Bug fix: FHBG price caps stale — updated to 1 October 2025 scheme
+
+**Reported:** A QLD buyer at $850,000 in Brisbane would have been incorrectly blocked by the tool showing a $700,000 QLD cap. The correct cap for SE Queensland (Brisbane, Gold Coast, Sunshine Coast) is $1,000,000 effective 1 October 2025. The bottom-line conclusion for the specific test case ($2,000,000 purchase) happened to remain correct, but for wrong reasons and with a wrong stated cap.
+
+**Two bugs fixed:**
+
+1. **Stale price caps** — all six states and both territories were updated to the 1 October 2025 Housing Australia announcement. Caps are now two-tier (capital city / regional centre vs other areas):
+
+   | State | Capital / Regional Centre | Other Areas |
+   |---|---|---|
+   | NSW | $1,500,000 | $800,000 |
+   | VIC | $950,000 | $650,000 |
+   | QLD | $1,000,000 | $700,000 |
+   | WA | $850,000 | $600,000 |
+   | SA | $900,000 | $500,000 |
+   | TAS | $700,000 | $550,000 |
+   | ACT | $1,000,000 | — |
+   | NT | $600,000 | — |
+
+2. **Income cap check was wrong** — income caps for FHBG were abolished entirely from 1 October 2025. The check for `$125,000 individual / $200,000 joint` was removed. The `FHBG_INCOME_CAP_SINGLE` and `FHBG_INCOME_CAP_JOINT` constants were deleted. The result text now explicitly states "No income cap applies."
+
+**Two-tier handling:** Since only state is collected (not suburb/postcode), the capital-city tier is used as the primary check and a clear `warn` status is returned when the property sits between the two tiers, with named regional centres per state (Brisbane/Gold Coast/Sunshine Coast for QLD, Sydney/Illawarra/Newcastle for NSW, Melbourne/Geelong for VIC). The caveat directs users to verify their specific postcode at housingaustralia.gov.au.
+
+**Source:** housingaustralia.gov.au/media/unlimited-places-higher-property-price-caps-first-home-buyers-1-october-2025
+
+---
+
 ## 2026-07-18 (property-scenario-qualify-lender-guidance)
 
 ### Lender guidance for borderline qualification results
