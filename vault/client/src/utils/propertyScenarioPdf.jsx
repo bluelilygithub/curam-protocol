@@ -247,6 +247,120 @@ function RefinanceResultSection({ calcResult }) {
   );
 }
 
+// ─── Sell / CGT interpretation ────────────────────────────────────────────────
+
+function SellCgtSection({ calcResult, inputs }) {
+  const ev = calcResult.calculation?.event_results?.[0];
+  const out = ev?.outputs;
+  if (!out) return null;
+
+  const salePrice = Number(out.sale_price ?? 0);
+  const sellingCosts = Number(out.selling_costs ?? 0);
+  const netProceeds = Number(out.net_sale_proceeds ?? 0);
+  const cgt = out.cgt || {};
+  const taxableCgt = Number(cgt.taxable_capital_gain_estimate ?? 0);
+  const isMreExempt = Boolean(cgt.main_residence_exempt);
+  const grossGain = Number(cgt.capital_gain_gross ?? 0);
+  const discountApplied = Boolean(cgt.cgt_discount_applied);
+  const partialFlagged = Boolean(cgt.partial_exemption_flagged);
+  const isMixed = inputs?.sellPpor === 'mixed';
+  const sellingCostPct = salePrice > 0 ? `${((sellingCosts / salePrice) * 100).toFixed(1)}%` : '';
+
+  const taxRows = [
+    { label: '$45k–$135k bracket (34.5% incl. Medicare)', rate: 0.345 },
+    { label: '$135k–$190k bracket (39% incl. Medicare)', rate: 0.39 },
+    { label: 'Top bracket 190k+ (47% incl. Medicare)', rate: 0.47 },
+  ];
+
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>Sell — Net Proceeds & CGT</Text>
+
+      {/* Net proceeds summary */}
+      <View style={{ marginBottom: 8 }}>
+        <View style={s.tableRow}>
+          <Text style={s.tableCellWide}>Net proceeds</Text>
+          <Text style={[s.tableCellNarrow, { fontFamily: 'Helvetica-Bold' }]}>{fmtMoney(netProceeds)}</Text>
+        </View>
+        <View style={s.tableRow}>
+          <Text style={s.tableCellWide}>Sale price</Text>
+          <Text style={s.tableCellNarrow}>{fmtMoney(salePrice)}</Text>
+        </View>
+        <View style={s.tableRow}>
+          <Text style={s.tableCellWide}>Selling costs ({sellingCostPct})</Text>
+          <Text style={s.tableCellNarrow}>{fmtMoney(sellingCosts)}</Text>
+        </View>
+      </View>
+
+      {/* CGT */}
+      <View style={{ borderTopWidth: 1, borderTopColor: '#D8D8D0', borderTopStyle: 'solid', paddingTop: 6, marginBottom: 6 }}>
+        <Text style={[s.label, { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#1A1A1A', marginBottom: 4 }]}>Capital Gains Tax</Text>
+        {isMreExempt ? (
+          <View style={{ backgroundColor: '#f0fdf4', padding: 6, borderRadius: 4, marginBottom: 4 }}>
+            <Text style={[s.caveat, { color: '#15803d', fontFamily: 'Helvetica-Bold' }]}>Main residence exemption — CGT is $0</Text>
+            {grossGain > 0 && (
+              <Text style={[s.caveat, { color: '#166534' }]}>Gross gain on simplified cost base: {fmtMoney(grossGain)} — fully exempt.</Text>
+            )}
+            <Text style={[s.caveat, { color: '#166534' }]}>Property was your principal place of residence for the entire ownership period — no taxable event occurs at all.</Text>
+          </View>
+        ) : taxableCgt > 0 ? (
+          <View>
+            <View style={{ backgroundColor: '#fef2f2', padding: 6, borderRadius: 4, marginBottom: 6 }}>
+              <Text style={[s.caveat, { fontFamily: 'Helvetica-Bold', color: '#b91c1c' }]}>
+                Taxable gain: {fmtMoney(taxableCgt)}
+              </Text>
+              <Text style={[s.caveat, { color: '#991b1b', marginTop: 2 }]}>
+                {discountApplied
+                  ? `After 50% CGT discount (gross gain ${fmtMoney(grossGain)} ÷ 2 — held >12 months).`
+                  : `Full gross gain — 50% discount not applied (held ≤12 months or unknown).`}
+              </Text>
+              <Text style={[s.caveat, { color: '#991b1b', fontFamily: 'Helvetica-Bold', marginTop: 2 }]}>
+                This is the gain added to your income — NOT the tax itself. There is no flat CGT rate in Australia.
+              </Text>
+            </View>
+
+            <Text style={[s.label, { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#1A1A1A', marginBottom: 3 }]}>
+              Indicative tax on the gain at 2025–26 marginal rates:
+            </Text>
+            <View style={s.tableHeader}>
+              <Text style={[s.tableCellWide, { fontFamily: 'Helvetica-Bold', fontSize: 7 }]}>Bracket</Text>
+              <Text style={[s.tableCellNarrow, { fontFamily: 'Helvetica-Bold', fontSize: 7 }]}>Est. tax on gain</Text>
+            </View>
+            {taxRows.map((r, i) => (
+              <View key={i} style={s.tableRow}>
+                <Text style={[s.tableCellWide, { fontSize: 7 }]}>{r.label}</Text>
+                <Text style={[s.tableCellNarrow, { fontSize: 7 }]}>{fmtMoney(Math.round(taxableCgt * r.rate))}</Text>
+              </View>
+            ))}
+            <Text style={[s.caveat, { marginTop: 4 }]}>
+              Your actual tax depends on total income in the year of sale, capital losses, offsets, and other deductions. CGT is reported in your tax return — not deducted at settlement.
+            </Text>
+
+            {(partialFlagged || isMixed) && (
+              <View style={{ backgroundColor: '#fefce8', padding: 5, borderRadius: 4, marginTop: 5 }}>
+                <Text style={[s.caveat, { color: '#92400e', fontFamily: 'Helvetica-Bold' }]}>
+                  Partial exemption may apply
+                </Text>
+                <Text style={[s.caveat, { color: '#92400e' }]}>
+                  {isMixed
+                    ? 'Property was flagged as having been both a residence and investment. The 6-year rule and partial main residence exemption may significantly reduce this figure — the calculation above is conservative (full investment CGT). Get advice from a tax agent with the full occupancy timeline.'
+                    : '6-year rule / partial exemption may apply — consult a tax agent with your occupancy dates.'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <Text style={s.caveat}>CGT: $0 — no capital gain on this simplified cost base.</Text>
+        )}
+      </View>
+
+      <View style={s.warning}>
+        <Text>Cost base uses purchase price only. ATO rules also allow: stamp duty at purchase, acquisition legal fees, capital improvements, and some borrowing costs — all reduce taxable gain. Not tax advice — verify with a registered tax agent.</Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Summary table ────────────────────────────────────────────────────────────
 
 function SummaryTableSection({ calcResult }) {
@@ -510,6 +624,8 @@ function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilt
         {show('overview') && <InputsSection inputs={inputs} scenarioType={scenarioType} />}
 
         {show('overview') && scenarioType === 'refinance' && <RefinanceResultSection calcResult={calcResult} />}
+
+        {show('overview') && scenarioType === 'sell' && <SellCgtSection calcResult={calcResult} inputs={inputs} />}
 
         {show('overview') && <SummaryTableSection calcResult={calcResult} />}
 

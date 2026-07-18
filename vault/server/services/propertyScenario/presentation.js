@@ -123,7 +123,7 @@ function buildScenarioSummaryTable(calculation = {}) {
     { key: 'monthly_saving', label: 'Monthly repayment saving (after switch)', value: t.monthly_repayment_saving, kind: 'benefit' },
     { key: 'annual_saving', label: 'Annualised repayment saving', value: t.annualised_repayment_saving, kind: 'benefit' },
     { key: 'mre_gain', label: 'MRE-exempt capital gain (memo)', value: t.main_residence_exempt_gain, kind: 'memo' },
-    { key: 'taxable_cgt', label: 'Taxable CGT estimate', value: t.taxable_cgt_estimate, kind: 'memo' },
+    { key: 'taxable_cgt', label: 'Taxable capital gain (not the tax — see CGT section)', value: t.taxable_cgt_estimate, kind: 'memo' },
   ];
 
   const eventRows = (calculation.event_results || []).map((e) => ({

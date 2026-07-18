@@ -275,7 +275,26 @@ function RefinanceInterpretation({ calcResult, rfRateType, rfState }) {
   );
 }
 
-function SellInterpretation({ calcResult }) {
+// Australian individual income tax brackets 2025-26 (incl. 2% Medicare levy)
+const AU_MARGINAL_RATES = [
+  { threshold: 190001, label: 'top bracket (190k+)', rate: 0.47 },
+  { threshold: 135001, label: '$135k–$190k', rate: 0.39 },
+  { threshold: 45001,  label: '$45k–$135k', rate: 0.345 },
+  { threshold: 18201,  label: '$18.2k–$45k', rate: 0.21 },
+  { threshold: 0,      label: 'below $18.2k', rate: 0.02 },
+];
+
+function fmtCgtTax(gain) {
+  // Show indicative tax range at three common brackets
+  const brackets = [
+    { label: '32.5%+Medi bracket', rate: 0.345 },
+    { label: '37%+Medi bracket', rate: 0.39 },
+    { label: 'top bracket (47%)', rate: 0.47 },
+  ];
+  return brackets.map((b) => `${fmt(Math.round(gain * b.rate))} (${b.label})`).join(' · ');
+}
+
+function SellInterpretation({ calcResult, sellPpor }) {
   if (!calcResult?.ready_for_calculations) return null;
   const ev = calcResult.calculation?.event_results?.[0];
   const out = ev?.outputs;
@@ -288,11 +307,15 @@ function SellInterpretation({ calcResult }) {
   const taxableCgt = Number(cgt.taxable_capital_gain_estimate ?? 0);
   const isMreExempt = Boolean(cgt.main_residence_exempt);
   const grossGain = Number(cgt.capital_gain_gross ?? 0);
+  const discountApplied = Boolean(cgt.cgt_discount_applied);
+  const partialFlagged = Boolean(cgt.partial_exemption_flagged);
+  const isMixed = sellPpor === 'mixed';
 
   const sellingCostPct = salePrice > 0 ? ((sellingCosts / salePrice) * 100).toFixed(1) : null;
 
   return (
-    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-3" style={{ borderLeftColor: 'var(--color-primary)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-4" style={{ borderLeftColor: 'var(--color-primary)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+      {/* Net proceeds */}
       <div className="space-y-1">
         <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
           Net proceeds: {fmt(netProceeds)}
@@ -302,42 +325,119 @@ function SellInterpretation({ calcResult }) {
         </p>
       </div>
 
+      {/* Selling costs */}
       <div className="space-y-1">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Selling costs ({sellingCostPct ? `${sellingCostPct}% of sale price` : 'estimate'}): {fmt(sellingCosts)}</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Selling costs breakdown</p>
         <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
           <li>Real estate agent commission: typically 1.5%–2.5% of sale price — varies by agent and location</li>
-          <li>Advertising / marketing: $2,000–$15,000 — depends on campaign type</li>
-          <li>Conveyancing / legal (vendor): $1,000–$2,500</li>
-          <li>Styling and minor repairs: varies widely</li>
+          <li>Advertising / marketing: $2,000–$15,000 — depends on campaign type and suburb</li>
+          <li>Vendor conveyancing / legal: $1,000–$2,500</li>
+          <li>Styling, cleaning and minor repairs: varies — often $2,000–$10,000+</li>
         </ul>
         <p className="text-xs" style={{ color: '#f59e0b' }}>
-          The 2.5% assumption is an estimate. Get itemised quotes from an agent and conveyancer before committing.
+          The 2.5% assumption is an estimate. Get itemised quotes from your agent and conveyancer.
         </p>
       </div>
 
-      <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Capital gains tax</p>
+      {/* CGT — the most important and most misunderstood section */}
+      <div className="pt-2 border-t space-y-3" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Capital gains tax (CGT)</p>
+
         {isMreExempt ? (
-          <p className="text-sm" style={{ color: '#16a34a' }}>
-            Main residence exemption applies — CGT is $0.
-            {grossGain > 0 ? ` (Gross gain ${fmt(grossGain)} — fully exempt.)` : ''}
-          </p>
+          /* PPOR — full main residence exemption */
+          <div className="rounded-lg p-3 space-y-1" style={{ background: '#f0fdf4', border: '1px solid #86efac' }}>
+            <p className="text-sm font-medium" style={{ color: '#15803d' }}>
+              Main residence exemption applies — CGT is $0.
+            </p>
+            {grossGain > 0 && (
+              <p className="text-xs" style={{ color: '#166534' }}>
+                Gross gain on simplified cost base: {fmt(grossGain)} — fully exempt because this was your principal place of residence.
+              </p>
+            )}
+            <p className="text-xs mt-1" style={{ color: '#166534' }}>
+              Under Australian tax law, a property that was your main residence for the entire ownership period generates no taxable gain — no 50% discount is even needed, because there is no taxable event at all.
+            </p>
+          </div>
         ) : taxableCgt > 0 ? (
-          <>
-            <p className="text-sm" style={{ color: '#ef4444' }}>
-              Taxable CGT estimate: {fmt(taxableCgt)} — this is the gain, not the tax payable. Actual tax = gain × your marginal rate.
-            </p>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              The 50% CGT discount applies if held &gt;12 months (individuals). CGT is reported in your tax return — not deducted at settlement.
-            </p>
-          </>
+          /* Investment / mixed — CGT applies */
+          <div className="space-y-3">
+            {/* What the numbers mean — critical context */}
+            <div className="rounded-lg p-3 space-y-2" style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
+              <p className="text-sm font-medium" style={{ color: '#b91c1c' }}>
+                Taxable gain: {fmt(taxableCgt)}
+              </p>
+              <p className="text-xs" style={{ color: '#991b1b' }}>
+                {discountApplied
+                  ? `This is the gain after the 50% CGT discount (gross gain ${fmt(grossGain)} ÷ 2). The 50% discount applies because the asset was held more than 12 months.`
+                  : `This is the full gross gain (${fmt(grossGain)}). The 50% discount does not apply — either the asset was held ≤12 months or the holding period is unknown.`}
+              </p>
+              <p className="text-xs font-medium" style={{ color: '#991b1b' }}>
+                Important: this is the amount added to your taxable income — not the tax itself. There is no separate flat CGT rate in Australia. Your actual tax liability depends on your total income in the year of sale.
+              </p>
+            </div>
+
+            {/* Indicative tax range */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Indicative tax on the gain at common marginal rates (2025–26 incl. Medicare levy):</p>
+              <table className="text-xs w-full" style={{ color: 'var(--color-muted)', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th className="text-left py-1 pr-4" style={{ color: 'var(--color-muted)', fontWeight: 500 }}>Income bracket</th>
+                    <th className="text-left py-1 pr-4" style={{ color: 'var(--color-muted)', fontWeight: 500 }}>Rate</th>
+                    <th className="text-left py-1" style={{ color: 'var(--color-muted)', fontWeight: 500 }}>Est. tax on gain</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label: '$45k–$135k', rate: 0.325, medi: 0.02 },
+                    { label: '$135k–$190k', rate: 0.37, medi: 0.02 },
+                    { label: '$190k+', rate: 0.45, medi: 0.02 },
+                  ].map((b) => (
+                    <tr key={b.label}>
+                      <td className="py-0.5 pr-4">{b.label}</td>
+                      <td className="py-0.5 pr-4">{Math.round((b.rate + b.medi) * 100)}%</td>
+                      <td className="py-0.5" style={{ color: 'var(--color-text)' }}>{fmt(Math.round(taxableCgt * (b.rate + b.medi)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                These are estimates only. Your actual liability depends on your total income that year, other deductions, offsets, and whether you have capital losses to apply. CGT is reported in your tax return — it is not deducted at settlement.
+              </p>
+            </div>
+
+            {/* Partial exemption flag for mixed-use properties */}
+            {(partialFlagged || isMixed) && (
+              <div className="rounded-lg p-3" style={{ background: '#fefce8', border: '1px solid #fde047' }}>
+                <p className="text-xs font-medium" style={{ color: '#92400e' }}>
+                  {isMixed
+                    ? 'This property was flagged as having been both a residence and an investment. A partial main residence exemption may apply — the calculation above shows full investment CGT, which is conservative.'
+                    : 'Partial main residence exemption may apply.'}
+                </p>
+                <p className="text-xs mt-1" style={{ color: '#92400e' }}>
+                  The 6-year rule and partial exemption can significantly reduce or eliminate CGT depending on occupancy dates. This tool does not calculate partial exemptions — you need a tax agent with the full timeline to get an accurate figure.
+                </p>
+              </div>
+            )}
+
+            {/* PPOR re-confirmation — the highest-leverage clarification */}
+            <div className="rounded-lg p-3" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                The single most important check: was this your primary residence?
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                If this property was your genuine principal place of residence for the entire period you owned it — and was never rented out or used to produce income — CGT would be $0 under the main residence exemption. That is the difference between this {fmt(taxableCgt)} taxable gain and a $0 liability. Verify that you answered the "property type" question correctly before relying on this estimate.
+              </p>
+            </div>
+          </div>
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            CGT: $0 — either exempt or no capital gain on this simplified cost base.
+            CGT: $0 — no capital gain on this simplified cost base.
           </p>
         )}
-        <p className="text-xs pt-1" style={{ color: '#f59e0b' }}>
-          Important: the CGT estimate uses your purchase price as the cost base. Your actual cost base may also include stamp duty paid at purchase, conveyancing fees, and capital improvements — all of which reduce taxable gain. Provide these figures for a more accurate estimate. Not tax advice — confirm with a tax agent.
+
+        <p className="text-xs" style={{ color: '#f59e0b' }}>
+          Cost base uses purchase price only. Your actual ATO cost base also includes: stamp duty paid at purchase, acquisition conveyancing fees, capital improvements, and some borrowing costs — all of which reduce taxable gain. This is not tax advice — confirm with a registered tax agent.
         </p>
       </div>
     </div>
@@ -585,7 +685,7 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
                 return [
                   { label: 'Net proceeds', value: t.sale_proceeds_generated },
                   { label: 'Selling costs', value: t.selling_costs },
-                  { label: 'Taxable CGT', value: t.taxable_cgt_estimate },
+                  { label: 'Taxable gain (CGT)', value: t.taxable_cgt_estimate },
                   { label: 'Total costs', value: t.total_costs },
                 ];
               }
@@ -1510,7 +1610,7 @@ export default function PropertyScenarioPage() {
                   <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} rfState={rfState} />
                 )}
                 {scenarioType === 'sell' && (
-                  <SellInterpretation calcResult={calcResult} />
+                  <SellInterpretation calcResult={calcResult} sellPpor={sellPpor} />
                 )}
                 {scenarioType === 'buy' && (
                   <BuyInterpretation calcResult={calcResult} />
