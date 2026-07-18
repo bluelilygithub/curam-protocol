@@ -515,6 +515,312 @@ function BuyInterpretation({ calcResult }) {
   );
 }
 
+const STATUS_COLOR = { pass: '#16a34a', warn: '#b45309', fail: '#b91c1c', info: '#1d4ed8' };
+const STATUS_BG    = { pass: '#f0fdf4', warn: '#fefce8', fail: '#fef2f2', info: '#eff6ff' };
+const STATUS_BORDER= { pass: '#86efac', warn: '#fde047', fail: '#fca5a5', info: '#93c5fd' };
+const STATUS_LABEL = { pass: 'Pass', warn: 'Check required', fail: 'Likely blocked', info: 'Note' };
+
+function QualifyCheck({ check, expanded, onToggle }) {
+  const col   = STATUS_COLOR[check.status]  || 'var(--color-muted)';
+  const bg    = STATUS_BG[check.status]    || 'var(--color-surface)';
+  const bord  = STATUS_BORDER[check.status] || 'var(--color-border)';
+  const label = STATUS_LABEL[check.status] || check.status;
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: bord }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-start gap-3 p-4 text-left transition-opacity duration-200 hover:opacity-80"
+        style={{ background: bg }}
+      >
+        <span className="text-lg shrink-0 mt-0.5" style={{ color: col }}>
+          {check.status === 'pass' ? '✓' : check.status === 'fail' ? '✗' : check.status === 'info' ? 'ℹ' : '⚠'}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{check.label}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: col, color: '#fff' }}>{label}</span>
+          </div>
+          <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text)' }}>{check.headline}</p>
+        </div>
+        <span className="text-xs shrink-0 mt-1" style={{ color: 'var(--color-muted)' }}>{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && check.detail && (
+        <div className="px-4 pb-4 pt-0 text-sm leading-relaxed" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', borderTop: `1px solid ${bord}` }}>
+          {check.detail}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BuyerQualifyForm({ getIcon, addToast }) {
+  const FIELD = {
+    borderColor: 'var(--color-border)', background: 'var(--color-bg)',
+    color: 'var(--color-text)', borderRadius: 8, border: '1px solid',
+    padding: '8px 12px', fontSize: 14, width: '100%', outline: 'none',
+  };
+
+  // Property
+  const [qPrice, setQPrice]     = useState('');
+  const [qDeposit, setQDeposit] = useState('');
+  const [qState, setQState]     = useState('');
+  const [qFhb, setQFhb]         = useState('');
+  const [qPpor, setQPpor]       = useState('ppor');
+  // Income & household
+  const [qIncome, setQIncome]     = useState('');
+  const [qPartner, setQPartner]   = useState('');
+  const [qHousehold, setQHousehold] = useState('single');
+  const [qEmployment, setQEmployment] = useState('payg_fulltime');
+  // Debts
+  const [qHecs, setQHecs]       = useState('no');
+  const [qDebts, setQDebts]     = useState('');
+  const [qExpenses, setQExpenses] = useState('');
+  // Loan
+  const [qTerm, setQTerm]       = useState('30');
+  const [qRate, setQRate]       = useState('');
+  // Results
+  const [result, setResult]     = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [expanded, setExpanded] = useState({});
+
+  async function runQualify() {
+    const price = parseFloat(qPrice);
+    const deposit = parseFloat(qDeposit);
+    const income = parseFloat(qIncome);
+    const rate = parseFloat(qRate);
+    if (!price || !deposit || !income || !rate || !qState) {
+      setError('Property price, deposit, state, gross income, and interest rate are required.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await api.post('/api/property-scenario/calculators/buyer-qualify', {
+        property_value:          price,
+        deposit_amount:          deposit,
+        state:                   qState,
+        is_fhb:                  qFhb === 'yes',
+        is_ppor:                 qPpor === 'ppor',
+        gross_annual_income:     income,
+        partner_gross_income:    qPartner ? parseFloat(qPartner) : 0,
+        household_type:          qHousehold,
+        employment_type:         qEmployment,
+        has_hecs:                qHecs === 'yes',
+        monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
+        monthly_expenses:        qExpenses ? parseFloat(qExpenses) : undefined,
+        loan_term_years:         parseFloat(qTerm) || 30,
+        target_rate_pct:         rate,
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.errors?.[0] || 'Qualification check failed');
+      setResult(data);
+      // Auto-expand fails first
+      const init = {};
+      (data.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
+      setExpanded(init);
+    } catch (err) {
+      setError(err.message || 'Request failed');
+      addToast(err.message || 'Qualification check failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const s = result?.summary;
+  const overallColor = s ? STATUS_COLOR[s.overall_status] : null;
+  const overallBg    = s ? STATUS_BG[s.overall_status] : null;
+  const overallBord  = s ? STATUS_BORDER[s.overall_status] : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Form */}
+      <div className="rounded-xl border p-4 sm:p-5 space-y-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Mortgage qualification check</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            Deterministic Australian checks: serviceability (APRA buffer), LVR, debt-to-income, genuine savings, First Home Guarantee eligibility, and HECS/HELP impact. Not a credit decision — for indicative purposes only.
+          </p>
+        </div>
+
+        {/* Property */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Property</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)</span>
+              <input type="text" inputMode="numeric" value={qPrice} onChange={(e) => setQPrice(e.target.value)} placeholder="e.g. 850000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)</span>
+              <input type="text" inputMode="numeric" value={qDeposit} onChange={(e) => setQDeposit(e.target.value)} placeholder="e.g. 170000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State</span>
+              <select value={qState} onChange={(e) => setQState(e.target.value)} style={FIELD}>
+                <option value="">Select…</option>
+                {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?</span>
+              <select value={qFhb} onChange={(e) => setQFhb(e.target.value)} style={FIELD}>
+                <option value="">Select…</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose</span>
+              <select value={qPpor} onChange={(e) => setQPpor(e.target.value)} style={FIELD}>
+                <option value="ppor">Primary residence (PPOR)</option>
+                <option value="investment">Investment</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {/* Income */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Income &amp; household</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)</span>
+              <input type="text" inputMode="numeric" value={qIncome} onChange={(e) => setQIncome(e.target.value)} placeholder="e.g. 95000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)</span>
+              <input type="text" inputMode="numeric" value={qPartner} onChange={(e) => setQPartner(e.target.value)} placeholder="leave blank if solo" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type</span>
+              <select value={qHousehold} onChange={(e) => setQHousehold(e.target.value)} style={FIELD}>
+                <option value="single">Single (no dependants)</option>
+                <option value="couple">Couple (no kids)</option>
+                <option value="family">Family (with children)</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Employment type</span>
+              <select value={qEmployment} onChange={(e) => setQEmployment(e.target.value)} style={FIELD}>
+                <option value="payg_fulltime">PAYG full-time</option>
+                <option value="payg_parttime">PAYG part-time</option>
+                <option value="casual">Casual</option>
+                <option value="contract">Contract</option>
+                <option value="self_employed">Self-employed</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {/* Debts */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Debts &amp; expenses</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>HECS / HELP debt outstanding?</span>
+              <select value={qHecs} onChange={(e) => setQHecs(e.target.value)} style={FIELD}>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)</span>
+              <input type="text" inputMode="numeric" value={qDebts} onChange={(e) => setQDebts(e.target.value)} placeholder="loans, credit cards (3.8%×limit)" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)</span>
+              <input type="text" inputMode="numeric" value={qExpenses} onChange={(e) => setQExpenses(e.target.value)} placeholder="leave blank to use HEM benchmark" style={FIELD} />
+            </label>
+          </div>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+            Credit card debt: lenders typically treat 3.8% of the total card limit as a monthly commitment — e.g. a $10,000 limit = $380/mo, even if you pay it off each month.
+          </p>
+        </div>
+
+        {/* Loan */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)</span>
+              <input type="text" inputMode="decimal" value={qRate} onChange={(e) => setQRate(e.target.value)} placeholder="e.g. 6.10 (see Lenders tab for live rates)" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)</span>
+              <select value={qTerm} onChange={(e) => setQTerm(e.target.value)} style={FIELD}>
+                <option value="25">25 years</option>
+                <option value="30">30 years</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+
+        <button
+          type="button"
+          disabled={loading}
+          onClick={runQualify}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {getIcon('check-circle', { size: 14 })}
+          {loading ? 'Running checks…' : 'Run qualification check'}
+        </button>
+      </div>
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-4">
+          {/* Overall verdict */}
+          <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
+            <p className="text-base font-semibold" style={{ color: overallColor }}>
+              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard blocks found'}
+              {s.overall_status === 'warn' && `${s.warn_count} area${s.warn_count !== 1 ? 's' : ''} to check — may face conditions or reduced choice`}
+              {s.overall_status === 'fail' && `${s.fail_count} likely block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
+            </p>
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              {[
+                { label: 'Loan requested', value: `$${s.loan_requested?.toLocaleString('en-AU') ?? '—'}` },
+                { label: 'Max indicative capacity', value: s.max_borrowing_capacity != null ? `$${s.max_borrowing_capacity.toLocaleString('en-AU', { maximumFractionDigits: 0 })}` : '—' },
+                { label: 'Est. monthly repayment', value: s.monthly_repayment_estimate != null ? `$${s.monthly_repayment_estimate.toLocaleString('en-AU')}/mo` : '—' },
+                { label: 'Assessment rate', value: `${s.assessment_rate_pct}%` },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                  <p className="font-semibold" style={{ color: 'var(--color-text)' }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Individual checks */}
+          <div className="space-y-2">
+            {(result.checks || []).map((check) => (
+              <QualifyCheck
+                key={check.id}
+                check={check}
+                expanded={!!expanded[check.id]}
+                onToggle={() => setExpanded((prev) => ({ ...prev, [check.id]: !prev[check.id] }))}
+              />
+            ))}
+          </div>
+
+          {/* Caveats */}
+          <div className="rounded-xl border px-4 py-3 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Important caveats</p>
+            {(result.caveats || []).map((c, i) => (
+              <p key={i} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>· {c}</p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Standalone Calculators — lets users enter their own loan numbers and instantly
  * see repayment, extra repayments, offset benefit, and borrowing power estimates.
@@ -1334,7 +1640,6 @@ export default function PropertyScenarioPage() {
 
   const handleTypePick = useCallback((type) => {
     if (type === 'calculators') {
-      // Go to the standalone calculator form (not the demo fixture)
       setScenarioType('calculators');
       return;
     }
@@ -1517,6 +1822,7 @@ export default function PropertyScenarioPage() {
                     { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
                     { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
                     { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together. Describe in plain English — AI maps the full scenario.' },
+                    { id: 'qualify', icon: 'check-circle', label: 'Can I qualify for a loan?', desc: 'Serviceability, LVR, DTI, genuine savings, First Home Guarantee — deterministic AU checks.' },
                     { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
                   ].map((t) => (
                     <button
@@ -1552,7 +1858,12 @@ export default function PropertyScenarioPage() {
 
             {/* ── Standalone calculators ───────────────────────────── */}
             {scenarioType === 'calculators' && (
-              <StandaloneCalculators getIcon={getIcon} api={api} />
+              <StandaloneCalculators getIcon={getIcon} />
+            )}
+
+            {/* ── Buyer qualification ──────────────────────────────── */}
+            {scenarioType === 'qualify' && (
+              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} />
             )}
 
             {/* ── Refinance / compare lenders form ─────────────────── */}

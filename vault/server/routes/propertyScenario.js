@@ -14,6 +14,7 @@ const { calculateRepayment } = require('../services/propertyScenario/calc/repaym
 const { calculateExtraRepayments } = require('../services/propertyScenario/calc/extraRepayments');
 const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/offset');
 const { calculateBorrowingPower } = require('../services/propertyScenario/calc/borrowingPower');
+const { assessBuyerQualification } = require('../services/propertyScenario/calc/buyerQualification');
 const { executeParse, executeClarify } = require('../services/propertyScenario/wireApi');
 const {
   buildInsight,
@@ -453,6 +454,32 @@ router.post('/calculators/offset', (req, res) => {
 
 router.post('/calculators/borrowing-power', (req, res) => {
   res.json(calculateBorrowingPower(req.body || {}));
+});
+
+/**
+ * POST /api/property-scenario/calculators/buyer-qualify
+ * Body matches assessBuyerQualification inputs.
+ * Returns deterministic AU mortgage qualification checks — not a credit decision.
+ */
+router.post('/calculators/buyer-qualify', (req, res) => {
+  const body = req.body || {};
+  const result = assessBuyerQualification({
+    propertyValue:         Number(body.property_value),
+    depositAmount:         Number(body.deposit_amount),
+    state:                 body.state || null,
+    isFhb:                 body.is_fhb === true || body.is_fhb === 'true',
+    isPpor:                body.is_ppor !== false && body.is_ppor !== 'false',
+    grossAnnualIncome:     Number(body.gross_annual_income),
+    partnerGrossIncome:    body.partner_gross_income ? Number(body.partner_gross_income) : 0,
+    householdType:         body.household_type || 'single',
+    employmentType:        body.employment_type || 'payg_fulltime',
+    hasHecs:               body.has_hecs === true || body.has_hecs === 'true',
+    monthlyDebtRepayments: body.monthly_debt_repayments ? Number(body.monthly_debt_repayments) : 0,
+    monthlyExpenses:       body.monthly_expenses ? Number(body.monthly_expenses) : undefined,
+    loanTermYears:         body.loan_term_years ? Number(body.loan_term_years) : 30,
+    targetRatePct:         Number(body.target_rate_pct),
+  });
+  res.json(result);
 });
 
 /**
