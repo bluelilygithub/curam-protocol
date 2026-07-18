@@ -4,6 +4,67 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (property-scenario-ux-and-feature-session-2)
+
+### Interactive follow-up Q&A panel
+The "Follow-ups" tab previously showed a static read-only list of suggested questions that could not be acted on. Replaced `AdvicePanel` with an interactive `FollowUpPanel`:
+- Each suggested question has an **Ask this** button that calls `POST /api/property-scenario/advice/ask` — the AI answer is grounded in the actual calculation totals, CDR bank data, caveats, and assumptions for that specific result (not generic advice)
+- Answered questions become inactive inline (answer shown, button removed)
+- **Add your own question** text input at the bottom — custom questions auto-ask immediately and are labelled "yours"
+- Answered Q&A state resets when a new scenario is run
+- PDF "Follow-ups" section updated: answered Q&A pairs render first (question + full answer text), unanswered suggestions listed below
+
+### CGT explanation accuracy — removed flat-rate ambiguity
+The sell result was displaying a "Taxable CGT" KPI tile and a terse explanation that left users able to infer a flat CGT rate (which does not exist in Australia):
+- KPI tile renamed to **"Taxable gain (CGT)"** — makes clear this is the discounted gain added to income, not the tax payable
+- `SellInterpretation` CGT section completely rewritten:
+  - **PPOR** (main residence exemption): green panel explains there is no taxable event at all — the 50% discount is irrelevant, CGT is $0 in full stop
+  - **Investment / mixed use**: separates gross gain from discounted taxable gain; explicitly states "there is no flat CGT rate in Australia"; shows indicative tax range at three 2025–26 marginal brackets (34.5%, 39%, 47% incl. Medicare levy) so users can see their likely range
+  - **Partial exemption / 6-year rule**: flagged prominently for mixed-use properties with explanation that the calculation shown is conservative (full investment CGT)
+  - **PPOR re-confirmation panel**: prominently surfaces the single highest-leverage check — "if this was genuinely your primary residence, this taxable gain becomes $0; verify your property type answer"
+- `presentation.js` summary table label updated: "Taxable capital gain (not the tax — see CGT section)"
+- PDF: new `SellCgtSection` added for sell scenarios, including the marginal rate table and all flags
+
+### Calculators tab and "Quick calculators" UX fixes
+Three problems corrected:
+1. **"Quick calculators" type picker** was silently loading the demo fixture and jumping to its Calculators tab — users had no way to enter their own numbers. Now opens a `StandaloneCalculators` form: enter loan amount, rate, term, extra repayment, offset balance, optional income; calls the four `/calculators/*` endpoints live against those inputs
+2. **Calculators tab in results view** now shows a "Loan basis for these calculators" panel so users know which numbers the four snapshots are running against, plus an explicit note that these results are independent of scenario totals
+3. **Charts tab** is now hidden for sell and buy scenario results — all four charts (rate comparison, cumulative cost, amortisation, break-even) are refinance/loan-specific and do not apply to CGT or stamp duty results
+
+### Buyer qualification check — new scenario type
+New **"Can I qualify for a loan?"** option on the scenario picker. Entirely deterministic, zero AI. `POST /api/property-scenario/calculators/buyer-qualify` backed by `server/services/propertyScenario/calc/buyerQualification.js`.
+
+Seven checks, all deterministic against published Australian rules:
+
+| Check | Rule source |
+|---|---|
+| **Serviceability (APRA)** | Gross income − HEM − existing debts − HECS = net surplus; max loan at assessment rate (product + 3pp, floor 8.5%). Shortfall shown in dollars |
+| **LVR / deposit** | < 5% = blocked; 5–20% = LMI required + shows deposit needed to avoid it; ≥ 20% = pass |
+| **Debt-to-income ratio** | > 6× = fail (APRA DTI cap); 5–6× = warn; < 5× = pass |
+| **Genuine savings** | < 5% of price = fail; 5–20% warns about 3-month holding period and gifted-funds rules; ≥ 20% = exempt |
+| **First Home Guarantee (FHBG)** | NHFIC 2024–25 income caps ($125k single / $200k joint), property price caps per state, PPOR requirement — ineligible cases show the specific disqualifying reason |
+| **HECS/HELP impact** | ATO 2024–25 compulsory repayment schedule; shows annual repayment, monthly drag, and estimated borrowing capacity reduction in dollars |
+| **Employment** | PAYG full-time passes; part-time, casual, contract, self-employed warn with the specific lender criteria each type faces |
+
+Results show an overall verdict (pass / warn / fail), max indicative borrowing capacity vs loan requested, estimated monthly repayment, and APRA assessment rate. Each check is a collapsible card — fails auto-expand.
+
+### PDF report generator — full coverage
+All new features produce downloadable PDFs:
+
+**Buyer qualification PDF** (`downloadQualificationPdf`):
+- Inputs echo (price, deposit, LVR, state, FHB, income, household, employment, HECS, debts, target rate)
+- Overall verdict banner with all key numbers
+- Every check rendered with status badge and complete detail text
+- Assumptions applied + caveats + "not a credit decision" disclaimer
+
+**Standalone calculators PDF** (`downloadCalculatorsPdf`):
+- Inputs used
+- All four calculator result explanations verbatim
+
+Download buttons added to both the qualification results and standalone calculator results in the UI.
+
+---
+
 ## 2026-07-18 (property-scenario-calculator-loan-amount-bug-and-ci-guard)
 
 **Bug found by the user spot-checking Stage 5 calculator output against their own inputs:** a refinance scenario entered as QLD, variable, $100,000 owing, 48 months remaining produced calculator snapshots for a $1,200,000 loan at 5.95% over 4 years — the loan amount was 12x too high while the rate and term happened to be correct.
