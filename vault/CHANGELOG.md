@@ -4,6 +4,28 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (property-scenario-accuracy-audit-and-deploy-outage)
+
+**Critical finding — deploy pipeline had been silently broken for hours:** `railway deployment list` showed 9 consecutive failed builds starting at 07:04, including every commit made earlier this session (PDF export, CDR fee integration, UX overhaul below). Root cause: an unescaped apostrophe in a string literal (`'What's the real break cost...'`) in `PropertyScenarioViews.jsx` broke the Vite build with a syntax error. The live site was silently serving a stale build the entire time regardless of what got committed and pushed on top of it — every "fixed and pushed" claim from earlier in the day had never actually gone live. Fixed the syntax error, verified a full local `npm run build`, and confirmed via `railway deployment list` that the resulting deploy succeeded — first successful deploy since 07:04. **Lesson: `git push` succeeding is not evidence a fix is live — check the actual Railway deploy status and, ideally, the served asset bundle content.**
+
+**Full accuracy audit of AU mortgage/property calculations,** prompted by user feedback that the app's output had been "poor to rubbish" despite covering only publicly available administrative data (stamp duty tables, LMI premiums, government fees, CDR rates) rather than genuine domain expertise:
+
+- **Refinance — government fees were entirely absent.** Added `MORTGAGE_GOVT_FEES` table (`server/services/propertyScenario/calc/tables.js`) with state-specific land titles office fees for mortgage discharge + re-registration (NSW $320, QLD $440, WA $380, etc.; national average $340 fallback). Refinance form gained a State selector; server passes it through to the fee calculation.
+- **Refinance — fee bundle was one opaque $400 "other costs" line.** Split into separate `valuation_fee` ($250, range $0–$600, noted many lenders waive it) and `legal_fee` ($400, range $300–$800), each with an explicit source/range shown in the UI rather than a single unlabelled number. Old $1,350 total for a representative scenario is now an accurate $1,920–$1,940 depending on state.
+- **Refinance — CDR rate disclosure added.** Named-lender panel now states the advertised rate is not guaranteed (depends on LVR, loan size, credit profile, lender assessment) and that the comparison rate assumes a 25-year/$150k loan term which may not reflect the user's actual remaining term.
+- **Sell (CGT) — cost base disclosure was misleadingly thin.** Now explicitly names stamp duty paid at purchase, conveyancing fees, and capital improvements as legitimate cost-base additions that reduce taxable gain but are not included in the simplified estimate. Selling cost breakdown itemises agent commission, advertising, conveyancing, and staging ranges instead of an unexplained "2.5% assumed."
+- **Buy — real, near-certain costs were missing entirely.** Added an "Additional costs not included in this estimate" panel: conveyancing ($1,500–$3,000), building/pest inspection ($400–$800), loan application fee, title insurance, council rate adjustments — with guidance to budget $3,000–$6,000 above stamp duty and LMI.
+- **`stampDuty` tables `AS_OF` date** updated to explicitly direct users to verify 2026 rates with their state revenue office rather than silently implying currency.
+
+**Two real bugs found only by testing against the live deployed app** (not caught by unit tests, since both were data-plumbing/scope errors invisible to a function-level test):
+
+1. **Crash:** `RefinanceInterpretation` is a top-level React component with no closure access to `PropertyScenarioPage`'s `rfState` state variable. A `ReferenceError` on every render — with no error boundary — silently blanked the entire results screen after every successful refinance calculation (server returned 200 OK; client crashed rendering it). Fixed by passing `rfState` as an explicit prop. Found via a live browser click-through showing a blank white `#root` with zero children after a successful API call.
+2. **Dead code:** `runFromScenario()` only forwarded `opts.run` to the orchestrator, but the `/calculate` route passes `refinance_fees` (state, CDR establishment-fee override) as a top-level sibling of `clarifications`. This silently dropped every state selection and CDR-sourced fee override since the feature was introduced in the prior `65b9359` commit — it had never actually worked. Fixed `runFromScenario` to accept `refinance_fees` / `selling_cost_pct` / `comparison_rate` / `force` either top-level or nested under `opts.run`.
+
+Verified via: full local `npm run build`, full property-scenario test suite (19 + 11 + 1 passing), a direct Node reproduction of the exact request/response shape, and — critically — an actual live browser session against the deployed app confirming the results page renders with the correct itemised fees, state-specific government fee, and input echo. Also fixed two stale test assertions in `wireApi.test.js` (missing `await` on now-`async` `executeClarify`) and a `clarifyingForm` dedup bug where the `'clarifying_questions'` sentinel path blocked all but the first narrative question.
+
+---
+
 ## 2026-07-18 (property-scenario-ux-overhaul)
 
 **Fix + Feature:** Comprehensive UX and correctness pass on the Property Scenario mortgage tool following live testing.
