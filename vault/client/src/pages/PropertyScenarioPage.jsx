@@ -584,6 +584,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
   const [qEmployment, setQEmployment] = useState('payg_fulltime');
   // Debts
   const [qHecs, setQHecs]       = useState('no');
+  const [qNewBuild, setQNewBuild] = useState('no');
   const [qDebts, setQDebts]     = useState('');
   const [qExpenses, setQExpenses] = useState('');
   // Loan
@@ -618,6 +619,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
         household_type:          qHousehold,
         employment_type:         qEmployment,
         has_hecs:                qHecs === 'yes',
+        is_new_build:            qNewBuild === 'yes',
         monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
         monthly_expenses:        qExpenses ? parseFloat(qExpenses) : undefined,
         loan_term_years:         parseFloat(qTerm) || 30,
@@ -654,6 +656,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
         household_type: qHousehold,
         employment_type: qEmployment,
         has_hecs: qHecs === 'yes',
+        is_new_build: qNewBuild === 'yes',
         monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
         monthly_expenses: qExpenses ? parseFloat(qExpenses) : undefined,
         loan_term_years: parseFloat(qTerm) || 30,
@@ -762,6 +765,13 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               <select value={qHecs} onChange={(e) => setQHecs(e.target.value)} style={FIELD}>
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>New build / off-the-plan?</span>
+              <select value={qNewBuild} onChange={(e) => setQNewBuild(e.target.value)} style={FIELD}>
+                <option value="no">No — established home</option>
+                <option value="yes">Yes — new build / off-the-plan</option>
               </select>
             </label>
             <label className="block space-y-1">
@@ -890,6 +900,86 @@ function BuyerQualifyForm({ getIcon, addToast }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Settlement cost summary */}
+          {s.cash_to_settle != null && (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="px-4 py-3" style={{ background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Total cash needed to settle</p>
+                <p className="text-xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>
+                  ${(s.fhog_offset > 0 ? s.net_cash_to_settle : s.cash_to_settle)?.toLocaleString('en-AU')}
+                  {s.lmi_required && <span className="text-sm font-normal ml-2" style={{ color: '#b45309' }}>+ ~${s.lmi_estimate?.toLocaleString('en-AU')} LMI (if not capitalised)</span>}
+                </p>
+              </div>
+              <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {[
+                  { label: 'Deposit', value: s.deposit_amount, note: '' },
+                  { label: 'Transfer duty (stamp duty)', value: s.stamp_duty_estimate, note: s.stamp_duty_estimate === 0 ? '← FHB exemption' : '' },
+                  { label: 'Legal / conveyancing (estimate)', value: s.legal_estimate, note: 'mid-point; confirm with conveyancer' },
+                  ...(s.lmi_required ? [{ label: 'LMI (if capitalised into loan)', value: s.lmi_estimate, note: 'typically added to loan, not paid in cash' }] : []),
+                  ...(s.fhog_offset > 0 ? [{ label: `FHOG grant offset (${s.stamp_duty_estimate != null ? 'state grant' : 'estimate'})`, value: -s.fhog_offset, note: '← reduces cash needed' }] : []),
+                ].map(({ label, value, note }) => value != null && (
+                  <div key={label} className="px-4 py-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm" style={{ color: 'var(--color-text)' }}>{label}</p>
+                      {note && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{note}</p>}
+                    </div>
+                    <p className="text-sm font-semibold" style={{ color: value < 0 ? '#16a34a' : 'var(--color-text)' }}>
+                      {value < 0 ? `−$${Math.abs(value).toLocaleString('en-AU')}` : `$${value.toLocaleString('en-AU')}`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 py-2" style={{ background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>LMI is often capitalised (added to your loan balance) rather than paid upfront. Does not include building inspection (~$500–$800), loan application fees, or council/water rate adjustments at settlement.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Stress / sensitivity view */}
+          {s.stress && (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="px-4 py-3" style={{ background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Rate &amp; income stress — how much buffer do you have?</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Your assessment passed at {s.target_rate_pct}% product rate ({s.assessment_rate_pct}% APRA assessment). If rates rise or income is shaded:</p>
+              </div>
+              <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {[
+                  {
+                    label: `Rate +1% (product ${s.stress.rate_plus_1.rate_pct?.toFixed(2)}%, assessed at ${s.stress.rate_plus_1.assessment_rate_pct?.toFixed(2)}%)`,
+                    max: s.stress.rate_plus_1.max_borrowing,
+                    pass: s.stress.rate_plus_1.still_qualifies,
+                    loanReq: s.loan_requested,
+                  },
+                  {
+                    label: `Rate +2% (product ${s.stress.rate_plus_2.rate_pct?.toFixed(2)}%, assessed at ${s.stress.rate_plus_2.assessment_rate_pct?.toFixed(2)}%)`,
+                    max: s.stress.rate_plus_2.max_borrowing,
+                    pass: s.stress.rate_plus_2.still_qualifies,
+                    loanReq: s.loan_requested,
+                  },
+                  {
+                    label: `Income at ${100 - s.stress.income_haircut.haircut_pct}% of stated ($${s.stress.income_haircut.assessed_income?.toLocaleString('en-AU')} p.a.) — ${s.stress.income_haircut.note}`,
+                    max: s.stress.income_haircut.max_borrowing,
+                    pass: s.stress.income_haircut.still_qualifies,
+                    loanReq: s.loan_requested,
+                  },
+                ].map(({ label, max, pass, loanReq }) => (
+                  <div key={label} className="px-4 py-2 flex items-start justify-between gap-4">
+                    <p className="text-xs leading-relaxed flex-1" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold" style={{ color: pass ? '#16a34a' : '#ef4444' }}>
+                        {pass ? 'Still qualifies' : 'Falls short'}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Max ~${max?.toLocaleString('en-AU', { maximumFractionDigits: 0 }) ?? '—'}
+                        {!pass && loanReq && max != null && ` (short $${(loanReq - max).toLocaleString('en-AU', { maximumFractionDigits: 0 })})`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

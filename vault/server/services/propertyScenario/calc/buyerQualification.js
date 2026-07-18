@@ -18,6 +18,7 @@
  */
 
 const { roundMoney } = require('./tables');
+const { calculateStampDutyLmi } = require('./stampDutyLmi');
 
 // ─── APRA serviceability ──────────────────────────────────────────────────────
 
@@ -54,35 +55,92 @@ function hemMonthly(householdType, grossAnnualIncome) {
   return t.high;
 }
 
-// ─── HECS/HELP compulsory repayment rates (ATO 2024-25) ──────────────────────
-const HECS_BRACKETS = [
-  { min: 151201, rate: 0.10 },
-  { min: 142643, rate: 0.095 },
-  { min: 134569, rate: 0.09 },
-  { min: 126951, rate: 0.085 },
-  { min: 119765, rate: 0.08 },
-  { min: 112986, rate: 0.075 },
-  { min: 106591, rate: 0.07 },
-  { min: 100558, rate: 0.065 },
-  { min: 94866,  rate: 0.06 },
-  { min: 89495,  rate: 0.055 },
-  { min: 84430,  rate: 0.05 },
-  { min: 79650,  rate: 0.045 },
-  { min: 75141,  rate: 0.04 },
-  { min: 70889,  rate: 0.035 },
-  { min: 66876,  rate: 0.03 },
-  { min: 63090,  rate: 0.025 },
-  { min: 59519,  rate: 0.02 },
-  { min: 51551,  rate: 0.01 },
-  { min: 0,      rate: 0 },
-];
+// ─── HECS/HELP compulsory repayment — ATO 2025-26 marginal method ────────────
+//
+// Effective 1 July 2025, the system changed from a cliff-bracket rate applied
+// to total income to a MARGINAL system: repayment calculated only on income
+// ABOVE the minimum repayment threshold of $67,000.
+//
+// Source: ato.gov.au/tax-rates-and-codes/study-and-training-support-loans-rates-and-repayment-thresholds
+// 2025-26 thresholds:
+//   $0 – $67,000          → NIL
+//   $67,001 – $125,000    → 15c for each $1 over $67,000
+//   $125,001 – $179,285   → $8,700 + 17c for each $1 over $125,000
+//   $179,286+             → 10% of total repayment income
+//
+// Impact vs old system: lower repayments for most incomes under ~$130k.
+// Example: $100k income → OLD cliff $6,000 (6%) → NEW marginal $4,950 (15% of $33k).
+const HECS_MIN_THRESHOLD_2526 = 67000;
+const HECS_TOTAL_RATE_THRESHOLD_2526 = 179286;
 
 function hecsAnnualRepayment(grossAnnualIncome) {
-  const bracket = HECS_BRACKETS.find((b) => grossAnnualIncome >= b.min);
-  return bracket ? roundMoney(grossAnnualIncome * bracket.rate) : 0;
+  if (grossAnnualIncome <= HECS_MIN_THRESHOLD_2526) return 0;
+  if (grossAnnualIncome >= HECS_TOTAL_RATE_THRESHOLD_2526) {
+    return roundMoney(grossAnnualIncome * 0.10);
+  }
+  if (grossAnnualIncome > 125000) {
+    return roundMoney(8700 + (grossAnnualIncome - 125000) * 0.17);
+  }
+  return roundMoney((grossAnnualIncome - HECS_MIN_THRESHOLD_2526) * 0.15);
 }
 
 // ─── First Home Guarantee property price caps (NHFIC 2024-25) ────────────────
+// ─── State First Home Owner Grant (FHOG) data ─────────────────────────────────
+// Each entry: { amount, max_value (strictly <), new_homes_only, note, source }
+// Only states with confirmed live data included. Others: null (prompt manual check).
+// Sources verified July 2026.
+const FHOG_BY_STATE = {
+  QLD: {
+    amount: 30000,
+    max_value: 750000,         // strictly < $750,000 (at $750k → not eligible)
+    new_homes_only: true,
+    note: '$30,000 for new homes (not established); contract signed 20 Nov 2023–30 Jun 2026 (extended going forward). Value must be < $750,000 including land and contract variations.',
+    source: 'qro.qld.gov.au/property-concessions-grants/first-home-grant/eligibility',
+  },
+  VIC: {
+    amount: 10000,
+    max_value: 750000,
+    new_homes_only: true,
+    note: '$10,000 for new or substantially renovated homes in regional Victoria; $0 for metro Melbourne new homes (grant ended for metro). Confirm current eligibility with State Revenue Office Victoria.',
+    source: 'sro.vic.gov.au',
+  },
+  SA: {
+    amount: 15000,
+    max_value: 650000,
+    new_homes_only: true,
+    note: '$15,000 for new homes (not established). Value cap $650,000.',
+    source: 'revenuesa.sa.gov.au',
+  },
+  WA: {
+    amount: 10000,
+    max_value: 750000,
+    new_homes_only: true,
+    note: '$10,000 for new homes (not established). Value cap $750,000.',
+    source: 'finance.wa.gov.au/cms/State_Revenue/First_Home_Owner_Grant',
+  },
+  TAS: {
+    amount: 30000,
+    max_value: null,            // no property value cap in TAS FHOG as of 2024
+    new_homes_only: false,      // TAS FHOG applies to both new and established
+    note: '$30,000 for any first home (new or established). Verify current amount and conditions with State Revenue Office Tasmania.',
+    source: 'sro.tas.gov.au',
+  },
+  NSW: null,  // NSW abolished state FHOG for established homes; only stamp duty exemptions remain — no FHOG applicable
+  ACT: null,  // ACT uses Home Buyer Concession Scheme (duty concession) — no FHOG
+  NT:  {
+    amount: 10000,
+    max_value: null,
+    new_homes_only: false,
+    note: '$10,000 Territory Home Owner Grant for NT residents purchasing a new or established home (owner-occupied). Confirm current eligibility at revenue.nt.gov.au.',
+    source: 'revenue.nt.gov.au',
+  },
+};
+
+// ─── Legal/conveyancing estimate for settlement cost summary ──────────────────
+// Buyer-side conveyancing in Australia: typically $1,500–$3,000.
+// We use $2,000 as a mid-point estimate for the settlement summary.
+const LEGAL_ESTIMATE = 2000;
+
 // FHBG property price caps — effective 1 October 2025 (Housing Australia announcement)
 // Source: housingaustralia.gov.au/media/unlimited-places-higher-property-price-caps-first-home-buyers-1-october-2025
 // Income caps ABOLISHED entirely from 1 October 2025 — no income limit applies.
@@ -138,6 +196,7 @@ function maxLoanFromMonthlyRepayment(monthlyRepaymentAmt, annualRatePct, termMon
  * @param {number}  [inputs.monthlyExpenses]      declared monthly living expenses (overrides HEM if higher)
  * @param {number}  inputs.loanTermYears          loan term (years)
  * @param {number}  inputs.targetRatePct          target interest rate (% p.a.)
+ * @param {boolean} [inputs.isNewBuild]            is the property a new/off-the-plan build? (affects FHOG + QLD duty)
  */
 function assessBuyerQualification(inputs = {}) {
   const caveats = [];
@@ -159,6 +218,7 @@ function assessBuyerQualification(inputs = {}) {
     monthlyExpenses,
     loanTermYears = 30,
     targetRatePct,
+    isNewBuild = false,
   } = inputs;
 
   // Validation
@@ -439,11 +499,139 @@ function assessBuyerQualification(inputs = {}) {
       headline: hecsImpact
         ? `HECS reduces borrowing capacity by ~$${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
         : `HECS compulsory repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} p.a.`,
-      detail: `Annual compulsory HECS repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} ($${hecsRepaymentMonthly.toLocaleString('en-AU')}/mo) at income $${grossAnnualIncome.toLocaleString('en-AU')} (ATO 2024-25 schedule). This is treated as a committed expense in serviceability assessment by most lenders, reducing the surplus available to repay a new loan. ${hecsImpact ? `At the APRA assessment rate, this equates to approximately $${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })} less borrowing capacity compared to the same borrower with no HECS.` : ''} Note: HECS debts are not visible in credit reports but lenders specifically ask about them on loan applications.`,
+      detail: `Annual compulsory HECS repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} ($${hecsRepaymentMonthly.toLocaleString('en-AU')}/mo) at income $${grossAnnualIncome.toLocaleString('en-AU')} (ATO 2025-26 marginal method — effective 1 July 2025; repayment calculated only on income above $67,000). This is treated as a committed expense in serviceability assessment by most lenders, reducing the surplus available to repay a new loan. ${hecsImpact ? `At the APRA assessment rate, this equates to approximately $${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })} less borrowing capacity compared to the same borrower with no HECS.` : ''} Note: HECS debts are not visible in credit reports but lenders specifically ask about them on loan applications.`,
       data: {
         hecs_annual_repayment: hecsRepaymentAnnual,
         hecs_monthly_repayment: hecsRepaymentMonthly,
         borrowing_capacity_reduction: hecsImpact,
+      },
+    });
+  }
+
+  // ─── 9. Stamp duty + LMI (real dollar figures) ───────────────────────────────
+  // Wire existing calculateStampDutyLmi to produce concrete dollar amounts.
+  // This replaces the vague "0.5%–3.5% range" with a specific estimate.
+  const sdLmiResult = state ? calculateStampDutyLmi(
+    {
+      state,
+      property_value: propertyValue,
+      is_first_home_buyer: isFhb,
+      deposit_amount: depositAmount,
+      loan: { balance: loanRequested },
+    },
+    { loan_amount: loanRequested }
+  ) : null;
+
+  const stampDutyPayable = sdLmiResult?.stamp_duty_payable ?? null;
+  const lmiEstimate      = sdLmiResult?.lmi_estimate       ?? null;
+  const lmiRequired      = sdLmiResult?.lmi_required       ?? false;
+  const fhbDutyApplied   = sdLmiResult?.fhb_concession_applied ?? false;
+  const fhbDutySaved     = sdLmiResult?.fhb_concession_amount  ?? 0;
+
+  if (sdLmiResult) {
+    if (sdLmiResult.errors?.length) {
+      (sdLmiResult.errors || []).forEach((e) => caveats.push(`Stamp duty calculation: ${e}`));
+    }
+    (sdLmiResult.caveats || []).forEach((c) => {
+      if (!caveats.includes(c)) caveats.push(c);
+    });
+
+    const sdStatus = stampDutyPayable != null && stampDutyPayable > 0 ? 'info' : 'pass';
+    const fhbNote = fhbDutyApplied && fhbDutySaved > 0
+      ? ` FHB concession applied — $${fhbDutySaved.toLocaleString('en-AU')} saved (standard duty: $${sdLmiResult.stamp_duty_standard?.toLocaleString('en-AU')}).`
+      : '';
+    const newBuildNote = isNewBuild && state === 'QLD' && isFhb
+      ? ' QLD announced a new-home transfer duty exemption for FHBs — verify at qro.qld.gov.au as this may reduce duty to $0 for new builds regardless of purchase price.'
+      : '';
+
+    checks.push({
+      id: 'stamp_duty',
+      label: 'Transfer duty (stamp duty)',
+      status: sdStatus,
+      headline: stampDutyPayable != null
+        ? stampDutyPayable === 0
+          ? `Transfer duty: $0 (FHB exemption applied in ${state})`
+          : `Transfer duty estimate: $${stampDutyPayable.toLocaleString('en-AU')}`
+        : 'Transfer duty: could not estimate (state required)',
+      detail: stampDutyPayable != null
+        ? `Estimated ${state} transfer duty on $${propertyValue.toLocaleString('en-AU')} purchase: $${stampDutyPayable.toLocaleString('en-AU')}.${fhbNote}${newBuildNote} This is a significant upfront cost paid at settlement — not included in the loan amount. Confirm with your conveyancer or state revenue office before committing.`
+        : 'Transfer duty could not be calculated — state is required. This is typically the second-largest upfront cost after the deposit.',
+      data: {
+        stamp_duty_standard: sdLmiResult.stamp_duty_standard,
+        stamp_duty_payable: stampDutyPayable,
+        fhb_concession_applied: fhbDutyApplied,
+        fhb_concession_amount: fhbDutySaved,
+      },
+    });
+  }
+
+  if (lmiRequired || (sdLmiResult && !lmiRequired)) {
+    const lmiStatus = lmiRequired ? 'warn' : 'pass';
+    checks.push({
+      id: 'lmi_cost',
+      label: 'Lenders Mortgage Insurance (LMI)',
+      status: lmiStatus,
+      headline: lmiRequired
+        ? lmiEstimate != null
+          ? `LMI required — estimated $${lmiEstimate.toLocaleString('en-AU')} (LVR ${((loanRequested / propertyValue) * 100).toFixed(1)}%)`
+          : 'LMI required — could not estimate (check loan/deposit inputs)'
+        : 'LMI not required (LVR ≤ 80%)',
+      detail: lmiRequired
+        ? `At ${((loanRequested / propertyValue) * 100).toFixed(1)}% LVR, Lenders Mortgage Insurance is required. ${lmiEstimate != null ? `Estimated LMI premium: $${lmiEstimate.toLocaleString('en-AU')} (indicative rate applied to $${loanRequested.toLocaleString('en-AU')} loan).` : ''} LMI is typically capitalised into the loan (added to the balance) rather than paid as cash on settlement day, but it increases the effective loan cost and total interest paid. LMI protects the lender — not you. Saving to 80% LVR (deposit of $${roundMoney(propertyValue * 0.20).toLocaleString('en-AU')}) eliminates LMI entirely.`
+        : `Your LVR of ${((loanRequested / propertyValue) * 100).toFixed(1)}% is at or below 80% — no LMI required.`,
+      data: {
+        lvr: sdLmiResult?.lvr,
+        lmi_required: lmiRequired,
+        lmi_estimate: lmiEstimate,
+      },
+    });
+  }
+
+  // ─── 10. FHOG (State First Home Owner Grant) ─────────────────────────────────
+  if (isFhb && state) {
+    const fhogData = FHOG_BY_STATE[state];
+    let fhogStatus, fhogHeadline, fhogDetail;
+
+    if (fhogData === null) {
+      // State explicitly has no FHOG (NSW, ACT)
+      fhogStatus = 'info';
+      fhogHeadline = `No state First Home Owner Grant in ${state}`;
+      fhogDetail = state === 'NSW'
+        ? 'NSW abolished the FHOG for established homes in 2014. No state grant applies. First-home buyer transfer duty exemptions and concessions are available separately.'
+        : `${state} does not offer a First Home Owner Grant. First-home buyer concessions apply via transfer duty only.`;
+    } else if (!fhogData) {
+      // State not in table — unknown
+      fhogStatus = 'warn';
+      fhogHeadline = `First Home Owner Grant — verify for ${state}`;
+      fhogDetail = `FHOG data not available for ${state} in this tool. Check with your state revenue office before settlement.`;
+    } else {
+      const priceEligible = fhogData.max_value == null || propertyValue < fhogData.max_value;
+      const newBuildEligible = !fhogData.new_homes_only || isNewBuild;
+
+      if (!priceEligible) {
+        fhogStatus = 'fail';
+        fhogHeadline = `FHOG — not available (price $${propertyValue.toLocaleString('en-AU')} ≥ $${fhogData.max_value?.toLocaleString('en-AU')} ${state} cap)`;
+        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) is not available — the property value of $${propertyValue.toLocaleString('en-AU')} meets or exceeds the cap of $${fhogData.max_value?.toLocaleString('en-AU')}. ${fhogData.note}`;
+      } else if (!newBuildEligible) {
+        fhogStatus = 'warn';
+        fhogHeadline = `FHOG — $${fhogData.amount.toLocaleString('en-AU')} available for NEW homes only`;
+        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) applies only to new or substantially renovated homes — not established/existing properties. If this is an established home, the grant does not apply. If it is a new build, you may be eligible. ${fhogData.note} Source: ${fhogData.source}`;
+      } else {
+        fhogStatus = 'pass';
+        fhogHeadline = `FHOG — $${fhogData.amount.toLocaleString('en-AU')} likely available${isNewBuild ? ' (new build confirmed)' : ''}`;
+        fhogDetail = `The ${state} First Home Owner Grant of $${fhogData.amount.toLocaleString('en-AU')} appears available based on property value and first-home status. ${fhogData.note} Apply through your participating lender or conveyancer. Source: ${fhogData.source}`;
+      }
+    }
+
+    checks.push({
+      id: 'fhog',
+      label: 'First Home Owner Grant (state)',
+      status: fhogStatus,
+      headline: fhogHeadline,
+      detail: fhogDetail,
+      data: {
+        fhog_amount: FHOG_BY_STATE[state]?.amount ?? null,
+        new_build: isNewBuild,
       },
     });
   }
@@ -457,6 +645,74 @@ function assessBuyerQualification(inputs = {}) {
   caveats.push(
     'Lenders will also assess credit history (Equifax, Experian, illion), conduct employment verification, request bank statements, and apply lender-specific policies that cannot be modelled here.'
   );
+
+  // ─── Settlement cost total ────────────────────────────────────────────────────
+  // Deposit + stamp duty + LMI (if not capitalised into loan) + legal estimate.
+  // LMI is commonly capitalised (added to loan balance), so we separate it.
+  const fhogOffset = (() => {
+    if (!isFhb || !state) return 0;
+    const fg = FHOG_BY_STATE[state];
+    if (!fg) return 0;
+    const priceOk = fg.max_value == null || propertyValue < fg.max_value;
+    const newBuildOk = !fg.new_homes_only || isNewBuild;
+    return (priceOk && newBuildOk) ? (fg.amount || 0) : 0;
+  })();
+
+  const cashToSettle = roundMoney(
+    depositAmount
+    + (stampDutyPayable ?? 0)
+    + LEGAL_ESTIMATE
+  );
+  const cashToSettleWithLmi = lmiRequired
+    ? roundMoney(cashToSettle + (lmiEstimate ?? 0))
+    : cashToSettle;
+  const netCashToSettle = roundMoney(cashToSettle - fhogOffset);
+
+  // ─── Rate stress test ─────────────────────────────────────────────────────────
+  // Show max borrowing at +1% and +2% rate stress to give a "buffer margin" view.
+  // Also show income haircut at 85% (lender may shade self-employed income).
+  const stressRate1 = targetRatePct + 1.0;
+  const stressRate2 = targetRatePct + 2.0;
+  const assessStress1 = Math.max(stressRate1 + 3.0, APRA_FLOOR_RATE_PCT);
+  const assessStress2 = Math.max(stressRate2 + 3.0, APRA_FLOOR_RATE_PCT);
+
+  const maxBorrowStress1 = netSurplus > 0
+    ? maxLoanFromMonthlyRepayment(netSurplus, assessStress1, termMonths) : 0;
+  const maxBorrowStress2 = netSurplus > 0
+    ? maxLoanFromMonthlyRepayment(netSurplus, assessStress2, termMonths) : 0;
+
+  // Income haircut for self-employed: lenders often use 80-85% of gross
+  const incomeHaircutPct = employmentType === 'self_employed' ? 0.80 : 0.95;
+  const haircutIncome = roundMoney(totalGrossAnnual * incomeHaircutPct);
+  const haircutExpenses = Math.max(hemMonthly(householdType, haircutIncome), effectiveExpenses);
+  const haircutHecsMonthly = hasHecs ? roundMoney(hecsAnnualRepayment(haircutIncome) / 12) : 0;
+  const haircutSurplus = roundMoney(haircutIncome / 12 - haircutExpenses - existingDebts - haircutHecsMonthly);
+  const maxBorrowHaircut = haircutSurplus > 0
+    ? maxLoanFromMonthlyRepayment(haircutSurplus, assessmentRatePct, termMonths) : 0;
+
+  const stress = {
+    rate_plus_1: {
+      rate_pct: stressRate1,
+      assessment_rate_pct: assessStress1,
+      max_borrowing: maxBorrowStress1,
+      still_qualifies: maxBorrowStress1 >= loanRequested,
+    },
+    rate_plus_2: {
+      rate_pct: stressRate2,
+      assessment_rate_pct: assessStress2,
+      max_borrowing: maxBorrowStress2,
+      still_qualifies: maxBorrowStress2 >= loanRequested,
+    },
+    income_haircut: {
+      haircut_pct: Math.round((1 - incomeHaircutPct) * 100),
+      assessed_income: haircutIncome,
+      max_borrowing: maxBorrowHaircut,
+      still_qualifies: maxBorrowHaircut >= loanRequested,
+      note: employmentType === 'self_employed'
+        ? 'Lenders typically shade self-employed income to 80–85% of gross for serviceability — this tests 80%.'
+        : 'Lenders may not use full overtime/bonus/commission — this tests at 95% of stated gross.',
+    },
+  };
 
   const summary = {
     overall_status: overallStatus,
@@ -474,6 +730,17 @@ function assessBuyerQualification(inputs = {}) {
     hecs_annual_repayment: hecsRepaymentAnnual,
     dti_ratio: dti,
     employment_type: employmentType,
+    // Settlement cost summary
+    stamp_duty_estimate: stampDutyPayable,
+    lmi_estimate: lmiEstimate,
+    lmi_required: lmiRequired,
+    legal_estimate: LEGAL_ESTIMATE,
+    cash_to_settle: cashToSettle,
+    cash_to_settle_with_lmi: cashToSettleWithLmi,
+    fhog_offset: fhogOffset,
+    net_cash_to_settle: netCashToSettle,
+    // Stress test
+    stress,
   };
 
   const lender_guidance = buildLenderGuidance(checks, summary, inputs);

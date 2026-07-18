@@ -684,6 +684,7 @@ function QualificationDocument({ result, inputs }) {
   const caveats = result?.caveats || [];
   const assumptions = result?.assumptions || [];
   const lenderGuidance = result?.lender_guidance || [];
+  const stress = s2.stress || null;
   const inp = inputs || {};
 
   const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
@@ -814,6 +815,57 @@ function QualificationDocument({ result, inputs }) {
           </View>
         )}
 
+        {/* Settlement cost summary */}
+        {s2.cash_to_settle != null && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Total cash needed to settle</Text>
+            <View style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>
+                ${(s2.fhog_offset > 0 ? s2.net_cash_to_settle : s2.cash_to_settle)?.toLocaleString('en-AU')}
+                {s2.lmi_required ? `  (+$${s2.lmi_estimate?.toLocaleString('en-AU')} LMI if not capitalised)` : ''}
+              </Text>
+            </View>
+            {[
+              { label: 'Deposit', value: s2.deposit_amount },
+              { label: 'Transfer duty (stamp duty)', value: s2.stamp_duty_estimate, note: s2.stamp_duty_estimate === 0 ? 'FHB exemption applied' : '' },
+              { label: 'Legal / conveyancing (estimate)', value: s2.legal_estimate, note: '$2,000 mid-point — confirm with conveyancer' },
+              ...(s2.lmi_required && s2.lmi_estimate ? [{ label: 'LMI (indicative — often capitalised into loan)', value: s2.lmi_estimate }] : []),
+              ...(s2.fhog_offset > 0 ? [{ label: 'FHOG grant offset', value: -s2.fhog_offset, note: 'State first home owner grant reduces cash needed' }] : []),
+            ].filter(r => r.value != null).map((row, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <View>
+                  <Text style={{ fontSize: 9, color: '#374151' }}>{row.label}</Text>
+                  {row.note ? <Text style={{ fontSize: 7, color: '#9ca3af' }}>{row.note}</Text> : null}
+                </View>
+                <Text style={{ fontSize: 9, fontWeight: 'bold', color: row.value < 0 ? '#16a34a' : '#111827' }}>
+                  {row.value < 0 ? `−$${Math.abs(row.value).toLocaleString('en-AU')}` : `$${row.value.toLocaleString('en-AU')}`}
+                </Text>
+              </View>
+            ))}
+            <Text style={{ fontSize: 7, color: '#6b7280', marginTop: 5 }}>Does not include building inspection (~$500–$800), loan application fees, or council/water rate adjustments.</Text>
+          </View>
+        )}
+
+        {/* Stress test */}
+        {stress && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Rate &amp; income stress — how much buffer do you have?</Text>
+            {[
+              { label: `Rate +1% (product ${stress.rate_plus_1.rate_pct?.toFixed(2)}%, assessed ${stress.rate_plus_1.assessment_rate_pct?.toFixed(2)}%)`, pass: stress.rate_plus_1.still_qualifies, max: stress.rate_plus_1.max_borrowing },
+              { label: `Rate +2% (product ${stress.rate_plus_2.rate_pct?.toFixed(2)}%, assessed ${stress.rate_plus_2.assessment_rate_pct?.toFixed(2)}%)`, pass: stress.rate_plus_2.still_qualifies, max: stress.rate_plus_2.max_borrowing },
+              { label: `Income at ${100 - stress.income_haircut.haircut_pct}% ($${stress.income_haircut.assessed_income?.toLocaleString('en-AU')} p.a.) — ${stress.income_haircut.note}`, pass: stress.income_haircut.still_qualifies, max: stress.income_haircut.max_borrowing },
+            ].map((row, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 8, color: '#6b7280', flex: 1, marginRight: 8 }}>{row.label}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: row.pass ? '#16a34a' : '#ef4444' }}>{row.pass ? 'Still qualifies' : 'Falls short'}</Text>
+                  <Text style={{ fontSize: 7, color: '#9ca3af' }}>Max ~${row.max?.toLocaleString('en-AU', { maximumFractionDigits: 0 }) ?? '—'}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Caveats & disclaimer */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Important caveats</Text>
@@ -822,7 +874,7 @@ function QualificationDocument({ result, inputs }) {
           ))}
           <View style={s.warning}>
             <Text>
-              This report is an indicative pre-qualification check using published Australian lending rules (APRA serviceability buffer, HEM benchmarks, ATO HECS schedule, NHFIC FHBG caps). It is NOT a credit decision, NOT pre-approval, and NOT a guarantee of finance. Lenders conduct full credit assessments using proprietary systems, credit history files, and policy overlays that cannot be replicated here. Figures may differ materially from a lender's actual assessment.
+              This report is an indicative pre-qualification check using published Australian lending rules (APRA serviceability buffer, HEM benchmarks, ATO 2025-26 HECS marginal method, NHFIC FHBG caps effective 1 Oct 2025). It is NOT a credit decision, NOT pre-approval, and NOT a guarantee of finance. Lenders conduct full credit assessments using proprietary systems, credit history files, and policy overlays that cannot be replicated here. Figures may differ materially from a lender's actual assessment.
             </Text>
           </View>
         </View>

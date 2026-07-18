@@ -478,6 +478,7 @@ router.post('/calculators/buyer-qualify', (req, res) => {
     monthlyExpenses:       body.monthly_expenses ? Number(body.monthly_expenses) : undefined,
     loanTermYears:         body.loan_term_years ? Number(body.loan_term_years) : 30,
     targetRatePct:         Number(body.target_rate_pct),
+    isNewBuild:            body.is_new_build === true || body.is_new_build === 'true',
   });
   res.json(result);
 });
