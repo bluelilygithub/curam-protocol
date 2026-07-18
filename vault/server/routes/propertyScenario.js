@@ -455,4 +455,70 @@ router.post('/calculators/borrowing-power', (req, res) => {
   res.json(calculateBorrowingPower(req.body || {}));
 });
 
+/**
+ * POST /api/property-scenario/advice/ask
+ * Body: { question: string, calcResult: object, scenarioType: string }
+ *
+ * Asks a follow-up question grounded in the deterministic calculation results.
+ * LLM has the scenario totals and caveats as context. It cannot change numbers —
+ * it can only explain and contextualise them.
+ */
+router.post('/advice/ask', async (req, res) => {
+  try {
+    const { question, calcResult, scenarioType } = req.body || {};
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      return res.status(400).json({ ok: false, error: 'invalid_request', message: 'question is required' });
+    }
+
+    const { callModel } = require('../services/callModel');
+    const { getModelsForUser } = require('../services/modelResolver');
+    const models = await getModelsForUser(req.user?.id);
+    const modelId = models.standard || models.light;
+    if (!modelId) throw new Error('No model configured');
+
+    const totals = calcResult?.calculation?.totals || {};
+    const caveats = (calcResult?.calculation?.caveats || []).slice(0, 5);
+    const assumptions = (calcResult?.calculation?.assumptions || []).slice(0, 4);
+    const eventSummary = (calcResult?.calculation?.event_results || [])
+      .map((e) => `  ${e.sequence}. ${e.type}: costs $${Number(e.costs || 0).toLocaleString('en-AU')}`)
+      .join('\n');
+    const cdrBank = calcResult?.cdr_rate_used?.best;
+
+    const system = [
+      'You are a financial scenario assistant. The user has run a deterministic Australian property',
+      'scenario calculation. Your job is to explain and contextualise the results for the specific',
+      'question asked. Rules:',
+      '1. Ground every answer in the provided numbers — do not invent figures.',
+      '2. Be concise: 2–4 short paragraphs unless the question genuinely requires more.',
+      '3. Clearly separate what the calculator has already accounted for from what it has not.',
+      '4. When relevant, name the specific Australian concept (e.g. "the 50% CGT discount", "APRA',
+      '   serviceability buffer") rather than vague descriptions.',
+      '5. End every answer with exactly: "This is not financial advice — verify with a licensed',
+      '   mortgage broker, accountant, or financial adviser before acting."',
+    ].join(' ');
+
+    const prompt = [
+      `Scenario type: ${scenarioType || 'property'}`,
+      '',
+      'Calculation totals (all amounts AUD):',
+      Object.entries(totals)
+        .filter(([, v]) => v != null && v !== 0)
+        .map(([k, v]) => `  ${k}: ${typeof v === 'number' ? `$${Number(v).toLocaleString('en-AU')}` : v}`)
+        .join('\n'),
+      eventSummary ? `\nEvents:\n${eventSummary}` : '',
+      cdrBank ? `\nBest CDR rate: ${cdrBank.rate}% p.a. — ${cdrBank.lender} (${cdrBank.product || 'variable'})` : '',
+      caveats.length ? `\nCaveats:\n${caveats.map((c) => `  · ${c}`).join('\n')}` : '',
+      assumptions.length ? `\nAssumptions:\n${assumptions.map((a) => `  · ${a}`).join('\n')}` : '',
+      '',
+      `Question: ${question.trim()}`,
+    ].filter((l) => l !== null).join('\n');
+
+    const answer = await callModel(modelId, prompt, { system, maxTokens: 600 });
+    return res.json({ ok: true, answer: String(answer).trim() });
+  } catch (err) {
+    console.error('[property-scenario] advice/ask', err);
+    return res.status(422).json({ ok: false, error: 'ask_failed', message: err.message || 'Ask failed' });
+  }
+});
+
 module.exports = router;

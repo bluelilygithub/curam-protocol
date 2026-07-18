@@ -673,6 +673,176 @@ export function ScenarioSummaryTable({ summary }) {
   );
 }
 
+/**
+ * Interactive follow-up Q&A panel. Each suggested question can be sent to the AI
+ * for an answer grounded in the actual calculation results. Users can also add
+ * their own questions. Answered questions become inactive. Answers are surfaced
+ * to the parent via onAnswer so they can reach the PDF.
+ */
+export function FollowUpPanel({ advice, calcResult, scenarioType, answers = {}, onAnswer }) {
+  const [asking, setAsking] = useState(null); // question text currently loading
+  const [customText, setCustomText] = useState('');
+  const [customQuestions, setCustomQuestions] = useState([]); // user-added questions
+  const [error, setError] = useState(null);
+
+  if (!advice) return null;
+
+  const suggested = advice.follow_up_questions || [];
+  const raise = advice.raise_with_broker_or_tax_agent || [];
+  const allQuestions = [...suggested, ...customQuestions];
+
+  async function askQuestion(question) {
+    if (!question.trim() || asking || answers[question]) return;
+    setAsking(question);
+    setError(null);
+    try {
+      const res = await api.post('/api/property-scenario/advice/ask', {
+        question: question.trim(),
+        calcResult,
+        scenarioType,
+      });
+      if (res.ok && res.answer) {
+        onAnswer?.(question, res.answer);
+      } else {
+        setError(res.message || 'Could not get an answer — try again.');
+      }
+    } catch (err) {
+      setError(err.message || 'Request failed.');
+    } finally {
+      setAsking(null);
+    }
+  }
+
+  function addCustomQuestion() {
+    const q = customText.trim();
+    if (!q || allQuestions.includes(q)) return;
+    setCustomQuestions((prev) => [...prev, q]);
+    setCustomText('');
+    // Auto-ask the custom question immediately
+    askQuestion(q);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Follow-up questions */}
+      <div className="rounded-2xl border p-5 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div>
+          <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Follow-up questions</h3>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+            Generated from your scenario's caveats — click Ask to get an explanation grounded in your specific numbers.
+          </p>
+        </div>
+
+        {error && (
+          <p className="text-xs px-3 py-2 rounded-lg" style={{ color: '#ef4444', background: '#fef2f2' }}>{error}</p>
+        )}
+
+        <ol className="space-y-4">
+          {allQuestions.map((q, idx) => {
+            const answered = Boolean(answers[q]);
+            const loading = asking === q;
+            const isCustom = idx >= suggested.length;
+            return (
+              <li key={q} className="space-y-2">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="mt-0.5 shrink-0 text-xs font-mono w-5 text-right"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {idx + 1}.
+                  </span>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: answered ? 'var(--color-muted)' : 'var(--color-text)' }}
+                    >
+                      {q}
+                      {isCustom && (
+                        <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          yours
+                        </span>
+                      )}
+                    </p>
+                    {!answered && (
+                      <button
+                        type="button"
+                        disabled={loading || answered}
+                        onClick={() => askQuestion(q)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                        style={{
+                          borderColor: 'var(--color-primary)',
+                          color: 'var(--color-primary)',
+                          background: 'transparent',
+                        }}
+                      >
+                        {loading ? 'Asking…' : 'Ask this'}
+                      </button>
+                    )}
+                    {answered && (
+                      <div
+                        className="text-sm leading-relaxed p-3 rounded-xl"
+                        style={{ background: 'var(--color-bg)', borderLeft: '3px solid var(--color-primary)', paddingLeft: 12 }}
+                      >
+                        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-primary)' }}>Answer</p>
+                        <p style={{ color: 'var(--color-text)', whiteSpace: 'pre-wrap' }}>{answers[q]}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* Add your own question */}
+        <div className="pt-3 border-t space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Add your own question</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addCustomQuestion()}
+              placeholder="e.g. What would happen if rates rose 1%?"
+              className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+              style={{
+                borderColor: 'var(--color-border)',
+                background: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+            />
+            <button
+              type="button"
+              disabled={!customText.trim() || !!asking}
+              onClick={addCustomQuestion}
+              className="px-3 py-2 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+            >
+              Ask
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Raise with broker */}
+      {raise.length > 0 && (
+        <div className="rounded-2xl border p-5 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Raise with your broker / tax agent</h3>
+          <ul className="space-y-2 text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {raise.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span style={{ color: 'var(--color-primary)' }}>·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Keep AdvicePanel as a read-only fallback for legacy/demo paths that don't have calcResult
 export function AdvicePanel({ advice }) {
   if (!advice) return null;
   return (

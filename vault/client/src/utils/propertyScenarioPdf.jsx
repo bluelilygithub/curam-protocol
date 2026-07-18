@@ -399,22 +399,43 @@ function CalculatorsSection({ calcResult }) {
 
 // ─── Follow-ups / advice ──────────────────────────────────────────────────────
 
-function FollowUpsSection({ calcResult }) {
+function FollowUpsSection({ calcResult, followUpAnswers }) {
   const advice = calcResult.advice;
   if (!advice) return null;
   const questions = advice.follow_up_questions || [];
   const raise = advice.raise_with_broker_or_tax_agent || [];
   const caveats = calcResult.calculation?.combined_caveats || calcResult.calculation?.caveats || [];
   const assumptions = calcResult.calculation?.combined_assumptions || calcResult.calculation?.assumptions || [];
+  const answered = followUpAnswers || {};
+  const answeredPairs = Object.entries(answered).filter(([, v]) => v);
+  const unanswered = questions.filter((q) => !answered[q]);
 
   return (
     <View style={s.section}>
       <Text style={s.sectionTitle}>Follow-ups, Caveats & Assumptions</Text>
 
-      {questions.length > 0 && (
+      {/* Answered Q&A — shown prominently first */}
+      {answeredPairs.length > 0 && (
+        <View style={{ marginBottom: 10 }}>
+          <Text style={[s.label, { fontFamily: 'Helvetica-Bold', color: '#1A1A1A', fontSize: 9, marginBottom: 5 }]}>
+            Answered questions
+          </Text>
+          {answeredPairs.map(([q, a], i) => (
+            <View key={i} style={{ marginBottom: 8, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: '#CC785C', borderLeftStyle: 'solid' }}>
+              <Text style={[s.label, { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#555', marginBottom: 2 }]}>Q: {q}</Text>
+              <Text style={[s.caveat, { fontSize: 8, color: '#1A1A1A', lineHeight: 1.4 }]}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Unanswered suggested questions */}
+      {unanswered.length > 0 && (
         <View style={{ marginBottom: 8 }}>
-          <Text style={[s.label, { fontFamily: 'Helvetica-Bold', color: '#1A1A1A', fontSize: 9, marginBottom: 3 }]}>Suggested follow-up questions</Text>
-          {questions.map((q, i) => (
+          <Text style={[s.label, { fontFamily: 'Helvetica-Bold', color: '#1A1A1A', fontSize: 9, marginBottom: 3 }]}>
+            {answeredPairs.length > 0 ? 'Remaining follow-up questions' : 'Suggested follow-up questions'}
+          </Text>
+          {unanswered.map((q, i) => (
             <Text key={i} style={s.caveatBullet}>· {q}</Text>
           ))}
         </View>
@@ -472,7 +493,7 @@ function ReportFooter({ generatedAt }) {
 
 // ─── Document ─────────────────────────────────────────────────────────────────
 
-function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilter }) {
+function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilter, followUpAnswers }) {
   const generatedAt = new Date().toLocaleString('en-AU', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -498,7 +519,7 @@ function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilt
 
         {show('calculators') && <CalculatorsSection calcResult={calcResult} />}
 
-        {show('followups') && <FollowUpsSection calcResult={calcResult} />}
+        {show('followups') && <FollowUpsSection calcResult={calcResult} followUpAnswers={followUpAnswers} />}
 
         <ReportFooter generatedAt={generatedAt} />
       </Page>
@@ -513,15 +534,17 @@ function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilt
  * @param {object} calcResult - full API response from /calculate or /clarify
  * @param {object} inputs     - form state (rfBalance, rfRate, etc.)
  * @param {string} scenarioType - 'refinance' | 'sell' | 'buy' | 'compound'
- * @param {string} tabFilter  - 'all' | 'overview' | 'lenders' | 'calculators' | 'followups'
+ * @param {string} tabFilter       - 'all' | 'overview' | 'lenders' | 'calculators' | 'followups'
+ * @param {object} [followUpAnswers] - { [question]: answer } map from interactive Q&A
  */
-export async function downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter = 'all') {
+export async function downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter = 'all', followUpAnswers) {
   const doc = (
     <PropertyScenarioPdfDocument
       calcResult={calcResult}
       inputs={inputs}
       scenarioType={scenarioType}
       tabFilter={tabFilter}
+      followUpAnswers={followUpAnswers || {}}
     />
   );
 

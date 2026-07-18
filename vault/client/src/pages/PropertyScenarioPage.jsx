@@ -8,9 +8,9 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 // Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
-async function downloadPdf(calcResult, inputs, scenarioType, tabFilter) {
+async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers) {
   const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
-  return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter);
+  return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers);
 }
 import {
   RateComparisonChart,
@@ -21,6 +21,7 @@ import {
   LenderTermsInsight,
   ScenarioSummaryTable,
   AdvicePanel,
+  FollowUpPanel,
   CalculatorSnapshots,
   CashFlowTimeline,
   FundingAlertBanner,
@@ -414,7 +415,7 @@ function BuyInterpretation({ calcResult }) {
   );
 }
 
-function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToast }) {
+function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToast, followUpAnswers }) {
   const [busy, setBusy] = React.useState(null);
 
   const options = [
@@ -427,7 +428,7 @@ function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToas
   async function handleDownload(key) {
     setBusy(key);
     try {
-      await downloadPdf(calcResult, inputs, scenarioType, key);
+      await downloadPdf(calcResult, inputs, scenarioType, key, followUpAnswers);
     } catch (err) {
       // Log the full error so it's visible in browser DevTools console
       console.error('[PDF] generation failed:', err);
@@ -500,7 +501,7 @@ function coerceAnswer(raw, type) {
   return raw;
 }
 
-function ResultsView({ demo, tab, setTab, loading, error }) {
+function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUpAnswers, onFollowUpAnswer }) {
   const calc = demo?.calculation;
   const charts = demo?.charts;
 
@@ -670,7 +671,17 @@ function ResultsView({ demo, tab, setTab, loading, error }) {
 
       {!loading && demo && tab === 'advice' && (
         <Section title="Advice & follow-ups" hint="Generated from Stage 4 caveats and assumptions">
-          <AdvicePanel advice={demo.advice} />
+          {onFollowUpAnswer ? (
+            <FollowUpPanel
+              advice={demo.advice}
+              calcResult={demo}
+              scenarioType={scenarioType}
+              answers={followUpAnswers || {}}
+              onAnswer={onFollowUpAnswer}
+            />
+          ) : (
+            <AdvicePanel advice={demo.advice} />
+          )}
         </Section>
       )}
     </>
@@ -875,6 +886,14 @@ export default function PropertyScenarioPage() {
   const [calcResult, setCalcResult] = useState(null);
   const [calcError, setCalcError] = useState(null);
 
+  // Follow-up Q&A: { [questionText]: answerText }
+  // Reset whenever a new calculation is run so stale answers don't carry over.
+  const [followUpAnswers, setFollowUpAnswers] = useState({});
+
+  const handleFollowUpAnswer = useCallback((question, answer) => {
+    setFollowUpAnswers((prev) => ({ ...prev, [question]: answer }));
+  }, []);
+
   const canUse = isAdmin || featureAccess.propertyScenario !== false;
 
   useEffect(() => {
@@ -1039,6 +1058,7 @@ export default function PropertyScenarioPage() {
     setScenarioType(null);
     setCalcResult(null);
     setCalcError(null);
+    setFollowUpAnswers({});
   };
 
   const handleTypePick = useCallback((type) => {
@@ -1061,6 +1081,7 @@ export default function PropertyScenarioPage() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Calculation failed');
       setCalcResult(data);
+      setFollowUpAnswers({});
       setTab('overview');
       addToast('Results ready', 'success');
     } catch (err) {
@@ -1480,6 +1501,7 @@ export default function PropertyScenarioPage() {
                     calcResult={calcResult}
                     scenarioType={scenarioType}
                     inputs={{ rfState, rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb }}
+                    followUpAnswers={followUpAnswers}
                     getIcon={getIcon}
                     addToast={addToast}
                   />
@@ -1493,7 +1515,16 @@ export default function PropertyScenarioPage() {
                 {scenarioType === 'buy' && (
                   <BuyInterpretation calcResult={calcResult} />
                 )}
-                <ResultsView demo={calcResult} tab={tab} setTab={setTab} loading={false} error={null} />
+                <ResultsView
+                  demo={calcResult}
+                  tab={tab}
+                  setTab={setTab}
+                  loading={false}
+                  error={null}
+                  scenarioType={scenarioType}
+                  followUpAnswers={followUpAnswers}
+                  onFollowUpAnswer={handleFollowUpAnswer}
+                />
               </>
             )}
 
@@ -1699,6 +1730,9 @@ export default function PropertyScenarioPage() {
                 setTab={setTab}
                 loading={false}
                 error={null}
+                scenarioType="compound"
+                followUpAnswers={followUpAnswers}
+                onFollowUpAnswer={handleFollowUpAnswer}
               />
             )}
 
