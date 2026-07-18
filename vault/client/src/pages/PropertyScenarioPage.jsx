@@ -62,13 +62,16 @@ function fmt(n) {
   return `$${Math.round(Number(n)).toLocaleString('en-AU')}`;
 }
 
-function RefinanceInterpretation({ calcResult, rfRate, rfRateType }) {
+function RefinanceInterpretation({ calcResult, rfRateType }) {
   if (!calcResult?.ready_for_calculations) return null;
 
   const refi = calcResult.calculation?.event_results?.[0]?.outputs?.refinance_break_even;
   const breakCostData = calcResult.calculation?.event_results?.[0]?.outputs?.break_cost;
   const totals = calcResult.calculation?.totals || {};
-  const cdr = calcResult.cdr_rate_used;
+  const cdrData = calcResult.cdr_rate_used; // { best: {...}, alternatives: [...] } or legacy { rate, lender }
+  // Support both old shape (rate/lender) and new shape (best/alternatives)
+  const best = cdrData?.best || (cdrData?.rate ? cdrData : null);
+  const alternatives = cdrData?.alternatives || [];
 
   if (!refi) return null;
 
@@ -87,11 +90,12 @@ function RefinanceInterpretation({ calcResult, rfRate, rfRateType }) {
   const positive = monthlySaving > 0;
   const borderColor = positive ? '#22c55e' : '#ef4444';
   const verdictColor = positive ? '#16a34a' : '#ef4444';
-
   const breakEvenYears = breakEvenMonths ? (breakEvenMonths / 12).toFixed(1) : null;
 
   return (
-    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-3" style={{ borderLeftColor: borderColor, background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-4" style={{ borderLeftColor: borderColor, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderLeft: `4px solid ${borderColor}` }}>
+
+      {/* Verdict */}
       <div className="space-y-1">
         {positive ? (
           <p className="text-base font-semibold" style={{ color: verdictColor }}>
@@ -103,56 +107,128 @@ function RefinanceInterpretation({ calcResult, rfRate, rfRateType }) {
           </p>
         ) : (
           <p className="text-base font-semibold" style={{ color: 'var(--color-muted)' }}>
-            No monthly saving — the target rate produces the same repayment
+            No monthly saving at this rate
           </p>
         )}
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-          {currentRepayment > 0 && targetRepayment > 0
-            ? `Current repayment: ${fmt(currentRepayment)}/month → new repayment: ${fmt(targetRepayment)}/month`
-            : cdr ? `Compared against ${cdr.lender} at ${cdr.rate}% (best available CDR rate)` : null}
-        </p>
+        {currentRepayment > 0 && targetRepayment > 0 && (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            Current repayment {fmt(currentRepayment)}/month → new repayment {fmt(targetRepayment)}/month
+          </p>
+        )}
       </div>
 
-      <div className="space-y-1">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Why the {fmt(totalCost)} upfront cost</p>
-        <ul className="text-sm space-y-0.5" style={{ color: 'var(--color-muted)' }}>
-          <li>Discharge fee (paying out existing lender): {fmt(discharge)}</li>
-          <li>Establishment fee (new lender setup): {fmt(establishment)}</li>
-          {other > 0 && <li>Valuation / legal / misc: {fmt(other)}</li>}
-          {breakCost > 0 && (
-            <li style={{ color: '#ef4444' }}>Fixed-rate break cost (IRD estimate): {fmt(breakCost)}</li>
-          )}
+      {/* Named bank + product */}
+      {best && (
+        <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {best.lender} — {best.rate}% p.a.
+                {best.fixed_or_variable ? ` (${best.fixed_or_variable})` : ''}
+              </p>
+              {best.product && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{best.product}</p>
+              )}
+              {best.comparison_rate != null && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  Comparison rate: {best.comparison_rate}% p.a.
+                  <span className="ml-1" style={{ color: '#f59e0b' }}>†</span>
+                </p>
+              )}
+              <div className="flex gap-3 mt-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                {best.offset && <span>✓ Offset</span>}
+                {best.redraw && <span>✓ Redraw</span>}
+                {best.upfront_fees != null && <span>Upfront fees est. {fmt(best.upfront_fees)}</span>}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              {best.links?.application && (
+                <a href={best.links.application} target="_blank" rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-center transition-opacity duration-200 hover:opacity-70"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  Apply →
+                </a>
+              )}
+              {best.links?.overview && (
+                <a href={best.links.overview} target="_blank" rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-center transition-opacity duration-200 hover:opacity-70"
+                  style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  Product details
+                </a>
+              )}
+            </div>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            † Comparison rate is a standardised figure that includes fees. The advertised rate ({best.rate}%) is used for repayment calculations above.
+            Source: CDR Open Banking — live data, fetched today.
+          </p>
+        </div>
+      )}
+
+      {/* Alternatives */}
+      {alternatives.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Other options below your current rate</p>
+          {alternatives.map((alt) => (
+            <div key={`${alt.lender}-${alt.rate}`} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{alt.lender}</span>
+                {alt.product && <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>{alt.product}</span>}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{alt.rate}%</span>
+                {alt.comparison_rate && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>cr {alt.comparison_rate}%</span>}
+                {alt.links?.overview && (
+                  <a href={alt.links.overview} target="_blank" rel="noopener noreferrer"
+                    className="text-xs transition-opacity duration-200 hover:opacity-70"
+                    style={{ color: 'var(--color-primary)' }}>View →</a>
+                )}
+              </div>
+            </div>
+          ))}
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>All rates are lowest available from CDR for owner-occupied P&amp;I. Switch to the Lenders tab for the full comparison including fees.</p>
+        </div>
+      )}
+
+      {/* Cost breakdown */}
+      <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Switching costs: {fmt(totalCost)}</p>
+        <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
+          <li>Discharge fee — {fmt(discharge)} (paying out existing lender)</li>
+          <li>Establishment fee — {fmt(establishment)} (new lender setup)</li>
+          {other > 0 && <li>Valuation / legal / misc — {fmt(other)}</li>}
+          {breakCost > 0 && <li style={{ color: '#ef4444' }}>Fixed-rate break cost (IRD estimate) — {fmt(breakCost)}</li>}
         </ul>
         {breakCost === 0 && isVariable && (
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-            Break cost: $0 — variable rate loans carry no early repayment penalty under Australian law.
+            Break cost: $0 — variable rate loans have no early repayment penalty under Australian law.
           </p>
         )}
         {breakCost === 0 && !isVariable && (
-          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-            Break cost: $0 estimated — actual IRD depends on your lender's comparison rate in the original loan contract. Confirm with your lender before switching.
+          <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>
+            Break cost: estimated $0 — actual IRD depends on your lender's comparison rate in your original contract. Confirm with your lender before switching.
           </p>
         )}
       </div>
 
+      {/* Break-even */}
       {positive && breakEvenMonths != null && (
-        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            <span className="font-medium">Break-even: {breakEvenMonths} months</span>
-            {breakEvenYears ? ` (${breakEvenYears} years)` : ''} — upfront costs recovered through lower repayments after that point.
+        <div className="pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Break-even: {breakEvenMonths} months{breakEvenYears ? ` (${breakEvenYears} years)` : ''}
           </p>
-          {breakEvenMonths > 60 && (
-            <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>
-              Break-even takes over 5 years. Consider whether you'll hold the loan that long before switching.
-            </p>
-          )}
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            After {breakEvenMonths} months of lower repayments, the {fmt(totalCost)} switching cost is fully recovered.
+            {breakEvenMonths > 60 ? ' Break-even exceeds 5 years — consider whether you\'ll hold this loan that long.' : ''}
+          </p>
         </div>
       )}
 
       {!positive && (
-        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            The upfront {fmt(totalCost)} cost is never recovered through repayment savings at this rate differential. Switching may still be worthwhile for features (offset, redraw, flexibility) — check the Lenders tab for the full comparison.
+            The {fmt(totalCost)} switching cost isn't recovered through repayment savings at this rate differential.
+            Switching may still make sense for product features (offset, redraw, flexibility) — check the Lenders tab.
           </p>
         </div>
       )}
@@ -1214,17 +1290,7 @@ export default function PropertyScenarioPage() {
             {/* ── Structured form results ───────────────────────────── */}
             {calcResult?.ready_for_calculations && (
               <>
-                {calcResult.cdr_rate_used && (
-                  <div className="rounded-xl border px-4 py-3 text-sm space-y-0.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                    <p className="font-medium" style={{ color: 'var(--color-text)' }}>
-                      Compared against best CDR rate: {calcResult.cdr_rate_used.rate}%
-                      {calcResult.cdr_rate_used.lender ? ` (${calcResult.cdr_rate_used.lender})` : ''}
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Lowest advertised rate from live CDR open banking data. Switch to "Lenders" tab to see all options.
-                    </p>
-                  </div>
-                )}
+                {/* CDR notice now rendered inside RefinanceInterpretation for refinance; hidden here */}
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setCalcResult(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                     {getIcon('sliders', { size: 13 })}

@@ -357,15 +357,36 @@ router.post('/calculate', async (req, res) => {
 
         // target rate same as current — use best CDR rate
         const candidates = (liveLenders || [])
-          .map((l) => ({ rate: Number(l.rate), lender: l.lender })) // normalized shape uses .rate
-          .filter((l) => Number.isFinite(l.rate) && l.rate > 0 && l.rate < currentRate)
-          .sort((a, b) => a.rate - b.rate);
+          .filter((l) => Number.isFinite(Number(l.rate)) && Number(l.rate) > 0 && Number(l.rate) < currentRate)
+          .sort((a, b) => Number(a.rate) - Number(b.rate));
 
         if (candidates.length) {
           const best = candidates[0];
           if (!fields.target_loan) fields.target_loan = {};
-          fields.target_loan = { ...fields.target_loan, rate: best.rate };
-          cdrRateUsed = { rate: best.rate, lender: best.lender };
+          fields.target_loan = { ...fields.target_loan, rate: Number(best.rate) };
+          // Return full lender objects so the UI can show product name, comparison rate, links
+          cdrRateUsed = {
+            best: {
+              rate: Number(best.rate),
+              comparison_rate: best.comparison_rate || null,
+              lender: best.lender,
+              product: best.name || best.product || null,
+              fixed_or_variable: best.fixed_or_variable || null,
+              offset: best.offset || false,
+              redraw: best.redraw || false,
+              upfront_fees: best.upfront_fees || null,
+              links: best.links || {},
+            },
+            // top alternatives (up to 3 more, excluding best)
+            alternatives: candidates.slice(1, 4).map((l) => ({
+              rate: Number(l.rate),
+              comparison_rate: l.comparison_rate || null,
+              lender: l.lender,
+              product: l.name || l.product || null,
+              fixed_or_variable: l.fixed_or_variable || null,
+              links: l.links || {},
+            })),
+          };
         }
       }
     }
