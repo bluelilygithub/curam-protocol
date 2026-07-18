@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_property_scenario_completed';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 10;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -51,7 +51,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-welcome',
     title: 'Property Scenario — Quick Tour',
-    text: "Property Scenario is a mortgage and property calculator with a natural-language front door. Describe a refinance, sale, purchase, or lender switch in plain English and Vault extracts the numbers, asks clarifying questions, and runs the full calculation — stamp duty, CGT, break costs, and more. This tour covers both paths.",
+    text: "This tool handles three things: structured mortgage and property calculators for common scenarios, a plain-English NLP path for complex multi-event situations, and a qualification check that tells you whether you\'re likely to get a loan approved. All dollar figures come from deterministic maths — the AI never touches the numbers themselves.",
     when: { show() { injectStepCounter(1); } },
     buttons: [
       btnSecondary('Skip Tour', () => tour.cancel()),
@@ -59,17 +59,17 @@ export function startPropertyScenarioTour(navigate) {
     ],
   });
 
-  // ── Step 2: Two modes ────────────────────────────────────────────────────
+  // ── Step 2: Scenario type picker ─────────────────────────────────────────
   tour.addStep({
-    id: 'ps-modes',
-    title: 'Two Entry Points',
-    text: "There are two tabs at the top: Describe your situation (the live NLP path — you type, it parses) and See an example (a pre-calculated compound scenario showing all the output components). Start with the example to understand what a finished result looks like before entering your own numbers.",
-    attachTo: { element: '[data-tour="ps-mode-tabs"]', on: 'bottom' },
+    id: 'ps-type-picker',
+    title: 'Start by Choosing Your Scenario',
+    text: "Instead of a blank text box, you pick what you\'re trying to do: compare lenders or refinance, sell a property, buy a property, run quick calculators, check if you qualify for a loan, or describe a complex multi-event situation in plain English. Simple scenarios go directly to a form — no AI parsing required.",
+    attachTo: { element: '[data-tour="ps-type-picker"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise(resolve => {
         navigate('/property-scenario');
         setTimeout(() => {
-          safeBeforeShow(tour, 'ps-modes', '[data-tour="ps-mode-tabs"]');
+          safeBeforeShow(tour, 'ps-type-picker', '[data-tour="ps-type-picker"]');
           resolve();
         }, 600);
       });
@@ -78,57 +78,75 @@ export function startPropertyScenarioTour(navigate) {
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 3: Describe path ────────────────────────────────────────────────
+  // ── Step 3: Structured forms ─────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-describe',
-    title: 'Describe Your Situation',
-    text: "Type your scenario in plain English — \"I'm selling my Sydney home for $1.4m (bought 2016 for $820k), buying in Randwick for $1.85m with 20% deposit, and switching the new loan to 5.3% with OnlineBank.\" Include dollar amounts, percentages, and dates where you know them. The more specific you are, the fewer clarifying questions you'll get.",
+    id: 'ps-structured-forms',
+    title: 'Structured Forms — No AI, Instant Results',
+    text: "For Refinance, Sell, and Buy scenarios, you fill in a short form (balance, rate, term, state) and submit directly to the calculation engine. There\'s no LLM parse step, no clarifying question loop, and no risk of a number being misread. The calculation runs immediately and shows what was entered alongside the result so you can verify every figure.",
     when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 4: Pre-extraction ───────────────────────────────────────────────
+  // ── Step 4: Results panels ───────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-grounding',
-    title: 'Numbers Are Verified, Not Invented',
-    text: "Before the AI processes your text, every currency amount, percentage, duration, and date is extracted by pattern matching. The AI's job is to assign those already-found values to scenario fields — not invent new ones. Any value the AI produces without a matching source in your text is stripped and flagged as a gap to clarify.",
+    id: 'ps-results',
+    title: 'Results — Interpretation, Not Just Numbers',
+    text: "Each scenario type has a dedicated plain-English interpretation panel. Refinance shows monthly saving, break-even months, and names the specific CDR bank and product used. Sell shows your net proceeds, CGT eligibility (including whether the main residence exemption applies — which makes CGT $0 for genuine PPORs), and indicative tax at three marginal brackets. Buy shows upfront costs, stamp duty, and LMI if applicable.",
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 5: Clarifying form ──────────────────────────────────────────────
+  // ── Step 5: Live CDR rates ───────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-clarify',
-    title: 'Clarifying Questions',
-    text: "If your text left anything ambiguous — state, PPOR status, deposit source, fixed-rate period vs loan term — a form appears asking just those specific questions. Answer them and submit. The scenario recalculates automatically once everything needed is resolved.",
+    id: 'ps-cdr',
+    title: 'Live Rates from 8 Australian Lenders',
+    text: "The refinance path fetches live mortgage rates from Australia\'s open banking CDR APIs — CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, and Up. No API key needed; these are publicly available. The best available rate below your current rate is used automatically. Rates are labelled Live CDR or Mock (fallback). Switch to the Lenders tab to see all products side by side.",
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 6: Results ──────────────────────────────────────────────────────
+  // ── Step 6: Quick calculators ────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-results',
-    title: 'Scenario Tab — Costs at a Glance',
-    text: "Once calculated, the Scenario tab shows total costs, stamp duty, deposit funded from sale proceeds, and monthly repayment saving — all wired together through the event sequence. The cash-flow timeline shows every money movement in order, including dependency flows (sale proceeds → deposit).",
+    id: 'ps-calculators',
+    title: 'Quick Calculators — Your Own Numbers',
+    text: "The Quick calculators option opens a form where you enter your own loan details and instantly run four standalone calculators: repayment (P&I), extra repayment impact (time and interest saved), offset account benefit, and borrowing power. The borrowing power figure is clearly caveated as indicative — it uses the APRA +3% buffer but can\'t replicate a lender\'s full policy.",
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 7: Lenders + CDR rates ──────────────────────────────────────────
+  // ── Step 7: Can I qualify? ───────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-lenders',
-    title: 'Lenders Tab — Live Rates + Document Insights',
-    text: "The Lenders tab shows live rates fetched from Australian bank CDR Product Reference Data APIs — no API key needed, they're publicly available. Each row is labelled CDR (live) or MOCK (fallback), and fees are marked estimated. Below the comparison table, the Ask panel lets you read a bank's actual T&Cs or PDS and ask open questions — every answer must cite the document.",
+    id: 'ps-qualify',
+    title: '"Can I Qualify?" — Deterministic AU Lending Checks',
+    text: "The qualification checker runs seven deterministic checks against Australian lending rules: serviceability (APRA buffer + HEM living expenses), LVR and deposit adequacy, debt-to-income ratio (APRA 6× guideline), genuine savings (3-month holding rule), employment type, HECS/HELP impact on borrowing capacity, and First Home Guarantee eligibility. Each check shows pass, warn, or fail with a detailed explanation.",
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 8: Honesty & caveats ─────────────────────────────────────────────
+  // ── Step 8: Lender guidance ──────────────────────────────────────────────
   tour.addStep({
-    id: 'ps-honesty',
-    title: 'What This Tool Is (and Isn\'t)',
-    text: "Every result carries caveats — CGT is not tax advice, stamp duty is an estimate, borrowing power is indicative only. The Follow-ups tab surfaces the most significant gaps and generates a list of things to raise with your broker or tax agent. Nothing here replaces professional advice; it gives you structured numbers to walk into that conversation with.",
+    id: 'ps-lender-guidance',
+    title: 'Lender Guidance for Borderline Cases',
+    text: "If any check fails or warns, the results show a \"Lenders likely to discuss your situation\" panel. Each barrier type (serviceability shortfall, high DTI, self-employed income, casual employment, high LVR, low deposit) maps to specific named lenders known to be more flexible on that dimension — Macquarie, Pepper Money, Liberty, BOQ, Bendigo, La Trobe, and others. Rate premiums and broker tips are included for each.",
     when: { show() { injectStepCounter(8); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 9: NLP path for complex scenarios ───────────────────────────────
+  tour.addStep({
+    id: 'ps-nlp',
+    title: 'Complex Scenarios — Plain English NLP',
+    text: "Choose \"Multiple events at once\" to describe a compound situation in plain English: selling, buying, and switching lender simultaneously. The system pattern-matches all currency amounts, percentages, and dates from your text before the AI sees it — the AI\'s only job is assigning those already-found values to fields, not inventing numbers. Any value with no matching source is stripped and added to the clarifying questions form.",
+    when: { show() { injectStepCounter(9); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 10: PDF + follow-ups ─────────────────────────────────────────────
+  tour.addStep({
+    id: 'ps-pdf',
+    title: 'Download, Follow-ups, and Caveats',
+    text: "Every result set has a PDF download button — either the current tab or a full report. The Follow-ups tab surfaces suggested questions grounded in your specific numbers (click \"Ask this\" to get an AI answer), and you can add your own custom questions. All results carry explicit caveats: CGT is not tax advice, stamp duty is an estimate, borrowing power is not pre-approval. The report is structured to hand to a broker or accountant.",
+    when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),
       {

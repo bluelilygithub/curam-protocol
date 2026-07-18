@@ -4,6 +4,38 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (property-scenario-qualify-lender-guidance)
+
+### Lender guidance for borderline qualification results
+After the "Can I qualify for a loan?" deterministic checks run, if any check **fails** or **warns**, the results now surface a "Lenders likely to discuss your situation" panel:
+- **Serviceability / income shortfall** → Macquarie Bank, Pepper Money, Liberty Financial, Firstmac
+- **High debt-to-income ratio (> 6×)** → Macquarie, ING, Pepper Money
+- **Self-employed income** → Pepper Money, Liberty Financial, La Trobe, Bluestone, Macquarie
+- **Casual / contract employment** → Bank of Queensland, Bendigo Bank, Pepper Money, ME Bank
+- **High LVR (85–95%)** → FHBG participating lenders (CBA, NAB, Macquarie, ANZ, Bendigo) or LMI path
+- **Deposit below 5%** → Family Home Guarantee, guarantor loan products, state shared-equity schemes
+
+Each entry shows: lender category, specifically what they are more flexible on, rate premium over major banks (where applicable), their website/contact, and a broker tip explaining the recommended approach and risks of multiple credit enquiries.
+
+All guidance is a **deterministic static lookup** — no AI — based on publicly documented 2024-25 lender policies. Includes a clear disclaimer that policies change and a broker should be consulted for current appetite.
+
+The lender guidance section also appears in the **PDF qualification report** (downloadable after running the qualify check).
+
+### Property Scenario tour updated (10 steps)
+The guided tour was rebuilt to reflect the current UI (8 steps covering the old NLP-only interface):
+- **Step 1**: Welcome — what the tool actually does (structured calc + NLP + qualify)
+- **Step 2**: Scenario type picker — choose what you\'re trying to do before entering any data
+- **Step 3**: Structured forms — refinance, sell, buy go directly to calculation with no LLM parse
+- **Step 4**: Results interpretation panels — plain-English explanation for each scenario type
+- **Step 5**: Live CDR rates — 8 Australian lenders, open banking, labelled live vs mock
+- **Step 6**: Quick calculators — user\'s own numbers, four standalone calculators
+- **Step 7**: "Can I qualify?" — seven deterministic AU lending checks explained
+- **Step 8**: Lender guidance — named lenders for each failure/warn type
+- **Step 9**: NLP path for compound/multi-event scenarios
+- **Step 10**: PDF download, interactive follow-ups, caveats
+
+---
+
 ## 2026-07-18 (property-scenario-ux-and-feature-session-2)
 
 ### Interactive follow-up Q&A panel
