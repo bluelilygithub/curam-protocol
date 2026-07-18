@@ -357,8 +357,8 @@ router.post('/calculate', async (req, res) => {
 
         // target rate same as current — use best CDR rate
         const candidates = (liveLenders || [])
-          .map((l) => ({ rate: Number(l.advertised_rate), lender: l.lender }))
-          .filter((l) => l.rate > 0 && l.rate < currentRate)
+          .map((l) => ({ rate: Number(l.rate), lender: l.lender })) // normalized shape uses .rate
+          .filter((l) => Number.isFinite(l.rate) && l.rate > 0 && l.rate < currentRate)
           .sort((a, b) => a.rate - b.rate);
 
         if (candidates.length) {

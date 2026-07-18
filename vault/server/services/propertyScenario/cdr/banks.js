@@ -23,9 +23,12 @@ const CDR_BANKS = [
     preferredVersions: [5, 4, 3, 6, 7],
     // Westpac CDR ignores product-category query param and returns 0 results when
     // filtered. Must fetch all products unfiltered and filter RESIDENTIAL_MORTGAGES
-    // client-side.
+    // client-side. Use pageSize 100 to cover ~325 products in ~4 requests instead of
+    // 13 (avoids timeout scanning 13 x 25-item pages serially).
     skipCategoryFilter: true,
-    maxPages: 15, // ~325 products across 13 pages; need to scan all to find mortgages
+    maxPages: 5,
+    pageSize: 100,
+    timeoutMs: 30000, // larger page size → allow more time per request
   },
   {
     id: 'anz',

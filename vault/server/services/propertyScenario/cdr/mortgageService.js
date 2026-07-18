@@ -61,9 +61,9 @@ async function fetchBankMortgages(bank, opts = {}) {
     const list = await fetchAllProducts(bank.baseUrl, {
       category: MORTGAGE_CATEGORY,
       versions: bank.preferredVersions,
-      pageSize: 25,
+      pageSize: bank.pageSize || 25,
       maxPages: bank.maxPages || opts.maxPages || 4,
-      timeoutMs: opts.timeoutMs || 20000,
+      timeoutMs: bank.timeoutMs || opts.timeoutMs || 20000,
       skipCategoryFilter: Boolean(bank.skipCategoryFilter),
     });
 
