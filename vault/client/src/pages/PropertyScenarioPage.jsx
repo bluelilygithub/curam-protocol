@@ -847,6 +847,52 @@ function BuyerQualifyForm({ getIcon, addToast }) {
             ))}
           </div>
 
+          {/* Lender guidance — only shown when there are fails/warns */}
+          {(result.lender_guidance || []).length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Lenders likely to discuss your situation</h3>
+                <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>Not endorsements — verify with a broker</span>
+              </div>
+              {(result.lender_guidance || []).map((g, gi) => (
+                <div key={gi} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="px-4 py-3" style={{ background: 'var(--color-surface)' }}>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{g.barrier}</p>
+                    <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--color-text)' }}>{g.intro}</p>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                    {(g.lenders || []).map((l, li) => (
+                      <div key={li} className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{l.name}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>{l.category}</span>
+                          </div>
+                          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{l.flexible_on}</p>
+                        </div>
+                        <div className="shrink-0 text-right sm:text-left">
+                          {l.rate_premium && l.rate_premium !== 'Standard rates' && l.rate_premium !== 'Competitive' && l.rate_premium !== 'Standard' && (
+                            <p className="text-xs" style={{ color: '#b45309' }}>Rate: {l.rate_premium}</p>
+                          )}
+                          {l.contact && (
+                            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{l.contact}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {g.broker_note && (
+                    <div className="px-4 py-3" style={{ background: 'var(--color-bg)', borderTop: '1px solid var(--color-border)' }}>
+                      <p className="text-xs leading-relaxed" style={{ color: '#1d4ed8' }}>
+                        <span className="font-medium">Broker tip: </span>{g.broker_note}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Caveats */}
           <div className="rounded-xl border px-4 py-3 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Important caveats</p>

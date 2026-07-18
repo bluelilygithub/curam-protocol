@@ -683,6 +683,7 @@ function QualificationDocument({ result, inputs }) {
   const checks = result?.checks || [];
   const caveats = result?.caveats || [];
   const assumptions = result?.assumptions || [];
+  const lenderGuidance = result?.lender_guidance || [];
   const inp = inputs || {};
 
   const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
@@ -766,6 +767,49 @@ function QualificationDocument({ result, inputs }) {
             <Text style={s.sectionTitle}>Assumptions applied</Text>
             {assumptions.map((a, i) => (
               <Text key={i} style={s.caveatBullet}>· {a}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* Lender guidance */}
+        {lenderGuidance.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Lenders likely to discuss your situation</Text>
+            <Text style={{ ...s.caveatBullet, marginBottom: 6, fontSize: 8, color: '#6b7280' }}>
+              These are lenders known to be more flexible on the specific barriers identified above. This is not an endorsement or recommendation — policies change and a mortgage broker will have current intelligence.
+            </Text>
+            {lenderGuidance.map((g, gi) => (
+              <View key={gi} style={{ marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4 }}>
+                <View style={{ backgroundColor: '#f9fafb', paddingHorizontal: 10, paddingVertical: 5, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#374151' }}>{g.barrier}</Text>
+                  <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 2 }}>{g.intro}</Text>
+                </View>
+                {(g.lenders || []).map((l, li) => (
+                  <View key={li} style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 5, borderTopWidth: 1, borderTopColor: '#e5e7eb', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#111827' }}>{l.name}
+                        <Text style={{ fontSize: 7, fontWeight: 'normal', color: '#9ca3af' }}>  {l.category}</Text>
+                      </Text>
+                      <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 1 }}>{l.flexible_on}</Text>
+                    </View>
+                    <View style={{ width: 110, textAlign: 'right' }}>
+                      {l.rate_premium && l.rate_premium !== 'Standard rates' && l.rate_premium !== 'Competitive' && l.rate_premium !== 'Standard' && (
+                        <Text style={{ fontSize: 7, color: '#b45309' }}>{l.rate_premium}</Text>
+                      )}
+                      {l.contact && (
+                        <Text style={{ fontSize: 7, color: '#6b7280' }}>{l.contact}</Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+                {g.broker_note && (
+                  <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 5, borderTopWidth: 1, borderTopColor: '#e5e7eb', borderBottomLeftRadius: 4, borderBottomRightRadius: 4 }}>
+                    <Text style={{ fontSize: 8, color: '#1d4ed8' }}>
+                      <Text style={{ fontWeight: 'bold' }}>Broker tip: </Text>{g.broker_note}
+                    </Text>
+                  </View>
+                )}
+              </View>
             ))}
           </View>
         )}

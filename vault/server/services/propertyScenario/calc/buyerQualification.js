@@ -437,29 +437,283 @@ function assessBuyerQualification(inputs = {}) {
     'Lenders will also assess credit history (Equifax, Experian, illion), conduct employment verification, request bank statements, and apply lender-specific policies that cannot be modelled here.'
   );
 
+  const summary = {
+    overall_status: overallStatus,
+    fail_count: failCount,
+    warn_count: warnCount,
+    loan_feasible: loanFeasible,
+    property_value: propertyValue,
+    deposit_amount: depositAmount,
+    loan_requested: loanRequested,
+    lvr_pct: lvr,
+    max_borrowing_capacity: maxBorrowing,
+    assessment_rate_pct: assessmentRatePct,
+    target_rate_pct: targetRatePct,
+    monthly_repayment_estimate: repaymentAtProductRate,
+    hecs_annual_repayment: hecsRepaymentAnnual,
+    dti_ratio: dti,
+    employment_type: employmentType,
+  };
+
+  const lender_guidance = buildLenderGuidance(checks, summary, inputs);
+
   return {
     ok: true,
     checks,
-    summary: {
-      overall_status: overallStatus,
-      fail_count: failCount,
-      warn_count: warnCount,
-      loan_feasible: loanFeasible,
-      property_value: propertyValue,
-      deposit_amount: depositAmount,
-      loan_requested: loanRequested,
-      lvr_pct: lvr,
-      max_borrowing_capacity: maxBorrowing,
-      assessment_rate_pct: assessmentRatePct,
-      target_rate_pct: targetRatePct,
-      monthly_repayment_estimate: repaymentAtProductRate,
-      hecs_annual_repayment: hecsRepaymentAnnual,
-      dti_ratio: dti,
-    },
+    summary,
+    lender_guidance,
     caveats,
     assumptions,
     errors,
   };
 }
 
-module.exports = { assessBuyerQualification, hecsAnnualRepayment, hemMonthly, monthlyRepayment };
+// ─── Lender guidance ─────────────────────────────────────────────────────────
+//
+// Static lookup: maps each failure/warn pattern to lenders known to be more
+// flexible on that specific dimension. Based on publicly documented lender
+// policies as of 2024-25. Policies change — always verify with a broker.
+//
+// Lender categories:
+//   'big4'          — CBA, Westpac, ANZ, NAB
+//   'major'         — Macquarie, ING (significant but not Big 4)
+//   'regional'      — BOQ, Bendigo, Suncorp, Heritage
+//   'non-bank'      — Pepper Money, Liberty, La Trobe, Bluestone, Firstmac
+//   'government'    — FHBG, Family Home Guarantee, state schemes
+//   'digital'       — ME Bank, UBank, Athena
+
+function buildLenderGuidance(checks, summary, inputs) {
+  const guidance = [];
+
+  const byId = {};
+  (checks || []).forEach((c) => { byId[c.id] = c; });
+  const svc  = byId.serviceability;
+  const dti  = byId.dti;
+  const lvr  = byId.lvr;
+  const emp  = byId.employment;
+  const gen  = byId.genuine_savings;
+  const fhbg = byId.fhbg;
+  const employmentType = inputs?.employmentType || '';
+  const lvrPct = summary?.lvr_pct || 0;
+
+  // ── 1. Serviceability shortfall ──────────────────────────────────────────
+  if (svc?.status === 'fail' || (svc?.status === 'warn')) {
+    guidance.push({
+      barrier: 'Serviceability / income shortfall',
+      intro: 'The APRA +3% buffer applies to every lender — you cannot avoid it. But living expense benchmarks (HEM) vary by lender, and some are more pragmatic about complex or growing income structures.',
+      lenders: [
+        {
+          name: 'Macquarie Bank',
+          category: 'Major (digital)',
+          flexible_on: 'More sophisticated income assessment; tends to use more realistic HEM for higher-income borrowers',
+          rate_premium: 'Competitive — similar to Big 4',
+          contact: 'macquarie.com.au/mortgages',
+        },
+        {
+          name: 'Pepper Money',
+          category: 'Non-bank specialist',
+          flexible_on: 'Purpose-built for borrowers outside standard policy; most flexible on income shortfall',
+          rate_premium: 'Typically +0.5%–1.5% above major banks',
+          contact: 'peppermoney.com.au',
+        },
+        {
+          name: 'Liberty Financial',
+          category: 'Non-bank specialist',
+          flexible_on: '"Prime" to "near-prime" product range; can accommodate borderline surplus',
+          rate_premium: 'Typically +0.3%–1.2% above major banks',
+          contact: 'liberty.com.au',
+        },
+        {
+          name: 'Firstmac',
+          category: 'Non-bank',
+          flexible_on: 'Sometimes more generous net income surplus calculations for straightforward PAYG profiles',
+          rate_premium: 'Typically competitive — often close to major banks',
+          contact: 'firstmac.com.au',
+        },
+      ],
+      broker_note: 'A mortgage broker is strongly recommended here. They have live intelligence on which lenders are currently approving profiles like yours, and can submit to one lender at a time rather than triggering multiple credit enquiries across the market.',
+    });
+  }
+
+  // ── 2. High DTI (> 6×) ───────────────────────────────────────────────────
+  if (dti?.status === 'fail') {
+    guidance.push({
+      barrier: 'High debt-to-income ratio (> 6×)',
+      intro: 'APRA has asked lenders to limit high-DTI lending, but implementation varies. Some lenders have more sophisticated DTI modelling and approve above 6× for strong income or asset profiles.',
+      lenders: [
+        {
+          name: 'Macquarie Bank',
+          category: 'Major (digital)',
+          flexible_on: 'Known to approve higher DTI for borrowers with strong income trajectory (e.g. professionals early in career) and good asset positions',
+          rate_premium: 'Competitive',
+          contact: 'macquarie.com.au/mortgages',
+        },
+        {
+          name: 'ING',
+          category: 'Online bank',
+          flexible_on: 'Sometimes more flexible DTI for borrowers with strong repayment track record and low living expenses',
+          rate_premium: 'Competitive — often market-leading',
+          contact: 'ing.com.au',
+        },
+        {
+          name: 'Pepper Money',
+          category: 'Non-bank specialist',
+          flexible_on: 'Has specific "near-prime" products where DTI above 6× is considered with mitigating factors',
+          rate_premium: '+0.5%–1.5% above major banks',
+          contact: 'peppermoney.com.au',
+        },
+      ],
+      broker_note: 'DTI appetite shifts with each lender\'s credit book position. A broker who specialises in "complex lending" will know current appetite better than the lender\'s published policy.',
+    });
+  }
+
+  // ── 3. Self-employed income ──────────────────────────────────────────────
+  if (emp?.status === 'warn' && employmentType === 'self_employed') {
+    guidance.push({
+      barrier: 'Self-employed — less than 2 years returns or complex income',
+      intro: 'Full-doc requires 2 years of ATO tax returns. Low-doc and alt-doc products allow an accountant\'s letter, BAS statements, or 12 months bank statements instead — offered mainly by specialist non-bank lenders.',
+      lenders: [
+        {
+          name: 'Pepper Money',
+          category: 'Non-bank specialist',
+          flexible_on: 'Australia\'s largest non-bank lender with a dedicated self-employed product range (low-doc and alt-doc). Accepts 12 months BAS.',
+          rate_premium: '+0.5%–1.5%',
+          contact: 'peppermoney.com.au',
+        },
+        {
+          name: 'Liberty Financial',
+          category: 'Non-bank specialist',
+          flexible_on: '"Express" applications using BAS instead of 2 years of returns. Strong track record with self-employed borrowers.',
+          rate_premium: '+0.3%–1.2%',
+          contact: 'liberty.com.au',
+        },
+        {
+          name: 'La Trobe Financial',
+          category: 'Non-bank',
+          flexible_on: 'Specialist in complex income including irregular self-employed earnings and less than 2 years in business',
+          rate_premium: '+0.5%–2.0%',
+          contact: 'latrobefinancial.com',
+        },
+        {
+          name: 'Bluestone Mortgages',
+          category: 'Non-bank',
+          flexible_on: 'Alt-doc products for self-employed with less than 2 full years of returns or as a company/trust structure',
+          rate_premium: '+0.5%–1.5%',
+          contact: 'bluestone.com.au',
+        },
+        {
+          name: 'Macquarie Bank',
+          category: 'Major (digital)',
+          flexible_on: 'Best of the major banks for assessing complex self-employed income; full-doc only but more sophisticated analysis',
+          rate_premium: 'Competitive',
+          contact: 'macquarie.com.au/mortgages',
+        },
+      ],
+      broker_note: 'A self-employed specialist broker is essential. The alt-doc market is not accessible directly in most cases — lenders work through accredited brokers. After 2 full years of returns, refinancing to a standard product brings rates back to market.',
+    });
+  }
+
+  // ── 4. Casual / contract employment ─────────────────────────────────────
+  if (emp?.status === 'warn' && (employmentType === 'casual' || employmentType === 'contract')) {
+    guidance.push({
+      barrier: `${employmentType === 'casual' ? 'Casual' : 'Contract'} employment`,
+      intro: 'Most Big 4 require 12+ months continuous history. Regional banks and non-banks often assess employment history more holistically, particularly for stable casual workers or long-running contracts.',
+      lenders: [
+        {
+          name: 'Bank of Queensland (BOQ)',
+          category: 'Regional bank',
+          flexible_on: 'More manual underwriting; stable casual workers in healthcare, education, and hospitality often approved where Big 4 decline',
+          rate_premium: 'Generally competitive with Big 4',
+          contact: 'boq.com.au',
+        },
+        {
+          name: 'Bendigo Bank',
+          category: 'Regional bank',
+          flexible_on: 'Community focus; more willing to consider employment history holistically rather than strictly by contract type',
+          rate_premium: 'Competitive',
+          contact: 'bendigobank.com.au',
+        },
+        {
+          name: 'Pepper Money',
+          category: 'Non-bank specialist',
+          flexible_on: 'Has products specifically for casual and contract workers — assesses average income over 12 months not current pay rate',
+          rate_premium: '+0.5%–1.5%',
+          contact: 'peppermoney.com.au',
+        },
+        {
+          name: 'ME Bank',
+          category: 'Digital bank',
+          flexible_on: 'Sometimes more flexible for contract workers in IT, engineering, and healthcare with demonstrable renewal history',
+          rate_premium: 'Often competitive',
+          contact: 'mebank.com.au',
+        },
+      ],
+      broker_note: employmentType === 'contract'
+        ? 'If your contract has a renewal history (2+ renewals, same client), this significantly improves options. Document the renewal history before approaching lenders.'
+        : 'If you are approaching 12 months in the same role, waiting to hit that milestone considerably expands lender choice. A broker can confirm which lenders will accept your specific tenure.',
+    });
+  }
+
+  // ── 5. High LVR (85–95%) ─────────────────────────────────────────────────
+  if (lvr?.status === 'warn' && lvrPct > 85) {
+    const fhbgEligible = fhbg?.status === 'pass';
+    guidance.push({
+      barrier: `High LVR (${lvrPct.toFixed(1)}%) — limited lender choice${fhbgEligible ? ', but FHBG likely available' : ''}`,
+      intro: fhbgEligible
+        ? 'You appear eligible for the First Home Guarantee (FHBG) — buy with 5% deposit with no LMI through a participating lender. This is strongly preferable to standard LMI above 85% LVR.'
+        : 'Above 85% LVR, lender choice narrows and LMI costs increase. Most major lenders will lend to 95% with LMI, but some are more competitive on LMI premiums and approval speed.',
+      lenders: fhbgEligible ? [
+        { name: 'Commonwealth Bank', category: 'Big 4', flexible_on: 'Participating FHBG lender; largest volume of FHBG approvals in Australia', rate_premium: 'Standard rates', contact: 'commbank.com.au/home-loans/first-home-guarantee' },
+        { name: 'NAB', category: 'Big 4', flexible_on: 'Participating FHBG lender; competitive turnaround on FHBG applications', rate_premium: 'Standard rates', contact: 'nab.com.au/personal/home-loans/first-home-guarantee' },
+        { name: 'Macquarie Bank', category: 'Major (digital)', flexible_on: 'Participating FHBG lender; fully digital process, fast conditional approval', rate_premium: 'Competitive', contact: 'macquarie.com.au/mortgages' },
+        { name: 'ANZ', category: 'Big 4', flexible_on: 'Participating FHBG lender', rate_premium: 'Standard rates', contact: 'anz.com.au' },
+        { name: 'Bendigo Bank', category: 'Regional bank', flexible_on: 'Participating FHBG lender; good for regional areas where Big 4 presence is limited', rate_premium: 'Competitive', contact: 'bendigobank.com.au' },
+      ] : [
+        { name: 'Commonwealth Bank', category: 'Big 4', flexible_on: 'LMI offered through QBE LMI; large volumes mean competitive LMI rates; strong 90–95% approval track record', rate_premium: 'Standard', contact: 'commbank.com.au' },
+        { name: 'NAB', category: 'Big 4', flexible_on: 'Strong at 90–95% LVR via Helia (formerly Genworth) LMI; fast approvals', rate_premium: 'Standard', contact: 'nab.com.au' },
+        { name: 'Macquarie Bank', category: 'Major (digital)', flexible_on: 'Competitive at high LVR with streamlined approval; LMI capitalised into loan', rate_premium: 'Competitive', contact: 'macquarie.com.au/mortgages' },
+        { name: 'Pepper Money', category: 'Non-bank', flexible_on: 'Can approve 95% LVR for borderline profiles that major banks decline', rate_premium: '+0.5%–1.5%', contact: 'peppermoney.com.au' },
+      ],
+      broker_note: fhbgEligible
+        ? 'FHBG places are limited each financial year — confirm availability at housingaustralia.gov.au and apply through a participating lender promptly. A broker can pre-check FHBG place availability before you submit a full application.'
+        : 'LMI premiums vary between lenders (different LMI insurer arrangements). A broker can compare the total LMI cost across lenders — the cheapest rate is not always the cheapest overall cost.',
+    });
+  }
+
+  // ── 6. Deposit below 5% ──────────────────────────────────────────────────
+  if (lvr?.status === 'fail') {
+    guidance.push({
+      barrier: 'Deposit below 5% — below mainstream minimum',
+      intro: 'Mainstream lenders will not proceed below 5% deposit without a government scheme or family guarantee. Three structured options exist.',
+      lenders: [
+        {
+          name: 'Family Home Guarantee (Government)',
+          category: 'Government scheme',
+          flexible_on: 'Single parents only — 2% deposit, government guarantees the rest, no LMI. Income cap $125k.',
+          rate_premium: 'Standard rates through participating lenders',
+          contact: 'housingaustralia.gov.au',
+        },
+        {
+          name: 'Guarantor loan (family pledge)',
+          category: 'Family guarantee — all Big 4 and most major banks',
+          flexible_on: 'Parent uses equity in their property as additional security — allows 0% deposit in some cases',
+          rate_premium: 'Standard rates',
+          contact: 'Speak to any major bank or broker',
+        },
+        {
+          name: 'Victorian Homebuyer Fund / NSW Shared Equity',
+          category: 'State government',
+          flexible_on: 'Some states co-purchase with you, reducing your required deposit. Eligibility and property caps apply.',
+          rate_premium: 'Standard — government takes an equity share instead',
+          contact: 'Check your state revenue office',
+        },
+      ],
+      broker_note: 'A guarantor arrangement requires your parent to put their own property at risk. All parties must receive independent legal and financial advice before proceeding. This is the highest-risk path — ensure it is genuinely understood, not just signed.',
+    });
+  }
+
+  if (guidance.length === 0) return null;
+  return guidance;
+}
+
+module.exports = { assessBuyerQualification, hecsAnnualRepayment, hemMonthly, monthlyRepayment, buildLenderGuidance };
