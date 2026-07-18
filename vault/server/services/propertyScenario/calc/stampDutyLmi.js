@@ -115,14 +115,21 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
   let lmiRequired = false;
   let lmiEstimate = null;
 
+  // BUG FIX: LVR must be compared against the 0.80 threshold using its *raw* ratio.
+  // roundMoney() rounds to 2dp (cent precision), which for a 0–1 ratio means whole
+  // percentage points — any LVR from 80.001%–80.499% previously rounded down to
+  // exactly 0.80 and silently skipped LMI even though it was genuinely over 80%.
+  // We now round only for display (4dp ≈ basis-point precision) and always branch
+  // on the unrounded ratio.
   if (Number.isFinite(loanAmount) && loanAmount > 0 && propertyValue > 0) {
-    lvr = roundMoney(loanAmount / propertyValue);
-    if (lvr > 0.80) {
+    const rawLvr = loanAmount / propertyValue;
+    lvr = Math.round(rawLvr * 10000) / 10000;
+    if (rawLvr > 0.80) {
       lmiRequired = true;
-      const band = LMI_TABLE.find((b) => lvr <= b.lvrMax) || LMI_TABLE[LMI_TABLE.length - 1];
+      const band = LMI_TABLE.find((b) => rawLvr <= b.lvrMax) || LMI_TABLE[LMI_TABLE.length - 1];
       lmiEstimate = roundMoney(loanAmount * band.rate);
       assumptions.push(
-        `LMI estimate uses indicative premium ${roundMoney(band.rate * 100)}% of loan at LVR ${(lvr * 100).toFixed(1)}% — not a lender quote.`
+        `LMI estimate uses indicative premium ${roundMoney(band.rate * 100)}% of loan at LVR ${(rawLvr * 100).toFixed(2)}% — not a lender quote.`
       );
       caveats.push(
         'Lenders and insurers price LMI differently (loan amount, credit, postcode, occupancy). Treat this as order-of-magnitude only.'
@@ -132,14 +139,15 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
     }
   } else if (deposit != null && Number.isFinite(deposit) && propertyValue > 0) {
     const impliedLoan = Math.max(0, propertyValue - deposit);
-    lvr = roundMoney(impliedLoan / propertyValue);
-    if (lvr > 0.80) {
+    const rawLvr = impliedLoan / propertyValue;
+    lvr = Math.round(rawLvr * 10000) / 10000;
+    if (rawLvr > 0.80) {
       lmiRequired = true;
-      const band = LMI_TABLE.find((b) => lvr <= b.lvrMax) || LMI_TABLE[LMI_TABLE.length - 1];
+      const band = LMI_TABLE.find((b) => rawLvr <= b.lvrMax) || LMI_TABLE[LMI_TABLE.length - 1];
       lmiEstimate = roundMoney(impliedLoan * band.rate);
       assumptions.push('Loan amount inferred as property_value − deposit_amount.');
       assumptions.push(
-        `LMI estimate uses indicative premium ${roundMoney(band.rate * 100)}% of inferred loan at LVR ${(lvr * 100).toFixed(1)}%.`
+        `LMI estimate uses indicative premium ${roundMoney(band.rate * 100)}% of inferred loan at LVR ${(rawLvr * 100).toFixed(2)}%.`
       );
     }
   } else {

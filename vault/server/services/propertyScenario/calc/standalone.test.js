@@ -10,7 +10,7 @@ const { calculateRepayment } = require('./repayment');
 const { calculateExtraRepayments } = require('./extraRepayments');
 const { calculateOffsetBenefit } = require('./offset');
 const { calculateBorrowingPower } = require('./borrowingPower');
-const { paymentAmount } = require('./loanMath');
+const { paymentAmount, amortizeUntilPaid } = require('./loanMath');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -80,6 +80,87 @@ test('repayment: rejects missing / invalid inputs with explanation', () => {
   assert.ok(r.explanation.length > 10);
 });
 
+// GAP: 0% interest rate was entirely untested at the standalone calculator level.
+// paymentAmount must fall back to loan_amount / periods instead of NaN/Infinity from
+// a zero-denominator amortisation factor.
+test('repayment: 0% rate falls back to loan_amount / term (no NaN/Infinity)', () => {
+  const r = calculateRepayment({
+    loan_amount: 120_000,
+    annual_rate_pct: 0,
+    term_months: 120,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.repayment, 1000);
+  assert.strictEqual(r.total_interest_over_term, 0);
+  assert.strictEqual(r.total_repaid_over_term, 120_000);
+});
+
+// GAP: a 1-month term was untested — must still return a finite, sane repayment
+// (principal + one period's interest) rather than dividing by zero periods.
+test('repayment: 1-month term returns principal plus one period of interest', () => {
+  const r = calculateRepayment({
+    loan_amount: 10_000,
+    annual_rate_pct: 6,
+    term_months: 1,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.periods_in_term, 1);
+  approx(r.repayment, 10_050, 0.5); // 10000 + 10000*0.06/12 = 10050
+  assert.ok(r.repayment > 10_000);
+});
+
+// GAP (Round 3 focus area #2): the known-good AU worked example ($300k @ 5.5% / 25y monthly)
+// was never locked in with an exact assertion. Independently re-derived via the standard
+// amortisation formula M = P·r(1+r)^n / ((1+r)^n − 1) with r = 0.055/12, n = 300: the
+// mathematically correct payment is $1,842.26/month, NOT $1,836.07 (that figure does not
+// match the standard AU monthly-rest P&I formula for these inputs — verified independently
+// with an external calculation, not just by re-running this module's own code).
+test('repayment: $300k @ 5.5% / 25y monthly is exactly $1,842.26 (independently verified formula)', () => {
+  const r = calculateRepayment({
+    loan_amount: 300_000,
+    annual_rate_pct: 5.5,
+    term_years: 25,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.repayment, 1842.26);
+  // Confirms rounding is to the nearest cent (Math.round via roundMoney), not truncated —
+  // a truncating implementation would return 1842.25 or lower here.
+  const rawFactor = (0.055 / 12) * (1 + 0.055 / 12) ** 300 / ((1 + 0.055 / 12) ** 300 - 1);
+  const rawPayment = 300_000 * rawFactor;
+  assert.ok(rawPayment > 1842.255 && rawPayment < 1842.265, `raw formula sanity check: ${rawPayment}`);
+});
+
+// GAP (Round 3 focus area #2): total_interest_over_term uses the formula method
+// (repayment × periods) − principal, which is NOT the same as a true period-by-period
+// amortisation sum once the repayment is rounded to the nearest cent. Lock in that the
+// two methods can legitimately disagree by a small amount (and even a fractional final
+// period), and that the caveat now says so explicitly instead of implying an exact schedule.
+test('repayment: total_interest_over_term (formula method) differs slightly from true amortisation sum — caveated', () => {
+  const r = calculateRepayment({
+    loan_amount: 300_000,
+    annual_rate_pct: 5.5,
+    term_years: 25,
+    frequency: 'monthly',
+  });
+  const trueAmortisation = amortizeUntilPaid({
+    principal: 300_000,
+    annualRatePct: 5.5,
+    payment: r.repayment,
+    periodsPerYear: 12,
+  });
+  // The two methods are close but not identical — confirms this is a real, small,
+  // rounding-driven discrepancy rather than a coincidental exact match.
+  assert.notStrictEqual(r.total_interest_over_term, trueAmortisation.total_interest);
+  approx(r.total_interest_over_term, trueAmortisation.total_interest, 5);
+  assert.ok(
+    r.caveats.some((c) => /repayment × number of periods|not a period-by-period amortisation/i.test(c)),
+    'expected an explicit caveat about the formula-based total_interest methodology'
+  );
+});
+
 // ─── Extra repayments ────────────────────────────────────────────────────────
 
 test('extra repayments: $200/mo saves time and interest on $450k @ 5.5% / 25y', () => {
@@ -107,6 +188,49 @@ test('extra repayments: zero extra → no savings', () => {
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.months_saved, 0);
   assert.strictEqual(r.interest_saved, 0);
+});
+
+// GAP: extra_per_period massively exceeding the base repayment (and the outstanding
+// balance) was untested — amortizeUntilPaid must cap "due" at the remaining balance and
+// pay the loan off in a single period, not loop indefinitely or overpay into negative
+// balance / negative total_extra.
+test('extra repayments: extra far exceeding balance pays off in 1 period, no infinite loop', () => {
+  const r = calculateExtraRepayments({
+    loan_amount: 10_000,
+    annual_rate_pct: 5,
+    term_years: 30,
+    extra_per_period: 1_000_000,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.with_extra.periods, 1);
+  assert.strictEqual(r.with_extra.paid_off, true);
+  assert.ok(r.with_extra.total_extra_paid > 0);
+  assert.ok(r.with_extra.total_extra_paid < 1_000_000, 'extra paid must be capped at what was actually owed, not the full extra offered');
+  assert.ok(r.interest_saved > 0);
+  assert.ok(r.months_saved > 300);
+});
+
+// GAP: extra_per_period exactly equal to the base repayment (doubling the effective
+// payment) was untested — must roughly halve the term without erroring.
+test('extra repayments: extra equal to base repayment materially shortens term', () => {
+  const zero = calculateExtraRepayments({
+    loan_amount: 400_000,
+    annual_rate_pct: 6,
+    term_years: 30,
+    extra_per_period: 0,
+    frequency: 'monthly',
+  });
+  const r = calculateExtraRepayments({
+    loan_amount: 400_000,
+    annual_rate_pct: 6,
+    term_years: 30,
+    extra_per_period: zero.base_repayment,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.ok(r.with_extra.months < r.baseline.months / 2 + 12, `expected roughly-halved term, got ${r.with_extra.months} vs baseline ${r.baseline.months}`);
+  assert.ok(r.with_extra.paid_off);
 });
 
 // ─── Offset ──────────────────────────────────────────────────────────────────
@@ -137,6 +261,27 @@ test('offset: full offset (balance = loan) → no interest / rapid payoff via re
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.with_offset.total_interest, 0);
   assert.ok(r.interest_saved > 0);
+});
+
+// GAP: offset_balance exceeding the loan amount was untested beyond the equal-balance
+// case above. Interest-bearing balance must floor at $0 (never negative), the applied
+// offset must be capped at the loan amount, and a caveat must explain the cap.
+test('offset: offset_balance greater than loan_amount is capped, never produces negative interest', () => {
+  const r = calculateOffsetBenefit({
+    loan_amount: 150_000,
+    annual_rate_pct: 5.5,
+    term_years: 20,
+    offset_balance: 500_000,
+    frequency: 'monthly',
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.offset_applied, 150_000);
+  assert.strictEqual(r.with_offset.total_interest, 0);
+  assert.ok(r.with_offset.total_interest >= 0);
+  assert.ok(r.interest_saved > 0);
+  assert.ok(r.caveats.some((c) => /exceeds loan amount/i.test(c)));
+  // First-period saving must use the capped offset, not the raw (larger) stated balance
+  approx(r.first_period_interest_saving, 150_000 * 0.055 / 12, 0.5);
 });
 
 // ─── Borrowing power ─────────────────────────────────────────────────────────

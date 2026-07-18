@@ -7,6 +7,7 @@ const {
   parseIsoDurationMonths,
   normalizeMortgageProduct,
   selectRepresentativeProducts,
+  classifySpecialPurpose,
 } = require('./normalize');
 
 const G = '\x1b[32m';
@@ -194,6 +195,106 @@ test('selectRepresentativeProducts prefers one variable + one fixed per bank', (
   assert.strictEqual(picked.filter((p) => p.bank_id === 'a').length, 2);
   assert.ok(picked.some((p) => p.bank_id === 'a' && p.fixed_or_variable === 'variable' && p.rate === 6.1));
   assert.ok(picked.some((p) => p.bank_id === 'a' && p.fixed_or_variable === 'fixed'));
+});
+
+// GAP (Round 3 focus area #3): "bridging loan" style products were never explicitly
+// tested for exclusion from the mainstream comparison table, despite being a short-term
+// product type that would badly distort a headline-rate comparison if it slipped through.
+test('classifySpecialPurpose excludes bridging loan products', () => {
+  assert.strictEqual(
+    classifySpecialPurpose('Residential Bridging Loan').special_eligibility,
+    true
+  );
+  assert.strictEqual(
+    classifySpecialPurpose('Bridge Finance Home Loan').special_eligibility,
+    true
+  );
+  // Also reachable via eligibility text alone (title/description clean)
+  assert.strictEqual(
+    classifySpecialPurpose(
+      'Flexi Variable Home Loan',
+      'Owner occupied variable',
+      ['Available as bridging finance for eligible customers']
+    ).special_eligibility,
+    true
+  );
+});
+
+test('selectRepresentativeProducts excludes a bridging product from the comparison table', () => {
+  const rows = [
+    {
+      bank_id: 'anz',
+      lender: 'ANZ',
+      name: 'ANZ Bridging Loan',
+      fixed_or_variable: 'variable',
+      rate: 8.5,
+      loan_purpose: 'OWNER_OCCUPIED',
+      repayment_type: 'PRINCIPAL_AND_INTEREST',
+      special_eligibility: true,
+    },
+    {
+      bank_id: 'anz',
+      lender: 'ANZ',
+      name: 'ANZ Standard Variable',
+      fixed_or_variable: 'variable',
+      rate: 6.2,
+      loan_purpose: 'OWNER_OCCUPIED',
+      repayment_type: 'PRINCIPAL_AND_INTEREST',
+      comparison_rate: 6.3,
+      special_eligibility: false,
+    },
+  ];
+  const picked = selectRepresentativeProducts(rows, 2);
+  assert.ok(!picked.some((p) => /bridging/i.test(p.name)));
+  assert.ok(picked.some((p) => p.name === 'ANZ Standard Variable'));
+});
+
+// GAP (Round 3 focus area #3): a CDR product with a null/undefined rate must be entirely
+// EXCLUDED from the normalized output (return null), never surfaced with rate: null or
+// rate: NaN — either of those would silently break downstream comparison-table maths.
+test('normalizeMortgageProduct excludes (returns null) a product whose chosen rate is null', () => {
+  const row = normalizeMortgageProduct({
+    productId: 'no_rate',
+    productCategory: 'RESIDENTIAL_MORTGAGES',
+    name: 'Mystery Rate Home Loan',
+    lendingRates: [
+      { lendingRateType: 'VARIABLE', rate: null, repaymentType: 'PRINCIPAL_AND_INTEREST', loanPurpose: 'OWNER_OCCUPIED' },
+    ],
+  }, { bankId: 'x', bankName: 'X' });
+  assert.strictEqual(row, null);
+});
+
+test('normalizeMortgageProduct excludes a product when rate is undefined (field entirely missing)', () => {
+  const row = normalizeMortgageProduct({
+    productId: 'no_rate_2',
+    productCategory: 'RESIDENTIAL_MORTGAGES',
+    name: 'Undefined Rate Home Loan',
+    lendingRates: [
+      { lendingRateType: 'VARIABLE', repaymentType: 'PRINCIPAL_AND_INTEREST', loanPurpose: 'OWNER_OCCUPIED' },
+    ],
+  }, { bankId: 'x', bankName: 'X' });
+  assert.strictEqual(row, null);
+});
+
+// GAP (Round 3 focus area #3): when lendingRates is empty or missing entirely, the product
+// must be excluded (null) rather than falling back to any default rate value.
+test('normalizeMortgageProduct excludes a product with empty lendingRates array', () => {
+  const row = normalizeMortgageProduct({
+    productId: 'empty_rates',
+    productCategory: 'RESIDENTIAL_MORTGAGES',
+    name: 'No Rates Listed Home Loan',
+    lendingRates: [],
+  }, { bankId: 'x', bankName: 'X' });
+  assert.strictEqual(row, null);
+});
+
+test('normalizeMortgageProduct excludes a product missing the lendingRates field entirely', () => {
+  const row = normalizeMortgageProduct({
+    productId: 'missing_rates',
+    productCategory: 'RESIDENTIAL_MORTGAGES',
+    name: 'No Rates Field Home Loan',
+  }, { bankId: 'x', bankName: 'X' });
+  assert.strictEqual(row, null);
 });
 
 console.log(`\n${B}${passed} passed${X}, ${failed ? R : G}${failed} failed${X}`);

@@ -149,6 +149,11 @@ function expandLoanObjectPath(basePath, parentId, existingLoan = null) {
 // ── Form builder ──────────────────────────────────────────────────────────────
 
 function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
+  // BUG (Round 3): default parameters only apply when the argument is `undefined` —
+  // callers passing `clarifying_questions: null` explicitly (LLM returned null instead
+  // of an empty array) bypassed the default and crashed on `.forEach` below. Normalize
+  // defensively instead of trusting the default parameter alone.
+  const questions = Array.isArray(clarifyingQuestions) ? clarifyingQuestions : [];
   const result = [];
   const byMessage = new Set();
   const byPath = new Set();
@@ -229,7 +234,7 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
 
   // 3. Narrative clarifying questions LAST — skipped when the concept is already
   //    covered by a real field-path row (byLabel dedup catches this).
-  clarifyingQuestions.forEach((q, i) => {
+  questions.forEach((q, i) => {
     const msg = String(q || '').trim();
     if (!msg) return;
     addRow({
@@ -290,8 +295,11 @@ function buildPipelineResponse({
   const remaining = clarification?.remaining_required
     || (scenario?.unresolved_assumptions || []).filter((a) => a.severity !== 'optional')
     || [];
-  const questions = clarifying_questions.length
-    ? clarifying_questions
+  // BUG (Round 3): `clarifying_questions` explicitly passed as null (not just omitted)
+  // bypassed the `= []` default parameter and crashed on `.length` — normalize defensively.
+  const safeClarifyingQuestions = Array.isArray(clarifying_questions) ? clarifying_questions : [];
+  const questions = safeClarifyingQuestions.length
+    ? safeClarifyingQuestions
     : remaining.map((a) => a.message).filter(Boolean);
 
   const base = {

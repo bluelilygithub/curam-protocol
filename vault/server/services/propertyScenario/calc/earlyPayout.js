@@ -89,10 +89,35 @@ function calculateEarlyPayoutBreakCost(fields, opts = {}) {
   if (rateType !== 'fixed') {
     errors.push('current_loan.fixed_or_variable should be "fixed" or "variable" for break-cost modelling');
   }
+
+  // remainingFixed === 0 means the fixed-rate period has already ended — distinct from
+  // "not provided" (null). With zero months left there is no differential period to
+  // break, so the IRD cost is $0 regardless of comparison_rate. Previously this was
+  // lumped into the "remainingFixed <= 0" branch below and treated as a missing-input
+  // error, refusing to compute anything instead of returning the correct $0 result.
+  if (rateType === 'fixed' && Number.isFinite(remainingFixed) && remainingFixed === 0) {
+    return {
+      ok: true,
+      break_cost_estimate: 0,
+      method: 'fixed_period_ended',
+      interest_rate_differential_pp: null,
+      remaining_fixed_months: 0,
+      loan_term_remaining_months: Number.isFinite(loanTermRemaining) ? loanTermRemaining : null,
+      fixed_period_source: fixedSource,
+      tax_deductibility_flagged: false,
+      caveats: [
+        ...caveats,
+        'Fixed-rate period has already ended (0 months remaining) — no interest-rate-differential break cost applies. Confirm with the lender whether the loan has rolled to variable or a new fixed term.',
+      ],
+      assumptions,
+      errors: [],
+    };
+  }
+
   if (!Number.isFinite(comparisonRate)) {
     errors.push('comparison_rate (% p.a.) is required to estimate fixed-rate break cost');
   }
-  if (!Number.isFinite(remainingFixed) || remainingFixed <= 0) {
+  if (!Number.isFinite(remainingFixed) || remainingFixed < 0) {
     errors.push(
       'fixed_period_remaining_months is required for fixed-rate break cost (months left on the fixed-rate period — typically 1–5 years in Australia). Do not use loan term_remaining_months here.'
     );

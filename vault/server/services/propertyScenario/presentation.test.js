@@ -10,6 +10,7 @@ const {
   buildPresentationPayload,
   buildAdviceFromCalculation,
   buildFundingAlert,
+  buildBreakEvenSeries,
 } = require('./presentation');
 
 const G = '\x1b[32m';
@@ -366,6 +367,86 @@ test('refinance event-type alias resolves the same as switch_lender', () => {
   assert.strictEqual(p.calculators.repayment.loan_amount, 250000);
   assert.strictEqual(p.calculators.repayment.term_months, 200);
   assert.strictEqual(p.calculators.repayment.annual_rate_pct, 5.8);
+});
+
+// ─── buildBreakEvenSeries ────────────────────────────────────────────────────
+
+// GAP: buildBreakEvenSeries was only ever exercised indirectly (via a healthy compound
+// scenario with a positive saving). No test covered a switch/refinance where the new
+// repayment is *higher* than the old one (monthly_saving < 0) — must produce a flat $0
+// cumulative_savings line (never break even) rather than a misleading negative-savings
+// projection, and must not throw on the null break_even_months.
+test('buildBreakEvenSeries: negative monthly saving flatlines savings at $0, never breaks even', () => {
+  const calculation = {
+    event_results: [{
+      type: 'switch_lender',
+      outputs: {
+        refinance_break_even: {
+          ok: true,
+          upfront_cost: 1_500,
+          monthly_saving: -75,
+          break_even_months: null,
+        },
+        break_cost: { break_cost_estimate: 0 },
+      },
+    }],
+  };
+  const series = buildBreakEvenSeries(calculation);
+  assert.strictEqual(series.break_even_months, null);
+  assert.ok(series.series.length > 0);
+  assert.ok(series.series.every((p) => p.cumulative_savings === 0), 'negative saving must never accumulate a positive/negative savings line');
+  assert.ok(series.series.every((p) => p.cumulative_cost === 1_500));
+  assert.match(series.note, /no modelled monthly saving/i);
+});
+
+// GAP: monthly_saving exactly $0 (identical repayment) was untested — must behave the
+// same as the negative case (flat $0 line), not divide-by-zero or project a break-even.
+test('buildBreakEvenSeries: zero monthly saving also flatlines (no divide-by-zero)', () => {
+  const calculation = {
+    event_results: [{
+      type: 'refinance',
+      outputs: {
+        refinance_break_even: {
+          ok: true,
+          upfront_cost: 900,
+          monthly_saving: 0,
+          break_even_months: null,
+        },
+        break_cost: null,
+      },
+    }],
+  };
+  const series = buildBreakEvenSeries(calculation);
+  assert.strictEqual(series.break_even_months, null);
+  assert.ok(series.series.every((p) => p.cumulative_savings === 0));
+  assert.ok(Number.isFinite(series.series[series.series.length - 1].month));
+});
+
+// GAP: a genuinely positive saving was never checked against buildBreakEvenSeries in
+// isolation (only end-to-end via a full scenario) — lock in that the horizon stretches
+// far enough for cumulative_savings to actually overtake cumulative_cost.
+test('buildBreakEvenSeries: positive saving series crosses cumulative cost by break-even month', () => {
+  const calculation = {
+    event_results: [{
+      type: 'switch_lender',
+      outputs: {
+        refinance_break_even: {
+          ok: true,
+          upfront_cost: 2_000,
+          monthly_saving: 100,
+          break_even_months: 20,
+        },
+        break_cost: { break_cost_estimate: 0 },
+      },
+    }],
+  };
+  const series = buildBreakEvenSeries(calculation);
+  assert.strictEqual(series.break_even_months, 20);
+  const atBreakEven = series.series.find((p) => p.month === 20);
+  assert.ok(atBreakEven);
+  assert.ok(atBreakEven.cumulative_savings >= atBreakEven.cumulative_cost);
+  const beforeBreakEven = series.series.find((p) => p.month === 5);
+  assert.ok(beforeBreakEven.cumulative_savings < beforeBreakEven.cumulative_cost);
 });
 
 console.log(`\n${B}${passed} passed${X}, ${failed ? R : G}${failed} failed${X}`);

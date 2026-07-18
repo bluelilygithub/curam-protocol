@@ -22,6 +22,7 @@ const { runScenario } = require('./orchestrate');
 const { runFromScenario, runFromText } = require('./runPipeline');
 const { applyClarifications, cloneScenario } = require('./clarify');
 const { calculateStampDutyLmi } = require('./calc/stampDutyLmi');
+const { createScenario, createLoanSnapshot } = require('./scenario');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -378,6 +379,486 @@ test('blocks when required assumptions remain (unless force)', () => {
   assert.strictEqual(blocked.ready, false);
   const forced = runScenario(scenario, { force: true });
   assert.strictEqual(forced.ready, true);
+});
+
+// BUG: when a buy is sequenced before its funding sell AND no deposit_amount is stated
+// on the buy event, resolveDepositFromDependencies previously left deposit_amount === null
+// and reported deposit_shortfall = $0 — silently understating a real funding gap that
+// (per the buy's own property_value/loan fields) is actually $600k. Fixed to infer the
+// implied deposit (property_value − loan.balance) as the shortfall instead of $0.
+test('buy-before-sell with NO stated deposit infers shortfall from price minus loan (not $0)', () => {
+  const scenario = createScenario({
+    id: 'sc_buy_before_sell_no_deposit',
+    title: 'Buy before sell, deposit not stated',
+    starting_properties: [{
+      id: 'prop_old',
+      state: 'NSW',
+      estimated_value: 900_000,
+      purchase_price: 500_000,
+      purchase_date: '2015-01-01',
+      was_ever_investment_property: false,
+      current_loan: createLoanSnapshot({
+        balance: 200_000,
+        rate: 5.5,
+        fixed_or_variable: 'variable',
+        term_remaining_months: 180,
+        property_id: 'prop_old',
+      }),
+    }],
+    events: [
+      {
+        id: 'ev_buy',
+        type: 'buy',
+        sequence: 1,
+        label: 'Buy first',
+        fields: {
+          property_id: 'prop_new',
+          property_value: 1_100_000,
+          state: 'NSW',
+          is_first_home_buyer: false,
+          // deposit_amount deliberately omitted — must not be treated as a $0 gap
+          settlement_date: '2026-09-01',
+          loan: createLoanSnapshot({
+            balance: 500_000,
+            rate: 5.4,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 360,
+          }),
+        },
+      },
+      {
+        id: 'ev_sell',
+        type: 'sell',
+        sequence: 2,
+        label: 'Sell later',
+        fields: {
+          property_id: 'prop_old',
+          property_value: 900_000,
+          purchase_price: 500_000,
+          purchase_date: '2015-01-01',
+          was_ever_investment_property: false,
+          state: 'NSW',
+          settlement_date: '2026-10-01',
+          selling_costs: 22_500,
+        },
+      },
+    ],
+    dependencies: [{
+      id: 'dep_funds',
+      from_event_id: 'ev_sell',
+      to_event_id: 'ev_buy',
+      kind: 'funds_deposit',
+      note: 'Sale is meant to fund buy but settles later',
+    }],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  const buy = calculation.event_results.find((e) => e.type === 'buy');
+
+  assert.strictEqual(calculation.bridging_required, true);
+  // Implied deposit = 1,100,000 property − 500,000 loan = 600,000 (NOT $0)
+  assert.strictEqual(buy.outputs.deposit_shortfall, 600_000);
+  assert.strictEqual(calculation.deposit_shortfall, 600_000);
+  assert.strictEqual(buy.outputs.deposit_amount, 600_000);
+  assert.ok(
+    buy.outputs.deposit_flow.notes.some((n) => /inferred required cash at settlement/i.test(n))
+  );
+});
+
+// GAP: selling a property whose starting_properties entry has no current_loan (or a
+// loan with no balance field) was untested at the orchestrator level. processSell derives
+// `discharge` from `prop?.current_loan?.balance`, so a missing loan must resolve to a
+// clean $0 discharge (not NaN propagating into net_sale_proceeds, and not a crash).
+test('sell with no current_loan on the property discharges $0 (no NaN, no crash)', () => {
+  const scenario = createScenario({
+    id: 'sc_sell_no_loan',
+    title: 'Sell an unencumbered property',
+    starting_properties: [{
+      id: 'prop_paid_off',
+      state: 'NSW',
+      estimated_value: 700_000,
+      purchase_price: 400_000,
+      purchase_date: '2010-01-01',
+      was_ever_investment_property: false,
+      // deliberately no current_loan — property is fully owned
+    }],
+    events: [{
+      id: 'ev_sell',
+      type: 'sell',
+      sequence: 1,
+      label: 'Sell paid-off home',
+      fields: {
+        property_id: 'prop_paid_off',
+        property_value: 700_000,
+        purchase_price: 400_000,
+        purchase_date: '2010-01-01',
+        was_ever_investment_property: false,
+        state: 'NSW',
+        settlement_date: '2026-06-01',
+        selling_costs: 17_500,
+      },
+    }],
+    dependencies: [],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  const sell = calculation.event_results.find((e) => e.type === 'sell');
+  assert.strictEqual(sell.ok, true);
+  assert.strictEqual(sell.outputs.loan_discharged, 0);
+  assert.ok(Number.isFinite(sell.outputs.net_sale_proceeds));
+  // 700,000 − 0 discharge − 17,500 selling costs
+  assert.strictEqual(sell.outputs.net_sale_proceeds, 682_500);
+  assert.ok(!Number.isNaN(calculation.totals.sale_proceeds_generated));
+});
+
+// GAP: two events sharing the same sequence number was rejected by structural validation
+// (scenario.test.js already covers that path), but nothing verified what the orchestrator
+// itself does when a caller forces past that validation error (opts.force=true). Both
+// events must still be processed (not silently dropped) — orderedEvents uses a stable
+// sort, so ties keep their original array order.
+test('duplicate sequence numbers with force=true still process every event (none silently skipped)', () => {
+  const scenario = createScenario({
+    id: 'sc_dup_sequence',
+    title: 'Two events with the same sequence',
+    starting_properties: [{
+      id: 'prop_a',
+      state: 'NSW',
+      current_loan: createLoanSnapshot({
+        balance: 100_000,
+        rate: 5.5,
+        fixed_or_variable: 'variable',
+        term_remaining_months: 120,
+        property_id: 'prop_a',
+      }),
+    }],
+    events: [
+      {
+        id: 'ev_refi',
+        type: 'refinance',
+        sequence: 1,
+        label: 'Refinance A',
+        fields: {
+          property_id: 'prop_a',
+          current_loan: {
+            balance: 100_000,
+            rate: 5.5,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 120,
+          },
+          target_loan: {
+            balance: 100_000,
+            rate: 5.0,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 120,
+          },
+        },
+      },
+      {
+        id: 'ev_payout',
+        type: 'early_payout',
+        sequence: 1, // duplicate on purpose
+        label: 'Payout A',
+        fields: {
+          property_id: 'prop_a',
+          current_loan: {
+            balance: 100_000,
+            rate: 5.0,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 120,
+          },
+          payout_date: '2026-08-01',
+        },
+      },
+    ],
+    dependencies: [],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  assert.strictEqual(calculation.event_results.length, 2, 'both events with the duplicate sequence must be processed');
+  assert.ok(calculation.event_results.some((e) => e.event_id === 'ev_refi'));
+  assert.ok(calculation.event_results.some((e) => e.event_id === 'ev_payout'));
+  // Structural validation caught the duplicate sequence and forcing past it is noted
+  assert.ok(calculation.caveats.some((c) => /force=true/i.test(c)));
+  assert.ok(calculation.blocking_errors.some((e) => /event_sequence_dup/i.test(e)));
+});
+
+// GAP (Round 3 focus area #1): a sell event with a custom, non-default `selling_costs`
+// value (not the 2.5% assumption) was never verified end-to-end at the orchestrator level
+// — only the default-percentage path was covered. Confirms the stated figure flows
+// unchanged into net_sale_proceeds and then fully funds the linked buy's deposit.
+test('sell→buy: explicit custom selling_costs (not the 2.5% default) flows through to net proceeds and buy deposit', () => {
+  const scenario = createScenario({
+    id: 'sc_custom_selling_costs',
+    title: 'Custom selling costs flow through',
+    starting_properties: [{
+      id: 'prop_old',
+      state: 'NSW',
+      estimated_value: 900_000,
+      purchase_price: 500_000,
+      purchase_date: '2015-01-01',
+      was_ever_investment_property: false,
+      current_loan: createLoanSnapshot({
+        balance: 200_000,
+        rate: 5.5,
+        fixed_or_variable: 'variable',
+        term_remaining_months: 180,
+        property_id: 'prop_old',
+      }),
+    }],
+    events: [
+      {
+        id: 'ev_sell',
+        type: 'sell',
+        sequence: 1,
+        fields: {
+          property_id: 'prop_old',
+          property_value: 900_000,
+          purchase_price: 500_000,
+          purchase_date: '2015-01-01',
+          was_ever_investment_property: false,
+          state: 'NSW',
+          settlement_date: '2026-06-01',
+          selling_costs: 12_345.67, // deliberately NOT 2.5% of 900k (22,500)
+        },
+      },
+      {
+        id: 'ev_buy',
+        type: 'buy',
+        sequence: 2,
+        fields: {
+          property_id: 'prop_new',
+          property_value: 1_000_000,
+          state: 'NSW',
+          is_first_home_buyer: false,
+          settlement_date: '2026-06-15',
+          // deposit_amount omitted — must consume all available proceeds exactly
+          loan: createLoanSnapshot({
+            balance: 512_345.67,
+            rate: 5.4,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 360,
+          }),
+        },
+      },
+    ],
+    dependencies: [{
+      id: 'dep_funds',
+      from_event_id: 'ev_sell',
+      to_event_id: 'ev_buy',
+      kind: 'funds_deposit',
+    }],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  const sell = calculation.event_results.find((e) => e.type === 'sell');
+  const buy = calculation.event_results.find((e) => e.type === 'buy');
+
+  // 900,000 − 200,000 loan discharge − 12,345.67 custom selling costs
+  assert.strictEqual(sell.outputs.selling_costs, 12_345.67);
+  assert.strictEqual(sell.outputs.net_sale_proceeds, 687_654.33);
+  // No "assumed X% of sale price" note should appear since a value was stated
+  assert.ok(!calculation.assumptions.some((a) => /selling costs not provided/i.test(a)));
+
+  // Deposit flow: no stated deposit_amount, so it must be inferred as ALL of net proceeds
+  assert.strictEqual(buy.outputs.funded_from_sale_proceeds, 687_654.33);
+  assert.strictEqual(buy.outputs.deposit_amount, 687_654.33);
+  assert.strictEqual(buy.outputs.deposit_shortfall, 0);
+});
+
+// GAP (Round 3 focus area #1): when sale proceeds exactly cover the buy deposit with
+// nothing left over, unused_sale_proceeds must be an exact $0 — never a floating-point
+// artefact like 5.68e-11 from repeated roundMoney(have - take) subtraction.
+test('sell→buy: proceeds exactly covering the deposit leave unused_sale_proceeds at an exact $0', () => {
+  const scenario = createScenario({
+    id: 'sc_exact_zero_unused',
+    title: 'Sale proceeds exactly cover the deposit',
+    starting_properties: [{
+      id: 'prop_old',
+      state: 'NSW',
+      estimated_value: 900_000,
+      purchase_price: 500_000,
+      purchase_date: '2015-01-01',
+      was_ever_investment_property: false,
+      current_loan: createLoanSnapshot({
+        balance: 200_000,
+        rate: 5.5,
+        fixed_or_variable: 'variable',
+        term_remaining_months: 180,
+        property_id: 'prop_old',
+      }),
+    }],
+    events: [
+      {
+        id: 'ev_sell',
+        type: 'sell',
+        sequence: 1,
+        fields: {
+          property_id: 'prop_old',
+          property_value: 900_000,
+          purchase_price: 500_000,
+          purchase_date: '2015-01-01',
+          was_ever_investment_property: false,
+          state: 'NSW',
+          settlement_date: '2026-06-01',
+          selling_costs: 12_345.67,
+        },
+      },
+      {
+        id: 'ev_buy',
+        type: 'buy',
+        sequence: 2,
+        fields: {
+          property_id: 'prop_new',
+          property_value: 1_000_000,
+          state: 'NSW',
+          is_first_home_buyer: false,
+          settlement_date: '2026-06-15',
+          // Stated deposit equal to the EXACT net proceeds figure (687,654.33)
+          deposit_amount: 687_654.33,
+          loan: createLoanSnapshot({
+            balance: 312_345.67,
+            rate: 5.4,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 360,
+          }),
+        },
+      },
+    ],
+    dependencies: [{
+      id: 'dep_funds',
+      from_event_id: 'ev_sell',
+      to_event_id: 'ev_buy',
+      kind: 'funds_deposit',
+    }],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  assert.strictEqual(calculation.totals.unused_sale_proceeds, 0);
+  assert.strictEqual(typeof calculation.totals.unused_sale_proceeds, 'number');
+  assert.ok(
+    Object.is(calculation.totals.unused_sale_proceeds, 0) && !Object.is(calculation.totals.unused_sale_proceeds, -0),
+    'unused_sale_proceeds must be exactly 0, not -0 or a tiny float residue'
+  );
+  assert.strictEqual(calculation.totals.deposit_shortfall, 0);
+});
+
+// GAP (Round 3 focus area #1): refinance→early_payout chains were only ever tested with
+// the early_payout event's current_loan EXPLICITLY stated on the event itself (bypassing
+// the ledger fallback entirely). This test omits current_loan from the payout event so the
+// orchestrator MUST pull the refinanced balance/rate/lender from the ledger — proving it
+// uses the state the refinance left the loan in, not the original starting_properties data.
+test('refinance→early_payout: payout event with no current_loan field pulls the REFINANCED balance from the ledger, not the original loan', () => {
+  const scenario = createScenario({
+    id: 'sc_refi_then_payout_ledger_fallback',
+    title: 'Refinance then payout — ledger fallback',
+    starting_properties: [{
+      id: 'prop_ppor',
+      state: 'NSW',
+      current_loan: createLoanSnapshot({
+        balance: 500_000,
+        rate: 6.5,
+        fixed_or_variable: 'variable',
+        term_remaining_months: 300,
+        lender: 'OldBank',
+        property_id: 'prop_ppor',
+      }),
+    }],
+    events: [
+      {
+        id: 'ev_refi',
+        type: 'refinance',
+        sequence: 1,
+        fields: {
+          property_id: 'prop_ppor',
+          current_loan: createLoanSnapshot({
+            balance: 500_000,
+            rate: 6.5,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 300,
+            lender: 'OldBank',
+          }),
+          target_loan: createLoanSnapshot({
+            balance: 480_000,
+            rate: 5.2,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 300,
+            lender: 'NewBank',
+          }),
+        },
+      },
+      {
+        id: 'ev_payout',
+        type: 'early_payout',
+        sequence: 2,
+        fields: {
+          property_id: 'prop_ppor',
+          payout_date: '2027-01-01',
+          // current_loan deliberately omitted
+        },
+      },
+    ],
+    dependencies: [],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  const payout = calculation.event_results.find((e) => e.type === 'early_payout');
+
+  // Principal repaid must be the REFINANCED balance (480k @ NewBank), not the original
+  // starting_properties balance (500k @ OldBank).
+  assert.strictEqual(payout.cost_breakdown.principal_repaid, 480_000);
+  assert.strictEqual(payout.outputs.early_payout.method, 'variable_no_ird');
+});
+
+// GAP (Round 3 focus area #1 / bug fix): processEarlyPayout silently defaulted
+// comparison_rate to the loan's OWN contract rate whenever no market comparison_rate was
+// supplied, so a fixed-rate early payout with no market rate available always showed
+// break_cost_estimate = $0 with a caveat that reads exactly like a genuine "rates are
+// favourable" comparison. Fixed to add an explicit assumption disclosing the default so a
+// $0 result isn't mistaken for "breaking this fixed loan is free".
+test('early_payout on a fixed loan with no comparison_rate anywhere: $0 IRD is now disclosed as a default, not a real comparison', () => {
+  const scenario = createScenario({
+    id: 'sc_fixed_payout_no_comparison_rate',
+    title: 'Fixed loan early payout, no market comparison rate supplied',
+    starting_properties: [{
+      id: 'prop_a',
+      state: 'NSW',
+      current_loan: createLoanSnapshot({
+        balance: 400_000,
+        rate: 5.9,
+        fixed_or_variable: 'fixed',
+        term_remaining_months: 300,
+        fixed_period_remaining_months: 24,
+        property_id: 'prop_a',
+      }),
+    }],
+    events: [{
+      id: 'ev_payout',
+      type: 'early_payout',
+      sequence: 1,
+      fields: {
+        property_id: 'prop_a',
+        payout_date: '2026-08-01',
+      },
+    }],
+    dependencies: [],
+    unresolved_assumptions: [],
+  });
+
+  const calculation = runScenario(scenario, { force: true });
+  const payout = calculation.event_results.find((e) => e.type === 'early_payout');
+
+  assert.strictEqual(payout.outputs.early_payout.break_cost_estimate, 0);
+  assert.strictEqual(payout.outputs.early_payout.comparison_rate, 5.9); // defaulted to contract rate
+  assert.ok(
+    calculation.assumptions.some((a) => /defaulted to the loan's own contract rate/i.test(a)),
+    'expected an explicit assumption disclosing the silent comparison_rate default'
+  );
 });
 
 test('applyClarifications selling_cost_pct fills sell events', () => {

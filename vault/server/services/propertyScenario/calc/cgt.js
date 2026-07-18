@@ -6,7 +6,15 @@ function monthsBetween(isoStart, isoEnd) {
   const a = new Date(isoStart);
   const b = new Date(isoEnd);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  let months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  // Day-of-month matters for the ATO's "held more than 12 months" discount test.
+  // e.g. 2020-01-31 → 2021-01-01 is 12 calendar months apart by year/month alone,
+  // but ownership was actually just under 12 months — without this adjustment the
+  // 50% CGT discount could be wrongly applied a few days early.
+  if (b.getDate() < a.getDate()) {
+    months -= 1;
+  }
+  return months;
 }
 
 /**
@@ -49,6 +57,8 @@ function calculateCgt(sellFields, opts = {}) {
       main_residence_exempt: false,
       held_over_12_months: null,
       partial_exemption_flagged: false,
+      is_capital_loss: false,
+      capital_loss_amount: 0,
       caveats,
       assumptions,
       errors,
@@ -76,6 +86,8 @@ function calculateCgt(sellFields, opts = {}) {
       main_residence_exempt: true,
       held_over_12_months: null,
       partial_exemption_flagged: false,
+      is_capital_loss: false,
+      capital_loss_amount: 0,
       caveats: [
         ...caveats,
         'Main residence exemption assumed in full because was_ever_investment_property is false. If any period was rented or used to produce income, this estimate is wrong.',
@@ -107,9 +119,19 @@ function calculateCgt(sellFields, opts = {}) {
 
   let discountApplied = false;
   let taxable = grossGain;
+  const isCapitalLoss = grossGain < 0;
 
-  if (grossGain <= 0) {
-    assumptions.push('No capital gain (sale ≤ purchase price on this simplified cost base).');
+  if (isCapitalLoss) {
+    assumptions.push(
+      `Capital loss of $${Math.abs(grossGain).toLocaleString()} on this simplified cost base (sale price below purchase price).`
+    );
+    caveats.push(
+      'A capital loss cannot be deducted against other (non-capital) income, but can generally be carried '
+      + 'forward to offset capital gains in future income years — keep records and confirm treatment with a tax agent.'
+    );
+    taxable = 0;
+  } else if (grossGain === 0) {
+    assumptions.push('No capital gain or loss (sale price equals purchase price on this simplified cost base).');
     taxable = 0;
   } else if (heldOver12 === true) {
     discountApplied = true;
@@ -132,6 +154,8 @@ function calculateCgt(sellFields, opts = {}) {
     main_residence_exempt: false,
     held_over_12_months: heldOver12,
     partial_exemption_flagged: partialExemptionFlagged,
+    is_capital_loss: isCapitalLoss,
+    capital_loss_amount: isCapitalLoss ? Math.abs(grossGain) : 0,
     caveats,
     assumptions,
     errors,

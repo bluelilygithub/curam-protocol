@@ -64,6 +64,16 @@ function calculateRepayment(input = {}) {
   caveats.push(
     'Lender fees, honeymoon rates, interest-only periods, and roundings may change the contractual repayment.'
   );
+  // GAP (Round 3): total_interest_over_term is derived from (repayment × periods) − principal,
+  // not a period-by-period amortisation sum. Because `repayment` itself is rounded to the
+  // nearest cent, this formula-based total can differ from a true amortisation schedule by a
+  // small amount (and a real schedule's final period may be a few dollars/days different) —
+  // caveat this explicitly so the figure isn't read as a precise cent-for-cent schedule total.
+  caveats.push(
+    'total_interest_over_term is calculated as (repayment × number of periods) − loan amount, '
+    + 'not a period-by-period amortisation schedule — it can differ from a real lender schedule '
+    + 'by a small amount because the repayment figure is rounded to the nearest cent.'
+  );
 
   const explanation =
     `On a ${money(amount)} loan at ${rate}% p.a. over ${formatDuration(termMonths)}, `

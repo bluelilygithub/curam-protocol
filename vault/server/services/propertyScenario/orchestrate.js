@@ -188,6 +188,34 @@ function resolveDepositFromDependencies(event, scenario, ledger, eventResultsByI
   if (deps.length && (buy_before_sell || funding_not_yet_available) && shortfall <= 0 && available <= 0) {
     if (Number.isFinite(deposit_amount) && deposit_amount > 0) {
       shortfall = roundMoney(deposit_amount);
+    } else {
+      // deposit_amount was never stated (not even inferred from proceeds, since none are
+      // available) — do not silently report a $0 funding gap. Infer the real cash needed
+      // at settlement from purchase price minus the new loan amount (deposit ≈ price − loan);
+      // fall back to the full purchase price if no loan is stated (assume all-cash).
+      const impliedPropertyValue = event.fields?.property_value != null
+        ? Number(event.fields.property_value)
+        : null;
+      const impliedLoanAmount = event.fields?.loan?.balance != null
+        ? Number(event.fields.loan.balance)
+        : null;
+      if (Number.isFinite(impliedPropertyValue) && impliedPropertyValue > 0) {
+        const impliedDeposit = Number.isFinite(impliedLoanAmount)
+          ? Math.max(0, roundMoney(impliedPropertyValue - impliedLoanAmount))
+          : roundMoney(impliedPropertyValue);
+        if (impliedDeposit > 0) {
+          deposit_amount = impliedDeposit;
+          shortfall = impliedDeposit;
+          notes.push(
+            'deposit_amount was not stated; inferred required cash at settlement as '
+            + `property_value ($${impliedPropertyValue.toLocaleString()})`
+            + (Number.isFinite(impliedLoanAmount)
+              ? ` minus loan amount ($${impliedLoanAmount.toLocaleString()})`
+              : ' (no loan amount stated — assumed full cash purchase)')
+            + ` = $${impliedDeposit.toLocaleString()}, since sale proceeds are not available at buy time.`
+          );
+        }
+      }
     }
   }
 
@@ -612,6 +640,7 @@ function processEarlyPayout(event, ledger, opts) {
     fields.current_loan = { ...prop.current_loan };
   }
 
+  const comparisonProvided = opts.comparison_rate != null;
   const comparison =
     opts.comparison_rate != null
       ? Number(opts.comparison_rate)
@@ -627,6 +656,19 @@ function processEarlyPayout(event, ledger, opts) {
   caveats.push(...(payout.caveats || []));
   assumptions.push(...(payout.assumptions || []));
   errors.push(...(payout.errors || []));
+
+  // BUG (Round 3): when no comparison_rate was supplied, the orchestrator silently
+  // defaulted it to the loan's OWN contract rate — always yielding IRD=0 with a caveat
+  // ("Comparison rate ≥ contract rate — IRD estimated at $0") that reads like a real
+  // market comparison was made, when in fact no market rate was ever supplied. Mirror
+  // processRefinanceLike's existing disclosure pattern so this default is visible.
+  if (!comparisonProvided && fields.current_loan?.fixed_or_variable === 'fixed' && comparison != null) {
+    assumptions.push(
+      'No market comparison_rate was supplied for this early payout — defaulted to the loan\'s own contract rate, '
+      + 'which always shows $0 IRD break cost. This does NOT mean breaking the fixed loan is free; '
+      + 'provide a real comparison/market rate for an accurate break-cost estimate.'
+    );
+  }
 
   const principal = Number(fields.current_loan?.balance) || 0;
   const breakCost = payout.break_cost_estimate || 0;

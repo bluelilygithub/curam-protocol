@@ -102,6 +102,75 @@ test('Stamp duty errors when state missing', () => {
   assert.ok(r.errors.length > 0);
 });
 
+// GAP: exact LVR boundary (80.00%) was untested — rule is "LMI when LVR > 80%", so
+// exactly 80% must NOT require LMI, while a cent over must.
+test('LMI boundary: LVR exactly 80% requires no LMI', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 1_000_000,
+    state: 'NSW',
+    is_first_home_buyer: false,
+    loan: { balance: 800_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.lvr, 0.8);
+  assert.strictEqual(r.lmi_required, false);
+  assert.strictEqual(r.lmi_estimate, null);
+});
+
+test('LMI boundary: LVR just above 80% requires LMI', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 1_000_000,
+    state: 'NSW',
+    is_first_home_buyer: false,
+    loan: { balance: 800_001 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.lmi_required, true);
+  assert.ok(r.lmi_estimate > 0);
+});
+
+// GAP: exact FHB full-exemption boundary was untested — NSW full exemption applies
+// "≤ $800,000"; one dollar over must fall into the tapered concession instead.
+test('NSW FHB boundary: exactly $800,000 gets full exemption ($0 duty)', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 800_000,
+    state: 'NSW',
+    is_first_home_buyer: true,
+    loan: { balance: 600_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.fhb_concession_applied, true);
+  assert.strictEqual(r.stamp_duty_payable, 0);
+});
+
+test('NSW FHB boundary: $800,001 loses full exemption, gets tapered concession instead', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 800_001,
+    state: 'NSW',
+    is_first_home_buyer: true,
+    loan: { balance: 600_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.fhb_concession_applied, true);
+  assert.ok(r.stamp_duty_payable > 0, 'expected some duty payable just above the full-exemption threshold');
+  assert.ok(r.stamp_duty_payable < r.stamp_duty_standard, 'tapered concession should still reduce duty below standard');
+});
+
+// GAP: QLD FHB concession above the top ($800k) threshold was untested — standard duty
+// should apply with no concession amount.
+test('QLD FHB above concession ceiling pays full standard duty', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 900_000,
+    state: 'QLD',
+    is_first_home_buyer: true,
+    loan: { balance: 700_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.fhb_concession_applied, false);
+  assert.strictEqual(r.fhb_concession_amount, 0);
+  assert.strictEqual(r.stamp_duty_payable, r.stamp_duty_standard);
+});
+
 // ─── CGT ─────────────────────────────────────────────────────────────────────
 
 test('CGT full MRE when never investment', () => {
@@ -161,6 +230,134 @@ test('CGT refuses when PPOR/investment unknown', () => {
   assert.strictEqual(r.ok, false);
 });
 
+// GAP: purchase_price > sale_price (capital loss) was previously lumped in with the
+// $0-gain branch and never labelled as a loss — losing the fact that capital losses can
+// be carried forward to offset future gains. calculateCgt now returns is_capital_loss +
+// capital_loss_amount and a caveat about carry-forward treatment.
+test('CGT capital loss (sale < purchase) is negative, zero taxable, and flagged as a loss', () => {
+  const r = calculateCgt({
+    property_value: 450_000,
+    purchase_price: 500_000,
+    purchase_date: '2020-01-01',
+    settlement_date: '2026-01-01',
+    was_ever_investment_property: true,
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.capital_gain_gross, -50_000);
+  assert.strictEqual(r.taxable_capital_gain_estimate, 0);
+  assert.strictEqual(r.cgt_discount_applied, false);
+  assert.strictEqual(r.is_capital_loss, true);
+  assert.strictEqual(r.capital_loss_amount, 50_000);
+  assert.ok(r.assumptions.some((a) => /capital loss of \$50,000/i.test(a)));
+  assert.ok(r.caveats.some((c) => /carried\s*forward/i.test(c)));
+});
+
+// GAP: exact break-even (sale === purchase) must not be mislabelled as a loss.
+test('CGT exact break-even (sale === purchase) is $0 gain, not a loss', () => {
+  const r = calculateCgt({
+    property_value: 500_000,
+    purchase_price: 500_000,
+    purchase_date: '2020-01-01',
+    settlement_date: '2026-01-01',
+    was_ever_investment_property: true,
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.capital_gain_gross, 0);
+  assert.strictEqual(r.taxable_capital_gain_estimate, 0);
+  assert.strictEqual(r.is_capital_loss, false);
+  assert.strictEqual(r.capital_loss_amount, 0);
+});
+
+// BUG: monthsBetween only compared year/month, ignoring day-of-month. A purchase on
+// 2020-01-31 sold on 2021-01-01 is only ~11 months of real ownership but the old formula
+// returned exactly 12, wrongly granting the 50% CGT discount a month early.
+test('CGT holding period accounts for day-of-month, not just calendar months', () => {
+  const r = calculateCgt({
+    property_value: 700_000,
+    purchase_price: 600_000,
+    purchase_date: '2020-01-31',
+    settlement_date: '2021-01-01',
+    was_ever_investment_property: true,
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.held_over_12_months, false);
+  assert.strictEqual(r.cgt_discount_applied, false);
+  assert.strictEqual(r.taxable_capital_gain_estimate, 100_000);
+});
+
+// Same-day-of-month one year later must still count as held >= 12 months (regression
+// guard for the day-of-month fix above).
+test('CGT holding period: exactly 12 months (same day-of-month) still qualifies for discount', () => {
+  const r = calculateCgt({
+    property_value: 700_000,
+    purchase_price: 600_000,
+    purchase_date: '2020-01-15',
+    settlement_date: '2021-01-15',
+    was_ever_investment_property: true,
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.held_over_12_months, true);
+  assert.strictEqual(r.cgt_discount_applied, true);
+  assert.strictEqual(r.taxable_capital_gain_estimate, 50_000);
+});
+
+// GAP (Round 3 focus area #4): calculateCgt only exposes a BINARY was_ever_investment_property
+// switch — there is no field/path for "was PPOR for N years, then rented under the 6-year
+// rule, still partially exempt". Passing hypothetical partial-occupancy detail (years as
+// main residence / years rented) has NO effect on the result because cgt.js never reads
+// those fields — it silently falls through to the same "ever investment = no full exemption,
+// full taxable gain (minus discount)" path as a pure investment property. Lock this in so a
+// future attempt to "quietly" support partial MRE without a dedicated code path doesn't
+// slip through unnoticed, and confirm the caveat is SPECIFIC to the 6-year rule (tells the
+// user to get tax advice for exactly this case) rather than only the generic disclaimer.
+test('CGT partial main-residence (6-year rule) is NOT modelled — extra occupancy fields are ignored, specific caveat required', () => {
+  const withHypotheticalPartialMreFields = calculateCgt({
+    property_value: 900_000,
+    purchase_price: 500_000,
+    purchase_date: '2015-01-01',
+    was_ever_investment_property: true,
+    settlement_date: '2026-01-01',
+    // These fields describe a genuine partial-MRE / 6-year-rule situation (lived in it for
+    // 6 years, then rented it out under the 6-year rule for the remaining ownership period) —
+    // but calculateCgt has no parameter for any of this and must ignore it entirely.
+    years_as_main_residence: 6,
+    years_rented_under_six_year_rule: 5,
+    six_year_rule_claimed: true,
+  });
+  const withoutThoseFields = calculateCgt({
+    property_value: 900_000,
+    purchase_price: 500_000,
+    purchase_date: '2015-01-01',
+    was_ever_investment_property: true,
+    settlement_date: '2026-01-01',
+  });
+
+  // Identical result whether or not partial-MRE detail is supplied — proves it's ignored,
+  // not silently (and incorrectly) factored into a partial exemption.
+  assert.strictEqual(
+    withHypotheticalPartialMreFields.taxable_capital_gain_estimate,
+    withoutThoseFields.taxable_capital_gain_estimate
+  );
+  assert.strictEqual(withHypotheticalPartialMreFields.main_residence_exempt, false);
+  assert.strictEqual(withHypotheticalPartialMreFields.partial_exemption_flagged, true);
+
+  // The caveat must be SPECIFIC to the 6-year rule / partial exemption case — not just the
+  // generic "this is not tax advice, consult a tax agent" disclaimer that appears regardless.
+  const genericDisclaimer = withHypotheticalPartialMreFields.caveats.find((c) => /this is not tax advice/i.test(c));
+  const sixYearRuleCaveat = withHypotheticalPartialMreFields.caveats.find((c) => /6-year rule/i.test(c));
+  assert.ok(genericDisclaimer, 'expected the generic tax-advice disclaimer to still be present');
+  assert.ok(sixYearRuleCaveat, 'expected a caveat specifically about the 6-year rule / partial MRE');
+  assert.notStrictEqual(
+    sixYearRuleCaveat,
+    genericDisclaimer,
+    'the 6-year-rule caveat must be distinct from the generic disclaimer, not the same generic text'
+  );
+  assert.ok(
+    /does not compute a number for that|get tax advice with occupancy dates/i.test(sixYearRuleCaveat),
+    `expected the 6-year-rule caveat to explicitly tell the user this is unmodelled and needs tax advice with occupancy dates, got: ${sixYearRuleCaveat}`
+  );
+});
+
 // ─── Refinance break-even ────────────────────────────────────────────────────
 
 test('Monthly repayment hand-check', () => {
@@ -208,6 +405,59 @@ test('Refinance with higher target rate → no break-even', () => {
   assert.strictEqual(r.ok, true);
   assert.ok(r.monthly_saving < 0);
   assert.strictEqual(r.break_even_months, null);
+});
+
+// GAP: identical current/target repayment (monthlySaving === 0) was untested — must not
+// divide by zero and must not silently return a misleading finite break-even.
+test('Refinance with identical rate/term (monthly_saving = 0) → break_even_months null, no divide-by-zero', () => {
+  const r = calculateRefinanceBreakEven({
+    current_loan: { balance: 400_000, rate: 6.0, fixed_or_variable: 'variable', term_remaining_months: 300 },
+    target_loan: { balance: 400_000, rate: 6.0, fixed_or_variable: 'variable', term_remaining_months: 300 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.monthly_saving, 0);
+  assert.strictEqual(r.break_even_months, null);
+  assert.ok(Number.isFinite(r.upfront_cost));
+  assert.ok(r.caveats.some((c) => /never recovered/i.test(c)));
+});
+
+// GAP: 0-balance current loan was untested. monthlyRepayment(0, …) returns 0, so this
+// must not throw or divide by zero, and should report $0 repayments both sides.
+test('Refinance with 0 current balance does not throw and reports $0 repayments', () => {
+  const r = calculateRefinanceBreakEven({
+    current_loan: { balance: 0, rate: 6.0, fixed_or_variable: 'variable', term_remaining_months: 300 },
+    target_loan: { balance: 0, rate: 5.4, fixed_or_variable: 'variable', term_remaining_months: 300 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.monthly_repayment_current, 0);
+  assert.strictEqual(r.monthly_repayment_target, 0);
+  assert.strictEqual(r.monthly_saving, 0);
+  assert.strictEqual(r.break_even_months, null);
+});
+
+// GAP: 0% interest rate on refinance loans was untested — monthlyRepayment must fall
+// back to a straight-line principal/term split instead of a NaN/Infinity factor.
+test('Refinance monthlyRepayment at 0% rate = principal / term (no NaN/Infinity)', () => {
+  const m = monthlyRepayment(120_000, 0, 120);
+  assert.strictEqual(m, 1000);
+  const r = calculateRefinanceBreakEven({
+    current_loan: { balance: 120_000, rate: 0, fixed_or_variable: 'variable', term_remaining_months: 120 },
+    target_loan: { balance: 120_000, rate: 0, fixed_or_variable: 'variable', term_remaining_months: 120 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.monthly_repayment_current, 1000);
+  assert.strictEqual(r.monthly_repayment_target, 1000);
+});
+
+// GAP: negative rates were untested — calculateRefinanceBreakEven should refuse (errors)
+// rather than silently compute a nonsensical negative-rate repayment.
+test('Refinance refuses negative rates instead of computing a nonsensical result', () => {
+  const r = calculateRefinanceBreakEven({
+    current_loan: { balance: 400_000, rate: -1, fixed_or_variable: 'variable', term_remaining_months: 240 },
+    target_loan: { balance: 400_000, rate: 5.5, fixed_or_variable: 'variable', term_remaining_months: 240 },
+  });
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.errors.some((e) => /current_loan\.rate/i.test(e)));
 });
 
 // ─── Early payout ────────────────────────────────────────────────────────────
@@ -307,6 +557,63 @@ test('Does not silently use term_remaining_months via opts confusion', () => {
   }, { comparison_rate: 5.4 });
   assert.strictEqual(r.ok, false);
   assert.notStrictEqual(r.break_cost_estimate, 54_600);
+});
+
+// BUG (Round 2): fixed_period_remaining_months explicitly set to 0 (fixed period has
+// already ended) was previously lumped into the "remainingFixed <= 0" branch and treated
+// as a missing-input error — refusing to compute anything even though a fixed period
+// with zero months left unambiguously means $0 IRD break cost, not an unknown input.
+test('Fixed period explicitly at 0 months remaining returns $0 break cost, not an error', () => {
+  const r = calculateEarlyPayoutBreakCost({
+    current_loan: {
+      balance: 400_000,
+      rate: 6.0,
+      fixed_or_variable: 'fixed',
+      term_remaining_months: 180,
+      fixed_period_remaining_months: 0,
+    },
+  }, { comparison_rate: 5.0 });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.break_cost_estimate, 0);
+  assert.strictEqual(r.method, 'fixed_period_ended');
+  assert.strictEqual(r.remaining_fixed_months, 0);
+  assert.ok(r.caveats.some((c) => /already ended/i.test(c)));
+});
+
+// GAP: comparison_rate exceeding the contract rate on a fixed loan was untested at the
+// standalone calculator level (only exercised indirectly via the payout-after-refinance
+// fixture). Locks in that a favourable comparison rate never produces a negative "break
+// cost" — IRD floors at $0.
+test('Comparison rate above contract rate on fixed loan → $0 break cost (never negative)', () => {
+  const r = calculateEarlyPayoutBreakCost({
+    current_loan: {
+      balance: 400_000,
+      rate: 5.0,
+      fixed_or_variable: 'fixed',
+      term_remaining_months: 180,
+      fixed_period_remaining_months: 24,
+    },
+  }, { comparison_rate: 6.5 });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.break_cost_estimate, 0);
+  assert.ok(r.interest_rate_differential_pp < 0);
+  assert.ok(r.assumptions.some((a) => /IRD economic cost estimated at \$0/i.test(a)));
+});
+
+// GAP: a $0 outstanding balance on a fixed loan was untested — the IRD formula multiplies
+// by balance, so this must cleanly resolve to $0 rather than skipping/erroring.
+test('Zero outstanding balance on fixed loan → $0 break cost, still ok', () => {
+  const r = calculateEarlyPayoutBreakCost({
+    current_loan: {
+      balance: 0,
+      rate: 6.0,
+      fixed_or_variable: 'fixed',
+      term_remaining_months: 180,
+      fixed_period_remaining_months: 24,
+    },
+  }, { comparison_rate: 5.0 });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.break_cost_estimate, 0);
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
