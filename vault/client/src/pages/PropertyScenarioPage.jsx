@@ -160,6 +160,122 @@ function RefinanceInterpretation({ calcResult, rfRate, rfRateType }) {
   );
 }
 
+function SellInterpretation({ calcResult }) {
+  if (!calcResult?.ready_for_calculations) return null;
+  const ev = calcResult.calculation?.event_results?.[0];
+  const out = ev?.outputs;
+  if (!out) return null;
+
+  const salePrice = Number(out.sale_price ?? 0);
+  const sellingCosts = Number(out.selling_costs ?? 0);
+  const netProceeds = Number(out.net_sale_proceeds ?? 0);
+  const cgt = out.cgt || {};
+  const taxableCgt = Number(cgt.taxable_capital_gain_estimate ?? 0);
+  const isMreExempt = Boolean(cgt.main_residence_exempt);
+  const grossGain = Number(cgt.capital_gain_gross ?? 0);
+
+  const sellingCostPct = salePrice > 0 ? ((sellingCosts / salePrice) * 100).toFixed(1) : null;
+
+  return (
+    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-3" style={{ borderLeftColor: 'var(--color-primary)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+      <div className="space-y-1">
+        <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+          Net proceeds: {fmt(netProceeds)}
+        </p>
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          Sale price {fmt(salePrice)} minus selling costs {fmt(sellingCosts)}{sellingCostPct ? ` (${sellingCostPct}% of sale price)` : ''}.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Selling cost estimate</p>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Assumed at 2.5% of sale price — covers agent commission (~2%) and conveyancing/marketing (~0.5%).
+          Confirm the actual split with your agent and conveyancer before relying on this figure.
+        </p>
+      </div>
+
+      <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Capital gains tax</p>
+        {isMreExempt ? (
+          <p className="text-sm" style={{ color: '#16a34a' }}>
+            Main residence exemption applies — CGT is $0.
+            {grossGain > 0 ? ` (Gross gain ${fmt(grossGain)} — fully exempt.)` : ''}
+          </p>
+        ) : taxableCgt > 0 ? (
+          <>
+            <p className="text-sm" style={{ color: '#ef4444' }}>
+              Taxable CGT estimate: {fmt(taxableCgt)} — included in your tax return, not at settlement.
+            </p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Actual tax depends on your marginal rate and whether you've held the property &gt;12 months (50% discount may apply). Confirm with your accountant.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            CGT: $0 — either exempt or no capital gain in this scenario.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BuyInterpretation({ calcResult }) {
+  if (!calcResult?.ready_for_calculations) return null;
+  const ev = calcResult.calculation?.event_results?.[0];
+  const out = ev?.outputs;
+  const totals = calcResult.calculation?.totals || {};
+  if (!out) return null;
+
+  const purchasePrice = Number(out.purchase_price ?? 0);
+  const stampDuty = Number(totals.stamp_duty ?? out.stamp_duty ?? 0);
+  const lmi = Number(totals.lmi ?? out.lmi ?? 0);
+  const deposit = Number(out.deposit ?? 0);
+  const loanAmount = purchasePrice > 0 && deposit > 0 ? purchasePrice - deposit : 0;
+  const lvr = purchasePrice > 0 && loanAmount > 0 ? ((loanAmount / purchasePrice) * 100).toFixed(1) : null;
+  const totalUpfront = stampDuty + lmi;
+
+  return (
+    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-3" style={{ borderLeftColor: 'var(--color-primary)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+      <div className="space-y-1">
+        <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+          Total upfront costs: {fmt(totalUpfront)}
+        </p>
+        {lvr && (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            Loan-to-value ratio: {lvr}% ({loanAmount > 0 ? `${fmt(loanAmount)} loan on ${fmt(purchasePrice)} property` : ''}).
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Stamp duty: {fmt(stampDuty)}</p>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Calculated using your state's published thresholds and rates. Payable at settlement — budget this separately from your deposit.
+        </p>
+      </div>
+
+      {lmi > 0 ? (
+        <div className="space-y-1 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-sm font-medium" style={{ color: '#f59e0b' }}>LMI: {fmt(lmi)}</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Lenders Mortgage Insurance applies because your LVR exceeds 80%. LMI protects the lender, not you — it adds to your loan cost.
+            This estimate uses standard premium tables; actual LMI is lender-specific and varies.
+          </p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            To avoid LMI: increase deposit to {purchasePrice > 0 ? fmt(purchasePrice * 0.2) : '20% of purchase price'} (20% LVR) or use a guarantor.
+          </p>
+        </div>
+      ) : (
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-sm" style={{ color: '#16a34a' }}>No LMI — deposit is 20% or more of purchase price.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function inferInputType(fieldPath = '', message = '') {
   const path = String(fieldPath).toLowerCase();
   const msg = String(message).toLowerCase();
@@ -264,12 +380,43 @@ function ResultsView({ demo, tab, setTab, loading, error }) {
       {!loading && demo && tab === 'overview' && (
         <>
           <div className="grid sm:grid-cols-4 gap-3">
-            {[
-              { label: 'Total costs', value: calc?.totals?.total_costs },
-              { label: 'Stamp duty', value: calc?.totals?.stamp_duty },
-              { label: 'Deposit from sale', value: calc?.totals?.deposit_funded_from_sale },
-              { label: 'Monthly saving', value: calc?.totals?.monthly_repayment_saving },
-            ].map((s) => (
+            {(() => {
+              const t = calc?.totals || {};
+              const events = calc?.event_results || [];
+              const hasRefinance = events.some((e) => ['switch_lender', 'refinance'].includes(e.type));
+              const hasSell = events.some((e) => e.type === 'sell');
+              const hasBuy = events.some((e) => e.type === 'buy');
+              if (hasRefinance && !hasSell && !hasBuy) {
+                return [
+                  { label: 'Switch costs', value: t.refinance_fees },
+                  { label: 'Break costs', value: t.break_costs },
+                  { label: 'Monthly saving', value: t.monthly_repayment_saving },
+                  { label: 'Annualised saving', value: t.annualised_repayment_saving },
+                ];
+              }
+              if (hasSell && !hasBuy) {
+                return [
+                  { label: 'Net proceeds', value: t.sale_proceeds_generated },
+                  { label: 'Selling costs', value: t.selling_costs },
+                  { label: 'Taxable CGT', value: t.taxable_cgt_estimate },
+                  { label: 'Total costs', value: t.total_costs },
+                ];
+              }
+              if (hasBuy && !hasSell) {
+                return [
+                  { label: 'Stamp duty', value: t.stamp_duty },
+                  { label: 'LMI', value: t.lmi },
+                  { label: 'Total upfront costs', value: t.total_costs },
+                  { label: 'Deposit from sale', value: t.deposit_funded_from_sale },
+                ];
+              }
+              return [
+                { label: 'Total costs', value: t.total_costs },
+                { label: 'Stamp duty', value: t.stamp_duty },
+                { label: 'Deposit from sale', value: t.deposit_funded_from_sale },
+                { label: 'Monthly saving', value: t.monthly_repayment_saving },
+              ];
+            })().map((s) => (
               <div key={s.label} className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{s.label}</p>
                 <p className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
@@ -1090,6 +1237,12 @@ export default function PropertyScenarioPage() {
                 </div>
                 {scenarioType === 'refinance' && (
                   <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} />
+                )}
+                {scenarioType === 'sell' && (
+                  <SellInterpretation calcResult={calcResult} />
+                )}
+                {scenarioType === 'buy' && (
+                  <BuyInterpretation calcResult={calcResult} />
                 )}
                 <ResultsView demo={calcResult} tab={tab} setTab={setTab} loading={false} error={null} />
               </>
