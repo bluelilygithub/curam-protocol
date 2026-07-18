@@ -1290,7 +1290,59 @@ export default function PropertyScenarioPage() {
             {/* ── Structured form results ───────────────────────────── */}
             {calcResult?.ready_for_calculations && (
               <>
-                {/* CDR notice now rendered inside RefinanceInterpretation for refinance; hidden here */}
+                {/* Input summary — what was used in the calculation */}
+                <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>What was calculated</p>
+                  {scenarioType === 'refinance' && (
+                    <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                      {[
+                        { label: 'Current balance', value: rfBalance ? `$${Number(rfBalance).toLocaleString('en-AU')}` : '—' },
+                        { label: 'Current rate', value: rfRate ? `${rfRate}% p.a.` : '—' },
+                        { label: 'Rate type', value: rfRateType || '—' },
+                        { label: 'Term remaining', value: rfTermMonths ? `${rfTermMonths} months (${(Number(rfTermMonths) / 12).toFixed(1)} yrs)` : '—' },
+                        rfRateType === 'fixed' && rfFixedPeriod ? { label: 'Fixed period remaining', value: `${rfFixedPeriod} months` } : null,
+                        { label: 'Compared against', value: rfTargetMode === 'cdr' ? 'Live CDR — best available rate' : rfTargetRate ? `${rfTargetRate}% (your target)` : 'CDR' },
+                      ].filter(Boolean).map(({ label, value }) => (
+                        <div key={label}>
+                          <dt className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</dt>
+                          <dd className="font-medium" style={{ color: 'var(--color-text)' }}>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {scenarioType === 'sell' && (
+                    <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                      {[
+                        { label: 'State', value: sellState || '—' },
+                        { label: 'Property type', value: sellPpor === 'ppor' ? 'PPOR' : sellPpor === 'investment' ? 'Investment' : 'Mixed' },
+                        { label: 'Sale price', value: sellPrice ? `$${Number(sellPrice).toLocaleString('en-AU')}` : '—' },
+                        { label: 'Purchase price', value: sellPurchasePrice ? `$${Number(sellPurchasePrice).toLocaleString('en-AU')}` : '—' },
+                        sellPurchaseYear ? { label: 'Year purchased', value: sellPurchaseYear } : null,
+                      ].filter(Boolean).map(({ label, value }) => (
+                        <div key={label}>
+                          <dt className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</dt>
+                          <dd className="font-medium" style={{ color: 'var(--color-text)' }}>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {scenarioType === 'buy' && (
+                    <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                      {[
+                        { label: 'State', value: buyState || '—' },
+                        { label: 'Purpose', value: buyPpor === 'ppor' ? 'PPOR' : 'Investment' },
+                        { label: 'Purchase price', value: buyPrice ? `$${Number(buyPrice).toLocaleString('en-AU')}` : '—' },
+                        { label: 'Deposit', value: buyDeposit ? `$${Number(buyDeposit).toLocaleString('en-AU')}` : '—' },
+                        { label: 'First home buyer', value: buyFhb === 'yes' ? 'Yes' : 'No' },
+                      ].map(({ label, value }) => (
+                        <div key={label}>
+                          <dt className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</dt>
+                          <dd className="font-medium" style={{ color: 'var(--color-text)' }}>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setCalcResult(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                     {getIcon('sliders', { size: 13 })}
