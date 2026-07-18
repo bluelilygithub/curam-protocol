@@ -26,11 +26,17 @@ app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'img-src':   ["'self'", 'data:', 'blob:', 'https://i.ytimg.com'],
-      'media-src': ["'self'", 'blob:', 'data:'],
-      'connect-src': ["'self'", 'blob:'],
-      'frame-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
-      'child-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+      // 'wasm-unsafe-eval' is required for @react-pdf/renderer which uses
+      // WebAssembly (harfbuzz font subsetting). Without it the PDF download
+      // throws: "WebAssembly.instantiate() violates CSP script-src 'self'".
+      // 'blob:' on script-src allows the Web Worker that react-pdf spawns.
+      'script-src': ["'self'", "'wasm-unsafe-eval'", 'blob:'],
+      'img-src':    ["'self'", 'data:', 'blob:', 'https://i.ytimg.com'],
+      'media-src':  ["'self'", 'blob:', 'data:'],
+      'connect-src':["'self'", 'blob:'],
+      'frame-src':  ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+      'child-src':  ["'self'", 'blob:', 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+      'worker-src': ["'self'", 'blob:'],
     },
   } : false,
 }));
