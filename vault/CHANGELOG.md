@@ -4,6 +4,30 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (property-scenario-ux-overhaul)
+
+**Fix + Feature:** Comprehensive UX and correctness pass on the Property Scenario mortgage tool following live testing.
+
+**CDR rate substitution bug (critical):** The `/calculate` route injected the best CDR lender rate for refinance scenarios but read `l.advertised_rate` from the normalised lender object — a field that doesn't exist. The correct field is `l.rate`. This caused the target loan rate to always equal the current rate, producing $0 monthly saving, $0 break cost, and a meaningless result for every CDR-comparison refinance. Fixed.
+
+**Westpac CDR timeout:** The Westpac workaround (fetch all products unfiltered, filter `RESIDENTIAL_MORTGAGES` client-side) required scanning 13 pages of 25 products each serially. At ~2s/page this exceeded the HTTP response window. Switched to `pageSize: 100` and `maxPages: 5` with `timeoutMs: 30000` per request — covers Westpac's ~325 products in ~4 requests. CDR coverage now consistently 8/8.
+
+**Refinance interpretation panel:** Added `RefinanceInterpretation` component that renders above the summary table. Shows verdict (saves X/month), current vs new repayment, named bank + product + comparison rate + Apply/detail URLs (from CDR), up to 3 alternative lenders with rates, switching cost breakdown (discharge / establishment / valuation-legal / IRD if fixed), break-even in months and years, warning when break-even > 5 years, and explanation when no saving (features may still justify switching).
+
+**Sell/buy interpretation panels:** `SellInterpretation` explains net proceeds, what the 2.5% selling cost assumption covers, and CGT status (MRE exempt vs taxable estimate with marginal-rate caveat). `BuyInterpretation` explains total upfront costs, stamp duty source, and LMI trigger — including what deposit is needed to avoid it.
+
+**Scenario-aware KPI strip:** The four KPI tiles now reflect the scenario type. Refinance → switch costs / break cost / monthly saving / annualised saving. Sell → net proceeds / selling costs / taxable CGT / total. Buy → stamp duty / LMI / total upfront / deposit from sale. Compound/mixed → previous generic four.
+
+**Named bank in results:** The CDR substitution now returns the full normalised lender object (product name, comparison rate, offset/redraw features, estimated upfront fees, application URL, product detail URL), not just rate + lender name. `RefinanceInterpretation` renders all of this. Comparison rate shown with AU-law disclosure note. Source attributed to CDR Open Banking with fetch timestamp.
+
+**Input echo:** Every structured form result now opens with a "What was calculated" summary echoing every field exactly as entered — balance, rate, rate type, term, comparison mode for refinance; state, property type, prices, year for sell; state, purpose, price, deposit, FHB status for buy. Provides an audit trail and lets the user verify numbers before trusting results.
+
+**Lender terms insight — suggested questions:** The "Ask about a lender's terms" section (Stage 11 T&Cs/PDS reasoning) previously rendered as an empty question box with no direction. Added five pre-populated question chips covering the most valuable queries: early repayment conditions, offset fine print, fixed-rate break cost formula, undisclosed fees, eligibility exclusions.
+
+**PDF export:** Four download buttons on every structured form result — "This tab", "Lenders", "Follow-ups", "Full report". Uses `@react-pdf/renderer` (already installed). PDF is structured for LLM consumption: inputs verbatim, refinance result with named bank and CDR provenance, cost/benefit table, cash-flow timeline, full lender comparison table (all 8 CDR lenders), calculator snapshots, caveats, assumptions, disclaimer. Files named `property-scenario-{type}-{tab}-{date}.pdf`.
+
+---
+
 ## 2026-07-15 (property-scenario-agent)
 
 **Feature:** Property Scenario mortgage agent at `/property-scenario` (feature flag `propertyScenario`). Stages 1–11: free-text parse with deterministic span pre-extraction + grounding, AU calc modules + orchestrator, Stage 6 charts/tables, live CDR PRD lender rates, bridging refuse-default modelling, `POST /parse` + `/clarify` UI path, and quarantined Stage 11 T&Cs/PDS insights (`POST /insights`) that cannot write scenario totals. Docs: `docs/property-scenario.md`. Open items (incl. W1 browser click-through): `server/services/propertyScenario/OPEN_ITEMS.md`.
