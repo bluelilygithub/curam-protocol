@@ -7,6 +7,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { downloadPropertyScenarioPdf } from '../utils/propertyScenarioPdf';
 import {
   RateComparisonChart,
   CumulativeCostChart,
@@ -1343,7 +1344,7 @@ export default function PropertyScenarioPage() {
                     </dl>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <button type="button" onClick={() => setCalcResult(null)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                     {getIcon('sliders', { size: 13 })}
                     Adjust values
@@ -1352,6 +1353,29 @@ export default function PropertyScenarioPage() {
                     {getIcon('rotate-ccw', { size: 13 })}
                     New scenario
                   </button>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Download</span>
+                    {[
+                      { key: 'overview', label: 'This tab' },
+                      { key: 'lenders', label: 'Lenders' },
+                      { key: 'followups', label: 'Follow-ups' },
+                      { key: 'all', label: 'Full report' },
+                    ].map(({ key, label }) => {
+                      const inputs = { rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb };
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, key)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                          style={{ borderColor: 'var(--color-border)', color: key === 'all' ? '#fff' : 'var(--color-text)', background: key === 'all' ? 'var(--color-primary)' : 'transparent' }}
+                        >
+                          {getIcon('download', { size: 12 })}
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {scenarioType === 'refinance' && (
                   <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} />
