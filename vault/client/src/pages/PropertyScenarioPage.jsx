@@ -199,9 +199,17 @@ function RefinanceInterpretation({ calcResult, rfRateType }) {
       <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Switching costs: {fmt(totalCost)}</p>
         <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
-          <li>Discharge fee — {fmt(discharge)} (paying out existing lender)</li>
-          <li>Establishment fee — {fmt(establishment)} (new lender setup)</li>
-          {other > 0 && <li>Valuation / legal / misc — {fmt(other)}</li>}
+          <li>
+            Discharge fee — {fmt(discharge)}
+            <span className="ml-1" style={{ color: '#f59e0b' }}>(industry average — confirm with your current lender)</span>
+          </li>
+          <li>
+            Establishment fee — {fmt(establishment)}
+            {best?.upfront_fees != null
+              ? <span className="ml-1" style={{ color: '#16a34a' }}>(from {best.lender} CDR data)</span>
+              : <span className="ml-1" style={{ color: '#f59e0b' }}>(industry average — confirm with {best?.lender || 'new lender'})</span>}
+          </li>
+          {other > 0 && <li>Valuation / legal / misc — {fmt(other)} <span style={{ color: '#f59e0b' }}>(industry average)</span></li>}
           {breakCost > 0 && <li style={{ color: '#ef4444' }}>Fixed-rate break cost (IRD estimate) — {fmt(breakCost)}</li>}
         </ul>
         {breakCost === 0 && isVariable && (

@@ -391,12 +391,22 @@ router.post('/calculate', async (req, res) => {
       }
     }
 
+    // If CDR substitution found a lender, use its actual published fees for the
+    // establishment cost instead of the hardcoded $600 default. Discharge fee
+    // is always from the user's current (outgoing) lender — CDR doesn't know
+    // that, so it stays at the default $350.
+    const cdrEstablishment = cdrRateUsed?.best?.upfront_fees;
+    const refinanceFeeOverrides = cdrEstablishment != null
+      ? { establishment_fee: Number(cdrEstablishment) }
+      : {};
+
     const { calculation, scenario: resolved } = runFromScenario(scenario, {
       clarifications: {
         selling_cost_pct: req.body?.selling_cost_pct ?? 0.025,
         resolve_optional: true,
         clear_assumptions: true,
       },
+      refinance_fees: refinanceFeeOverrides,
     });
     const presentation = buildPresentationPayload({
       scenario: resolved,
