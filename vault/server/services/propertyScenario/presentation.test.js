@@ -284,5 +284,89 @@ test('stub fallback rows are labeled MOCK with mock provenance', () => {
   assert.ok(p.lenders.rows.every((r) => r.provenance_label === 'MOCK'));
 });
 
+test('refinance-only scenario (no buy event) uses the actual loan balance, not the $1.2M/30yr placeholder', () => {
+  // Regression test for a 2026-07-18 bug: buildPresentationPayload's loan/term/rate
+  // resolution only ever checked `buy` events for the balance, so any switch_lender
+  // / refinance-only scenario (the structured-form path with no buy event) silently
+  // fell through to the hardcoded $1,200,000 / 360-month / 5.29% defaults for the
+  // calculator snapshots, lender comparison table, and amortization/cumulative charts
+  // — regardless of the user's real loan size.
+  const scenario = {
+    id: 'sc_refi_only',
+    events: [
+      {
+        type: 'switch_lender',
+        sequence: 1,
+        fields: {
+          current_loan: {
+            balance: 100000,
+            rate: 6.2,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 48,
+            state: 'QLD',
+          },
+          target_loan: {
+            balance: 100000,
+            rate: 5.95,
+            fixed_or_variable: 'variable',
+            term_remaining_months: 48,
+          },
+        },
+      },
+    ],
+  };
+  const calculation = { ready: true, totals: {}, caveats: [], assumptions: [] };
+  const p = buildPresentationPayload({ scenario, calculation });
+
+  assert.strictEqual(p.calculators.repayment.loan_amount, 100000);
+  assert.strictEqual(p.calculators.repayment.term_months, 48);
+  assert.strictEqual(p.calculators.repayment.annual_rate_pct, 5.95);
+  assert.ok(
+    !/1,200,000/.test(p.calculators.repayment.explanation),
+    `repayment explanation leaked the $1.2M placeholder: ${p.calculators.repayment.explanation}`
+  );
+
+  assert.ok(
+    !/1,200,000/.test(p.calculators.extra_repayments.explanation),
+    `extra_repayments explanation leaked the $1.2M placeholder: ${p.calculators.extra_repayments.explanation}`
+  );
+  assert.ok(
+    !/1,200,000/.test(p.calculators.offset.explanation),
+    `offset explanation leaked the $1.2M placeholder: ${p.calculators.offset.explanation}`
+  );
+
+  // Lender comparison + charts share the same resolved loan/term — must also be $100k/48mo.
+  assert.ok(p.lenders.rows.length > 0);
+  assert.ok(
+    p.lenders.rows.every((r) => r.monthly_repayment < 5000),
+    `lender row repayments look like they used the $1.2M placeholder: ${JSON.stringify(p.lenders.rows.map((r) => r.monthly_repayment))}`
+  );
+  assert.strictEqual(p.charts.amortization.schedule.length <= 5, true);
+});
+
+// refinance-only scenario using the `refinance` event-type alias (route accepts both
+// 'switch_lender' and 'refinance') must resolve identically — not silently regress
+// to the buy-only lookup because of a type-name mismatch.
+test('refinance event-type alias resolves the same as switch_lender', () => {
+  const scenario = {
+    id: 'sc_refi_alias',
+    events: [
+      {
+        type: 'refinance',
+        sequence: 1,
+        fields: {
+          current_loan: { balance: 250000, rate: 6.0, fixed_or_variable: 'variable', term_remaining_months: 200 },
+          target_loan: { balance: 250000, rate: 5.8, fixed_or_variable: 'variable', term_remaining_months: 200 },
+        },
+      },
+    ],
+  };
+  const calculation = { ready: true, totals: {}, caveats: [], assumptions: [] };
+  const p = buildPresentationPayload({ scenario, calculation });
+  assert.strictEqual(p.calculators.repayment.loan_amount, 250000);
+  assert.strictEqual(p.calculators.repayment.term_months, 200);
+  assert.strictEqual(p.calculators.repayment.annual_rate_pct, 5.8);
+});
+
 console.log(`\n${B}${passed} passed${X}, ${failed ? R : G}${failed} failed${X}`);
 process.exit(failed ? 1 : 0);

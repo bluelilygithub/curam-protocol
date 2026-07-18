@@ -412,16 +412,29 @@ function buildPresentationPayload({
   coverage,
   lenderFetchError,
 }) {
+  // switch_lender and refinance are the same concept (see routes/propertyScenario.js
+  // CDR substitution loop) — both must resolve identically here, or a refinance
+  // scenario silently falls through to the buy-only lookup below and defaults
+  // to a $1.2M/30yr placeholder loan regardless of what the user entered.
+  const refinanceEvent = scenario?.events?.find(
+    (e) => e.type === 'switch_lender' || e.type === 'refinance'
+  );
+  const buyEvent = scenario?.events?.find((e) => e.type === 'buy');
+
   const loan = loanAmount
-    || scenario?.events?.find((e) => e.type === 'buy')?.fields?.loan?.balance
+    || refinanceEvent?.fields?.target_loan?.balance
+    || refinanceEvent?.fields?.current_loan?.balance
+    || buyEvent?.fields?.loan?.balance
     || 1_200_000;
   const term = termMonths
-    || scenario?.events?.find((e) => e.type === 'switch_lender')?.fields?.target_loan?.term_remaining_months
-    || scenario?.events?.find((e) => e.type === 'buy')?.fields?.loan?.term_remaining_months
+    || refinanceEvent?.fields?.target_loan?.term_remaining_months
+    || refinanceEvent?.fields?.current_loan?.term_remaining_months
+    || buyEvent?.fields?.loan?.term_remaining_months
     || 360;
   const productRate = rate
-    || scenario?.events?.find((e) => e.type === 'switch_lender')?.fields?.target_loan?.rate
-    || scenario?.events?.find((e) => e.type === 'buy')?.fields?.loan?.rate
+    || refinanceEvent?.fields?.target_loan?.rate
+    || refinanceEvent?.fields?.current_loan?.rate
+    || buyEvent?.fields?.loan?.rate
     || 5.29;
 
   const hasLive = Array.isArray(liveLenders) && liveLenders.length > 0;

@@ -4,6 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-18 (property-scenario-calculator-loan-amount-bug-and-ci-guard)
+
+**Bug found by the user spot-checking Stage 5 calculator output against their own inputs:** a refinance scenario entered as QLD, variable, $100,000 owing, 48 months remaining produced calculator snapshots for a $1,200,000 loan at 5.95% over 4 years — the loan amount was 12x too high while the rate and term happened to be correct.
+
+**Root cause:** `buildPresentationPayload()` (`server/services/propertyScenario/presentation.js`) resolves the loan amount, rate, and term once and shares them across the calculator snapshots, the lender comparison table, the amortization chart, and the cumulative-cost chart. The `rate` and `term` lookups correctly checked `switch_lender` events' `target_loan` fields, but the `loan` (balance) lookup only ever checked `buy` events — there was no fallback to the refinance event's loan balance at all. Any refinance/switch-lender scenario submitted through the structured form (no `buy` event present) silently fell through every check and landed on the hardcoded placeholder default (`1_200_000`, `360` months, `5.29%`), while `rate`/`term` still resolved correctly from the real scenario — producing a result that looked plausible (right rate, right term) but was working from the wrong loan size throughout every downstream chart and table, not just the calculator cards.
+
+**Fix:** unified the loan/rate/term resolution to check `switch_lender` and `refinance` event types (target_loan → current_loan) before falling back to `buy` events, so all four consumers (calculator snapshots, lender comparison, amortization chart, cumulative-cost chart) resolve consistently from one source. Added two regression tests in `presentation.test.js`: a refinance-only scenario asserting the $100k/48mo/5.95% inputs flow through correctly (not the $1.2M placeholder), and a second confirming the `refinance` event-type alias resolves identically to `switch_lender`.
+
+**Process fix — added CI that was previously entirely absent:** this repo had zero CI before this session; the only signal on a broken build was Railway's own build step, which had already silently blocked every deploy for hours earlier today (see the outage entry below) with no proactive alert. Added `.github/workflows/build-check.yml` (repo root) running on every push/PR to `version-7` and `main`: a full `npm run build` (would have caught today's apostrophe syntax error before Railway ever saw the commit) plus the full offline property-scenario test suite (`parseScenario.test.js` excluded — it always calls the live Anthropic API).
+
+---
+
 ## 2026-07-18 (property-scenario-accuracy-audit-and-deploy-outage)
 
 **Critical finding — deploy pipeline had been silently broken for hours:** `railway deployment list` showed 9 consecutive failed builds starting at 07:04, including every commit made earlier this session (PDF export, CDR fee integration, UX overhaul below). Root cause: an unescaped apostrophe in a string literal (`'What's the real break cost...'`) in `PropertyScenarioViews.jsx` broke the Vite build with a syntax error. The live site was silently serving a stale build the entire time regardless of what got committed and pushed on top of it — every "fixed and pushed" claim from earlier in the day had never actually gone live. Fixed the syntax error, verified a full local `npm run build`, and confirmed via `railway deployment list` that the resulting deploy succeeded — first successful deploy since 07:04. **Lesson: `git push` succeeding is not evidence a fix is live — check the actual Railway deploy status and, ideally, the served asset bundle content.**

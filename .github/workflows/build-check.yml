@@ -1,0 +1,66 @@
+name: Build Check
+
+# Guards against the class of bug that broke every Vault deploy on 2026-07-18:
+# an unescaped apostrophe in a client .jsx string caused a hard Vite build
+# failure that Railway swallowed silently, blocking all deploys for hours
+# with no signal to the developer. This workflow fails loudly on push/PR
+# instead, before Railway ever sees the commit.
+
+on:
+  push:
+    branches: [version-7, main]
+  pull_request:
+    branches: [version-7, main]
+
+jobs:
+  client-build:
+    name: Client build (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vault
+        run: npm ci
+
+      - name: Build client
+        working-directory: vault
+        run: npm run build
+
+  property-scenario-tests:
+    name: Property Scenario unit tests (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vault
+        run: npm ci
+
+      - name: Run offline test suite
+        working-directory: vault
+        # parseScenario.test.js is excluded — it always calls the live Anthropic
+        # API and requires ANTHROPIC_API_KEY; every other *.test.js file here
+        # runs fully offline against fixtures/mocks (live-only probes live in
+        # separate *.probe.js files and are not picked up by this glob).
+        run: |
+          set -e
+          status=0
+          for f in $(find server/services/propertyScenario -name "*.test.js" ! -name "parseScenario.test.js" | sort); do
+            echo "::group::$f"
+            node "$f" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
