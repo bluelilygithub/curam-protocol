@@ -87,7 +87,10 @@ function RefinanceInterpretation({ calcResult, rfRateType }) {
   const totalCost = upfront + breakCost;
   const discharge = Number(refi.discharge_fee ?? 350);
   const establishment = Number(refi.establishment_fee ?? 600);
-  const other = Number(refi.other_costs ?? 400);
+  const valuationFee = Number(refi.valuation_fee ?? 250);
+  const legalFee = Number(refi.legal_fee ?? 400);
+  const govtFees = Number(refi.govt_fees ?? 340);
+  const govtFeesSource = refi.govt_fees_source || 'State land titles office fees';
   const currentRepayment = Number(refi.monthly_repayment_current ?? 0);
   const targetRepayment = Number(refi.monthly_repayment_target ?? 0);
   const isVariable = rfRateType === 'variable';
@@ -164,8 +167,10 @@ function RefinanceInterpretation({ calcResult, rfRateType }) {
             </div>
           </div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            † Comparison rate is a standardised figure that includes fees. The advertised rate ({best.rate}%) is used for repayment calculations above.
-            Source: CDR Open Banking — live data, fetched today.
+            † The advertised rate ({best.rate}%) is used for repayment calculations above. The comparison rate ({best.comparison_rate}%) is a standardised figure that includes fees and is based on a 25-year/$150,000 loan — it may not reflect your actual cost over your remaining term.
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: '#f59e0b' }}>
+            Advertised rates are not guaranteed — the rate you receive depends on your LVR, loan size, credit profile, and lender assessment. Source: CDR Open Banking live data.
           </p>
         </div>
       )}
@@ -196,32 +201,52 @@ function RefinanceInterpretation({ calcResult, rfRateType }) {
       )}
 
       {/* Cost breakdown */}
-      <div className="space-y-1 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Switching costs: {fmt(totalCost)}</p>
-        <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
-          <li>
-            Discharge fee — {fmt(discharge)}
-            <span className="ml-1" style={{ color: '#f59e0b' }}>(industry average — confirm with your current lender)</span>
+      <div className="space-y-1.5 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>All switching costs: {fmt(totalCost)}</p>
+        <ul className="text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
+          <li className="flex items-start gap-1">
+            <span className="shrink-0">Discharge fee (paying out your current lender) — {fmt(discharge)}</span>
+            <span className="shrink-0" style={{ color: '#f59e0b' }}>estimate $150–$500 · confirm with your current lender</span>
           </li>
-          <li>
-            Establishment fee — {fmt(establishment)}
+          <li className="flex items-start gap-1">
+            <span className="shrink-0">Establishment fee (new lender setup) — {fmt(establishment)}</span>
             {best?.upfront_fees != null
-              ? <span className="ml-1" style={{ color: '#16a34a' }}>(from {best.lender} CDR data)</span>
-              : <span className="ml-1" style={{ color: '#f59e0b' }}>(industry average — confirm with {best?.lender || 'new lender'})</span>}
+              ? <span className="shrink-0" style={{ color: '#16a34a' }}>from {best.lender} CDR data</span>
+              : <span className="shrink-0" style={{ color: '#f59e0b' }}>estimate $0–$1,000 · check new lender's fee schedule</span>}
           </li>
-          {other > 0 && <li>Valuation / legal / misc — {fmt(other)} <span style={{ color: '#f59e0b' }}>(industry average)</span></li>}
-          {breakCost > 0 && <li style={{ color: '#ef4444' }}>Fixed-rate break cost (IRD estimate) — {fmt(breakCost)}</li>}
+          <li className="flex items-start gap-1">
+            <span className="shrink-0">Valuation fee — {fmt(valuationFee)}</span>
+            <span className="shrink-0" style={{ color: '#f59e0b' }}>estimate $0–$600 · many lenders waive on refinance</span>
+          </li>
+          <li className="flex items-start gap-1">
+            <span className="shrink-0">Legal / conveyancing — {fmt(legalFee)}</span>
+            <span className="shrink-0" style={{ color: '#f59e0b' }}>estimate $300–$800</span>
+          </li>
+          <li className="flex items-start gap-1">
+            <span className="shrink-0">Government fees (mortgage discharge + re-registration) — {fmt(govtFees)}</span>
+            <span className="shrink-0" style={{ color: rfState ? '#16a34a' : '#f59e0b' }}>
+              {rfState ? `${rfState} land titles office · confirm fee schedule` : 'national average · varies $240–$440 by state'}
+            </span>
+          </li>
+          {breakCost > 0 && (
+            <li className="flex items-start gap-1" style={{ color: '#ef4444' }}>
+              <span>Fixed-rate break cost (IRD estimate) — {fmt(breakCost)}</span>
+            </li>
+          )}
         </ul>
         {breakCost === 0 && isVariable && (
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-            Break cost: $0 — variable rate loans have no early repayment penalty under Australian law.
+            Break cost: $0 — variable rate loans carry no early repayment penalty under Australian law.
           </p>
         )}
         {breakCost === 0 && !isVariable && (
           <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>
-            Break cost: estimated $0 — actual IRD depends on your lender's comparison rate in your original contract. Confirm with your lender before switching.
+            Break cost shown as $0 — actual IRD depends on your lender's comparison rate in the original contract. Confirm with your lender before switching.
           </p>
         )}
+        <p className="text-xs pt-0.5" style={{ color: 'var(--color-muted)' }}>
+          All cost figures are estimates. Get itemised quotes from both lenders before committing to a switch.
+        </p>
       </div>
 
       {/* Break-even */}
@@ -277,10 +302,15 @@ function SellInterpretation({ calcResult }) {
       </div>
 
       <div className="space-y-1">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Selling cost estimate</p>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Assumed at 2.5% of sale price — covers agent commission (~2%) and conveyancing/marketing (~0.5%).
-          Confirm the actual split with your agent and conveyancer before relying on this figure.
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Selling costs ({sellingCostPct ? `${sellingCostPct}% of sale price` : 'estimate'}): {fmt(sellingCosts)}</p>
+        <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
+          <li>Real estate agent commission: typically 1.5%–2.5% of sale price — varies by agent and location</li>
+          <li>Advertising / marketing: $2,000–$15,000 — depends on campaign type</li>
+          <li>Conveyancing / legal (vendor): $1,000–$2,500</li>
+          <li>Styling and minor repairs: varies widely</li>
+        </ul>
+        <p className="text-xs" style={{ color: '#f59e0b' }}>
+          The 2.5% assumption is an estimate. Get itemised quotes from an agent and conveyancer before committing.
         </p>
       </div>
 
@@ -294,17 +324,20 @@ function SellInterpretation({ calcResult }) {
         ) : taxableCgt > 0 ? (
           <>
             <p className="text-sm" style={{ color: '#ef4444' }}>
-              Taxable CGT estimate: {fmt(taxableCgt)} — included in your tax return, not at settlement.
+              Taxable CGT estimate: {fmt(taxableCgt)} — this is the gain, not the tax payable. Actual tax = gain × your marginal rate.
             </p>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Actual tax depends on your marginal rate and whether you've held the property &gt;12 months (50% discount may apply). Confirm with your accountant.
+              The 50% CGT discount applies if held &gt;12 months (individuals). CGT is reported in your tax return — not deducted at settlement.
             </p>
           </>
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            CGT: $0 — either exempt or no capital gain in this scenario.
+            CGT: $0 — either exempt or no capital gain on this simplified cost base.
           </p>
         )}
+        <p className="text-xs pt-1" style={{ color: '#f59e0b' }}>
+          Important: the CGT estimate uses your purchase price as the cost base. Your actual cost base may also include stamp duty paid at purchase, conveyancing fees, and capital improvements — all of which reduce taxable gain. Provide these figures for a more accurate estimate. Not tax advice — confirm with a tax agent.
+        </p>
       </div>
     </div>
   );
@@ -350,10 +383,10 @@ function BuyInterpretation({ calcResult }) {
           <p className="text-sm font-medium" style={{ color: '#f59e0b' }}>LMI: {fmt(lmi)}</p>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             Lenders Mortgage Insurance applies because your LVR exceeds 80%. LMI protects the lender, not you — it adds to your loan cost.
-            This estimate uses standard premium tables; actual LMI is lender-specific and varies.
+            This estimate uses indicative premium tables; actual LMI is priced by the insurer (Helia or QBE) and varies by lender, loan amount, postcode, and credit profile.
           </p>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            To avoid LMI: increase deposit to {purchasePrice > 0 ? fmt(purchasePrice * 0.2) : '20% of purchase price'} (20% LVR) or use a guarantor.
+            To avoid LMI: increase deposit to {purchasePrice > 0 ? fmt(purchasePrice * 0.2) : '20% of purchase price'} (20% LVR) or explore a family guarantee arrangement.
           </p>
         </div>
       ) : (
@@ -361,6 +394,22 @@ function BuyInterpretation({ calcResult }) {
           <p className="text-sm" style={{ color: '#16a34a' }}>No LMI — deposit is 20% or more of purchase price.</p>
         </div>
       )}
+
+      {/* Additional certain costs not included in the calculation */}
+      <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Additional costs not included in this estimate</p>
+        <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
+          <li>Conveyancing / legal (buyer): $1,500–$3,000 — required for every purchase</li>
+          <li>Building and pest inspection: $400–$800 — strongly recommended before exchange</li>
+          <li>Loan application / establishment fee: $0–$600 — check your lender's fee schedule</li>
+          <li>Title insurance: $250–$500 (optional but recommended)</li>
+          <li>Council rates / water adjustment at settlement: varies by property and timing</li>
+          <li>Moving costs: varies</li>
+        </ul>
+        <p className="text-xs" style={{ color: '#f59e0b' }}>
+          Budget an additional $3,000–$6,000 above stamp duty and LMI for these transaction costs.
+        </p>
+      </div>
     </div>
   );
 }
@@ -796,6 +845,7 @@ export default function PropertyScenarioPage() {
   const [scenarioType, setScenarioType] = useState(null);
 
   // Refinance form fields
+  const [rfState, setRfState] = useState('');
   const [rfBalance, setRfBalance] = useState('');
   const [rfRate, setRfRate] = useState('');
   const [rfRateType, setRfRateType] = useState('variable');
@@ -1000,11 +1050,11 @@ export default function PropertyScenarioPage() {
   }, [demo, demoLoading, loadDemo]);
 
   // ── Direct calculation (structured forms → /calculate, no LLM) ────────────
-  const submitDirect = useCallback(async (scenario) => {
+  const submitDirect = useCallback(async (scenario, extraBody = {}) => {
     setCalcError(null);
     startProcessing('Running calculation…', 'Computing your scenario. Please don\'t navigate away.');
     try {
-      const res = await api.post('/api/property-scenario/calculate', { scenario });
+      const res = await api.post('/api/property-scenario/calculate', { scenario, ...extraBody });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Calculation failed');
       setCalcResult(data);
@@ -1033,13 +1083,17 @@ export default function PropertyScenarioPage() {
     };
     const targetRate = rfTargetMode === 'specific' && rfTargetRate ? parseFloat(rfTargetRate) : rate;
     const targetLoan = { ...currentLoan, rate: targetRate };
-    submitDirect({
-      id: `sc_${Date.now()}`, title: 'Refinance / switch lender', currency: 'AUD',
-      starting_properties: [{ id: 'prop_1', label: 'Current property', current_loan: currentLoan }],
-      events: [{ id: 'ev_1', type: 'switch_lender', sequence: 1, label: 'Switch lender',
-        fields: { property_id: 'prop_1', current_loan: currentLoan, target_loan: targetLoan } }],
-      unresolved_assumptions: [], dependencies: [],
-    });
+    submitDirect(
+      {
+        id: `sc_${Date.now()}`, title: 'Refinance / switch lender', currency: 'AUD',
+        starting_properties: [{ id: 'prop_1', label: 'Current property', current_loan: currentLoan }],
+        events: [{ id: 'ev_1', type: 'switch_lender', sequence: 1, label: 'Switch lender',
+          fields: { property_id: 'prop_1', current_loan: currentLoan, target_loan: targetLoan } }],
+        unresolved_assumptions: [], dependencies: [],
+      },
+      // Pass state so the server can look up the correct government mortgage registration fees
+      rfState ? { state: rfState } : {}
+    );
   };
 
   const submitSell = () => {
@@ -1208,6 +1262,14 @@ export default function PropertyScenarioPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State</span>
+                      <select value={rfState} onChange={(e) => setRfState(e.target.value)} style={FIELD}>
+                        <option value="">Select state (for govt fees)…</option>
+                        {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </label>
+                    <div />
+                    <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current loan balance ($) *</span>
                       <input type="text" inputMode="decimal" value={rfBalance} onChange={(e) => setRfBalance(e.target.value)} placeholder="e.g. 100000" style={FIELD} />
                     </label>
@@ -1354,6 +1416,7 @@ export default function PropertyScenarioPage() {
                   {scenarioType === 'refinance' && (
                     <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
                       {[
+                        rfState ? { label: 'State', value: rfState } : null,
                         { label: 'Current balance', value: rfBalance ? `$${Number(rfBalance).toLocaleString('en-AU')}` : '—' },
                         { label: 'Current rate', value: rfRate ? `${rfRate}% p.a.` : '—' },
                         { label: 'Rate type', value: rfRateType || '—' },
@@ -1413,7 +1476,7 @@ export default function PropertyScenarioPage() {
                   <PdfDownloadButtons
                     calcResult={calcResult}
                     scenarioType={scenarioType}
-                    inputs={{ rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb }}
+                    inputs={{ rfState, rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb }}
                     getIcon={getIcon}
                     addToast={addToast}
                   />

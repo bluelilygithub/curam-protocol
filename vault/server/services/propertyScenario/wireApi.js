@@ -155,7 +155,9 @@ function clarifyingForm(scenario, clarifyingQuestions = [], validation = null) {
   const byLabel = new Set(); // also dedup by humanized label to prevent semantic duplicates
 
   function addRow(row) {
-    if (row.field_path && byPath.has(row.field_path)) return;
+    // 'clarifying_questions' is a sentinel path shared by all narrative questions —
+    // don't block on it; use message/label dedup only for that category.
+    if (row.field_path && row.field_path !== 'clarifying_questions' && byPath.has(row.field_path)) return;
     if (byMessage.has(String(row.message || '').trim().toLowerCase())) return;
     const lk = String(row.label || '').trim().toLowerCase();
     if (lk && byLabel.has(lk)) return;

@@ -1,11 +1,21 @@
 'use strict';
 
-const { roundMoney } = require('./tables');
+const { roundMoney, MORTGAGE_GOVT_FEES, MORTGAGE_GOVT_FEES_DEFAULT } = require('./tables');
 
-/** Default fee assumptions when Scenario does not supply them. */
-const DEFAULT_DISCHARGE_FEE = 350;
-const DEFAULT_ESTABLISHMENT_FEE = 600;
-const DEFAULT_OTHER_COSTS = 400; // valuation / legal sketch
+/**
+ * Default fee assumptions — used only when CDR data or explicit opts don't supply a figure.
+ * Sources:
+ *   Discharge fee:     ASIC Moneysmart / lender schedules — typical $150–$500; $350 is midpoint
+ *   Establishment fee: varies widely ($0 for many online lenders to $1,000+ for some majors);
+ *                      $600 is a conservative mid-market estimate — CDR data overrides this
+ *   Valuation fee:     $0 (many lenders waive for refinance) to $600; $250 is midpoint
+ *   Legal/conveyancing:$300–$800 for refinance; $400 is midpoint
+ *   Govt fees:         See MORTGAGE_GOVT_FEES table in tables.js — state-specific land titles fees
+ */
+const DEFAULT_DISCHARGE_FEE = 350;         // range $150–$500
+const DEFAULT_ESTABLISHMENT_FEE = 600;     // range $0–$1,000; CDR data should override
+const DEFAULT_VALUATION_FEE = 250;         // range $0–$600; often waived on refinance
+const DEFAULT_LEGAL_FEE = 400;             // range $300–$800
 
 /**
  * Approximate monthly repayment (P&I) for break-even maths.
@@ -28,9 +38,12 @@ function monthlyRepayment(balance, annualRatePct, termMonths) {
  *
  * @param {object} fields — refinance or switch_lender event.fields
  * @param {object} [opts]
- * @param {number} [opts.discharge_fee]
- * @param {number} [opts.establishment_fee]
- * @param {number} [opts.other_costs]
+ * @param {number}  [opts.discharge_fee]      — override discharge fee
+ * @param {number}  [opts.establishment_fee]  — override establishment fee (CDR data preferred)
+ * @param {number}  [opts.valuation_fee]      — override valuation fee
+ * @param {number}  [opts.legal_fee]          — override legal/conveyancing fee
+ * @param {boolean} [opts.valuation_waived]   — set true when lender confirms no valuation fee
+ * @param {string}  [opts.state]              — AU state code for government fees (NSW, VIC, etc.)
  * @returns {object}
  */
 function calculateRefinanceBreakEven(fields, opts = {}) {
@@ -53,25 +66,70 @@ function calculateRefinanceBreakEven(fields, opts = {}) {
   if (!Number.isFinite(tgtRate) || tgtRate < 0) errors.push('target_loan.rate required');
   if (!Number.isFinite(curTerm) || curTerm <= 0) errors.push('current_loan.term_remaining_months required');
 
+  // ── Itemised cost build-up ───────────────────────────────────────────────
   const discharge = opts.discharge_fee != null ? Number(opts.discharge_fee) : DEFAULT_DISCHARGE_FEE;
   const establishment = opts.establishment_fee != null ? Number(opts.establishment_fee) : DEFAULT_ESTABLISHMENT_FEE;
-  const other = opts.other_costs != null ? Number(opts.other_costs) : DEFAULT_OTHER_COSTS;
-  const upfrontCost = roundMoney(discharge + establishment + other);
 
-  assumptions.push(
-    `Upfront refinance costs assumed: discharge $${discharge}, establishment $${establishment}, other $${other} (override via opts).`
-  );
+  const valuationWaived = opts.valuation_waived === true;
+  const valuation = valuationWaived ? 0
+    : (opts.valuation_fee != null ? Number(opts.valuation_fee) : DEFAULT_VALUATION_FEE);
+
+  const legal = opts.legal_fee != null ? Number(opts.legal_fee) : DEFAULT_LEGAL_FEE;
+
+  // Government land titles fees: discharge old mortgage + register new mortgage
+  const state = opts.state || null;
+  const govtFeeEntry = state ? MORTGAGE_GOVT_FEES[state] : null;
+  const govtFees = govtFeeEntry ? govtFeeEntry.total : MORTGAGE_GOVT_FEES_DEFAULT;
+  const govtFeeSource = govtFeeEntry
+    ? govtFeeEntry.note
+    : `National average used — state not supplied (range $240–$440 depending on state)`;
+
+  const upfrontCost = roundMoney(discharge + establishment + valuation + legal + govtFees);
+
+  // ── Source / assumption notes ────────────────────────────────────────────
+  if (opts.discharge_fee != null) {
+    assumptions.push(`Discharge fee $${discharge} — from CDR/lender data.`);
+  } else {
+    assumptions.push(`Discharge fee $${discharge} — industry midpoint ($150–$500); confirm with your current lender.`);
+  }
+
+  if (opts.establishment_fee != null) {
+    assumptions.push(`Establishment fee $${establishment} — from lender CDR data.`);
+  } else {
+    assumptions.push(`Establishment fee $${establishment} — industry estimate ($0–$1,000); check new lender's fee schedule.`);
+  }
+
+  if (valuationWaived) {
+    assumptions.push('Valuation fee: $0 — lender confirmed waived.');
+  } else if (opts.valuation_fee != null) {
+    assumptions.push(`Valuation fee $${valuation} — from lender data.`);
+  } else {
+    assumptions.push(`Valuation fee $${valuation} — estimate ($0–$600); many lenders waive for refinance — confirm.`);
+  }
+
+  assumptions.push(`Legal/conveyancing $${legal} — estimate ($300–$800) for refinance title work.`);
+
+  assumptions.push(`Government fees $${govtFees} — ${govtFeeSource}. Covers mortgage discharge (old lender) + new mortgage registration with state land titles.`);
+
   caveats.push(
-    'Break-even ignores cashback, honeymoon rates, offset accounts, and repayment type changes (IO vs P&I).'
+    'Break-even ignores cashback offers, honeymoon rates, offset account differences, and IO vs P&I repayment type changes.'
   );
   caveats.push(
     'If switching from fixed, early-repayment / break costs may apply separately — see early payout module.'
+  );
+  caveats.push(
+    'Some lenders bundle valuation and legal into the establishment fee — confirm itemised costs with each lender before switching.'
   );
 
   if (errors.length) {
     return {
       ok: false,
       upfront_cost: upfrontCost,
+      discharge_fee: discharge,
+      establishment_fee: establishment,
+      valuation_fee: valuation,
+      legal_fee: legal,
+      govt_fees: govtFees,
       monthly_repayment_current: null,
       monthly_repayment_target: null,
       monthly_saving: null,
@@ -117,7 +175,10 @@ function calculateRefinanceBreakEven(fields, opts = {}) {
     upfront_cost: upfrontCost,
     discharge_fee: discharge,
     establishment_fee: establishment,
-    other_costs: other,
+    valuation_fee: valuation,
+    legal_fee: legal,
+    govt_fees: govtFees,
+    govt_fees_source: govtFeeSource,
     monthly_repayment_current: payCurrent,
     monthly_repayment_target: payTarget,
     monthly_saving: monthlySaving,
@@ -134,5 +195,6 @@ module.exports = {
   monthlyRepayment,
   DEFAULT_DISCHARGE_FEE,
   DEFAULT_ESTABLISHMENT_FEE,
-  DEFAULT_OTHER_COSTS,
+  DEFAULT_VALUATION_FEE,
+  DEFAULT_LEGAL_FEE,
 };

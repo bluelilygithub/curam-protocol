@@ -6,7 +6,10 @@
  * AS_OF: 2025-07-01 (illustrative; confirm with state revenue office before acting).
  */
 
-const AS_OF = '2025-07-01';
+// Stamp duty tables last reviewed 2025-07-01. AU state revenue offices update
+// thresholds periodically. Always direct users to the relevant state revenue
+// office before relying on these figures for any financial decision.
+const AS_OF = '2025-07-01 (verify with state revenue office for 2026 rates)';
 
 /**
  * Bracket: duty = base + rate_per_dollar * max(0, value - over)
@@ -169,10 +172,33 @@ function dutyFromBrackets(value, brackets) {
   return 0;
 }
 
+/**
+ * Government mortgage registration fees (land titles office).
+ * Refinancing requires: (1) discharging the old mortgage, (2) registering the new one.
+ * Both transactions attract a state government fee. Figures are approximate 2024-2025
+ * — verify with your conveyancer as these are updated periodically.
+ *
+ * Each entry is the total of discharge + new registration combined.
+ */
+const MORTGAGE_GOVT_FEES = {
+  NSW: { discharge: 160, registration: 160, total: 320, note: 'NSW Land Registry Services — approx 2024-25' },
+  VIC: { discharge: 120, registration: 120, total: 240, note: 'Land Use Victoria — approx 2024-25' },
+  QLD: { discharge: 220, registration: 220, total: 440, note: 'Titles Queensland — approx 2024-25' },
+  WA:  { discharge: 190, registration: 190, total: 380, note: 'Landgate WA — approx 2024-25' },
+  SA:  { discharge: 195, registration: 195, total: 390, note: 'SA Land Titles — approx 2024-25' },
+  TAS: { discharge: 135, registration: 135, total: 270, note: 'Land Tasmania — approx 2024-25' },
+  ACT: { discharge: 160, registration: 160, total: 320, note: 'ACT Land Titles — approx 2024-25' },
+  NT:  { discharge: 155, registration: 155, total: 310, note: 'NT Land Titles — approx 2024-25' },
+};
+// National average used when state is unknown
+const MORTGAGE_GOVT_FEES_DEFAULT = 340;
+
 module.exports = {
   AS_OF,
   STAMP_DUTY_TABLES,
   LMI_TABLE,
+  MORTGAGE_GOVT_FEES,
+  MORTGAGE_GOVT_FEES_DEFAULT,
   dutyFromBrackets,
   roundMoney,
 };

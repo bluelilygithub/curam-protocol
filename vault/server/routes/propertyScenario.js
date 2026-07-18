@@ -396,9 +396,15 @@ router.post('/calculate', async (req, res) => {
     // is always from the user's current (outgoing) lender — CDR doesn't know
     // that, so it stays at the default $350.
     const cdrEstablishment = cdrRateUsed?.best?.upfront_fees;
-    const refinanceFeeOverrides = cdrEstablishment != null
-      ? { establishment_fee: Number(cdrEstablishment) }
-      : {};
+
+    // Pass state so the calc can look up government mortgage registration fees
+    // (land titles office fees are state-specific and are a real, certain cost).
+    const rfState = req.body?.state || null;
+
+    const refinanceFeeOverrides = {
+      ...(cdrEstablishment != null ? { establishment_fee: Number(cdrEstablishment) } : {}),
+      ...(rfState ? { state: rfState } : {}),
+    };
 
     const { calculation, scenario: resolved } = runFromScenario(scenario, {
       clarifications: {

@@ -185,14 +185,14 @@ async function main() {
   });
 
   await test('clarify: invalid request without scenario', async () => {
-    const r = executeClarify({});
+    const r = await executeClarify({});
     assert.strictEqual(r.ok, false);
     assert.strictEqual(r.error, 'invalid_request');
   });
 
   await test('clarify loop: answers → ready_for_calculations (simple refinance)', async () => {
     const partial = incompleteParseScenario();
-    const mid = executeClarify({
+    const mid = await executeClarify({
       scenario: partial,
       answers: { ass_state: 'NSW' },
     });
@@ -228,7 +228,7 @@ async function main() {
       });
 
       const s = scenarioSellBuySwitchValid();
-      const result = executeClarify({
+      const result = await executeClarify({
         source_text: SOURCE_TEXT_SELL_BUY_SWITCH,
         scenario: skeleton,
         clear_assumptions: true,
@@ -278,7 +278,7 @@ async function main() {
   });
 
   await test('clarify failure inside apply is structured clarify_failed', async () => {
-    const r = executeClarify(
+    const r = await executeClarify(
       { scenario: incompleteParseScenario(), answers: { ass_state: 'NSW' } },
       {
         runFromScenario: () => {
@@ -318,7 +318,7 @@ async function main() {
       unresolved_assumptions: [],
     });
 
-    const r = executeClarify({ scenario: broken });
+    const r = await executeClarify({ scenario: broken });
     assert.strictEqual(r.ok, true);
     assert.strictEqual(r.ready_for_calculations, false);
     assert.ok(r.clarifying_form.length >= 1, 'expected validation-driven form rows');
@@ -365,10 +365,10 @@ async function main() {
       unresolved_assumptions: [],
     });
 
-    const blocked = executeClarify({ scenario: partial });
+    const blocked = await executeClarify({ scenario: partial });
     assert.strictEqual(blocked.ready_for_calculations, false);
 
-    const unlocked = executeClarify({
+    const unlocked = await executeClarify({
       scenario: partial,
       answers: {
         'events.0.fields.target_loan.balance': 400_000,

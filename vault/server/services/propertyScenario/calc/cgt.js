@@ -57,7 +57,7 @@ function calculateCgt(sellFields, opts = {}) {
 
   const grossGain = roundMoney(salePrice - costBase);
   assumptions.push(
-    'Cost base uses purchase_price only — selling costs, capital works, stamp duty on purchase, and improvements are not yet included.'
+    'Cost base uses purchase_price only. Under ATO rules, your actual cost base also includes: stamp duty paid on purchase, conveyancing/legal fees on acquisition, capital improvements, and some borrowing costs — all of which reduce your taxable gain. Providing these figures would lower the CGT estimate shown here.'
   );
   caveats.push(
     'This is not tax advice. Capital gains tax depends on your full cost base, ownership history, and ATO rules — consult a tax agent.'

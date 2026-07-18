@@ -184,14 +184,18 @@ test('Refinance break-even months from rate cut', () => {
       fixed_or_variable: 'variable',
       term_remaining_months: 300,
     },
-  }, { discharge_fee: 350, establishment_fee: 600, other_costs: 400 });
+  // Use explicit opts so test isn't coupled to default fee values.
+  // Upfront: discharge(350) + establishment(600) + valuation(250) + legal(400) + govt(340) = 1940
+  }, { discharge_fee: 350, establishment_fee: 600, valuation_fee: 250, legal_fee: 400 });
+  // state not supplied → national average govt fee (340)
+  const expectedUpfront = 350 + 600 + 250 + 400 + 340; // 1940
 
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.upfront_cost, 1_350);
+  assert.strictEqual(r.upfront_cost, expectedUpfront);
   assert.ok(r.monthly_saving > 0);
   assert.ok(r.break_even_months >= 1);
-  // Hand: savings ≈ difference of P&I; break-even = ceil(1350 / saving)
-  const expectedMonths = Math.ceil(1350 / r.monthly_saving);
+  // Hand: break-even = ceil(upfront / saving)
+  const expectedMonths = Math.ceil(expectedUpfront / r.monthly_saving);
   assert.strictEqual(r.break_even_months, expectedMonths);
   assert.ok(r.caveats.length >= 1);
 });
