@@ -70,6 +70,8 @@ function ReportHeader({ scenarioType, generatedAt }) {
     sell: 'Sell a Property',
     buy: 'Buy a Property',
     compound: 'Multiple Events',
+    qualify: 'Buyer Qualification Check',
+    calculators: 'Standalone Calculators',
   };
   return (
     <View style={s.header}>
@@ -643,6 +645,220 @@ function PropertyScenarioPdfDocument({ calcResult, inputs, scenarioType, tabFilt
   );
 }
 
+// ─── Buyer Qualification Document ─────────────────────────────────────────────
+
+const STATUS_COLORS_PDF = {
+  pass: { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'PASS' },
+  warn: { bg: '#fefce8', border: '#fde047', text: '#92400e', label: 'CHECK REQUIRED' },
+  fail: { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'LIKELY BLOCKED' },
+  info: { bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', label: 'NOTE' },
+};
+
+function QualifyCheckRow({ check }) {
+  const col = STATUS_COLORS_PDF[check.status] || STATUS_COLORS_PDF.info;
+  return (
+    <View style={{ marginBottom: 8, borderLeftWidth: 3, borderLeftColor: col.border, borderLeftStyle: 'solid', paddingLeft: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 2 }}>
+        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: MUTED, marginRight: 6, textTransform: 'uppercase' }}>
+          {check.label}
+        </Text>
+        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: col.text, backgroundColor: col.bg, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2 }}>
+          {col.label}
+        </Text>
+      </View>
+      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{check.headline}</Text>
+      {check.detail ? (
+        <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{check.detail}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function QualificationDocument({ result, inputs }) {
+  const generatedAt = new Date().toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const s2 = result?.summary || {};
+  const checks = result?.checks || [];
+  const caveats = result?.caveats || [];
+  const assumptions = result?.assumptions || [];
+  const inp = inputs || {};
+
+  const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
+
+  return (
+    <Document title="Buyer Qualification Report" author="Curam Vault" creator="Curam Vault">
+      <Page size="A4" style={s.page}>
+        {/* Header */}
+        <View style={s.header}>
+          <Text style={s.title}>Buyer Qualification Report</Text>
+          <Text style={s.subtitle}>
+            Generated {generatedAt} · Deterministic AU mortgage pre-qualification checks · Not a credit decision or pre-approval
+          </Text>
+        </View>
+
+        {/* Inputs summary */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>What was assessed</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {[
+              ['Purchase price', inp.property_value ? fmtMoney(inp.property_value) : '—'],
+              ['Deposit', inp.deposit_amount ? fmtMoney(inp.deposit_amount) : '—'],
+              ['Deposit %', s2.lvr_pct != null ? `${(100 - s2.lvr_pct).toFixed(1)}%` : '—'],
+              ['LVR', s2.lvr_pct != null ? `${s2.lvr_pct.toFixed(1)}%` : '—'],
+              ['State', inp.state || '—'],
+              ['FHB', inp.is_fhb ? 'Yes' : 'No'],
+              ['Purpose', inp.is_ppor !== false ? 'PPOR' : 'Investment'],
+              ['Gross income', inp.gross_annual_income ? `$${Number(inp.gross_annual_income).toLocaleString('en-AU')}/yr` : '—'],
+              ['Partner income', inp.partner_gross_income ? `$${Number(inp.partner_gross_income).toLocaleString('en-AU')}/yr` : 'None'],
+              ['Household', inp.household_type || '—'],
+              ['Employment', inp.employment_type?.replace(/_/g, ' ') || '—'],
+              ['HECS/HELP', inp.has_hecs ? 'Yes' : 'No'],
+              ['Existing debts/mo', inp.monthly_debt_repayments ? fmtMoney(inp.monthly_debt_repayments) : '$0'],
+              ['Declared expenses/mo', inp.monthly_expenses ? fmtMoney(inp.monthly_expenses) : 'HEM benchmark used'],
+              ['Target rate', inp.target_rate_pct ? `${inp.target_rate_pct}% p.a.` : '—'],
+              ['Loan term', inp.loan_term_years ? `${inp.loan_term_years} years` : '30 years'],
+            ].map(([label, value]) => (
+              <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
+                <Text style={{ width: '55%', fontSize: 8, color: MUTED }}>{label}</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Overall verdict */}
+        <View style={[s.section, { backgroundColor: statusColors.bg, padding: 10, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
+          <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
+            Overall: {statusColors.label}
+            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely block${s2.fail_count !== 1 ? 's' : ''}` : ''}
+            {s2.warn_count > 0 ? ` — ${s2.warn_count} area${s2.warn_count !== 1 ? 's' : ''} to verify` : ''}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {[
+              ['Loan requested', fmtMoney(s2.loan_requested)],
+              ['Max indicative capacity', s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'],
+              ['Est. monthly repayment', s2.monthly_repayment_estimate != null ? fmtMonthly(s2.monthly_repayment_estimate) : '—'],
+              ['APRA assessment rate', `${s2.assessment_rate_pct}%`],
+              ['DTI ratio', s2.dti_ratio != null ? `${s2.dti_ratio.toFixed(1)}×` : '—'],
+              ['HECS annual repayment', s2.hecs_annual_repayment > 0 ? fmtMoney(s2.hecs_annual_repayment) : 'None'],
+            ].map(([label, value]) => (
+              <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
+                <Text style={{ width: '55%', fontSize: 8, color: MUTED }}>{label}</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Individual checks */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Qualification checks</Text>
+          {checks.map((check) => (
+            <QualifyCheckRow key={check.id} check={check} />
+          ))}
+        </View>
+
+        {/* Assumptions */}
+        {assumptions.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Assumptions applied</Text>
+            {assumptions.map((a, i) => (
+              <Text key={i} style={s.caveatBullet}>· {a}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* Caveats & disclaimer */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Important caveats</Text>
+          {caveats.map((c, i) => (
+            <Text key={i} style={s.caveatBullet}>· {c}</Text>
+          ))}
+          <View style={s.warning}>
+            <Text>
+              This report is an indicative pre-qualification check using published Australian lending rules (APRA serviceability buffer, HEM benchmarks, ATO HECS schedule, NHFIC FHBG caps). It is NOT a credit decision, NOT pre-approval, and NOT a guarantee of finance. Lenders conduct full credit assessments using proprietary systems, credit history files, and policy overlays that cannot be replicated here. Figures may differ materially from a lender's actual assessment.
+            </Text>
+          </View>
+        </View>
+
+        <ReportFooter generatedAt={generatedAt} />
+      </Page>
+    </Document>
+  );
+}
+
+// ─── Standalone Calculators Document ──────────────────────────────────────────
+
+function CalculatorsDocument({ calcInputs, calcResults }) {
+  const generatedAt = new Date().toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const { loanAmount, rate, termYears, extra, offsetBalance } = calcInputs || {};
+  const { repayment, extra_repayments, offset, borrowing_power } = calcResults || {};
+
+  return (
+    <Document title="Loan Calculators Report" author="Curam Vault" creator="Curam Vault">
+      <Page size="A4" style={s.page}>
+        <View style={s.header}>
+          <Text style={s.title}>Standalone Loan Calculators Report</Text>
+          <Text style={s.subtitle}>
+            Generated {generatedAt} · Deterministic P&I calculations · Standalone — not linked to any scenario
+          </Text>
+        </View>
+
+        {/* Inputs */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Inputs used</Text>
+          {[
+            ['Loan amount', loanAmount ? fmtMoney(loanAmount) : '—'],
+            ['Interest rate', rate ? `${rate}% p.a.` : '—'],
+            ['Loan term', termYears ? `${termYears} years` : '—'],
+            ['Extra monthly repayment', extra ? fmtMoney(extra) : '$200 (default)'],
+            ['Offset account balance', offsetBalance ? fmtMoney(offsetBalance) : '$50,000 (default)'],
+          ].map(([label, value]) => (
+            <View key={label} style={s.row}>
+              <Text style={s.label}>{label}</Text>
+              <Text style={s.value}>{value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Results */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Calculator results</Text>
+          {[
+            { title: 'Monthly repayment (P&I)', result: repayment },
+            { title: `Extra repayments (+$${extra || 200}/mo)`, result: extra_repayments },
+            { title: `Offset account ($${Number(offsetBalance || 50000).toLocaleString('en-AU')})`, result: offset },
+            borrowing_power ? { title: 'Borrowing power', result: borrowing_power } : null,
+          ].filter(Boolean).map((c) => (
+            <View key={c.title} style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 3 }}>{c.title}</Text>
+              <Text style={{ fontSize: 9, color: '#1A1A1A', lineHeight: 1.4 }}>
+                {c.result?.explanation || (c.result?.ok === false ? `Error: ${c.result?.errors?.[0] || 'calculation failed'}` : '—')}
+              </Text>
+              {c.title.includes('Borrowing') && c.result?.caveats?.[0] && (
+                <Text style={[s.caveat, { marginTop: 3 }]}>{c.result.caveats[0]}</Text>
+              )}
+            </View>
+          ))}
+        </View>
+
+        <View style={s.warning}>
+          <Text>
+            These calculations use the standard Australian P&I amortisation formula. They are standalone estimates and do not constitute financial or lending advice. Actual repayments depend on your lender's specific product terms, fees, and repayment schedule.
+          </Text>
+        </View>
+
+        <ReportFooter generatedAt={generatedAt} />
+      </Page>
+    </Document>
+  );
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -671,6 +887,40 @@ export async function downloadPropertyScenarioPdf(calcResult, inputs, scenarioTy
   const ts = new Date().toISOString().slice(0, 10);
   a.href = url;
   a.download = `property-scenario-${scenarioType}-${label}-${ts}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generate and download a buyer qualification PDF.
+ * @param {object} result  - response from /calculators/buyer-qualify
+ * @param {object} inputs  - the raw form inputs sent to that endpoint
+ */
+export async function downloadQualificationPdf(result, inputs) {
+  const doc = <QualificationDocument result={result} inputs={inputs} />;
+  const blob = await pdf(doc).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `buyer-qualification-${ts}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generate and download a standalone calculators PDF.
+ * @param {object} calcInputs   - { loanAmount, rate, termYears, extra, offsetBalance }
+ * @param {object} calcResults  - { repayment, extra_repayments, offset, borrowing_power }
+ */
+export async function downloadCalculatorsPdf(calcInputs, calcResults) {
+  const doc = <CalculatorsDocument calcInputs={calcInputs} calcResults={calcResults} />;
+  const blob = await pdf(doc).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `loan-calculators-${ts}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }

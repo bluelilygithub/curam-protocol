@@ -12,6 +12,16 @@ async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUp
   const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
   return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers);
 }
+
+async function downloadQualifyPdf(result, inputs) {
+  const { downloadQualificationPdf } = await import('../utils/propertyScenarioPdf');
+  return downloadQualificationPdf(result, inputs);
+}
+
+async function downloadCalcsPdf(calcInputs, calcResults) {
+  const { downloadCalculatorsPdf } = await import('../utils/propertyScenarioPdf');
+  return downloadCalculatorsPdf(calcInputs, calcResults);
+}
 import {
   RateComparisonChart,
   CumulativeCostChart,
@@ -628,6 +638,35 @@ function BuyerQualifyForm({ getIcon, addToast }) {
     }
   }
 
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  async function handleQualifyPdf() {
+    setPdfBusy(true);
+    try {
+      await downloadQualifyPdf(result, {
+        property_value: parseFloat(qPrice),
+        deposit_amount: parseFloat(qDeposit),
+        state: qState,
+        is_fhb: qFhb === 'yes',
+        is_ppor: qPpor === 'ppor',
+        gross_annual_income: parseFloat(qIncome),
+        partner_gross_income: qPartner ? parseFloat(qPartner) : 0,
+        household_type: qHousehold,
+        employment_type: qEmployment,
+        has_hecs: qHecs === 'yes',
+        monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
+        monthly_expenses: qExpenses ? parseFloat(qExpenses) : undefined,
+        loan_term_years: parseFloat(qTerm) || 30,
+        target_rate_pct: parseFloat(qRate),
+      });
+    } catch (err) {
+      console.error('[PDF] qualification failed:', err);
+      addToast('PDF generation failed — ' + (err?.message || 'unknown error'), 'error');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   const s = result?.summary;
   const overallColor = s ? STATUS_COLOR[s.overall_status] : null;
   const overallBg    = s ? STATUS_BG[s.overall_status] : null;
@@ -815,6 +854,18 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               <p key={i} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>· {c}</p>
             ))}
           </div>
+
+          {/* PDF download */}
+          <button
+            type="button"
+            disabled={pdfBusy}
+            onClick={handleQualifyPdf}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+          >
+            {getIcon('download', { size: 13 })}
+            {pdfBusy ? 'Generating…' : 'Download qualification report (PDF)'}
+          </button>
         </div>
       )}
     </div>
@@ -839,6 +890,7 @@ function StandaloneCalculators({ getIcon }) {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   async function runCalcs() {
     const amount = parseFloat(loanAmount);
@@ -934,23 +986,47 @@ function StandaloneCalculators({ getIcon }) {
       </div>
 
       {results && (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {[
-            { key: 'repayment', title: 'Monthly repayment', result: results.repayment },
-            { key: 'extra_repayments', title: `Extra repayments (+$${extra || 200}/mo)`, result: results.extra_repayments },
-            { key: 'offset', title: `Offset account ($${Number(offsetBalance || 50000).toLocaleString('en-AU')})`, result: results.offset },
-            results.borrowing_power ? { key: 'borrowing_power', title: 'Borrowing power', result: results.borrowing_power } : null,
-          ].filter(Boolean).map((c) => (
-            <div key={c.key} className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{c.title}</p>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
-                {c.result?.explanation || (c.result?.ok === false ? `Error: ${c.result?.errors?.[0] || 'calculation failed'}` : '—')}
-              </p>
-              {c.key === 'borrowing_power' && c.result?.caveats?.[0] && (
-                <p className="text-xs leading-relaxed" style={{ color: '#b45309' }}>{c.result.caveats[0]}</p>
-              )}
-            </div>
-          ))}
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { key: 'repayment', title: 'Monthly repayment', result: results.repayment },
+              { key: 'extra_repayments', title: `Extra repayments (+$${extra || 200}/mo)`, result: results.extra_repayments },
+              { key: 'offset', title: `Offset account ($${Number(offsetBalance || 50000).toLocaleString('en-AU')})`, result: results.offset },
+              results.borrowing_power ? { key: 'borrowing_power', title: 'Borrowing power', result: results.borrowing_power } : null,
+            ].filter(Boolean).map((c) => (
+              <div key={c.key} className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{c.title}</p>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                  {c.result?.explanation || (c.result?.ok === false ? `Error: ${c.result?.errors?.[0] || 'calculation failed'}` : '—')}
+                </p>
+                {c.key === 'borrowing_power' && c.result?.caveats?.[0] && (
+                  <p className="text-xs leading-relaxed" style={{ color: '#b45309' }}>{c.result.caveats[0]}</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={pdfBusy}
+            onClick={async () => {
+              setPdfBusy(true);
+              try {
+                await downloadCalcsPdf(
+                  { loanAmount: parseFloat(loanAmount), rate: parseFloat(rate), termYears: parseFloat(termYears), extra: parseFloat(extra) || 200, offsetBalance: parseFloat(offsetBalance) || 50000 },
+                  results
+                );
+              } catch (err) {
+                console.error('[PDF] calculators failed:', err);
+              } finally {
+                setPdfBusy(false);
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+          >
+            {getIcon('download', { size: 13 })}
+            {pdfBusy ? 'Generating…' : 'Download calculator report (PDF)'}
+          </button>
         </div>
       )}
     </div>
