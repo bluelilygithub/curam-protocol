@@ -515,6 +515,142 @@ function BuyInterpretation({ calcResult }) {
   );
 }
 
+/**
+ * Standalone Calculators — lets users enter their own loan numbers and instantly
+ * see repayment, extra repayments, offset benefit, and borrowing power estimates.
+ * Calls the four /api/property-scenario/calculators/* endpoints directly.
+ * These results are completely independent of any scenario — they never feed back
+ * into scenario totals, CGT, stamp duty, or any other calculation.
+ */
+function StandaloneCalculators({ getIcon }) {
+  const [loanAmount, setLoanAmount] = useState('');
+  const [rate, setRate] = useState('');
+  const [termYears, setTermYears] = useState('');
+  const [extra, setExtra] = useState('200');
+  const [offsetBalance, setOffsetBalance] = useState('50000');
+  const [monthlyIncome, setMonthlyIncome] = useState('');
+  const [monthlyExpenses, setMonthlyExpenses] = useState('');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function runCalcs() {
+    const amount = parseFloat(loanAmount);
+    const r = parseFloat(rate);
+    const months = Math.round(parseFloat(termYears) * 12);
+    if (!amount || !r || !months) {
+      setError('Loan amount, interest rate, and term are required.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      async function callCalc(path, body) {
+        const res = await api.post(path, body);
+        return res.json();
+      }
+      const [rep, xRep, off, bp] = await Promise.all([
+        callCalc('/api/property-scenario/calculators/repayment', { loan_amount: amount, annual_rate_pct: r, term_months: months }),
+        callCalc('/api/property-scenario/calculators/extra-repayments', { loan_amount: amount, annual_rate_pct: r, term_months: months, extra_monthly: parseFloat(extra) || 200 }),
+        callCalc('/api/property-scenario/calculators/offset', { loan_amount: amount, annual_rate_pct: r, term_months: months, offset_balance: parseFloat(offsetBalance) || 50000 }),
+        monthlyIncome
+          ? callCalc('/api/property-scenario/calculators/borrowing-power', { monthly_income: parseFloat(monthlyIncome), monthly_expenses: parseFloat(monthlyExpenses) || 0, term_months: months, annual_rate_pct: r })
+          : Promise.resolve(null),
+      ]);
+      setResults({ repayment: rep, extra_repayments: xRep, offset: off, borrowing_power: bp });
+    } catch (err) {
+      setError(err.message || 'Calculation failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const FIELD = {
+    borderColor: 'var(--color-border)', background: 'var(--color-bg)',
+    color: 'var(--color-text)', borderRadius: 8, border: '1px solid',
+    padding: '8px 12px', fontSize: 14, width: '100%', outline: 'none',
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border p-4 sm:p-5 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Loan details</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            Enter your own numbers to get instant estimates. These calculators are standalone — they do not create a scenario and have no connection to stamp duty, CGT, or lender comparisons.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan amount ($)</span>
+            <input type="text" inputMode="numeric" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} placeholder="e.g. 500000" style={FIELD} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)</span>
+            <input type="text" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)</span>
+            <input type="text" inputMode="numeric" value={termYears} onChange={(e) => setTermYears(e.target.value)} placeholder="e.g. 25" style={FIELD} />
+          </label>
+        </div>
+
+        <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Optional — used for specific calculators</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Extra monthly repayment ($)</span>
+              <input type="text" inputMode="numeric" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. 200" style={FIELD} />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Offset account balance ($)</span>
+              <input type="text" inputMode="numeric" value={offsetBalance} onChange={(e) => setOffsetBalance(e.target.value)} placeholder="e.g. 50000" style={FIELD} />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Monthly income ($) — for borrowing power</span>
+              <input type="text" inputMode="numeric" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} placeholder="e.g. 8000 (leave blank to skip)" style={FIELD} />
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+
+        <button
+          type="button"
+          disabled={loading}
+          onClick={runCalcs}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {getIcon('calculator', { size: 14 })}
+          {loading ? 'Calculating…' : 'Calculate'}
+        </button>
+      </div>
+
+      {results && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {[
+            { key: 'repayment', title: 'Monthly repayment', result: results.repayment },
+            { key: 'extra_repayments', title: `Extra repayments (+$${extra || 200}/mo)`, result: results.extra_repayments },
+            { key: 'offset', title: `Offset account ($${Number(offsetBalance || 50000).toLocaleString('en-AU')})`, result: results.offset },
+            results.borrowing_power ? { key: 'borrowing_power', title: 'Borrowing power', result: results.borrowing_power } : null,
+          ].filter(Boolean).map((c) => (
+            <div key={c.key} className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{c.title}</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                {c.result?.explanation || (c.result?.ok === false ? `Error: ${c.result?.errors?.[0] || 'calculation failed'}` : '—')}
+              </p>
+              {c.key === 'borrowing_power' && c.result?.caveats?.[0] && (
+                <p className="text-xs leading-relaxed" style={{ color: '#b45309' }}>{c.result.caveats[0]}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToast, followUpAnswers }) {
   const [busy, setBusy] = React.useState(null);
 
@@ -647,7 +783,11 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
 
       {!loading && demo && (
         <div className="shrink-0 flex gap-1 overflow-x-auto -mx-1 px-1 pb-1">
-          {TABS.map((t) => (
+          {TABS.filter((t) => {
+            // Charts tab only makes sense for refinance/compound (loan amortisation, break-even)
+            if (t.id === 'charts' && scenarioType && ['sell', 'buy'].includes(scenarioType)) return false;
+            return true;
+          }).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -763,11 +903,42 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
         </>
       )}
 
-      {!loading && demo && tab === 'calculators' && (
-        <Section title="Stage 5 calculators" hint="Standalone snapshots on the modelled loan">
-          <CalculatorSnapshots calculators={demo.calculators} />
-        </Section>
-      )}
+      {!loading && demo && tab === 'calculators' && (() => {
+        const calcs = demo.calculators;
+        // Pull the loan basis from the calc result so users know what numbers were used
+        const loanBasis = calcs?._loan_basis;
+        const loanAmt = loanBasis?.loan_amount || calcs?.repayment?.loan_amount;
+        const loanRate = loanBasis?.rate || calcs?.repayment?.rate;
+        const loanTerm = loanBasis?.term_months || calcs?.repayment?.term_months;
+        return (
+          <div className="space-y-3">
+            {(loanAmt || loanRate || loanTerm) ? (
+              <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Loan basis for these calculators
+                </p>
+                <p style={{ color: 'var(--color-text)' }}>
+                  {loanAmt ? `$${Number(loanAmt).toLocaleString('en-AU')} loan` : ''}
+                  {loanRate ? ` at ${loanRate}% p.a.` : ''}
+                  {loanTerm ? ` over ${loanTerm} months (${(loanTerm / 12).toFixed(1)} yrs)` : ''}
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  These four calculators run on the loan modelled in your scenario. They are standalone — they do not feed back into the scenario totals or charts.
+                  {scenarioType === 'sell' && ' For a sell scenario, the loan basis is drawn from any associated loan in the scenario; if none, default figures are used.'}
+                  {scenarioType === 'buy' && ' For a buy scenario, the loan basis is drawn from your purchase price minus deposit.'}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p style={{ color: 'var(--color-muted)' }}>
+                  These four calculators (repayment, extra repayments, offset benefit, borrowing power) run against the loan modelled in your scenario. They are standalone estimates — they do not affect the scenario totals, CGT, stamp duty, or any other result on the other tabs.
+                </p>
+              </div>
+            )}
+            <CalculatorSnapshots calculators={calcs} />
+          </div>
+        );
+      })()}
 
       {!loading && demo && tab === 'advice' && (
         <Section title="Advice & follow-ups" hint="Generated from Stage 4 caveats and assumptions">
@@ -1163,14 +1334,13 @@ export default function PropertyScenarioPage() {
 
   const handleTypePick = useCallback((type) => {
     if (type === 'calculators') {
-      setMode('example');
-      setTab('calculators');
-      if (!demo && !demoLoading) loadDemo();
+      // Go to the standalone calculator form (not the demo fixture)
+      setScenarioType('calculators');
       return;
     }
     setScenarioType(type);
     setCalcError(null);
-  }, [demo, demoLoading, loadDemo]);
+  }, []);
 
   // ── Direct calculation (structured forms → /calculate, no LLM) ────────────
   const submitDirect = useCallback(async (scenario, extraBody = {}) => {
@@ -1378,6 +1548,11 @@ export default function PropertyScenarioPage() {
                 {getIcon('arrow-left', { size: 14 })}
                 Back to scenario types
               </button>
+            )}
+
+            {/* ── Standalone calculators ───────────────────────────── */}
+            {scenarioType === 'calculators' && (
+              <StandaloneCalculators getIcon={getIcon} api={api} />
             )}
 
             {/* ── Refinance / compare lenders form ─────────────────── */}
