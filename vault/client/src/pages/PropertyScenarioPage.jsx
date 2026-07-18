@@ -7,7 +7,11 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
-import { downloadPropertyScenarioPdf } from '../utils/propertyScenarioPdf';
+// Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
+async function downloadPdf(calcResult, inputs, scenarioType, tabFilter) {
+  const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
+  return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter);
+}
 import {
   RateComparisonChart,
   CumulativeCostChart,
@@ -349,6 +353,51 @@ function BuyInterpretation({ calcResult }) {
           <p className="text-sm" style={{ color: '#16a34a' }}>No LMI — deposit is 20% or more of purchase price.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToast }) {
+  const [busy, setBusy] = React.useState(null);
+
+  const options = [
+    { key: 'overview', label: 'This tab' },
+    { key: 'lenders', label: 'Lenders' },
+    { key: 'followups', label: 'Follow-ups' },
+    { key: 'all', label: 'Full report' },
+  ];
+
+  async function handleDownload(key) {
+    setBusy(key);
+    try {
+      await downloadPdf(calcResult, inputs, scenarioType, key);
+    } catch (err) {
+      addToast('PDF generation failed — ' + (err.message || 'unknown error'), 'error');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Download PDF</span>
+      {options.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          disabled={busy !== null}
+          onClick={() => handleDownload(key)}
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-50"
+          style={{
+            borderColor: 'var(--color-border)',
+            color: key === 'all' ? '#fff' : 'var(--color-text)',
+            background: key === 'all' ? 'var(--color-primary)' : 'transparent',
+          }}
+        >
+          {busy === key ? '…' : getIcon('download', { size: 12 })}
+          {busy === key ? 'Generating…' : label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1353,29 +1402,13 @@ export default function PropertyScenarioPage() {
                     {getIcon('rotate-ccw', { size: 13 })}
                     New scenario
                   </button>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Download</span>
-                    {[
-                      { key: 'overview', label: 'This tab' },
-                      { key: 'lenders', label: 'Lenders' },
-                      { key: 'followups', label: 'Follow-ups' },
-                      { key: 'all', label: 'Full report' },
-                    ].map(({ key, label }) => {
-                      const inputs = { rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb };
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, key)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-                          style={{ borderColor: 'var(--color-border)', color: key === 'all' ? '#fff' : 'var(--color-text)', background: key === 'all' ? 'var(--color-primary)' : 'transparent' }}
-                        >
-                          {getIcon('download', { size: 12 })}
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <PdfDownloadButtons
+                    calcResult={calcResult}
+                    scenarioType={scenarioType}
+                    inputs={{ rfBalance, rfRate, rfRateType, rfTermMonths, rfFixedPeriod, rfTargetMode, rfTargetRate, sellState, sellPpor, sellPrice, sellPurchasePrice, sellPurchaseYear, buyState, buyPpor, buyPrice, buyDeposit, buyFhb }}
+                    getIcon={getIcon}
+                    addToast={addToast}
+                  />
                 </div>
                 {scenarioType === 'refinance' && (
                   <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} />
