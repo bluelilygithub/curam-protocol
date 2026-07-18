@@ -57,6 +57,109 @@ function Section({ title, hint, children }) {
   );
 }
 
+function fmt(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return `$${Math.round(Number(n)).toLocaleString('en-AU')}`;
+}
+
+function RefinanceInterpretation({ calcResult, rfRate, rfRateType }) {
+  if (!calcResult?.ready_for_calculations) return null;
+
+  const refi = calcResult.calculation?.event_results?.[0]?.outputs?.refinance_break_even;
+  const breakCostData = calcResult.calculation?.event_results?.[0]?.outputs?.break_cost;
+  const totals = calcResult.calculation?.totals || {};
+  const cdr = calcResult.cdr_rate_used;
+
+  if (!refi) return null;
+
+  const monthlySaving = Number(refi.monthly_saving ?? totals.monthly_repayment_saving ?? 0);
+  const breakEvenMonths = refi.break_even_months;
+  const upfront = Number(refi.upfront_cost ?? 0);
+  const breakCost = Number(totals.break_costs ?? breakCostData?.break_cost_estimate ?? 0);
+  const totalCost = upfront + breakCost;
+  const discharge = Number(refi.discharge_fee ?? 350);
+  const establishment = Number(refi.establishment_fee ?? 600);
+  const other = Number(refi.other_costs ?? 400);
+  const currentRepayment = Number(refi.monthly_repayment_current ?? 0);
+  const targetRepayment = Number(refi.monthly_repayment_target ?? 0);
+  const isVariable = rfRateType === 'variable';
+
+  const positive = monthlySaving > 0;
+  const borderColor = positive ? '#22c55e' : '#ef4444';
+  const verdictColor = positive ? '#16a34a' : '#ef4444';
+
+  const breakEvenYears = breakEvenMonths ? (breakEvenMonths / 12).toFixed(1) : null;
+
+  return (
+    <div className="rounded-xl border-l-4 p-4 sm:p-5 space-y-3" style={{ borderLeftColor: borderColor, background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', borderRight: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+      <div className="space-y-1">
+        {positive ? (
+          <p className="text-base font-semibold" style={{ color: verdictColor }}>
+            Switching saves {fmt(monthlySaving)}/month
+          </p>
+        ) : monthlySaving < 0 ? (
+          <p className="text-base font-semibold" style={{ color: verdictColor }}>
+            Switching increases repayments by {fmt(Math.abs(monthlySaving))}/month
+          </p>
+        ) : (
+          <p className="text-base font-semibold" style={{ color: 'var(--color-muted)' }}>
+            No monthly saving — the target rate produces the same repayment
+          </p>
+        )}
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          {currentRepayment > 0 && targetRepayment > 0
+            ? `Current repayment: ${fmt(currentRepayment)}/month → new repayment: ${fmt(targetRepayment)}/month`
+            : cdr ? `Compared against ${cdr.lender} at ${cdr.rate}% (best available CDR rate)` : null}
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Why the {fmt(totalCost)} upfront cost</p>
+        <ul className="text-sm space-y-0.5" style={{ color: 'var(--color-muted)' }}>
+          <li>Discharge fee (paying out existing lender): {fmt(discharge)}</li>
+          <li>Establishment fee (new lender setup): {fmt(establishment)}</li>
+          {other > 0 && <li>Valuation / legal / misc: {fmt(other)}</li>}
+          {breakCost > 0 && (
+            <li style={{ color: '#ef4444' }}>Fixed-rate break cost (IRD estimate): {fmt(breakCost)}</li>
+          )}
+        </ul>
+        {breakCost === 0 && isVariable && (
+          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+            Break cost: $0 — variable rate loans carry no early repayment penalty under Australian law.
+          </p>
+        )}
+        {breakCost === 0 && !isVariable && (
+          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+            Break cost: $0 estimated — actual IRD depends on your lender's comparison rate in the original loan contract. Confirm with your lender before switching.
+          </p>
+        )}
+      </div>
+
+      {positive && breakEvenMonths != null && (
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            <span className="font-medium">Break-even: {breakEvenMonths} months</span>
+            {breakEvenYears ? ` (${breakEvenYears} years)` : ''} — upfront costs recovered through lower repayments after that point.
+          </p>
+          {breakEvenMonths > 60 && (
+            <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>
+              Break-even takes over 5 years. Consider whether you'll hold the loan that long before switching.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!positive && (
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            The upfront {fmt(totalCost)} cost is never recovered through repayment savings at this rate differential. Switching may still be worthwhile for features (offset, redraw, flexibility) — check the Lenders tab for the full comparison.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function inferInputType(fieldPath = '', message = '') {
   const path = String(fieldPath).toLowerCase();
   const msg = String(message).toLowerCase();
@@ -985,6 +1088,9 @@ export default function PropertyScenarioPage() {
                     New scenario
                   </button>
                 </div>
+                {scenarioType === 'refinance' && (
+                  <RefinanceInterpretation calcResult={calcResult} rfRate={rfRate} rfRateType={rfRateType} />
+                )}
                 <ResultsView demo={calcResult} tab={tab} setTab={setTab} loading={false} error={null} />
               </>
             )}
