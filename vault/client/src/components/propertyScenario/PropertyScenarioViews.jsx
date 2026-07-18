@@ -467,13 +467,40 @@ export function LenderTermsInsight({ rows = [] }) {
         </select>
       </label>
 
+      <div className="space-y-1.5">
+        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Suggested questions</span>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            'What are the actual early repayment conditions — any caps or fees on extra payments?',
+            'Does the fine print match the advertised offset account — any balance caps or fee conditions?',
+            'What's the real break cost formula if I leave a fixed rate early?',
+            'Are there any ongoing fees not captured in the CDR summary?',
+            'What do the eligibility conditions actually say — who does this product exclude?',
+          ].map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => setQuestion(q)}
+              className="px-2.5 py-1 rounded-lg text-xs transition-opacity duration-200 hover:opacity-70 text-left"
+              style={{
+                background: question === q ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: question === q ? '#fff' : 'var(--color-text)',
+                border: `1px solid ${question === q ? 'var(--color-primary)' : 'var(--color-border)'}`,
+              }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <label className="block space-y-1.5">
-        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Your question</span>
+        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Or type your own question</span>
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          rows={3}
-          placeholder="e.g. Can I pay this off early without penalty? How does the offset account work here?"
+          rows={2}
+          placeholder="e.g. Can I pay this off early without penalty?"
           className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
         />
