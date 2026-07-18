@@ -473,7 +473,7 @@ export function LenderTermsInsight({ rows = [] }) {
           {[
             'What are the actual early repayment conditions — any caps or fees on extra payments?',
             'Does the fine print match the advertised offset account — any balance caps or fee conditions?',
-            'What's the real break cost formula if I leave a fixed rate early?',
+            "What's the real break cost formula if I leave a fixed rate early?",
             'Are there any ongoing fees not captured in the CDR summary?',
             'What do the eligibility conditions actually say — who does this product exclude?',
           ].map((q) => (
