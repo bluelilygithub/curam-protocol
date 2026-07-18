@@ -429,7 +429,10 @@ function PdfDownloadButtons({ calcResult, scenarioType, inputs, getIcon, addToas
     try {
       await downloadPdf(calcResult, inputs, scenarioType, key);
     } catch (err) {
-      addToast('PDF generation failed — ' + (err.message || 'unknown error'), 'error');
+      // Log the full error so it's visible in browser DevTools console
+      console.error('[PDF] generation failed:', err);
+      const msg = err?.message || String(err) || 'unknown error';
+      addToast('PDF generation failed — ' + msg, 'error');
     } finally {
       setBusy(null);
     }

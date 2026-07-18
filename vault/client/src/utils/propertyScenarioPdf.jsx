@@ -18,33 +18,36 @@ const MUTED = '#888888';
 const BORDER = '#D8D8D0';
 const BG_ALT = '#F5F5F0';
 
+// react-pdf v3 StyleSheet: avoid multi-value shorthand strings for padding
+// (e.g. '6 8') — use paddingVertical/paddingHorizontal instead.
+// Border shorthand ('1 solid #hex') is supported in v3.1+.
 const s = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', fontSize: 9, color: '#1A1A1A', padding: 40, lineHeight: 1.4 },
-  header: { marginBottom: 16, borderBottom: `1 solid ${BORDER}`, paddingBottom: 10 },
+  page: { fontFamily: 'Helvetica', fontSize: 9, color: '#1A1A1A', padding: 40 },
+  header: { marginBottom: 16, borderBottomWidth: 1, borderBottomColor: BORDER, borderBottomStyle: 'solid', paddingBottom: 10 },
   title: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2 },
   subtitle: { fontSize: 9, color: MUTED },
   section: { marginBottom: 14 },
-  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 6, paddingBottom: 3, borderBottom: `1 solid ${BORDER}` },
+  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 6, paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: BORDER, borderBottomStyle: 'solid' },
   sectionHint: { fontSize: 8, color: MUTED, marginBottom: 6 },
   row: { flexDirection: 'row', marginBottom: 2 },
   label: { width: '42%', color: MUTED, fontSize: 8.5 },
   value: { flex: 1, fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
-  tableHeader: { flexDirection: 'row', backgroundColor: BG_ALT, padding: '5 6', borderBottom: `1 solid ${BORDER}`, marginBottom: 0 },
-  tableRow: { flexDirection: 'row', padding: '4 6', borderBottom: `1 solid ${BORDER}` },
+  tableHeader: { flexDirection: 'row', backgroundColor: BG_ALT, paddingVertical: 5, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: BORDER, borderBottomStyle: 'solid', marginBottom: 0 },
+  tableRow: { flexDirection: 'row', paddingVertical: 4, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: BORDER, borderBottomStyle: 'solid' },
   tableCell: { flex: 1, fontSize: 8 },
   tableCellBold: { flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' },
   tableCellNarrow: { width: 80, fontSize: 8 },
   tableCellWide: { flex: 2, fontSize: 8 },
   caveat: { fontSize: 8, color: MUTED, marginBottom: 3, paddingLeft: 8 },
   caveatBullet: { fontSize: 8, color: MUTED, marginBottom: 2 },
-  highlight: { backgroundColor: '#FFF8F5', padding: '6 8', borderLeft: `3 solid ${PRIMARY}`, marginBottom: 8 },
+  highlight: { backgroundColor: '#FFF8F5', paddingVertical: 6, paddingHorizontal: 8, borderLeftWidth: 3, borderLeftColor: PRIMARY, borderLeftStyle: 'solid', marginBottom: 8 },
   highlightText: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: PRIMARY },
   highlightSub: { fontSize: 8, color: MUTED, marginTop: 2 },
   pill: { fontSize: 8, color: MUTED, marginBottom: 2 },
-  divider: { borderBottom: `1 solid ${BORDER}`, marginBottom: 10, marginTop: 4 },
+  divider: { borderBottomWidth: 1, borderBottomColor: BORDER, borderBottomStyle: 'solid', marginBottom: 10, marginTop: 4 },
   footer: { position: 'absolute', bottom: 24, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between' },
   footerText: { fontSize: 7, color: MUTED },
-  warning: { fontSize: 8, color: '#92400E', backgroundColor: '#FFFBEB', padding: '5 8', marginTop: 6, borderLeft: `3 solid #F59E0B` },
+  warning: { fontSize: 8, color: '#92400E', backgroundColor: '#FFFBEB', paddingVertical: 5, paddingHorizontal: 8, marginTop: 6, borderLeftWidth: 3, borderLeftColor: '#F59E0B', borderLeftStyle: 'solid' },
 });
 
 function fmtMoney(n) {
@@ -345,27 +348,32 @@ function LendersSection({ calcResult }) {
 function CalculatorsSection({ calcResult }) {
   const calcs = calcResult.calculators;
   if (!calcs) return null;
+  // Field names match the actual calculator return shapes:
+  //   repayment.repayment (not .monthly), extra_repayments.months_saved,
+  //   borrowing_power.max_loan_indicative / .assessment_rate_pct / .explanation
   const sections = [
-    calcs.repayment && ['Repayment Calculator', [
-      ['Monthly repayment', fmtMonthly(calcs.repayment.monthly)],
-      ['Fortnightly repayment', calcs.repayment.fortnightly ? `$${Number(calcs.repayment.fortnightly).toLocaleString('en-AU')}/fortnight` : '—'],
-      ['Weekly repayment', calcs.repayment.weekly ? `$${Number(calcs.repayment.weekly).toLocaleString('en-AU')}/week` : '—'],
+    calcs.repayment && calcs.repayment.ok && ['Repayment Calculator', [
+      ['Monthly repayment', fmtMonthly(calcs.repayment.repayment)],
+      ['Total repaid over term', fmtMoney(calcs.repayment.total_repaid_over_term)],
+      ['Total interest', fmtMoney(calcs.repayment.total_interest_over_term)],
       calcs.repayment.explanation ? ['Note', calcs.repayment.explanation] : null,
     ].filter(Boolean)],
-    calcs.extra_repayments && ['Extra Repayments Impact', [
-      ['Time saved', calcs.extra_repayments.time_saved_label || '—'],
+    calcs.extra_repayments && calcs.extra_repayments.ok && ['Extra Repayments (+$200/month)', [
+      ['Months saved', calcs.extra_repayments.months_saved != null ? `${calcs.extra_repayments.months_saved} months` : '—'],
       ['Interest saved', fmtMoney(calcs.extra_repayments.interest_saved)],
       calcs.extra_repayments.explanation ? ['Note', calcs.extra_repayments.explanation] : null,
     ].filter(Boolean)],
-    calcs.offset && ['Offset Account Benefit', [
-      ['Interest saved over term', fmtMoney(calcs.offset.interest_saved)],
-      ['Effective rate reduction', calcs.offset.effective_rate_reduction ? `${calcs.offset.effective_rate_reduction}%` : '—'],
+    calcs.offset && calcs.offset.ok && ['Offset Account ($50k)', [
+      ['Interest saved', fmtMoney(calcs.offset.interest_saved)],
+      ['Months saved', calcs.offset.months_saved != null ? `${calcs.offset.months_saved} months` : '—'],
+      ['First period interest saving', calcs.offset.first_period_interest_saving != null ? fmtMoney(calcs.offset.first_period_interest_saving) : '—'],
       calcs.offset.explanation ? ['Note', calcs.offset.explanation] : null,
     ].filter(Boolean)],
-    calcs.borrowing_power && ['Borrowing Power (Indicative)', [
-      ['Indicative max loan', fmtMoney(calcs.borrowing_power.indicative_max_loan)],
-      ['Assessment rate used', calcs.borrowing_power.assessment_rate ? `${calcs.borrowing_power.assessment_rate}%` : '—'],
-      ['Note', calcs.borrowing_power.disclaimer || 'Indicative only — not a lending decision. Actual serviceability varies by lender.'],
+    calcs.borrowing_power && calcs.borrowing_power.ok && ['Borrowing Power (Indicative)', [
+      ['Indicative max loan', fmtMoney(calcs.borrowing_power.max_loan_indicative)],
+      ['Assessment rate', calcs.borrowing_power.assessment_rate_pct != null ? `${calcs.borrowing_power.assessment_rate_pct}%` : '—'],
+      ['Monthly surplus used', calcs.borrowing_power.monthly_surplus != null ? fmtMonthly(calcs.borrowing_power.monthly_surplus) : '—'],
+      ['Note', calcs.borrowing_power.explanation || 'Indicative only — not a lending decision. Actual serviceability varies by lender.'],
     ]],
   ].filter(Boolean);
 
