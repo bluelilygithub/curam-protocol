@@ -4,6 +4,32 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (qualify-depth-and-tour-update)
+
+### Four additional buyer qualification checks
+- **Age at loan maturity** — optional age input; warns if age + term > 70, fails if > 75; shows repayment at shortened term to age 70 so buyer sees the payment impact of adjusting
+- **Property type restrictions** — dropdown: house/townhouse (no restriction), high-rise apartment, studio/under 50m², rural/acreage, off-the-plan; warns/fails if current LVR exceeds typical cap for that type (70–80% for restricted types); off-the-plan gets completion/valuation risk caveat
+- **Credit file self-check prompt** — always shown as `info`; directs to free Equifax check at mycreditfile.com.au; explains hard enquiry stacking risk and 3.8% credit card limit rule; 30–60 day dispute timeline flagged
+- **Rental income for investment purchases** — optional gross rental $ p.a.; shaded to 75%, added to surplus; shows dollar borrowing capacity boost; prompts entry if investment purchase but blank
+
+### HECS detail text fix
+At incomes ≥ $179,286 the detail now correctly states "10% total-income cap applies" rather than describing the marginal mechanism (which would give $21,450 at $200k, not the actual capped $20,000).
+
+### Borrowing power APRA floor corrected
+`DEFAULT_ASSESSMENT_FLOOR_PCT` updated 5.05% → 8.5% in `borrowingPower.js`, consistent with `buyerQualification.js` and current major-bank practice. The old floor was set during the near-zero-rate era and is never triggered at current rates — no existing user saw wrong results — but would have produced inflated numbers if rates fall significantly.
+
+### FHOG cross-reference in Buy form
+`BuyInterpretation` now shows a First Home Owner Grant note for FHB purchases: grant amount if potentially eligible (QLD $30k, VIC $10k, SA $15k, WA $10k, TAS $30k, NT $10k), or "not available — price above cap" if purchase price meets or exceeds the state threshold.
+
+### Property Scenario tour updated
+Steps 4, 6, 7, and 10 updated to reflect all recent additions:
+- Step 4: FHOG cross-reference in buy form results
+- Step 6: Borrowing power APRA floor accuracy noted
+- Step 7: Expanded to cover all 14 qualification checks, optional extra inputs (age, property type, rental income), data currency (HECS 2025-26, FHBG Oct 2025), settlement cost total, and rate/income stress test
+- Step 10: PDF now described as including settlement costs, stress test, lender guidance, and all 14 checks
+
+---
+
 ## 2026-07-18 (fhbg-caps-oct-2025-fix)
 
 ### Bug fix: FHBG price caps stale — updated to 1 October 2025 scheme

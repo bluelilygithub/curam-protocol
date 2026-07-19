@@ -91,7 +91,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-results',
     title: 'Results — Interpretation, Not Just Numbers',
-    text: "Each scenario type has a dedicated plain-English interpretation panel. Refinance shows monthly saving, break-even months, and names the specific CDR bank and product used. Sell shows your net proceeds, CGT eligibility (including whether the main residence exemption applies — which makes CGT $0 for genuine PPORs), and indicative tax at three marginal brackets. Buy shows upfront costs, stamp duty, and LMI if applicable.",
+    text: "Each scenario type has a dedicated plain-English interpretation panel. Refinance shows monthly saving, break-even months, and names the specific CDR bank used. Sell shows net proceeds and CGT — a genuine PPOR gets $0 CGT (main residence exemption), an investment shows indicative tax at three 2025-26 marginal brackets. Buy shows stamp duty (calculated, not estimated), LMI if LVR exceeds 80%, and — for first-home buyers — a First Home Owner Grant cross-reference showing whether your state grant is available and what it pays.",
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
@@ -109,7 +109,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-calculators',
     title: 'Quick Calculators — Your Own Numbers',
-    text: "The Quick calculators option opens a form where you enter your own loan details and instantly run four standalone calculators: repayment (P&I), extra repayment impact (time and interest saved), offset account benefit, and borrowing power. The borrowing power figure is clearly caveated as indicative — it uses the APRA +3% buffer but can\'t replicate a lender\'s full policy.",
+    text: "Enter your own loan details and instantly run four standalone calculators: repayment (P&I), extra repayment impact (time and interest saved), offset account benefit, and borrowing power. Borrowing power uses the APRA +3% buffer with an 8.5% floor — consistent with what the major banks actually apply today, not the lower floor from the low-rate era. The figure is explicitly caveated as indicative; it doesn\'t replace a full serviceability assessment.",
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
@@ -117,8 +117,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 7: Can I qualify? ───────────────────────────────────────────────
   tour.addStep({
     id: 'ps-qualify',
-    title: '"Can I Qualify?" — Deterministic AU Lending Checks',
-    text: "The qualification checker runs seven deterministic checks against Australian lending rules: serviceability (APRA buffer + HEM living expenses), LVR and deposit adequacy, debt-to-income ratio (APRA 6× guideline), genuine savings (3-month holding rule), employment type, HECS/HELP impact on borrowing capacity, and First Home Guarantee eligibility. Each check shows pass, warn, or fail with a detailed explanation.",
+    title: '"Can I Qualify?" — Comprehensive AU Lending Checks',
+    text: "Runs 14 deterministic checks against current Australian lending rules. Core checks: serviceability (APRA +3% buffer, HEM living benchmarks), LVR/deposit, debt-to-income ratio (APRA 6× guideline), genuine savings, employment type, HECS/HELP (2025-26 marginal method — updated from the July 2025 rule change), and First Home Guarantee (October 2025 caps, income cap abolished). Cost checks: real stamp duty figure, real LMI dollar estimate. Scheme: First Home Owner Grant by state. Optional extra checks: age at loan maturity (flags if loan runs past 70-75), property type restrictions (studios, high-rise, rural attract lower LVR caps), rental income for investment purchases, and a credit file self-check prompt. Results include a settlement cost total (deposit + duty + LMI + legal) and a rate/income stress test showing whether you still qualify at +1% and +2% rate increases.",
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
@@ -145,7 +145,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-pdf',
     title: 'Download, Follow-ups, and Caveats',
-    text: "Every result set has a PDF download button — either the current tab or a full report. The Follow-ups tab surfaces suggested questions grounded in your specific numbers (click \"Ask this\" to get an AI answer), and you can add your own custom questions. All results carry explicit caveats: CGT is not tax advice, stamp duty is an estimate, borrowing power is not pre-approval. The report is structured to hand to a broker or accountant.",
+    text: "Every result set has a PDF download button. The qualification report PDF includes all 14 checks, the settlement cost breakdown, the rate/income stress test, lender guidance, and the HECS/stamp duty/LMI data — structured to hand directly to a broker or accountant. The Follow-ups tab surfaces suggested questions grounded in your specific numbers (click \"Ask this\" for an AI answer) and accepts your own custom questions. All results carry explicit caveats stating what the tool cannot know: credit history, lender-specific overlays, and anything requiring a professional opinion.",
     when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),
