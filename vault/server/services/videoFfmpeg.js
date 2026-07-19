@@ -96,6 +96,107 @@ async function convertVideo(inputPath, outputPath, { crf = 23, maxWidth } = {}) 
   await execFileAsync(FFMPEG, args);
 }
 
+/**
+ * Concatenate multiple video files into one MP4.
+ * Clips are normalized (resolution, fps, audio) then joined so mixed
+ * codecs / sizes / missing-audio inputs still work.
+ *
+ * @param {string[]} inputPaths — ordered file paths
+ * @param {string} outputPath
+ * @param {{ maxWidth?: number, crf?: number }} [opts]
+ */
+async function joinVideos(inputPaths, outputPath, opts = {}) {
+  if (!Array.isArray(inputPaths) || inputPaths.length < 2) {
+    throw new Error('At least two video files are required to join');
+  }
+
+  const maxWidth = opts.maxWidth != null && Number.isFinite(opts.maxWidth)
+    ? Math.max(160, Math.min(3840, Math.round(opts.maxWidth)))
+    : 1280;
+  const crf = opts.crf != null && Number.isFinite(opts.crf)
+    ? Math.min(35, Math.max(18, Math.round(opts.crf)))
+    : 23;
+
+  const probes = [];
+  for (const p of inputPaths) {
+    probes.push(await probeVideo(p));
+  }
+
+  // Target canvas: largest width among inputs (capped), keep 16:9-ish height from first clip.
+  let targetW = Math.min(
+    maxWidth,
+    Math.max(...probes.map((p) => p.width || 1280))
+  );
+  if (!Number.isFinite(targetW) || targetW < 160) targetW = maxWidth;
+  // Even dimensions required for yuv420p / libx264
+  if (targetW % 2) targetW -= 1;
+
+  let targetH = probes[0]?.height && probes[0]?.width
+    ? Math.round((probes[0].height / probes[0].width) * targetW)
+    : Math.round((targetW * 9) / 16);
+  if (targetH % 2) targetH -= 1;
+  if (targetH < 120) targetH = 720;
+
+  const dir = path.dirname(outputPath);
+  const normalized = [];
+
+  for (let i = 0; i < inputPaths.length; i += 1) {
+    const inputPath = inputPaths[i];
+    const info = probes[i];
+    const normPath = path.join(dir, `join_norm_${i}.mp4`);
+    const vf = `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,`
+      + `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p`;
+
+    if (info.hasAudio) {
+      await execFileAsync(FFMPEG, [
+        '-y', '-i', inputPath,
+        '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+        '-movflags', '+faststart',
+        normPath,
+      ], 600000);
+    } else {
+      // Silent stereo track so concat always has audio on every segment
+      await execFileAsync(FFMPEG, [
+        '-y',
+        '-i', inputPath,
+        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+        '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:a', 'aac', '-b:a', '128k',
+        '-map', '0:v:0', '-map', '1:a:0',
+        '-shortest',
+        '-movflags', '+faststart',
+        normPath,
+      ], 600000);
+    }
+    normalized.push(normPath);
+  }
+
+  const listPath = path.join(dir, 'join_concat.txt');
+  const listBody = normalized
+    .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
+    .join('\n');
+  await fs.writeFile(listPath, listBody, 'utf8');
+
+  // Same codec/params after normalize → stream copy is safe and fast
+  try {
+    await execFileAsync(FFMPEG, [
+      '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
+      '-c', 'copy', '-movflags', '+faststart',
+      outputPath,
+    ], 300000);
+  } catch {
+    await execFileAsync(FFMPEG, [
+      '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+      outputPath,
+    ], 600000);
+  }
+}
+
 async function extractAudio(inputPath, outputPath, format = 'mp3') {
   const codec = format === 'wav'
     ? ['-c:a', 'pcm_s16le']
@@ -330,6 +431,7 @@ module.exports = {
   probeVideo,
   clipVideo,
   convertVideo,
+  joinVideos,
   extractAudio,
   captureThumbnail,
   annotateVideo,

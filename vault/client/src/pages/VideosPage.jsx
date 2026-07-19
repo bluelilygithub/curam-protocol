@@ -222,6 +222,7 @@ const TOOL_GROUPS = [
     label: 'Compose',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
+      { id: 'join', label: 'Join videos', desc: 'Concatenate clips into one MP4' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
     ],
   },
@@ -379,6 +380,71 @@ function VideoUpload({ file, onFile, label = 'Video file' }) {
   );
 }
 
+function MultiVideoUpload({ files, onFiles, label = 'Video files (order = join order)' }) {
+  const inputRef = useRef(null);
+  const move = (index, dir) => {
+    const next = [...files];
+    const j = index + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[index], next[j]] = [next[j], next[index]];
+    onFiles(next);
+  };
+  const removeAt = (index) => onFiles(files.filter((_, i) => i !== index));
+
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          {files.length ? 'Add more videos' : 'Choose videos'}
+        </button>
+        {files.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onFiles([])}
+            className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const picked = Array.from(e.target.files || []);
+          if (!picked.length) return;
+          onFiles([...files, ...picked].slice(0, 12));
+          e.target.value = '';
+        }}
+      />
+      {files.length > 0 && (
+        <ul className="space-y-1.5 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          {files.map((f, i) => (
+            <li key={`${f.name}-${f.size}-${i}`} className="flex items-center gap-2 text-xs">
+              <span className="shrink-0 w-5 text-center font-medium" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
+              <span className="flex-1 truncate" style={{ color: 'var(--color-text)' }}>{f.name}</span>
+              <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>{formatBytes(f.size)}</span>
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move up">↑</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === files.length - 1} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move down">↓</button>
+              <button type="button" onClick={() => removeAt(i)} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }} aria-label="Remove">×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ResultVideo({
   blobUrl, downloadName, onUse, onSave, saveLabel = 'Save to library',
   saveTitle, onSaveTitleChange,
@@ -491,6 +557,11 @@ export default function VideosPage() {
   const [crf, setCrf] = useState(23);
   const [maxWidth, setMaxWidth] = useState('');
 
+  // Join
+  const [joinFiles, setJoinFiles] = useState([]);
+  const [joinMaxWidth, setJoinMaxWidth] = useState('1280');
+  const [joinCrf, setJoinCrf] = useState(23);
+
   // Annotate
   const [overlayText, setOverlayText] = useState('');
   const [textPosition, setTextPosition] = useState('bottom-center');
@@ -572,7 +643,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'caption-studio') clearComposeResult();
+    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -1248,11 +1319,11 @@ export default function VideosPage() {
           </section>
         )}
 
-        {tool !== 'generate' && tool !== 'saved-library' && !(tool === 'caption-studio' && captionLibraryId) && (
+        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && !(tool === 'caption-studio' && captionLibraryId) && (
           <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && (
+        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -1354,6 +1425,48 @@ export default function VideosPage() {
               Apply label
             </button>
             {resultForTool === 'annotate' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'join' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Join videos</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Concatenate two or more clips into one MP4. Clips are normalized to a common size and frame rate so mixed formats still join cleanly. Order in the list is the play order.
+            </p>
+            <MultiVideoUpload files={joinFiles} onFiles={setJoinFiles} />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (output)</span>
+                <input type="number" min={320} max={3840} step={2} value={joinMaxWidth} onChange={(e) => setJoinMaxWidth(e.target.value)} placeholder="1280" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35)</span>
+                <input type="number" min={18} max={35} value={joinCrf} onChange={(e) => setJoinCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (joinFiles.length < 2) {
+                  addToast('Add at least two videos to join', 'error');
+                  return;
+                }
+                const fd = new FormData();
+                joinFiles.forEach((f) => fd.append('videos', f));
+                if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
+                fd.append('crf', String(joinCrf));
+                runFormVideo('join', fd, { label: 'Joining videos…', resultFilename: 'joined.mp4', forTool: 'join' });
+              }}
+              disabled={!ffmpegOk || joinFiles.length < 2}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Join {joinFiles.length || 0} clips
+            </button>
+            {resultForTool === 'join' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>

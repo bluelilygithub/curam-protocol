@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (video-join)
+
+### Join videos tool
+New Compose tool under Video Tools: concatenate 2–12 clips into one MP4. Server normalizes each clip (shared resolution, 30 fps, stereo AAC — silent track if needed) then joins via ffmpeg concat demuxer. UI supports multi-file pick, reorder, and remove. `POST /api/videos/join`.
+
+---
+
 ## 2026-07-19 (eligible-lenders-list)
 
 ### Eligible banks & products after qualification

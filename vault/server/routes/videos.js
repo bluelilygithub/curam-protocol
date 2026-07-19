@@ -14,6 +14,7 @@ const {
   probeVideo,
   clipVideo,
   convertVideo,
+  joinVideos,
   extractAudio,
   captureThumbnail,
   annotateVideo,
@@ -428,6 +429,44 @@ router.post('/convert', upload.single('video'), async (req, res) => {
     sendVideoBuffer(res, buffer, 'converted.mp4');
   } catch (err) {
     console.error('[videos/convert]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/join', upload.array('videos', 12), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const files = req.files || [];
+    if (files.length < 2) {
+      return res.status(400).json({ error: 'Upload at least two video files (field name: videos)' });
+    }
+
+    const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
+    const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPaths = [];
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+        if (!file?.buffer?.length) throw new Error(`Video file #${i + 1} is empty`);
+        const ext = extensionForMime(file.mimetype);
+        const inputPath = path.join(dir, `join_in_${i}${ext}`);
+        await fs.writeFile(inputPath, file.buffer);
+        inputPaths.push(inputPath);
+      }
+      const outputPath = path.join(dir, 'joined.mp4');
+      await joinVideos(inputPaths, outputPath, {
+        maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
+        crf: Number.isFinite(crf) ? crf : 23,
+      });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'joined.mp4');
+  } catch (err) {
+    console.error('[videos/join]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
