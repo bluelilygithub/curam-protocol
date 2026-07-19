@@ -15,6 +15,7 @@ const { calculateExtraRepayments } = require('../services/propertyScenario/calc/
 const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/offset');
 const { calculateBorrowingPower } = require('../services/propertyScenario/calc/borrowingPower');
 const { assessBuyerQualification } = require('../services/propertyScenario/calc/buyerQualification');
+const { buildEligibleLenderProducts } = require('../services/propertyScenario/calc/eligibleProducts');
 const { executeParse, executeClarify } = require('../services/propertyScenario/wireApi');
 const {
   buildInsight,
@@ -484,6 +485,50 @@ router.post('/calculators/buyer-qualify', (req, res) => {
     grossRentalIncome:     body.gross_rental_income ? Number(body.gross_rental_income) : undefined,
   });
   res.json(result);
+});
+
+/**
+ * GET /api/property-scenario/calculators/buyer-qualify/eligible-lenders
+ * Live CDR products ranked for a buyer who has passed lending checks.
+ * Query: loan_amount, term_months, is_ppor=true|false, refresh=1
+ */
+router.get('/calculators/buyer-qualify/eligible-lenders', async (req, res) => {
+  try {
+    const loanAmount = Number(req.query.loan_amount) || 0;
+    const termMonths = Number(req.query.term_months) || 360;
+    const isPpor = req.query.is_ppor !== 'false' && req.query.is_ppor !== '0';
+    const { live, error } = await loadLiveLenders(req);
+
+    if (!live?.ok) {
+      return res.json({
+        ok: false,
+        stub: true,
+        products: [],
+        error: error || live?.coverage?.summary || 'CDR PRD unavailable',
+        coverage: live?.coverage || null,
+        note: 'Live lender rates unavailable — try again shortly or use Compare live CDR rates.',
+      });
+    }
+
+    const pack = buildEligibleLenderProducts(live.all_normalized || live.lenders || [], {
+      loanAmount,
+      termMonths,
+      isPpor,
+      maxPerBank: 2,
+    });
+
+    res.json({
+      ok: true,
+      stub: false,
+      source: 'cdr_prd',
+      fetched_at: live.fetched_at,
+      cache: live.cache,
+      coverage: live.coverage,
+      ...pack,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || 'Eligible lenders fetch failed' });
+  }
 });
 
 /**

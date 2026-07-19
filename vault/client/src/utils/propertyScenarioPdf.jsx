@@ -674,7 +674,7 @@ function QualifyCheckRow({ check }) {
   );
 }
 
-function QualificationDocument({ result, inputs }) {
+function QualificationDocument({ result, inputs, eligibleLenders }) {
   const generatedAt = new Date().toLocaleString('en-AU', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -684,6 +684,7 @@ function QualificationDocument({ result, inputs }) {
   const caveats = result?.caveats || [];
   const assumptions = result?.assumptions || [];
   const lenderGuidance = result?.lender_guidance || [];
+  const eligibleProducts = eligibleLenders?.products || [];
   const stress = s2.stress || null;
   const inp = inputs || {};
 
@@ -771,6 +772,39 @@ function QualificationDocument({ result, inputs }) {
             <Text style={s.sectionTitle}>Assumptions applied</Text>
             {assumptions.map((a, i) => (
               <Text key={i} style={s.caveatBullet}>· {a}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* Eligible lenders & products (live CDR) */}
+        {eligibleProducts.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Eligible lenders &amp; products (live CDR)</Text>
+            <Text style={{ ...s.caveatBullet, marginBottom: 6, fontSize: 8, color: '#6b7280' }}>
+              {eligibleLenders?.note
+                || 'Live open-banking rates ranked by advertised rate for this loan amount. Not a credit decision — confirm eligibility with the lender or a broker.'}
+            </Text>
+            {eligibleProducts.map((p, i) => (
+              <View key={p.id || i} style={{ flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+                    {p.lender}
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica', color: '#9ca3af' }}>
+                      {'  '}{p.fixed_or_variable === 'fixed' ? 'Fixed' : 'Variable'}{i === 0 ? ' · Lowest rate' : ''}
+                    </Text>
+                  </Text>
+                  <Text style={{ fontSize: 8, color: '#374151', marginTop: 1 }}>{p.product || p.name}</Text>
+                  <Text style={{ fontSize: 7, color: '#6b7280', marginTop: 1 }}>
+                    {[p.offset ? 'Offset' : null, p.redraw ? 'Redraw' : null, p.comparison_rate != null ? `Comp. ${Number(p.comparison_rate).toFixed(2)}%` : null].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                <View style={{ width: 90, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{Number(p.rate).toFixed(2)}%</Text>
+                  {p.monthly_repayment != null && (
+                    <Text style={{ fontSize: 7, color: '#6b7280' }}>~${Math.round(p.monthly_repayment).toLocaleString('en-AU')}/mo</Text>
+                  )}
+                </View>
+              </View>
             ))}
           </View>
         )}
@@ -995,8 +1029,8 @@ export async function downloadPropertyScenarioPdf(calcResult, inputs, scenarioTy
  * @param {object} result  - response from /calculators/buyer-qualify
  * @param {object} inputs  - the raw form inputs sent to that endpoint
  */
-export async function downloadQualificationPdf(result, inputs) {
-  const doc = <QualificationDocument result={result} inputs={inputs} />;
+export async function downloadQualificationPdf(result, inputs, eligibleLenders) {
+  const doc = <QualificationDocument result={result} inputs={inputs} eligibleLenders={eligibleLenders} />;
   const blob = await pdf(doc).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

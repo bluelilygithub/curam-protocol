@@ -14,9 +14,9 @@ async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUp
   return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers);
 }
 
-async function downloadQualifyPdf(result, inputs) {
+async function downloadQualifyPdf(result, inputs, eligibleLenders) {
   const { downloadQualificationPdf } = await import('../utils/propertyScenarioPdf');
-  return downloadQualificationPdf(result, inputs);
+  return downloadQualificationPdf(result, inputs, eligibleLenders);
 }
 
 async function downloadCalcsPdf(calcInputs, calcResults) {
@@ -100,53 +100,197 @@ function FieldTip({ text }) {
   );
 }
 
-function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overallStatus, lenderGuidance, getIcon, onCompareRates }) {
-  const [show, setShow] = React.useState(false);
+function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, isPpor, overallStatus, lenderGuidance, getIcon, onCompareRates, onProductsLoaded }) {
+  const [showProfiles, setShowProfiles] = React.useState(false);
+  const [products, setProducts] = React.useState([]);
+  const [packMeta, setPackMeta] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState(null);
 
   const guidanceLenderNames = new Set(
     (lenderGuidance || []).flatMap((g) => (g.lenders || []).map((l) => l.name))
   );
 
+  React.useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const qs = new URLSearchParams({
+          loan_amount: String(Math.round(loanAmount || 0)),
+          term_months: String(Math.round(termMonths || 360)),
+          is_ppor: isPpor === false ? 'false' : 'true',
+        });
+        const res = await api.get(`/api/property-scenario/calculators/buyer-qualify/eligible-lenders?${qs}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!data?.ok) {
+          setProducts([]);
+          setPackMeta(data);
+          setLoadError(data?.error || data?.note || 'Could not load live lender products');
+        } else {
+          setProducts(data.products || []);
+          setPackMeta(data);
+          setLoadError(null);
+          if (onProductsLoaded) onProductsLoaded(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setProducts([]);
+          setLoadError(err.message || 'Failed to load eligible lenders');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    if (loanAmount > 0) load();
+    else {
+      setLoading(false);
+      setLoadError('Loan amount required to rank products');
+    }
+    return () => { cancelled = true; };
+  }, [loanAmount, termMonths, isPpor]);
+
   const profiles = LENDER_PROFILES;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="px-4 py-3 flex flex-wrap items-start justify-between gap-3" style={{ background: 'var(--color-surface)' }}>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              {overallStatus === 'pass'
+                ? 'Eligible lenders & products'
+                : 'Lenders & products to discuss'}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+              Live CDR rates for a ${(loanAmount || 0).toLocaleString('en-AU')} {isPpor === false ? 'investment' : 'owner-occupied'} loan
+              {targetRate > 0 ? ` (your target ${targetRate}%)` : ''}. Ranked by advertised rate — not a credit decision.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCompareRates}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70"
+            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+          >
+            {getIcon('refresh-cw', { size: 13 })}
+            Full refinance compare
+          </button>
+        </div>
+
+        {loading && (
+          <div className="px-4 py-6 text-sm" style={{ color: 'var(--color-muted)' }}>
+            Fetching live rates from Australian banks via CDR…
+          </div>
+        )}
+
+        {!loading && loadError && (
+          <div className="px-4 py-4 space-y-2">
+            <p className="text-sm" style={{ color: '#b45309' }}>{loadError}</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              You can still open a full refinance comparison, or expand lender profiles below.
+            </p>
+          </div>
+        )}
+
+        {!loading && !loadError && products.length > 0 && (
+          <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+            {products.map((p, i) => {
+              const isHighlighted = [...guidanceLenderNames].some((n) => {
+                const norm = String(n).toLowerCase();
+                return (
+                  norm.includes(String(p.lender || '').toLowerCase())
+                  || String(p.lender || '').toLowerCase().includes(norm.replace(/\s*\(.*?\)\s*/g, '').trim())
+                );
+              });
+              return (
+                <div
+                  key={p.id || `${p.lender}-${p.product}-${i}`}
+                  className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3"
+                  style={{ background: isHighlighted ? 'color-mix(in srgb, var(--color-primary) 6%, transparent)' : 'transparent' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{p.lender}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                        {p.fixed_or_variable === 'fixed' ? `Fixed${p.fixed_period_months ? ` ${Math.round(p.fixed_period_months / 12)}y` : ''}` : 'Variable'}
+                      </span>
+                      {isHighlighted && (
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                          Highlighted for you
+                        </span>
+                      )}
+                      {i === 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#16a34a', color: '#fff' }}>
+                          Lowest rate
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{p.product || p.name}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      <span style={{ color: p.offset ? '#16a34a' : 'var(--color-muted)' }}>{p.offset ? '✓' : '·'} Offset</span>
+                      <span style={{ color: p.redraw ? '#16a34a' : 'var(--color-muted)' }}>{p.redraw ? '✓' : '·'} Redraw</span>
+                      {p.comparison_rate != null && <span>Comp. {Number(p.comparison_rate).toFixed(2)}%</span>}
+                      {(p.overview_uri || p.application_uri) && (
+                        <a
+                          href={p.application_uri || p.overview_uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="transition-opacity duration-200 hover:opacity-70"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          Product page →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{Number(p.rate).toFixed(2)}%</p>
+                    {p.monthly_repayment != null && (
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        ~${Math.round(p.monthly_repayment).toLocaleString('en-AU')}/mo
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loading && !loadError && products.length === 0 && (
+          <div className="px-4 py-4 text-sm" style={{ color: 'var(--color-muted)' }}>
+            No matching live products returned. Try Full refinance compare.
+          </div>
+        )}
+
+        {packMeta?.note && (
+          <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{packMeta.note}</p>
+            {packMeta.coverage?.summary && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Coverage: {packMeta.coverage.summary}</p>
+            )}
+          </div>
+        )}
+      </div>
+
       <button
         type="button"
-        onClick={() => setShow((v) => !v)}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity duration-200 hover:opacity-70"
-        style={{ background: 'var(--color-primary)', color: '#fff' }}
+        onClick={() => setShowProfiles((v) => !v)}
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
       >
-        {getIcon('building', { size: 14 })}
-        {show ? 'Hide lender profiles' : 'View matching lenders & products →'}
+        {getIcon('building', { size: 13 })}
+        {showProfiles ? 'Hide lender feature guides' : 'Lender features & benefits →'}
       </button>
 
-      {show && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                {overallStatus === 'pass'
-                  ? 'You broadly qualify — here are the lenders we track via CDR'
-                  : 'Lenders & products relevant to your situation'}
-              </p>
-              {loanAmount > 0 && targetRate > 0 && (
-                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  Based on a ${loanAmount.toLocaleString('en-AU')} loan at {targetRate}%. Use "Compare live CDR rates" to see current products and monthly repayments side-by-side.
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={onCompareRates}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70"
-              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
-            >
-              {getIcon('refresh-cw', { size: 13 })}
-              Compare live CDR rates
-            </button>
-          </div>
-
+      {showProfiles && (
+        <div className="space-y-3">
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Editorial summaries of the banks we track — features, fees, and who they suit. Rates above are live; these notes are not rate quotes.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {profiles.map((lender) => {
               const isHighlighted = [...guidanceLenderNames].some((n) => {
@@ -166,7 +310,6 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
                     background: 'var(--color-surface)',
                   }}
                 >
-                  {/* Header */}
                   <div className="px-4 py-3 border-b flex items-start justify-between gap-2" style={{ borderColor: 'var(--color-border)' }}>
                     <div>
                       <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{lender.name}</p>
@@ -178,12 +321,8 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
                       </span>
                     )}
                   </div>
-
-                  {/* Body */}
                   <div className="px-4 py-3 space-y-2 flex-1">
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{lender.summary}</p>
-
-                    {/* Features */}
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs pt-1">
                       <span style={{ color: lender.offsetAvailable ? '#16a34a' : '#b45309' }}>
                         {lender.offsetAvailable ? '✓' : '✗'} Offset account
@@ -191,15 +330,9 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
                       <span style={{ color: '#16a34a' }}>✓ Redraw</span>
                       <span style={{ color: '#16a34a' }}>✓ Extra repayments</span>
                     </div>
-
                     <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                       <span className="font-medium">Fee:</span> {lender.annualFee}
                     </p>
-                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      <span className="font-medium">Service:</span> {lender.serviceModel}
-                    </p>
-
-                    {/* Best for tags */}
                     <div className="flex flex-wrap gap-1 pt-1">
                       {lender.bestFor.map((tag) => (
                         <span
@@ -211,18 +344,7 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
                         </span>
                       ))}
                     </div>
-
-                    {/* Restrictions */}
-                    {lender.restrictions.length > 0 && (
-                      <div className="space-y-0.5 pt-1">
-                        {lender.restrictions.map((r) => (
-                          <p key={r} className="text-xs" style={{ color: '#b45309' }}>⚠ {r}</p>
-                        ))}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Footer link */}
                   <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                     <a
                       href={lender.website}
@@ -238,10 +360,6 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
               );
             })}
           </div>
-
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            These are editorial summaries — not endorsements or advice. Product features, rates, and eligibility change frequently; always confirm directly with the lender or a licensed mortgage broker. Live rates above are sourced from Australia's open banking (CDR) APIs.
-          </p>
         </div>
       )}
     </div>
@@ -825,6 +943,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
     }
     setError(null);
     setLoading(true);
+    setEligibleLendersPack(null);
     try {
       const res = await api.post('/api/property-scenario/calculators/buyer-qualify', {
         property_value:          price,
@@ -866,6 +985,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
   }
 
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [eligibleLendersPack, setEligibleLendersPack] = useState(null);
 
   async function handleQualifyPdf() {
     setPdfBusy(true);
@@ -889,7 +1009,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
         applicant_age: qAge ? parseFloat(qAge) : undefined,
         property_type_class: qPropTypeClass || undefined,
         gross_rental_income: qRentalIncome ? parseFloat(qRentalIncome) : undefined,
-      });
+      }, eligibleLendersPack);
     } catch (err) {
       console.error('[PDF] qualification failed:', err);
       addToast('PDF generation failed — ' + (err?.message || 'unknown error'), 'error');
@@ -1105,9 +1225,11 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
               targetRate={s.target_rate_pct}
               termMonths={Number(qTerm) * 12}
               state={qState}
+              isPpor={qPpor === 'ppor'}
               overallStatus={s.overall_status}
               lenderGuidance={result.lender_guidance}
               getIcon={getIcon}
+              onProductsLoaded={setEligibleLendersPack}
               onCompareRates={() => {
                 if (onSwitchToRefinance) {
                   onSwitchToRefinance({

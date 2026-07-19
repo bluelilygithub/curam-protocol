@@ -278,10 +278,11 @@ function normalizeMortgageProduct(product, ctx = {}) {
  *
  * @param {object[]} normalizedRows
  * @param {number} [maxPerBank=2]
- * @param {{ includeSpecial?: boolean }} [opts]
+ * @param {{ includeSpecial?: boolean, preferredPurpose?: string }} [opts]
  */
 function selectRepresentativeProducts(normalizedRows, maxPerBank = 2, opts = {}) {
   const includeSpecial = opts.includeSpecial === true;
+  const preferredPurpose = opts.preferredPurpose || 'OWNER_OCCUPIED';
   const byBank = new Map();
   normalizedRows.forEach((row) => {
     const key = row.bank_id || row.lender;
@@ -300,7 +301,7 @@ function selectRepresentativeProducts(normalizedRows, maxPerBank = 2, opts = {})
 
     const score = (r) => {
       let s = 0;
-      if (r.loan_purpose === 'OWNER_OCCUPIED') s += 5;
+      if (r.loan_purpose === preferredPurpose) s += 5;
       if (r.repayment_type === 'PRINCIPAL_AND_INTEREST') s += 3;
       if (r.comparison_rate != null) s += 1;
       if (r.offset) s += 1;

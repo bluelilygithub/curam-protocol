@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (eligible-lenders-list)
+
+### Eligible banks & products after qualification
+When a buyer qualification returns pass or warn, the results now auto-load a ranked live CDR product list (bank, product name, rate, comparison rate, estimated monthly repayment, offset/redraw). Filtered for owner-occupied or investment purpose. Included in the PDF report. Editorial feature guides remain available under a secondary expand.
+
+---
+
 ## 2026-07-19 (qualify-status-and-duty-fix)
 
 ### Bug fix: FHOG/FHBG ineligibility no longer drives "LIKELY BLOCKED"
