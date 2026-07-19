@@ -1074,10 +1074,12 @@ function buildLenderGuidance(checks, summary, inputs) {
         { name: 'NAB', category: 'Big 4', flexible_on: 'Participating FHBG lender; competitive turnaround on FHBG applications', rate_premium: 'Standard rates', contact: 'nab.com.au/personal/home-loans/first-home-guarantee' },
         { name: 'Macquarie Bank', category: 'Major (digital)', flexible_on: 'Participating FHBG lender; fully digital process, fast conditional approval', rate_premium: 'Competitive', contact: 'macquarie.com.au/mortgages' },
         { name: 'ANZ', category: 'Big 4', flexible_on: 'Participating FHBG lender', rate_premium: 'Standard rates', contact: 'anz.com.au' },
+        { name: 'Bank of Queensland (BOQ)', category: 'Regional bank', flexible_on: 'Participating FHBG lender; more flexible manual underwriting than Big 4; strong for QLD-based buyers', rate_premium: 'Competitive', contact: 'boq.com.au' },
         { name: 'Bendigo Bank', category: 'Regional bank', flexible_on: 'Participating FHBG lender; good for regional areas where Big 4 presence is limited', rate_premium: 'Competitive', contact: 'bendigobank.com.au' },
       ] : [
         { name: 'Commonwealth Bank', category: 'Big 4', flexible_on: 'LMI offered through QBE LMI; large volumes mean competitive LMI rates; strong 90–95% approval track record', rate_premium: 'Standard', contact: 'commbank.com.au' },
         { name: 'NAB', category: 'Big 4', flexible_on: 'Strong at 90–95% LVR via Helia (formerly Genworth) LMI; fast approvals', rate_premium: 'Standard', contact: 'nab.com.au' },
+        { name: 'Bank of Queensland (BOQ)', category: 'Regional bank', flexible_on: 'Lends to 95% LVR with LMI; manual underwriting means less rigid automated decline at high LVR', rate_premium: 'Competitive with Big 4', contact: 'boq.com.au' },
         { name: 'Macquarie Bank', category: 'Major (digital)', flexible_on: 'Competitive at high LVR with streamlined approval; LMI capitalised into loan', rate_premium: 'Competitive', contact: 'macquarie.com.au/mortgages' },
         { name: 'Pepper Money', category: 'Non-bank', flexible_on: 'Can approve 95% LVR for borderline profiles that major banks decline', rate_premium: '+0.5%–1.5%', contact: 'peppermoney.com.au' },
       ],
