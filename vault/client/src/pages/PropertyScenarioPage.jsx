@@ -506,6 +506,32 @@ function BuyInterpretation({ calcResult }) {
         </div>
       )}
 
+      {/* First Home Owner Grant cross-reference */}
+      {(() => {
+        const state = calcResult.calculation?.event_results?.[0]?.inputs?.state;
+        const isFhb = calcResult.calculation?.event_results?.[0]?.inputs?.is_first_home_buyer;
+        if (!isFhb || !state) return null;
+        const FHOG_NOTES = {
+          QLD: { amount: 30000, cap: 750000, note: 'new homes only (not established), property value < $750,000, contract 20 Nov 2023–30 Jun 2026' },
+          VIC: { amount: 10000, cap: 750000, note: 'new homes in regional VIC only; metro Melbourne grant ended' },
+          SA:  { amount: 15000, cap: 650000, note: 'new homes, value ≤ $650,000' },
+          WA:  { amount: 10000, cap: 750000, note: 'new homes, value ≤ $750,000' },
+          TAS: { amount: 30000, cap: null,   note: 'new and established homes' },
+          NT:  { amount: 10000, cap: null,   note: 'new and established homes' },
+        };
+        const fg = FHOG_NOTES[state];
+        if (!fg) return null;
+        const blocked = fg.cap && purchasePrice >= fg.cap;
+        return (
+          <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
+            <p className="text-sm font-medium" style={{ color: blocked ? 'var(--color-muted)' : '#16a34a' }}>
+              {state} First Home Owner Grant: {blocked ? `Not available — price above $${fg.cap.toLocaleString('en-AU')} cap` : `$${fg.amount.toLocaleString('en-AU')} may be available`}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{fg.note}. Apply through your participating lender. Verify eligibility at your state revenue office.</p>
+          </div>
+        );
+      })()}
+
       {/* Additional certain costs not included in the calculation */}
       <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--color-border)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Additional costs not included in this estimate</p>

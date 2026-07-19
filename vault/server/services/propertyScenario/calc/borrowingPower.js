@@ -5,8 +5,12 @@ const { paymentAmount, money, formatDuration } = require('./loanMath');
 
 /** APRA-style assessment buffer (percentage points) on the customer rate. */
 const DEFAULT_ASSESSMENT_BUFFER_PP = 3.0;
+// Floor updated from 5.05% to 8.5% — reflects current APRA guidance and major-bank practice.
+// The old 5.05% was set when the cash rate was near zero; at current market rates it produces
+// an inflated borrowing power figure because product + 3pp always exceeds it. 8.5% is the
+// floor used by buyerQualification.js and is consistent with what the big four actually apply.
 /** Floor assessment rate (% p.a.) when customer rate + buffer is lower. */
-const DEFAULT_ASSESSMENT_FLOOR_PCT = 5.05;
+const DEFAULT_ASSESSMENT_FLOOR_PCT = 8.5;
 /** Fraction of gross income treated as available after tax/HECS sketch (illustrative). */
 const DEFAULT_NET_INCOME_FACTOR = 0.70;
 /** Minimum monthly surplus buffer kept free (living cushion). */
