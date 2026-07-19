@@ -678,9 +678,9 @@ function assessBuyerQualification(inputs = {}) {
   //   house_town:     standard house or townhouse → no additional restriction (baseline)
   //   off_plan:       off-the-plan → generally fine but completion risk caveat
   const PROPERTY_TYPE_RULES = {
-    studio_small:  { restrict: true, typical_max_lvr: 80, note: 'Studios and apartments under ~50m² often attract a maximum LVR of 70–80% at major lenders (some as low as 60%), regardless of borrower quality. At 88% LVR you would need to save to 80% or find a specialist lender.' },
-    highrise:      { restrict: true, typical_max_lvr: 80, note: 'High-rise apartments (typically 6+ storeys or developments with 50+ units) attract tighter LVR caps — usually 70–80% — due to perceived resale liquidity risk. Confirm with a broker which lenders are currently lending above 80% for this type in your area.' },
-    rural_acreage: { restrict: true, typical_max_lvr: 70, note: 'Rural, acreage, and hobby farm properties typically attract a maximum LVR of 60–70% at most lenders. Some specialist lenders go to 80%. Serviceability checks that pass for a metro property may still be blocked at this LVR by the deposit requirement alone.' },
+    studio_small:  { restrict: true, typical_max_lvr: 80, note: 'Studios and apartments under ~50m² are restricted by many major lenders (typical cap 70–80%, some as low as 60%), but policy varies significantly by postcode and development. A broker can identify which lenders are active above 80% in your specific area — the headline restriction is a starting point, not a ceiling in every case.' },
+    highrise:      { restrict: true, typical_max_lvr: 80, note: 'High-rise apartments (typically 6+ storeys or 50+ units) attract tighter LVR caps at major lenders, often 70–80%, due to perceived resale liquidity risk. However, this is negotiable: some banks lend to 90% LVR on high-rise in high-demand postcodes (inner-city Brisbane, Melbourne CBD fringe, North Sydney). A broker who knows which lenders are currently active above 80% for your specific postcode and development can often find a workable path.' },
+    rural_acreage: { restrict: true, typical_max_lvr: 70, note: 'Rural, acreage, and hobby farm properties typically attract a maximum LVR of 60–70% at most lenders. Some specialist lenders and regional banks (Bendigo, Bank of Queensland) go to 80% for properties with good road access and within reasonable distance of a service town. A broker with rural lending experience is important here.' },
     off_plan:      { restrict: false, note: 'Off-the-plan purchases are generally acceptable but carry a completion risk caveat: the lender re-values the property at settlement (not at contract date). If the market falls, your LVR at settlement may be higher than contracted, requiring a larger deposit. Some lenders apply a 10–20% valuation haircut upfront.' },
     house_town:    { restrict: false, note: null },
   };
@@ -696,9 +696,9 @@ function assessBuyerQualification(inputs = {}) {
         label: 'Property type restrictions',
         status: propTypeStatus,
         headline: exceedsTypicalCap
-          ? `Property type may block this LVR — typical max ${rule.typical_max_lvr}% for this type`
+          ? `LVR above typical cap for this type — broker can identify lenders active above ${rule.typical_max_lvr}%`
           : rule.restrict
-            ? `Property type may restrict lender choice — check LVR policy`
+            ? `Lender choice may be narrower — some lenders restrict LVR for this property type`
             : `Property type noted — see caveat`,
         detail: rule.note || 'No additional restriction for this property type.',
         data: { property_type: inputs.propertyType, typical_max_lvr: rule.typical_max_lvr ?? null, current_lvr_pct: Math.round(currentLvr * 10000) / 100 },

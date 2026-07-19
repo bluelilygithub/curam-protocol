@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { startPropertyScenarioTour, TOUR_KEY as PS_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 import api from '../utils/apiClient';
@@ -625,6 +625,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [expanded, setExpanded] = useState({});
+  const qualifyResultRef        = useRef(null);
 
   async function runQualify() {
     const price = parseFloat(qPrice);
@@ -665,6 +666,10 @@ function BuyerQualifyForm({ getIcon, addToast }) {
       const init = {};
       (data.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
+      // Scroll to results after a brief paint delay
+      setTimeout(() => {
+        qualifyResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
     } catch (err) {
       setError(err.message || 'Request failed');
       addToast(err.message || 'Qualification check failed', 'error');
@@ -883,7 +888,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
 
       {/* Results */}
       {result && (
-        <div className="space-y-4">
+        <div ref={qualifyResultRef} className="space-y-4">
           {/* Overall verdict */}
           <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
             <p className="text-base font-semibold" style={{ color: overallColor }}>
@@ -1735,6 +1740,7 @@ export default function PropertyScenarioPage() {
   // Direct calculation result (structured forms — no LLM)
   const [calcResult, setCalcResult] = useState(null);
   const [calcError, setCalcError] = useState(null);
+  const calcResultRef = useRef(null);
 
   // Follow-up Q&A: { [questionText]: answerText }
   // Reset whenever a new calculation is run so stale answers don't carry over.
@@ -1932,6 +1938,9 @@ export default function PropertyScenarioPage() {
       setFollowUpAnswers({});
       setTab('overview');
       addToast('Results ready', 'success');
+      setTimeout(() => {
+        calcResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
     } catch (err) {
       setCalcError(err.message || 'Calculation failed');
       addToast(err.message || 'Calculation failed', 'error');
@@ -2292,7 +2301,7 @@ export default function PropertyScenarioPage() {
 
             {/* ── Structured form results ───────────────────────────── */}
             {calcResult?.ready_for_calculations && (
-              <>
+              <div ref={calcResultRef}>
                 {/* Input summary — what was used in the calculation */}
                 <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                   <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>What was calculated</p>
@@ -2384,7 +2393,7 @@ export default function PropertyScenarioPage() {
                   followUpAnswers={followUpAnswers}
                   onFollowUpAnswer={handleFollowUpAnswer}
                 />
-              </>
+              </div>
             )}
 
             {/* ── Compound NLP path (multiple events) ──────────────── */}
