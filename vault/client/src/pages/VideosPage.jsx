@@ -208,6 +208,7 @@ const TOOL_GROUPS = [
     tools: [
       { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
       { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
+      { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
     ],
   },
   {
@@ -215,6 +216,8 @@ const TOOL_GROUPS = [
     label: 'Transform',
     tools: [
       { id: 'clip', label: 'Clip / trim', desc: 'Set in and out points' },
+      { id: 'reframe', label: 'Crop / reframe', desc: '9:16, 16:9, 1:1, 4:5 — crop or letterbox' },
+      { id: 'speed', label: 'Speed', desc: 'Slow-mo or speed up (0.25×–4×)' },
     ],
   },
   {
@@ -222,7 +225,8 @@ const TOOL_GROUPS = [
     label: 'Compose',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
-      { id: 'join', label: 'Join videos', desc: 'Concatenate clips into one MP4' },
+      { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
+      { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
     ],
   },
@@ -561,6 +565,25 @@ export default function VideosPage() {
   const [joinFiles, setJoinFiles] = useState([]);
   const [joinMaxWidth, setJoinMaxWidth] = useState('1280');
   const [joinCrf, setJoinCrf] = useState(23);
+  const [joinCrossfade, setJoinCrossfade] = useState('0');
+
+  // Reframe
+  const [reframeAspect, setReframeAspect] = useState('9:16');
+  const [reframeMode, setReframeMode] = useState('crop');
+  const [reframeFocus, setReframeFocus] = useState('center');
+
+  // Audio mute/replace
+  const [audioMode, setAudioMode] = useState('mute');
+  const [audioFile, setAudioFile] = useState(null);
+
+  // Speed
+  const [speedFactor, setSpeedFactor] = useState('1.5');
+
+  // Overlay
+  const [overlayImageFile, setOverlayImageFile] = useState(null);
+  const [overlayPosition, setOverlayPosition] = useState('bottom-right');
+  const [overlayScale, setOverlayScale] = useState('20');
+  const [overlayOpacity, setOverlayOpacity] = useState('0.85');
 
   // Annotate
   const [overlayText, setOverlayText] = useState('');
@@ -643,7 +666,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join') clearComposeResult();
+    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -1319,11 +1342,11 @@ export default function VideosPage() {
           </section>
         )}
 
-        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && !(tool === 'caption-studio' && captionLibraryId) && (
+        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && !(tool === 'caption-studio' && captionLibraryId) && (
           <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && (
+        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -1401,6 +1424,206 @@ export default function VideosPage() {
           </section>
         )}
 
+        {tool === 'audio' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Mute / replace audio</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Strip the soundtrack, or replace it with a music / voice file. Replace uses the shorter of video and audio length.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'mute', label: 'Mute' },
+                { id: 'replace', label: 'Replace audio' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setAudioMode(m.id)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{
+                    borderColor: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: 'var(--color-bg)',
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {audioMode === 'replace' && (
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Audio file (mp3 / wav / m4a)</span>
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.aac"
+                  onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs"
+                  style={{ color: 'var(--color-text)' }}
+                />
+                {audioFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{audioFile.name}</span>}
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!requireFile()) return;
+                if (audioMode === 'replace' && !audioFile) {
+                  addToast('Choose an audio file to replace with', 'error');
+                  return;
+                }
+                const fd = new FormData();
+                fd.append('video', sourceFile);
+                fd.append('mode', audioMode);
+                if (audioMode === 'replace') fd.append('audio', audioFile);
+                runFormVideo('audio', fd, {
+                  label: audioMode === 'mute' ? 'Muting…' : 'Replacing audio…',
+                  resultFilename: audioMode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4',
+                  forTool: 'audio',
+                });
+              }}
+              disabled={!ffmpegOk}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {audioMode === 'mute' ? 'Mute video' : 'Replace audio'}
+            </button>
+            {resultForTool === 'audio' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'reframe' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Crop / reframe</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Fit video to a social aspect ratio. Crop fills the frame (may trim edges); pad letterboxes without cutting.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {['9:16', '16:9', '1:1', '4:5'].map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setReframeAspect(a)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{
+                    borderColor: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: 'var(--color-bg)',
+                  }}
+                >
+                  {a}{a === '9:16' ? ' · Reels' : a === '1:1' ? ' · Square' : ''}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'crop', label: 'Crop (fill)' },
+                { id: 'pad', label: 'Pad (letterbox)' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setReframeMode(m.id)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{
+                    borderColor: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: 'var(--color-bg)',
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {reframeMode === 'crop' && (
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crop focus</span>
+                <select value={reframeFocus} onChange={(e) => setReframeFocus(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="center">Centre</option>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!requireFile()) return;
+                const fd = new FormData();
+                fd.append('video', sourceFile);
+                fd.append('aspect', reframeAspect);
+                fd.append('mode', reframeMode);
+                fd.append('focus', reframeFocus);
+                runFormVideo('reframe', fd, { label: 'Reframing…', resultFilename: `reframed-${reframeAspect.replace(':', 'x')}.mp4`, forTool: 'reframe' });
+              }}
+              disabled={!ffmpegOk}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Reframe to {reframeAspect}
+            </button>
+            {resultForTool === 'reframe' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'speed' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Speed</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Change playback speed from 0.25× (slow-mo) to 4×. Audio tempo follows when a soundtrack is present.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {['0.5', '0.75', '1.25', '1.5', '2', '3'].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSpeedFactor(s)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{
+                    borderColor: speedFactor === s ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: speedFactor === s ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: 'var(--color-bg)',
+                  }}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Custom speed (0.25–4)</span>
+              <input type="number" min={0.25} max={4} step={0.05} value={speedFactor} onChange={(e) => setSpeedFactor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                if (!requireFile()) return;
+                const s = Number(speedFactor);
+                if (!Number.isFinite(s) || s < 0.25 || s > 4) {
+                  addToast('Speed must be between 0.25 and 4', 'error');
+                  return;
+                }
+                const fd = new FormData();
+                fd.append('video', sourceFile);
+                fd.append('speed', String(s));
+                runFormVideo('speed', fd, { label: `Applying ${s}× speed…`, resultFilename: `speed-${s}x.mp4`, forTool: 'speed' });
+              }}
+              disabled={!ffmpegOk}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Apply {speedFactor || '?'}×
+            </button>
+            {resultForTool === 'speed' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
         {tool === 'annotate' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
@@ -1430,6 +1653,66 @@ export default function VideosPage() {
           </section>
         )}
 
+        {tool === 'overlay' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Overlay / watermark</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Place a logo or image on top of the video. PNG with transparency works best.
+            </p>
+            <VideoUpload file={sourceFile} onFile={setSourceFile} label="Video" />
+            {previewUrl && (
+              <video src={previewUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
+            )}
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Overlay image (PNG / JPG)</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                onChange={(e) => setOverlayImageFile(e.target.files?.[0] || null)}
+                className="block w-full text-xs"
+                style={{ color: 'var(--color-text)' }}
+              />
+              {overlayImageFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{overlayImageFile.name}</span>}
+            </label>
+            <PositionGrid value={overlayPosition} onChange={setOverlayPosition} label="Overlay position" />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (% of video width)</span>
+                <input type="number" min={5} max={80} value={overlayScale} onChange={(e) => setOverlayScale(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Opacity (0.05–1)</span>
+                <input type="number" min={0.05} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!requireFile()) return;
+                if (!overlayImageFile) {
+                  addToast('Choose an overlay image', 'error');
+                  return;
+                }
+                const fd = new FormData();
+                fd.append('video', sourceFile);
+                fd.append('image', overlayImageFile);
+                fd.append('position', overlayPosition);
+                fd.append('scalePct', String(overlayScale));
+                fd.append('opacity', String(overlayOpacity));
+                runFormVideo('overlay', fd, { label: 'Applying overlay…', resultFilename: 'overlay.mp4', forTool: 'overlay' });
+              }}
+              disabled={!ffmpegOk}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Apply overlay
+            </button>
+            {resultForTool === 'overlay' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
         {tool === 'join' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Join videos</h2>
@@ -1446,6 +1729,10 @@ export default function VideosPage() {
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35)</span>
                 <input type="number" min={18} max={35} value={joinCrf} onChange={(e) => setJoinCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </label>
+              <label className="block space-y-1 col-span-2">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crossfade (seconds) — 0 = hard cut</span>
+                <input type="number" min={0} max={5} step={0.1} value={joinCrossfade} onChange={(e) => setJoinCrossfade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </label>
             </div>
             <button
               type="button"
@@ -1458,13 +1745,19 @@ export default function VideosPage() {
                 joinFiles.forEach((f) => fd.append('videos', f));
                 if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
                 fd.append('crf', String(joinCrf));
-                runFormVideo('join', fd, { label: 'Joining videos…', resultFilename: 'joined.mp4', forTool: 'join' });
+                const xf = Number(joinCrossfade) || 0;
+                if (xf > 0) fd.append('crossfadeSec', String(xf));
+                runFormVideo('join', fd, {
+                  label: xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
+                  resultFilename: 'joined.mp4',
+                  forTool: 'join',
+                });
               }}
               disabled={!ffmpegOk || joinFiles.length < 2}
               className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}
             >
-              Join {joinFiles.length || 0} clips
+              Join {joinFiles.length || 0} clips{Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : ''}
             </button>
             {resultForTool === 'join' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />

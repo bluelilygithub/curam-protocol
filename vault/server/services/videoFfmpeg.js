@@ -197,6 +197,305 @@ async function joinVideos(inputPaths, outputPath, opts = {}) {
   }
 }
 
+function evenDim(n) {
+  const v = Math.round(Number(n) || 0);
+  if (v < 2) return 2;
+  return v % 2 ? v - 1 : v;
+}
+
+const ASPECT_RATIOS = {
+  '9:16': 9 / 16,
+  '16:9': 16 / 9,
+  '1:1': 1,
+  '4:5': 4 / 5,
+};
+
+/**
+ * Reframe to a target aspect ratio via center-crop (fill) or letterbox (pad).
+ * @param {{ aspect?: string, mode?: 'crop'|'pad', maxHeight?: number, focus?: string, crf?: number }} [opts]
+ */
+async function reframeVideo(inputPath, outputPath, opts = {}) {
+  const aspect = opts.aspect || '9:16';
+  const mode = opts.mode === 'pad' ? 'pad' : 'crop';
+  const focus = opts.focus || 'center';
+  const maxHeight = Math.max(240, Math.min(2160, Number(opts.maxHeight) || 1920));
+  const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
+  const ratio = ASPECT_RATIOS[aspect];
+  if (!ratio) throw new Error(`Unsupported aspect "${aspect}" — use 9:16, 16:9, 1:1, or 4:5`);
+
+  const probe = await probeVideo(inputPath);
+  let th = evenDim(Math.min(maxHeight, probe.height || maxHeight));
+  let tw = evenDim(th * ratio);
+  // Prefer fitting the source's longer side for portrait targets from landscape
+  if (probe.width && probe.height) {
+    const srcRatio = probe.width / probe.height;
+    if (mode === 'crop') {
+      if (srcRatio > ratio) {
+        th = evenDim(Math.min(maxHeight, probe.height));
+        tw = evenDim(th * ratio);
+      } else {
+        tw = evenDim(Math.min(maxHeight * ratio * (16 / 9), probe.width || maxHeight));
+        th = evenDim(tw / ratio);
+        if (th > maxHeight) {
+          th = evenDim(maxHeight);
+          tw = evenDim(th * ratio);
+        }
+      }
+    }
+  }
+
+  let vf;
+  if (mode === 'pad') {
+    vf = `scale=${tw}:${th}:force_original_aspect_ratio=decrease,pad=${tw}:${th}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+  } else {
+    let cropX = '(iw-ow)/2';
+    let cropY = '(ih-oh)/2';
+    if (focus === 'top') cropY = '0';
+    else if (focus === 'bottom') cropY = 'ih-oh';
+    else if (focus === 'left') cropX = '0';
+    else if (focus === 'right') cropX = 'iw-ow';
+    vf = `scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th}:${cropX}:${cropY},setsar=1,format=yuv420p`;
+  }
+
+  const hasAudio = (await probeVideo(inputPath)).hasAudio;
+  const args = ['-y', '-i', inputPath, '-vf', vf, '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf)];
+  if (hasAudio) args.push('-c:a', 'aac', '-b:a', '128k');
+  else args.push('-an');
+  args.push('-movflags', '+faststart', outputPath);
+  await execFileAsync(FFMPEG, args, 600000);
+}
+
+/**
+ * Mute soundtrack or replace with an external audio file.
+ * @param {{ mode?: 'mute'|'replace', audioPath?: string }} [opts]
+ */
+async function muteOrReplaceAudio(inputPath, outputPath, opts = {}) {
+  const mode = opts.mode === 'replace' ? 'replace' : 'mute';
+  if (mode === 'mute') {
+    try {
+      await execFileAsync(FFMPEG, [
+        '-y', '-i', inputPath, '-c:v', 'copy', '-an', '-movflags', '+faststart', outputPath,
+      ]);
+    } catch {
+      await execFileAsync(FFMPEG, [
+        '-y', '-i', inputPath,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-an', '-movflags', '+faststart', outputPath,
+      ], 600000);
+    }
+    return;
+  }
+  if (!opts.audioPath) throw new Error('audioPath is required for replace mode');
+  try {
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath, '-i', opts.audioPath,
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+      '-shortest', '-movflags', '+faststart', outputPath,
+    ]);
+  } catch {
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath, '-i', opts.audioPath,
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'aac', '-b:a', '192k',
+      '-shortest', '-movflags', '+faststart', outputPath,
+    ], 600000);
+  }
+}
+
+function buildAtempoChain(speed) {
+  const filters = [];
+  let s = speed;
+  while (s > 2.0 + 1e-9) {
+    filters.push('atempo=2.0');
+    s /= 2.0;
+  }
+  while (s < 0.5 - 1e-9) {
+    filters.push('atempo=0.5');
+    s /= 0.5;
+  }
+  filters.push(`atempo=${Number(s.toFixed(4))}`);
+  return filters.join(',');
+}
+
+/**
+ * Change playback speed (0.25×–4×). Audio tempo follows when present.
+ * @param {{ speed?: number, crf?: number }} [opts]
+ */
+async function changeVideoSpeed(inputPath, outputPath, opts = {}) {
+  const speed = Number(opts.speed);
+  if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) {
+    throw new Error('speed must be between 0.25 and 4');
+  }
+  const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
+  const probe = await probeVideo(inputPath);
+  const setpts = `setpts=${(1 / speed).toFixed(6)}*PTS`;
+
+  if (probe.hasAudio) {
+    const af = buildAtempoChain(speed);
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath,
+      '-filter_complex', `[0:v]${setpts},format=yuv420p[v];[0:a]${af}[a]`,
+      '-map', '[v]', '-map', '[a]',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart', outputPath,
+    ], 600000);
+  } else {
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath,
+      '-vf', `${setpts},format=yuv420p`,
+      '-an',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-movflags', '+faststart', outputPath,
+    ], 600000);
+  }
+}
+
+const OVERLAY_POSITIONS = {
+  'top-left': { x: '40', y: '40' },
+  'top-center': { x: '(W-w)/2', y: '40' },
+  'top-right': { x: 'W-w-40', y: '40' },
+  'center-left': { x: '40', y: '(H-h)/2' },
+  center: { x: '(W-w)/2', y: '(H-h)/2' },
+  'center-right': { x: 'W-w-40', y: '(H-h)/2' },
+  'bottom-left': { x: '40', y: 'H-h-40' },
+  'bottom-center': { x: '(W-w)/2', y: 'H-h-40' },
+  'bottom-right': { x: 'W-w-40', y: 'H-h-40' },
+};
+
+/**
+ * Overlay an image (logo/watermark) on video.
+ * @param {{ position?: string, scalePct?: number, opacity?: number, crf?: number }} [opts]
+ */
+async function overlayImage(inputPath, imagePath, outputPath, opts = {}) {
+  const position = opts.position || 'bottom-right';
+  const scalePct = Math.min(80, Math.max(5, Number(opts.scalePct) || 20));
+  const opacity = Math.min(1, Math.max(0.05, Number(opts.opacity) ?? 0.85));
+  const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
+  const pos = OVERLAY_POSITIONS[position] || OVERLAY_POSITIONS['bottom-right'];
+  const probe = await probeVideo(inputPath);
+  const baseW = probe.width || 1280;
+  const ovW = evenDim((baseW * scalePct) / 100);
+
+  const fc = `[1:v]scale=${ovW}:-1,format=rgba,colorchannelmixer=aa=${opacity.toFixed(3)}[ov];`
+    + `[0:v][ov]overlay=x=${pos.x}:y=${pos.y}:format=auto[vout]`;
+
+  const args = [
+    '-y', '-i', inputPath, '-i', imagePath,
+    '-filter_complex', fc,
+    '-map', '[vout]',
+  ];
+  if (probe.hasAudio) args.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
+  else args.push('-an');
+  args.push(
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath
+  );
+  await execFileAsync(FFMPEG, args, 600000);
+}
+
+/**
+ * Join with optional crossfade between clips.
+ * When crossfadeSec > 0, uses xfade + acrossfade after normalize.
+ */
+async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}) {
+  const crossfadeSec = Math.max(0, Number(opts.crossfadeSec) || 0);
+  if (crossfadeSec <= 0) {
+    return joinVideos(inputPaths, outputPath, opts);
+  }
+  if (!Array.isArray(inputPaths) || inputPaths.length < 2) {
+    throw new Error('At least two video files are required to join');
+  }
+
+  const maxWidth = opts.maxWidth != null && Number.isFinite(opts.maxWidth)
+    ? Math.max(160, Math.min(3840, Math.round(opts.maxWidth)))
+    : 1280;
+  const crf = opts.crf != null && Number.isFinite(opts.crf)
+    ? Math.min(35, Math.max(18, Math.round(opts.crf)))
+    : 23;
+
+  const probes = [];
+  for (const p of inputPaths) probes.push(await probeVideo(p));
+
+  let targetW = Math.min(maxWidth, Math.max(...probes.map((p) => p.width || 1280)));
+  if (!Number.isFinite(targetW) || targetW < 160) targetW = maxWidth;
+  targetW = evenDim(targetW);
+  let targetH = probes[0]?.height && probes[0]?.width
+    ? evenDim((probes[0].height / probes[0].width) * targetW)
+    : evenDim((targetW * 9) / 16);
+  if (targetH < 120) targetH = 720;
+
+  const dir = path.dirname(outputPath);
+  const normalized = [];
+  const durations = [];
+
+  for (let i = 0; i < inputPaths.length; i += 1) {
+    const info = probes[i];
+    const dur = Math.max(0.1, Number(info.duration) || 1);
+    durations.push(dur);
+    const normPath = path.join(dir, `xfade_norm_${i}.mp4`);
+    const vf = `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,`
+      + `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p`;
+
+    if (info.hasAudio) {
+      await execFileAsync(FFMPEG, [
+        '-y', '-i', inputPaths[i],
+        '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+        normPath,
+      ], 600000);
+    } else {
+      await execFileAsync(FFMPEG, [
+        '-y', '-i', inputPaths[i],
+        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+        '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:a', 'aac', '-b:a', '128k',
+        '-map', '0:v:0', '-map', '1:a:0', '-shortest',
+        normPath,
+      ], 600000);
+    }
+    normalized.push(normPath);
+  }
+
+  // Cap crossfade so each clip still contributes content
+  const minDur = Math.min(...durations);
+  const fade = Math.min(crossfadeSec, Math.max(0.1, minDur / 2 - 0.05));
+
+  const n = normalized.length;
+  const inputs = normalized.flatMap((p) => ['-i', p]);
+  const vParts = [];
+  const aParts = [];
+  let vPrev = '[0:v]';
+  let aPrev = '[0:a]';
+  let offset = durations[0] - fade;
+
+  for (let i = 1; i < n; i += 1) {
+    const vOut = i === n - 1 ? '[vout]' : `[v${i}]`;
+    const aOut = i === n - 1 ? '[aout]' : `[a${i}]`;
+    vParts.push(`${vPrev}[${i}:v]xfade=transition=fade:duration=${fade.toFixed(3)}:offset=${Math.max(0, offset).toFixed(3)}${vOut}`);
+    aParts.push(`${aPrev}[${i}:a]acrossfade=d=${fade.toFixed(3)}${aOut}`);
+    vPrev = vOut;
+    aPrev = aOut;
+    if (i < n - 1) {
+      offset += durations[i] - fade;
+    }
+  }
+
+  const fc = `${vParts.join(';')};${aParts.join(';')}`;
+  await execFileAsync(FFMPEG, [
+    '-y', ...inputs,
+    '-filter_complex', fc,
+    '-map', '[vout]', '-map', '[aout]',
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+    '-c:a', 'aac', '-b:a', '128k',
+    '-movflags', '+faststart', outputPath,
+  ], 900000);
+}
+
 async function extractAudio(inputPath, outputPath, format = 'mp3') {
   const codec = format === 'wav'
     ? ['-c:a', 'pcm_s16le']
@@ -432,6 +731,12 @@ module.exports = {
   clipVideo,
   convertVideo,
   joinVideos,
+  joinVideosWithOptionalCrossfade,
+  reframeVideo,
+  muteOrReplaceAudio,
+  changeVideoSpeed,
+  overlayImage,
+  ASPECT_RATIOS,
   extractAudio,
   captureThumbnail,
   annotateVideo,

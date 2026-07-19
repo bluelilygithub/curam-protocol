@@ -15,7 +15,7 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
-| Server (ffmpeg) | Clip, Convert, Join, Extract audio, Annotate, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
+| Server (ffmpeg) | Clip, Convert, Join (+ crossfade), Reframe, Speed, Mute/replace audio, Overlay, Extract audio, Annotate, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
 | Library (disk + DB) | Saved media, Caption studio (library source) | `video_library` table + files under `{UPLOAD_DIR}/video-library/{userId}/` |
 | Local dev only | Auto-transcribe | `whisper-cli` + model file; hosted Vault → paste SRT instead |
 
@@ -28,9 +28,9 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | Group | Tools |
 |---|---|
 | **Create** | Generate clip |
-| **Optimise** | Convert / compress, Extract audio |
-| **Transform** | Clip / trim |
-| **Compose** | Annotate, Join videos, Caption studio |
+| **Optimise** | Convert / compress, Extract audio, Mute / replace audio |
+| **Transform** | Clip / trim, Crop / reframe, Speed |
+| **Compose** | Annotate, Overlay / watermark, Join videos, Caption studio |
 | **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
 
@@ -56,15 +56,19 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 - **Convert / compress** — re-encode H.264 MP4 with CRF (18–35) and optional max width. `POST /api/videos/convert`.
 - **Extract audio** — export MP3 (or WAV via API `format=wav`). `POST /api/videos/extract-audio`.
+- **Mute / replace audio** — strip soundtrack (`mode=mute`) or replace with uploaded audio (`mode=replace` + `audio` file). `POST /api/videos/audio`.
 
 ### Transform
 
 - **Clip / trim** — `startSec` + optional `endSec`. `POST /api/videos/clip`.
+- **Crop / reframe** — target aspect `9:16` / `16:9` / `1:1` / `4:5`; `mode=crop` (fill) or `pad` (letterbox); crop `focus` center/top/bottom/left/right. `POST /api/videos/reframe`.
+- **Speed** — `speed` 0.25–4 (audio tempo follows). `POST /api/videos/speed`.
 
 ### Compose
 
 - **Annotate** — burn a single full-duration text label (top / center / bottom) via ffmpeg `drawtext`. Google Fonts (20 curated), text/background colour, weight, size. `POST /api/videos/annotate`.
-- **Join videos** — concatenate 2–12 clips into one MP4. Each clip is normalized (shared resolution, 30 fps, stereo AAC) then joined, so mixed codecs, sizes, and silent clips still work. Optional `maxWidth` (default 1280) and CRF. `POST /api/videos/join` with multipart field `videos` (repeated).
+- **Overlay / watermark** — image on video; position grid, scale %, opacity. `POST /api/videos/overlay` (`video` + `image`).
+- **Join videos** — concatenate 2–12 clips into one MP4. Each clip is normalized (shared resolution, 30 fps, stereo AAC) then joined. Optional `crossfadeSec` (>0 uses xfade + acrossfade). Optional `maxWidth` (default 1280) and CRF. `POST /api/videos/join` with multipart field `videos` (repeated).
 - **Caption studio** — upload a video or pick one from **Saved media**, paste SRT (or auto-transcribe on upload in local dev), and burn styled subtitles. Same typography controls as Annotate (Google Fonts, weight, size, text + background colour). Optional **Save captioned result to library**. `POST /api/videos/burn-captions` (upload) or `POST /api/videos/library/:id/captions` (library item).
 
 ### Library
@@ -85,8 +89,8 @@ GET  /api/videos/status
 POST /api/videos/youtube-preview   JSON { url }
 POST /api/videos/generate          JSON { brief?, … } → submits FAL queue job, returns `{ requestId, endpoint, status }` quickly
 GET  /api/videos/generate/status   `?requestId=&endpoint=` → poll until `COMPLETED` (client polls every 3s)
-POST /api/videos/probe|clip|convert|join|extract-audio|thumbnail|annotate|transcribe|burn-captions
-                                   multipart field `video` (+ tool-specific fields; join uses repeated `videos`)
+POST /api/videos/probe|clip|convert|join|reframe|audio|speed|overlay|extract-audio|thumbnail|annotate|transcribe|burn-captions
+                                   multipart field `video` (+ tool-specific fields; join uses repeated `videos`; overlay uses `image`; audio replace uses `audio`)
 GET  /api/videos/library
 POST /api/videos/library            multipart `file` + `title`, `tool`, `mediaType`, `transaction` (JSON string)
 GET  /api/videos/library/:id/stream authenticated file stream

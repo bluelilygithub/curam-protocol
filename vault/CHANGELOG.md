@@ -4,6 +4,17 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (video-manipulate-suite)
+
+### Five new video manipulation tools
+- **Crop / reframe** — 9:16 / 16:9 / 1:1 / 4:5; crop (fill) or pad (letterbox); focus for crop. `POST /api/videos/reframe`
+- **Mute / replace audio** — strip soundtrack or swap in an audio file. `POST /api/videos/audio`
+- **Speed** — 0.25×–4× with audio tempo follow. `POST /api/videos/speed`
+- **Overlay / watermark** — image logo with position, scale %, opacity. `POST /api/videos/overlay`
+- **Crossfade join** — optional `crossfadeSec` on Join (xfade + acrossfade). `POST /api/videos/join`
+
+---
+
 ## 2026-07-19 (video-join)
 
 ### Join videos tool

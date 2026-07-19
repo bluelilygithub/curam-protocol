@@ -14,7 +14,11 @@ const {
   probeVideo,
   clipVideo,
   convertVideo,
-  joinVideos,
+  joinVideosWithOptionalCrossfade,
+  reframeVideo,
+  muteOrReplaceAudio,
+  changeVideoSpeed,
+  overlayImage,
   extractAudio,
   captureThumbnail,
   annotateVideo,
@@ -445,6 +449,9 @@ router.post('/join', upload.array('videos', 12), async (req, res) => {
 
     const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
     const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
+    const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
+      ? Number(req.body.crossfadeSec)
+      : 0;
 
     const buffer = await withTempDir(async (dir) => {
       const inputPaths = [];
@@ -457,9 +464,10 @@ router.post('/join', upload.array('videos', 12), async (req, res) => {
         inputPaths.push(inputPath);
       }
       const outputPath = path.join(dir, 'joined.mp4');
-      await joinVideos(inputPaths, outputPath, {
+      await joinVideosWithOptionalCrossfade(inputPaths, outputPath, {
         maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
         crf: Number.isFinite(crf) ? crf : 23,
+        crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
       });
       return readOutputFile(outputPath);
     });
@@ -467,6 +475,129 @@ router.post('/join', upload.array('videos', 12), async (req, res) => {
     sendVideoBuffer(res, buffer, 'joined.mp4');
   } catch (err) {
     console.error('[videos/join]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reframe', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const aspect = req.body?.aspect || '9:16';
+    const mode = req.body?.mode === 'pad' ? 'pad' : 'crop';
+    const focus = req.body?.focus || 'center';
+    const maxHeight = req.body?.maxHeight ? Number(req.body.maxHeight) : 1920;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'reframed.mp4');
+      await reframeVideo(inputPath, outputPath, { aspect, mode, focus, maxHeight });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'reframed.mp4');
+  } catch (err) {
+    console.error('[videos/reframe]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/audio', upload.fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'audio', maxCount: 1 },
+]), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const mode = req.body?.mode === 'replace' ? 'replace' : 'mute';
+    const videoFile = req.files?.video?.[0];
+    if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+    if (mode === 'replace' && !req.files?.audio?.[0]) {
+      return res.status(400).json({ error: 'Audio file is required for replace mode' });
+    }
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, videoFile);
+      let audioPath = null;
+      if (mode === 'replace') {
+        const af = req.files.audio[0];
+        const aext = af.mimetype?.includes('wav') ? '.wav'
+          : af.mimetype?.includes('mpeg') || af.mimetype?.includes('mp3') ? '.mp3'
+            : af.mimetype?.includes('mp4') || af.mimetype?.includes('m4a') ? '.m4a'
+              : '.mp3';
+        audioPath = path.join(dir, `audio_in${aext}`);
+        await fs.writeFile(audioPath, af.buffer);
+      }
+      const outputPath = path.join(dir, 'audio_out.mp4');
+      await muteOrReplaceAudio(inputPath, outputPath, { mode, audioPath });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, mode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4');
+  } catch (err) {
+    console.error('[videos/audio]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/speed', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const speed = Number(req.body?.speed);
+    if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) {
+      return res.status(400).json({ error: 'speed must be a number between 0.25 and 4' });
+    }
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'speed.mp4');
+      await changeVideoSpeed(inputPath, outputPath, { speed });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'speed.mp4');
+  } catch (err) {
+    console.error('[videos/speed]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/overlay', upload.fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'image', maxCount: 1 },
+]), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const videoFile = req.files?.video?.[0];
+    const imageFile = req.files?.image?.[0];
+    if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+    if (!imageFile) return res.status(400).json({ error: 'Image file is required (logo/watermark)' });
+
+    const position = req.body?.position || 'bottom-right';
+    const scalePct = req.body?.scalePct != null ? Number(req.body.scalePct) : 20;
+    const opacity = req.body?.opacity != null ? Number(req.body.opacity) : 0.85;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, videoFile);
+      const imgExt = imageFile.mimetype?.includes('png') ? '.png'
+        : imageFile.mimetype?.includes('webp') ? '.webp'
+          : '.jpg';
+      const imagePath = path.join(dir, `overlay${imgExt}`);
+      await fs.writeFile(imagePath, imageFile.buffer);
+      const outputPath = path.join(dir, 'overlay.mp4');
+      await overlayImage(inputPath, imagePath, outputPath, { position, scalePct, opacity });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'overlay.mp4');
+  } catch (err) {
+    console.error('[videos/overlay]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
