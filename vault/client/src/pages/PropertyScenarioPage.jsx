@@ -7,6 +7,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { LENDER_PROFILES } from '../utils/lenderProfiles';
 // Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
 async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers) {
   const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
@@ -96,6 +97,147 @@ function FieldTip({ text }) {
         </span>
       )}
     </span>
+  );
+}
+
+function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overallStatus, lenderGuidance, getIcon, onCompareRates }) {
+  const [show, setShow] = React.useState(false);
+
+  const guidanceLenderNames = new Set(
+    (lenderGuidance || []).flatMap((g) => (g.lenders || []).map((l) => l.name))
+  );
+
+  const profiles = LENDER_PROFILES;
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity duration-200 hover:opacity-70"
+        style={{ background: 'var(--color-primary)', color: '#fff' }}
+      >
+        {getIcon('building', { size: 14 })}
+        {show ? 'Hide lender profiles' : 'View matching lenders & products →'}
+      </button>
+
+      {show && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {overallStatus === 'pass'
+                  ? 'You broadly qualify — here are the lenders we track via CDR'
+                  : 'Lenders & products relevant to your situation'}
+              </p>
+              {loanAmount > 0 && targetRate > 0 && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  Based on a ${loanAmount.toLocaleString('en-AU')} loan at {targetRate}%. Use "Compare live CDR rates" to see current products and monthly repayments side-by-side.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onCompareRates}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {getIcon('refresh-cw', { size: 13 })}
+              Compare live CDR rates
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {profiles.map((lender) => {
+              const isHighlighted = guidanceLenderNames.has(lender.name);
+              return (
+                <div
+                  key={lender.id}
+                  className="rounded-xl border overflow-hidden flex flex-col"
+                  style={{
+                    borderColor: isHighlighted ? 'var(--color-primary)' : 'var(--color-border)',
+                    background: 'var(--color-surface)',
+                  }}
+                >
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b flex items-start justify-between gap-2" style={{ borderColor: 'var(--color-border)' }}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{lender.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{lender.type}</p>
+                    </div>
+                    {isHighlighted && (
+                      <span className="text-xs px-1.5 py-0.5 rounded shrink-0" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Highlighted for you
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-4 py-3 space-y-2 flex-1">
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{lender.summary}</p>
+
+                    {/* Features */}
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs pt-1">
+                      <span style={{ color: lender.offsetAvailable ? '#16a34a' : '#b45309' }}>
+                        {lender.offsetAvailable ? '✓' : '✗'} Offset account
+                      </span>
+                      <span style={{ color: '#16a34a' }}>✓ Redraw</span>
+                      <span style={{ color: '#16a34a' }}>✓ Extra repayments</span>
+                    </div>
+
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      <span className="font-medium">Fee:</span> {lender.annualFee}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      <span className="font-medium">Service:</span> {lender.serviceModel}
+                    </p>
+
+                    {/* Best for tags */}
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {lender.bestFor.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs px-1.5 py-0.5 rounded"
+                          style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Restrictions */}
+                    {lender.restrictions.length > 0 && (
+                      <div className="space-y-0.5 pt-1">
+                        {lender.restrictions.map((r) => (
+                          <p key={r} className="text-xs" style={{ color: '#b45309' }}>⚠ {r}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer link */}
+                  <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <a
+                      href={lender.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs transition-opacity duration-200 hover:opacity-70"
+                      style={{ color: 'var(--color-primary)' }}
+                    >
+                      {lender.name} home loans →
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            These are editorial summaries — not endorsements or advice. Product features, rates, and eligibility change frequently; always confirm directly with the lender or a licensed mortgage broker. Live rates above are sourced from Australia's open banking (CDR) APIs.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -628,7 +770,7 @@ function QualifyCheck({ check, expanded, onToggle }) {
   );
 }
 
-function BuyerQualifyForm({ getIcon, addToast }) {
+function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
   const FIELD = {
     borderColor: 'var(--color-border)', background: 'var(--color-bg)',
     color: 'var(--color-text)', borderRadius: 8, border: '1px solid',
@@ -948,6 +1090,29 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               ))}
             </div>
           </div>
+
+          {/* Lender discovery CTA — shown on pass or warn */}
+          {(s.overall_status === 'pass' || s.overall_status === 'warn') && (
+            <LenderDiscoveryPanel
+              loanAmount={s.loan_requested}
+              targetRate={s.target_rate_pct}
+              termMonths={Number(qTerm) * 12}
+              state={qState}
+              overallStatus={s.overall_status}
+              lenderGuidance={result.lender_guidance}
+              getIcon={getIcon}
+              onCompareRates={() => {
+                if (onSwitchToRefinance) {
+                  onSwitchToRefinance({
+                    balance: s.loan_requested,
+                    rate: s.target_rate_pct,
+                    termMonths: Number(qTerm) * 12,
+                    state: qState,
+                  });
+                }
+              }}
+            />
+          )}
 
           {/* Individual checks */}
           <div className="space-y-2">
@@ -1964,6 +2129,20 @@ export default function PropertyScenarioPage() {
     setCalcError(null);
   }, []);
 
+  // Called when qualification result CTA "Compare live CDR rates" is clicked.
+  // Pre-fills the refinance form and switches the view.
+  const handleSwitchToRefinance = useCallback(({ balance, rate, termMonths, state: st }) => {
+    if (balance) setRfBalance(String(Math.round(balance)));
+    if (rate)    setRfRate(String(rate));
+    if (termMonths) setRfTermMonths(String(termMonths));
+    if (st)      setRfState(st);
+    setRfTargetMode('cdr');
+    setCalcResult(null);
+    setCalcError(null);
+    setScenarioType('refinance');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   // ── Direct calculation (structured forms → /calculate, no LLM) ────────────
   const submitDirect = useCallback(async (scenario, extraBody = {}) => {
     setCalcError(null);
@@ -2183,7 +2362,7 @@ export default function PropertyScenarioPage() {
 
             {/* ── Buyer qualification ──────────────────────────────── */}
             {scenarioType === 'qualify' && (
-              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} />
+              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} onSwitchToRefinance={handleSwitchToRefinance} />
             )}
 
             {/* ── Refinance / compare lenders form ─────────────────── */}
