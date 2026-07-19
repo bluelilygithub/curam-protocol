@@ -590,6 +590,10 @@ function BuyerQualifyForm({ getIcon, addToast }) {
   // Loan
   const [qTerm, setQTerm]       = useState('30');
   const [qRate, setQRate]       = useState('');
+  // Extra checks
+  const [qAge, setQAge]               = useState('');
+  const [qPropTypeClass, setQPropTypeClass] = useState('house_town');
+  const [qRentalIncome, setQRentalIncome]   = useState('');
   // Results
   const [result, setResult]     = useState(null);
   const [loading, setLoading]   = useState(false);
@@ -624,6 +628,9 @@ function BuyerQualifyForm({ getIcon, addToast }) {
         monthly_expenses:        qExpenses ? parseFloat(qExpenses) : undefined,
         loan_term_years:         parseFloat(qTerm) || 30,
         target_rate_pct:         rate,
+        applicant_age:           qAge ? parseFloat(qAge) : undefined,
+        property_type_class:     qPropTypeClass || undefined,
+        gross_rental_income:     qRentalIncome ? parseFloat(qRentalIncome) : undefined,
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.errors?.[0] || 'Qualification check failed');
@@ -661,6 +668,9 @@ function BuyerQualifyForm({ getIcon, addToast }) {
         monthly_expenses: qExpenses ? parseFloat(qExpenses) : undefined,
         loan_term_years: parseFloat(qTerm) || 30,
         target_rate_pct: parseFloat(qRate),
+        applicant_age: qAge ? parseFloat(qAge) : undefined,
+        property_type_class: qPropTypeClass || undefined,
+        gross_rental_income: qRentalIncome ? parseFloat(qRentalIncome) : undefined,
       });
     } catch (err) {
       console.error('[PDF] qualification failed:', err);
@@ -802,6 +812,31 @@ function BuyerQualifyForm({ getIcon, addToast }) {
                 <option value="25">25 years</option>
                 <option value="30">30 years</option>
               </select>
+            </label>
+          </div>
+        </div>
+
+        {/* Additional checks */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Additional checks (optional)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)</span>
+              <input type="text" inputMode="numeric" value={qAge} onChange={(e) => setQAge(e.target.value)} placeholder="e.g. 42 — checks loan maturity age" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type</span>
+              <select value={qPropTypeClass} onChange={(e) => setQPropTypeClass(e.target.value)} style={FIELD}>
+                <option value="house_town">House or townhouse</option>
+                <option value="highrise">Apartment — high-rise (6+ floors)</option>
+                <option value="studio_small">Studio / apartment under 50m²</option>
+                <option value="rural_acreage">Rural, acreage or hobby farm</option>
+                <option value="off_plan">Off-the-plan</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)</span>
+              <input type="text" inputMode="numeric" value={qRentalIncome} onChange={(e) => setQRentalIncome(e.target.value)} placeholder="Investment only — leave blank for PPOR" style={FIELD} />
             </label>
           </div>
         </div>

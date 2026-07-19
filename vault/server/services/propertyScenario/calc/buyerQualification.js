@@ -499,7 +499,7 @@ function assessBuyerQualification(inputs = {}) {
       headline: hecsImpact
         ? `HECS reduces borrowing capacity by ~$${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
         : `HECS compulsory repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} p.a.`,
-      detail: `Annual compulsory HECS repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} ($${hecsRepaymentMonthly.toLocaleString('en-AU')}/mo) at income $${grossAnnualIncome.toLocaleString('en-AU')} (ATO 2025-26 marginal method — effective 1 July 2025; repayment calculated only on income above $67,000). This is treated as a committed expense in serviceability assessment by most lenders, reducing the surplus available to repay a new loan. ${hecsImpact ? `At the APRA assessment rate, this equates to approximately $${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })} less borrowing capacity compared to the same borrower with no HECS.` : ''} Note: HECS debts are not visible in credit reports but lenders specifically ask about them on loan applications.`,
+      detail: `Annual compulsory HECS repayment: $${hecsRepaymentAnnual.toLocaleString('en-AU')} ($${hecsRepaymentMonthly.toLocaleString('en-AU')}/mo) at income $${grossAnnualIncome.toLocaleString('en-AU')} (ATO 2025-26 marginal method — effective 1 July 2025${grossAnnualIncome >= 179286 ? '; at this income the 10% total-income cap applies, which is lower than the marginal band calculation' : '; repayment calculated only on the portion of income above $67,000'}). This is treated as a committed expense in serviceability assessment by most lenders, reducing the surplus available to repay a new loan. ${hecsImpact ? `At the APRA assessment rate, this equates to approximately $${hecsImpact.toLocaleString('en-AU', { maximumFractionDigits: 0 })} less borrowing capacity compared to the same borrower with no HECS.` : ''} Note: HECS debts are not visible in credit reports but lenders specifically ask about them on loan applications.`,
       data: {
         hecs_annual_repayment: hecsRepaymentAnnual,
         hecs_monthly_repayment: hecsRepaymentMonthly,
@@ -633,6 +633,117 @@ function assessBuyerQualification(inputs = {}) {
         fhog_amount: FHOG_BY_STATE[state]?.amount ?? null,
         new_build: isNewBuild,
       },
+    });
+  }
+
+  // ─── 11. Age at loan maturity ─────────────────────────────────────────────────
+  // Most Australian lenders require the loan to be fully repaid by age 70–75.
+  // If the loan would still be running past 70, lenders may shorten the term
+  // (increasing monthly repayments) or require a documented repayment strategy.
+  // We flag at > 70 as a warn and > 75 as a fail.
+  if (Number.isFinite(inputs.applicantAge) && inputs.applicantAge > 0) {
+    const ageAtMaturity = inputs.applicantAge + loanTermYears;
+    let ageStatus, ageHeadline, ageDetail;
+    if (ageAtMaturity > 75) {
+      ageStatus = 'fail';
+      ageHeadline = `Loan matures at age ${ageAtMaturity} — above most lenders' maximum (age 75)`;
+      ageDetail = `At age ${inputs.applicantAge} with a ${loanTermYears}-year loan, the loan would mature at age ${ageAtMaturity}. Most Australian lenders require full repayment by age 70–75. You would either need to shorten the loan term (increasing monthly repayments significantly), demonstrate a credible exit strategy (e.g. planned property sale, super access), or accept that lender choice narrows considerably. A ${Math.max(0, 70 - inputs.applicantAge)}-year term would mature at age 70 — this gives monthly repayments of approximately $${monthlyRepayment(loanRequested, targetRatePct, Math.max(1, (70 - inputs.applicantAge) * 12))?.toLocaleString('en-AU') ?? '—'}/mo (at product rate, not assessment rate).`;
+    } else if (ageAtMaturity > 70) {
+      ageStatus = 'warn';
+      ageHeadline = `Loan matures at age ${ageAtMaturity} — some lenders cap at 70`;
+      ageDetail = `At age ${inputs.applicantAge} with a ${loanTermYears}-year loan, the loan would mature at age ${ageAtMaturity}. Most major lenders allow maturity to age 75, but some cap at 70. Lenders in the 70–75 range may require documentary evidence of a repayment strategy — for example, planned super drawdown or sale of another asset. A broker can identify which lenders are comfortable with this profile.`;
+    } else {
+      ageStatus = 'pass';
+      ageHeadline = `Loan matures at age ${ageAtMaturity} — within standard lender policy`;
+      ageDetail = `At age ${inputs.applicantAge}, this ${loanTermYears}-year loan matures at age ${ageAtMaturity}, comfortably within the age 70–75 range most lenders accept.`;
+    }
+    checks.push({
+      id: 'age_maturity',
+      label: 'Age at loan maturity',
+      status: ageStatus,
+      headline: ageHeadline,
+      detail: ageDetail,
+      data: { applicant_age: inputs.applicantAge, loan_term_years: loanTermYears, age_at_maturity: ageAtMaturity },
+    });
+  }
+
+  // ─── 12. Property type restrictions ──────────────────────────────────────────
+  // Certain property types attract lower LVR caps or restricted lender choice
+  // regardless of borrower quality. These are policy-level, not creditworthiness.
+  //
+  // Types and typical LVR restrictions (approximate, lender-specific):
+  //   studio_small:   studio or apartment under 50m² → max 70–80% LVR with many lenders
+  //   highrise:       high-rise apartment (6+ floors or 50+ units) → max 70–80% LVR
+  //   rural_acreage:  rural / acreage / hobby farm → max 70–80% LVR; some lenders 60%
+  //   house_town:     standard house or townhouse → no additional restriction (baseline)
+  //   off_plan:       off-the-plan → generally fine but completion risk caveat
+  const PROPERTY_TYPE_RULES = {
+    studio_small:  { restrict: true, typical_max_lvr: 80, note: 'Studios and apartments under ~50m² often attract a maximum LVR of 70–80% at major lenders (some as low as 60%), regardless of borrower quality. At 88% LVR you would need to save to 80% or find a specialist lender.' },
+    highrise:      { restrict: true, typical_max_lvr: 80, note: 'High-rise apartments (typically 6+ storeys or developments with 50+ units) attract tighter LVR caps — usually 70–80% — due to perceived resale liquidity risk. Confirm with a broker which lenders are currently lending above 80% for this type in your area.' },
+    rural_acreage: { restrict: true, typical_max_lvr: 70, note: 'Rural, acreage, and hobby farm properties typically attract a maximum LVR of 60–70% at most lenders. Some specialist lenders go to 80%. Serviceability checks that pass for a metro property may still be blocked at this LVR by the deposit requirement alone.' },
+    off_plan:      { restrict: false, note: 'Off-the-plan purchases are generally acceptable but carry a completion risk caveat: the lender re-values the property at settlement (not at contract date). If the market falls, your LVR at settlement may be higher than contracted, requiring a larger deposit. Some lenders apply a 10–20% valuation haircut upfront.' },
+    house_town:    { restrict: false, note: null },
+  };
+
+  if (inputs.propertyType && inputs.propertyType !== 'house_town') {
+    const rule = PROPERTY_TYPE_RULES[inputs.propertyType];
+    if (rule) {
+      const currentLvr = loanRequested / propertyValue;
+      const exceedsTypicalCap = rule.restrict && currentLvr > (rule.typical_max_lvr / 100);
+      const propTypeStatus = exceedsTypicalCap ? 'fail' : rule.restrict ? 'warn' : 'info';
+      checks.push({
+        id: 'property_type',
+        label: 'Property type restrictions',
+        status: propTypeStatus,
+        headline: exceedsTypicalCap
+          ? `Property type may block this LVR — typical max ${rule.typical_max_lvr}% for this type`
+          : rule.restrict
+            ? `Property type may restrict lender choice — check LVR policy`
+            : `Property type noted — see caveat`,
+        detail: rule.note || 'No additional restriction for this property type.',
+        data: { property_type: inputs.propertyType, typical_max_lvr: rule.typical_max_lvr ?? null, current_lvr_pct: Math.round(currentLvr * 10000) / 100 },
+      });
+    }
+  }
+
+  // ─── 13. Credit file self-check prompt ───────────────────────────────────────
+  // Not a calculation — a process reminder. Errors on a credit file take 30–60
+  // days to correct and can delay or block an application. Most buyers don't
+  // know they can check for free before a lender does a hard enquiry.
+  checks.push({
+    id: 'credit_file',
+    label: 'Credit file — check before applying',
+    status: 'info',
+    headline: 'Check your credit file before a lender does',
+    detail: `Every lender runs a hard credit enquiry when you apply. Multiple hard enquiries in a short window (rate-shopping) reduce your credit score. Before approaching any lender: (1) Get a free copy of your credit report at mycreditfile.com.au (Equifax) or creditsavvy.com.au — free once per year, does not affect your score. (2) Check for errors, old defaults, or accounts you don't recognise — dispute anything incorrect before you apply (30–60 day correction process). (3) If you have existing credit cards, reduce limits rather than closing them — lenders assess 3.8% of the total limit as a monthly commitment regardless of balance. Any errors or unexpected entries in your file can delay or block an application — the time to find them is now, not on settlement day.`,
+    data: { free_check_url: 'mycreditfile.com.au' },
+  });
+
+  // ─── 14. Rental income (investment property) ─────────────────────────────────
+  // If the buyer is purchasing an investment property (isPpor = false) and
+  // declares rental income, most lenders shade it to 70–80% of gross and add
+  // it to serviceability surplus. This can meaningfully increase borrowing capacity.
+  if (!isPpor && Number.isFinite(inputs.grossRentalIncome) && inputs.grossRentalIncome > 0) {
+    const shadingPct = 0.75; // Conservative 75% shading (most lenders 70–80%)
+    const shadedMonthlyRental = roundMoney((inputs.grossRentalIncome * shadingPct) / 12);
+    const rentalBorrowingBoost = maxLoanFromMonthlyRepayment(shadedMonthlyRental, assessmentRatePct, termMonths);
+    assumptions.push(`Rental income $${inputs.grossRentalIncome.toLocaleString('en-AU')} p.a. gross, shaded to 75% = $${roundMoney(inputs.grossRentalIncome * shadingPct).toLocaleString('en-AU')} p.a. ($${shadedMonthlyRental.toLocaleString('en-AU')}/mo) for serviceability.`);
+    checks.push({
+      id: 'rental_income',
+      label: 'Rental income (investment purchase)',
+      status: 'info',
+      headline: `Rental income adds ~$${rentalBorrowingBoost?.toLocaleString('en-AU', { maximumFractionDigits: 0 }) ?? '—'} to indicative borrowing capacity`,
+      detail: `Gross rental income of $${inputs.grossRentalIncome.toLocaleString('en-AU')} p.a. (${(inputs.grossRentalIncome / 52).toLocaleString('en-AU', { maximumFractionDigits: 0 })}/wk) shaded to 75% = $${roundMoney(inputs.grossRentalIncome * shadingPct).toLocaleString('en-AU')} p.a. ($${shadedMonthlyRental.toLocaleString('en-AU')}/mo) for serviceability purposes. Most lenders shade rental income to 70–80% of gross to account for vacancy, property management fees, and maintenance. At the APRA assessment rate, this rental surplus supports approximately $${rentalBorrowingBoost?.toLocaleString('en-AU', { maximumFractionDigits: 0 }) ?? '—'} of additional loan. Note: negative gearing (rental income < loan repayment) reduces this benefit — in that case the net rental loss is treated as an additional expense in serviceability, not a credit.`,
+      data: { gross_rental_income: inputs.grossRentalIncome, shading_pct: shadingPct, shaded_monthly: shadedMonthlyRental, borrowing_boost: rentalBorrowingBoost },
+    });
+  } else if (!isPpor && !inputs.grossRentalIncome) {
+    checks.push({
+      id: 'rental_income',
+      label: 'Rental income (investment purchase)',
+      status: 'info',
+      headline: 'Investment purchase — no rental income declared',
+      detail: 'If this property will generate rental income, declare it — lenders shade gross rent to 70–80% and add it to your serviceability surplus, which can materially increase borrowing capacity. Run this check again with an expected weekly rent to see the impact.',
+      data: {},
     });
   }
 

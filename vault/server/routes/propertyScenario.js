@@ -479,6 +479,9 @@ router.post('/calculators/buyer-qualify', (req, res) => {
     loanTermYears:         body.loan_term_years ? Number(body.loan_term_years) : 30,
     targetRatePct:         Number(body.target_rate_pct),
     isNewBuild:            body.is_new_build === true || body.is_new_build === 'true',
+    applicantAge:          body.applicant_age ? Number(body.applicant_age) : undefined,
+    propertyType:          body.property_type_class || undefined,
+    grossRentalIncome:     body.gross_rental_income ? Number(body.gross_rental_income) : undefined,
   });
   res.json(result);
 });

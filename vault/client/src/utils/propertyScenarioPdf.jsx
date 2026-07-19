@@ -721,7 +721,10 @@ function QualificationDocument({ result, inputs }) {
               ['Declared expenses/mo', inp.monthly_expenses ? fmtMoney(inp.monthly_expenses) : 'HEM benchmark used'],
               ['Target rate', inp.target_rate_pct ? `${inp.target_rate_pct}% p.a.` : '—'],
               ['Loan term', inp.loan_term_years ? `${inp.loan_term_years} years` : '30 years'],
-            ].map(([label, value]) => (
+              inp.is_new_build ? ['Property', 'New build / off-the-plan'] : ['Property', inp.property_type_class?.replace(/_/g, ' ') || 'Established'],
+              inp.applicant_age ? ['Applicant age', `${inp.applicant_age} (matures age ${Number(inp.applicant_age) + Number(inp.loan_term_years || 30)})`] : null,
+              inp.gross_rental_income ? ['Gross rental income', `$${Number(inp.gross_rental_income).toLocaleString('en-AU')}/yr`] : null,
+            ].filter(Boolean).map(([label, value]) => (
               <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
                 <Text style={{ width: '55%', fontSize: 8, color: MUTED }}>{label}</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{value}</Text>
