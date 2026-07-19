@@ -449,19 +449,19 @@ function assessBuyerQualification(inputs = {}) {
     let fhbgStatus, fhbgHeadline, fhbgDetail;
 
     if (!ppOrOk) {
-      fhbgStatus = 'fail';
+      fhbgStatus = 'info';
       fhbgHeadline = 'FHBG — not eligible (investment property)';
-      fhbgDetail = 'The First Home Guarantee requires the property to be purchased as a principal place of residence. Investment properties are excluded.';
+      fhbgDetail = 'The First Home Guarantee requires the property to be purchased as a principal place of residence. Investment properties are excluded. This does not by itself block a standard home loan — you would proceed without the guarantee (typically paying LMI if LVR > 80%).';
     } else if (capTiers == null) {
       // Unknown state
       fhbgStatus = 'warn';
       fhbgHeadline = 'FHBG — state price cap unavailable; verify manually';
       fhbgDetail = `No income cap applies (removed 1 Oct 2025) and PPOR condition appears met. Verify the property price cap for your state and postcode at housingaustralia.gov.au.`;
     } else if (aboveCapital) {
-      // Above even the most generous tier — definitively blocked on price
-      fhbgStatus = 'fail';
+      // Above even the most generous tier — scheme unavailable; not a lending block
+      fhbgStatus = 'info';
       fhbgHeadline = `FHBG — purchase price above ${state} cap ($${capitalCap.toLocaleString('en-AU')} capital / $${otherCap.toLocaleString('en-AU')} regional)`;
-      fhbgDetail = `The property price of $${propertyValue.toLocaleString('en-AU')} exceeds the FHBG property price cap for ${state} in all areas (capital city / regional centre: $${capitalCap.toLocaleString('en-AU')}; other areas: $${otherCap.toLocaleString('en-AU')}). The guarantee is not available for this purchase. Note: income caps were removed from 1 October 2025 — income is not a limiting factor.`;
+      fhbgDetail = `The property price of $${propertyValue.toLocaleString('en-AU')} exceeds the FHBG property price cap for ${state} in all areas (capital city / regional centre: $${capitalCap.toLocaleString('en-AU')}; other areas: $${otherCap.toLocaleString('en-AU')}). The guarantee is not available for this purchase — this does not mean a lender will decline your loan; you would proceed as a standard purchase (LMI applies if LVR > 80%). Note: income caps were removed from 1 October 2025 — income is not a limiting factor.`;
     } else if (aboveOther && !aboveCapital) {
       // Fits capital/regional-centre tier but not the "other areas" lower tier — location-dependent
       fhbgStatus = 'warn';
@@ -617,13 +617,14 @@ function assessBuyerQualification(inputs = {}) {
       const newBuildEligible = !fhogData.new_homes_only || isNewBuild;
 
       if (!priceEligible) {
-        fhogStatus = 'fail';
+        // Not a lending fail — FHOG is a state grant, unrelated to loan approval.
+        fhogStatus = 'info';
         fhogHeadline = `FHOG — not available (price $${propertyValue.toLocaleString('en-AU')} ≥ $${fhogData.max_value?.toLocaleString('en-AU')} ${state} cap)`;
-        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) is not available — the property value of $${propertyValue.toLocaleString('en-AU')} meets or exceeds the cap of $${fhogData.max_value?.toLocaleString('en-AU')}. ${fhogData.note}`;
+        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) is not available — the property value of $${propertyValue.toLocaleString('en-AU')} meets or exceeds the cap of $${fhogData.max_value?.toLocaleString('en-AU')}. This does not affect whether a lender will approve your loan — FHOG is a separate state government grant. ${fhogData.note}`;
       } else if (!newBuildEligible) {
-        fhogStatus = 'warn';
+        fhogStatus = 'info';
         fhogHeadline = `FHOG — $${fhogData.amount.toLocaleString('en-AU')} available for NEW homes only`;
-        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) applies only to new or substantially renovated homes — not established/existing properties. If this is an established home, the grant does not apply. If it is a new build, you may be eligible. ${fhogData.note} Source: ${fhogData.source}`;
+        fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) applies only to new or substantially renovated homes — not established/existing properties. If this is an established home, the grant does not apply (this does not affect loan approval). If it is a new build, you may be eligible. ${fhogData.note} Source: ${fhogData.source}`;
       } else {
         fhogStatus = 'pass';
         fhogHeadline = `FHOG — $${fhogData.amount.toLocaleString('en-AU')} likely available${isNewBuild ? ' (new build confirmed)' : ''}`;
@@ -756,8 +757,12 @@ function assessBuyerQualification(inputs = {}) {
   }
 
   // ─── Summary ─────────────────────────────────────────────────────────────────
-  const failCount  = checks.filter((c) => c.status === 'fail').length;
-  const warnCount  = checks.filter((c) => c.status === 'warn').length;
+  // Overall status reflects LENDING risk only — government grants/schemes (FHOG, FHBG)
+  // are separate benefit checks and must not turn an all-green lending checklist red.
+  const GRANT_OR_SCHEME_IDS = new Set(['fhog', 'fhbg']);
+  const lendingChecks = checks.filter((c) => !GRANT_OR_SCHEME_IDS.has(c.id));
+  const failCount  = lendingChecks.filter((c) => c.status === 'fail').length;
+  const warnCount  = lendingChecks.filter((c) => c.status === 'warn').length;
   const overallStatus = failCount > 0 ? 'fail' : warnCount > 0 ? 'warn' : 'pass';
   const loanFeasible = overallStatus !== 'fail';
 

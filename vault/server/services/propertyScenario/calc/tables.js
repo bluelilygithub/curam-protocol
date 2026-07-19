@@ -71,11 +71,12 @@ const STAMP_DUTY_TABLES = {
     ],
     fhb: {
       // First-home concession: full exemption ≤ $700k, tapered to $800k.
-      // This is separate from and generally more generous than the home concession.
-      // FHBs above $800k pay the general rate (not the home concession rate).
+      // Separate from and generally more generous than the home concession below those caps.
+      // FHBs above $800k lose the first-home exemption but still get the home concession
+      // if the purchase is a PPOR — they do NOT fall back to the general/investor rate.
       full_exemption_max: 700_000,
       concessional_max: 800_000,
-      note: 'QLD first-home concession: full exemption ≤ $700k, tapered concession $700k–$800k. Separate from the home concession (available to all PPOR owner-occupiers). Confirm eligibility with QLD Revenue Office.',
+      note: 'QLD first-home concession: full exemption ≤ $700k, tapered concession $700k–$800k. Separate from the home concession (available to all PPOR owner-occupiers, including FHBs above $800k). Confirm eligibility with QLD Revenue Office.',
     },
   },
   WA: {

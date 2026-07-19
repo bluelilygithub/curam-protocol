@@ -86,14 +86,16 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
   let pporConcessionApplied = false;
   let pporConcessionAmount = 0;
 
-  // ── PPOR / owner-occupier concession ─────────────────────────────────────────
-  // Some states have a concessional rate for any owner-occupier (not just FHBs).
-  // QLD: "home concession" — saves up to $7,175 vs the general/investor rate for
-  // properties ≥ $350,000. Applies to any buyer who moves in within 12 months,
-  // regardless of first-home-buyer status.
-  // Applied BEFORE the FHB check — FHB concession takes precedence if applicable
-  // (it is typically more generous than the home concession alone).
-  if (!isFhb && isPpor && table.home_concession_brackets) {
+  // ── Concession hierarchy (take the lowest applicable duty) ───────────────────
+  // 1. General / investor rate (default)
+  // 2. PPOR home concession — ANY owner-occupier (incl. FHBs above first-home
+  //    thresholds). QLD saves up to $7,175 vs general for properties ≥ $350k.
+  // 3. First-home concession — often more generous (full exemption / taper).
+  //
+  // IMPORTANT: failing the first-home thresholds must NOT fall through to the
+  // general rate when the buyer is still a PPOR — home concession still applies.
+
+  if (isPpor && table.home_concession_brackets) {
     const homeDuty = dutyFromBrackets(propertyValue, table.home_concession_brackets);
     if (homeDuty < stampDutyPayable) {
       pporConcessionAmount = roundMoney(stampDutyPayable - homeDuty);
@@ -111,25 +113,41 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
     caveats.push(table.fhb.note);
     const { full_exemption_max: fullMax, concessional_max: concMax } = table.fhb;
     if (fullMax != null && propertyValue <= fullMax) {
-      fhbConcessionAmount = stampDutyStandard;
+      fhbConcessionAmount = roundMoney(stampDutyStandard);
       stampDutyPayable = 0;
       fhbApplied = true;
+      // FHB full exemption supersedes home concession for the payable amount.
+      pporConcessionApplied = false;
+      pporConcessionAmount = 0;
       assumptions.push(`Assumed full FHB duty exemption in ${state} at purchase ≤ $${fullMax.toLocaleString()}.`);
     } else if (concMax != null && propertyValue <= concMax && fullMax != null) {
-      // Linear taper between fullMax and concMax (illustrative)
+      // Linear taper between fullMax and concMax (illustrative), then take the
+      // better of tapered FHB vs any already-applied home concession.
       const span = concMax - fullMax;
       const t = span > 0 ? (propertyValue - fullMax) / span : 1;
-      stampDutyPayable = roundMoney(stampDutyStandard * Math.min(1, Math.max(0, t)));
-      fhbConcessionAmount = roundMoney(stampDutyStandard - stampDutyPayable);
-      fhbApplied = true;
-      assumptions.push(
-        `Assumed tapered FHB concession in ${state} between $${fullMax.toLocaleString()} and $${concMax.toLocaleString()}.`
-      );
+      const fhbDuty = roundMoney(stampDutyStandard * Math.min(1, Math.max(0, t)));
+      if (fhbDuty < stampDutyPayable) {
+        fhbConcessionAmount = roundMoney(stampDutyStandard - fhbDuty);
+        stampDutyPayable = fhbDuty;
+        fhbApplied = true;
+        pporConcessionApplied = false;
+        pporConcessionAmount = 0;
+        assumptions.push(
+          `Assumed tapered FHB concession in ${state} between $${fullMax.toLocaleString()} and $${concMax.toLocaleString()}.`
+        );
+      } else {
+        assumptions.push(
+          `FHB tapered concession in ${state} calculated at $${fhbDuty.toLocaleString('en-AU')} — ` +
+          `PPOR home concession ($${stampDutyPayable.toLocaleString('en-AU')}) is more favourable and was retained.`
+        );
+      }
     } else if (fullMax == null && concMax == null) {
-      caveats.push(`No automatic FHB exemption modelled for ${state}; standard duty applied.`);
+      caveats.push(`No automatic FHB exemption modelled for ${state}; ${pporConcessionApplied ? 'PPOR home concession retained' : 'standard duty applied'}.`);
     } else {
       caveats.push(
-        `Purchase price above modelled FHB thresholds for ${state}; standard duty applied (concessions may still exist — check revenue office).`
+        `Purchase price above modelled FHB thresholds for ${state}; ` +
+        `${pporConcessionApplied ? 'PPOR home concession retained (first-home exemption not available at this price)' : 'standard duty applied'} ` +
+        `(confirm with revenue office).`
       );
     }
   } else if (fields.is_first_home_buyer === false) {

@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (qualify-status-and-duty-fix)
+
+### Bug fix: FHOG/FHBG ineligibility no longer drives "LIKELY BLOCKED"
+Overall qualification status now rolls up **lending checks only**. First Home Owner Grant (FHOG) and First Home Guarantee (FHBG) are government scheme/benefit checks — ineligibility is shown as `info` (or location `warn` for FHBG), but cannot turn an all-green lending checklist into a fail. Previously a buyer who passed employment, serviceability, LVR, DTI, genuine savings, LMI, and age could still see "1 likely block" solely because the property was above the FHOG price cap.
+
+### Bug fix: QLD PPOR home concession for FHBs above first-home thresholds
+Transfer duty for a QLD first-home buyer above the $800k first-home concession cap was incorrectly falling through to the **general/investor rate**. The home concession (available to all PPOR owner-occupiers) now applies whenever FHB exemption/taper does not produce a lower figure. Verified: FHB+PPOR at $950,000 → **$28,600** (was $35,775; saving $7,175). Full FHB exemption at ≤$700k still returns $0.
+
+---
+
 ## 2026-07-19 (boq-cdr)
 
 ### Bank of Queensland added to live CDR lender set
