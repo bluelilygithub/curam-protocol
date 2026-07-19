@@ -516,17 +516,20 @@ function assessBuyerQualification(inputs = {}) {
       state,
       property_value: propertyValue,
       is_first_home_buyer: isFhb,
+      is_ppor: isPpor,
       deposit_amount: depositAmount,
       loan: { balance: loanRequested },
     },
     { loan_amount: loanRequested }
   ) : null;
 
-  const stampDutyPayable = sdLmiResult?.stamp_duty_payable ?? null;
-  const lmiEstimate      = sdLmiResult?.lmi_estimate       ?? null;
-  const lmiRequired      = sdLmiResult?.lmi_required       ?? false;
-  const fhbDutyApplied   = sdLmiResult?.fhb_concession_applied ?? false;
-  const fhbDutySaved     = sdLmiResult?.fhb_concession_amount  ?? 0;
+  const stampDutyPayable   = sdLmiResult?.stamp_duty_payable       ?? null;
+  const lmiEstimate        = sdLmiResult?.lmi_estimate             ?? null;
+  const lmiRequired        = sdLmiResult?.lmi_required             ?? false;
+  const fhbDutyApplied     = sdLmiResult?.fhb_concession_applied   ?? false;
+  const fhbDutySaved       = sdLmiResult?.fhb_concession_amount    ?? 0;
+  const pporDutyApplied    = sdLmiResult?.ppor_concession_applied  ?? false;
+  const pporDutySaved      = sdLmiResult?.ppor_concession_amount   ?? 0;
 
   if (sdLmiResult) {
     if (sdLmiResult.errors?.length) {
@@ -538,7 +541,10 @@ function assessBuyerQualification(inputs = {}) {
 
     const sdStatus = stampDutyPayable != null && stampDutyPayable > 0 ? 'info' : 'pass';
     const fhbNote = fhbDutyApplied && fhbDutySaved > 0
-      ? ` FHB concession applied — $${fhbDutySaved.toLocaleString('en-AU')} saved (standard duty: $${sdLmiResult.stamp_duty_standard?.toLocaleString('en-AU')}).`
+      ? ` FHB concession applied — $${fhbDutySaved.toLocaleString('en-AU')} saved vs standard rate.`
+      : '';
+    const pporNote = pporDutyApplied && pporDutySaved > 0
+      ? ` PPOR home concession applied — $${pporDutySaved.toLocaleString('en-AU')} saved vs general/investor rate.`
       : '';
     const newBuildNote = isNewBuild && state === 'QLD' && isFhb
       ? ' QLD announced a new-home transfer duty exemption for FHBs — verify at qro.qld.gov.au as this may reduce duty to $0 for new builds regardless of purchase price.'
@@ -554,13 +560,15 @@ function assessBuyerQualification(inputs = {}) {
           : `Transfer duty estimate: $${stampDutyPayable.toLocaleString('en-AU')}`
         : 'Transfer duty: could not estimate (state required)',
       detail: stampDutyPayable != null
-        ? `Estimated ${state} transfer duty on $${propertyValue.toLocaleString('en-AU')} purchase: $${stampDutyPayable.toLocaleString('en-AU')}.${fhbNote}${newBuildNote} This is a significant upfront cost paid at settlement — not included in the loan amount. Confirm with your conveyancer or state revenue office before committing.`
+        ? `Estimated ${state} transfer duty on $${propertyValue.toLocaleString('en-AU')} purchase: $${stampDutyPayable.toLocaleString('en-AU')}.${fhbNote}${pporNote}${newBuildNote} This is a significant upfront cost paid at settlement — not included in the loan amount. Confirm with your conveyancer or state revenue office before committing.`
         : 'Transfer duty could not be calculated — state is required. This is typically the second-largest upfront cost after the deposit.',
       data: {
         stamp_duty_standard: sdLmiResult.stamp_duty_standard,
         stamp_duty_payable: stampDutyPayable,
         fhb_concession_applied: fhbDutyApplied,
         fhb_concession_amount: fhbDutySaved,
+        ppor_concession_applied: pporDutyApplied,
+        ppor_concession_amount: pporDutySaved,
       },
     });
   }

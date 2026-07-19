@@ -50,6 +50,7 @@ const STAMP_DUTY_TABLES = {
     },
   },
   QLD: {
+    // General rate — applies to investors and any buyer NOT claiming home or first-home concession.
     brackets: [
       { upTo: 5_000, over: 0, base: 0, rate: 0 },
       { upTo: 75_000, over: 5_000, base: 0, rate: 0.015 },
@@ -57,10 +58,24 @@ const STAMP_DUTY_TABLES = {
       { upTo: 1_000_000, over: 540_000, base: 17_325, rate: 0.045 },
       { upTo: null, over: 1_000_000, base: 38_025, rate: 0.0575 },
     ],
+    // Home concession — applies to ANY owner-occupier (PPOR) who moves in within 12 months,
+    // regardless of first-home-buyer status. Per QLD Revenue Office: saves up to $7,175 vs
+    // the general rate for properties at or above $350,000.
+    // Source: qro.qld.gov.au/duties/transfer-duty/transfer-duty-rates/
+    // Verified: general $900k = $33,525 — home concession $900k = $26,350 — saving = $7,175 ✓
+    home_concession_brackets: [
+      { upTo: 350_000, over: 0, base: 0, rate: 0.01 },
+      { upTo: 540_000, over: 350_000, base: 3_500, rate: 0.035 },
+      { upTo: 1_000_000, over: 540_000, base: 10_150, rate: 0.045 },
+      { upTo: null, over: 1_000_000, base: 30_850, rate: 0.0575 },
+    ],
     fhb: {
+      // First-home concession: full exemption ≤ $700k, tapered to $800k.
+      // This is separate from and generally more generous than the home concession.
+      // FHBs above $800k pay the general rate (not the home concession rate).
       full_exemption_max: 700_000,
       concessional_max: 800_000,
-      note: 'QLD first-home concession sketched — check home concession vs first home concession',
+      note: 'QLD first-home concession: full exemption ≤ $700k, tapered concession $700k–$800k. Separate from the home concession (available to all PPOR owner-occupiers). Confirm eligibility with QLD Revenue Office.',
     },
   },
   WA: {

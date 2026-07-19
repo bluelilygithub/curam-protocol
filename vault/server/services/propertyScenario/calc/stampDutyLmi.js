@@ -16,6 +16,8 @@ const { STAMP_DUTY_TABLES, LMI_TABLE, AS_OF, dutyFromBrackets, roundMoney } = re
  *   stamp_duty_payable: number|null,
  *   fhb_concession_applied: boolean,
  *   fhb_concession_amount: number,
+ *   ppor_concession_applied: boolean,
+ *   ppor_concession_amount: number,
  *   deposit_amount: number|null,
  *   loan_amount: number|null,
  *   lvr: number|null,
@@ -36,6 +38,7 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
   const state = fields.state || null;
   const propertyValue = Number(fields.property_value);
   const isFhb = fields.is_first_home_buyer === true;
+  const isPpor = fields.is_ppor === true;
   const deposit = fields.deposit_amount != null ? Number(fields.deposit_amount) : null;
   const loanAmount = opts.loan_amount != null
     ? Number(opts.loan_amount)
@@ -61,6 +64,8 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
       stamp_duty_payable: null,
       fhb_concession_applied: false,
       fhb_concession_amount: 0,
+      ppor_concession_applied: false,
+      ppor_concession_amount: 0,
       deposit_amount: deposit,
       loan_amount: loanAmount,
       lvr: null,
@@ -78,6 +83,28 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
   let stampDutyPayable = stampDutyStandard;
   let fhbApplied = false;
   let fhbConcessionAmount = 0;
+  let pporConcessionApplied = false;
+  let pporConcessionAmount = 0;
+
+  // ── PPOR / owner-occupier concession ─────────────────────────────────────────
+  // Some states have a concessional rate for any owner-occupier (not just FHBs).
+  // QLD: "home concession" — saves up to $7,175 vs the general/investor rate for
+  // properties ≥ $350,000. Applies to any buyer who moves in within 12 months,
+  // regardless of first-home-buyer status.
+  // Applied BEFORE the FHB check — FHB concession takes precedence if applicable
+  // (it is typically more generous than the home concession alone).
+  if (!isFhb && isPpor && table.home_concession_brackets) {
+    const homeDuty = dutyFromBrackets(propertyValue, table.home_concession_brackets);
+    if (homeDuty < stampDutyPayable) {
+      pporConcessionAmount = roundMoney(stampDutyPayable - homeDuty);
+      stampDutyPayable = homeDuty;
+      pporConcessionApplied = true;
+      assumptions.push(
+        `Owner-occupier (PPOR) home concession applied for ${state}: duty reduced by $${pporConcessionAmount.toLocaleString('en-AU')} ` +
+        `(from $${Math.round(stampDutyStandard).toLocaleString('en-AU')} to $${Math.round(homeDuty).toLocaleString('en-AU')}).`
+      );
+    }
+  }
 
   if (isFhb) {
     assumptions.push('First-home-buyer concession applied using simplified eligibility — genuine FHB / PPR tests not verified.');
@@ -166,6 +193,8 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
     stamp_duty_payable: stampDutyPayable,
     fhb_concession_applied: fhbApplied,
     fhb_concession_amount: fhbConcessionAmount,
+    ppor_concession_applied: pporConcessionApplied,
+    ppor_concession_amount: pporConcessionAmount,
     deposit_amount: deposit,
     loan_amount: loanAmount,
     lvr,
