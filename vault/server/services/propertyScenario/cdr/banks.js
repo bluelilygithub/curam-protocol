@@ -72,6 +72,14 @@ const CDR_BANKS = [
     baseUrl: 'https://api.up.com.au/cds-au/v1',
     preferredVersions: [5, 4, 3, 6, 7],
   },
+  {
+    id: 'boq',
+    name: 'Bank of Queensland',
+    brand: 'BOQ',
+    // Confirmed live Jul 2026: only x-v:3 accepted; api.cds.boq.com.au returns 406.
+    baseUrl: 'https://secure.api.boq.com.au/cds-au/v1',
+    preferredVersions: [3, 4, 5, 6, 7],
+  },
 ];
 
 const MORTGAGE_CATEGORY = 'RESIDENTIAL_MORTGAGES';

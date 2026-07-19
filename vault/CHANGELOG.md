@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-19 (boq-cdr)
+
+### Bank of Queensland added to live CDR lender set
+BOQ is now included in refinance/lender comparisons alongside the existing 8 banks (9 total). Live PRD endpoint confirmed: `secure.api.boq.com.au` with API `x-v: 3` only. Lender discovery profiles, refinance radio label, PDF copy, and the Property Scenario tour updated accordingly. Qualification guidance already referenced BOQ for casual employment and high-LVR cases.
+
+---
+
 ## 2026-07-19 (qualify-depth-and-tour-update)
 
 ### Four additional buyer qualification checks

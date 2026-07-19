@@ -99,8 +99,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 5: Live CDR rates ───────────────────────────────────────────────
   tour.addStep({
     id: 'ps-cdr',
-    title: 'Live Rates from 8 Australian Lenders',
-    text: "The refinance path fetches live mortgage rates from Australia\'s open banking CDR APIs — CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, and Up. No API key needed; these are publicly available. The best available rate below your current rate is used automatically. Rates are labelled Live CDR or Mock (fallback). Switch to the Lenders tab to see all products side by side.",
+    title: 'Live Rates from 9 Australian Lenders',
+    text: "The refinance path fetches live mortgage rates from Australia\'s open banking CDR APIs — CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and Bank of Queensland. No API key needed; these are publicly available. The best available rate below your current rate is used automatically. Rates are labelled Live CDR or Mock (fallback). Switch to the Lenders tab to see all products side by side.",
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });

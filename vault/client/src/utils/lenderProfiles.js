@@ -1,5 +1,5 @@
 /**
- * Static editorial profiles for the 8 Australian lenders covered by our CDR integration.
+ * Static editorial profiles for the Australian lenders covered by our CDR integration.
  * These describe product characteristics and target borrower profiles — not rates.
  * Rates are fetched live via the CDR refinance comparison.
  *
@@ -174,5 +174,28 @@ export const LENDER_PROFILES = [
     ],
     summary:
       "Australia's newest home loan from the popular neobank, backed by Bendigo Bank. Competitive variable rate, transparent $0 fee structure, and excellent app experience. Currently limited to owner-occupier P&I — no investor or IO options.",
+  },
+  {
+    id: 'boq',
+    name: 'Bank of Queensland',
+    shortName: 'BOQ',
+    type: 'Regional bank',
+    serviceModel: 'Branch + digital + broker',
+    website: 'https://www.boq.com.au/personal/home-loans',
+    offsetAvailable: true,
+    redraw: true,
+    extraRepayments: true,
+    annualFee: '$0 (BOQ Blue Basic Variable) · ~$395/yr (BOQ Economy/Package with offset)',
+    bestFor: [
+      'Queensland buyers',
+      'Casual and contract workers',
+      'Borrowers wanting personal service over a major bank',
+      'FHBG-eligible buyers',
+    ],
+    restrictions: [
+      'Branch presence primarily in QLD and northern NSW',
+    ],
+    summary:
+      'Queensland-based regional bank with manual underwriting and more flexible credit assessment than the Big 4. BOQ Blue Basic Variable is a no-annual-fee product with redraw; their Economy/Package adds offset. A participating First Home Guarantee (FHBG) lender. Known for more pragmatic treatment of casual employment in healthcare, education, and hospitality.',
   },
 ];

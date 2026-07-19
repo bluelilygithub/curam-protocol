@@ -98,7 +98,7 @@ function InputsSection({ inputs, scenarioType }) {
           ? ['Fixed period remaining', `${inputs.rfFixedPeriod} months`]
           : null,
         ['Compared against', inputs.rfTargetMode === 'cdr'
-          ? 'Live CDR market rates — best available from 8 major AU lenders'
+          ? 'Live CDR market rates — best available from 9 AU lenders'
           : inputs.rfTargetRate ? `Specific rate: ${inputs.rfTargetRate}%` : '—'],
       ].filter(Boolean);
     }

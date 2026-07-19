@@ -149,7 +149,14 @@ function LenderDiscoveryPanel({ loanAmount, targetRate, termMonths, state, overa
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {profiles.map((lender) => {
-              const isHighlighted = guidanceLenderNames.has(lender.name);
+              const isHighlighted = [...guidanceLenderNames].some((n) => {
+                const norm = String(n).toLowerCase();
+                return (
+                  norm.includes(lender.name.toLowerCase())
+                  || norm.includes(lender.shortName.toLowerCase())
+                  || lender.name.toLowerCase().includes(norm.replace(/\s*\(.*?\)\s*/g, '').trim())
+                );
+              });
               return (
                 <div
                   key={lender.id}
@@ -2408,7 +2415,7 @@ export default function PropertyScenarioPage() {
                     <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>Compare against</p>
                     <div className="flex flex-col gap-2">
                       {[
-                        { v: 'cdr', label: 'Live market rates — 8 major Australian lenders via CDR open banking' },
+                        { v: 'cdr', label: 'Live market rates — 9 Australian lenders via CDR open banking' },
                         { v: 'specific', label: 'A specific rate I have in mind' },
                       ].map(({ v, label }) => (
                         <label key={v} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
