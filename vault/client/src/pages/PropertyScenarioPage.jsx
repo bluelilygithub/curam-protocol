@@ -61,6 +61,44 @@ const FIELD = {
   outline: 'none',
 };
 
+function FieldTip({ text }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <span className="relative inline-flex items-center" style={{ verticalAlign: 'middle' }}>
+      <button
+        type="button"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setShow(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 13, height: 13, borderRadius: '50%',
+          border: '1px solid var(--color-muted)', fontSize: 8, fontWeight: 700,
+          color: 'var(--color-muted)', background: 'transparent',
+          cursor: 'default', lineHeight: 1, flexShrink: 0, marginLeft: 4,
+        }}
+        aria-label="More information"
+      >?</button>
+      {show && (
+        <span style={{
+          position: 'absolute', bottom: '130%', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--color-text)', color: 'var(--color-bg)',
+          borderRadius: 6, padding: '7px 10px',
+          fontSize: 11, lineHeight: 1.55, whiteSpace: 'normal', width: 230, zIndex: 20,
+          pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}>
+          {text}
+          <span style={{
+            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+            border: '5px solid transparent', borderTopColor: 'var(--color-text)',
+          }} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Section({ title, hint, children }) {
   return (
     <section className="rounded-2xl border p-5 sm:p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -732,22 +770,22 @@ function BuyerQualifyForm({ getIcon, addToast }) {
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Property</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)<FieldTip text="The full property price you intend to pay — not including stamp duty or other costs." /></span>
               <input type="text" inputMode="numeric" value={qPrice} onChange={(e) => setQPrice(e.target.value)} placeholder="e.g. 850000" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)<FieldTip text="Your total available deposit — savings, equity from another property, and grants. Your LVR (loan-to-value ratio) is calculated directly from this figure." /></span>
               <input type="text" inputMode="numeric" value={qDeposit} onChange={(e) => setQDeposit(e.target.value)} placeholder="e.g. 170000" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State<FieldTip text="Used to calculate stamp duty, First Home Buyer concessions, and FHOG eligibility. Rates and thresholds differ significantly between states." /></span>
               <select value={qState} onChange={(e) => setQState(e.target.value)} style={FIELD}>
                 <option value="">Select…</option>
                 {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?<FieldTip text="Affects eligibility for stamp duty concessions, the First Home Guarantee (5% deposit, no LMI), and state-based First Home Owner Grants (new builds only in most states)." /></span>
               <select value={qFhb} onChange={(e) => setQFhb(e.target.value)} style={FIELD}>
                 <option value="">Select…</option>
                 <option value="yes">Yes</option>
@@ -755,7 +793,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose<FieldTip text="PPOR (primary place of residence) vs investment. Affects lender serviceability assessment, CGT treatment on future sale, and some lender-specific policies." /></span>
               <select value={qPpor} onChange={(e) => setQPpor(e.target.value)} style={FIELD}>
                 <option value="ppor">Primary residence (PPOR)</option>
                 <option value="investment">Investment</option>
@@ -769,15 +807,15 @@ function BuyerQualifyForm({ getIcon, addToast }) {
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Income &amp; household</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Your total gross income before tax — salary, wages, and salary packaging. Do not include rental income here; enter it in the optional rental income field below." /></span>
               <input type="text" inputMode="numeric" value={qIncome} onChange={(e) => setQIncome(e.target.value)} placeholder="e.g. 95000" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)<FieldTip text="For joint applications, enter your partner's gross annual income before tax. Leave blank for a sole applicant." /></span>
               <input type="text" inputMode="numeric" value={qPartner} onChange={(e) => setQPartner(e.target.value)} placeholder="leave blank if solo" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type<FieldTip text="Used to select the correct HEM (Household Expenditure Measure) benchmark. Lenders use HEM as a minimum living expenses floor if your declared expenses are lower than the benchmark." /></span>
               <select value={qHousehold} onChange={(e) => setQHousehold(e.target.value)} style={FIELD}>
                 <option value="single">Single (no dependants)</option>
                 <option value="couple">Couple (no kids)</option>
@@ -785,7 +823,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Employment type</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Employment type<FieldTip text="Self-employed and casual applicants typically need 2 years of tax returns. Contract income may be accepted if the field is consistent. PAYG full-time is the lowest-risk category." /></span>
               <select value={qEmployment} onChange={(e) => setQEmployment(e.target.value)} style={FIELD}>
                 <option value="payg_fulltime">PAYG full-time</option>
                 <option value="payg_parttime">PAYG part-time</option>
@@ -802,25 +840,25 @@ function BuyerQualifyForm({ getIcon, addToast }) {
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Debts &amp; expenses</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>HECS / HELP debt outstanding?</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>HECS / HELP debt outstanding?<FieldTip text="HECS repayments reduce your borrowing capacity because lenders count the compulsory ATO repayment as a monthly expense. The 2025-26 marginal method is used here." /></span>
               <select value={qHecs} onChange={(e) => setQHecs(e.target.value)} style={FIELD}>
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>New build / off-the-plan?</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>New build / off-the-plan?<FieldTip text="Some lender policies and state grants differ for new builds. The First Home Owner Grant is typically only available for new builds or substantially renovated properties." /></span>
               <select value={qNewBuild} onChange={(e) => setQNewBuild(e.target.value)} style={FIELD}>
                 <option value="no">No — established home</option>
                 <option value="yes">Yes — new build / off-the-plan</option>
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)<FieldTip text="Total minimum monthly payments on personal loans, car loans, and credit cards. For credit cards: lenders count 3.8% of your total limit as a monthly commitment — e.g. $10,000 limit = $380/mo, even if you pay it off in full each month." /></span>
               <input type="text" inputMode="numeric" value={qDebts} onChange={(e) => setQDebts(e.target.value)} placeholder="loans, credit cards (3.8%×limit)" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)<FieldTip text="Your declared monthly living costs (groceries, utilities, transport, subscriptions). Leave blank and the HEM benchmark for your household type is used — lenders apply whichever is higher." /></span>
               <input type="text" inputMode="numeric" value={qExpenses} onChange={(e) => setQExpenses(e.target.value)} placeholder="leave blank to use HEM benchmark" style={FIELD} />
             </label>
           </div>
@@ -834,11 +872,11 @@ function BuyerQualifyForm({ getIcon, addToast }) {
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="The rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer). Check live CDR rates in the Lenders tab for a real-market starting point." /></span>
               <input type="text" inputMode="decimal" value={qRate} onChange={(e) => setQRate(e.target.value)} placeholder="e.g. 6.10 (see Lenders tab for live rates)" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="Typically 30 years for maximum borrowing capacity. A shorter term raises the minimum repayment and lowers the amount a lender will approve." /></span>
               <select value={qTerm} onChange={(e) => setQTerm(e.target.value)} style={FIELD}>
                 <option value="25">25 years</option>
                 <option value="30">30 years</option>
@@ -852,11 +890,11 @@ function BuyerQualifyForm({ getIcon, addToast }) {
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Additional checks (optional)</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)<FieldTip text="Optional. Checks whether the loan would mature beyond age 70-75 — the typical ceiling most lenders apply without a documented retirement income plan." /></span>
               <input type="text" inputMode="numeric" value={qAge} onChange={(e) => setQAge(e.target.value)} placeholder="e.g. 42 — checks loan maturity age" style={FIELD} />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type<FieldTip text="Affects the maximum LVR some lenders will approve. High-rise, studios under 50m², and rural properties face tighter caps at major lenders — but this varies by postcode and is often broker-negotiable." /></span>
               <select value={qPropTypeClass} onChange={(e) => setQPropTypeClass(e.target.value)} style={FIELD}>
                 <option value="house_town">House or townhouse</option>
                 <option value="highrise">Apartment — high-rise (6+ floors)</option>
@@ -866,7 +904,7 @@ function BuyerQualifyForm({ getIcon, addToast }) {
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)<FieldTip text="Investment purchases only. Lenders typically shade (discount) rental income to 75% before adding it to your serviceability calculation. Leave blank for a PPOR purchase." /></span>
               <input type="text" inputMode="numeric" value={qRentalIncome} onChange={(e) => setQRentalIncome(e.target.value)} placeholder="Investment only — leave blank for PPOR" style={FIELD} />
             </label>
           </div>
@@ -1142,15 +1180,15 @@ function StandaloneCalculators({ getIcon }) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan amount ($)</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan amount ($)<FieldTip text="The amount you're borrowing — purchase price minus your deposit. Not the property value." /></span>
             <input type="text" inputMode="numeric" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} placeholder="e.g. 500000" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text="Your annual interest rate. Check your current statement or the live rates in the Lenders tab." /></span>
             <input type="text" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="The full repayment period. Typically 25 or 30 years. Shorter terms mean higher repayments but significantly less total interest paid." /></span>
             <input type="text" inputMode="numeric" value={termYears} onChange={(e) => setTermYears(e.target.value)} placeholder="e.g. 25" style={FIELD} />
           </label>
         </div>
@@ -1159,15 +1197,15 @@ function StandaloneCalculators({ getIcon }) {
           <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Optional — used for specific calculators</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1.5">
-              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Extra monthly repayment ($)</span>
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Extra monthly repayment ($)<FieldTip text="How much extra you'd pay above the minimum each month. Even a small extra payment can cut years off your loan and save a substantial amount in interest." /></span>
               <input type="text" inputMode="numeric" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. 200" style={FIELD} />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Offset account balance ($)</span>
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Offset account balance ($)<FieldTip text="An offset account reduces the interest charged daily. A $50,000 offset on a $500,000 loan means you only pay interest on $450,000 — every day the balance sits there." /></span>
               <input type="text" inputMode="numeric" value={offsetBalance} onChange={(e) => setOffsetBalance(e.target.value)} placeholder="e.g. 50000" style={FIELD} />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Monthly income ($) — for borrowing power</span>
+              <span className="text-xs" style={{ color: 'var(--color-text)' }}>Monthly income ($) — for borrowing power<FieldTip text="Your gross monthly income (before tax). Used only to estimate indicative borrowing power. Leave blank to skip that calculator. This is not a lender pre-approval." /></span>
               <input type="text" inputMode="numeric" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} placeholder="e.g. 8000 (leave blank to skip)" style={FIELD} />
             </label>
           </div>
@@ -2154,7 +2192,7 @@ export default function PropertyScenarioPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State<FieldTip text="Used to calculate government discharge and new mortgage registration fees, which vary by state and affect the true cost of switching lender." /></span>
                       <select value={rfState} onChange={(e) => setRfState(e.target.value)} style={FIELD}>
                         <option value="">Select state (for govt fees)…</option>
                         {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -2162,27 +2200,27 @@ export default function PropertyScenarioPage() {
                     </label>
                     <div />
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current loan balance ($) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current loan balance ($) *<FieldTip text="Your outstanding principal — check your most recent statement or online banking. Don't use the original loan amount." /></span>
                       <input type="text" inputMode="decimal" value={rfBalance} onChange={(e) => setRfBalance(e.target.value)} placeholder="e.g. 100000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *<FieldTip text="Your current annual interest rate. Check your statement — the rate may differ from your original contract if you've negotiated a discount over time." /></span>
                       <input type="text" inputMode="decimal" value={rfRate} onChange={(e) => setRfRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable rates can change with RBA movements. Fixed rates lock in certainty but may carry significant break costs if you exit the fixed period early." /></span>
                       <select value={rfRateType} onChange={(e) => setRfRateType(e.target.value)} style={FIELD}>
                         <option value="variable">Variable</option>
                         <option value="fixed">Fixed</option>
                       </select>
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Term remaining (months) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Term remaining (months) *<FieldTip text="How many months are left on your current loan. E.g. 20 years remaining = 240 months. Check your loan schedule or call your lender." /></span>
                       <input type="text" inputMode="numeric" value={rfTermMonths} onChange={(e) => setRfTermMonths(e.target.value)} placeholder="e.g. 240" style={FIELD} />
                     </label>
                     {rfRateType === 'fixed' && (
                       <label className="block space-y-1.5">
-                        <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Fixed period remaining (months)</span>
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Fixed period remaining (months)<FieldTip text="Months left of your fixed rate period. Break costs are calculated against this — typically higher the more time remains. Your lender can give you the exact break cost figure." /></span>
                         <input type="text" inputMode="numeric" value={rfFixedPeriod} onChange={(e) => setRfFixedPeriod(e.target.value)} placeholder="e.g. 24" style={FIELD} />
                       </label>
                     )}
@@ -2219,14 +2257,14 @@ export default function PropertyScenarioPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *<FieldTip text="Used to calculate agent commission norms and government transfer costs. CGT rules are federal, but some state concessions apply to PPOR sales." /></span>
                       <select value={sellState} onChange={(e) => setSellState(e.target.value)} style={FIELD}>
                         <option value="">Select state…</option>
                         {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type<FieldTip text="Primary residences (PPOR) qualify for the main residence CGT exemption — CGT is $0. Investment properties are fully subject to CGT, with a 50% discount if held over 12 months before adding the gain to your taxable income." /></span>
                       <select value={sellPpor} onChange={(e) => setSellPpor(e.target.value)} style={FIELD}>
                         <option value="ppor">Primary residence (PPOR) — CGT main residence exemption applies</option>
                         <option value="investment">Investment property — CGT applies</option>
@@ -2234,15 +2272,15 @@ export default function PropertyScenarioPage() {
                       </select>
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected sale price ($) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected sale price ($) *<FieldTip text="Your estimated or contracted sale price. If not yet sold, use a current market appraisal. Selling costs (agent commission, legal fees) are deducted to arrive at net proceeds." /></span>
                       <input type="text" inputMode="decimal" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Original purchase price ($) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Original purchase price ($) *<FieldTip text="What you originally paid for the property. For CGT, this is your cost base — it should include stamp duty and legal costs paid at purchase, which reduce your taxable gain." /></span>
                       <input type="text" inputMode="decimal" value={sellPurchasePrice} onChange={(e) => setSellPurchasePrice(e.target.value)} placeholder="e.g. 750000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year purchased</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year purchased<FieldTip text="Used to determine whether the 50% CGT discount applies (held more than 12 months) and to estimate the holding period for the result summary." /></span>
                       <input type="text" inputMode="numeric" value={sellPurchaseYear} onChange={(e) => setSellPurchaseYear(e.target.value)} placeholder="e.g. 2015" style={FIELD} />
                     </label>
                   </div>
@@ -2261,29 +2299,29 @@ export default function PropertyScenarioPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State *<FieldTip text="Stamp duty rates and First Home Buyer concessions are state-specific. QLD, NSW, VIC, WA all have different thresholds and calculation methods." /></span>
                       <select value={buyState} onChange={(e) => setBuyState(e.target.value)} style={FIELD}>
                         <option value="">Select state…</option>
                         {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose<FieldTip text="Investment properties don't qualify for First Home Buyer stamp duty concessions. PPOR (owner-occupied) purchases attract lower duty rates and more favourable lender treatment." /></span>
                       <select value={buyPpor} onChange={(e) => setBuyPpor(e.target.value)} style={FIELD}>
                         <option value="ppor">Primary residence (PPOR)</option>
                         <option value="investment">Investment property</option>
                       </select>
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($) *<FieldTip text="The full property purchase price. Stamp duty, LMI, and all upfront costs are calculated as percentages of this figure." /></span>
                       <input type="text" inputMode="decimal" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($) *</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($) *<FieldTip text="Your available deposit (savings + equity). If deposit is below 20% of the purchase price, Lenders Mortgage Insurance (LMI) typically applies — unless you qualify for the First Home Guarantee (5% min)." /></span>
                       <input type="text" inputMode="decimal" value={buyDeposit} onChange={(e) => setBuyDeposit(e.target.value)} placeholder="e.g. 240000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?</span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?<FieldTip text="First home buyers may qualify for stamp duty exemptions or concessions and the First Home Guarantee (5% deposit, no LMI for eligible buyers). State-based FHOG grants also apply for new builds." /></span>
                       <select value={buyFhb} onChange={(e) => setBuyFhb(e.target.value)} style={FIELD}>
                         <option value="no">No</option>
                         <option value="yes">Yes</option>
