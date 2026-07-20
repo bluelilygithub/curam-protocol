@@ -2262,7 +2262,7 @@ function ChatPage({ general = false }) {
                       </optgroup>
                     );
                   })}
-                  <optgroup label="Unfoldered">
+                  <optgroup label="Unassigned">
                     {projects.filter(p => !p.folderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </optgroup>
                 </select>

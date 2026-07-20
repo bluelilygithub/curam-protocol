@@ -4,7 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-20 (sidebar-project-clarity)
+## 2026-07-20 (sidebar-collection-accordion)
+
+### Collection accordion + Unassigned group
+- **One collection open at a time** — expanding a collection (or Unassigned) collapses the others.
+- **Unassigned** — projects with no collection live under a dedicated grey group; drag onto it to remove a project from a collection.
+- Opening a project opens its parent collection automatically.
+
+---
+
 
 ### Delete empty projects + color-differentiate collections
 - **Delete empty projects** — ⋯ menu always visible (not hover-only); empty projects show an **empty** badge and put **Delete empty project** first in the menu; expanded empty projects also get an inline **Delete project** link.

@@ -113,7 +113,7 @@ const semanticMap = {
   blocks: { lucide: 'Blocks' },
   square: { lucide: 'Square' },
   library: { lucide: 'Library' },
-  inbox: { lucide: 'InboxIcon' },
+  inbox: { lucide: 'Inbox' },
   scissors: { lucide: 'Scissors' },
   crop: { lucide: 'Crop' },
   shield: { lucide: 'Shield' },

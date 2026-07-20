@@ -9,6 +9,9 @@ import { openNewChatModal } from '../utils/openNewChatModal';
 import { loadSessionById } from '../utils/chatNavigation';
 import OverflowMenu from './OverflowMenu';
 
+const UNASSIGNED_ID = 'unassigned';
+const COLLECTION_COLOR = '#5B7C99';
+
 function ProjectSidebar({ onClose, showClientContext = false, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
@@ -31,7 +34,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
   const location = useLocation();
   const getIcon = useIcon();
   const [folders, setFolders] = useState([]);
-  const [collapsedFolders, setCollapsedFolders] = useState({});
+  const [openCollectionId, setOpenCollectionId] = useState(null); // folder id | 'unassigned' | null
   const [showFolderInput, setShowFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [expandedProjectId, setExpandedProjectId] = useState(() => {
@@ -61,16 +64,41 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
     return () => document.removeEventListener('vault:sessions-changed', loadSessionLists);
   }, [expandedProjectId, fetchProjects]);
 
+  // Accordion default: open the collection that owns the active/route project
+  useEffect(() => {
+    if (openCollectionId != null) return;
+    if (!projects.length && !folders.length) return;
+    const match = location.pathname.match(/\/projects\/(\d+)/);
+    const routeProjectId = match ? Number(match[1]) : activeProjectId;
+    const project = projects.find((p) => p.id === routeProjectId);
+    if (project) {
+      setOpenCollectionId(project.folderId || UNASSIGNED_ID);
+      return;
+    }
+    if (folders.length > 0) setOpenCollectionId(folders[0].id);
+    else setOpenCollectionId(UNASSIGNED_ID);
+  }, [projects, folders, activeProjectId, location.pathname, openCollectionId]);
+
   const refreshFolders = () => {
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
   };
 
+  const openCollection = (id) => {
+    setOpenCollectionId(id);
+  };
+
+  const toggleCollection = (id) => {
+    setOpenCollectionId((prev) => (prev === id ? null : id));
+  };
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    await api.post('/api/folders', { name: newFolderName.trim() });
+    const res = await api.post('/api/folders', { name: newFolderName.trim() });
+    const folder = await res.json().catch(() => null);
     setNewFolderName('');
     setShowFolderInput(false);
     refreshFolders();
+    if (folder?.id) openCollection(folder.id);
   };
 
   const saveFolderRename = async (folderId) => {
@@ -86,11 +114,10 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
     if (!deleteFolderTarget) return;
     await api.delete(`/api/folders/${deleteFolderTarget.id}`);
     setDeleteFolderTarget(null);
+    if (openCollectionId === deleteFolderTarget.id) openCollection(UNASSIGNED_ID);
     refreshFolders();
     await fetchProjects();
   };
-
-  const toggleFolder = (folderId) => setCollapsedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
 
   const toggleProjectSessions = (projectId) => {
     const opening = expandedProjectId !== projectId;
@@ -108,6 +135,8 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
   const enterProject = async (projectId) => {
     setActive(projectId);
     setExpandedProjectId(projectId);
+    const project = projects.find((p) => p.id === projectId);
+    openCollection(project?.folderId || UNASSIGNED_ID);
     let sessions = projectSessions[projectId];
     if (!sessions) {
       sessions = await api.get(`/api/chat/sessions/${projectId}`).then(r => r.json()).catch(() => []);
@@ -156,10 +185,9 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
     setDragOverFolderId(null);
     setDraggedId(null);
     setDragOverId(null);
-    await update(id, { folderId });
+    await update(id, { folderId: folderId || null });
     await fetchProjects();
-    // Expand the folder so the project is visible
-    if (folderId) setCollapsedFolders(prev => ({ ...prev, [folderId]: false }));
+    openCollection(folderId || UNASSIGNED_ID);
   };
 
   const handleCreate = async (data) => {
@@ -315,7 +343,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
               className="w-full px-3 py-2 rounded-xl border text-sm outline-none mb-5"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             >
-              <option value="">No collection</option>
+              <option value="">Unassigned</option>
               {folders.map(folder => (
                 <option key={folder.id} value={folder.id}>{folder.name}</option>
               ))}
@@ -330,7 +358,9 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                       folderId: moveProjectFolderId ? Number(moveProjectFolderId) : null,
                     });
                     if (moveProjectFolderId) {
-                      setCollapsedFolders(prev => ({ ...prev, [moveProjectFolderId]: false }));
+                      openCollection(Number(moveProjectFolderId));
+                    } else {
+                      openCollection(UNASSIGNED_ID);
                     }
                     setMoveProjectTarget(null);
                     setMoveProjectFolderId('');
@@ -597,7 +627,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
             <>
               {folders.map(folder => {
                 const fps = folderProjects[folder.id] || [];
-                const isCollapsed = collapsedFolders[folder.id];
+                const isOpen = openCollectionId === folder.id;
                 const isRenamingFolder = renamingFolderId === folder.id;
                 return (
                   <div key={folder.id} className="mb-1">
@@ -612,7 +642,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                           if (e.key === 'Escape') setRenamingFolderId(null);
                         }}
                         className="w-full px-2 py-1.5 text-xs rounded-lg border outline-none"
-                        style={{ background: 'var(--color-bg)', borderColor: '#5B7C99', color: 'var(--color-text)' }}
+                        style={{ background: 'var(--color-bg)', borderColor: COLLECTION_COLOR, color: 'var(--color-text)' }}
                       />
                     ) : (
                       <div
@@ -621,17 +651,17 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                         onDragLeave={() => setDragOverFolderId(null)}
                         onDrop={(e) => handleFolderDrop(e, folder.id)}
                         style={{
-                          background: dragOverFolderId === folder.id ? 'rgba(91,124,153,0.15)' : 'rgba(91,124,153,0.08)',
-                          outline: dragOverFolderId === folder.id ? '1px dashed #5B7C99' : 'none',
+                          background: dragOverFolderId === folder.id ? 'rgba(91,124,153,0.18)' : 'rgba(91,124,153,0.08)',
+                          outline: dragOverFolderId === folder.id ? `1px dashed ${COLLECTION_COLOR}` : 'none',
                         }}
                       >
                         <button
                           type="button"
-                          onClick={() => toggleFolder(folder.id)}
+                          onClick={() => toggleCollection(folder.id)}
                           className="flex-1 min-w-0 text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg hover:opacity-80"
-                          style={{ color: '#5B7C99' }}
+                          style={{ color: COLLECTION_COLOR }}
                         >
-                          {getIcon(isCollapsed ? 'chevron-right' : 'chevron-down', { size: 11 })}
+                          {getIcon(isOpen ? 'chevron-down' : 'chevron-right', { size: 11 })}
                           {getIcon('folder-open', { size: 12 })}
                           <span className="truncate">{folder.name}</span>
                           <span className="ml-auto tabular-nums opacity-80">{fps.length}</span>
@@ -661,27 +691,48 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                         </div>
                       </div>
                     )}
-                    {!isCollapsed && fps.map(p => renderProject(p, true))}
+                    {isOpen && fps.map(p => renderProject(p, true))}
                   </div>
                 );
               })}
-              {draggedId && projects.find(p => p.id === draggedId)?.folderId && (
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOverFolderId('none'); }}
-                  onDragLeave={() => setDragOverFolderId(null)}
-                  onDrop={(e) => handleFolderDrop(e, null)}
-                  className="mx-1 my-0.5 px-2 py-1.5 rounded-lg text-xs transition-all"
-                  style={{
-                    border: dragOverFolderId === 'none' ? '1px dashed var(--color-primary)' : '1px dashed var(--color-border)',
-                    color: dragOverFolderId === 'none' ? 'var(--color-primary)' : 'var(--color-muted)',
-                    background: dragOverFolderId === 'none' ? 'var(--color-primary)10' : 'transparent',
-                  }}
-                >
-                  Drop here to remove from folder
+
+              {(projects.length > 0 || folders.length > 0) && (
+                <div className="mb-1">
+                  <div
+                    className="flex items-center gap-0.5 rounded-lg"
+                    onDragOver={(e) => { e.preventDefault(); setDragOverFolderId(UNASSIGNED_ID); }}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    onDrop={(e) => handleFolderDrop(e, null)}
+                    style={{
+                      background: dragOverFolderId === UNASSIGNED_ID ? 'rgba(136,136,136,0.18)' : 'rgba(136,136,136,0.08)',
+                      outline: dragOverFolderId === UNASSIGNED_ID ? '1px dashed var(--color-muted)' : 'none',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleCollection(UNASSIGNED_ID)}
+                      className="flex-1 min-w-0 text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg hover:opacity-80"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {getIcon(openCollectionId === UNASSIGNED_ID ? 'chevron-down' : 'chevron-right', { size: 11 })}
+                      {getIcon('inbox', { size: 12 })}
+                      <span className="truncate">Unassigned</span>
+                      <span className="ml-auto tabular-nums opacity-80">{unfoldered.length}</span>
+                    </button>
+                  </div>
+                  {openCollectionId === UNASSIGNED_ID && (
+                    unfoldered.length > 0
+                      ? unfoldered.map(p => renderProject(p, true))
+                      : (
+                        <p className="text-xs py-2" style={{ color: 'var(--color-muted)', paddingLeft: '1rem' }}>
+                          No unassigned projects — drag a project here to remove it from a collection.
+                        </p>
+                      )
+                  )}
                 </div>
               )}
-              {unfoldered.map(p => renderProject(p, false))}
-              {projects.length === 0 && (
+
+              {projects.length === 0 && folders.length === 0 && (
                 <p className="px-3 py-6 text-xs text-center" style={{ color: 'var(--color-muted)' }}>
                   No projects yet
                 </p>
