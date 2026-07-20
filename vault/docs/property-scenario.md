@@ -66,6 +66,26 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `POST` | `/insights` | `{ product\|product_id, question }` — cited document Q&A |
 | `POST` | `/insights/compare` | `{ products\|product_ids, question }` — multi-doc compare |
 | `POST` | `/calculators/*` | Standalone repayment / extra-repayments / offset / borrowing-power |
+| `POST` | `/calculators/buyer-qualify` | Lite buyer qualification (serviceability, LVR, DTI, genuine savings, FHBG) |
+| `POST` | `/calculators/qualification-proforma` | Full broker-style proforma: strict + levers + excluded + CDR lenderFit + curated `bankPosture` |
+
+---
+
+## Qualification proforma
+
+Primary homepage path for “will a bank look at this file?”. Builds on the same strict engine as the lite qualify check (`buyerQualification.js`), then adds:
+
+| Layer | Source | What it is |
+|-------|--------|------------|
+| **Strict** | Deterministic AU rules | Serviceability (incl. shaded overtime/bonus + self-employed add-backs), LVR, DTI, genuine savings (holding period + gift portion), employment tenure, FHBG/FHOG, etc. |
+| **Levers** | `qualificationProforma.js` | Risk-rated presentation / timing / lender-selection choices — never invent income or hide debts |
+| **Excluded** | Static list | Misrepresentation / NCCP fraud line — shown for transparency |
+| **Bank posture** | `bankPosture.js` | Curated broker knowledge per major lender (tenure windows, self-employed appetite, overtime shading). **Not** CDR and **not** a credit decision |
+| **Lender fit** | CDR PRD | Live published products/rates for the loan purpose — product publication only |
+
+**Journey:** Buy / Quick qualify / Refinance results can **Continue to qualification proforma** with prefilled fields. PDF download includes bank posture + CDR fit.
+
+**Honesty:** CDR cannot simulate credit committees. Bank posture is editorial/indicative. Overtime irregular → 0% in strict (conservative); 1yr → 50%; 2yr → 80%.
 
 ---
 

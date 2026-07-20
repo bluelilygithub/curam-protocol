@@ -48,11 +48,17 @@ const HEM = {
   },
 };
 
-function hemMonthly(householdType, grossAnnualIncome) {
+function hemMonthly(householdType, grossAnnualIncome, dependents = 0) {
   const t = HEM[householdType] || HEM.single;
-  if (grossAnnualIncome < 50000) return t.low;
-  if (grossAnnualIncome < 150000) return t.mid;
-  return t.high;
+  let base;
+  if (grossAnnualIncome < 50000) base = t.low;
+  else if (grossAnnualIncome < 150000) base = t.mid;
+  else base = t.high;
+  // HEM scales with dependents. 'family' bucket already assumes ~1-2 kids; add a
+  // per-extra-dependent loading beyond that for larger households (Melbourne Institute
+  // HEM increases roughly $180-250/mo per additional dependent, metro approximate).
+  const extraDependents = Math.max(0, (Number(dependents) || 0) - (householdType === 'family' ? 2 : 0));
+  return roundMoney(base + extraDependents * 220);
 }
 
 // ─── HECS/HELP compulsory repayment — ATO 2025-26 marginal method ────────────
@@ -219,7 +225,33 @@ function assessBuyerQualification(inputs = {}) {
     loanTermYears = 30,
     targetRatePct,
     isNewBuild = false,
+    dependents = 0,
+    creditCardLimitsTotal = 0,
+    monthsInCurrentRole,
+    hasAdverseCredit = false,
+    adverseCreditSeverity, // 'minor' | 'default' | 'judgment_or_bankruptcy'
+    overtimeBonusAnnual = 0,
+    overtimeBonusRegularity = 'irregular',
+    selfEmployedAddbacksAnnual = 0,
+    genuineSavingsHeldMonths,
+    depositGiftAmount = 0,
+    liabilities = null, // optional [{ type, label, monthlyRepayment }]
   } = inputs;
+
+  // Itemised liabilities sum into monthly debt repayments when provided.
+  let resolvedMonthlyDebts = Number(monthlyDebtRepayments) || 0;
+  let liabilityLines = [];
+  if (Array.isArray(liabilities) && liabilities.length > 0) {
+    liabilityLines = liabilities
+      .map((row) => ({
+        type: row.type || 'other',
+        label: row.label || row.type || 'Liability',
+        monthlyRepayment: Number(row.monthlyRepayment) || 0,
+      }))
+      .filter((row) => row.monthlyRepayment > 0);
+    const itemisedTotal = liabilityLines.reduce((sum, row) => sum + row.monthlyRepayment, 0);
+    if (itemisedTotal > 0) resolvedMonthlyDebts = roundMoney(itemisedTotal);
+  }
 
   // Validation
   if (!Number.isFinite(propertyValue) || propertyValue <= 0) errors.push('propertyValue must be a positive number');
@@ -233,13 +265,34 @@ function assessBuyerQualification(inputs = {}) {
 
   const termMonths = Math.round(loanTermYears * 12);
   const loanRequested = roundMoney(propertyValue - depositAmount);
-  const totalGrossAnnual = grossAnnualIncome + (partnerGrossIncome || 0);
+  const baseGrossAnnual = grossAnnualIncome + (partnerGrossIncome || 0);
+
+  // Conservative overtime/bonus shading into assessable income (strict path).
+  // Irregular → 0% in strict (still surfaces as a lender-selection lever in the proforma).
+  // 1-year history → 50%; 2+ years → 80%. Lenders differ — this is a mid-conservative baseline.
+  const overtimeShade =
+    overtimeBonusRegularity === 'two_year_history' ? 0.8
+      : overtimeBonusRegularity === 'one_year_history' ? 0.5
+        : 0;
+  const overtimeAssessed = roundMoney((Number(overtimeBonusAnnual) || 0) * overtimeShade);
+  const addbacksAssessed = employmentType === 'self_employed'
+    ? roundMoney(Number(selfEmployedAddbacksAnnual) || 0)
+    : 0;
+  const totalGrossAnnual = roundMoney(baseGrossAnnual + overtimeAssessed + addbacksAssessed);
   const isJoint = (partnerGrossIncome || 0) > 0;
   const assessmentRatePct = Math.max(targetRatePct + 3.0, APRA_FLOOR_RATE_PCT);
 
   assumptions.push(`Loan term: ${loanTermYears} years (${termMonths} months).`);
   assumptions.push(`Target product rate: ${targetRatePct}% p.a. APRA assessment rate applied: ${assessmentRatePct}% p.a. (higher of product + 3pp or ${APRA_FLOOR_RATE_PCT}% floor).`);
-  if (isJoint) assumptions.push(`Joint application — combined gross income: $${totalGrossAnnual.toLocaleString('en-AU')} p.a.`);
+  if (isJoint) assumptions.push(`Joint application — combined base gross income: $${baseGrossAnnual.toLocaleString('en-AU')} p.a.`);
+  if (overtimeAssessed > 0) {
+    assumptions.push(`Overtime/bonus/commission $${Number(overtimeBonusAnnual).toLocaleString('en-AU')}/yr shaded at ${Math.round(overtimeShade * 100)}% (${overtimeBonusRegularity.replace(/_/g, ' ')}) → +$${overtimeAssessed.toLocaleString('en-AU')} assessable. Individual lenders may credit more or less.`);
+  } else if ((Number(overtimeBonusAnnual) || 0) > 0) {
+    assumptions.push(`Overtime/bonus/commission $${Number(overtimeBonusAnnual).toLocaleString('en-AU')}/yr declared as irregular — not credited in the strict serviceability figure (lender shopping may still credit a portion).`);
+  }
+  if (addbacksAssessed > 0) {
+    assumptions.push(`Self-employed add-backs $${addbacksAssessed.toLocaleString('en-AU')}/yr included in assessable income — requires accountant verification.`);
+  }
   caveats.push('This is an indicative qualification check — not a credit decision, not pre-approval. Lenders apply their own credit policies, conduct credit history checks, and use proprietary serviceability models. Results here can differ materially from a lender\'s actual assessment.');
 
   const checks = [];
@@ -259,14 +312,37 @@ function assessBuyerQualification(inputs = {}) {
     contract:       { status: 'warn', note: 'Contract income is generally accepted if the contract has run for 12+ months or you have a history of renewals. Lenders may use the lower of contract rate or the last 2 years average.' },
     self_employed:  { status: 'warn', note: 'Self-employed borrowers typically need 2 full years of tax returns (individual + business). Some lenders offer low-doc options but these usually attract higher rates and stricter LVR caps. The income figure you\'ve entered must be verifiable via tax returns.' },
   };
-  const empFlag = empFlags[employmentType] || empFlags.payg_fulltime;
+  let empFlag = empFlags[employmentType] || empFlags.payg_fulltime;
+
+  // Tenure-aware refinement for casual/contract/part-time — this is the single
+  // biggest lever brokers actually use: WHEN you apply matters as much as income.
+  const tenureAware = ['casual', 'contract', 'payg_parttime'].includes(employmentType);
+  if (tenureAware && Number.isFinite(monthsInCurrentRole)) {
+    if (monthsInCurrentRole < 6) {
+      empFlag = {
+        status: 'fail',
+        note: `At ${monthsInCurrentRole} months with your current employer, most lenders will decline outright — probation and short-tenure ${employmentType.replace('_', ' ')} income is generally not accepted until at least 6 months. Waiting, or approaching a lender with a lower threshold, materially changes this outcome.`,
+      };
+    } else if (monthsInCurrentRole < 12) {
+      empFlag = {
+        status: 'warn',
+        note: `${monthsInCurrentRole} months with your current employer sits in the "some lenders, not all" zone — a handful of lenders accept 6+ months of ${employmentType.replace('_', ' ')} income with an employer letter confirming ongoing/permanent intent; most still want 12 months.`,
+      };
+    } else {
+      empFlag = {
+        status: 'pass',
+        note: `At ${monthsInCurrentRole} months with the same employer, ${employmentType.replace('_', ' ')} income clears the 12-month threshold most mainstream lenders apply. An employer letter confirming ongoing/permanent intent still strengthens the file.`,
+      };
+    }
+  }
+
   checks.push({
     id: 'employment',
     label: 'Employment',
     status: empFlag.status,
     headline: empLabels[employmentType] || employmentType,
     detail: empFlag.note,
-    data: { employment_type: employmentType },
+    data: { employment_type: employmentType, months_in_current_role: Number.isFinite(monthsInCurrentRole) ? monthsInCurrentRole : null },
   });
 
   // ─── 2. HECS/HELP impact ────────────────────────────────────────────────────
@@ -277,22 +353,29 @@ function assessBuyerQualification(inputs = {}) {
   }
 
   // ─── 3. Serviceability ──────────────────────────────────────────────────────
-  const hem = hemMonthly(householdType, totalGrossAnnual);
+  const hem = hemMonthly(householdType, totalGrossAnnual, dependents);
   const declaredExpenses = monthlyExpenses && Number.isFinite(monthlyExpenses) ? Number(monthlyExpenses) : null;
   const effectiveExpenses = declaredExpenses != null ? Math.max(declaredExpenses, hem) : hem;
-  const existingDebts = Number(monthlyDebtRepayments) || 0;
+  // Lenders count an assumed monthly commitment on undrawn credit card LIMITS (not
+  // balances) regardless of whether the card is carrying a balance — industry-standard
+  // 3.8%/month of total limit. This is a real, current commitment (not a lever).
+  const cardCommitmentMonthly = roundMoney((Number(creditCardLimitsTotal) || 0) * 0.038);
+  const existingDebts = roundMoney(resolvedMonthlyDebts + cardCommitmentMonthly);
   const grossMonthly = totalGrossAnnual / 12;
 
   // Net surplus available to service the new loan
   const netSurplus = roundMoney(grossMonthly - effectiveExpenses - existingDebts - hecsRepaymentMonthly);
 
   assumptions.push(
-    `HEM benchmark for ${householdType}: $${hem.toLocaleString('en-AU')}/mo. ` +
+    `HEM benchmark for ${householdType}${dependents ? ` with ${dependents} dependent${dependents === 1 ? '' : 's'}` : ''}: $${hem.toLocaleString('en-AU')}/mo. ` +
     (declaredExpenses != null
       ? `Declared expenses $${declaredExpenses.toLocaleString('en-AU')}/mo — using ${effectiveExpenses === hem ? 'HEM (higher)' : 'declared (higher)'}.`
       : `No declared expenses — using HEM benchmark.`)
   );
-  if (existingDebts > 0) assumptions.push(`Existing debt repayments: $${existingDebts.toLocaleString('en-AU')}/mo (reduces available surplus).`);
+  if (resolvedMonthlyDebts > 0) {
+    assumptions.push(`Existing debt repayments: $${resolvedMonthlyDebts.toLocaleString('en-AU')}/mo (reduces available surplus)${liabilityLines.length ? ` across ${liabilityLines.length} itemised liabilities` : ''}.`);
+  }
+  if (cardCommitmentMonthly > 0) assumptions.push(`Credit card commitment: $${Number(creditCardLimitsTotal).toLocaleString('en-AU')} in limits assessed at 3.8%/mo = $${cardCommitmentMonthly.toLocaleString('en-AU')}/mo, regardless of balance carried.`);
   if (hecsRepaymentMonthly > 0) assumptions.push(`HECS compulsory repayment included in surplus: −$${hecsRepaymentMonthly.toLocaleString('en-AU')}/mo.`);
 
   const maxBorrowing = netSurplus > 0
@@ -329,9 +412,15 @@ function assessBuyerQualification(inputs = {}) {
     detail: serviceDetail,
     data: {
       gross_monthly_income: roundMoney(grossMonthly),
+      base_gross_annual: baseGrossAnnual,
+      overtime_assessed_annual: overtimeAssessed,
+      addbacks_assessed_annual: addbacksAssessed,
+      assessable_gross_annual: totalGrossAnnual,
       monthly_expenses_used: effectiveExpenses,
       hecs_monthly: hecsRepaymentMonthly,
+      card_commitment_monthly: cardCommitmentMonthly,
       existing_debts_monthly: existingDebts,
+      liability_lines: liabilityLines,
       net_surplus_monthly: netSurplus,
       assessment_rate_pct: assessmentRatePct,
       max_borrowing_capacity: maxBorrowing,
@@ -402,20 +491,39 @@ function assessBuyerQualification(inputs = {}) {
 
   // ─── 6. Genuine savings ──────────────────────────────────────────────────────
   const minGenuineSavings = roundMoney(propertyValue * 0.05);
+  const giftPortion = Math.max(0, Number(depositGiftAmount) || 0);
+  const countableGenuine = roundMoney(Math.max(0, depositAmount - giftPortion));
+  const heldMonths = Number.isFinite(genuineSavingsHeldMonths) ? Number(genuineSavingsHeldMonths) : null;
   let genuineStatus, genuineHeadline, genuineDetail;
 
   if (depositAmount >= propertyValue * 0.20) {
     genuineStatus = 'pass';
     genuineHeadline = 'Deposit ≥ 20% — genuine savings check generally not required';
     genuineDetail = 'At 20%+ deposit, most lenders do not require formal proof of genuine savings. The deposit must still be verified (bank statements, evidence of funds), but the genuine-savings holding period requirement typically does not apply.';
-  } else if (depositAmount >= minGenuineSavings) {
-    genuineStatus = 'warn';
-    genuineHeadline = `Deposit covers 5% threshold ($${minGenuineSavings.toLocaleString('en-AU')}) — but must be genuine savings`;
-    genuineDetail = `Most lenders require that at least 5% of the purchase price comes from genuine savings — funds held in your name for at least 3 months (bank statements required). Gifted funds from parents do not count as genuine savings unless supplemented by a genuine savings component. Rental history can substitute for genuine savings with some lenders.`;
-  } else {
+  } else if (countableGenuine < minGenuineSavings) {
     genuineStatus = 'fail';
-    genuineHeadline = `Deposit ($${depositAmount.toLocaleString('en-AU')}) is below the 5% genuine savings threshold ($${minGenuineSavings.toLocaleString('en-AU')})`;
-    genuineDetail = `A deposit below 5% of purchase price ($${minGenuineSavings.toLocaleString('en-AU')}) will be rejected by most lenders on genuine savings grounds alone, regardless of serviceability. You would need to save an additional $${(minGenuineSavings - depositAmount).toLocaleString('en-AU')} and hold it for at least 3 months, OR explore a family guarantee arrangement.`;
+    genuineHeadline = giftPortion > 0
+      ? `After gifts ($${giftPortion.toLocaleString('en-AU')}), countable genuine savings ($${countableGenuine.toLocaleString('en-AU')}) are below the 5% threshold ($${minGenuineSavings.toLocaleString('en-AU')})`
+      : `Deposit ($${depositAmount.toLocaleString('en-AU')}) is below the 5% genuine savings threshold ($${minGenuineSavings.toLocaleString('en-AU')})`;
+    genuineDetail = giftPortion > 0
+      ? `Gifted funds typically do not count toward genuine savings. Of your $${depositAmount.toLocaleString('en-AU')} deposit, $${giftPortion.toLocaleString('en-AU')} is gift — leaving $${countableGenuine.toLocaleString('en-AU')} countable against the $${minGenuineSavings.toLocaleString('en-AU')} (5%) threshold. You need more funds held in your name, a family guarantee, or a lender that accepts rental history in lieu.`
+      : `A deposit below 5% of purchase price ($${minGenuineSavings.toLocaleString('en-AU')}) will be rejected by most lenders on genuine savings grounds alone, regardless of serviceability. You would need to save an additional $${(minGenuineSavings - depositAmount).toLocaleString('en-AU')} and hold it for at least 3 months, OR explore a family guarantee arrangement.`;
+  } else if (heldMonths != null && heldMonths < 3) {
+    genuineStatus = 'fail';
+    genuineHeadline = `Genuine savings held only ${heldMonths} month${heldMonths === 1 ? '' : 's'} — most lenders require 3 months`;
+    genuineDetail = `You meet the dollar threshold ($${countableGenuine.toLocaleString('en-AU')} countable vs $${minGenuineSavings.toLocaleString('en-AU')} required), but funds held for fewer than 3 months usually fail the genuine-savings holding-period test. Bank statements covering at least 3 consecutive months are standard evidence. Waiting ${Math.max(0, 3 - heldMonths)} more month${3 - heldMonths === 1 ? '' : 's'}, or using rental history with a lender that accepts it as a substitute, changes this outcome.`;
+  } else if (heldMonths != null && heldMonths >= 3) {
+    genuineStatus = giftPortion > 0 ? 'warn' : 'pass';
+    genuineHeadline = giftPortion > 0
+      ? `$${countableGenuine.toLocaleString('en-AU')} held ${heldMonths}+ months — gifts ($${giftPortion.toLocaleString('en-AU')}) excluded from genuine savings`
+      : `Genuine savings of $${countableGenuine.toLocaleString('en-AU')} held ${heldMonths}+ months — meets typical 3-month rule`;
+    genuineDetail = giftPortion > 0
+      ? `Countable genuine savings clear the 5% threshold and holding period. Gifted portion ($${giftPortion.toLocaleString('en-AU')}) still needs a gift letter and does not count toward the genuine-savings component. Some lenders accept rental history to top up thin genuine savings.`
+      : `Deposit meets the 5% genuine-savings dollar threshold and the typical 3-month holding period. Keep consecutive bank statements ready — lenders verify this on application.`;
+  } else {
+    genuineStatus = 'warn';
+    genuineHeadline = `Deposit covers 5% threshold ($${minGenuineSavings.toLocaleString('en-AU')}) — confirm 3-month holding period`;
+    genuineDetail = `Most lenders require that at least 5% of the purchase price comes from genuine savings — funds held in your name for at least 3 months (bank statements required).${giftPortion > 0 ? ` Gifted funds ($${giftPortion.toLocaleString('en-AU')}) do not count unless supplemented by a genuine savings component.` : ' Gifted funds from parents do not count as genuine savings unless supplemented by a genuine savings component.'} Rental history can substitute for genuine savings with some lenders. Enter how long the funds have been held to refine this check.`;
   }
 
   checks.push({
@@ -424,7 +532,14 @@ function assessBuyerQualification(inputs = {}) {
     status: genuineStatus,
     headline: genuineHeadline,
     detail: genuineDetail,
-    data: { deposit: depositAmount, min_genuine_savings: minGenuineSavings, deposit_pct: depositPct },
+    data: {
+      deposit: depositAmount,
+      deposit_gift_amount: giftPortion,
+      countable_genuine_savings: countableGenuine,
+      min_genuine_savings: minGenuineSavings,
+      deposit_pct: depositPct,
+      held_months: heldMonths,
+    },
   });
 
   // ─── 7. First Home Guarantee (FHBG) ─────────────────────────────────────────
@@ -727,6 +842,24 @@ function assessBuyerQualification(inputs = {}) {
     detail: `Every lender runs a hard credit enquiry when you apply. Multiple hard enquiries in a short window (rate-shopping) reduce your credit score. Before approaching any lender: (1) Get a free copy of your credit report at mycreditfile.com.au (Equifax) or creditsavvy.com.au — free once per year, does not affect your score. (2) Check for errors, old defaults, or accounts you don't recognise — dispute anything incorrect before you apply (30–60 day correction process). (3) If you have existing credit cards, reduce limits rather than closing them — lenders assess 3.8% of the total limit as a monthly commitment regardless of balance. Any errors or unexpected entries in your file can delay or block an application — the time to find them is now, not on settlement day.`,
     data: { free_check_url: 'mycreditfile.com.au' },
   });
+
+  // ─── 13b. Declared adverse credit ────────────────────────────────────────────
+  if (hasAdverseCredit) {
+    const sevLabels = {
+      minor: { status: 'warn', headline: 'Minor adverse credit declared — mainstream lending still likely', note: 'Minor blemishes (a single small default paid out, an old missed utility payment) are often accepted by major lenders, especially if paid out and explained in writing. Some lenders run automated declines on any default regardless of size — a broker who knows which lenders manually review defaults under a threshold (commonly $500–$1,000, paid) can avoid an automatic knockback.' },
+      default: { status: 'warn', headline: 'Default(s) on file — lender choice narrows, not necessarily blocked', note: 'An unpaid or recently paid default typically pushes you toward second-tier or specialist ("near-prime") lenders, who accept defaults with a clean 6–12 months since payment, usually at a modest rate premium. Most major banks decline outright on an unpaid default. Paying out any default before applying — and getting written confirmation from the creditor — is the single biggest lever here.' },
+      judgment_or_bankruptcy: { status: 'fail', headline: 'Court judgment or bankruptcy declared — mainstream and most near-prime lenders excluded', note: 'A court judgment or past bankruptcy/Part IX agreement excludes mainstream and most near-prime lenders until it is fully discharged and, for bankruptcy, generally 1–2 years clear after discharge (specialist lender policies vary). Specialist/private lenders exist but at materially higher rates. A broker specialising in credit-impaired lending is strongly recommended — general market comparison tools (including this one) will overstate what is realistically available.' },
+    };
+    const sev = sevLabels[adverseCreditSeverity] || sevLabels.default;
+    checks.push({
+      id: 'credit_history',
+      label: 'Credit history',
+      status: sev.status,
+      headline: sev.headline,
+      detail: `${sev.note} This is a self-declared flag — the actual position (amount, date, paid/unpaid status) matters more than the category. Get your actual credit file (mycreditfile.com.au or creditsavvy.com.au) before applying anywhere; it is the only accurate picture. Nothing in this tool can quantify lender-specific credit scoring — that requires a real credit file and, ideally, a broker who has visibility of which lenders' scorecards are more forgiving for your specific entry.`,
+      data: { has_adverse_credit: true, severity: adverseCreditSeverity || 'default' },
+    });
+  }
 
   // ─── 14. Rental income (investment property) ─────────────────────────────────
   // If the buyer is purchasing an investment property (isPpor = false) and
@@ -1130,4 +1263,11 @@ function buildLenderGuidance(checks, summary, inputs) {
   return guidance;
 }
 
-module.exports = { assessBuyerQualification, hecsAnnualRepayment, hemMonthly, monthlyRepayment, buildLenderGuidance };
+module.exports = {
+  assessBuyerQualification,
+  hecsAnnualRepayment,
+  hemMonthly,
+  monthlyRepayment,
+  maxLoanFromMonthlyRepayment,
+  buildLenderGuidance,
+};

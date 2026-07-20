@@ -23,6 +23,11 @@ async function downloadCalcsPdf(calcInputs, calcResults) {
   const { downloadCalculatorsPdf } = await import('../utils/propertyScenarioPdf');
   return downloadCalculatorsPdf(calcInputs, calcResults);
 }
+
+async function downloadProformaPdf(proforma, inputs) {
+  const { downloadQualificationProformaPdf } = await import('../utils/propertyScenarioPdf');
+  return downloadQualificationProformaPdf(proforma, inputs);
+}
 import {
   RateComparisonChart,
   CumulativeCostChart,
@@ -895,7 +900,7 @@ function QualifyCheck({ check, expanded, onToggle }) {
   );
 }
 
-function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
+function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToProforma }) {
   const FIELD = {
     borderColor: 'var(--color-border)', background: 'var(--color-bg)',
     color: 'var(--color-text)', borderRadius: 8, border: '1px solid',
@@ -1243,6 +1248,36 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
             />
           )}
 
+          {onSwitchToProforma && (
+            <button
+              type="button"
+              onClick={() => onSwitchToProforma({
+                property_value: qPrice,
+                deposit_amount: qDeposit,
+                state: qState,
+                is_fhb: qFhb === 'yes' ? 'yes' : qFhb === 'no' ? 'no' : '',
+                is_ppor: qPpor,
+                gross_annual_income: qIncome,
+                partner_gross_income: qPartner,
+                household_type: qHousehold,
+                employment_type: qEmployment,
+                has_hecs: qHecs,
+                is_new_build: qNewBuild,
+                monthly_debt_repayments: qDebts,
+                monthly_expenses: qExpenses,
+                loan_term_years: qTerm,
+                target_rate_pct: qRate,
+                applicant_age: qAge,
+                property_type_class: qPropTypeClass,
+                gross_rental_income: qRentalIncome,
+              })}
+              className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+              style={{ color: 'var(--color-primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Continue to qualification proforma (full broker file review) →
+            </button>
+          )}
+
           {/* Individual checks */}
           <div className="space-y-2">
             {(result.checks || []).map((check) => (
@@ -1399,6 +1434,628 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance }) {
           >
             {getIcon('download', { size: 13 })}
             {pdfBusy ? 'Generating…' : 'Download qualification report (PDF)'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const RISK_COLOR = { low: '#15803d', medium: '#92400e', high: '#b91c1c' };
+const RISK_BG    = { low: '#f0fdf4', medium: '#fefce8', high: '#fef2f2' };
+const RISK_BORDER = { low: '#86efac', medium: '#fde047', high: '#fca5a5' };
+const RISK_LABEL  = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' };
+
+function LeverCard({ lever }) {
+  const col = RISK_COLOR[lever.riskLevel] || RISK_COLOR.medium;
+  const bg = RISK_BG[lever.riskLevel] || RISK_BG.medium;
+  const bord = RISK_BORDER[lever.riskLevel] || RISK_BORDER.medium;
+  return (
+    <div className="rounded-lg border p-3 space-y-1.5" style={{ borderColor: bord, background: bg }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ color: col, background: 'rgba(255,255,255,0.6)' }}>
+          {RISK_LABEL[lever.riskLevel] || 'Medium risk'}
+        </span>
+        <span className="text-xs uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{lever.category}</span>
+      </div>
+      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{lever.title}</p>
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>{lever.whatItIs}</p>
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}><span className="font-medium">Why it's allowed: </span>{lever.whyItsAllowed}</p>
+      {lever.impact && <p className="text-xs font-semibold" style={{ color: col }}>{lever.impact}</p>}
+      {lever.regulatoryNote && <p className="text-xs leading-relaxed" style={{ color: '#b91c1c' }}>⚠ {lever.regulatoryNote}</p>}
+    </div>
+  );
+}
+
+/**
+ * Qualification Proforma — the broker-realistic layer on top of the plain
+ * qualification check. Runs the same strict/deterministic engine unchanged,
+ * then separately surfaces (a) legitimate presentation/structuring/timing
+ * levers with risk ratings, (b) a static list of things deliberately NOT
+ * modelled because they'd constitute lender misrepresentation, and (c) a
+ * live CDR-sourced lender product fit table (no policy speculation).
+ */
+function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialInputs }) {
+  // Property
+  const [pPrice, setPPrice]     = useState(() => initialInputs?.property_value != null ? String(initialInputs.property_value) : '');
+  const [pDeposit, setPDeposit] = useState(() => initialInputs?.deposit_amount != null ? String(initialInputs.deposit_amount) : '');
+  const [pState, setPState]     = useState(() => initialInputs?.state || '');
+  const [pFhb, setPFhb]         = useState(() => {
+    if (initialInputs?.is_fhb === true || initialInputs?.is_fhb === 'yes') return 'yes';
+    if (initialInputs?.is_fhb === false || initialInputs?.is_fhb === 'no') return 'no';
+    return '';
+  });
+  const [pPpor, setPPpor]       = useState(() => {
+    if (initialInputs?.is_ppor === false || initialInputs?.is_ppor === 'investment') return 'investment';
+    return 'ppor';
+  });
+  // Income & household
+  const [pIncome, setPIncome]     = useState(() => initialInputs?.gross_annual_income != null ? String(initialInputs.gross_annual_income) : '');
+  const [pPartner, setPPartner]   = useState(() => initialInputs?.partner_gross_income ? String(initialInputs.partner_gross_income) : '');
+  const [pHousehold, setPHousehold] = useState(() => initialInputs?.household_type || 'single');
+  const [pDependents, setPDependents] = useState(() => initialInputs?.dependents != null && initialInputs.dependents !== '' ? String(initialInputs.dependents) : '');
+  const [pEmployment, setPEmployment] = useState(() => initialInputs?.employment_type || 'payg_fulltime');
+  const [pMonthsInRole, setPMonthsInRole] = useState(() => initialInputs?.months_in_current_role != null ? String(initialInputs.months_in_current_role) : '');
+  // Debts & expenses
+  const [pHecs, setPHecs]       = useState(() => (initialInputs?.has_hecs === true || initialInputs?.has_hecs === 'yes') ? 'yes' : 'no');
+  const [pNewBuild, setPNewBuild] = useState(() => (initialInputs?.is_new_build === true || initialInputs?.is_new_build === 'yes') ? 'yes' : 'no');
+  const [pDebts, setPDebts]     = useState(() => initialInputs?.monthly_debt_repayments ? String(initialInputs.monthly_debt_repayments) : '');
+  const [pExpenses, setPExpenses] = useState(() => initialInputs?.monthly_expenses ? String(initialInputs.monthly_expenses) : '');
+  const [pCardLimits, setPCardLimits] = useState(() => initialInputs?.credit_card_limits_total ? String(initialInputs.credit_card_limits_total) : '');
+  const [pLiabilities, setPLiabilities] = useState(() => {
+    if (Array.isArray(initialInputs?.liabilities) && initialInputs.liabilities.length) {
+      return initialInputs.liabilities.map((row) => ({
+        type: row.type || 'other',
+        label: row.label || '',
+        monthly: String(row.monthly_repayment ?? row.monthlyRepayment ?? ''),
+      }));
+    }
+    return [];
+  });
+  // Broker-realism inputs
+  const [pOvertime, setPOvertime] = useState(() => initialInputs?.overtime_bonus_annual ? String(initialInputs.overtime_bonus_annual) : '');
+  const [pOvertimeRegularity, setPOvertimeRegularity] = useState(() => initialInputs?.overtime_bonus_regularity || 'irregular');
+  const [pAddbacks, setPAddbacks] = useState(() => initialInputs?.self_employed_addbacks_annual ? String(initialInputs.self_employed_addbacks_annual) : '');
+  const [pAdverseCredit, setPAdverseCredit] = useState(() => (initialInputs?.has_adverse_credit === true || initialInputs?.has_adverse_credit === 'yes') ? 'yes' : 'no');
+  const [pAdverseSeverity, setPAdverseSeverity] = useState(() => initialInputs?.adverse_credit_severity || 'default');
+  const [pGenuineHeldMonths, setPGenuineHeldMonths] = useState(() => initialInputs?.genuine_savings_held_months != null ? String(initialInputs.genuine_savings_held_months) : '');
+  const [pDepositGift, setPDepositGift] = useState(() => initialInputs?.deposit_gift_amount ? String(initialInputs.deposit_gift_amount) : '');
+  // Loan
+  const [pTerm, setPTerm]       = useState(() => initialInputs?.loan_term_years ? String(initialInputs.loan_term_years) : '30');
+  const [pRate, setPRate]       = useState(() => initialInputs?.target_rate_pct != null ? String(initialInputs.target_rate_pct) : '');
+  // Extra checks
+  const [pAge, setPAge]               = useState(() => initialInputs?.applicant_age ? String(initialInputs.applicant_age) : '');
+  const [pPropTypeClass, setPPropTypeClass] = useState(() => initialInputs?.property_type_class || 'house_town');
+  const [pRentalIncome, setPRentalIncome]   = useState(() => initialInputs?.gross_rental_income ? String(initialInputs.gross_rental_income) : '');
+  // Results
+  const [proforma, setProforma] = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [pdfBusy, setPdfBusy]   = useState(false);
+  const proformaResultRef       = useRef(null);
+
+  function buildInputPayload() {
+    const liabilityRows = pLiabilities
+      .map((row) => ({
+        type: row.type || 'other',
+        label: row.label || row.type || 'Liability',
+        monthly_repayment: parseFloat(row.monthly) || 0,
+      }))
+      .filter((row) => row.monthly_repayment > 0);
+    const itemisedDebtTotal = liabilityRows.reduce((sum, row) => sum + row.monthly_repayment, 0);
+    return {
+      property_value:          parseFloat(pPrice),
+      deposit_amount:          parseFloat(pDeposit),
+      state:                   pState,
+      is_fhb:                  pFhb === 'yes',
+      is_ppor:                 pPpor === 'ppor',
+      gross_annual_income:     parseFloat(pIncome),
+      partner_gross_income:    pPartner ? parseFloat(pPartner) : 0,
+      household_type:          pHousehold,
+      dependents:              pDependents ? parseInt(pDependents, 10) : 0,
+      employment_type:         pEmployment,
+      months_in_current_role:  pMonthsInRole !== '' ? parseFloat(pMonthsInRole) : undefined,
+      has_hecs:                pHecs === 'yes',
+      is_new_build:            pNewBuild === 'yes',
+      monthly_debt_repayments: itemisedDebtTotal > 0 ? itemisedDebtTotal : (pDebts ? parseFloat(pDebts) : 0),
+      liabilities:             liabilityRows.length ? liabilityRows : undefined,
+      monthly_expenses:        pExpenses ? parseFloat(pExpenses) : undefined,
+      credit_card_limits_total: pCardLimits ? parseFloat(pCardLimits) : 0,
+      overtime_bonus_annual:   pOvertime ? parseFloat(pOvertime) : 0,
+      overtime_bonus_regularity: pOvertimeRegularity,
+      self_employed_addbacks_annual: pAddbacks ? parseFloat(pAddbacks) : 0,
+      genuine_savings_held_months: pGenuineHeldMonths !== '' ? parseFloat(pGenuineHeldMonths) : undefined,
+      deposit_gift_amount:     pDepositGift ? parseFloat(pDepositGift) : 0,
+      has_adverse_credit:      pAdverseCredit === 'yes',
+      adverse_credit_severity: pAdverseSeverity,
+      loan_term_years:         parseFloat(pTerm) || 30,
+      target_rate_pct:         parseFloat(pRate),
+      applicant_age:           pAge ? parseFloat(pAge) : undefined,
+      property_type_class:     pPropTypeClass || undefined,
+      gross_rental_income:     pRentalIncome ? parseFloat(pRentalIncome) : undefined,
+    };
+  }
+
+  async function runProforma() {
+    const price = parseFloat(pPrice);
+    const deposit = parseFloat(pDeposit);
+    const income = parseFloat(pIncome);
+    const rate = parseFloat(pRate);
+    if (!price || !deposit || !income || !rate || !pState) {
+      setError('Property price, deposit, state, gross income, and interest rate are required.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await api.post('/api/property-scenario/calculators/qualification-proforma', buildInputPayload());
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.errors?.[0] || 'Qualification proforma failed');
+      setProforma(data);
+      const init = {};
+      (data.strict?.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
+      setExpanded(init);
+      setTimeout(() => {
+        proformaResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    } catch (err) {
+      setError(err.message || 'Request failed');
+      addToast(err.message || 'Qualification proforma failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleProformaPdf() {
+    setPdfBusy(true);
+    try {
+      await downloadProformaPdf(proforma, buildInputPayload());
+    } catch (err) {
+      console.error('[PDF] proforma failed:', err);
+      addToast('PDF generation failed — ' + (err?.message || 'unknown error'), 'error');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  const strict = proforma?.strict;
+  const s = strict?.summary;
+  const overallColor = s ? STATUS_COLOR[s.overall_status] : null;
+  const overallBg    = s ? STATUS_BG[s.overall_status] : null;
+  const overallBord  = s ? STATUS_BORDER[s.overall_status] : null;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border p-4 sm:p-5 space-y-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Qualification proforma — the broker-realistic file review</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            Strict AU checks (with overtime/bonus shaded into serviceability where evidenced), risk-rated presentation levers, a curated bank-by-bank posture matrix, and live CDR product fit. Strict numbers never invent income or hide debts — they take what you declared at face value, with conservative shading.
+          </p>
+          {initialInputs && (
+            <p className="text-xs mt-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg))', color: 'var(--color-text)' }}>
+              Prefill applied from your previous step — review and complete any missing broker-file fields before running.
+            </p>
+          )}
+        </div>
+
+        {/* Property */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Property</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)<FieldTip text="The full property price you intend to pay." /></span>
+              <input type="text" inputMode="numeric" value={pPrice} onChange={(e) => setPPrice(e.target.value)} placeholder="e.g. 850000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)<FieldTip text="Your total available deposit. Your LVR is calculated from this." /></span>
+              <input type="text" inputMode="numeric" value={pDeposit} onChange={(e) => setPDeposit(e.target.value)} placeholder="e.g. 170000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State<FieldTip text="Used for stamp duty, FHB concessions, and FHOG eligibility." /></span>
+              <select value={pState} onChange={(e) => setPState(e.target.value)} style={FIELD}>
+                <option value="">Select…</option>
+                {['NSW','VIC','QLD','SA','WA','TAS','ACT','NT'].map((st) => <option key={st} value={st}>{st}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?<FieldTip text="Affects stamp duty concessions, FHBG, and FHOG." /></span>
+              <select value={pFhb} onChange={(e) => setPFhb(e.target.value)} style={FIELD}>
+                <option value="">Select…</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property purpose<FieldTip text="PPOR vs investment — affects serviceability and rental income treatment." /></span>
+              <select value={pPpor} onChange={(e) => setPPpor(e.target.value)} style={FIELD}>
+                <option value="ppor">Primary residence (PPOR)</option>
+                <option value="investment">Investment</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {/* Income & household */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Income &amp; household</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Total gross income before tax — salary and wages." /></span>
+              <input type="text" inputMode="numeric" value={pIncome} onChange={(e) => setPIncome(e.target.value)} placeholder="e.g. 95000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)<FieldTip text="Leave blank for a sole applicant." /></span>
+              <input type="text" inputMode="numeric" value={pPartner} onChange={(e) => setPPartner(e.target.value)} placeholder="leave blank if solo" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type<FieldTip text="Sets the HEM living-expense benchmark." /></span>
+              <select value={pHousehold} onChange={(e) => setPHousehold(e.target.value)} style={FIELD}>
+                <option value="single">Single (no dependants)</option>
+                <option value="couple">Couple (no kids)</option>
+                <option value="family">Family (with children)</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Number of dependents<FieldTip text="Refines the HEM benchmark beyond the household-type default — more dependents raises the assumed living-expense floor." /></span>
+              <input type="text" inputMode="numeric" value={pDependents} onChange={(e) => setPDependents(e.target.value)} placeholder="e.g. 2" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Employment type<FieldTip text="Self-employed and casual need longer verified history. This drives the timing lever below." /></span>
+              <select value={pEmployment} onChange={(e) => setPEmployment(e.target.value)} style={FIELD}>
+                <option value="payg_fulltime">PAYG full-time</option>
+                <option value="payg_parttime">PAYG part-time</option>
+                <option value="casual">Casual</option>
+                <option value="contract">Contract</option>
+                <option value="self_employed">Self-employed</option>
+              </select>
+            </label>
+            {['casual', 'contract', 'payg_parttime'].includes(pEmployment) && (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Months with current employer<FieldTip text="Real broker lever: many mainstream lenders open up at 12 months; a few accept 6+ months with an employer letter." /></span>
+                <input type="text" inputMode="numeric" value={pMonthsInRole} onChange={(e) => setPMonthsInRole(e.target.value)} placeholder="e.g. 8" style={FIELD} />
+              </label>
+            )}
+            {pEmployment === 'self_employed' && (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Annual add-backs ($, optional)<FieldTip text="Non-cash / one-off expenses your accountant would add back to net profit — e.g. depreciation, one-off costs. Requires an accountant letter." /></span>
+                <input type="text" inputMode="numeric" value={pAddbacks} onChange={(e) => setPAddbacks(e.target.value)} placeholder="e.g. 12000" style={FIELD} />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* Debts & expenses */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Debts &amp; expenses</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>HECS / HELP debt outstanding?<FieldTip text="Reduces borrowing capacity via the compulsory ATO repayment." /></span>
+              <select value={pHecs} onChange={(e) => setPHecs(e.target.value)} style={FIELD}>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>New build / off-the-plan?<FieldTip text="Affects FHOG and some state duty rules." /></span>
+              <select value={pNewBuild} onChange={(e) => setPNewBuild(e.target.value)} style={FIELD}>
+                <option value="no">No — established home</option>
+                <option value="yes">Yes — new build / off-the-plan</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)<FieldTip text="Total of non-card loans if you prefer a single figure. Or itemise below — itemised rows override this total." /></span>
+              <input type="text" inputMode="numeric" value={pDebts} onChange={(e) => setPDebts(e.target.value)} placeholder="loans, other repayments" style={FIELD} disabled={pLiabilities.some((r) => parseFloat(r.monthly) > 0)} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Total credit card / BNPL limits ($)<FieldTip text="Lenders assess 3.8%/month of your total limit as a commitment, regardless of balance. This is what the 'close cards before applying' lever acts on." /></span>
+              <input type="text" inputMode="numeric" value={pCardLimits} onChange={(e) => setPCardLimits(e.target.value)} placeholder="e.g. 15000" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)<FieldTip text="Leave blank to use the HEM benchmark. If your real spending is higher than HEM, declaring it truthfully — and understanding the risk of not doing so — is covered in the levers below." /></span>
+              <input type="text" inputMode="numeric" value={pExpenses} onChange={(e) => setPExpenses(e.target.value)} placeholder="leave blank to use HEM benchmark" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Genuine savings held (months)<FieldTip text="Most lenders want at least 3 months of bank statements showing the deposit funds in your name. Leave blank if unsure — the check will flag that you still need to confirm." /></span>
+              <input type="text" inputMode="numeric" value={pGenuineHeldMonths} onChange={(e) => setPGenuineHeldMonths(e.target.value)} placeholder="e.g. 4" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gift portion of deposit ($)<FieldTip text="Gifted funds usually do not count as genuine savings. Enter the gift amount so the check uses only the remainder." /></span>
+              <input type="text" inputMode="numeric" value={pDepositGift} onChange={(e) => setPDepositGift(e.target.value)} placeholder="0 if none" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Overtime / bonus / commission ($/yr, optional)<FieldTip text="Shaded into the strict serviceability figure when you have 1–2 years of history (50%/80%). Irregular income is excluded from strict and left for lender shopping in the levers." /></span>
+              <input type="text" inputMode="numeric" value={pOvertime} onChange={(e) => setPOvertime(e.target.value)} placeholder="e.g. 8000" style={FIELD} />
+            </label>
+            {parseFloat(pOvertime) > 0 && (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>History with that income<FieldTip text="How long you've actually received this — determines how much a lender will realistically credit." /></span>
+                <select value={pOvertimeRegularity} onChange={(e) => setPOvertimeRegularity(e.target.value)} style={FIELD}>
+                  <option value="irregular">Irregular / less than 1 year</option>
+                  <option value="one_year_history">Consistent for 1 year</option>
+                  <option value="two_year_history">Consistent for 2+ years</option>
+                </select>
+              </label>
+            )}
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Any defaults, judgments, or bankruptcy?<FieldTip text="Self-declared only — get your actual credit file before applying anywhere." /></span>
+              <select value={pAdverseCredit} onChange={(e) => setPAdverseCredit(e.target.value)} style={FIELD}>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+            {pAdverseCredit === 'yes' && (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Severity<FieldTip text="Roughly how serious — this changes which lender tier is realistically available." /></span>
+                <select value={pAdverseSeverity} onChange={(e) => setPAdverseSeverity(e.target.value)} style={FIELD}>
+                  <option value="minor">Minor (small, paid)</option>
+                  <option value="default">Default(s) — paid or unpaid</option>
+                  <option value="judgment_or_bankruptcy">Court judgment or bankruptcy</option>
+                </select>
+              </label>
+            )}
+          </div>
+
+          {/* Itemised liabilities */}
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                Itemised debts (optional)
+                <FieldTip text="Car loan, personal loan, HECS repayment schedule (if not using the HECS toggle), store card, etc. Sum overrides the single monthly-debt field above." />
+              </p>
+              <button
+                type="button"
+                onClick={() => setPLiabilities((prev) => [...prev, { type: 'personal_loan', label: '', monthly: '' }])}
+                className="text-xs font-medium transition-opacity duration-200 hover:opacity-70"
+                style={{ color: 'var(--color-primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                + Add liability
+              </button>
+            </div>
+            {pLiabilities.map((row, idx) => (
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <select
+                  value={row.type}
+                  onChange={(e) => setPLiabilities((prev) => prev.map((r, i) => (i === idx ? { ...r, type: e.target.value } : r)))}
+                  style={FIELD}
+                >
+                  <option value="car_loan">Car loan</option>
+                  <option value="personal_loan">Personal loan</option>
+                  <option value="hecs_repayment">HECS / HELP (extra)</option>
+                  <option value="store_card">Store card / Afterpay</option>
+                  <option value="other">Other</option>
+                </select>
+                <input
+                  type="text"
+                  value={row.label}
+                  onChange={(e) => setPLiabilities((prev) => prev.map((r, i) => (i === idx ? { ...r, label: e.target.value } : r)))}
+                  placeholder="Label (optional)"
+                  style={FIELD}
+                />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={row.monthly}
+                  onChange={(e) => setPLiabilities((prev) => prev.map((r, i) => (i === idx ? { ...r, monthly: e.target.value } : r)))}
+                  placeholder="$/mo"
+                  style={FIELD}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPLiabilities((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-xs transition-opacity duration-200 hover:opacity-70"
+                  style={{ color: '#ef4444', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Loan */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
+              <input type="text" inputMode="decimal" value={pRate} onChange={(e) => setPRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="30 years maximises borrowing capacity." /></span>
+              <select value={pTerm} onChange={(e) => setPTerm(e.target.value)} style={FIELD}>
+                <option value="25">25 years</option>
+                <option value="30">30 years</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {/* Additional checks */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Additional checks (optional)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)<FieldTip text="Checks loan maturity against typical lender age caps." /></span>
+              <input type="text" inputMode="numeric" value={pAge} onChange={(e) => setPAge(e.target.value)} placeholder="e.g. 42" style={FIELD} />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type<FieldTip text="Some property types face tighter LVR caps — often broker-negotiable by postcode." /></span>
+              <select value={pPropTypeClass} onChange={(e) => setPPropTypeClass(e.target.value)} style={FIELD}>
+                <option value="house_town">House or townhouse</option>
+                <option value="highrise">Apartment — high-rise (6+ floors)</option>
+                <option value="studio_small">Studio / apartment under 50m²</option>
+                <option value="rural_acreage">Rural, acreage or hobby farm</option>
+                <option value="off_plan">Off-the-plan</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)<FieldTip text="Investment purchases only. Drives the rental-appraisal-shading lever below." /></span>
+              <input type="text" inputMode="numeric" value={pRentalIncome} onChange={(e) => setPRentalIncome(e.target.value)} placeholder="Investment only" style={FIELD} />
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+
+        <button
+          type="button"
+          disabled={loading}
+          onClick={runProforma}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {getIcon('shield-check', { size: 14 })}
+          {loading ? 'Running the full review…' : 'Run the qualification proforma'}
+        </button>
+      </div>
+
+      {proforma && strict?.ok && (
+        <div ref={proformaResultRef} className="space-y-5">
+          {/* Strict verdict */}
+          <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: overallColor }}>As declared — strict result</p>
+            <p className="text-base font-semibold" style={{ color: overallColor }}>
+              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard blocks found'}
+              {s.overall_status === 'warn' && `${s.warn_count} area${s.warn_count !== 1 ? 's' : ''} to check — may face conditions or reduced choice`}
+              {s.overall_status === 'fail' && `${s.fail_count} likely block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
+            </p>
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              {[
+                { label: 'Loan requested', value: `$${s.loan_requested?.toLocaleString('en-AU') ?? '—'}` },
+                { label: 'Max indicative capacity', value: s.max_borrowing_capacity != null ? `$${s.max_borrowing_capacity.toLocaleString('en-AU', { maximumFractionDigits: 0 })}` : '—' },
+                { label: 'Est. monthly repayment', value: s.monthly_repayment_estimate != null ? `$${s.monthly_repayment_estimate.toLocaleString('en-AU')}/mo` : '—' },
+                { label: 'Assessment rate', value: `${s.assessment_rate_pct}%` },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                  <p className="font-semibold" style={{ color: 'var(--color-text)' }}>{value}</p>
+                </div>
+              ))}
+            </div>
+            {onSwitchToBuy && (s.overall_status === 'pass' || s.overall_status === 'warn') && (
+              <button
+                type="button"
+                onClick={() => onSwitchToBuy({ price: pPrice, deposit: pDeposit, state: pState, fhb: pFhb, ppor: pPpor })}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium transition-opacity duration-200 hover:opacity-70"
+                style={{ color: overallColor, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                Continue to the buy calculator with these figures →
+              </button>
+            )}
+          </div>
+
+          {/* Individual checks */}
+          <div className="space-y-2">
+            {(strict.checks || []).map((check) => (
+              <QualifyCheck
+                key={check.id}
+                check={check}
+                expanded={!!expanded[check.id]}
+                onToggle={() => setExpanded((prev) => ({ ...prev, [check.id]: !prev[check.id] }))}
+              />
+            ))}
+          </div>
+
+          {/* Levers */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Presentation, structuring &amp; timing levers</h3>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                Legitimate choices about how, when, and to whom this file is presented — none of them change a true fact about your income, debts, or employment. Risk rating reflects scrutiny/documentation burden and consequence if it goes wrong, not legality.
+              </p>
+            </div>
+            {(proforma.levers || []).length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {proforma.levers.map((lv) => <LeverCard key={lv.id} lever={lv} />)}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No specific levers identified from the inputs provided — the strict checks above already reflect the full picture.</p>
+            )}
+          </div>
+
+          {/* Where the line sits */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Where the line sits — not modelled, and why</h3>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Deliberately excluded because they'd constitute misrepresentation to a lender — potentially loan fraud under the NCCP Act — not because they're merely aggressive.
+            </p>
+            <div className="space-y-2">
+              {(proforma.excluded || []).map((e) => (
+                <div key={e.id} className="rounded-lg border-l-3 pl-3 py-1" style={{ borderLeftWidth: 3, borderLeftColor: '#fca5a5', borderLeftStyle: 'solid' }}>
+                  <p className="text-xs font-semibold" style={{ color: '#b91c1c' }}>{e.title}</p>
+                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{e.why}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Curated bank posture */}
+          {proforma.bankPosture?.banks?.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Bank-by-bank posture (curated)</h3>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{proforma.bankPosture.note}</p>
+              <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                {proforma.bankPosture.banks.map((b) => {
+                  const fitColor = b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c';
+                  return (
+                    <div key={b.id} className="px-4 py-3 space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{b.name}</p>
+                          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
+                        </div>
+                        <p className="text-xs font-semibold shrink-0 uppercase tracking-wide" style={{ color: fitColor }}>{b.fit}</p>
+                      </div>
+                      {(b.reasons || []).slice(0, 2).map((reason, ri) => (
+                        <p key={ri} className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>· {reason}</p>
+                      ))}
+                      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{b.disclaimer}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Live lender fit */}
+          {proforma.lenderFit?.products?.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Live lender product fit</h3>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{proforma.lenderFit.note}</p>
+              <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                {proforma.lenderFit.products.map((p, i) => (
+                  <div key={p.id || i} className="px-4 py-3 flex items-start justify-between gap-3" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{p.lender}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{p.product || p.name}</p>
+                      {p.fit_note && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{p.fit_note}</p>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{Number(p.rate).toFixed(2)}%</p>
+                      <p className="text-xs font-medium" style={{ color: p.fit === 'restricted' ? '#b91c1c' : p.fit === 'check' ? '#92400e' : '#15803d' }}>
+                        {p.fit === 'restricted' ? 'Restricted' : p.fit === 'check' ? 'Check eligibility' : 'Available'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {proforma.live_lender_error && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Live lender fit unavailable right now: {proforma.live_lender_error}</p>
+          )}
+
+          <button
+            type="button"
+            disabled={pdfBusy}
+            onClick={handleProformaPdf}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+          >
+            {getIcon('download', { size: 13 })}
+            {pdfBusy ? 'Generating…' : 'Download qualification proforma (PDF)'}
           </button>
         </div>
       )}
@@ -2069,6 +2726,9 @@ export default function PropertyScenarioPage() {
   const [buyFhb, setBuyFhb] = useState('no');
   const [buyPpor, setBuyPpor] = useState('ppor');
 
+  // Prefill when continuing into the qualification proforma from buy / qualify / refinance
+  const [proformaPrefill, setProformaPrefill] = useState(null);
+
   // Direct calculation result (structured forms — no LLM)
   const [calcResult, setCalcResult] = useState(null);
   const [calcError, setCalcError] = useState(null);
@@ -2240,6 +2900,7 @@ export default function PropertyScenarioPage() {
     setScenarioType(null);
     setCalcResult(null);
     setCalcError(null);
+    setProformaPrefill(null);
   };
 
   const goBack = () => {
@@ -2247,6 +2908,7 @@ export default function PropertyScenarioPage() {
     setCalcResult(null);
     setCalcError(null);
     setFollowUpAnswers({});
+    setProformaPrefill(null);
   };
 
   const handleTypePick = useCallback((type) => {
@@ -2254,6 +2916,7 @@ export default function PropertyScenarioPage() {
       setScenarioType('calculators');
       return;
     }
+    if (type !== 'proforma') setProformaPrefill(null);
     setScenarioType(type);
     setCalcError(null);
   }, []);
@@ -2269,6 +2932,28 @@ export default function PropertyScenarioPage() {
     setCalcResult(null);
     setCalcError(null);
     setScenarioType('refinance');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Called from the Qualification Proforma's "Continue to the buy calculator"
+  // CTA — pre-fills the buy form with the same figures already entered.
+  const handleSwitchToBuy = useCallback(({ price, deposit, state: st, fhb, ppor } = {}) => {
+    if (price)    setBuyPrice(String(price));
+    if (deposit)  setBuyDeposit(String(deposit));
+    if (st)       setBuyState(st);
+    if (fhb)      setBuyFhb(fhb);
+    if (ppor)     setBuyPpor(ppor);
+    setCalcResult(null);
+    setCalcError(null);
+    setScenarioType('buy');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleSwitchToProforma = useCallback((prefill = {}) => {
+    setProformaPrefill(prefill);
+    setCalcResult(null);
+    setCalcError(null);
+    setScenarioType('proforma');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -2402,6 +3087,8 @@ export default function PropertyScenarioPage() {
               : scenarioType === 'sell' ? 'CGT, selling costs, and net proceeds'
               : scenarioType === 'buy' ? 'Stamp duty, LMI, and upfront purchase costs'
               : scenarioType === 'compound' ? 'AI maps your scenario from plain English'
+              : scenarioType === 'proforma' ? 'Broker-realistic file review — strict checks, levers, bank posture, live lender fit'
+              : scenarioType === 'qualify' ? 'Quick qualification check — use the proforma for the full broker file review'
               : scenarioType === 'calculators' ? 'Repayment, offset, extra repayments, borrowing power'
               : 'Choose a scenario type to get started'}
           </p>
@@ -2446,23 +3133,34 @@ export default function PropertyScenarioPage() {
                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What would you like to explore?</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
+                    { id: 'proforma', icon: 'shield-check', label: 'Qualification proforma', desc: 'Full broker-style file review: strict AU checks, risk-rated presentation levers, curated bank posture, and live CDR product fit. Primary path before you approach lenders.', featured: true },
                     { id: 'refinance', icon: 'refresh-cw', label: 'Compare lenders / refinance', desc: 'See if switching saves money. Instant calculation — no AI, no waiting.' },
-                    { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
                     { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
+                    { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
+                    { id: 'qualify', icon: 'check-circle', label: 'Quick check — can I qualify?', desc: 'Lite serviceability, LVR, DTI, and genuine-savings snapshot. Use the proforma for the full broker file review.' },
                     { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together. Describe in plain English — AI maps the full scenario.' },
-                    { id: 'qualify', icon: 'check-circle', label: 'Can I qualify for a loan?', desc: 'Serviceability, LVR, DTI, genuine savings, First Home Guarantee — deterministic AU checks.' },
                     { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
                   ].map((t) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => handleTypePick(t.id)}
-                      className="flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70"
-                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70${t.featured ? ' sm:col-span-2' : ''}`}
+                      style={{
+                        borderColor: t.featured ? 'var(--color-primary)' : 'var(--color-border)',
+                        background: t.featured ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-bg))' : 'var(--color-bg)',
+                      }}
                     >
                       <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
                       <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.label}</p>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                          {t.label}
+                          {t.featured && (
+                            <span className="ml-2 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                              Recommended
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
                       </div>
                     </button>
@@ -2491,7 +3189,18 @@ export default function PropertyScenarioPage() {
 
             {/* ── Buyer qualification ──────────────────────────────── */}
             {scenarioType === 'qualify' && (
-              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} onSwitchToRefinance={handleSwitchToRefinance} />
+              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} onSwitchToRefinance={handleSwitchToRefinance} onSwitchToProforma={handleSwitchToProforma} />
+            )}
+
+            {/* ── Qualification proforma (broker-realistic review) ─── */}
+            {scenarioType === 'proforma' && (
+              <QualificationProformaForm
+                key={proformaPrefill ? `prefill-${JSON.stringify(proformaPrefill).slice(0, 80)}` : 'blank'}
+                getIcon={getIcon}
+                addToast={addToast}
+                onSwitchToBuy={handleSwitchToBuy}
+                initialInputs={proformaPrefill || undefined}
+              />
             )}
 
             {/* ── Refinance / compare lenders form ─────────────────── */}
@@ -2711,6 +3420,40 @@ export default function PropertyScenarioPage() {
                     {getIcon('rotate-ccw', { size: 13 })}
                     New scenario
                   </button>
+                  {scenarioType === 'buy' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchToProforma({
+                        property_value: buyPrice,
+                        deposit_amount: buyDeposit,
+                        state: buyState,
+                        is_fhb: buyFhb,
+                        is_ppor: buyPpor,
+                      })}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}
+                    >
+                      {getIcon('shield-check', { size: 13 })}
+                      Continue to qualification proforma
+                    </button>
+                  )}
+                  {scenarioType === 'refinance' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchToProforma({
+                        property_value: '',
+                        deposit_amount: '',
+                        state: rfState,
+                        target_rate_pct: rfRate,
+                        loan_term_years: rfTermMonths ? String(Math.round(Number(rfTermMonths) / 12)) : '30',
+                      })}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}
+                    >
+                      {getIcon('shield-check', { size: 13 })}
+                      Continue to qualification proforma
+                    </button>
+                  )}
                   <PdfDownloadButtons
                     calcResult={calcResult}
                     scenarioType={scenarioType}

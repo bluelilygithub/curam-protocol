@@ -68,6 +68,9 @@ function buildEligibleLenderProducts(allNormalized, opts = {}) {
         term_months: termMonths,
         application_uri: l.links?.application || null,
         overview_uri: l.links?.overview || null,
+        eligibility: Array.isArray(l.eligibility) ? l.eligibility : [],
+        special_eligibility: Boolean(l.special_eligibility),
+        special_eligibility_label: l.special_eligibility_label || null,
         provenance: 'cdr_prd',
       };
     })

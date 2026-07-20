@@ -114,11 +114,11 @@ export function startPropertyScenarioTour(navigate) {
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 7: Can I qualify? ───────────────────────────────────────────────
+  // ── Step 7: Qualification proforma ───────────────────────────────────────
   tour.addStep({
     id: 'ps-qualify',
-    title: '"Can I Qualify?" — Comprehensive AU Lending Checks',
-    text: "Runs 14 deterministic checks against current Australian lending rules. Core checks: serviceability (APRA +3% buffer, HEM living benchmarks), LVR/deposit, debt-to-income ratio (APRA 6× guideline), genuine savings, employment type, HECS/HELP (2025-26 marginal method — updated from the July 2025 rule change), and First Home Guarantee (October 2025 caps, income cap abolished). Cost checks: real stamp duty figure, real LMI dollar estimate. Scheme: First Home Owner Grant by state. Optional extra checks: age at loan maturity (flags if loan runs past 70-75), property type restrictions (studios, high-rise, rural attract lower LVR caps), rental income for investment purchases, and a credit file self-check prompt. Results include a settlement cost total (deposit + duty + LMI + legal) and a rate/income stress test showing whether you still qualify at +1% and +2% rate increases.",
+    title: 'Qualification Proforma — Broker-Style File Review',
+    text: "The featured path on the homepage. Runs the same deterministic AU checks as the lite \"Quick check\", then adds risk-rated presentation levers, a curated bank-by-bank posture matrix (indicative broker knowledge — not a credit decision), and live CDR product fit. Overtime/bonus with history is shaded into strict serviceability; genuine-savings holding months and gift portions refine the deposit check. Buy, refinance, and the lite qualify flow can continue into the proforma with figures prefilled. PDF download covers the full review for a broker conversation.",
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
@@ -126,8 +126,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 8: Lender guidance ──────────────────────────────────────────────
   tour.addStep({
     id: 'ps-lender-guidance',
-    title: 'Lender Guidance for Borderline Cases',
-    text: "If any check fails or warns, the results show a \"Lenders likely to discuss your situation\" panel. Each barrier type (serviceability shortfall, high DTI, self-employed income, casual employment, high LVR, low deposit) maps to specific named lenders known to be more flexible on that dimension — Macquarie, Pepper Money, Liberty, BOQ, Bendigo, La Trobe, and others. Rate premiums and broker tips are included for each.",
+    title: 'Lender Guidance and Bank Posture',
+    text: "If any check fails or warns, results can show \"Lenders likely to discuss your situation\" plus the curated bank posture ranking (CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, BOQ). Barrier types map to more flexible lenders — Macquarie, Pepper Money, Liberty, BOQ, Bendigo, La Trobe, and others. Rate premiums and broker tips are included. CDR product fit shows published rates only — it does not predict approval.",
     when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });

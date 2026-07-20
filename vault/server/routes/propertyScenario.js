@@ -16,6 +16,7 @@ const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/of
 const { calculateBorrowingPower } = require('../services/propertyScenario/calc/borrowingPower');
 const { assessBuyerQualification } = require('../services/propertyScenario/calc/buyerQualification');
 const { buildEligibleLenderProducts } = require('../services/propertyScenario/calc/eligibleProducts');
+const { buildQualificationProforma } = require('../services/propertyScenario/calc/qualificationProforma');
 const { executeParse, executeClarify } = require('../services/propertyScenario/wireApi');
 const {
   buildInsight,
@@ -529,6 +530,71 @@ router.get('/calculators/buyer-qualify/eligible-lenders', async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || 'Eligible lenders fetch failed' });
   }
+});
+
+/**
+ * POST /api/property-scenario/calculators/qualification-proforma
+ * Body matches assessBuyerQualification inputs, plus broker-realism fields:
+ *   overtime_bonus_annual, overtime_bonus_regularity, self_employed_addbacks_annual,
+ *   dependents, credit_card_limits_total, months_in_current_role,
+ *   has_adverse_credit, adverse_credit_severity,
+ *   genuine_savings_held_months, deposit_gift_amount, liabilities[].
+ * Returns { strict, levers, excluded, lenderFit, bankPosture }.
+ * Query: live=1 to include a live CDR lender-fit table (default on; live=0 to skip).
+ */
+router.post('/calculators/qualification-proforma', async (req, res) => {
+  const body = req.body || {};
+  const liabilities = Array.isArray(body.liabilities)
+    ? body.liabilities.map((row) => ({
+      type: row.type || 'other',
+      label: row.label || row.type || 'Liability',
+      monthlyRepayment: row.monthly_repayment != null ? Number(row.monthly_repayment) : Number(row.monthlyRepayment) || 0,
+    }))
+    : null;
+  const inputs = {
+    propertyValue:         Number(body.property_value),
+    depositAmount:         Number(body.deposit_amount),
+    state:                 body.state || null,
+    isFhb:                 body.is_fhb === true || body.is_fhb === 'true',
+    isPpor:                body.is_ppor !== false && body.is_ppor !== 'false',
+    grossAnnualIncome:     Number(body.gross_annual_income),
+    partnerGrossIncome:    body.partner_gross_income ? Number(body.partner_gross_income) : 0,
+    householdType:         body.household_type || 'single',
+    employmentType:        body.employment_type || 'payg_fulltime',
+    hasHecs:               body.has_hecs === true || body.has_hecs === 'true',
+    monthlyDebtRepayments: body.monthly_debt_repayments ? Number(body.monthly_debt_repayments) : 0,
+    monthlyExpenses:       body.monthly_expenses ? Number(body.monthly_expenses) : undefined,
+    loanTermYears:         body.loan_term_years ? Number(body.loan_term_years) : 30,
+    targetRatePct:         Number(body.target_rate_pct),
+    isNewBuild:            body.is_new_build === true || body.is_new_build === 'true',
+    applicantAge:          body.applicant_age ? Number(body.applicant_age) : undefined,
+    propertyType:          body.property_type_class || undefined,
+    grossRentalIncome:     body.gross_rental_income ? Number(body.gross_rental_income) : undefined,
+    dependents:            body.dependents ? Number(body.dependents) : 0,
+    creditCardLimitsTotal: body.credit_card_limits_total ? Number(body.credit_card_limits_total) : 0,
+    monthsInCurrentRole:   body.months_in_current_role != null && body.months_in_current_role !== '' ? Number(body.months_in_current_role) : undefined,
+    hasAdverseCredit:      body.has_adverse_credit === true || body.has_adverse_credit === 'true',
+    adverseCreditSeverity: body.adverse_credit_severity || undefined,
+    overtimeBonusAnnual:        body.overtime_bonus_annual ? Number(body.overtime_bonus_annual) : 0,
+    overtimeBonusRegularity:    body.overtime_bonus_regularity || 'irregular',
+    selfEmployedAddbacksAnnual: body.self_employed_addbacks_annual ? Number(body.self_employed_addbacks_annual) : 0,
+    genuineSavingsHeldMonths: body.genuine_savings_held_months != null && body.genuine_savings_held_months !== ''
+      ? Number(body.genuine_savings_held_months) : undefined,
+    depositGiftAmount: body.deposit_gift_amount ? Number(body.deposit_gift_amount) : 0,
+    liabilities,
+  };
+
+  const wantLive = req.query.live !== '0' && req.query.live !== 'false';
+  let allNormalized = null;
+  let liveError = null;
+  if (wantLive) {
+    const { live, error } = await loadLiveLenders(req);
+    if (live?.ok) allNormalized = live.all_normalized || live.lenders || [];
+    else liveError = error || live?.coverage?.summary || null;
+  }
+
+  const result = buildQualificationProforma(inputs, allNormalized);
+  res.json({ ...result, live_lender_error: liveError });
 });
 
 /**

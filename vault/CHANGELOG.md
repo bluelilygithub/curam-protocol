@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-20 (qualification-proforma-enhancements)
+
+### Qualification proforma — four upgrades
+- **Homepage** — proforma is the featured primary card; plain “Can I qualify?” demoted to a lite quick check.
+- **Bank posture matrix** — curated per-lender appetite notes (`bankPosture.js`) ranked against the file; shown in UI + PDF. Explicitly not CDR and not a credit decision.
+- **Richer file inputs** — itemised liabilities; overtime/bonus shaded into strict serviceability (50%/80% with history); genuine-savings holding months + gift portion of deposit.
+- **Journey step** — Continue to qualification proforma from buy / quick qualify / refinance with prefill; PDF covers the full review.
+
+---
+
 ## 2026-07-20 (sidebar-collection-accordion)
 
 ### Collection accordion + Unassigned group

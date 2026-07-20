@@ -922,6 +922,184 @@ function QualificationDocument({ result, inputs, eligibleLenders }) {
   );
 }
 
+// ─── Qualification Proforma Document ─────────────────────────────────────────
+
+const RISK_COLORS_PDF = {
+  low:    { bg: '#f0fdf4', border: '#86efac', text: '#15803d', label: 'LOW RISK' },
+  medium: { bg: '#fefce8', border: '#fde047', text: '#92400e', label: 'MEDIUM RISK' },
+  high:   { bg: '#fef2f2', border: '#fca5a5', text: '#b91c1c', label: 'HIGH RISK' },
+};
+
+function LeverRow({ lever }) {
+  const col = RISK_COLORS_PDF[lever.riskLevel] || RISK_COLORS_PDF.medium;
+  return (
+    <View style={{ marginBottom: 9, borderLeftWidth: 3, borderLeftColor: col.border, borderLeftStyle: 'solid', paddingLeft: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 2 }}>
+        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: col.text, backgroundColor: col.bg, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2, marginRight: 6 }}>
+          {col.label}
+        </Text>
+        <Text style={{ fontSize: 7, color: MUTED, textTransform: 'uppercase' }}>{lever.category}</Text>
+      </View>
+      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{lever.title}</Text>
+      <Text style={{ fontSize: 8, color: '#374151', lineHeight: 1.4, marginBottom: 2 }}>{lever.whatItIs}</Text>
+      <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4, marginBottom: 2 }}>
+        <Text style={{ fontFamily: 'Helvetica-Bold' }}>Why it's allowed: </Text>{lever.whyItsAllowed}
+      </Text>
+      {lever.impact && (
+        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2 }}>{lever.impact}</Text>
+      )}
+      {lever.regulatoryNote && (
+        <Text style={{ fontSize: 7.5, color: '#b91c1c', lineHeight: 1.4 }}>⚠ {lever.regulatoryNote}</Text>
+      )}
+    </View>
+  );
+}
+
+function QualificationProformaDocument({ proforma, inputs }) {
+  const generatedAt = new Date().toLocaleString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  const strict = proforma?.strict || {};
+  const s2 = strict.summary || {};
+  const checks = strict.checks || [];
+  const levers = proforma?.levers || [];
+  const excluded = proforma?.excluded || [];
+  const lenderFit = proforma?.lenderFit;
+  const bankPosture = proforma?.bankPosture;
+  const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
+  const inp = inputs || {};
+
+  return (
+    <Document title="Qualification Proforma" author="Curam Vault" creator="Curam Vault">
+      <Page size="A4" style={s.page}>
+        <View style={s.header}>
+          <Text style={s.title}>Qualification Proforma</Text>
+          <Text style={s.subtitle}>
+            Generated {generatedAt} · The broker-style file review: strict numbers, presentation levers, and where the line sits — not a credit decision
+          </Text>
+        </View>
+
+        {/* Strict verdict */}
+        <View style={[s.section, { backgroundColor: statusColors.bg, padding: 10, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
+          <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
+            As declared: {statusColors.label}
+            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely block${s2.fail_count !== 1 ? 's' : ''}` : ''}
+            {s2.warn_count > 0 ? ` — ${s2.warn_count} area${s2.warn_count !== 1 ? 's' : ''} to verify` : ''}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {[
+              ['Loan requested', fmtMoney(s2.loan_requested)],
+              ['Max indicative capacity (as declared)', s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'],
+              ['Employment', inp.employment_type?.replace(/_/g, ' ') || '—'],
+              ['Months in current role', inp.months_in_current_role ?? '—'],
+              ['Credit card limits', inp.credit_card_limits_total ? fmtMoney(inp.credit_card_limits_total) : '$0'],
+              ['Dependents', inp.dependents ?? 0],
+              ['Adverse credit declared', inp.has_adverse_credit ? `Yes (${inp.adverse_credit_severity || 'default'})` : 'No'],
+            ].map(([label, value]) => (
+              <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
+                <Text style={{ width: '60%', fontSize: 8, color: MUTED }}>{label}</Text>
+                <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* As-declared checks */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>As declared — strict checks (unchanged by anything below)</Text>
+          {checks.map((check) => (
+            <QualifyCheckRow key={check.id} check={check} />
+          ))}
+        </View>
+
+        {/* Levers */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Presentation, structuring &amp; timing levers</Text>
+          <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>
+            Legitimate choices a broker might make about how, when, and to whom this file is presented — none of them change a true fact about income, debts, or employment. Each is risk-rated; higher risk means more scrutiny, more documentation required, or more consequence if it goes wrong — not that it's illegal.
+          </Text>
+          {levers.length > 0 ? levers.map((lv) => <LeverRow key={lv.id} lever={lv} />) : (
+            <Text style={s.caveatBullet}>No specific levers identified from the inputs provided — the strict checks above already reflect the full picture.</Text>
+          )}
+        </View>
+
+        {/* Where the line sits */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Where the line sits — not modelled, and why</Text>
+          <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>
+            These are deliberately excluded because they constitute misrepresentation to a lender — potentially loan fraud under the National Consumer Credit Protection Act — not because they're merely aggressive.
+          </Text>
+          {excluded.map((e) => (
+            <View key={e.id} style={{ marginBottom: 6, borderLeftWidth: 3, borderLeftColor: '#fca5a5', borderLeftStyle: 'solid', paddingLeft: 8 }}>
+              <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 1 }}>{e.title}</Text>
+              <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{e.why}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Live lender fit */}
+        {lenderFit?.products?.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Live lender product fit (CDR — not a credit decision)</Text>
+            <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>{lenderFit.note}</Text>
+            {lenderFit.products.map((p, i) => (
+              <View key={p.id || i} style={{ flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{p.lender}</Text>
+                  <Text style={{ fontSize: 8, color: '#374151', marginTop: 1 }}>{p.product || p.name}</Text>
+                  {p.fit_note && <Text style={{ fontSize: 7, color: '#6b7280', marginTop: 1 }}>{p.fit_note}</Text>}
+                </View>
+                <View style={{ width: 90, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{Number(p.rate).toFixed(2)}%</Text>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: p.fit === 'restricted' ? '#b91c1c' : p.fit === 'check' ? '#92400e' : '#15803d' }}>
+                    {p.fit === 'restricted' ? 'Restricted' : p.fit === 'check' ? 'Check eligibility' : 'Available'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Curated bank posture */}
+        {bankPosture?.banks?.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Bank-by-bank posture (curated — not CDR)</Text>
+            <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>{bankPosture.note}</Text>
+            {bankPosture.banks.map((b) => (
+              <View key={b.id} style={{ marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{b.name}</Text>
+                  <Text style={{
+                    fontSize: 8,
+                    fontFamily: 'Helvetica-Bold',
+                    color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
+                  }}>
+                    {(b.fit || '').toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}>{b.postureSummary}</Text>
+                {(b.reasons || []).slice(0, 2).map((reason, ri) => (
+                  <Text key={ri} style={{ fontSize: 7.5, color: '#6b7280', lineHeight: 1.35 }}>· {reason}</Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={s.section}>
+          <View style={s.warning}>
+            <Text>
+              This proforma is educational context, not legal, financial, or credit advice. The strict checks use published Australian lending rules. The levers describe presentation, timing, and lender-selection choices only — no lever here involves altering a true fact. Bank posture rows are curated broker knowledge about typical appetite and are not sourced from Open Banking. Actual lender credit policies (HEM multipliers, serviceability floors, casual-employment history windows, and similar) are commercial-in-confidence and are not published via Open Banking — they are not simulated as credit decisions in this report. Speak to a licensed mortgage broker before acting on anything here.
+            </Text>
+          </View>
+        </View>
+
+        <ReportFooter generatedAt={generatedAt} />
+      </Page>
+    </Document>
+  );
+}
+
 // ─── Standalone Calculators Document ──────────────────────────────────────────
 
 function CalculatorsDocument({ calcInputs, calcResults }) {
@@ -1037,6 +1215,23 @@ export async function downloadQualificationPdf(result, inputs, eligibleLenders) 
   const ts = new Date().toISOString().slice(0, 10);
   a.href = url;
   a.download = `buyer-qualification-${ts}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generate and download a Qualification Proforma PDF.
+ * @param {object} proforma - response from /calculators/qualification-proforma
+ * @param {object} inputs   - the raw form inputs sent to that endpoint
+ */
+export async function downloadQualificationProformaPdf(proforma, inputs) {
+  const doc = <QualificationProformaDocument proforma={proforma} inputs={inputs} />;
+  const blob = await pdf(doc).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `qualification-proforma-${ts}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
