@@ -67,7 +67,7 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `POST` | `/insights/compare` | `{ products\|product_ids, question }` — multi-doc compare |
 | `POST` | `/calculators/*` | Standalone repayment / extra-repayments / offset / borrowing-power |
 | `POST` | `/calculators/buyer-qualify` | Lite buyer qualification (serviceability, LVR, DTI, genuine savings, FHBG) |
-| `POST` | `/calculators/qualification-proforma` | Full broker-style proforma: strict + levers + excluded + CDR lenderFit + curated `bankPosture` |
+| `POST` | `/calculators/qualification-proforma` | Full proforma: strict + levers + `leversDelta` + `bankPanel` (capacity + CDR) + supplement |
 
 ---
 
@@ -78,22 +78,33 @@ Primary homepage path for “will a bank look at this file?”. Builds on the sa
 | Layer | Source | What it is |
 |-------|--------|------------|
 | **Strict** | Deterministic AU rules | Serviceability (incl. shaded overtime/bonus + self-employed add-backs), LVR, DTI, genuine savings (holding period + gift portion), employment tenure, FHBG/FHOG, etc. |
-| **Levers** | `qualificationProforma.js` | Risk-rated presentation / timing / lender-selection choices — never invent income or hide debts |
+| **Levers** | `qualificationProforma.js` | Risk-rated presentation / timing / lender-selection choices — never invent income or hide debts. `leversDelta` stacks indicative capacity uplifts. |
 | **Excluded** | Static list | Misrepresentation / NCCP fraud line — shown for transparency |
-| **Bank posture** | `bankPosture.js` | Curated broker knowledge per major lender (tenure windows, self-employed appetite, overtime shading). **Not** CDR and **not** a credit decision |
-| **Lender fit** | CDR PRD | Live published products/rates for the loan purpose — product publication only |
+| **Bank panel** | `bankPosture.js` + CDR | Merged row per bank: fit, **per-bank indicative capacity** (overtime/rental/HEM knobs through the same surplus engine), documents list, live rate when CDR matches. **Not** a credit decision |
+| **Supplement** | `proformaSupplement.js` | Rate stress, product-fit guidance, income stress caveats, post-settlement cashflow |
 
-**Journey:** Buy / Quick qualify / Refinance results can **Continue to qualification proforma** with prefilled fields. PDF download includes bank posture + CDR fit.
+**Per-bank capacity:** `estimateBankCapacity()` reuses surplus → max-loan maths with each bank’s curated knobs (`overtimeCrediting` → shade %, `rentalShadingPct`, `hemStance`). Example: overtime with 1-year history may be ~40% at CommBank vs ~70% at Macquarie, so indicative capacity diverges. Always labelled indicative — not a quote or approval.
 
-**Honesty:** CDR cannot simulate credit committees. Bank posture is editorial/indicative and is driven by strict-check flags (property type, DTI, LVR, employment). Overtime irregular → 0% in strict (conservative); 1yr → 50%; 2yr → 80%. Overall status is **lending checks only** — FHOG/FHBG ineligibility is never a loan block. QLD transfer duty applies the PPOR home concession independently of FHB status (saves up to $7,175 vs general). Under-declaring expenses to HEM is listed under excluded/compliance — never as a lever with a dollar upside.
+**Journey:** Buy / lite qualify / refinance can **Continue to qualification proforma** with prefilled fields. Inputs also persist in a shared browser **file profile** (`vault:propertyScenario:fileProfile`) across modes. Homepage cards are grouped: Check my file · Plan a transaction · Quick tools.
+
+**PDF:** Executive summary (verdict, loan vs capacity, top actions, capacity-by-bank table) → severity-ordered checks + levers delta → bank panel detail → supplement pages.
+
+**Honesty:** CDR cannot simulate credit committees. Bank capacity dollars move because curated knobs differ — they are not underwriting. Overall status is **lending checks only** — FHOG/FHBG ineligibility is never a loan block. QLD PPOR home concession applies independently of FHB status. Under-declaring expenses to HEM is excluded/compliance — never a lever with a dollar upside.
 
 ---
 
 ## UI modes
 
-1. **Describe your situation** — textarea → Analyse → clarifying form → Stage 6 results when ready  
-2. **See an example** — deterministic fixture demo (fast reference)  
-3. **Lenders tab → Ask about a lender's terms** — dashed exploration panel; never feeds scenario maths
+Homepage (Describe path) scenario cards:
+
+1. **Check my file** — Qualification proforma (featured) · Lite serviceability check  
+2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
+3. **Quick tools** — Standalone calculators  
+
+Also:
+
+4. **See an example** — deterministic fixture demo  
+5. **Lenders tab → Ask about a lender's terms** — dashed exploration panel; never feeds scenario maths
 
 ---
 

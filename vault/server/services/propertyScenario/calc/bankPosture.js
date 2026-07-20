@@ -1,14 +1,54 @@
 'use strict';
 
 /**
- * Curated bank credit-posture matrix (broker knowledge).
+ * Curated bank credit-posture matrix (indicative knowledge for borrower education).
  *
  * This is NOT live Open Banking data and NOT a credit decision.
- * Policies change; treat as indicative broker notes for lender selection,
+ * Policies change; treat as indicative notes for lender selection,
  * alongside CDR product fit (rates/fees/eligibility text).
+ *
+ * Each bank carries serviceability knobs used by estimateBankCapacity() so
+ * the same deterministic engine can produce per-bank indicative capacity
+ * (overtime shade, rental shade, HEM stance) — dollars that move by lender.
  *
  * Last reviewed: July 2026.
  */
+
+const {
+  hemMonthly,
+  hecsAnnualRepayment,
+  maxLoanFromMonthlyRepayment,
+  monthlyRepayment,
+} = require('./buyerQualification');
+const { roundMoney } = require('./tables');
+
+const APRA_FLOOR_RATE_PCT = 8.5;
+
+/** Map curated overtimeCrediting + regularity → shade fraction applied to overtime/bonus. */
+function overtimeShadeForBank(crediting, regularity) {
+  const table = {
+    conservative: { irregular: 0, one_year_history: 0.4, two_year_history: 0.7 },
+    moderate:     { irregular: 0, one_year_history: 0.5, two_year_history: 0.8 },
+    generous:     { irregular: 0.25, one_year_history: 0.7, two_year_history: 1.0 },
+  };
+  const row = table[crediting] || table.moderate;
+  return row[regularity] != null ? row[regularity] : row.irregular;
+}
+
+/** HEM multiplier by stance — pragmatic banks slightly lower mid/high-income HEM. */
+function hemMultiplierForStance(stance) {
+  if (stance === 'pragmatic') return 0.92;
+  if (stance === 'conservative') return 1.05;
+  return 1.0;
+}
+
+const DOCS_BY_EMPLOYMENT = {
+  payg_fulltime: ['2–3 recent payslips', 'Employment contract or letter confirming ongoing role', 'Last 2 FY group certificates / income statements', '3 months bank statements'],
+  payg_parttime: ['2–3 recent payslips', 'Employer letter confirming hours and ongoing intent', 'Last 2 FY income statements', '3 months bank statements'],
+  casual: ['Payslips covering ≥6–12 months (lender-dependent)', 'Employer letter confirming ongoing casual engagement', 'Last 2 FY income statements', '3 months bank statements'],
+  contract: ['Current contract + remaining term', 'Evidence of prior contract renewals if available', 'Last 2 FY tax returns / income statements', '3 months bank statements'],
+  self_employed: ['2 years personal tax returns', '2 years business/company returns or BAS', 'Accountant letter on add-backs (if claimed)', '6–12 months business bank statements'],
+};
 
 const BANK_POSTURES = [
   {
@@ -22,7 +62,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    hemStance: 'standard',
     highDensityAppetite: 'tight',
+    fhbgParticipant: true,
+    professionPacks: false,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 10,
+    cashbackAppetite: 'occasional',
     notes: [
       'Typically wants 12 months casual/contract history.',
       'Overtime/bonus often averaged and shaded unless 2 years stable.',
@@ -42,7 +88,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 70,
+    hemStance: 'standard',
     highDensityAppetite: 'tight',
+    fhbgParticipant: true,
+    professionPacks: false,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 12,
+    cashbackAppetite: 'occasional',
     notes: [
       'Group brands sometimes more flexible than the Westpac brand itself — brokers shop within the group.',
       'Adverse credit usually needs clear explanation and time-since-event.',
@@ -61,7 +113,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    hemStance: 'conservative',
     highDensityAppetite: 'tight',
+    fhbgParticipant: true,
+    professionPacks: false,
+    offsetOnFixed: false,
+    typicalTurnaroundDays: 8,
+    cashbackAppetite: 'rare',
     notes: [
       'ANZ Plus path is digital-first and best for straightforward owner-occupier files.',
       'Self-employed usually needs full tax returns — low-doc not a strength.',
@@ -80,7 +138,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
+    hemStance: 'standard',
     highDensityAppetite: 'moderate',
+    fhbgParticipant: true,
+    professionPacks: true,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 10,
+    cashbackAppetite: 'occasional',
     notes: [
       'MedPlus and similar packs can improve assessment for eligible professions.',
       'Broker channel often used for nuanced files.',
@@ -99,7 +163,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'tight',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    hemStance: 'conservative',
     highDensityAppetite: 'tight',
+    fhbgParticipant: false,
+    professionPacks: false,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 7,
+    cashbackAppetite: 'rare',
     notes: [
       'No branches — servicing is digital/phone only.',
       'Best when the file is already strong; not the first call for edge cases.',
@@ -118,7 +188,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'generous',
     overtimeCrediting: 'generous',
     rentalShadingPct: 80,
+    hemStance: 'pragmatic',
     highDensityAppetite: 'flexible',
+    fhbgParticipant: true,
+    professionPacks: false,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 9,
+    cashbackAppetite: 'active',
     notes: [
       'Common broker pick for self-employed with accountant-verified add-backs.',
       'Investment and rental shading often less conservative than majors.',
@@ -138,7 +214,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'tight',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    hemStance: 'conservative',
     highDensityAppetite: 'tight',
+    fhbgParticipant: false,
+    professionPacks: false,
+    offsetOnFixed: false,
+    typicalTurnaroundDays: 6,
+    cashbackAppetite: 'rare',
     notes: [
       'NAB-backed but independently operated digital brand.',
       'If the file needs exception underwriting, look elsewhere first.',
@@ -157,7 +239,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: null,
+    hemStance: 'standard',
     highDensityAppetite: 'moderate',
+    fhbgParticipant: false,
+    professionPacks: false,
+    offsetOnFixed: false,
+    typicalTurnaroundDays: 5,
+    cashbackAppetite: 'rare',
     notes: [
       'Investment and interest-only are out of scope today.',
       'Excellent for young OO buyers who already bank with Up.',
@@ -176,7 +264,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'generous',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
+    hemStance: 'pragmatic',
     highDensityAppetite: 'flexible',
+    fhbgParticipant: true,
+    professionPacks: false,
+    offsetOnFixed: true,
+    typicalTurnaroundDays: 14,
+    cashbackAppetite: 'occasional',
     notes: [
       'Regional presence strongest in QLD / northern NSW.',
       'Brokers often approach BOQ when majors decline short-tenure casual.',
@@ -188,10 +282,115 @@ const BANK_POSTURES = [
 ];
 
 /**
+ * Run the same surplus → max-loan math as the strict engine, but with this
+ * bank's overtime shade, rental shade, and HEM stance.
+ * Returns null capacity when the bank is unsuitable for the purpose.
+ */
+function estimateBankCapacity(inputs = {}, bank = {}, strictSummary = {}) {
+  const isPpor = inputs.isPpor !== false;
+  if (!isPpor && bank.id === 'up') {
+    return {
+      unsuitable: true,
+      reason: 'Owner-occupier P&I only — investment out of scope',
+      indicative_capacity: null,
+      assessable_gross_annual: null,
+      overtime_shade_pct: null,
+      rental_shade_pct: null,
+      net_surplus_monthly: null,
+      narrative: null,
+    };
+  }
+
+  const baseGross = (Number(inputs.grossAnnualIncome) || 0) + (Number(inputs.partnerGrossIncome) || 0);
+  const overtime = Number(inputs.overtimeBonusAnnual) || 0;
+  const regularity = inputs.overtimeBonusRegularity || 'irregular';
+  const shade = overtimeShadeForBank(bank.overtimeCrediting || 'moderate', regularity);
+  const overtimeAssessed = roundMoney(overtime * shade);
+  const addbacks = inputs.employmentType === 'self_employed'
+    ? roundMoney(Number(inputs.selfEmployedAddbacksAnnual) || 0)
+    : 0;
+
+  let rentalMonthly = 0;
+  const grossRent = Number(inputs.grossRentalIncome) || 0;
+  const rentalPct = bank.rentalShadingPct;
+  if (!isPpor && grossRent > 0 && rentalPct != null) {
+    rentalMonthly = roundMoney((grossRent * (rentalPct / 100)) / 12);
+  }
+
+  const assessableGross = roundMoney(baseGross + overtimeAssessed + addbacks);
+  const householdType = inputs.householdType || 'single';
+  const dependents = Number(inputs.dependents) || 0;
+  const hemBase = hemMonthly(householdType, baseGross, dependents);
+  const hemUsed = roundMoney(hemBase * hemMultiplierForStance(bank.hemStance || 'standard'));
+  const declared = inputs.monthlyExpenses != null && Number.isFinite(Number(inputs.monthlyExpenses))
+    ? Number(inputs.monthlyExpenses) : null;
+  const expenses = declared != null ? Math.max(declared, hemUsed) : hemUsed;
+
+  let debtMonthly = Number(inputs.monthlyDebtRepayments) || 0;
+  if (Array.isArray(inputs.liabilities) && inputs.liabilities.length) {
+    const itemised = inputs.liabilities.reduce((s, r) => s + (Number(r.monthlyRepayment) || 0), 0);
+    if (itemised > 0) debtMonthly = itemised;
+  }
+  const cardCommit = roundMoney((Number(inputs.creditCardLimitsTotal) || 0) * 0.038);
+  const hecsMonthly = inputs.hasHecs
+    ? roundMoney(hecsAnnualRepayment(Number(inputs.grossAnnualIncome) || 0) / 12)
+    : 0;
+
+  const surplus = roundMoney((assessableGross / 12) + rentalMonthly - expenses - debtMonthly - cardCommit - hecsMonthly);
+  const targetRate = Number(inputs.targetRatePct) || Number(strictSummary.target_rate_pct) || 5.5;
+  const assessmentRate = Math.max(targetRate + 3.0, APRA_FLOOR_RATE_PCT);
+  const termMonths = Math.round((Number(inputs.loanTermYears) || 30) * 12);
+  const capacity = surplus > 0
+    ? (maxLoanFromMonthlyRepayment(surplus, assessmentRate, termMonths) || 0)
+    : 0;
+  const loanRequested = Number(strictSummary.loan_requested)
+    || roundMoney((Number(inputs.propertyValue) || 0) - (Number(inputs.depositAmount) || 0));
+  const coversLoan = capacity >= loanRequested && loanRequested > 0;
+
+  const shadePct = Math.round(shade * 100);
+  const parts = [];
+  if (overtime > 0) {
+    parts.push(`overtime shaded to ~${shadePct}%`);
+  }
+  if (rentalMonthly > 0) {
+    parts.push(`rent at ${rentalPct}%`);
+  }
+  if (bank.hemStance === 'pragmatic') parts.push('pragmatic HEM');
+  else if (bank.hemStance === 'conservative') parts.push('conservative HEM');
+  const knobs = parts.length ? parts.join(', ') : 'standard PAYG assessment';
+  const narrative = `${bank.shortName || bank.name}: ${knobs} → assessable ~$${Math.round(assessableGross).toLocaleString('en-AU')}/yr → indicative capacity ~$${Math.round(capacity).toLocaleString('en-AU')}`;
+
+  return {
+    unsuitable: false,
+    reason: null,
+    indicative_capacity: Math.round(capacity),
+    assessable_gross_annual: Math.round(assessableGross),
+    overtime_shade_pct: shadePct,
+    overtime_assessed_annual: overtimeAssessed,
+    rental_shade_pct: rentalPct,
+    rental_monthly_credited: rentalMonthly,
+    hem_monthly_used: hemUsed,
+    net_surplus_monthly: surplus,
+    assessment_rate_pct: assessmentRate,
+    covers_requested_loan: coversLoan,
+    delta_vs_strict: Math.round(capacity - (Number(strictSummary.max_borrowing_capacity) || 0)),
+    narrative,
+  };
+}
+
+function documentsForBank(bank, employmentType) {
+  const base = DOCS_BY_EMPLOYMENT[employmentType] || DOCS_BY_EMPLOYMENT.payg_fulltime;
+  const extra = [];
+  if (bank.professionPacks) extra.push('Evidence of eligible profession (for MedPlus / professional packs, if applicable)');
+  if (employmentType === 'self_employed' && bank.selfEmployedYears <= 1) {
+    extra.push('1-year tax return pack may be accepted here — confirm with broker');
+  }
+  return [...base, ...extra];
+}
+
+/**
  * Score how a bank's curated posture fits this applicant file.
- * Uses both raw inputs and strict-check flags so posture diverges when the
- * file has real differentiating risk (property type, DTI, LVR, employment).
- * Returns ranked rows with fit: strong | fair | weak | unsuitable.
+ * Attaches per-bank indicative capacity from estimateBankCapacity().
  */
 function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = []) {
   const employmentType = inputs.employmentType || 'payg_fulltime';
@@ -200,30 +399,46 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
   const isSelfEmployed = employmentType === 'self_employed';
   const isCasualLike = ['casual', 'contract', 'payg_parttime'].includes(employmentType);
   const hasAdverse = !!inputs.hasAdverseCredit;
+  const isFhb = !!inputs.isFhb;
   const dti = Number(strictSummary.dti_ratio) || 0;
   const lvr = Number(strictSummary.lvr_pct) || 0;
   const overtime = Number(inputs.overtimeBonusAnnual) || 0;
   const addbacks = Number(inputs.selfEmployedAddbacksAnnual) || 0;
   const cardLimits = Number(inputs.creditCardLimitsTotal) || 0;
   const propertyType = inputs.propertyType || inputs.property_type_class || null;
+  const overallPass = strictSummary.overall_status === 'pass';
   const byId = {};
   (strictChecks || []).forEach((c) => { byId[c.id] = c; });
   const propCheck = byId.property_type;
   const densityTypes = new Set(['highrise', 'studio_small']);
   const isDensity = densityTypes.has(propertyType) || (propCheck && densityTypes.has(propCheck.data?.property_type));
   const ruralLike = propertyType === 'rural_acreage' || propCheck?.data?.property_type === 'rural_acreage';
+  const cleanPayg = overallPass && employmentType === 'payg_fulltime' && !hasAdverse && !isDensity && !ruralLike;
 
   const rows = BANK_POSTURES.map((bank) => {
     const reasons = [];
     let score = 50;
+    const capacity = estimateBankCapacity(inputs, bank, strictSummary);
 
     if (!isPpor && bank.id === 'up') {
       return {
-        ...bank,
+        id: bank.id,
+        name: bank.name,
+        shortName: bank.shortName,
+        overall: bank.overall,
+        postureSummary: bank.postureSummary,
         fit: 'unsuitable',
         score: 0,
         reasons: ['Up currently offers owner-occupier P&I only — investment is out of scope.'],
-        disclaimer: 'Indicative broker posture — not a credit decision.',
+        capacity,
+        documents: documentsForBank(bank, employmentType),
+        fhbgParticipant: bank.fhbgParticipant,
+        offsetOnFixed: bank.offsetOnFixed,
+        typicalTurnaroundDays: bank.typicalTurnaroundDays,
+        moreForgivingOn: bank.moreForgivingOn,
+        stricterOn: bank.stricterOn,
+        notes: bank.notes,
+        disclaimer: 'Indicative posture and capacity — not a credit decision.',
       };
     }
 
@@ -257,10 +472,10 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
     if (overtime > 0) {
       if (bank.overtimeCrediting === 'generous') {
         score += 8;
-        reasons.push('Overtime/bonus crediting tends to be less conservative.');
+        reasons.push(`Overtime/bonus crediting tends to be less conservative (~${capacity.overtime_shade_pct}% on your history).`);
       } else if (bank.overtimeCrediting === 'conservative') {
         score -= 5;
-        reasons.push('Expect conservative overtime/bonus shading unless 2-year history is clear.');
+        reasons.push(`Expect conservative overtime/bonus shading (~${capacity.overtime_shade_pct}% on your history).`);
       }
     }
 
@@ -288,8 +503,6 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       reasons.push('LVR above 85% typically means LMI and a narrower lender panel.');
     }
 
-    // Property-type flags from the strict checks — the main differentiator for
-    // otherwise-vanilla PAYG files (e.g. high-rise at 80% LVR).
     if (isDensity) {
       const label = (propertyType || propCheck?.data?.property_type || 'high-density').replace(/_/g, ' ');
       if (bank.highDensityAppetite === 'flexible') {
@@ -339,6 +552,43 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       reasons.push(`Investment rental shading often around ${bank.rentalShadingPct}% (less conservative).`);
     }
 
+    // Clean PAYG differentiators — otherwise every major looks the same
+    if (cleanPayg) {
+      if (isFhb && bank.fhbgParticipant) {
+        score += 8;
+        reasons.push('Participates in First Home Guarantee — relevant if you are using (or considering) a 5% no-LMI scheme.');
+      } else if (isFhb && bank.fhbgParticipant === false) {
+        score -= 4;
+        reasons.push('Not typically an FHBG participant — scheme path would need another lender.');
+      }
+      if (bank.professionPacks) {
+        score += 4;
+        reasons.push('Offers profession packs (e.g. MedPlus) that can improve assessment for eligible occupations.');
+      }
+      if (bank.offsetOnFixed) {
+        score += 3;
+        reasons.push('Typically offers offset on fixed-rate products — useful if you want rate certainty and offset.');
+      } else if (bank.overall === 'rate_focused') {
+        score += 2;
+        reasons.push('Rate-focused digital path suits a clean PAYG file if you prioritise headline rate over flexibility.');
+      }
+      if (bank.cashbackAppetite === 'active') {
+        score += 3;
+        reasons.push('Often active on refinance cashbacks — worth pricing into a switch comparison.');
+      }
+      if (bank.typicalTurnaroundDays != null && bank.typicalTurnaroundDays <= 7) {
+        score += 2;
+        reasons.push(`Typically faster digital turnaround (~${bank.typicalTurnaroundDays} days) on clean files.`);
+      }
+    }
+
+    // Capacity narrative as a primary reason when dollars diverge
+    if (capacity?.narrative && !capacity.unsuitable) {
+      if (Math.abs(capacity.delta_vs_strict || 0) >= 15000 || overtime > 0 || (!isPpor && (Number(inputs.grossRentalIncome) || 0) > 0)) {
+        reasons.unshift(capacity.narrative);
+      }
+    }
+
     let fit = 'fair';
     if (score >= 70) fit = 'strong';
     else if (score >= 45) fit = 'fair';
@@ -346,7 +596,7 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
     else fit = 'unsuitable';
 
     if (reasons.length === 0) {
-      reasons.push('No strong positive or negative posture flags from the inputs provided — treat as a mainstream shop.');
+      reasons.push(capacity?.narrative || 'No strong positive or negative posture flags — treat as a mainstream shop.');
     }
 
     return {
@@ -358,24 +608,86 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       fit,
       score,
       reasons,
+      capacity,
+      documents: documentsForBank(bank, employmentType),
+      fhbgParticipant: bank.fhbgParticipant,
+      offsetOnFixed: bank.offsetOnFixed,
+      typicalTurnaroundDays: bank.typicalTurnaroundDays,
+      cashbackAppetite: bank.cashbackAppetite,
       moreForgivingOn: bank.moreForgivingOn,
       stricterOn: bank.stricterOn,
       notes: bank.notes,
-      disclaimer: 'Indicative broker posture based on commonly observed lending appetite — not a credit decision and not sourced from CDR.',
+      disclaimer: 'Indicative posture and capacity modelled from curated policy knobs — not a credit decision and not sourced from CDR.',
     };
   });
 
-  rows.sort((a, b) => b.score - a.score);
+  rows.sort((a, b) => {
+    const capA = a.capacity?.indicative_capacity ?? -1;
+    const capB = b.capacity?.indicative_capacity ?? -1;
+    if (b.score !== a.score) return b.score - a.score;
+    return capB - capA;
+  });
+
+  const capacityRange = rows
+    .filter((r) => r.capacity?.indicative_capacity != null)
+    .map((r) => r.capacity.indicative_capacity);
+  const minCap = capacityRange.length ? Math.min(...capacityRange) : null;
+  const maxCap = capacityRange.length ? Math.max(...capacityRange) : null;
 
   return {
     banks: rows,
     basis: 'curated_broker_posture',
-    note: 'Bank-by-bank rows below are curated broker knowledge about typical credit appetite (tenure windows, self-employed flexibility, overtime shading, DTI tolerance, high-density/rural property policy). They are driven by flags already raised in the strict checks — not generic bank trivia. They are not live Open Banking fields and do not predict approval. Use with the CDR product-fit table for rates and published eligibility text.',
+    capacity_note: minCap != null && maxCap != null && maxCap !== minCap
+      ? `Indicative capacity across this panel ranges from ~$${minCap.toLocaleString('en-AU')} to ~$${maxCap.toLocaleString('en-AU')} depending on each bank's overtime, rental, and expense stance — same engine, different knobs. Not a quote or approval.`
+      : 'Indicative capacity uses each bank\'s curated overtime/rental/HEM stance through the same surplus engine. Not a quote or approval.',
+    note: 'Bank-by-bank rows combine curated appetite notes with indicative capacity (overtime shade, rental shade, HEM stance). They are not live Open Banking fields and do not predict approval. Live rates (when available) come from CDR product publication.',
     reviewed: '2026-07',
+  };
+}
+
+/**
+ * Merge curated posture rows with live CDR products into one panel per bank.
+ */
+function buildMergedBankPanel(bankPosture, lenderFit) {
+  const banks = bankPosture?.banks || [];
+  const products = lenderFit?.products || [];
+
+  function matchProducts(bank) {
+    const names = [bank.name, bank.shortName, bank.id].filter(Boolean).map((n) => String(n).toLowerCase());
+    return products.filter((p) => {
+      const lender = String(p.lender || p.bank || p.name || '').toLowerCase();
+      return names.some((n) => lender.includes(n) || n.includes(lender.split(/\s+/)[0]));
+    });
+  }
+
+  return {
+    banks: banks.map((b) => {
+      const matched = matchProducts(b);
+      const best = matched.slice().sort((a, c) => (Number(a.rate) || 99) - (Number(c.rate) || 99))[0] || null;
+      return {
+        ...b,
+        live_rate: best ? Number(best.rate) : null,
+        live_product: best ? (best.product || best.name || null) : null,
+        live_fit: best ? best.fit : null,
+        live_fit_note: best ? best.fit_note : null,
+        live_products: matched.slice(0, 2).map((p) => ({
+          id: p.id,
+          product: p.product || p.name,
+          rate: Number(p.rate),
+          fit: p.fit,
+        })),
+      };
+    }),
+    capacity_note: bankPosture?.capacity_note || null,
+    note: bankPosture?.note || null,
+    has_live_rates: products.length > 0,
   };
 }
 
 module.exports = {
   BANK_POSTURES,
   buildBankPostureFit,
+  estimateBankCapacity,
+  buildMergedBankPanel,
+  overtimeShadeForBank,
 };

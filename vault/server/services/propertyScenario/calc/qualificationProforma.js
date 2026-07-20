@@ -35,8 +35,39 @@ const {
 } = require('./buyerQualification');
 const { roundMoney } = require('./tables');
 const { buildEligibleLenderProducts } = require('./eligibleProducts');
-const { buildBankPostureFit } = require('./bankPosture');
+const { buildBankPostureFit, buildMergedBankPanel } = require('./bankPosture');
 const { buildProformaSupplement } = require('./proformaSupplement');
+
+/** Parse "+$123,456 indicative…" style lever impacts into a number. */
+function parseLeverUplift(impact) {
+  if (!impact || typeof impact !== 'string') return 0;
+  const m = impact.match(/\+\$([\d,]+)/);
+  if (!m) return 0;
+  return Number(String(m[1]).replace(/,/g, '')) || 0;
+}
+
+function buildLeversDelta(strict, levers) {
+  const base = Math.round(Number(strict?.summary?.max_borrowing_capacity) || 0);
+  const loan = Math.round(Number(strict?.summary?.loan_requested) || 0);
+  const items = (levers || [])
+    .map((lv) => ({ id: lv.id, title: lv.title, uplift: parseLeverUplift(lv.impact), riskLevel: lv.riskLevel }))
+    .filter((x) => x.uplift > 0)
+    .sort((a, b) => b.uplift - a.uplift);
+  // Uplifts are not strictly additive (overlapping levers) — present as a stacked
+  // indicative range, not a guaranteed sum.
+  const stacked = items.reduce((s, x) => s + x.uplift, 0);
+  const optimistic = base + stacked;
+  return {
+    base_capacity: base,
+    loan_requested: loan,
+    items,
+    stacked_uplift: stacked,
+    optimistic_capacity: optimistic,
+    note: items.length
+      ? `Strict indicative capacity $${base.toLocaleString('en-AU')}. Stacking the lever uplifts below (indicative, not additive guarantees) points toward ~$${optimistic.toLocaleString('en-AU')}. Talk to a broker before treating any stack as real.`
+      : `Strict indicative capacity $${base.toLocaleString('en-AU')}. No quantified structuring levers fired from these inputs.`,
+  };
+}
 
 function getCheck(checks, id) {
   return (checks || []).find((c) => c.id === id) || null;
@@ -272,11 +303,14 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
       excluded: EXCLUDED_LEVERS,
       lenderFit: null,
       bankPosture: null,
+      bankPanel: null,
+      leversDelta: null,
       supplement: null,
     };
   }
 
   const levers = buildLevers(strict, inputs);
+  const leversDelta = buildLeversDelta(strict, levers);
   const bankPosture = buildBankPostureFit(inputs, strict.summary || {}, strict.checks || []);
   const supplement = buildProformaSupplement(strict, inputs, bankPosture);
   const lenderFit = Array.isArray(allNormalized) && allNormalized.length > 0
@@ -287,17 +321,20 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
       maxPerBank: 2,
     })
     : null;
+  const bankPanel = buildMergedBankPanel(bankPosture, lenderFit);
 
   return {
     ok: true,
     strict,
     levers,
+    leversDelta,
     excluded: EXCLUDED_LEVERS,
     lenderFit,
     bankPosture,
+    bankPanel,
     supplement,
     meta: {
-      caveat: 'Levers describe legitimate presentation, timing, documentation, and lender-selection choices only — none of them involve changing a true fact about income, debts, or employment. The "excluded" list exists to show where that line sits. Bank posture rows are curated broker knowledge, not CDR fields and not credit decisions. The supplement adds rate stress, product-fit guidance, and post-settlement cashflow notes — indicative only.',
+      caveat: 'Levers describe legitimate presentation, timing, documentation, and lender-selection choices only — none of them involve changing a true fact about income, debts, or employment. The "excluded" list exists to show where that line sits. Bank posture and per-bank capacity use curated policy knobs through the same surplus engine — indicative only, not credit decisions. The supplement adds rate stress, product-fit guidance, and post-settlement cashflow notes.',
     },
   };
 }

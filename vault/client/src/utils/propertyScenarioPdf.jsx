@@ -964,87 +964,159 @@ function QualificationProformaDocument({ proforma, inputs }) {
   });
   const strict = proforma?.strict || {};
   const s2 = strict.summary || {};
-  const checks = strict.checks || [];
+  const statusRank = { fail: 0, warn: 1, info: 2, pass: 3 };
+  const checks = [...(strict.checks || [])].sort(
+    (a, b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9),
+  );
+  const failing = checks.filter((c) => c.status === 'fail');
+  const warning = checks.filter((c) => c.status === 'warn');
   const levers = proforma?.levers || [];
+  const leversDelta = proforma?.leversDelta;
   const excluded = proforma?.excluded || [];
-  const lenderFit = proforma?.lenderFit;
-  const bankPosture = proforma?.bankPosture;
+  const bankPanel = proforma?.bankPanel || proforma?.bankPosture;
+  const banks = bankPanel?.banks || [];
   const supplement = proforma?.supplement;
   const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
   const inp = inputs || {};
+  const topActions = [
+    ...failing.slice(0, 2).map((c) => `Resolve: ${c.headline}`),
+    ...warning.slice(0, 1).map((c) => `Verify: ${c.headline}`),
+    ...(leversDelta?.items || []).slice(0, 1).map((i) => `Consider: ${i.title}`),
+  ].slice(0, 3);
+  const topBanks = banks.filter((b) => b.fit === 'strong' || b.fit === 'fair').slice(0, 3);
 
   return (
     <Document title="Qualification Proforma" author="Curam Vault" creator="Curam Vault">
+      {/* ── Page 1: Executive summary ─────────────────────────────────────── */}
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <Text style={s.title}>Qualification Proforma</Text>
           <Text style={s.subtitle}>
-            Generated {generatedAt} · The broker-style file review: strict numbers, presentation levers, and where the line sits — not a credit decision
+            Executive summary · {generatedAt} · Educational file review — not a credit decision
           </Text>
         </View>
 
-        {/* Strict verdict */}
-        <View style={[s.section, { backgroundColor: statusColors.bg, padding: 10, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
-          <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
-            Lending checks: {statusColors.label}
-            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely lending block${s2.fail_count !== 1 ? 's' : ''}` : ''}
-            {s2.warn_count > 0 ? ` — ${s2.warn_count} area${s2.warn_count !== 1 ? 's' : ''} to verify` : ''}
+        <View style={[s.section, { backgroundColor: statusColors.bg, padding: 12, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
+          <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
+            {statusColors.label}
           </Text>
-          <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
-            {s2.status_note || 'Overall status reflects lending checks only. Government grants/schemes (FHOG, FHBG) are reported separately and do not mean a lender would decline the loan.'}
+          <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 4 }}>
+            Loan requested {fmtMoney(s2.loan_requested)} · Strict capacity {s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'}
           </Text>
+          {leversDelta?.optimistic_capacity > leversDelta?.base_capacity && (
+            <Text style={{ fontSize: 9, color: '#15803d', marginBottom: 4 }}>
+              With structuring levers (indicative): {fmtMoney(leversDelta.optimistic_capacity)}
+            </Text>
+          )}
+          <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>
+            {s2.status_note || 'Overall status reflects lending checks only. Grants/schemes are reported separately.'}
+          </Text>
+        </View>
+
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Top actions</Text>
+          {topActions.length > 0 ? topActions.map((a, i) => (
+            <Text key={i} style={{ fontSize: 9, color: '#111827', marginBottom: 4, lineHeight: 1.35 }}>{i + 1}. {a}</Text>
+          )) : (
+            <Text style={{ fontSize: 9, color: MUTED }}>No blocking actions — review bank panel and levers for optimisation.</Text>
+          )}
+        </View>
+
+        {topBanks.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Indicative capacity by bank (same engine, different knobs)</Text>
+            {bankPanel?.capacity_note && (
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>{bankPanel.capacity_note}</Text>
+            )}
+            <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#d1d5db', paddingBottom: 3, marginBottom: 2 }}>
+              <Text style={{ width: '28%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Bank</Text>
+              <Text style={{ width: '14%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Fit</Text>
+              <Text style={{ width: '22%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Capacity</Text>
+              <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Live rate</Text>
+              <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>OT shade</Text>
+            </View>
+            {banks.slice(0, 8).map((b) => (
+              <View key={b.id} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                <Text style={{ width: '28%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{b.shortName || b.name}</Text>
+                <Text style={{
+                  width: '14%', fontSize: 8, fontFamily: 'Helvetica-Bold',
+                  color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
+                }}>{(b.fit || '').toUpperCase()}</Text>
+                <Text style={{ width: '22%', fontSize: 8, color: '#111827' }}>
+                  {b.capacity?.indicative_capacity != null ? fmtMoney(b.capacity.indicative_capacity) : '—'}
+                </Text>
+                <Text style={{ width: '18%', fontSize: 8, color: '#111827' }}>
+                  {b.live_rate != null ? `${Number(b.live_rate).toFixed(2)}%` : '—'}
+                </Text>
+                <Text style={{ width: '18%', fontSize: 8, color: MUTED }}>
+                  {b.capacity?.overtime_shade_pct != null ? `${b.capacity.overtime_shade_pct}%` : '—'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>File snapshot</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {[
-              ['Purchase price', inp.property_value ? fmtMoney(inp.property_value) : '—'],
+              ['Purchase', inp.property_value ? fmtMoney(inp.property_value) : '—'],
               ['Deposit', inp.deposit_amount ? fmtMoney(inp.deposit_amount) : '—'],
               ['State', inp.state || '—'],
               ['Purpose', inp.is_ppor === false || inp.is_ppor === 'false' ? 'Investment' : 'PPOR'],
-              ['FHB', inp.is_fhb ? 'Yes' : 'No'],
-              ['Loan requested', fmtMoney(s2.loan_requested)],
-              ['Max indicative capacity', s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'],
-              ['Transfer duty (payable)', s2.stamp_duty_estimate != null ? fmtMoney(s2.stamp_duty_estimate) : '—'],
-              ['Gross income', inp.gross_annual_income ? `$${Number(inp.gross_annual_income).toLocaleString('en-AU')}/yr` : '—'],
-              ['Declared expenses/mo', inp.monthly_expenses ? fmtMoney(inp.monthly_expenses) : 'HEM used'],
-              ['Existing debts/mo', inp.monthly_debt_repayments ? fmtMoney(inp.monthly_debt_repayments) : '$0'],
-              ['Credit card limits', inp.credit_card_limits_total ? fmtMoney(inp.credit_card_limits_total) : '$0'],
+              ['Income', inp.gross_annual_income ? `$${Number(inp.gross_annual_income).toLocaleString('en-AU')}/yr` : '—'],
               ['Employment', inp.employment_type?.replace(/_/g, ' ') || '—'],
-              ['Property type', inp.property_type_class?.replace(/_/g, ' ') || '—'],
-              ['Months in current role', inp.months_in_current_role ?? '—'],
-              ['Adverse credit', inp.has_adverse_credit ? `Yes (${inp.adverse_credit_severity || 'default'})` : 'No'],
+              ['Overtime', inp.overtime_bonus_annual ? fmtMoney(inp.overtime_bonus_annual) : '$0'],
+              ['Card limits', inp.credit_card_limits_total ? fmtMoney(inp.credit_card_limits_total) : '$0'],
             ].map(([label, value]) => (
               <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
-                <Text style={{ width: '60%', fontSize: 8, color: MUTED }}>{label}</Text>
+                <Text style={{ width: '45%', fontSize: 8, color: MUTED }}>{label}</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontFamily: 'Helvetica-Bold' }}>{value}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* As-declared checks */}
+        <ReportFooter generatedAt={generatedAt} />
+      </Page>
+
+      {/* ── Page 2: Checks + levers ───────────────────────────────────────── */}
+      <Page size="A4" style={s.page}>
+        <View style={s.header}>
+          <Text style={s.title}>Strict checks &amp; levers</Text>
+          <Text style={s.subtitle}>Detail · {generatedAt} · Checks ordered by severity</Text>
+        </View>
+
         <View style={s.section}>
-          <Text style={s.sectionTitle}>As declared — strict checks (unchanged by anything below)</Text>
+          <Text style={s.sectionTitle}>As declared — strict checks</Text>
           {checks.map((check) => (
             <QualifyCheckRow key={check.id} check={check} />
           ))}
         </View>
 
-        {/* Levers */}
+        {leversDelta && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Capacity if you structure the file</Text>
+            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 4, lineHeight: 1.4 }}>{leversDelta.note}</Text>
+            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+              Strict {fmtMoney(leversDelta.base_capacity)}
+              {leversDelta.stacked_uplift > 0 ? ` → with levers ~${fmtMoney(leversDelta.optimistic_capacity)}` : ''}
+            </Text>
+          </View>
+        )}
+
         <View style={s.section}>
           <Text style={s.sectionTitle}>Presentation, structuring &amp; timing levers</Text>
           <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>
-            Legitimate choices a broker might make about how, when, and to whom this file is presented — none of them change a true fact about income, debts, or employment. Each is risk-rated; higher risk means more scrutiny, more documentation required, or more consequence if it goes wrong — not that it's illegal.
+            Legitimate choices about how, when, and to whom this file is presented — none change a true fact about income, debts, or employment.
           </Text>
           {levers.length > 0 ? levers.map((lv) => <LeverRow key={lv.id} lever={lv} />) : (
-            <Text style={s.caveatBullet}>No specific levers identified from the inputs provided — the strict checks above already reflect the full picture.</Text>
+            <Text style={s.caveatBullet}>No specific levers identified from the inputs provided.</Text>
           )}
         </View>
 
-        {/* Where the line sits */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Where the line sits — not modelled, and why</Text>
-          <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>
-            These are deliberately excluded because they constitute misrepresentation to a lender — potentially loan fraud under the National Consumer Credit Protection Act — not because they're merely aggressive.
-          </Text>
+          <Text style={s.sectionTitle}>Where the line sits — not modelled</Text>
           {excluded.map((e) => (
             <View key={e.id} style={{ marginBottom: 6, borderLeftWidth: 3, borderLeftColor: '#fca5a5', borderLeftStyle: 'solid', paddingLeft: 8 }}>
               <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 1 }}>{e.title}</Text>
@@ -1053,76 +1125,75 @@ function QualificationProformaDocument({ proforma, inputs }) {
           ))}
         </View>
 
-        {/* Live lender fit */}
-        {lenderFit?.products?.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Live lender product fit (CDR — not a credit decision)</Text>
-            <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>{lenderFit.note}</Text>
-            {lenderFit.products.map((p, i) => (
-              <View key={p.id || i} style={{ flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', alignItems: 'flex-start' }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{p.lender}</Text>
-                  <Text style={{ fontSize: 8, color: '#374151', marginTop: 1 }}>{p.product || p.name}</Text>
-                  {p.fit_note && <Text style={{ fontSize: 7, color: '#6b7280', marginTop: 1 }}>{p.fit_note}</Text>}
-                </View>
-                <View style={{ width: 90, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{Number(p.rate).toFixed(2)}%</Text>
-                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: p.fit === 'restricted' ? '#b91c1c' : p.fit === 'check' ? '#92400e' : '#15803d' }}>
-                    {p.fit === 'restricted' ? 'Restricted' : p.fit === 'check' ? 'Check eligibility' : 'Available'}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+        <ReportFooter generatedAt={generatedAt} />
+      </Page>
 
-        {/* Curated bank posture */}
-        {bankPosture?.banks?.length > 0 && (
+      {/* ── Page 3: Bank panel detail ─────────────────────────────────────── */}
+      {banks.length > 0 && (
+        <Page size="A4" style={s.page}>
+          <View style={s.header}>
+            <Text style={s.title}>Bank-by-bank panel</Text>
+            <Text style={s.subtitle}>
+              Posture + indicative capacity + live rate when available · {generatedAt}
+            </Text>
+          </View>
+
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Bank-by-bank posture (curated — not CDR)</Text>
-            <Text style={{ ...s.caveatBullet, marginBottom: 6 }}>{bankPosture.note}</Text>
-            {bankPosture.banks.map((b) => (
-              <View key={b.id} style={{ marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 8, lineHeight: 1.35 }}>
+              {bankPanel?.note || 'Curated posture knobs drive indicative capacity. Not a credit decision.'}
+            </Text>
+            {banks.map((b) => (
+              <View key={b.id} style={{ marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                   <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{b.name}</Text>
                   <Text style={{
-                    fontSize: 8,
-                    fontFamily: 'Helvetica-Bold',
+                    fontSize: 8, fontFamily: 'Helvetica-Bold',
                     color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
                   }}>
                     {(b.fit || '').toUpperCase()}
+                    {b.capacity?.indicative_capacity != null ? ` · ${fmtMoney(b.capacity.indicative_capacity)}` : ''}
+                    {b.live_rate != null ? ` · ${Number(b.live_rate).toFixed(2)}%` : ''}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}>{b.postureSummary}</Text>
-                {(b.reasons || []).slice(0, 2).map((reason, ri) => (
+                {b.capacity?.narrative && (
+                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2, lineHeight: 1.35 }}>
+                    {b.capacity.narrative}
+                  </Text>
+                )}
+                <Text style={{ fontSize: 7.5, color: '#374151', marginBottom: 2 }}>{b.postureSummary}</Text>
+                {(b.reasons || []).filter((r) => r !== b.capacity?.narrative).slice(0, 2).map((reason, ri) => (
                   <Text key={ri} style={{ fontSize: 7.5, color: '#6b7280', lineHeight: 1.35 }}>· {reason}</Text>
                 ))}
+                {(b.documents || []).length > 0 && (
+                  <Text style={{ fontSize: 7, color: MUTED, marginTop: 3, lineHeight: 1.35 }}>
+                    Docs: {(b.documents || []).slice(0, 3).join(' · ')}
+                  </Text>
+                )}
               </View>
             ))}
           </View>
-        )}
 
-        <View style={s.section}>
-          <View style={s.warning}>
-            <Text>
-              This proforma is educational context, not legal, financial, or credit advice. The strict checks use published Australian lending rules. The levers describe presentation, timing, and lender-selection choices only — no lever here involves altering a true fact. Bank posture rows are curated broker knowledge about typical appetite and are not sourced from Open Banking. Actual lender credit policies (HEM multipliers, serviceability floors, casual-employment history windows, and similar) are commercial-in-confidence and are not published via Open Banking — they are not simulated as credit decisions in this report. Speak to a licensed mortgage broker before acting on anything here.
-            </Text>
+          <View style={s.section}>
+            <View style={s.warning}>
+              <Text>
+                Educational context only — not legal, financial, or credit advice. Per-bank capacity uses curated overtime, rental, and HEM stances through the same surplus engine; it is not a lender quote. Speak to a licensed mortgage broker before acting.
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <ReportFooter generatedAt={generatedAt} />
-      </Page>
+          <ReportFooter generatedAt={generatedAt} />
+        </Page>
+      )}
 
       {supplement && (
         <Page size="A4" style={s.page}>
           <View style={s.header}>
             <Text style={s.title}>Additional Analysis</Text>
             <Text style={s.subtitle}>
-              Supplementary · {generatedAt} · Extending the strict file review — rate stress, lender/product fit, and post-settlement cashflow. Indicative only; not a credit decision.
+              Supplementary · {generatedAt} · Rate stress, product fit, income stress — indicative only
             </Text>
           </View>
 
-          {/* Product fit */}
           {supplement.productFit && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{supplement.productFit.title}</Text>
@@ -1140,7 +1211,6 @@ function QualificationProformaDocument({ proforma, inputs }) {
             </View>
           )}
 
-          {/* Rate stress */}
           {supplement.rateStress?.rows?.length > 0 && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{supplement.rateStress.title}</Text>
@@ -1151,7 +1221,7 @@ function QualificationProformaDocument({ proforma, inputs }) {
                 <Text style={{ width: '28%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Rate</Text>
                 <Text style={{ width: '36%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Monthly repayment</Text>
                 <Text style={{ width: '36%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>
-                  Buffer vs ${Number(supplement.rateStress.surplus_monthly || 0).toLocaleString('en-AU')} surplus
+                  Buffer vs {fmtMoney(supplement.rateStress.surplus_monthly)} surplus
                 </Text>
               </View>
               {supplement.rateStress.rows.map((row, i) => (
@@ -1171,7 +1241,6 @@ function QualificationProformaDocument({ proforma, inputs }) {
             </View>
           )}
 
-          {/* Income stress */}
           {supplement.incomeStress && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{supplement.incomeStress.title}</Text>

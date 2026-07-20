@@ -51,7 +51,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-welcome',
     title: 'Property Scenario — Quick Tour',
-    text: "This tool handles three things: structured mortgage and property calculators for common scenarios, a plain-English NLP path for complex multi-event situations, and a qualification check that tells you whether you\'re likely to get a loan approved. All dollar figures come from deterministic maths — the AI never touches the numbers themselves.",
+    text: "This tool helps you check a home loan file, plan a buy/sell/refinance, and run quick repayment maths. All dollar figures come from deterministic Australian rules — the AI never invents numbers. The recommended start is the Qualification Proforma: a full file review with per-bank indicative capacity.",
     when: { show() { injectStepCounter(1); } },
     buttons: [
       btnSecondary('Skip Tour', () => tour.cancel()),
@@ -62,8 +62,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 2: Scenario type picker ─────────────────────────────────────────
   tour.addStep({
     id: 'ps-type-picker',
-    title: 'Start by Choosing Your Scenario',
-    text: "Instead of a blank text box, you pick what you\'re trying to do: compare lenders or refinance, sell a property, buy a property, run quick calculators, check if you qualify for a loan, or describe a complex multi-event situation in plain English. Simple scenarios go directly to a form — no AI parsing required.",
+    title: 'Three Groups on the Homepage',
+    text: "Cards are grouped: Check my file (Qualification proforma + Lite serviceability check), Plan a transaction (refinance, buy, sell, multi-event), and Quick tools (standalone calculators). The proforma is featured — use the lite check for a fast snapshot, then continue into the full review when you want bank-by-bank capacity.",
     attachTo: { element: '[data-tour="ps-type-picker"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise(resolve => {
@@ -82,7 +82,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-structured-forms',
     title: 'Structured Forms — No AI, Instant Results',
-    text: "For Refinance, Sell, and Buy scenarios, you fill in a short form (balance, rate, term, state) and submit directly to the calculation engine. There\'s no LLM parse step, no clarifying question loop, and no risk of a number being misread. The calculation runs immediately and shows what was entered alongside the result so you can verify every figure.",
+    text: "For Refinance, Sell, and Buy, you fill a short form and submit straight to the calculation engine — no LLM parse step. Income, deposit, and debt fields you enter in the lite check or proforma are saved in a shared file profile in this browser, so you don\'t re-type when you switch modes.",
     when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
@@ -91,7 +91,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-results',
     title: 'Results — Interpretation, Not Just Numbers',
-    text: "Each scenario type has a dedicated plain-English interpretation panel. Refinance shows monthly saving, break-even months, and names the specific CDR bank used. Sell shows net proceeds and CGT — a genuine PPOR gets $0 CGT (main residence exemption), an investment shows indicative tax at three 2025-26 marginal brackets. Buy shows stamp duty (calculated, not estimated), LMI if LVR exceeds 80%, and — for first-home buyers — a First Home Owner Grant cross-reference showing whether your state grant is available and what it pays.",
+    text: "Each scenario type has a plain-English interpretation panel. Refinance shows monthly saving and break-even. Sell shows net proceeds and CGT. Buy shows stamp duty, LMI if LVR exceeds 80%, and first-home grant cross-checks. From buy, refinance, or the lite check you can Continue to the qualification proforma with figures prefilled.",
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
@@ -100,7 +100,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-cdr',
     title: 'Live Rates from 9 Australian Lenders',
-    text: "The refinance path fetches live mortgage rates from Australia\'s open banking CDR APIs — CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and Bank of Queensland. No API key needed; these are publicly available. The best available rate below your current rate is used automatically. Rates are labelled Live CDR or Mock (fallback). Switch to the Lenders tab to see all products side by side.",
+    text: "Refinance and the proforma bank panel can fetch live mortgage rates from Australia\'s open banking CDR APIs — CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and Bank of Queensland. Rates are labelled Live CDR or Mock (fallback). CDR is product publication only — it does not predict approval.",
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
@@ -109,7 +109,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-calculators',
     title: 'Quick Calculators — Your Own Numbers',
-    text: "Enter your own loan details and instantly run four standalone calculators: repayment (P&I), extra repayment impact (time and interest saved), offset account benefit, and borrowing power. Borrowing power uses the APRA +3% buffer with an 8.5% floor — consistent with what the major banks actually apply today, not the lower floor from the low-rate era. The figure is explicitly caveated as indicative; it doesn\'t replace a full serviceability assessment.",
+    text: "Enter your own loan details and run four standalone calculators: repayment (P&I), extra repayment impact, offset benefit, and borrowing power. Borrowing power uses the APRA +3% buffer with an 8.5% floor. The figure is indicative — it doesn\'t replace a full serviceability assessment.",
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
@@ -117,8 +117,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 7: Qualification proforma ───────────────────────────────────────
   tour.addStep({
     id: 'ps-qualify',
-    title: 'Qualification Proforma — Broker-Style File Review',
-    text: "The featured path on the homepage. Runs the same deterministic AU checks as the lite \"Quick check\", then adds risk-rated presentation levers, a curated bank-by-bank posture matrix (indicative broker knowledge — not a credit decision), and live CDR product fit. Overtime/bonus with history is shaded into strict serviceability; genuine-savings holding months and gift portions refine the deposit check. Buy, refinance, and the lite qualify flow can continue into the proforma with figures prefilled. PDF download covers the full review for a broker conversation.",
+    title: 'Qualification Proforma — Full File Review',
+    text: "Runs the same deterministic AU checks as the lite serviceability check, then adds structuring levers, a capacity delta (strict → with levers), and a merged bank panel. Each bank gets an indicative capacity from the same surplus engine with that bank\'s overtime shade, rental shade, and HEM stance — so dollars move by lender (e.g. Macquarie vs CommBank on overtime). Also includes documents they\'d typically ask for, live rate when CDR matches, and supplementary rate-stress analysis. Clearly labelled indicative — not a credit decision.",
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
@@ -126,8 +126,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 8: Lender guidance ──────────────────────────────────────────────
   tour.addStep({
     id: 'ps-lender-guidance',
-    title: 'Lender Guidance and Bank Posture',
-    text: "If any check fails or warns, results can show \"Lenders likely to discuss your situation\" plus the curated bank posture ranking (CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, BOQ). Barrier types map to more flexible lenders — Macquarie, Pepper Money, Liberty, BOQ, Bendigo, La Trobe, and others. Rate premiums and broker tips are included. CDR product fit shows published rates only — it does not predict approval.",
+    title: 'How Each Bank May See This File',
+    text: "The bank panel ranks CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and BOQ with fit (strong/fair/weak), indicative capacity, and reasons. Clean PAYG files still differentiate on FHBG participation, offset-on-fixed, cashback appetite, and turnaround. Expand \"Documents they\'d typically ask for\" per bank. This is curated policy knobs plus CDR rates — not an underwriting system.",
     when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
@@ -136,7 +136,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-nlp',
     title: 'Complex Scenarios — Plain English NLP',
-    text: "Choose \"Multiple events at once\" to describe a compound situation in plain English: selling, buying, and switching lender simultaneously. The system pattern-matches all currency amounts, percentages, and dates from your text before the AI sees it — the AI\'s only job is assigning those already-found values to fields, not inventing numbers. Any value with no matching source is stripped and added to the clarifying questions form.",
+    text: "Choose \"Multiple events at once\" to describe a compound situation in plain English: selling, buying, and switching lender together. Currency amounts, percentages, and dates are pattern-matched from your text before the AI sees them — the AI only assigns those values to fields. Anything without a matching source is stripped and asked in clarifying questions.",
     when: { show() { injectStepCounter(9); } },
     buttons: [btnBack(), btnNext],
   });
@@ -144,8 +144,8 @@ export function startPropertyScenarioTour(navigate) {
   // ── Step 10: PDF + follow-ups ─────────────────────────────────────────────
   tour.addStep({
     id: 'ps-pdf',
-    title: 'Download, Follow-ups, and Caveats',
-    text: "Every result set has a PDF download button. The qualification report PDF includes all 14 checks, the settlement cost breakdown, the rate/income stress test, lender guidance, and the HECS/stamp duty/LMI data — structured to hand directly to a broker or accountant. The Follow-ups tab surfaces suggested questions grounded in your specific numbers (click \"Ask this\" for an AI answer) and accepts your own custom questions. All results carry explicit caveats stating what the tool cannot know: credit history, lender-specific overlays, and anything requiring a professional opinion.",
+    title: 'PDF Report, Follow-ups, and Caveats',
+    text: "The proforma PDF opens with an executive summary: verdict, loan vs capacity, top actions, and a capacity-by-bank table. Later pages cover severity-ordered checks, levers, the full bank panel, and supplementary rate/income stress. Follow-ups on scenario results let you ask grounded questions. All results carry caveats: this is educational, not pre-approval, and not a substitute for a licensed broker.",
     when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),

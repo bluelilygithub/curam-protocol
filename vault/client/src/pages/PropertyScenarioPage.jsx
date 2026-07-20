@@ -13,6 +13,11 @@ import {
 } from '../utils/numericInput';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { LENDER_PROFILES } from '../utils/lenderProfiles';
+import {
+  mergeInitialWithProfile,
+  saveFileProfileFromPayload,
+  saveLastProformaSummary,
+} from '../utils/propertyScenarioFileProfile';
 // Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
 async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers) {
   const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
@@ -993,6 +998,26 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
         },
       );
       setResult(data);
+      saveFileProfileFromPayload({
+        property_value: price,
+        deposit_amount: deposit,
+        state: qState,
+        is_fhb: qFhb === 'yes',
+        is_ppor: qPpor === 'ppor',
+        gross_annual_income: income,
+        partner_gross_income: qPartner ? parseFormattedNumber(qPartner) : 0,
+        household_type: qHousehold,
+        employment_type: qEmployment,
+        has_hecs: qHecs === 'yes',
+        is_new_build: qNewBuild === 'yes',
+        monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
+        monthly_expenses: qExpenses ? parseFormattedNumber(qExpenses) : undefined,
+        loan_term_years: parseFormattedNumber(qTerm) || 30,
+        target_rate_pct: rate,
+        applicant_age: qAge ? parseFormattedNumber(qAge) : undefined,
+        property_type_class: qPropTypeClass || undefined,
+        gross_rental_income: qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
+      });
       const init = {};
       (data.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
@@ -1497,35 +1522,36 @@ function LeverCard({ lever }) {
  * live CDR-sourced lender product fit table (no policy speculation).
  */
 function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialInputs }) {
+  const seeded = useMemo(() => mergeInitialWithProfile(initialInputs), [initialInputs]);
   // Property
-  const [pPrice, setPPrice]     = useState(() => initialInputs?.property_value != null ? formatNumberForInput(initialInputs.property_value) : '');
-  const [pDeposit, setPDeposit] = useState(() => initialInputs?.deposit_amount != null ? formatNumberForInput(initialInputs.deposit_amount) : '');
-  const [pState, setPState]     = useState(() => initialInputs?.state || '');
+  const [pPrice, setPPrice]     = useState(() => seeded?.property_value != null ? formatNumberForInput(seeded.property_value) : '');
+  const [pDeposit, setPDeposit] = useState(() => seeded?.deposit_amount != null ? formatNumberForInput(seeded.deposit_amount) : '');
+  const [pState, setPState]     = useState(() => seeded?.state || '');
   const [pFhb, setPFhb]         = useState(() => {
-    if (initialInputs?.is_fhb === true || initialInputs?.is_fhb === 'yes') return 'yes';
-    if (initialInputs?.is_fhb === false || initialInputs?.is_fhb === 'no') return 'no';
+    if (seeded?.is_fhb === true || seeded?.is_fhb === 'yes') return 'yes';
+    if (seeded?.is_fhb === false || seeded?.is_fhb === 'no') return 'no';
     return '';
   });
   const [pPpor, setPPpor]       = useState(() => {
-    if (initialInputs?.is_ppor === false || initialInputs?.is_ppor === 'investment') return 'investment';
+    if (seeded?.is_ppor === false || seeded?.is_ppor === 'investment') return 'investment';
     return 'ppor';
   });
   // Income & household
-  const [pIncome, setPIncome]     = useState(() => initialInputs?.gross_annual_income != null ? formatNumberForInput(initialInputs.gross_annual_income) : '');
-  const [pPartner, setPPartner]   = useState(() => initialInputs?.partner_gross_income ? formatNumberForInput(initialInputs.partner_gross_income) : '');
-  const [pHousehold, setPHousehold] = useState(() => initialInputs?.household_type || 'single');
-  const [pDependents, setPDependents] = useState(() => initialInputs?.dependents != null && initialInputs.dependents !== '' ? String(initialInputs.dependents) : '');
-  const [pEmployment, setPEmployment] = useState(() => initialInputs?.employment_type || 'payg_fulltime');
-  const [pMonthsInRole, setPMonthsInRole] = useState(() => initialInputs?.months_in_current_role != null ? String(initialInputs.months_in_current_role) : '');
+  const [pIncome, setPIncome]     = useState(() => seeded?.gross_annual_income != null ? formatNumberForInput(seeded.gross_annual_income) : '');
+  const [pPartner, setPPartner]   = useState(() => seeded?.partner_gross_income ? formatNumberForInput(seeded.partner_gross_income) : '');
+  const [pHousehold, setPHousehold] = useState(() => seeded?.household_type || 'single');
+  const [pDependents, setPDependents] = useState(() => seeded?.dependents != null && seeded.dependents !== '' ? String(seeded.dependents) : '');
+  const [pEmployment, setPEmployment] = useState(() => seeded?.employment_type || 'payg_fulltime');
+  const [pMonthsInRole, setPMonthsInRole] = useState(() => seeded?.months_in_current_role != null ? String(seeded.months_in_current_role) : '');
   // Debts & expenses
-  const [pHecs, setPHecs]       = useState(() => (initialInputs?.has_hecs === true || initialInputs?.has_hecs === 'yes') ? 'yes' : 'no');
-  const [pNewBuild, setPNewBuild] = useState(() => (initialInputs?.is_new_build === true || initialInputs?.is_new_build === 'yes') ? 'yes' : 'no');
-  const [pDebts, setPDebts]     = useState(() => initialInputs?.monthly_debt_repayments ? formatNumberForInput(initialInputs.monthly_debt_repayments) : '');
-  const [pExpenses, setPExpenses] = useState(() => initialInputs?.monthly_expenses ? formatNumberForInput(initialInputs.monthly_expenses) : '');
-  const [pCardLimits, setPCardLimits] = useState(() => initialInputs?.credit_card_limits_total ? formatNumberForInput(initialInputs.credit_card_limits_total) : '');
+  const [pHecs, setPHecs]       = useState(() => (seeded?.has_hecs === true || seeded?.has_hecs === 'yes') ? 'yes' : 'no');
+  const [pNewBuild, setPNewBuild] = useState(() => (seeded?.is_new_build === true || seeded?.is_new_build === 'yes') ? 'yes' : 'no');
+  const [pDebts, setPDebts]     = useState(() => seeded?.monthly_debt_repayments ? formatNumberForInput(seeded.monthly_debt_repayments) : '');
+  const [pExpenses, setPExpenses] = useState(() => seeded?.monthly_expenses ? formatNumberForInput(seeded.monthly_expenses) : '');
+  const [pCardLimits, setPCardLimits] = useState(() => seeded?.credit_card_limits_total ? formatNumberForInput(seeded.credit_card_limits_total) : '');
   const [pLiabilities, setPLiabilities] = useState(() => {
-    if (Array.isArray(initialInputs?.liabilities) && initialInputs.liabilities.length) {
-      return initialInputs.liabilities.map((row) => ({
+    if (Array.isArray(seeded?.liabilities) && seeded.liabilities.length) {
+      return seeded.liabilities.map((row) => ({
         type: row.type || 'other',
         label: row.label || '',
         monthly: formatNumberForInput(row.monthly_repayment ?? row.monthlyRepayment ?? '') || '',
@@ -1534,26 +1560,27 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
     return [];
   });
   // Broker-realism inputs
-  const [pOvertime, setPOvertime] = useState(() => initialInputs?.overtime_bonus_annual ? formatNumberForInput(initialInputs.overtime_bonus_annual) : '');
-  const [pOvertimeRegularity, setPOvertimeRegularity] = useState(() => initialInputs?.overtime_bonus_regularity || 'irregular');
-  const [pAddbacks, setPAddbacks] = useState(() => initialInputs?.self_employed_addbacks_annual ? formatNumberForInput(initialInputs.self_employed_addbacks_annual) : '');
-  const [pAdverseCredit, setPAdverseCredit] = useState(() => (initialInputs?.has_adverse_credit === true || initialInputs?.has_adverse_credit === 'yes') ? 'yes' : 'no');
-  const [pAdverseSeverity, setPAdverseSeverity] = useState(() => initialInputs?.adverse_credit_severity || 'default');
-  const [pGenuineHeldMonths, setPGenuineHeldMonths] = useState(() => initialInputs?.genuine_savings_held_months != null ? String(initialInputs.genuine_savings_held_months) : '');
-  const [pDepositGift, setPDepositGift] = useState(() => initialInputs?.deposit_gift_amount ? formatNumberForInput(initialInputs.deposit_gift_amount) : '');
+  const [pOvertime, setPOvertime] = useState(() => seeded?.overtime_bonus_annual ? formatNumberForInput(seeded.overtime_bonus_annual) : '');
+  const [pOvertimeRegularity, setPOvertimeRegularity] = useState(() => seeded?.overtime_bonus_regularity || 'irregular');
+  const [pAddbacks, setPAddbacks] = useState(() => seeded?.self_employed_addbacks_annual ? formatNumberForInput(seeded.self_employed_addbacks_annual) : '');
+  const [pAdverseCredit, setPAdverseCredit] = useState(() => (seeded?.has_adverse_credit === true || seeded?.has_adverse_credit === 'yes') ? 'yes' : 'no');
+  const [pAdverseSeverity, setPAdverseSeverity] = useState(() => seeded?.adverse_credit_severity || 'default');
+  const [pGenuineHeldMonths, setPGenuineHeldMonths] = useState(() => seeded?.genuine_savings_held_months != null ? String(seeded.genuine_savings_held_months) : '');
+  const [pDepositGift, setPDepositGift] = useState(() => seeded?.deposit_gift_amount ? formatNumberForInput(seeded.deposit_gift_amount) : '');
   // Loan
-  const [pTerm, setPTerm]       = useState(() => initialInputs?.loan_term_years ? String(initialInputs.loan_term_years) : '30');
-  const [pRate, setPRate]       = useState(() => initialInputs?.target_rate_pct != null ? formatNumberForInput(initialInputs.target_rate_pct, { allowDecimals: true }) : '');
+  const [pTerm, setPTerm]       = useState(() => seeded?.loan_term_years ? String(seeded.loan_term_years) : '30');
+  const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true }) : '');
   // Extra checks
-  const [pAge, setPAge]               = useState(() => initialInputs?.applicant_age ? String(initialInputs.applicant_age) : '');
-  const [pPropTypeClass, setPPropTypeClass] = useState(() => initialInputs?.property_type_class || 'house_town');
-  const [pRentalIncome, setPRentalIncome]   = useState(() => initialInputs?.gross_rental_income ? formatNumberForInput(initialInputs.gross_rental_income) : '');
+  const [pAge, setPAge]               = useState(() => seeded?.applicant_age ? String(seeded.applicant_age) : '');
+  const [pPropTypeClass, setPPropTypeClass] = useState(() => seeded?.property_type_class || 'house_town');
+  const [pRentalIncome, setPRentalIncome]   = useState(() => seeded?.gross_rental_income ? formatNumberForInput(seeded.gross_rental_income) : '');
   // Results
   const [proforma, setProforma] = useState(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [expanded, setExpanded] = useState({});
   const [pdfBusy, setPdfBusy]   = useState(false);
+  const [docsBankId, setDocsBankId] = useState(null);
   const proformaResultRef       = useRef(null);
 
   function buildInputPayload() {
@@ -1620,7 +1647,8 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           'Applying overtime / genuine-savings rules',
           'Scoring presentation levers',
           'Ranking curated bank posture',
-          'Fetching live CDR lender product fit',
+          'Modelling per-bank indicative capacity',
+          'Fetching live CDR lender rates',
           'Assembling the proforma report',
         ],
         async () => {
@@ -1631,6 +1659,16 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
         },
       );
       setProforma(data);
+      const payload = buildInputPayload();
+      saveFileProfileFromPayload(payload);
+      saveLastProformaSummary({
+        overall_status: data.strict?.summary?.overall_status,
+        loan_requested: data.strict?.summary?.loan_requested,
+        max_borrowing_capacity: data.strict?.summary?.max_borrowing_capacity,
+        top_bank: data.bankPanel?.banks?.[0]?.shortName || data.bankPosture?.banks?.[0]?.shortName,
+        top_capacity: data.bankPanel?.banks?.[0]?.capacity?.indicative_capacity
+          || data.bankPosture?.banks?.[0]?.capacity?.indicative_capacity,
+      });
       const init = {};
       (data.strict?.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
@@ -2030,60 +2068,95 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             </div>
           </div>
 
-          {/* Curated bank posture */}
-          {proforma.bankPosture?.banks?.length > 0 && (
+          {/* Levers delta */}
+          {proforma.leversDelta && (
+            <div className="rounded-xl border px-4 py-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Capacity if you structure the file</h3>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.leversDelta.note}</p>
+              <div className="flex flex-wrap gap-4 text-xs">
+                <span style={{ color: 'var(--color-text)' }}>
+                  Strict: <strong>${Number(proforma.leversDelta.base_capacity || 0).toLocaleString('en-AU')}</strong>
+                </span>
+                {proforma.leversDelta.stacked_uplift > 0 && (
+                  <span style={{ color: '#15803d' }}>
+                    With levers (indicative): <strong>${Number(proforma.leversDelta.optimistic_capacity || 0).toLocaleString('en-AU')}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Merged bank panel — posture + capacity + live rate */}
+          {(proforma.bankPanel?.banks || proforma.bankPosture?.banks)?.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Bank-by-bank posture (curated)</h3>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{proforma.bankPosture.note}</p>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How each bank may see this file</h3>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {proforma.bankPanel?.capacity_note || proforma.bankPosture?.capacity_note}
+              </p>
+              <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                {proforma.bankPanel?.note || proforma.bankPosture?.note}
+              </p>
               <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                {proforma.bankPosture.banks.map((b) => {
+                {(proforma.bankPanel?.banks || proforma.bankPosture.banks).map((b) => {
                   const fitColor = b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c';
+                  const cap = b.capacity?.indicative_capacity;
                   return (
                     <div key={b.id} className="px-4 py-3 space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{b.name}</p>
-                          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
                         </div>
-                        <p className="text-xs font-semibold shrink-0 uppercase tracking-wide" style={{ color: fitColor }}>{b.fit}</p>
+                        <div className="shrink-0 text-right space-y-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: fitColor }}>{b.fit}</p>
+                          {cap != null && (
+                            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                              ~${Number(cap).toLocaleString('en-AU')}
+                            </p>
+                          )}
+                          {b.live_rate != null && (
+                            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                              Live {Number(b.live_rate).toFixed(2)}%{b.live_product ? ` · ${b.live_product}` : ''}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      {(b.reasons || []).slice(0, 2).map((reason, ri) => (
+                      {b.capacity?.narrative && (
+                        <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-primary)' }}>{b.capacity.narrative}</p>
+                      )}
+                      {(b.reasons || []).filter((r) => r !== b.capacity?.narrative).slice(0, 2).map((reason, ri) => (
                         <p key={ri} className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>· {reason}</p>
                       ))}
-                      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{b.disclaimer}</p>
+                      <div className="flex flex-wrap gap-3 pt-0.5">
+                        {b.fhbgParticipant && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>FHBG</span>}
+                        {b.offsetOnFixed && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Offset on fixed</span>}
+                        {b.typicalTurnaroundDays != null && (
+                          <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>~{b.typicalTurnaroundDays}d turnaround</span>
+                        )}
+                        {(b.documents || []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setDocsBankId((prev) => (prev === b.id ? null : b.id))}
+                            className="text-[10px] font-medium transition-opacity duration-200 hover:opacity-70"
+                            style={{ color: 'var(--color-primary)' }}
+                          >
+                            {docsBankId === b.id ? 'Hide documents' : 'Documents they\'d typically ask for'}
+                          </button>
+                        )}
+                      </div>
+                      {docsBankId === b.id && (
+                        <ul className="text-xs space-y-0.5 pl-3 list-disc" style={{ color: 'var(--color-muted)' }}>
+                          {(b.documents || []).map((d, i) => <li key={i}>{d}</li>)}
+                        </ul>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
-
-          {/* Live lender fit */}
-          {proforma.lenderFit?.products?.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Live lender product fit</h3>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{proforma.lenderFit.note}</p>
-              <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                {proforma.lenderFit.products.map((p, i) => (
-                  <div key={p.id || i} className="px-4 py-3 flex items-start justify-between gap-3" style={{ borderColor: 'var(--color-border)' }}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{p.lender}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{p.product || p.name}</p>
-                      {p.fit_note && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{p.fit_note}</p>}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{Number(p.rate).toFixed(2)}%</p>
-                      <p className="text-xs font-medium" style={{ color: p.fit === 'restricted' ? '#b91c1c' : p.fit === 'check' ? '#92400e' : '#15803d' }}>
-                        {p.fit === 'restricted' ? 'Restricted' : p.fit === 'check' ? 'Check eligibility' : 'Available'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           {proforma.live_lender_error && (
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Live lender fit unavailable right now: {proforma.live_lender_error}</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Live rates unavailable right now: {proforma.live_lender_error}</p>
           )}
 
           {/* Supplementary analysis (rate stress, product fit, post-settlement) */}
@@ -3272,7 +3345,7 @@ export default function PropertyScenarioPage() {
               : scenarioType === 'buy' ? 'Stamp duty, LMI, and upfront purchase costs'
               : scenarioType === 'compound' ? 'AI maps your scenario from plain English'
               : scenarioType === 'proforma' ? 'Broker-realistic file review — strict checks, levers, bank posture, live lender fit'
-              : scenarioType === 'qualify' ? 'Quick qualification check — use the proforma for the full broker file review'
+              : scenarioType === 'qualify' ? 'Lite serviceability check — use the proforma for the full broker file review'
               : scenarioType === 'calculators' ? 'Repayment, offset, extra repayments, borrowing power'
               : 'Choose a scenario type to get started'}
           </p>
@@ -3313,43 +3386,63 @@ export default function PropertyScenarioPage() {
           <>
             {/* ── Scenario type picker ──────────────────────────────── */}
             {scenarioType === null && !calcResult && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What would you like to explore?</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { id: 'proforma', icon: 'shield-check', label: 'Qualification proforma', desc: 'Full broker-style file review: strict AU checks, risk-rated presentation levers, curated bank posture, and live CDR product fit. Primary path before you approach lenders.', featured: true },
-                    { id: 'refinance', icon: 'refresh-cw', label: 'Compare lenders / refinance', desc: 'See if switching saves money. Instant calculation — no AI, no waiting.' },
-                    { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
-                    { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
-                    { id: 'qualify', icon: 'check-circle', label: 'Quick check — can I qualify?', desc: 'Lite serviceability, LVR, DTI, and genuine-savings snapshot. Use the proforma for the full broker file review.' },
-                    { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together. Describe in plain English — AI maps the full scenario.' },
-                    { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
-                  ].map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handleTypePick(t.id)}
-                      className={`flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70${t.featured ? ' sm:col-span-2' : ''}`}
-                      style={{
-                        borderColor: t.featured ? 'var(--color-primary)' : 'var(--color-border)',
-                        background: t.featured ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-bg))' : 'var(--color-bg)',
-                      }}
-                    >
-                      <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                          {t.label}
-                          {t.featured && (
-                            <span className="ml-2 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                              Recommended
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {[
+                  {
+                    group: 'Check my file',
+                    items: [
+                      { id: 'proforma', icon: 'shield-check', label: 'Qualification proforma', desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.', featured: true },
+                      { id: 'qualify', icon: 'check-circle', label: 'Lite serviceability check', desc: 'Serviceability, LVR, DTI, and genuine-savings snapshot.' },
+                    ],
+                  },
+                  {
+                    group: 'Plan a transaction',
+                    items: [
+                      { id: 'refinance', icon: 'refresh-cw', label: 'Compare lenders / refinance', desc: 'See if switching saves money. Instant calculation — no AI.' },
+                      { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
+                      { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
+                      { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together — describe in plain English.' },
+                    ],
+                  },
+                  {
+                    group: 'Quick tools',
+                    items: [
+                      { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
+                    ],
+                  },
+                ].map((section) => (
+                  <div key={section.group} className="space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{section.group}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {section.items.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => handleTypePick(t.id)}
+                          className={`flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70${t.featured ? ' sm:col-span-2' : ''}`}
+                          style={{
+                            borderColor: t.featured ? 'var(--color-primary)' : 'var(--color-border)',
+                            background: t.featured ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-bg))' : 'var(--color-bg)',
+                          }}
+                        >
+                          <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
+                          <div>
+                            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                              {t.label}
+                              {t.featured && (
+                                <span className="ml-2 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                                  Recommended
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

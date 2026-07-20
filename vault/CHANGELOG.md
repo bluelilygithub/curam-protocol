@@ -4,6 +4,25 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-20 (proforma-bank-capacity)
+
+### Per-bank indicative capacity + report/UX polish
+- **Bank capacity** — each bank’s overtime shade, rental shade, and HEM stance now runs through the same surplus engine; dollars move by lender (e.g. Macquarie vs CommBank on overtime files). Clearly labelled indicative, not a quote.
+- **Merged bank panel** — posture + capacity + live CDR rate + documents-they’d-ask in one row (UI + PDF).
+- **Clean-file axes** — FHBG participation, profession packs, offset-on-fixed, cashback appetite, turnaround for otherwise-vanilla PAYG files.
+- **PDF** — executive summary page (verdict, top actions, capacity-by-bank table); severity-ordered checks; levers capacity delta; page numbers retained.
+- **Streamlining** — homepage grouped into Check my file / Plan a transaction / Quick tools; shared file profile in localStorage across modes.
+- **Docs / tour** — `docs/property-scenario.md`, `CLAUDE.md`, and the in-app Property Scenario tour updated for the bank panel and PDF structure.
+
+---
+
+## 2026-07-20 (qualify-rename)
+
+### Lite serviceability check
+- Homepage card renamed from “Quick check — can I qualify?” to **Lite serviceability check** (proforma stays the featured path).
+
+---
+
 ## 2026-07-20 (proforma-supplement)
 
 ### Qualification proforma — supplementary analysis (best of breed)
