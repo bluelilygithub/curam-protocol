@@ -85,7 +85,7 @@ Primary homepage path for “will a bank look at this file?”. Builds on the sa
 
 **Journey:** Buy / Quick qualify / Refinance results can **Continue to qualification proforma** with prefilled fields. PDF download includes bank posture + CDR fit.
 
-**Honesty:** CDR cannot simulate credit committees. Bank posture is editorial/indicative. Overtime irregular → 0% in strict (conservative); 1yr → 50%; 2yr → 80%.
+**Honesty:** CDR cannot simulate credit committees. Bank posture is editorial/indicative and is driven by strict-check flags (property type, DTI, LVR, employment). Overtime irregular → 0% in strict (conservative); 1yr → 50%; 2yr → 80%. Overall status is **lending checks only** — FHOG/FHBG ineligibility is never a loan block. QLD transfer duty applies the PPOR home concession independently of FHB status (saves up to $7,175 vs general). Under-declaring expenses to HEM is listed under excluded/compliance — never as a lever with a dollar upside.
 
 ---
 

@@ -22,13 +22,14 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    highDensityAppetite: 'tight',
     notes: [
       'Typically wants 12 months casual/contract history.',
       'Overtime/bonus often averaged and shaded unless 2 years stable.',
       'Strong digital servicing; exception requests slower than regional banks.',
     ],
     moreForgivingOn: ['Clean PAYG full-time', 'FHBG / first-home packages'],
-    stricterOn: ['Short-tenure casual', 'Complex self-employed structures'],
+    stricterOn: ['Short-tenure casual', 'Complex self-employed structures', 'High-rise / small apartments at high LVR'],
   },
   {
     id: 'westpac',
@@ -41,12 +42,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 70,
+    highDensityAppetite: 'tight',
     notes: [
       'Group brands sometimes more flexible than the Westpac brand itself — brokers shop within the group.',
       'Adverse credit usually needs clear explanation and time-since-event.',
     ],
     moreForgivingOn: ['Documented PAYG', 'In-group brand shopping'],
-    stricterOn: ['Recent defaults', 'Thin genuine savings evidence'],
+    stricterOn: ['Recent defaults', 'Thin genuine savings evidence', 'High-density LVR'],
   },
   {
     id: 'anz',
@@ -59,12 +61,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    highDensityAppetite: 'tight',
     notes: [
       'ANZ Plus path is digital-first and best for straightforward owner-occupier files.',
       'Self-employed usually needs full tax returns — low-doc not a strength.',
     ],
     moreForgivingOn: ['Straightforward PAYG', 'Digital-ready borrowers'],
-    stricterOn: ['Complex income', 'High DTI without strong surplus'],
+    stricterOn: ['Complex income', 'High DTI without strong surplus', 'High-rise at high LVR'],
   },
   {
     id: 'nab',
@@ -77,6 +80,7 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
+    highDensityAppetite: 'moderate',
     notes: [
       'MedPlus and similar packs can improve assessment for eligible professions.',
       'Broker channel often used for nuanced files.',
@@ -95,12 +99,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'tight',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    highDensityAppetite: 'tight',
     notes: [
       'No branches — servicing is digital/phone only.',
       'Best when the file is already strong; not the first call for edge cases.',
     ],
     moreForgivingOn: ['Clean PAYG with ING banking history'],
-    stricterOn: ['Casual/contract edge cases', 'High LVR without strong surplus'],
+    stricterOn: ['Casual/contract edge cases', 'High LVR without strong surplus', 'Apartment risk'],
   },
   {
     id: 'macquarie',
@@ -113,12 +118,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'generous',
     overtimeCrediting: 'generous',
     rentalShadingPct: 80,
+    highDensityAppetite: 'flexible',
     notes: [
       'Common broker pick for self-employed with accountant-verified add-backs.',
       'Investment and rental shading often less conservative than majors.',
       'Still requires evidence — flexibility is policy, not a free pass.',
     ],
-    moreForgivingOn: ['Self-employed', 'Investors', 'Complex but documented income'],
+    moreForgivingOn: ['Self-employed', 'Investors', 'Complex but documented income', 'High-density with strong postcode'],
     stricterOn: ['Undocumented income', 'Fraud / misrepresentation risk'],
   },
   {
@@ -132,12 +138,13 @@ const BANK_POSTURES = [
     dtiAppetite: 'tight',
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
+    highDensityAppetite: 'tight',
     notes: [
       'NAB-backed but independently operated digital brand.',
       'If the file needs exception underwriting, look elsewhere first.',
     ],
     moreForgivingOn: ['Clean PAYG full-time'],
-    stricterOn: ['Adverse credit', 'Casual under 12 months', 'Self-employed complexity'],
+    stricterOn: ['Adverse credit', 'Casual under 12 months', 'Self-employed complexity', 'High-rise LVR'],
   },
   {
     id: 'up',
@@ -150,6 +157,7 @@ const BANK_POSTURES = [
     dtiAppetite: 'standard',
     overtimeCrediting: 'moderate',
     rentalShadingPct: null,
+    highDensityAppetite: 'moderate',
     notes: [
       'Investment and interest-only are out of scope today.',
       'Excellent for young OO buyers who already bank with Up.',
@@ -168,21 +176,24 @@ const BANK_POSTURES = [
     dtiAppetite: 'generous',
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
+    highDensityAppetite: 'flexible',
     notes: [
       'Regional presence strongest in QLD / northern NSW.',
       'Brokers often approach BOQ when majors decline short-tenure casual.',
       'Still evidence-based — employer letters and payslips matter.',
     ],
-    moreForgivingOn: ['Casual/contract with 6+ months', 'QLD buyers', 'FHBG'],
+    moreForgivingOn: ['Casual/contract with 6+ months', 'QLD buyers', 'FHBG', 'Nuanced property types via broker'],
     stricterOn: ['Files outside footprint without broker support'],
   },
 ];
 
 /**
  * Score how a bank's curated posture fits this applicant file.
+ * Uses both raw inputs and strict-check flags so posture diverges when the
+ * file has real differentiating risk (property type, DTI, LVR, employment).
  * Returns ranked rows with fit: strong | fair | weak | unsuitable.
  */
-function buildBankPostureFit(inputs = {}, strictSummary = {}) {
+function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = []) {
   const employmentType = inputs.employmentType || 'payg_fulltime';
   const monthsInRole = Number.isFinite(inputs.monthsInCurrentRole) ? Number(inputs.monthsInCurrentRole) : null;
   const isPpor = inputs.isPpor !== false;
@@ -193,6 +204,14 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}) {
   const lvr = Number(strictSummary.lvr_pct) || 0;
   const overtime = Number(inputs.overtimeBonusAnnual) || 0;
   const addbacks = Number(inputs.selfEmployedAddbacksAnnual) || 0;
+  const cardLimits = Number(inputs.creditCardLimitsTotal) || 0;
+  const propertyType = inputs.propertyType || inputs.property_type_class || null;
+  const byId = {};
+  (strictChecks || []).forEach((c) => { byId[c.id] = c; });
+  const propCheck = byId.property_type;
+  const densityTypes = new Set(['highrise', 'studio_small']);
+  const isDensity = densityTypes.has(propertyType) || (propCheck && densityTypes.has(propCheck.data?.property_type));
+  const ruralLike = propertyType === 'rural_acreage' || propCheck?.data?.property_type === 'rural_acreage';
 
   const rows = BANK_POSTURES.map((bank) => {
     const reasons = [];
@@ -254,11 +273,55 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}) {
         score -= 8;
         reasons.push('DTI above 6× typically triggers extra scrutiny.');
       }
+    } else if (dti > 5) {
+      if (bank.dtiAppetite === 'tight') {
+        score -= 6;
+        reasons.push('DTI above 5× is near the edge for tighter-appetite lenders.');
+      }
     }
 
     if (lvr > 90) {
       score -= 8;
       reasons.push('High LVR (>90%) narrows the field at most lenders.');
+    } else if (lvr > 85) {
+      score -= 4;
+      reasons.push('LVR above 85% typically means LMI and a narrower lender panel.');
+    }
+
+    // Property-type flags from the strict checks — the main differentiator for
+    // otherwise-vanilla PAYG files (e.g. high-rise at 80% LVR).
+    if (isDensity) {
+      const label = (propertyType || propCheck?.data?.property_type || 'high-density').replace(/_/g, ' ');
+      if (bank.highDensityAppetite === 'flexible') {
+        score += 12;
+        reasons.push(`More pragmatic on ${label} LVR — brokers often find a path above conservative 70–80% caps in supported postcodes.`);
+      } else if (bank.highDensityAppetite === 'moderate') {
+        score += 2;
+        reasons.push(`${label} is workable here in many postcodes, but expect LVR scrutiny around 80%.`);
+      } else {
+        score -= 14;
+        reasons.push(`Tighter typical LVR caps on ${label} (often 70–80%) — less appetite without a strong postcode / development story.`);
+      }
+    }
+
+    if (ruralLike) {
+      if (bank.overall === 'flexible' || bank.id === 'boq') {
+        score += 8;
+        reasons.push('Regional / rural lending is more commonly accommodated here than at pure digital majors.');
+      } else if (bank.overall === 'rate_focused') {
+        score -= 10;
+        reasons.push('Acreage / rural files are usually outside rate-focused digital lender appetite.');
+      } else {
+        score -= 6;
+        reasons.push('Rural / acreage typically attracts lower max LVR at mainstream lenders.');
+      }
+    }
+
+    if (cardLimits >= 10000) {
+      if (bank.overall === 'rate_focused') {
+        score -= 4;
+        reasons.push(`$${cardLimits.toLocaleString('en-AU')} in card limits is a material serviceability drag — digital lenders are less flexible on residual commitments.`);
+      }
     }
 
     if (hasAdverse) {
@@ -307,7 +370,7 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}) {
   return {
     banks: rows,
     basis: 'curated_broker_posture',
-    note: 'Bank-by-bank rows below are curated broker knowledge about typical credit appetite (tenure windows, self-employed flexibility, overtime shading, DTI tolerance). They are not live Open Banking fields and do not predict approval. Use with the CDR product-fit table for rates and published eligibility text.',
+    note: 'Bank-by-bank rows below are curated broker knowledge about typical credit appetite (tenure windows, self-employed flexibility, overtime shading, DTI tolerance, high-density/rural property policy). They are driven by flags already raised in the strict checks — not generic bank trivia. They are not live Open Banking fields and do not predict approval. Use with the CDR product-fit table for rates and published eligibility text.',
     reviewed: '2026-07',
   };
 }

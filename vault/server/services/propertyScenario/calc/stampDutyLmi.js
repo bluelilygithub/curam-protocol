@@ -37,8 +37,10 @@ function calculateStampDutyLmi(buyFields, opts = {}) {
   const fields = buyFields || {};
   const state = fields.state || null;
   const propertyValue = Number(fields.property_value);
-  const isFhb = fields.is_first_home_buyer === true;
-  const isPpor = fields.is_ppor === true;
+  const isFhb = fields.is_first_home_buyer === true || fields.is_first_home_buyer === 'true' || fields.is_first_home_buyer === 'yes';
+  // Tolerate common truthy encodings — missing/undefined must NOT default to PPOR
+  // (investors would incorrectly receive the home concession).
+  const isPpor = fields.is_ppor === true || fields.is_ppor === 'true' || fields.is_ppor === 'yes';
   const deposit = fields.deposit_amount != null ? Number(fields.deposit_amount) : null;
   const loanAmount = opts.loan_amount != null
     ? Number(opts.loan_amount)

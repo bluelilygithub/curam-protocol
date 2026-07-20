@@ -737,9 +737,12 @@ function QualificationDocument({ result, inputs, eligibleLenders }) {
         {/* Overall verdict */}
         <View style={[s.section, { backgroundColor: statusColors.bg, padding: 10, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
           <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
-            Overall: {statusColors.label}
-            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely block${s2.fail_count !== 1 ? 's' : ''}` : ''}
+            Overall (lending checks only): {statusColors.label}
+            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely lending block${s2.fail_count !== 1 ? 's' : ''}` : ''}
             {s2.warn_count > 0 ? ` — ${s2.warn_count} area${s2.warn_count !== 1 ? 's' : ''} to verify` : ''}
+          </Text>
+          <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+            {s2.status_note || 'Overall status reflects lending checks only. Government grants/schemes (FHOG, FHBG) are reported separately and do not mean a lender would decline the loan.'}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {[
@@ -982,19 +985,31 @@ function QualificationProformaDocument({ proforma, inputs }) {
         {/* Strict verdict */}
         <View style={[s.section, { backgroundColor: statusColors.bg, padding: 10, borderLeftWidth: 4, borderLeftColor: statusColors.border, borderLeftStyle: 'solid' }]}>
           <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: statusColors.text, marginBottom: 4 }}>
-            As declared: {statusColors.label}
-            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely block${s2.fail_count !== 1 ? 's' : ''}` : ''}
+            Lending checks: {statusColors.label}
+            {s2.fail_count > 0 ? ` — ${s2.fail_count} likely lending block${s2.fail_count !== 1 ? 's' : ''}` : ''}
             {s2.warn_count > 0 ? ` — ${s2.warn_count} area${s2.warn_count !== 1 ? 's' : ''} to verify` : ''}
+          </Text>
+          <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+            {s2.status_note || 'Overall status reflects lending checks only. Government grants/schemes (FHOG, FHBG) are reported separately and do not mean a lender would decline the loan.'}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {[
+              ['Purchase price', inp.property_value ? fmtMoney(inp.property_value) : '—'],
+              ['Deposit', inp.deposit_amount ? fmtMoney(inp.deposit_amount) : '—'],
+              ['State', inp.state || '—'],
+              ['Purpose', inp.is_ppor === false || inp.is_ppor === 'false' ? 'Investment' : 'PPOR'],
+              ['FHB', inp.is_fhb ? 'Yes' : 'No'],
               ['Loan requested', fmtMoney(s2.loan_requested)],
-              ['Max indicative capacity (as declared)', s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'],
-              ['Employment', inp.employment_type?.replace(/_/g, ' ') || '—'],
-              ['Months in current role', inp.months_in_current_role ?? '—'],
+              ['Max indicative capacity', s2.max_borrowing_capacity != null ? fmtMoney(s2.max_borrowing_capacity) : '—'],
+              ['Transfer duty (payable)', s2.stamp_duty_estimate != null ? fmtMoney(s2.stamp_duty_estimate) : '—'],
+              ['Gross income', inp.gross_annual_income ? `$${Number(inp.gross_annual_income).toLocaleString('en-AU')}/yr` : '—'],
+              ['Declared expenses/mo', inp.monthly_expenses ? fmtMoney(inp.monthly_expenses) : 'HEM used'],
+              ['Existing debts/mo', inp.monthly_debt_repayments ? fmtMoney(inp.monthly_debt_repayments) : '$0'],
               ['Credit card limits', inp.credit_card_limits_total ? fmtMoney(inp.credit_card_limits_total) : '$0'],
-              ['Dependents', inp.dependents ?? 0],
-              ['Adverse credit declared', inp.has_adverse_credit ? `Yes (${inp.adverse_credit_severity || 'default'})` : 'No'],
+              ['Employment', inp.employment_type?.replace(/_/g, ' ') || '—'],
+              ['Property type', inp.property_type_class?.replace(/_/g, ' ') || '—'],
+              ['Months in current role', inp.months_in_current_role ?? '—'],
+              ['Adverse credit', inp.has_adverse_credit ? `Yes (${inp.adverse_credit_severity || 'default'})` : 'No'],
             ].map(([label, value]) => (
               <View key={label} style={{ width: '50%', flexDirection: 'row', marginBottom: 3 }}>
                 <Text style={{ width: '60%', fontSize: 8, color: MUTED }}>{label}</Text>

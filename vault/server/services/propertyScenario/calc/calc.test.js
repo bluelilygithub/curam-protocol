@@ -156,9 +156,10 @@ test('NSW FHB boundary: $800,001 loses full exemption, gets tapered concession i
   assert.ok(r.stamp_duty_payable < r.stamp_duty_standard, 'tapered concession should still reduce duty below standard');
 });
 
-// GAP: QLD FHB concession above the top ($800k) threshold was untested — standard duty
-// should apply with no concession amount.
-test('QLD FHB above concession ceiling pays full standard duty', () => {
+// GAP: QLD FHB above $800k with NO is_ppor flag cannot claim home concession
+// (occupancy unknown) — falls through to general rate. When is_ppor is true,
+// home concession MUST still apply (see next tests).
+test('QLD FHB above concession ceiling without is_ppor pays general rate', () => {
   const r = calculateStampDutyLmi({
     property_value: 900_000,
     state: 'QLD',
@@ -167,8 +168,56 @@ test('QLD FHB above concession ceiling pays full standard duty', () => {
   });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.fhb_concession_applied, false);
+  assert.strictEqual(r.ppor_concession_applied, false);
   assert.strictEqual(r.fhb_concession_amount, 0);
   assert.strictEqual(r.stamp_duty_payable, r.stamp_duty_standard);
+  assert.strictEqual(r.stamp_duty_payable, 33_525);
+});
+
+// QLD home concession — ANY PPOR owner-occupier, FHB or not. Saves up to $7,175
+// vs general rate at ≥ $350k. Source: QRO published home concession rates.
+test('QLD non-FHB PPOR at $900k gets home concession (−$7,175 vs general)', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 900_000,
+    state: 'QLD',
+    is_first_home_buyer: false,
+    is_ppor: true,
+    loan: { balance: 700_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.stamp_duty_standard, 33_525);
+  assert.strictEqual(r.stamp_duty_payable, 26_350);
+  assert.strictEqual(r.ppor_concession_applied, true);
+  assert.strictEqual(r.ppor_concession_amount, 7_175);
+  assert.strictEqual(r.fhb_concession_applied, false);
+});
+
+test('QLD FHB PPOR above $800k still gets home concession (does not fall to investor rate)', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 950_000,
+    state: 'QLD',
+    is_first_home_buyer: true,
+    is_ppor: true,
+    loan: { balance: 760_000 },
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.stamp_duty_standard, 35_775);
+  assert.strictEqual(r.stamp_duty_payable, 28_600);
+  assert.strictEqual(r.ppor_concession_applied, true);
+  assert.strictEqual(r.ppor_concession_amount, 7_175);
+  assert.strictEqual(r.fhb_concession_applied, false);
+});
+
+test('QLD investor (is_ppor false) at $900k pays general rate', () => {
+  const r = calculateStampDutyLmi({
+    property_value: 900_000,
+    state: 'QLD',
+    is_first_home_buyer: false,
+    is_ppor: false,
+    loan: { balance: 700_000 },
+  });
+  assert.strictEqual(r.stamp_duty_payable, 33_525);
+  assert.strictEqual(r.ppor_concession_applied, false);
 });
 
 // ─── CGT ─────────────────────────────────────────────────────────────────────

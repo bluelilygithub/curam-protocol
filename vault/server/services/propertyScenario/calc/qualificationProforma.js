@@ -32,7 +32,6 @@
 const {
   assessBuyerQualification,
   maxLoanFromMonthlyRepayment,
-  hemMonthly,
 } = require('./buyerQualification');
 const { roundMoney } = require('./tables');
 const { buildEligibleLenderProducts } = require('./eligibleProducts');
@@ -119,24 +118,9 @@ function buildLevers(strict, inputs) {
     });
   }
 
-  // ── 4. Declared expenses vs HEM floor ─────────────────────────────────────
-  const declared = Number(inputs.monthlyExpenses) || 0;
-  const totalGrossAnnual = (Number(inputs.grossAnnualIncome) || 0) + (Number(inputs.partnerGrossIncome) || 0);
-  const hem = hemMonthly(inputs.householdType || 'single', totalGrossAnnual, Number(inputs.dependents) || 0);
-  if (declared > hem) {
-    const delta = roundMoney(declared - hem);
-    const uplift = upliftFor(delta);
-    levers.push({
-      id: 'expenses_at_hem_floor',
-      title: 'Declaring expenses at the HEM benchmark instead of your higher actual figure',
-      category: 'Documentation',
-      riskLevel: 'high',
-      whatItIs: `You've indicated actual expenses of $${declared.toLocaleString('en-AU')}/mo, above the HEM benchmark of $${hem.toLocaleString('en-AU')}/mo. A lender will use whichever is higher by policy, but only if you disclose the higher figure in the first place.`,
-      whyItsAllowed: 'It isn\'t automatically safe. Responsible lending obligations (NCCP Act) require you to make reasonable inquiries into your own expenses and disclose them honestly — HEM is a regulatory floor lenders apply when your declared figure is lower, not a licence to under-declare a figure you know is higher. If your bank statements show consistent spending above HEM, some lenders will pick it up in statement checks regardless of what you write on the form.',
-      impact: `Understating expenses down to the HEM floor could show as much as +$${uplift.toLocaleString('en-AU')} indicative borrowing capacity — which is exactly why this is the highest-risk lever here: it is the most tempting and the easiest for a lender's bank-statement review to catch.`,
-      regulatoryNote: 'Under-declaring expenses you know are higher is a responsible-lending breach, not a grey area — a loan approved on that basis can be more expensive to service than it looks, or unwound if discovered.',
-    });
-  }
+  // ── 4. Declared expenses vs HEM — NOT a lever (misrepresentation).
+  // Educational note lives in EXCLUDED_LEVERS so we never attach a "$ you'd gain"
+  // figure to under-declaring expenses on a regulated credit application.
 
   // ── 5. Timing around employment tenure thresholds ────────────────────────
   const emp = getCheck(checks, 'employment');
@@ -216,6 +200,11 @@ const EXCLUDED_LEVERS = [
     why: 'Income must be evidenced. Lenders verify against payslips, group certificates, ATO income statements, or tax returns — a figure that can\'t be verified is fabricated, not "optimised."',
   },
   {
+    id: 'underdeclaring_expenses',
+    title: 'Declaring living expenses at the HEM floor when you know your actual spending is higher',
+    why: 'HEM is a regulatory floor lenders apply when declared expenses are lower — not a licence to under-declare. Responsible lending obligations (NCCP Act) require honest disclosure. Bank statements often reveal the gap. This is a compliance breach, not a structuring choice — we deliberately do not quantify any borrowing-capacity "upside" for it.',
+  },
+  {
     id: 'false_occupancy',
     title: 'Declaring a property as owner-occupied to get a better rate/LVR when you intend to rent it out',
     why: 'Owner-occupier vs investment is a loan contract term, not a preference. Misrepresenting it is a breach of contract that can trigger loan recall, and it is routinely checked (rates notices, insurance, tenancy databases).',
@@ -223,7 +212,7 @@ const EXCLUDED_LEVERS = [
   {
     id: 'temporary_reversal',
     title: 'Paying down debt or reducing card limits purely for the application, with a plan to reverse it right after settlement',
-    why: 'Presenting a deliberately temporary snapshot as your ongoing financial position is materially misleading, even though each individual action (paying down debt) is legal on its own. Intent is what separates this from lever #1 above.',
+    why: 'Presenting a deliberately temporary snapshot as your ongoing financial position is materially misleading, even though each individual action (paying down debt) is legal on its own. Intent is what separates this from the legitimate "close unused cards before applying" structuring step.',
   },
   {
     id: 'disguised_borrowed_deposit',
@@ -286,7 +275,7 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
   }
 
   const levers = buildLevers(strict, inputs);
-  const bankPosture = buildBankPostureFit(inputs, strict.summary || {});
+  const bankPosture = buildBankPostureFit(inputs, strict.summary || {}, strict.checks || []);
   const lenderFit = Array.isArray(allNormalized) && allNormalized.length > 0
     ? buildLenderFit(allNormalized, {
       loanAmount: strict.summary.loan_requested,

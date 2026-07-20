@@ -1204,10 +1204,13 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           {/* Overall verdict */}
           <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
             <p className="text-base font-semibold" style={{ color: overallColor }}>
-              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard blocks found'}
+              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard lending blocks found'}
               {s.overall_status === 'warn' && `${s.warn_count} area${s.warn_count !== 1 ? 's' : ''} to check — may face conditions or reduced choice`}
-              {s.overall_status === 'fail' && `${s.fail_count} likely block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
+              {s.overall_status === 'fail' && `${s.fail_count} likely lending block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
             </p>
+            {s.status_note && (
+              <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{s.status_note}</p>
+            )}
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               {[
                 { label: 'Loan requested', value: `$${s.loan_requested?.toLocaleString('en-AU') ?? '—'}` },
@@ -1915,12 +1918,15 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
         <div ref={proformaResultRef} className="space-y-5">
           {/* Strict verdict */}
           <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: overallColor }}>As declared — strict result</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: overallColor }}>Lending checks — strict result</p>
             <p className="text-base font-semibold" style={{ color: overallColor }}>
-              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard blocks found'}
+              {s.overall_status === 'pass' && 'Looks broadly serviceable — no hard lending blocks found'}
               {s.overall_status === 'warn' && `${s.warn_count} area${s.warn_count !== 1 ? 's' : ''} to check — may face conditions or reduced choice`}
-              {s.overall_status === 'fail' && `${s.fail_count} likely block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
+              {s.overall_status === 'fail' && `${s.fail_count} likely lending block${s.fail_count !== 1 ? 's' : ''} — most lenders would not proceed as-is`}
             </p>
+            {s.status_note && (
+              <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{s.status_note}</p>
+            )}
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               {[
                 { label: 'Loan requested', value: `$${s.loan_requested?.toLocaleString('en-AU') ?? '—'}` },

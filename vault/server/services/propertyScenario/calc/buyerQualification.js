@@ -32,13 +32,13 @@ const APRA_FLOOR_RATE_PCT = 8.5;
 // Lenders typically use HEM if declared expenses are lower; actual or HEM — whichever higher.
 const HEM = {
   single: {
-    low:  1400,  // income < $50k p.a.
-    mid:  1800,  // income $50k–$100k
-    high: 2200,  // income $100k+
+    low:  1400,  // gross income < $50k p.a.
+    mid:  1800,  // gross income $50k–<$150k
+    high: 2200,  // gross income $150k+
   },
   couple: {
     low:  2400,  // combined income < $100k
-    mid:  3000,  // combined $100k–$150k
+    mid:  3000,  // combined $100k–<$150k
     high: 3600,  // combined $150k+
   },
   family: {
@@ -59,6 +59,13 @@ function hemMonthly(householdType, grossAnnualIncome, dependents = 0) {
   // HEM increases roughly $180-250/mo per additional dependent, metro approximate).
   const extraDependents = Math.max(0, (Number(dependents) || 0) - (householdType === 'family' ? 2 : 0));
   return roundMoney(base + extraDependents * 220);
+}
+
+/** Income band used for HEM — explains why two singles can show $1,800 vs $2,200. */
+function hemBandLabel(grossAnnualIncome) {
+  if (grossAnnualIncome < 50000) return 'low (<$50k)';
+  if (grossAnnualIncome < 150000) return 'mid ($50k–<$150k)';
+  return 'high ($150k+)';
 }
 
 // ─── HECS/HELP compulsory repayment — ATO 2025-26 marginal method ────────────
@@ -353,7 +360,9 @@ function assessBuyerQualification(inputs = {}) {
   }
 
   // ─── 3. Serviceability ──────────────────────────────────────────────────────
-  const hem = hemMonthly(householdType, totalGrossAnnual, dependents);
+  // HEM uses base salary (not overtime-shaded assessable) — matches how lenders
+  // pick an expense benchmark from core household income.
+  const hem = hemMonthly(householdType, baseGrossAnnual, dependents);
   const declaredExpenses = monthlyExpenses && Number.isFinite(monthlyExpenses) ? Number(monthlyExpenses) : null;
   const effectiveExpenses = declaredExpenses != null ? Math.max(declaredExpenses, hem) : hem;
   // Lenders count an assumed monthly commitment on undrawn credit card LIMITS (not
@@ -367,7 +376,7 @@ function assessBuyerQualification(inputs = {}) {
   const netSurplus = roundMoney(grossMonthly - effectiveExpenses - existingDebts - hecsRepaymentMonthly);
 
   assumptions.push(
-    `HEM benchmark for ${householdType}${dependents ? ` with ${dependents} dependent${dependents === 1 ? '' : 's'}` : ''}: $${hem.toLocaleString('en-AU')}/mo. ` +
+    `HEM benchmark for ${householdType}${dependents ? ` with ${dependents} dependent${dependents === 1 ? '' : 's'}` : ''} at income band ${hemBandLabel(baseGrossAnnual)}: $${hem.toLocaleString('en-AU')}/mo. ` +
     (declaredExpenses != null
       ? `Declared expenses $${declaredExpenses.toLocaleString('en-AU')}/mo — using ${effectiveExpenses === hem ? 'HEM (higher)' : 'declared (higher)'}.`
       : `No declared expenses — using HEM benchmark.`)
@@ -976,6 +985,9 @@ function assessBuyerQualification(inputs = {}) {
     fail_count: failCount,
     warn_count: warnCount,
     loan_feasible: loanFeasible,
+    // Explicit: grants/schemes never drive overall_status. Surface separately so PDF/UI can't flatten them into "loan blocked".
+    status_scope: 'lending_checks_only',
+    status_note: 'Overall status reflects lending checks only (serviceability, LVR, DTI, genuine savings, employment, credit, property-type policy). Government grants and schemes (FHOG, FHBG) are reported separately and do not mean a lender would decline the loan.',
     property_value: propertyValue,
     deposit_amount: depositAmount,
     loan_requested: loanRequested,
@@ -1267,6 +1279,7 @@ module.exports = {
   assessBuyerQualification,
   hecsAnnualRepayment,
   hemMonthly,
+  hemBandLabel,
   monthlyRepayment,
   maxLoanFromMonthlyRepayment,
   buildLenderGuidance,

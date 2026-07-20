@@ -4,6 +4,17 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-20 (proforma-audit-fixes)
+
+### Qualification proforma audit (QLD duty, status, levers, posture)
+- **QLD PPOR home concession** — regression tests lock non-FHB and above-threshold FHB PPOR duty at −$7,175 vs general (`$26,350` / `$28,600`); `is_ppor` encoding made more tolerant. (Engine already applied concession when `is_ppor` was true — tests prevent regressing to investor rate.)
+- **Overall status copy** — explicit `status_note`: lending checks only; FHOG/FHBG never mean “loan blocked.” PDF/UI headline says “Lending checks.”
+- **Expense under-declare** — removed from levers (no dollar upside on a stated NCCP breach); moved to excluded/compliance list.
+- **HEM bands** — comments/assumptions clarify mid = `$50k–<$150k` vs high = `$150k+` (explains `$1,800` vs `$2,200` for singles).
+- **Bank posture** — feeds strict-check property-type (high-rise/studio/rural) so rows diverge instead of uniform FAIR; PDF inputs now show purpose, debts, expenses, duty payable.
+
+---
+
 ## 2026-07-20 (qualification-proforma-enhancements)
 
 ### Qualification proforma — four upgrades
