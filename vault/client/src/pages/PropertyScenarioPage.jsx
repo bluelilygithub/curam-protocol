@@ -5,7 +5,12 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
-import useProcessingStore from '../store/processingStore';
+import useProcessingStore, { runWithStepLog } from '../store/processingStore';
+import FormattedNumberInput from '../components/FormattedNumberInput';
+import {
+  formatNumberForInput,
+  parseFormattedNumber,
+} from '../utils/numericInput';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { LENDER_PROFILES } from '../utils/lenderProfiles';
 // Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
@@ -938,10 +943,10 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
   const qualifyResultRef        = useRef(null);
 
   async function runQualify() {
-    const price = parseFloat(qPrice);
-    const deposit = parseFloat(qDeposit);
-    const income = parseFloat(qIncome);
-    const rate = parseFloat(qRate);
+    const price = parseFormattedNumber(qPrice);
+    const deposit = parseFormattedNumber(qDeposit);
+    const income = parseFormattedNumber(qIncome);
+    const rate = parseFormattedNumber(qRate);
     if (!price || !deposit || !income || !rate || !qState) {
       setError('Property price, deposit, state, gross income, and interest rate are required.');
       return;
@@ -950,34 +955,47 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
     setLoading(true);
     setEligibleLendersPack(null);
     try {
-      const res = await api.post('/api/property-scenario/calculators/buyer-qualify', {
-        property_value:          price,
-        deposit_amount:          deposit,
-        state:                   qState,
-        is_fhb:                  qFhb === 'yes',
-        is_ppor:                 qPpor === 'ppor',
-        gross_annual_income:     income,
-        partner_gross_income:    qPartner ? parseFloat(qPartner) : 0,
-        household_type:          qHousehold,
-        employment_type:         qEmployment,
-        has_hecs:                qHecs === 'yes',
-        is_new_build:            qNewBuild === 'yes',
-        monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
-        monthly_expenses:        qExpenses ? parseFloat(qExpenses) : undefined,
-        loan_term_years:         parseFloat(qTerm) || 30,
-        target_rate_pct:         rate,
-        applicant_age:           qAge ? parseFloat(qAge) : undefined,
-        property_type_class:     qPropTypeClass || undefined,
-        gross_rental_income:     qRentalIncome ? parseFloat(qRentalIncome) : undefined,
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.errors?.[0] || 'Qualification check failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Running qualification check…',
+        'Deterministic AU lending checks — please don’t navigate away.',
+        [
+          'Validating purchase, deposit, and income inputs',
+          'Assessing employment and serviceability (APRA)',
+          'Checking LVR, DTI, and genuine savings',
+          'Estimating stamp duty, LMI, and settlement cash',
+          'Building lender guidance',
+        ],
+        async () => {
+          const res = await api.post('/api/property-scenario/calculators/buyer-qualify', {
+            property_value:          price,
+            deposit_amount:          deposit,
+            state:                   qState,
+            is_fhb:                  qFhb === 'yes',
+            is_ppor:                 qPpor === 'ppor',
+            gross_annual_income:     income,
+            partner_gross_income:    qPartner ? parseFormattedNumber(qPartner) : 0,
+            household_type:          qHousehold,
+            employment_type:         qEmployment,
+            has_hecs:                qHecs === 'yes',
+            is_new_build:            qNewBuild === 'yes',
+            monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
+            monthly_expenses:        qExpenses ? parseFormattedNumber(qExpenses) : undefined,
+            loan_term_years:         parseFormattedNumber(qTerm) || 30,
+            target_rate_pct:         rate,
+            applicant_age:           qAge ? parseFormattedNumber(qAge) : undefined,
+            property_type_class:     qPropTypeClass || undefined,
+            gross_rental_income:     qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
+          });
+          const payload = await res.json();
+          if (!payload.ok) throw new Error(payload.errors?.[0] || 'Qualification check failed');
+          return payload;
+        },
+      );
       setResult(data);
-      // Auto-expand fails first
       const init = {};
       (data.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
-      // Scroll to results after a brief paint delay
       setTimeout(() => {
         qualifyResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 120);
@@ -996,24 +1014,24 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
     setPdfBusy(true);
     try {
       await downloadQualifyPdf(result, {
-        property_value: parseFloat(qPrice),
-        deposit_amount: parseFloat(qDeposit),
+        property_value: parseFormattedNumber(qPrice),
+        deposit_amount: parseFormattedNumber(qDeposit),
         state: qState,
         is_fhb: qFhb === 'yes',
         is_ppor: qPpor === 'ppor',
-        gross_annual_income: parseFloat(qIncome),
-        partner_gross_income: qPartner ? parseFloat(qPartner) : 0,
+        gross_annual_income: parseFormattedNumber(qIncome),
+        partner_gross_income: qPartner ? parseFormattedNumber(qPartner) : 0,
         household_type: qHousehold,
         employment_type: qEmployment,
         has_hecs: qHecs === 'yes',
         is_new_build: qNewBuild === 'yes',
-        monthly_debt_repayments: qDebts ? parseFloat(qDebts) : 0,
-        monthly_expenses: qExpenses ? parseFloat(qExpenses) : undefined,
-        loan_term_years: parseFloat(qTerm) || 30,
-        target_rate_pct: parseFloat(qRate),
-        applicant_age: qAge ? parseFloat(qAge) : undefined,
+        monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
+        monthly_expenses: qExpenses ? parseFormattedNumber(qExpenses) : undefined,
+        loan_term_years: parseFormattedNumber(qTerm) || 30,
+        target_rate_pct: parseFormattedNumber(qRate),
+        applicant_age: qAge ? parseFormattedNumber(qAge) : undefined,
         property_type_class: qPropTypeClass || undefined,
-        gross_rental_income: qRentalIncome ? parseFloat(qRentalIncome) : undefined,
+        gross_rental_income: qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
       }, eligibleLendersPack);
     } catch (err) {
       console.error('[PDF] qualification failed:', err);
@@ -1045,11 +1063,11 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)<FieldTip text="The full property price you intend to pay — not including stamp duty or other costs." /></span>
-              <input type="text" inputMode="numeric" value={qPrice} onChange={(e) => setQPrice(e.target.value)} placeholder="e.g. 850000" style={FIELD} />
+              <FormattedNumberInput value={qPrice} onChange={setQPrice} placeholder="e.g. 850000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)<FieldTip text="Your total available deposit — savings, equity from another property, and grants. Your LVR (loan-to-value ratio) is calculated directly from this figure." /></span>
-              <input type="text" inputMode="numeric" value={qDeposit} onChange={(e) => setQDeposit(e.target.value)} placeholder="e.g. 170000" style={FIELD} />
+              <FormattedNumberInput value={qDeposit} onChange={setQDeposit} placeholder="e.g. 170000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State<FieldTip text="Used to calculate stamp duty, First Home Buyer concessions, and FHOG eligibility. Rates and thresholds differ significantly between states." /></span>
@@ -1082,11 +1100,11 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Your total gross income before tax — salary, wages, and salary packaging. Do not include rental income here; enter it in the optional rental income field below." /></span>
-              <input type="text" inputMode="numeric" value={qIncome} onChange={(e) => setQIncome(e.target.value)} placeholder="e.g. 95000" style={FIELD} />
+              <FormattedNumberInput value={qIncome} onChange={setQIncome} placeholder="e.g. 95000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)<FieldTip text="For joint applications, enter your partner's gross annual income before tax. Leave blank for a sole applicant." /></span>
-              <input type="text" inputMode="numeric" value={qPartner} onChange={(e) => setQPartner(e.target.value)} placeholder="leave blank if solo" style={FIELD} />
+              <FormattedNumberInput value={qPartner} onChange={setQPartner} placeholder="leave blank if solo" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type<FieldTip text="Used to select the correct HEM (Household Expenditure Measure) benchmark. Lenders use HEM as a minimum living expenses floor if your declared expenses are lower than the benchmark." /></span>
@@ -1129,11 +1147,11 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)<FieldTip text="Total minimum monthly payments on personal loans, car loans, and credit cards. For credit cards: lenders count 3.8% of your total limit as a monthly commitment — e.g. $10,000 limit = $380/mo, even if you pay it off in full each month." /></span>
-              <input type="text" inputMode="numeric" value={qDebts} onChange={(e) => setQDebts(e.target.value)} placeholder="loans, credit cards (3.8%×limit)" style={FIELD} />
+              <FormattedNumberInput value={qDebts} onChange={setQDebts} placeholder="loans, credit cards (3.8%×limit)" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)<FieldTip text="Your declared monthly living costs (groceries, utilities, transport, subscriptions). Leave blank and the HEM benchmark for your household type is used — lenders apply whichever is higher." /></span>
-              <input type="text" inputMode="numeric" value={qExpenses} onChange={(e) => setQExpenses(e.target.value)} placeholder="leave blank to use HEM benchmark" style={FIELD} />
+              <FormattedNumberInput value={qExpenses} onChange={setQExpenses} placeholder="leave blank to use HEM benchmark" style={FIELD} />
             </label>
           </div>
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
@@ -1147,7 +1165,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="The rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer). Check live CDR rates in the Lenders tab for a real-market starting point." /></span>
-              <input type="text" inputMode="decimal" value={qRate} onChange={(e) => setQRate(e.target.value)} placeholder="e.g. 6.10 (see Lenders tab for live rates)" style={FIELD} />
+              <FormattedNumberInput value={qRate} onChange={setQRate} allowDecimals placeholder="e.g. 6.10 (see Lenders tab for live rates)" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="Typically 30 years for maximum borrowing capacity. A shorter term raises the minimum repayment and lowers the amount a lender will approve." /></span>
@@ -1165,7 +1183,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)<FieldTip text="Optional. Checks whether the loan would mature beyond age 70-75 — the typical ceiling most lenders apply without a documented retirement income plan." /></span>
-              <input type="text" inputMode="numeric" value={qAge} onChange={(e) => setQAge(e.target.value)} placeholder="e.g. 42 — checks loan maturity age" style={FIELD} />
+              <FormattedNumberInput value={qAge} onChange={setQAge} placeholder="e.g. 42 — checks loan maturity age" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type<FieldTip text="Affects the maximum LVR some lenders will approve. High-rise, studios under 50m², and rural properties face tighter caps at major lenders — but this varies by postcode and is often broker-negotiable." /></span>
@@ -1179,7 +1197,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)<FieldTip text="Investment purchases only. Lenders typically shade (discount) rental income to 75% before adding it to your serviceability calculation. Leave blank for a PPOR purchase." /></span>
-              <input type="text" inputMode="numeric" value={qRentalIncome} onChange={(e) => setQRentalIncome(e.target.value)} placeholder="Investment only — leave blank for PPOR" style={FIELD} />
+              <FormattedNumberInput value={qRentalIncome} onChange={setQRentalIncome} placeholder="Investment only — leave blank for PPOR" style={FIELD} />
             </label>
           </div>
         </div>
@@ -1480,8 +1498,8 @@ function LeverCard({ lever }) {
  */
 function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialInputs }) {
   // Property
-  const [pPrice, setPPrice]     = useState(() => initialInputs?.property_value != null ? String(initialInputs.property_value) : '');
-  const [pDeposit, setPDeposit] = useState(() => initialInputs?.deposit_amount != null ? String(initialInputs.deposit_amount) : '');
+  const [pPrice, setPPrice]     = useState(() => initialInputs?.property_value != null ? formatNumberForInput(initialInputs.property_value) : '');
+  const [pDeposit, setPDeposit] = useState(() => initialInputs?.deposit_amount != null ? formatNumberForInput(initialInputs.deposit_amount) : '');
   const [pState, setPState]     = useState(() => initialInputs?.state || '');
   const [pFhb, setPFhb]         = useState(() => {
     if (initialInputs?.is_fhb === true || initialInputs?.is_fhb === 'yes') return 'yes';
@@ -1493,8 +1511,8 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
     return 'ppor';
   });
   // Income & household
-  const [pIncome, setPIncome]     = useState(() => initialInputs?.gross_annual_income != null ? String(initialInputs.gross_annual_income) : '');
-  const [pPartner, setPPartner]   = useState(() => initialInputs?.partner_gross_income ? String(initialInputs.partner_gross_income) : '');
+  const [pIncome, setPIncome]     = useState(() => initialInputs?.gross_annual_income != null ? formatNumberForInput(initialInputs.gross_annual_income) : '');
+  const [pPartner, setPPartner]   = useState(() => initialInputs?.partner_gross_income ? formatNumberForInput(initialInputs.partner_gross_income) : '');
   const [pHousehold, setPHousehold] = useState(() => initialInputs?.household_type || 'single');
   const [pDependents, setPDependents] = useState(() => initialInputs?.dependents != null && initialInputs.dependents !== '' ? String(initialInputs.dependents) : '');
   const [pEmployment, setPEmployment] = useState(() => initialInputs?.employment_type || 'payg_fulltime');
@@ -1502,34 +1520,34 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   // Debts & expenses
   const [pHecs, setPHecs]       = useState(() => (initialInputs?.has_hecs === true || initialInputs?.has_hecs === 'yes') ? 'yes' : 'no');
   const [pNewBuild, setPNewBuild] = useState(() => (initialInputs?.is_new_build === true || initialInputs?.is_new_build === 'yes') ? 'yes' : 'no');
-  const [pDebts, setPDebts]     = useState(() => initialInputs?.monthly_debt_repayments ? String(initialInputs.monthly_debt_repayments) : '');
-  const [pExpenses, setPExpenses] = useState(() => initialInputs?.monthly_expenses ? String(initialInputs.monthly_expenses) : '');
-  const [pCardLimits, setPCardLimits] = useState(() => initialInputs?.credit_card_limits_total ? String(initialInputs.credit_card_limits_total) : '');
+  const [pDebts, setPDebts]     = useState(() => initialInputs?.monthly_debt_repayments ? formatNumberForInput(initialInputs.monthly_debt_repayments) : '');
+  const [pExpenses, setPExpenses] = useState(() => initialInputs?.monthly_expenses ? formatNumberForInput(initialInputs.monthly_expenses) : '');
+  const [pCardLimits, setPCardLimits] = useState(() => initialInputs?.credit_card_limits_total ? formatNumberForInput(initialInputs.credit_card_limits_total) : '');
   const [pLiabilities, setPLiabilities] = useState(() => {
     if (Array.isArray(initialInputs?.liabilities) && initialInputs.liabilities.length) {
       return initialInputs.liabilities.map((row) => ({
         type: row.type || 'other',
         label: row.label || '',
-        monthly: String(row.monthly_repayment ?? row.monthlyRepayment ?? ''),
+        monthly: formatNumberForInput(row.monthly_repayment ?? row.monthlyRepayment ?? '') || '',
       }));
     }
     return [];
   });
   // Broker-realism inputs
-  const [pOvertime, setPOvertime] = useState(() => initialInputs?.overtime_bonus_annual ? String(initialInputs.overtime_bonus_annual) : '');
+  const [pOvertime, setPOvertime] = useState(() => initialInputs?.overtime_bonus_annual ? formatNumberForInput(initialInputs.overtime_bonus_annual) : '');
   const [pOvertimeRegularity, setPOvertimeRegularity] = useState(() => initialInputs?.overtime_bonus_regularity || 'irregular');
-  const [pAddbacks, setPAddbacks] = useState(() => initialInputs?.self_employed_addbacks_annual ? String(initialInputs.self_employed_addbacks_annual) : '');
+  const [pAddbacks, setPAddbacks] = useState(() => initialInputs?.self_employed_addbacks_annual ? formatNumberForInput(initialInputs.self_employed_addbacks_annual) : '');
   const [pAdverseCredit, setPAdverseCredit] = useState(() => (initialInputs?.has_adverse_credit === true || initialInputs?.has_adverse_credit === 'yes') ? 'yes' : 'no');
   const [pAdverseSeverity, setPAdverseSeverity] = useState(() => initialInputs?.adverse_credit_severity || 'default');
   const [pGenuineHeldMonths, setPGenuineHeldMonths] = useState(() => initialInputs?.genuine_savings_held_months != null ? String(initialInputs.genuine_savings_held_months) : '');
-  const [pDepositGift, setPDepositGift] = useState(() => initialInputs?.deposit_gift_amount ? String(initialInputs.deposit_gift_amount) : '');
+  const [pDepositGift, setPDepositGift] = useState(() => initialInputs?.deposit_gift_amount ? formatNumberForInput(initialInputs.deposit_gift_amount) : '');
   // Loan
   const [pTerm, setPTerm]       = useState(() => initialInputs?.loan_term_years ? String(initialInputs.loan_term_years) : '30');
-  const [pRate, setPRate]       = useState(() => initialInputs?.target_rate_pct != null ? String(initialInputs.target_rate_pct) : '');
+  const [pRate, setPRate]       = useState(() => initialInputs?.target_rate_pct != null ? formatNumberForInput(initialInputs.target_rate_pct, { allowDecimals: true }) : '');
   // Extra checks
   const [pAge, setPAge]               = useState(() => initialInputs?.applicant_age ? String(initialInputs.applicant_age) : '');
   const [pPropTypeClass, setPPropTypeClass] = useState(() => initialInputs?.property_type_class || 'house_town');
-  const [pRentalIncome, setPRentalIncome]   = useState(() => initialInputs?.gross_rental_income ? String(initialInputs.gross_rental_income) : '');
+  const [pRentalIncome, setPRentalIncome]   = useState(() => initialInputs?.gross_rental_income ? formatNumberForInput(initialInputs.gross_rental_income) : '');
   // Results
   const [proforma, setProforma] = useState(null);
   const [loading, setLoading]   = useState(false);
@@ -1543,48 +1561,48 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       .map((row) => ({
         type: row.type || 'other',
         label: row.label || row.type || 'Liability',
-        monthly_repayment: parseFloat(row.monthly) || 0,
+        monthly_repayment: parseFormattedNumber(row.monthly) || 0,
       }))
       .filter((row) => row.monthly_repayment > 0);
     const itemisedDebtTotal = liabilityRows.reduce((sum, row) => sum + row.monthly_repayment, 0);
     return {
-      property_value:          parseFloat(pPrice),
-      deposit_amount:          parseFloat(pDeposit),
+      property_value:          parseFormattedNumber(pPrice),
+      deposit_amount:          parseFormattedNumber(pDeposit),
       state:                   pState,
       is_fhb:                  pFhb === 'yes',
       is_ppor:                 pPpor === 'ppor',
-      gross_annual_income:     parseFloat(pIncome),
-      partner_gross_income:    pPartner ? parseFloat(pPartner) : 0,
+      gross_annual_income:     parseFormattedNumber(pIncome),
+      partner_gross_income:    pPartner ? parseFormattedNumber(pPartner) : 0,
       household_type:          pHousehold,
-      dependents:              pDependents ? parseInt(pDependents, 10) : 0,
+      dependents:              pDependents ? Math.round(parseFormattedNumber(pDependents)) || 0 : 0,
       employment_type:         pEmployment,
-      months_in_current_role:  pMonthsInRole !== '' ? parseFloat(pMonthsInRole) : undefined,
+      months_in_current_role:  pMonthsInRole !== '' ? parseFormattedNumber(pMonthsInRole) : undefined,
       has_hecs:                pHecs === 'yes',
       is_new_build:            pNewBuild === 'yes',
-      monthly_debt_repayments: itemisedDebtTotal > 0 ? itemisedDebtTotal : (pDebts ? parseFloat(pDebts) : 0),
+      monthly_debt_repayments: itemisedDebtTotal > 0 ? itemisedDebtTotal : (pDebts ? parseFormattedNumber(pDebts) : 0),
       liabilities:             liabilityRows.length ? liabilityRows : undefined,
-      monthly_expenses:        pExpenses ? parseFloat(pExpenses) : undefined,
-      credit_card_limits_total: pCardLimits ? parseFloat(pCardLimits) : 0,
-      overtime_bonus_annual:   pOvertime ? parseFloat(pOvertime) : 0,
+      monthly_expenses:        pExpenses ? parseFormattedNumber(pExpenses) : undefined,
+      credit_card_limits_total: pCardLimits ? parseFormattedNumber(pCardLimits) : 0,
+      overtime_bonus_annual:   pOvertime ? parseFormattedNumber(pOvertime) : 0,
       overtime_bonus_regularity: pOvertimeRegularity,
-      self_employed_addbacks_annual: pAddbacks ? parseFloat(pAddbacks) : 0,
-      genuine_savings_held_months: pGenuineHeldMonths !== '' ? parseFloat(pGenuineHeldMonths) : undefined,
-      deposit_gift_amount:     pDepositGift ? parseFloat(pDepositGift) : 0,
+      self_employed_addbacks_annual: pAddbacks ? parseFormattedNumber(pAddbacks) : 0,
+      genuine_savings_held_months: pGenuineHeldMonths !== '' ? parseFormattedNumber(pGenuineHeldMonths) : undefined,
+      deposit_gift_amount:     pDepositGift ? parseFormattedNumber(pDepositGift) : 0,
       has_adverse_credit:      pAdverseCredit === 'yes',
       adverse_credit_severity: pAdverseSeverity,
-      loan_term_years:         parseFloat(pTerm) || 30,
-      target_rate_pct:         parseFloat(pRate),
-      applicant_age:           pAge ? parseFloat(pAge) : undefined,
+      loan_term_years:         parseFormattedNumber(pTerm) || 30,
+      target_rate_pct:         parseFormattedNumber(pRate),
+      applicant_age:           pAge ? parseFormattedNumber(pAge) : undefined,
       property_type_class:     pPropTypeClass || undefined,
-      gross_rental_income:     pRentalIncome ? parseFloat(pRentalIncome) : undefined,
+      gross_rental_income:     pRentalIncome ? parseFormattedNumber(pRentalIncome) : undefined,
     };
   }
 
   async function runProforma() {
-    const price = parseFloat(pPrice);
-    const deposit = parseFloat(pDeposit);
-    const income = parseFloat(pIncome);
-    const rate = parseFloat(pRate);
+    const price = parseFormattedNumber(pPrice);
+    const deposit = parseFormattedNumber(pDeposit);
+    const income = parseFormattedNumber(pIncome);
+    const rate = parseFormattedNumber(pRate);
     if (!price || !deposit || !income || !rate || !pState) {
       setError('Property price, deposit, state, gross income, and interest rate are required.');
       return;
@@ -1592,9 +1610,26 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post('/api/property-scenario/calculators/qualification-proforma', buildInputPayload());
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.errors?.[0] || 'Qualification proforma failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Running qualification proforma…',
+        'Full broker-style file review — please don’t navigate away.',
+        [
+          'Validating the file inputs',
+          'Running strict AU lending checks',
+          'Applying overtime / genuine-savings rules',
+          'Scoring presentation levers',
+          'Ranking curated bank posture',
+          'Fetching live CDR lender product fit',
+          'Assembling the proforma report',
+        ],
+        async () => {
+          const res = await api.post('/api/property-scenario/calculators/qualification-proforma', buildInputPayload());
+          const payload = await res.json();
+          if (!payload.ok) throw new Error(payload.errors?.[0] || 'Qualification proforma failed');
+          return payload;
+        },
+      );
       setProforma(data);
       const init = {};
       (data.strict?.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
@@ -1649,11 +1684,11 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($)<FieldTip text="The full property price you intend to pay." /></span>
-              <input type="text" inputMode="numeric" value={pPrice} onChange={(e) => setPPrice(e.target.value)} placeholder="e.g. 850000" style={FIELD} />
+              <FormattedNumberInput value={pPrice} onChange={setPPrice} placeholder="e.g. 850000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($)<FieldTip text="Your total available deposit. Your LVR is calculated from this." /></span>
-              <input type="text" inputMode="numeric" value={pDeposit} onChange={(e) => setPDeposit(e.target.value)} placeholder="e.g. 170000" style={FIELD} />
+              <FormattedNumberInput value={pDeposit} onChange={setPDeposit} placeholder="e.g. 170000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>State<FieldTip text="Used for stamp duty, FHB concessions, and FHOG eligibility." /></span>
@@ -1686,11 +1721,11 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Total gross income before tax — salary and wages." /></span>
-              <input type="text" inputMode="numeric" value={pIncome} onChange={(e) => setPIncome(e.target.value)} placeholder="e.g. 95000" style={FIELD} />
+              <FormattedNumberInput value={pIncome} onChange={setPIncome} placeholder="e.g. 95000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)<FieldTip text="Leave blank for a sole applicant." /></span>
-              <input type="text" inputMode="numeric" value={pPartner} onChange={(e) => setPPartner(e.target.value)} placeholder="leave blank if solo" style={FIELD} />
+              <FormattedNumberInput value={pPartner} onChange={setPPartner} placeholder="leave blank if solo" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Household type<FieldTip text="Sets the HEM living-expense benchmark." /></span>
@@ -1702,7 +1737,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Number of dependents<FieldTip text="Refines the HEM benchmark beyond the household-type default — more dependents raises the assumed living-expense floor." /></span>
-              <input type="text" inputMode="numeric" value={pDependents} onChange={(e) => setPDependents(e.target.value)} placeholder="e.g. 2" style={FIELD} />
+              <FormattedNumberInput value={pDependents} onChange={setPDependents} placeholder="e.g. 2" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Employment type<FieldTip text="Self-employed and casual need longer verified history. This drives the timing lever below." /></span>
@@ -1717,13 +1752,13 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             {['casual', 'contract', 'payg_parttime'].includes(pEmployment) && (
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Months with current employer<FieldTip text="Real broker lever: many mainstream lenders open up at 12 months; a few accept 6+ months with an employer letter." /></span>
-                <input type="text" inputMode="numeric" value={pMonthsInRole} onChange={(e) => setPMonthsInRole(e.target.value)} placeholder="e.g. 8" style={FIELD} />
+                <FormattedNumberInput value={pMonthsInRole} onChange={setPMonthsInRole} placeholder="e.g. 8" style={FIELD} />
               </label>
             )}
             {pEmployment === 'self_employed' && (
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Annual add-backs ($, optional)<FieldTip text="Non-cash / one-off expenses your accountant would add back to net profit — e.g. depreciation, one-off costs. Requires an accountant letter." /></span>
-                <input type="text" inputMode="numeric" value={pAddbacks} onChange={(e) => setPAddbacks(e.target.value)} placeholder="e.g. 12000" style={FIELD} />
+                <FormattedNumberInput value={pAddbacks} onChange={setPAddbacks} placeholder="e.g. 12000" style={FIELD} />
               </label>
             )}
           </div>
@@ -1749,29 +1784,29 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Existing monthly debt repayments ($)<FieldTip text="Total of non-card loans if you prefer a single figure. Or itemise below — itemised rows override this total." /></span>
-              <input type="text" inputMode="numeric" value={pDebts} onChange={(e) => setPDebts(e.target.value)} placeholder="loans, other repayments" style={FIELD} disabled={pLiabilities.some((r) => parseFloat(r.monthly) > 0)} />
+              <FormattedNumberInput value={pDebts} onChange={setPDebts} placeholder="loans, other repayments" style={FIELD} disabled={pLiabilities.some((r) => parseFormattedNumber(r.monthly) > 0)} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Total credit card / BNPL limits ($)<FieldTip text="Lenders assess 3.8%/month of your total limit as a commitment, regardless of balance. This is what the 'close cards before applying' lever acts on." /></span>
-              <input type="text" inputMode="numeric" value={pCardLimits} onChange={(e) => setPCardLimits(e.target.value)} placeholder="e.g. 15000" style={FIELD} />
+              <FormattedNumberInput value={pCardLimits} onChange={setPCardLimits} placeholder="e.g. 15000" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Monthly living expenses ($, optional)<FieldTip text="Leave blank to use the HEM benchmark. If your real spending is higher than HEM, declaring it truthfully — and understanding the risk of not doing so — is covered in the levers below." /></span>
-              <input type="text" inputMode="numeric" value={pExpenses} onChange={(e) => setPExpenses(e.target.value)} placeholder="leave blank to use HEM benchmark" style={FIELD} />
+              <FormattedNumberInput value={pExpenses} onChange={setPExpenses} placeholder="leave blank to use HEM benchmark" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Genuine savings held (months)<FieldTip text="Most lenders want at least 3 months of bank statements showing the deposit funds in your name. Leave blank if unsure — the check will flag that you still need to confirm." /></span>
-              <input type="text" inputMode="numeric" value={pGenuineHeldMonths} onChange={(e) => setPGenuineHeldMonths(e.target.value)} placeholder="e.g. 4" style={FIELD} />
+              <FormattedNumberInput value={pGenuineHeldMonths} onChange={setPGenuineHeldMonths} placeholder="e.g. 4" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gift portion of deposit ($)<FieldTip text="Gifted funds usually do not count as genuine savings. Enter the gift amount so the check uses only the remainder." /></span>
-              <input type="text" inputMode="numeric" value={pDepositGift} onChange={(e) => setPDepositGift(e.target.value)} placeholder="0 if none" style={FIELD} />
+              <FormattedNumberInput value={pDepositGift} onChange={setPDepositGift} placeholder="0 if none" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Overtime / bonus / commission ($/yr, optional)<FieldTip text="Shaded into the strict serviceability figure when you have 1–2 years of history (50%/80%). Irregular income is excluded from strict and left for lender shopping in the levers." /></span>
-              <input type="text" inputMode="numeric" value={pOvertime} onChange={(e) => setPOvertime(e.target.value)} placeholder="e.g. 8000" style={FIELD} />
+              <FormattedNumberInput value={pOvertime} onChange={setPOvertime} placeholder="e.g. 8000" style={FIELD} />
             </label>
-            {parseFloat(pOvertime) > 0 && (
+            {parseFormattedNumber(pOvertime) > 0 && (
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>History with that income<FieldTip text="How long you've actually received this — determines how much a lender will realistically credit." /></span>
                 <select value={pOvertimeRegularity} onChange={(e) => setPOvertimeRegularity(e.target.value)} style={FIELD}>
@@ -1836,11 +1871,9 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                   placeholder="Label (optional)"
                   style={FIELD}
                 />
-                <input
-                  type="text"
-                  inputMode="numeric"
+                <FormattedNumberInput
                   value={row.monthly}
-                  onChange={(e) => setPLiabilities((prev) => prev.map((r, i) => (i === idx ? { ...r, monthly: e.target.value } : r)))}
+                  onChange={(v) => setPLiabilities((prev) => prev.map((r, i) => (i === idx ? { ...r, monthly: v } : r)))}
                   placeholder="$/mo"
                   style={FIELD}
                 />
@@ -1863,7 +1896,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
-              <input type="text" inputMode="decimal" value={pRate} onChange={(e) => setPRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+              <FormattedNumberInput value={pRate} onChange={setPRate} allowDecimals placeholder="e.g. 6.10" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="30 years maximises borrowing capacity." /></span>
@@ -1881,7 +1914,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Your age (years)<FieldTip text="Checks loan maturity against typical lender age caps." /></span>
-              <input type="text" inputMode="numeric" value={pAge} onChange={(e) => setPAge(e.target.value)} placeholder="e.g. 42" style={FIELD} />
+              <FormattedNumberInput value={pAge} onChange={setPAge} placeholder="e.g. 42" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Property type<FieldTip text="Some property types face tighter LVR caps — often broker-negotiable by postcode." /></span>
@@ -1895,7 +1928,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected gross rental income ($ p.a.)<FieldTip text="Investment purchases only. Drives the rental-appraisal-shading lever below." /></span>
-              <input type="text" inputMode="numeric" value={pRentalIncome} onChange={(e) => setPRentalIncome(e.target.value)} placeholder="Investment only" style={FIELD} />
+              <FormattedNumberInput value={pRentalIncome} onChange={setPRentalIncome} placeholder="Investment only" style={FIELD} />
             </label>
           </div>
         </div>
@@ -2090,9 +2123,9 @@ function StandaloneCalculators({ getIcon }) {
   const [pdfBusy, setPdfBusy] = useState(false);
 
   async function runCalcs() {
-    const amount = parseFloat(loanAmount);
-    const r = parseFloat(rate);
-    const months = Math.round(parseFloat(termYears) * 12);
+    const amount = parseFormattedNumber(loanAmount);
+    const r = parseFormattedNumber(rate);
+    const months = Math.round(parseFormattedNumber(termYears) * 12);
     if (!amount || !r || !months) {
       setError('Loan amount, interest rate, and term are required.');
       return;
@@ -2100,19 +2133,33 @@ function StandaloneCalculators({ getIcon }) {
     setError(null);
     setLoading(true);
     try {
-      async function callCalc(path, body) {
-        const res = await api.post(path, body);
-        return res.json();
-      }
-      const [rep, xRep, off, bp] = await Promise.all([
-        callCalc('/api/property-scenario/calculators/repayment', { loan_amount: amount, annual_rate_pct: r, term_months: months }),
-        callCalc('/api/property-scenario/calculators/extra-repayments', { loan_amount: amount, annual_rate_pct: r, term_months: months, extra_monthly: parseFloat(extra) || 200 }),
-        callCalc('/api/property-scenario/calculators/offset', { loan_amount: amount, annual_rate_pct: r, term_months: months, offset_balance: parseFloat(offsetBalance) || 50000 }),
-        monthlyIncome
-          ? callCalc('/api/property-scenario/calculators/borrowing-power', { monthly_income: parseFloat(monthlyIncome), monthly_expenses: parseFloat(monthlyExpenses) || 0, term_months: months, annual_rate_pct: r })
-          : Promise.resolve(null),
-      ]);
-      setResults({ repayment: rep, extra_repayments: xRep, offset: off, borrowing_power: bp });
+      const results = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Running calculators…',
+        'Standalone P&I estimates — please don’t navigate away.',
+        [
+          'Calculating monthly repayment',
+          'Modelling extra repayments',
+          'Estimating offset benefit',
+          ...(monthlyIncome ? ['Estimating borrowing power'] : []),
+        ],
+        async () => {
+          async function callCalc(path, body) {
+            const res = await api.post(path, body);
+            return res.json();
+          }
+          const [rep, xRep, off, bp] = await Promise.all([
+            callCalc('/api/property-scenario/calculators/repayment', { loan_amount: amount, annual_rate_pct: r, term_months: months }),
+            callCalc('/api/property-scenario/calculators/extra-repayments', { loan_amount: amount, annual_rate_pct: r, term_months: months, extra_monthly: parseFormattedNumber(extra) || 200 }),
+            callCalc('/api/property-scenario/calculators/offset', { loan_amount: amount, annual_rate_pct: r, term_months: months, offset_balance: parseFormattedNumber(offsetBalance) || 50000 }),
+            monthlyIncome
+              ? callCalc('/api/property-scenario/calculators/borrowing-power', { monthly_income: parseFormattedNumber(monthlyIncome), monthly_expenses: parseFormattedNumber(monthlyExpenses) || 0, term_months: months, annual_rate_pct: r })
+              : Promise.resolve(null),
+          ]);
+          return { repayment: rep, extra_repayments: xRep, offset: off, borrowing_power: bp };
+        },
+      );
+      setResults(results);
     } catch (err) {
       setError(err.message || 'Calculation failed');
     } finally {
@@ -2138,15 +2185,15 @@ function StandaloneCalculators({ getIcon }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block space-y-1.5">
             <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan amount ($)<FieldTip text="The amount you're borrowing — purchase price minus your deposit. Not the property value." /></span>
-            <input type="text" inputMode="numeric" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} placeholder="e.g. 500000" style={FIELD} />
+            <FormattedNumberInput value={loanAmount} onChange={setLoanAmount} placeholder="e.g. 500000" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
             <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text="Your annual interest rate. Check your current statement or the live rates in the Lenders tab." /></span>
-            <input type="text" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+            <FormattedNumberInput value={rate} onChange={setRate} allowDecimals placeholder="e.g. 6.10" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
             <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="The full repayment period. Typically 25 or 30 years. Shorter terms mean higher repayments but significantly less total interest paid." /></span>
-            <input type="text" inputMode="numeric" value={termYears} onChange={(e) => setTermYears(e.target.value)} placeholder="e.g. 25" style={FIELD} />
+            <FormattedNumberInput value={termYears} onChange={setTermYears} placeholder="e.g. 25" style={FIELD} />
           </label>
         </div>
 
@@ -2155,15 +2202,15 @@ function StandaloneCalculators({ getIcon }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block space-y-1.5">
               <span className="text-xs" style={{ color: 'var(--color-text)' }}>Extra monthly repayment ($)<FieldTip text="How much extra you'd pay above the minimum each month. Even a small extra payment can cut years off your loan and save a substantial amount in interest." /></span>
-              <input type="text" inputMode="numeric" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. 200" style={FIELD} />
+              <FormattedNumberInput value={extra} onChange={setExtra} placeholder="e.g. 200" style={FIELD} />
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs" style={{ color: 'var(--color-text)' }}>Offset account balance ($)<FieldTip text="An offset account reduces the interest charged daily. A $50,000 offset on a $500,000 loan means you only pay interest on $450,000 — every day the balance sits there." /></span>
-              <input type="text" inputMode="numeric" value={offsetBalance} onChange={(e) => setOffsetBalance(e.target.value)} placeholder="e.g. 50000" style={FIELD} />
+              <FormattedNumberInput value={offsetBalance} onChange={setOffsetBalance} placeholder="e.g. 50000" style={FIELD} />
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs" style={{ color: 'var(--color-text)' }}>Monthly income ($) — for borrowing power<FieldTip text="Your gross monthly income (before tax). Used only to estimate indicative borrowing power. Leave blank to skip that calculator. This is not a lender pre-approval." /></span>
-              <input type="text" inputMode="numeric" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} placeholder="e.g. 8000 (leave blank to skip)" style={FIELD} />
+              <FormattedNumberInput value={monthlyIncome} onChange={setMonthlyIncome} placeholder="e.g. 8000 (leave blank to skip)" style={FIELD} />
             </label>
           </div>
         </div>
@@ -2209,7 +2256,7 @@ function StandaloneCalculators({ getIcon }) {
               setPdfBusy(true);
               try {
                 await downloadCalcsPdf(
-                  { loanAmount: parseFloat(loanAmount), rate: parseFloat(rate), termYears: parseFloat(termYears), extra: parseFloat(extra) || 200, offsetBalance: parseFloat(offsetBalance) || 50000 },
+                  { loanAmount: parseFormattedNumber(loanAmount), rate: parseFormattedNumber(rate), termYears: parseFormattedNumber(termYears), extra: parseFormattedNumber(extra) || 200, offsetBalance: parseFormattedNumber(offsetBalance) || 50000 },
                   results
                 );
               } catch (err) {
@@ -2809,10 +2856,20 @@ export default function PropertyScenarioPage() {
       ? `${trimmed}\n\nAdditional context: ${contextParts.join(' ')}`
       : trimmed;
 
-    startProcessing('Parsing your scenario…', 'AI is assigning numbers from your text. Please don’t navigate away.');
+    startProcessing('Parsing your scenario…', 'AI is assigning numbers from your text. Please don’t navigate away.', {
+      steps: [
+        'Reading your description',
+        'Extracting amounts, rates, and dates',
+        'Assigning values to scenario fields',
+        'Checking for clarifying questions',
+      ],
+    });
+    const advance = setInterval(() => useProcessingStore.getState().advanceProcessingStep(), 700);
     try {
       const res = await api.post('/api/property-scenario/parse', { text: fullText });
       const data = await res.json();
+      clearInterval(advance);
+      useProcessingStore.getState().completeAllProcessingSteps();
       if (!data.ok) {
         setPipeline(null);
         setPipelineError(data.message || 'Parse failed');
@@ -2828,10 +2885,12 @@ export default function PropertyScenarioPage() {
         addToast('Need a few details before calculating', 'info');
       }
     } catch (err) {
+      clearInterval(advance);
       setPipeline(null);
       setPipelineError(err.message || 'Parse failed');
       addToast(err.message || 'Parse failed', 'error');
     } finally {
+      clearInterval(advance);
       stopProcessing();
     }
   };
@@ -2859,7 +2918,15 @@ export default function PropertyScenarioPage() {
       }
     });
 
-    startProcessing('Updating scenario…', 'Applying your answers and recalculating when ready.');
+    startProcessing('Updating scenario…', 'Applying your answers and recalculating when ready.', {
+      steps: [
+        'Applying your clarifying answers',
+        'Re-validating the scenario',
+        'Running deterministic calculations',
+        'Building results presentation',
+      ],
+    });
+    const advance = setInterval(() => useProcessingStore.getState().advanceProcessingStep(), 700);
     try {
       const body = {
         scenario: pipeline.scenario,
@@ -2872,6 +2939,8 @@ export default function PropertyScenarioPage() {
 
       const res = await api.post('/api/property-scenario/clarify', body);
       const data = await res.json();
+      clearInterval(advance);
+      useProcessingStore.getState().completeAllProcessingSteps();
       if (!data.ok) {
         setPipelineError(data.message || 'Could not apply answers');
         addToast(data.message || 'Clarify failed', 'error');
@@ -2886,9 +2955,11 @@ export default function PropertyScenarioPage() {
         addToast('Still need a few more details', 'info');
       }
     } catch (err) {
+      clearInterval(advance);
       setPipelineError(err.message || 'Clarify failed');
       addToast(err.message || 'Clarify failed', 'error');
     } finally {
+      clearInterval(advance);
       stopProcessing();
     }
   };
@@ -2930,9 +3001,9 @@ export default function PropertyScenarioPage() {
   // Called when qualification result CTA "Compare live CDR rates" is clicked.
   // Pre-fills the refinance form and switches the view.
   const handleSwitchToRefinance = useCallback(({ balance, rate, termMonths, state: st }) => {
-    if (balance) setRfBalance(String(Math.round(balance)));
-    if (rate)    setRfRate(String(rate));
-    if (termMonths) setRfTermMonths(String(termMonths));
+    if (balance) setRfBalance(formatNumberForInput(Math.round(balance)));
+    if (rate)    setRfRate(formatNumberForInput(rate, { allowDecimals: true }));
+    if (termMonths) setRfTermMonths(formatNumberForInput(termMonths));
     if (st)      setRfState(st);
     setRfTargetMode('cdr');
     setCalcResult(null);
@@ -2944,8 +3015,8 @@ export default function PropertyScenarioPage() {
   // Called from the Qualification Proforma's "Continue to the buy calculator"
   // CTA — pre-fills the buy form with the same figures already entered.
   const handleSwitchToBuy = useCallback(({ price, deposit, state: st, fhb, ppor } = {}) => {
-    if (price)    setBuyPrice(String(price));
-    if (deposit)  setBuyDeposit(String(deposit));
+    if (price)    setBuyPrice(formatNumberForInput(price));
+    if (deposit)  setBuyDeposit(formatNumberForInput(deposit));
     if (st)       setBuyState(st);
     if (fhb)      setBuyFhb(fhb);
     if (ppor)     setBuyPpor(ppor);
@@ -2966,11 +3037,24 @@ export default function PropertyScenarioPage() {
   // ── Direct calculation (structured forms → /calculate, no LLM) ────────────
   const submitDirect = useCallback(async (scenario, extraBody = {}) => {
     setCalcError(null);
-    startProcessing('Running calculation…', 'Computing your scenario. Please don\'t navigate away.');
     try {
-      const res = await api.post('/api/property-scenario/calculate', { scenario, ...extraBody });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.message || 'Calculation failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Running calculation…',
+        'Deterministic AU scenario maths — please don’t navigate away.',
+        [
+          'Reading scenario inputs',
+          'Running stamp duty / CGT / refinance modules',
+          'Building cash-flow and totals',
+          'Preparing charts and lender comparison',
+        ],
+        async () => {
+          const res = await api.post('/api/property-scenario/calculate', { scenario, ...extraBody });
+          const payload = await res.json();
+          if (!res.ok || !payload.ok) throw new Error(payload.message || 'Calculation failed');
+          return payload;
+        },
+      );
       setCalcResult(data);
       setFollowUpAnswers({});
       setTab('overview');
@@ -2981,25 +3065,23 @@ export default function PropertyScenarioPage() {
     } catch (err) {
       setCalcError(err.message || 'Calculation failed');
       addToast(err.message || 'Calculation failed', 'error');
-    } finally {
-      stopProcessing();
     }
-  }, [startProcessing, stopProcessing, addToast]);
+  }, [addToast]);
 
   const submitRefinance = () => {
-    const balance = parseFloat(rfBalance);
-    const rate = parseFloat(rfRate);
-    const termMonths = parseInt(rfTermMonths, 10);
+    const balance = parseFormattedNumber(rfBalance);
+    const rate = parseFormattedNumber(rfRate);
+    const termMonths = Math.round(parseFormattedNumber(rfTermMonths));
     if (!balance || !rate || !termMonths) {
       setCalcError('Balance, current rate, and term remaining are required.');
       return;
     }
-    const fixedPeriod = rfRateType === 'fixed' && rfFixedPeriod ? parseInt(rfFixedPeriod, 10) : undefined;
+    const fixedPeriod = rfRateType === 'fixed' && rfFixedPeriod ? Math.round(parseFormattedNumber(rfFixedPeriod)) : undefined;
     const currentLoan = {
       balance, rate, fixed_or_variable: rfRateType, term_remaining_months: termMonths,
       ...(fixedPeriod ? { fixed_period_remaining_months: fixedPeriod } : {}),
     };
-    const targetRate = rfTargetMode === 'specific' && rfTargetRate ? parseFloat(rfTargetRate) : rate;
+    const targetRate = rfTargetMode === 'specific' && rfTargetRate ? parseFormattedNumber(rfTargetRate) : rate;
     const targetLoan = { ...currentLoan, rate: targetRate };
     submitDirect(
       {
@@ -3015,8 +3097,8 @@ export default function PropertyScenarioPage() {
   };
 
   const submitSell = () => {
-    const salePrice = parseFloat(sellPrice);
-    const purchasePrice = parseFloat(sellPurchasePrice);
+    const salePrice = parseFormattedNumber(sellPrice);
+    const purchasePrice = parseFormattedNumber(sellPurchasePrice);
     if (!sellState || !salePrice || !purchasePrice) {
       setCalcError('State, expected sale price, and original purchase price are required.');
       return;
@@ -3035,8 +3117,8 @@ export default function PropertyScenarioPage() {
   };
 
   const submitBuy = () => {
-    const price = parseFloat(buyPrice);
-    const deposit = parseFloat(buyDeposit);
+    const price = parseFormattedNumber(buyPrice);
+    const deposit = parseFormattedNumber(buyDeposit);
     if (!buyState || !price || !deposit) {
       setCalcError('State, purchase price, and deposit are required.');
       return;
@@ -3224,11 +3306,11 @@ export default function PropertyScenarioPage() {
                     <div />
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current loan balance ($) *<FieldTip text="Your outstanding principal — check your most recent statement or online banking. Don't use the original loan amount." /></span>
-                      <input type="text" inputMode="decimal" value={rfBalance} onChange={(e) => setRfBalance(e.target.value)} placeholder="e.g. 100000" style={FIELD} />
+                      <FormattedNumberInput value={rfBalance} onChange={setRfBalance} allowDecimals placeholder="e.g. 100000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *<FieldTip text="Your current annual interest rate. Check your statement — the rate may differ from your original contract if you've negotiated a discount over time." /></span>
-                      <input type="text" inputMode="decimal" value={rfRate} onChange={(e) => setRfRate(e.target.value)} placeholder="e.g. 6.10" style={FIELD} />
+                      <FormattedNumberInput value={rfRate} onChange={setRfRate} allowDecimals placeholder="e.g. 6.10" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable rates can change with RBA movements. Fixed rates lock in certainty but may carry significant break costs if you exit the fixed period early." /></span>
@@ -3239,12 +3321,12 @@ export default function PropertyScenarioPage() {
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Term remaining (months) *<FieldTip text="How many months are left on your current loan. E.g. 20 years remaining = 240 months. Check your loan schedule or call your lender." /></span>
-                      <input type="text" inputMode="numeric" value={rfTermMonths} onChange={(e) => setRfTermMonths(e.target.value)} placeholder="e.g. 240" style={FIELD} />
+                      <FormattedNumberInput value={rfTermMonths} onChange={setRfTermMonths} placeholder="e.g. 240" style={FIELD} />
                     </label>
                     {rfRateType === 'fixed' && (
                       <label className="block space-y-1.5">
                         <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Fixed period remaining (months)<FieldTip text="Months left of your fixed rate period. Break costs are calculated against this — typically higher the more time remains. Your lender can give you the exact break cost figure." /></span>
-                        <input type="text" inputMode="numeric" value={rfFixedPeriod} onChange={(e) => setRfFixedPeriod(e.target.value)} placeholder="e.g. 24" style={FIELD} />
+                        <FormattedNumberInput value={rfFixedPeriod} onChange={setRfFixedPeriod} placeholder="e.g. 24" style={FIELD} />
                       </label>
                     )}
                   </div>
@@ -3261,7 +3343,7 @@ export default function PropertyScenarioPage() {
                         </label>
                       ))}
                       {rfTargetMode === 'specific' && (
-                        <input type="text" inputMode="decimal" value={rfTargetRate} onChange={(e) => setRfTargetRate(e.target.value)} placeholder="Target rate, e.g. 5.89" style={{ ...FIELD, maxWidth: 220 }} />
+                        <FormattedNumberInput value={rfTargetRate} onChange={setRfTargetRate} allowDecimals placeholder="Target rate, e.g. 5.89" style={{ ...FIELD, maxWidth: 220 }} />
                       )}
                     </div>
                   </div>
@@ -3296,15 +3378,15 @@ export default function PropertyScenarioPage() {
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Expected sale price ($) *<FieldTip text="Your estimated or contracted sale price. If not yet sold, use a current market appraisal. Selling costs (agent commission, legal fees) are deducted to arrive at net proceeds." /></span>
-                      <input type="text" inputMode="decimal" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
+                      <FormattedNumberInput value={sellPrice} onChange={setSellPrice} allowDecimals placeholder="e.g. 1200000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Original purchase price ($) *<FieldTip text="What you originally paid for the property. For CGT, this is your cost base — it should include stamp duty and legal costs paid at purchase, which reduce your taxable gain." /></span>
-                      <input type="text" inputMode="decimal" value={sellPurchasePrice} onChange={(e) => setSellPurchasePrice(e.target.value)} placeholder="e.g. 750000" style={FIELD} />
+                      <FormattedNumberInput value={sellPurchasePrice} onChange={setSellPurchasePrice} allowDecimals placeholder="e.g. 750000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year purchased<FieldTip text="Used to determine whether the 50% CGT discount applies (held more than 12 months) and to estimate the holding period for the result summary." /></span>
-                      <input type="text" inputMode="numeric" value={sellPurchaseYear} onChange={(e) => setSellPurchaseYear(e.target.value)} placeholder="e.g. 2015" style={FIELD} />
+                      <FormattedNumberInput value={sellPurchaseYear} onChange={setSellPurchaseYear} placeholder="e.g. 2015" style={FIELD} />
                     </label>
                   </div>
                   {calcError && <p className="text-sm" style={{ color: '#ef4444' }}>{calcError}</p>}
@@ -3337,11 +3419,11 @@ export default function PropertyScenarioPage() {
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Purchase price ($) *<FieldTip text="The full property purchase price. Stamp duty, LMI, and all upfront costs are calculated as percentages of this figure." /></span>
-                      <input type="text" inputMode="decimal" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="e.g. 1200000" style={FIELD} />
+                      <FormattedNumberInput value={buyPrice} onChange={setBuyPrice} allowDecimals placeholder="e.g. 1200000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Deposit ($) *<FieldTip text="Your available deposit (savings + equity). If deposit is below 20% of the purchase price, Lenders Mortgage Insurance (LMI) typically applies — unless you qualify for the First Home Guarantee (5% min)." /></span>
-                      <input type="text" inputMode="decimal" value={buyDeposit} onChange={(e) => setBuyDeposit(e.target.value)} placeholder="e.g. 240000" style={FIELD} />
+                      <FormattedNumberInput value={buyDeposit} onChange={setBuyDeposit} allowDecimals placeholder="e.g. 240000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>First home buyer?<FieldTip text="First home buyers may qualify for stamp duty exemptions or concessions and the First Home Guarantee (5% deposit, no LMI for eligible buyers). State-based FHOG grants also apply for new builds." /></span>

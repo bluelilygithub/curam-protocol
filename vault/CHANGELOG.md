@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-20 (property-scenario-input-ux)
+
+### Thousand separators + calculation step log
+- **Numeric inputs** — Property Scenario money/amount fields auto-insert thousand commas while typing (`FormattedNumberInput`); values are parsed cleanly for API calls.
+- **Rolling step dialog** — Buy / refinance / qualify / proforma / calculators / NLP parse show a ProcessingModal log of steps as the calculation runs.
+
+---
+
 ## 2026-07-20 (proforma-audit-fixes)
 
 ### Qualification proforma audit (QLD duty, status, levers, posture)
