@@ -6,31 +6,23 @@ import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
-import { openRecentSession, loadSessionById } from '../utils/chatNavigation';
+import { loadSessionById } from '../utils/chatNavigation';
 import OverflowMenu from './OverflowMenu';
-import { SIDEBAR_WORKSPACE_LINKS } from '../config/appNavigation';
-import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
-function ProjectSidebar({ onClose, showHabits = true, showClientContext = false, collapsed = false }) {
+function ProjectSidebar({ onClose, showClientContext = false, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const [draggedId, setDraggedId] = useState(null);
-  const [draggedSessionId, setDraggedSessionId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragOverFolderId, setDragOverFolderId] = useState(null);
-  const [dragOverProjectId, setDragOverProjectId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [moveProjectTarget, setMoveProjectTarget] = useState(null);
   const [moveProjectFolderId, setMoveProjectFolderId] = useState('');
   const [moveProjectSaving, setMoveProjectSaving] = useState(false);
-  const [moveSessionTarget, setMoveSessionTarget] = useState(null);
-  const [recentSessions, setRecentSessions] = useState([]);
-  const [moveSessionProjectId, setMoveSessionProjectId] = useState('');
-  const [moveSessionSaving, setMoveSessionSaving] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
@@ -38,29 +30,20 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
   const [collapsedFolders, setCollapsedFolders] = useState({});
   const [showFolderInput, setShowFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [generalSessions, setGeneralSessions] = useState([]);
-  const [generalExpanded, setGeneralExpanded] = useState(true);
   const [expandedProjectId, setExpandedProjectId] = useState(() => {
     const match = window.location.pathname.match(/\/projects\/(\d+)/);
     return match ? Number(match[1]) : null;
   });
   const [projectSessions, setProjectSessions] = useState({});
-  const [habitsOpen, setHabitsOpen] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('sidebarHabitsOpen') ?? 'false'); } catch { return false; }
-  });
   const [clientOpen, setClientOpen] = useState(false);
   const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
   const [tpSaving, setTpSaving] = useState(false);
-  const [railTip, setRailTip] = useState(null); // collapsed icon-rail tooltips (must be top-level — Rules of Hooks)
-  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
-  const [projectStats, setProjectStats] = useState({}); // { [projectId]: { tasks, notes, files } }
+  const [railTip, setRailTip] = useState(null);
 
   useEffect(() => {
     const loadSessionLists = () => {
       fetchProjects();
       api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
-      api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
-      api.get('/api/chat/recent?limit=5').then(r => r.json()).then(data => setRecentSessions(Array.isArray(data) ? data : [])).catch(() => {});
       if (expandedProjectId) {
         api.get(`/api/chat/sessions/${expandedProjectId}`)
           .then(r => r.json())
@@ -73,49 +56,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
     document.addEventListener('vault:sessions-changed', loadSessionLists);
     return () => document.removeEventListener('vault:sessions-changed', loadSessionLists);
   }, [expandedProjectId, fetchProjects]);
-
-  useEffect(() => {
-    api.get('/api/settings/feature-access')
-      .then(r => r.json())
-      .then(data => {
-        if (data?.flags && typeof data.flags === 'object') {
-          setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const canUseFeature = (key) => featureAccess[key] !== false;
-
-  const loadProjectStats = async (projectId) => {
-    if (!projectId || projectStats[projectId]) return;
-    try {
-      const [tasksRes, notesRes, filesRes] = await Promise.all([
-        api.get('/api/tasks').then(r => r.json()).catch(() => []),
-        api.get(`/api/notes?project_id=${projectId}`).then(r => r.json()).catch(() => []),
-        api.get(`/api/files/${projectId}`).then(r => r.json()).catch(() => []),
-      ]);
-      const tasks = Array.isArray(tasksRes) ? tasksRes.filter(t => t.projectId === projectId) : [];
-      const notes = Array.isArray(notesRes) ? notesRes : [];
-      const files = Array.isArray(filesRes) ? filesRes : [];
-      setProjectStats(prev => ({
-        ...prev,
-        [projectId]: { tasks: tasks.length, notes: notes.length, files: files.length },
-      }));
-    } catch {
-      setProjectStats(prev => ({ ...prev, [projectId]: { tasks: 0, notes: 0, files: 0 } }));
-    }
-  };
-
-  // Tour: expand 7 Habits section on request
-  useEffect(() => {
-    const handler = () => {
-      setHabitsOpen(true);
-      localStorage.setItem('sidebarHabitsOpen', 'true');
-    };
-    document.addEventListener('vault:expand-habits-sidebar', handler);
-    return () => document.removeEventListener('vault:expand-habits-sidebar', handler);
-  }, []);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -137,7 +77,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
           .then(sessions => setProjectSessions(prev => ({ ...prev, [projectId]: sessions })))
           .catch(() => {});
       }
-      loadProjectStats(projectId);
     }
   };
 
@@ -164,11 +103,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
   };
 
   const handleDragStart = (e, id) => { setDraggedId(id); e.dataTransfer.effectAllowed = 'move'; };
-  const handleSessionDragStart = (e, sessionId) => {
-    setDraggedSessionId(sessionId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', sessionId);
-  };
   const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setDragOverId(id); };
   const handleDrop = (e, targetId) => {
     e.preventDefault();
@@ -185,64 +119,8 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
   };
   const handleDragEnd = () => {
     setDraggedId(null);
-    setDraggedSessionId(null);
     setDragOverId(null);
     setDragOverFolderId(null);
-    setDragOverProjectId(null);
-  };
-
-  const moveSessionToProject = async (sessionId, projectId) => {
-    if (!sessionId || !projectId) return;
-    await api.patch(`/api/chat/sessions/${sessionId}/project`, { projectId });
-    await fetchProjects();
-    const sessions = await api.get('/api/chat/sessions/general').then(r => r.json());
-    const targetSessions = await api.get(`/api/chat/sessions/${projectId}`).then(r => r.json()).catch(() => []);
-    setGeneralSessions(sessions);
-    setProjectSessions(prev => ({ ...prev, [projectId]: targetSessions }));
-    document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
-  };
-
-  const handleProjectDragOver = (e, projectId) => {
-    if (draggedSessionId) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      setDragOverProjectId(projectId);
-      return;
-    }
-    handleDragOver(e, projectId);
-  };
-
-  const handleProjectDrop = async (e, projectId) => {
-    if (draggedSessionId) {
-      e.preventDefault();
-      e.stopPropagation();
-      const sid = draggedSessionId;
-      setDraggedSessionId(null);
-      setDragOverProjectId(null);
-      await moveSessionToProject(sid, projectId);
-      setExpandedProjectId(projectId);
-      return;
-    }
-    handleDrop(e, projectId);
-  };
-
-  const openMoveSessionModal = (session) => {
-    setMoveSessionTarget(session);
-    setMoveSessionProjectId(projects[0]?.id ? String(projects[0].id) : '');
-  };
-
-  const confirmMoveSession = async () => {
-    if (!moveSessionTarget || !moveSessionProjectId) return;
-    setMoveSessionSaving(true);
-    try {
-      const targetProjectId = Number(moveSessionProjectId);
-      await moveSessionToProject(moveSessionTarget.sessionId, targetProjectId);
-      setExpandedProjectId(targetProjectId);
-      setMoveSessionTarget(null);
-      setMoveSessionProjectId('');
-    } finally {
-      setMoveSessionSaving(false);
-    }
   };
 
   const handleFolderDrop = async (e, folderId) => {
@@ -272,15 +150,11 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
     setRenamingId(null);
   };
 
-  const isGeneralActive = location.pathname === '/chat';
-
   if (collapsed) {
     const railItems = [
-      { icon: 'message-circle', title: 'Quick chat', action: startQuickChat, active: location.pathname === '/chat' },
+      { icon: 'plus', title: 'New chat', action: startQuickChat },
       { icon: 'home', title: 'Home', action: () => navigate('/'), active: location.pathname === '/' },
-      { icon: 'list-checks', title: 'Tasks', action: () => navigate('/tasks'), active: location.pathname === '/tasks' },
       { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
-      { icon: 'settings', title: 'Settings', action: () => navigate('/settings'), active: location.pathname === '/settings' },
     ];
 
     return (
@@ -326,140 +200,16 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Quick chat section */}
-      <div className="px-2 pt-2 pb-1">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={startQuickChat}
-            className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors text-left"
-            style={{
-              background: isGeneralActive ? 'var(--color-bg)' : 'transparent',
-              color: isGeneralActive ? 'var(--color-primary)' : 'var(--color-text)',
-              fontWeight: isGeneralActive ? 500 : 400,
-            }}
-          >
-            <span style={{ flexShrink: 0, opacity: isGeneralActive ? 1 : 0.5 }}>
-              {getIcon('message-circle', { size: 14 })}
-            </span>
-            <span className="flex-1 truncate">Quick chat</span>
-            {generalSessions.length > 0 && (
-              <span
-                onClick={(e) => { e.stopPropagation(); setGeneralExpanded(v => !v); }}
-                className="text-xs tabular-nums hover:opacity-60 cursor-pointer"
-                style={{ color: 'var(--color-muted)' }}
-              >
-                {generalSessions.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); startQuickChat(); }}
-            className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
-            style={{ color: 'var(--color-primary)' }}
-            data-tip="New quick chat"
-          >
-            {getIcon('plus', { size: 14 })}
-          </button>
-        </div>
-        {generalExpanded && generalSessions.length > 0 && (
-          <div className="mt-0.5 space-y-0.5 max-h-52 overflow-y-auto pr-1">
-            {generalSessions.map(s => (
-              <div
-                key={s.sessionId}
-                draggable
-                onDragStart={(e) => handleSessionDragStart(e, s.sessionId)}
-                onDragEnd={handleDragEnd}
-                className="group flex items-center gap-1 rounded-md"
-              >
-                <button
-                  onClick={() => {
-                    navigate('/chat');
-                    setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
-                    if (onClose) onClose();
-                  }}
-                  className="flex-1 text-left px-3 py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
-                  style={{ color: 'var(--color-muted)', paddingLeft: '2rem' }}
-                >
-                  {formatSessionLabel(s)}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
-                  className="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity flex-shrink-0"
-                  style={{ color: 'var(--color-muted)' }}
-                  data-tip="Move to project"
-                >
-                  {getIcon('arrow-right', { size: 11 })}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {recentSessions.length > 0 && (
-        <div className="px-2 pb-2">
-          <p className="px-1 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
-            Recent
-          </p>
-          <div className="space-y-0.5 max-h-40 overflow-y-auto">
-            {recentSessions.map((s) => (
-              <button
-                key={s.sessionId}
-                type="button"
-                onClick={() => {
-                  openRecentSession(s, navigate, setActive);
-                  if (onClose) onClose();
-                }}
-                className="w-full text-left px-2 py-1.5 rounded-lg hover:opacity-70 transition-opacity"
-              >
-                <div className="text-xs truncate" style={{ color: 'var(--color-text)' }}>
-                  {formatSessionLabel(s)}
-                </div>
-                <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {s.projectName || 'Quick chat'}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="px-3 pb-1">
-        <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
-      </div>
-
-      {/* Workspace shortcuts */}
-      <div className="px-2 pb-2">
-        <p className="px-1 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
-          Workspace
-        </p>
-        <div className="grid grid-cols-2 gap-0.5">
-          {SIDEBAR_WORKSPACE_LINKS.filter(link => !link.featureKey || canUseFeature(link.featureKey)).map(link => {
-            const active = link.matchPrefix
-              ? location.pathname.startsWith('/clients')
-              : location.pathname === link.path;
-            return (
-              <button
-                key={link.id}
-                type="button"
-                onClick={() => { navigate(link.path); if (onClose) onClose(); }}
-                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70 text-left"
-                style={{
-                  color: active ? 'var(--color-primary)' : 'var(--color-text)',
-                  background: active ? 'var(--color-bg)' : 'transparent',
-                  fontWeight: active ? 500 : 400,
-                }}
-              >
-                {getIcon(link.icon, { size: 12, style: { color: active ? 'var(--color-primary)' : 'var(--color-muted)' } })}
-                <span className="truncate">{link.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="px-3 pb-1">
-        <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
+      <div className="px-2 pt-2 pb-2">
+        <button
+          type="button"
+          onClick={startQuickChat}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          {getIcon('plus', { size: 14 })}
+          New chat
+        </button>
       </div>
 
       {/* Projects header */}
@@ -486,9 +236,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
           </button>
         </div>
       </div>
-      <p className="px-3 pb-2 text-[11px] leading-snug" style={{ color: 'var(--color-muted)' }}>
-        Collections group projects in the sidebar — not individual chats.
-      </p>
       {showFolderInput && (
         <div className="px-2 pb-2">
           <input
@@ -603,47 +350,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
         </div>
       )}
 
-      {moveSessionTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
-            <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-              Move "{formatSessionLabel(moveSessionTarget)}" into a project for brief and file context.
-            </p>
-            <select
-              value={moveSessionProjectId}
-              onChange={e => setMoveSessionProjectId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border text-sm outline-none mb-5"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              {folders.map(folder => {
-                const folderProjects = projects.filter(p => p.folderId === folder.id);
-                if (folderProjects.length === 0) return null;
-                return (
-                  <optgroup key={folder.id} label={folder.name}>
-                    {folderProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </optgroup>
-                );
-              })}
-              <optgroup label="Unfoldered">
-                {projects.filter(p => !p.folderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </optgroup>
-            </select>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setMoveSessionTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
-              <button
-                onClick={confirmMoveSession}
-                disabled={!moveSessionProjectId || moveSessionSaving}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-50"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {moveSessionSaving ? 'Moving…' : 'Move'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {/* Render project row helper */}
@@ -659,14 +365,12 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
                 className="group relative"
                 draggable
                 onDragStart={(e) => handleDragStart(e, project.id)}
-                onDragOver={(e) => handleProjectDragOver(e, project.id)}
-                onDrop={(e) => handleProjectDrop(e, project.id)}
+                onDragOver={(e) => handleDragOver(e, project.id)}
+                onDrop={(e) => handleDrop(e, project.id)}
                 onDragEnd={handleDragEnd}
                 style={{
                   opacity: draggedId === project.id ? 0.4 : 1,
                   borderLeft: dragOverId === project.id ? '2px solid var(--color-primary)' : '2px solid transparent',
-                  outline: dragOverProjectId === project.id ? '1px dashed var(--color-primary)' : 'none',
-                  borderRadius: dragOverProjectId === project.id ? '0.5rem' : undefined,
                 }}
               >
                 {isRenaming ? (
@@ -779,7 +483,7 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
                             onClick={() => {
                               setActive(project.id);
                               navigate(`/projects/${project.id}/chat`);
-                              setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
+                              loadSessionById(s.sessionId);
                               if (onClose) onClose();
                             }}
                             className="w-full text-left py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
@@ -803,39 +507,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
                             View all {sessions.length} chats →
                           </button>
                         )}
-                        {(() => {
-                          const stats = projectStats[project.id];
-                          if (!stats) return null;
-                          const pad = indent ? '3rem' : '2.25rem';
-                          const links = [
-                            { label: `${stats.tasks} task${stats.tasks !== 1 ? 's' : ''}`, path: `/tasks?project=${project.id}` },
-                            { label: `${stats.notes} note${stats.notes !== 1 ? 's' : ''}`, path: `/notes?project=${project.id}` },
-                            { label: `${stats.files} file${stats.files !== 1 ? 's' : ''}`, path: `/projects/${project.id}#files` },
-                          ];
-                          return (
-                            <div className="flex flex-wrap gap-1 py-1" style={{ paddingLeft: pad }}>
-                              {links.map(l => (
-                                <button
-                                  key={l.path}
-                                  type="button"
-                                  onClick={() => { navigate(l.path); if (onClose) onClose(); }}
-                                  className="text-[10px] px-1.5 py-0.5 rounded-md border hover:opacity-70 transition-opacity"
-                                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                                >
-                                  {l.label}
-                                </button>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => { navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
-                                className="text-[10px] px-1.5 py-0.5 rounded-md hover:opacity-70 transition-opacity"
-                                style={{ color: 'var(--color-primary)' }}
-                              >
-                                Overview →
-                              </button>
-                            </div>
-                          );
-                        })()}
                       </div>
                     )}
                   </>
@@ -908,47 +579,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
           );
         })()}
       </div>
-
-      {/* 7 Habits section */}
-      {showHabits && (
-        <div className="px-2 border-t" data-tour="habits-sidebar" style={{ borderColor: 'var(--color-border)' }}>
-          <button
-            onClick={() => {
-              const next = !habitsOpen;
-              setHabitsOpen(next);
-              localStorage.setItem('sidebarHabitsOpen', JSON.stringify(next));
-            }}
-            className="w-full text-left px-2 py-2 flex items-center gap-1.5 transition-colors hover:opacity-70"
-          >
-            {getIcon(habitsOpen ? 'chevron-down' : 'chevron-right', { size: 11, style: { color: 'var(--color-muted)' } })}
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>7 Habits</span>
-          </button>
-          {habitsOpen && (
-            <div className="pb-1 space-y-0.5">
-              {[
-                { label: '🧭 Mission Statement', path: '/goals?section=mission' },
-                { label: '⚡ Priority Matrix', path: '/tasks?view=matrix' },
-                { label: '🌱 Renewal Balance', path: '/goals?section=renewal' },
-              ].map(item => {
-                const isActive = location.pathname + location.search === item.path || location.search.includes(item.path.split('?')[1] || '___');
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => { navigate(item.path); if (onClose) onClose(); }}
-                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-70"
-                    style={{
-                      color: 'var(--color-muted)',
-                      paddingLeft: '1.75rem',
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Client context section */}
       {showClientContext && (() => {
@@ -1050,14 +680,6 @@ function ProjectSidebar({ onClose, showHabits = true, showClientContext = false,
         >
           {getIcon('archive', { size: 14 })}
           Archived Projects
-        </button>
-        <button
-          onClick={() => { navigate('/settings'); if (onClose) onClose(); }}
-          className="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors hover:opacity-70"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {getIcon('settings', { size: 14 })}
-          Settings
         </button>
       </div>
     </div>

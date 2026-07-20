@@ -484,18 +484,16 @@ function UserGuidePage() {
 
         <SubHeading>Starting a chat</SubHeading>
         <UL>
-          <LI>Click <strong>Quick chat</strong> at the top of the left sidebar (or the <strong>+</strong> beside it) — opens instantly.</LI>
-          <LI>Click a project name in the sidebar to resume its latest chat, or start blank if none exist.</LI>
-          <LI>Use the <strong>Recent</strong> list in the sidebar to jump back to any of your last five conversations.</LI>
+          <LI>Click the primary <strong>New chat</strong> button at the top of the sidebar, or press <Kbd>⌘</Kbd><Kbd>N</Kbd>.</LI>
+          <LI>Click a project name to resume its latest chat, or start blank if none exist.</LI>
+          <LI>Use <strong>Home → Continue</strong> or <strong>Chat History</strong> to find past conversations.</LI>
           <LI>Navigate directly to <code>/chat</code> or <code>/projects/:id/chat</code>.</LI>
-          <LI>Press <Kbd>⌘</Kbd><Kbd>N</Kbd> for a new chat in the current context.</LI>
         </UL>
 
         <SubHeading>Session list</SubHeading>
         <P>
-          The sidebar shows your most recent quick chats under the <em>Quick chat</em> heading.
-          Click any session to open it. The count badge expands or collapses the list.
-          Session titles use the auto-generated name or the first line of your message — not internal IDs.
+          Past chats live in <strong>Chat History</strong> (sidebar footer or top-bar clock icon) and on
+          <strong> Home → Continue</strong>. Expand a project in the sidebar to see its recent sessions inline.
         </P>
 
         <Callout type="tip">

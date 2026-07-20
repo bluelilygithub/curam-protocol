@@ -29,7 +29,7 @@ export const DEFAULT_FEATURE_ACCESS = {
 export const FEATURE_ACCESS_OPTIONS = [
   { key: 'clients', label: 'Clients' },
   { key: 'goals', label: 'Goals' },
-  { key: 'habitsSidebar', label: '7 Habits Sidebar' },
+  { key: 'habitsSidebar', label: '7 Habits (Apps menu)' },
   { key: 'memberModelSelection', label: 'Model Selection (Members)' },
   { key: 'chains', label: 'Prompt Chains' },
   { key: 'graph', label: 'Knowledge Graph' },

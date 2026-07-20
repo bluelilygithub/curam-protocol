@@ -51,33 +51,39 @@ Projects grid sits below with copy that projects are optional context (brief, fi
 
 ## Sidebar
 
-### Recent (cross-project)
+Minimal layout: **New chat** button, then **Projects** (with optional collections). Resume chats via project expand, **Chat History** (bottom link or top bar), or **Home → Continue**.
 
-- Below Quick chat: last **5** sessions from `GET /api/chat/recent?limit=5`
-- Shows label + location (project name or “Quick chat”)
-- Refreshes on `vault:sessions-changed`
+### New chat
 
-### Quick chat
-
-- Top section: **Quick chat** + **+** for new quick chat
-- Expandable list of recent quick chats (newest first)
-- Drag a quick-chat session onto a project row to move it into that project
+Primary button at top of sidebar → blank quick chat (`/chat`). Project chats: click a project name (resumes latest) or **⋯ → New chat**.
 
 ### Projects
 
-- Helper text: *Collections group projects in the sidebar — not individual chats.*
 - **Click project name** → enter project (`/projects/:id/chat`); resumes latest session, or blank chat if none
 - **Chevron** → expand/collapse recent sessions (newest 10); **View all N chats →** when more than 10 (`/history?projectId=`)
 - **⋯ overflow menu:** New chat, Overview, Move to collection…, Rename, Archive (confirm), Delete (confirm)
+- Drag project rows onto collection headers to organise; **Move to collection** in overflow for touch/mobile
 
 ### Collections (folders)
 
-- Created via folder-plus icon; labelled “Collection” in UI copy
-- Group project rows only; assign via project detail **Organisation** dropdown, **Move to collection** in overflow menu, or drag project onto collection header
+- Created via folder-plus icon next to Projects header
+- Group project rows only; assign via project detail **Organisation**, overflow menu, or drag onto collection header
+
+### 7 Habits
+
+When enabled (Settings → Feature Access → **7 Habits (Apps menu)**), shortcuts appear in the top-bar **Apps** dropdown:
+
+- Mission Statement → `/goals?section=mission`
+- Priority Matrix → `/tasks?view=matrix`
+- Renewal Balance → `/goals?section=renewal`
 
 ### Client context (conditional)
 
-- Touchpoint logging block shown only on **project overview** (`/projects/:id`) and **client detail** — hidden on chat routes
+Touchpoint logging block shown only on **project overview** (`/projects/:id`) and **client detail** — hidden on chat routes.
+
+### Bottom links
+
+**Chat History** · **Archived Projects**
 
 ---
 

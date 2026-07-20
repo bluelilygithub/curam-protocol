@@ -74,7 +74,11 @@ export const APP_NAV_GROUPS = [
   },
 ];
 
-export function isNavItemActive(item, pathname) {
+export function isNavItemActive(item, pathname, search = '') {
+  if (item.path.includes('?')) {
+    const [path, query] = item.path.split('?');
+    return pathname === path && String(search).includes(query);
+  }
   if (item.matchPrefix) return pathname.startsWith(item.path.replace(/\/[^/]+$/, '') || item.path);
   if (item.path === '/student/quiz') return pathname.startsWith('/student');
   if (item.path === '/clients') return pathname.startsWith('/clients');
@@ -101,3 +105,26 @@ export const SIDEBAR_WORKSPACE_LINKS = [
   { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals' },
   { id: 'clients', label: 'Clients', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
 ];
+
+/** 7 Habits shortcuts — shown in Apps launcher when habitsSidebar + goals are enabled. */
+export const HABITS_NAV_GROUP = {
+  id: 'seven-habits',
+  label: '7 Habits',
+  items: [
+    { id: 'habits-mission', label: 'Mission Statement', path: '/goals?section=mission', icon: 'compass', featureKey: 'goals' },
+    { id: 'habits-matrix', label: 'Priority Matrix', path: '/tasks?view=matrix', icon: 'layout-grid', featureKey: null },
+    { id: 'habits-renewal', label: 'Renewal Balance', path: '/goals?section=renewal', icon: 'heart-pulse', featureKey: 'goals' },
+  ],
+};
+
+export function shouldShowHabitsNav(canUseFeature) {
+  return canUseFeature('goals') && canUseFeature('habitsSidebar');
+}
+
+export function getAppsNavGroups({ canUseFeature, isAdmin = false }) {
+  const groups = filterNavGroups({ canUseFeature, isAdmin });
+  if (!shouldShowHabitsNav(canUseFeature)) return groups;
+  const habitsItems = HABITS_NAV_GROUP.items.filter((item) => !item.featureKey || canUseFeature(item.featureKey));
+  if (habitsItems.length === 0) return groups;
+  return [{ ...HABITS_NAV_GROUP, items: habitsItems }, ...groups];
+}

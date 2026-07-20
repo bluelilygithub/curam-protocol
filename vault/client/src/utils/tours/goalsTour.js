@@ -65,16 +65,15 @@ export function startGoalsTour(navigate) {
     ],
   });
 
-  // ── Step 2: 7 Habits Sidebar ──────────────────────────────────────────────
+  // ── Step 2: 7 Habits in Apps menu ───────────────────────────────────────────
   tour.addStep({
-    id: 'habits-sidebar',
+    id: 'habits-apps',
     title: '7 Habits Quick Access',
-    text: 'These three links are your shortcuts. Mission is your north star. Matrix shows your priorities. Renewal tracks your life balance. Everything connects here.',
-    attachTo: { element: '[data-tour="habits-sidebar"]', on: 'right' },
+    text: 'Open the Apps menu (grid icon in the top bar) for Mission Statement, Priority Matrix, and Renewal Balance — your 7 Habits shortcuts live there now.',
+    attachTo: { element: '[data-tour="apps-launcher"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
-        // Expand the 7 Habits sidebar section if collapsed
-        document.dispatchEvent(new CustomEvent('vault:expand-habits-sidebar'));
+        document.dispatchEvent(new CustomEvent('vault:open-apps-launcher'));
         setTimeout(resolve, 400);
       });
     },

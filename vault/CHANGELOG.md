@@ -4,7 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-20 (chat-ux-overhaul)
+## 2026-07-20 (sidebar-de-clutter)
+
+### Simpler chat sidebar
+- **Single focus** — sidebar is now **New chat** + **Projects** (+ collections) only; removed Quick chat list, Recent list, and Workspace shortcut grid (Tasks/Notes/Goals/Clients remain in the top bar and Apps menu).
+- **7 Habits moved** — Mission Statement, Priority Matrix, and Renewal Balance now live under **Apps** (grid icon) when the `habitsSidebar` feature flag is on.
+- **Goals tour** updated to point at Apps launcher instead of sidebar habits section.
+- **Bottom links** trimmed to Chat History + Archived Projects (Settings removed — already in top bar).
+
+---
+
 
 ### Chat-first projects & folders UX
 - **Instant new chat** — removed the Quick vs Project modal; `Cmd/Ctrl+N` and sidebar actions route straight to a blank composer in the current or chosen context.

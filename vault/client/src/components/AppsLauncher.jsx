@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
-import { APP_NAV_GROUPS, filterNavGroups, isNavItemActive } from '../config/appNavigation';
+import { getAppsNavGroups, isNavItemActive } from '../config/appNavigation';
 
 export default function AppsLauncher({
   canUseFeature,
@@ -14,11 +14,17 @@ export default function AppsLauncher({
   const location = useLocation();
   const getIcon = useIcon();
 
-  const groups = filterNavGroups({ canUseFeature, isAdmin });
+  const groups = getAppsNavGroups({ canUseFeature, isAdmin });
 
-  const anyActive = groups.some(g =>
-    g.items.some(item => isNavItemActive(item, location.pathname))
+  const anyActive = groups.some((g) =>
+    g.items.some((item) => isNavItemActive(item, location.pathname, location.search))
   );
+
+  useEffect(() => {
+    const openHandler = () => setOpen(true);
+    document.addEventListener('vault:open-apps-launcher', openHandler);
+    return () => document.removeEventListener('vault:open-apps-launcher', openHandler);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -44,6 +50,7 @@ export default function AppsLauncher({
           color: open || anyActive ? 'var(--color-primary)' : 'var(--color-muted)',
         }}
         data-tip="Apps"
+        data-tour="apps-launcher"
         aria-expanded={open}
         aria-haspopup="true"
       >
@@ -75,8 +82,11 @@ export default function AppsLauncher({
             Apps
           </div>
           <div className="max-h-[min(70dvh,520px)] overflow-y-auto p-2 space-y-3">
-            {groups.map(group => (
-              <div key={group.id}>
+            {groups.map((group) => (
+              <div
+                key={group.id}
+                {...(group.id === 'seven-habits' ? { 'data-tour': 'habits-apps' } : {})}
+              >
                 <p
                   className="px-1 pb-1.5 pt-0.5 text-[10px] font-bold uppercase tracking-wider"
                   style={{ color: '#166534' }}
@@ -84,8 +94,8 @@ export default function AppsLauncher({
                   {group.label}
                 </p>
                 <div className="grid grid-cols-2 gap-1">
-                  {group.items.map(item => {
-                    const active = isNavItemActive(item, location.pathname);
+                  {group.items.map((item) => {
+                    const active = isNavItemActive(item, location.pathname, location.search);
                     const showMissionDot = item.badgeKey === 'missionReminder' && missionReminderDue;
                     const showSuggestionBadge = item.badgeKey === 'suggestions' && newSuggestionCount > 0;
                     return (
