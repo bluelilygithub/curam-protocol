@@ -4,7 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-20 (sidebar-de-clutter)
+## 2026-07-20 (sidebar-project-clarity)
+
+### Delete empty projects + color-differentiate collections
+- **Delete empty projects** — ⋯ menu always visible (not hover-only); empty projects show an **empty** badge and put **Delete empty project** first in the menu; expanded empty projects also get an inline **Delete project** link.
+- **Collections vs projects** — collections use slate-blue tint (`#5B7C99`) + folder icon + tinted row background; projects use sage-green layers icon (`#6B8F71`) and normal text.
+- **Collection ⋯ menu** — rename and delete collection (projects are unassigned, not deleted).
+
+---
+
 
 ### Simpler chat sidebar
 - **Single focus** — sidebar is now **New chat** + **Projects** (+ collections) only; removed Quick chat list, Recent list, and Workspace shortcut grid (Tasks/Notes/Goals/Clients remain in the top bar and Apps menu).

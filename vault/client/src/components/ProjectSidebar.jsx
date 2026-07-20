@@ -20,6 +20,10 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
   const [dragOverFolderId, setDragOverFolderId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState(null);
+  const [renamingFolderId, setRenamingFolderId] = useState(null);
+  const [renameFolderValue, setRenameFolderValue] = useState('');
+  const renameFolderInputRef = useRef(null);
   const [moveProjectTarget, setMoveProjectTarget] = useState(null);
   const [moveProjectFolderId, setMoveProjectFolderId] = useState('');
   const [moveProjectSaving, setMoveProjectSaving] = useState(false);
@@ -57,12 +61,33 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
     return () => document.removeEventListener('vault:sessions-changed', loadSessionLists);
   }, [expandedProjectId, fetchProjects]);
 
+  const refreshFolders = () => {
+    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+  };
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     await api.post('/api/folders', { name: newFolderName.trim() });
     setNewFolderName('');
     setShowFolderInput(false);
-    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+    refreshFolders();
+  };
+
+  const saveFolderRename = async (folderId) => {
+    const name = renameFolderValue.trim();
+    if (name) {
+      await api.put(`/api/folders/${folderId}`, { name });
+      refreshFolders();
+    }
+    setRenamingFolderId(null);
+  };
+
+  const confirmDeleteFolder = async () => {
+    if (!deleteFolderTarget) return;
+    await api.delete(`/api/folders/${deleteFolderTarget.id}`);
+    setDeleteFolderTarget(null);
+    refreshFolders();
+    await fetchProjects();
   };
 
   const toggleFolder = (folderId) => setCollapsedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
@@ -330,7 +355,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
               This will permanently delete the project
-              {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${deleteTarget.chatCount === 1 ? '' : 's'}`}
+              {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${Number(deleteTarget.chatCount) === 1 ? '' : 's'}`}
               , all uploaded files, and all messages. This cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
@@ -350,6 +375,26 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
         </div>
       )}
 
+      {deleteFolderTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete collection "{deleteFolderTarget.name}"?</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              Projects inside stay in your workspace — they just leave this collection. The collection itself is removed.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteFolderTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={confirmDeleteFolder}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity"
+              >
+                Delete collection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {/* Render project row helper */}
@@ -359,6 +404,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
             const isRenaming = renamingId === project.id;
             const isExpanded = expandedProjectId === project.id;
             const sessions = projectSessions[project.id] || [];
+            const isEmpty = !Number(project.chatCount);
             return (
               <div
                 key={project.id}
@@ -413,21 +459,32 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                           fontWeight: isActive ? 500 : 400,
                         }}
                       >
-                        <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
-                          {getIcon('folder', { size: 14 })}
+                        <span style={{ flexShrink: 0, color: isActive ? 'var(--color-primary)' : '#6B8F71' }}>
+                          {getIcon('layers', { size: 14 })}
                         </span>
                         <span className="truncate flex-1">{project.name}</span>
-                        {project.chatCount > 0 && !isExpanded && (
+                        {isEmpty && !isExpanded && (
+                          <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                            empty
+                          </span>
+                        )}
+                        {!isEmpty && !isExpanded && (
                           <span className="flex-shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
                             {project.chatCount}
                           </span>
                         )}
                       </button>
-                      <div className="opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity">
+                      <div className="flex-shrink-0">
                         <OverflowMenu
                           variant="icon"
                           title="Project actions"
                           actions={[
+                            ...(isEmpty ? [{
+                              label: 'Delete empty project',
+                              icon: 'trash',
+                              danger: true,
+                              onClick: () => setDeleteTarget(project),
+                            }, { divider: true, key: `empty-div-${project.id}` }] : []),
                             {
                               label: 'New chat',
                               icon: 'plus',
@@ -465,12 +522,12 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                               icon: 'archive',
                               onClick: () => setArchiveTarget(project),
                             },
-                            {
+                            ...(!isEmpty ? [{
                               label: 'Delete',
                               icon: 'trash',
                               danger: true,
                               onClick: () => setDeleteTarget(project),
-                            },
+                            }] : []),
                           ]}
                         />
                       </div>
@@ -493,9 +550,19 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
                           </button>
                         ))}
                         {sessions.length === 0 && (
-                          <p className="text-xs py-1" style={{ color: 'var(--color-muted)', paddingLeft: indent ? '3rem' : '2.25rem' }}>
-                            No chats yet
-                          </p>
+                          <div className="flex items-center gap-2 py-1" style={{ paddingLeft: indent ? '3rem' : '2.25rem' }}>
+                            <p className="text-xs flex-1" style={{ color: 'var(--color-muted)' }}>
+                              No chats yet
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(project)}
+                              className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70 transition-opacity"
+                              style={{ color: '#ef4444' }}
+                            >
+                              Delete project
+                            </button>
+                          </div>
                         )}
                         {sessions.length > 10 && (
                           <button
@@ -531,25 +598,69 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
               {folders.map(folder => {
                 const fps = folderProjects[folder.id] || [];
                 const isCollapsed = collapsedFolders[folder.id];
+                const isRenamingFolder = renamingFolderId === folder.id;
                 return (
-                  <div key={folder.id}>
-                    <button
-                      onClick={() => toggleFolder(folder.id)}
-                      onDragOver={(e) => { e.preventDefault(); setDragOverFolderId(folder.id); }}
-                      onDragLeave={() => setDragOverFolderId(null)}
-                      onDrop={(e) => handleFolderDrop(e, folder.id)}
-                      className="w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg"
-                      style={{
-                        color: dragOverFolderId === folder.id ? 'var(--color-primary)' : 'var(--color-muted)',
-                        background: dragOverFolderId === folder.id ? 'var(--color-primary)15' : 'transparent',
-                        outline: dragOverFolderId === folder.id ? '1px dashed var(--color-primary)' : 'none',
-                      }}
-                    >
-                      {getIcon(isCollapsed ? 'chevron-right' : 'chevron-down', { size: 11 })}
-                      {getIcon('folder-open', { size: 12 })}
-                      {folder.name}
-                      <span className="ml-auto tabular-nums">{fps.length}</span>
-                    </button>
+                  <div key={folder.id} className="mb-1">
+                    {isRenamingFolder ? (
+                      <input
+                        ref={renameFolderInputRef}
+                        value={renameFolderValue}
+                        onChange={e => setRenameFolderValue(e.target.value)}
+                        onBlur={() => saveFolderRename(folder.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveFolderRename(folder.id);
+                          if (e.key === 'Escape') setRenamingFolderId(null);
+                        }}
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border outline-none"
+                        style={{ background: 'var(--color-bg)', borderColor: '#5B7C99', color: 'var(--color-text)' }}
+                      />
+                    ) : (
+                      <div
+                        className="group flex items-center gap-0.5 rounded-lg"
+                        onDragOver={(e) => { e.preventDefault(); setDragOverFolderId(folder.id); }}
+                        onDragLeave={() => setDragOverFolderId(null)}
+                        onDrop={(e) => handleFolderDrop(e, folder.id)}
+                        style={{
+                          background: dragOverFolderId === folder.id ? 'rgba(91,124,153,0.15)' : 'rgba(91,124,153,0.08)',
+                          outline: dragOverFolderId === folder.id ? '1px dashed #5B7C99' : 'none',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleFolder(folder.id)}
+                          className="flex-1 min-w-0 text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg hover:opacity-80"
+                          style={{ color: '#5B7C99' }}
+                        >
+                          {getIcon(isCollapsed ? 'chevron-right' : 'chevron-down', { size: 11 })}
+                          {getIcon('folder-open', { size: 12 })}
+                          <span className="truncate">{folder.name}</span>
+                          <span className="ml-auto tabular-nums opacity-80">{fps.length}</span>
+                        </button>
+                        <div className="pr-1 flex-shrink-0">
+                          <OverflowMenu
+                            variant="icon"
+                            title="Collection actions"
+                            actions={[
+                              {
+                                label: 'Rename',
+                                icon: 'edit',
+                                onClick: () => {
+                                  setRenamingFolderId(folder.id);
+                                  setRenameFolderValue(folder.name);
+                                  setTimeout(() => renameFolderInputRef.current?.focus(), 0);
+                                },
+                              },
+                              {
+                                label: 'Delete collection',
+                                icon: 'trash',
+                                danger: true,
+                                onClick: () => setDeleteFolderTarget(folder),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    )}
                     {!isCollapsed && fps.map(p => renderProject(p, true))}
                   </div>
                 );

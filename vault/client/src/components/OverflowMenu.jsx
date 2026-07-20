@@ -17,7 +17,11 @@ export default function OverflowMenu({ actions, title = 'More actions', variant 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
         className={
           variant === 'icon'
             ? `w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0 ${className}`
