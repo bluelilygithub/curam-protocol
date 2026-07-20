@@ -78,4 +78,4 @@ Deep links:
 
 ## Related docs
 
-- [Chat navigation](./chat-navigation.md) — Continue home, New chat modal, session labels
+- [Chat navigation](./chat-navigation.md) — Continue home, instant new chat, recents, session labels

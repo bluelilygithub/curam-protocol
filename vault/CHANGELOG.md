@@ -14,6 +14,8 @@ A log of bugs found and fixed in the Curam Vault application.
 - **Project chat history** — “View all N chats →” from expanded project rows; `/history?projectId=` filter on Chat History.
 - **Cleaner chat sidebar** — client touchpoint form hidden on chat routes (shown on project overview and client pages only).
 
+**Docs:** `docs/chat-navigation.md`, `MEMORY.md`, User Guide (Chat / Quick chat / Collections / History sections).
+
 ---
 
 

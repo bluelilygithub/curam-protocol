@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 
 /**
- * Global New chat modal state.
+ * Global new-chat routing state (navigation only — no modal UI).
  *
  * Usage:
  *   import { openNewChatModal } from '../utils/openNewChatModal';
  *   openNewChatModal({ defaultMode: 'project', defaultProjectId: '12' });
  *
- * NewChatModalHost (rendered once in App.jsx) reads this store.
+ * NewChatModalHost (rendered once in App.jsx) navigates and dispatches vault:new-chat.
  */
 const useNewChatStore = create((set) => ({
   options: null,

@@ -396,9 +396,10 @@ function UserGuidePage() {
 
         <SubHeading>Starting a new session</SubHeading>
         <P>
-          Select <strong>+ New chat</strong> from the session dropdown, or press
-          <Kbd>⌘</Kbd><Kbd>N</Kbd>. Each session is independent — switching sessions does not
-          affect others.
+          Press <Kbd>⌘</Kbd><Kbd>N</Kbd>, select <strong>+ New chat</strong> from the session dropdown, or click
+          <strong> Quick chat</strong> / a project in the sidebar. You land on a blank composer immediately — no modal.
+          On an empty chat, use the <strong>Context</strong> dropdown to switch between Quick chat and any project
+          before your first message.
         </P>
 
         <SubHeading>Model and temperature</SubHeading>
@@ -483,9 +484,11 @@ function UserGuidePage() {
 
         <SubHeading>Starting a chat</SubHeading>
         <UL>
-          <LI>From <strong>Home</strong>, click <strong>New chat</strong> and choose Quick chat or a project.</LI>
-          <LI>Click <strong>Quick chat</strong> at the top of the left sidebar (or the <strong>+</strong> beside it).</LI>
-          <LI>Navigate directly to <code>/chat</code>.</LI>
+          <LI>Click <strong>Quick chat</strong> at the top of the left sidebar (or the <strong>+</strong> beside it) — opens instantly.</LI>
+          <LI>Click a project name in the sidebar to resume its latest chat, or start blank if none exist.</LI>
+          <LI>Use the <strong>Recent</strong> list in the sidebar to jump back to any of your last five conversations.</LI>
+          <LI>Navigate directly to <code>/chat</code> or <code>/projects/:id/chat</code>.</LI>
+          <LI>Press <Kbd>⌘</Kbd><Kbd>N</Kbd> for a new chat in the current context.</LI>
         </UL>
 
         <SubHeading>Session list</SubHeading>
@@ -530,6 +533,8 @@ function UserGuidePage() {
         <P>
           The search box filters sessions in real time by title, project name, or the content of the
           last message. Useful for finding a session when you remember a phrase but not the date.
+          From an expanded project in the sidebar, <strong>View all N chats →</strong> opens History
+          pre-filtered to that project (<code>/history?projectId=</code>).
         </P>
 
         <SubHeading>Navigating to a session</SubHeading>
@@ -1079,8 +1084,10 @@ function UserGuidePage() {
 
         <SubHeading>Opening a project from the sidebar</SubHeading>
         <P>
-          Click the <strong>project name</strong> to enter the project (opens the latest chat, or a new chat if none exist).
+          Click the <strong>project name</strong> to enter the project (opens the latest chat, or a blank chat if none exist).
           Click the <strong>chevron</strong> to expand recent sessions without leaving the sidebar.
+          Use the <strong>⋯</strong> menu for new chat, overview, move to collection, rename, archive, or delete.
+          When a project has more than ten chats, <strong>View all N chats →</strong> opens Chat History filtered to that project.
         </P>
 
         <SubHeading>Collapsing collections</SubHeading>
