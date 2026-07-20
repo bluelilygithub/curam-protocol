@@ -4,7 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-19 (video-manipulate-suite)
+## 2026-07-20 (chat-ux-overhaul)
+
+### Chat-first projects & folders UX
+- **Instant new chat** — removed the Quick vs Project modal; `Cmd/Ctrl+N` and sidebar actions route straight to a blank composer in the current or chosen context.
+- **Context picker** — empty chat state includes an inline Quick chat / project selector before the first message.
+- **Recent chats in sidebar** — cross-project recents (last 5) above the project tree; chat header Home resumes the latest conversation.
+- **Safer project rows** — five hover icons replaced with one overflow menu; archive now confirms; mobile-friendly “Move to collection” modal.
+- **Project chat history** — “View all N chats →” from expanded project rows; `/history?projectId=` filter on Chat History.
+- **Cleaner chat sidebar** — client touchpoint form hidden on chat routes (shown on project overview and client pages only).
+
+---
+
 
 ### Five new video manipulation tools
 - **Crop / reframe** — 9:16 / 16:9 / 1:1 / 4:5; crop (fill) or pad (letterbox); focus for crop. `POST /api/videos/reframe`

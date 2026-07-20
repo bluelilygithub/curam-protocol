@@ -1,6 +1,6 @@
 import useNewChatStore from '../store/newChatStore';
 
-/** Open the global New chat modal (Quick chat vs project). */
+/** Open a new chat in the given context (routes immediately; no modal). */
 export function openNewChatModal(detail = {}) {
   useNewChatStore.getState().openNewChatModal(detail);
 }

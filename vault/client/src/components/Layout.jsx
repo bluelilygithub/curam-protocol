@@ -334,6 +334,7 @@ function Layout() {
         <ProjectSidebar
           onClose={() => setSidebarOpen(false)}
           showHabits={canUseFeature('goals') && canUseFeature('habitsSidebar')}
+          showClientContext={/^\/projects\/\d+$/.test(location.pathname) || /^\/clients\/\d+/.test(location.pathname)}
           collapsed={!sidebarOpen && !isMobile}
         />
         {/* Drag-to-resize handle — desktop only */}

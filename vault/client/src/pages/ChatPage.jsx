@@ -30,7 +30,7 @@ import ModelAdvisorModal from '../components/ModelAdvisorModal';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatSessionLabel } from '../utils/sessionDisplay';
-import { openNewChatModal } from '../utils/openNewChatModal';
+import { openRecentSession } from '../utils/chatNavigation';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -279,7 +279,31 @@ function ChatPage({ general = false }) {
   const mentionTimerRef = useRef(null);
   const handleSendRef = useRef(null);
 
+  const startBlankChat = useCallback(() => {
+    document.dispatchEvent(new CustomEvent('vault:new-chat'));
+  }, []);
+
+  const resumeLatestChat = useCallback(async () => {
+    try {
+      const data = await api.get('/api/chat/recent?limit=1').then((r) => r.json());
+      if (Array.isArray(data) && data[0]) {
+        openRecentSession(data[0], navigate, setActive);
+        return;
+      }
+    } catch {
+      // fall through to home
+    }
+    navigate('/');
+  }, [navigate, setActive]);
+
+  const switchChatContext = useCallback((value) => {
+    startBlankChat();
+    if (value === 'quick') navigate('/chat');
+    else navigate(`/projects/${value}/chat`);
+  }, [navigate, startBlankChat]);
+
   const project = projects.find((p) => p.id === projectId);
+
   useEffect(() => {
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
@@ -1031,14 +1055,15 @@ function ChatPage({ general = false }) {
           background: MODELS.find(x => x.id === effectiveModel)?.label === 'Premium' ? '#fee2e2' : undefined,
         }}
       >
-        <Link
-          to="/"
+        <button
+          type="button"
+          onClick={resumeLatestChat}
           className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity"
           style={{ color: 'var(--color-muted)' }}
           title="Home — continue recent chats"
         >
           {getIcon('home', { size: 16 })}
-        </Link>
+        </button>
 
         {general ? (
           <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>
@@ -1101,11 +1126,7 @@ function ChatPage({ general = false }) {
                   <button
                     onClick={() => {
                       setShowSessionPicker(false);
-                      openNewChatModal(
-                        general
-                          ? { defaultMode: 'quick' }
-                          : { defaultMode: 'project', defaultProjectId: String(projectId) }
-                      );
+                      startBlankChat();
                     }}
                     className="w-full text-left px-3 py-2 text-xs hover:opacity-70 border-b"
                     style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
@@ -1152,11 +1173,7 @@ function ChatPage({ general = false }) {
         ) : (
           <button
             type="button"
-            onClick={() => openNewChatModal(
-              general
-                ? { defaultMode: 'quick' }
-                : { defaultMode: 'project', defaultProjectId: String(projectId) }
-            )}
+            onClick={startBlankChat}
             className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex-shrink-0"
             style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
           >
@@ -1553,6 +1570,24 @@ function ChatPage({ general = false }) {
                 <p className="text-sm max-w-xs" style={{ color: 'var(--color-muted)' }}>
                   {project ? 'Uses your project brief, files, and pinned URLs.' : 'Ask anything — no project files or brief. Global memory and persona still apply.'}
                 </p>
+                {!sessionId && (
+                  <div className="mt-4 flex flex-col items-center gap-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+                      Context
+                    </label>
+                    <select
+                      value={general ? 'quick' : String(projectId || '')}
+                      onChange={(e) => switchChatContext(e.target.value)}
+                      className="px-3 py-2 rounded-xl border text-xs outline-none max-w-xs"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      <option value="quick">Quick chat</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             ) : (
               <MemoMessageList

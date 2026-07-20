@@ -8,7 +8,7 @@ import { useIcon } from '../providers/IconProvider';
  *   { label, icon?, shortcut?, active?, danger?, disabled?, onClick, dataTour? }
  *   | { divider: true, key: string }
  */
-export default function OverflowMenu({ actions, title = 'More actions' }) {
+export default function OverflowMenu({ actions, title = 'More actions', variant = 'default', className = '' }) {
   const getIcon = useIcon();
   const [open, setOpen] = useState(false);
 
@@ -18,14 +18,22 @@ export default function OverflowMenu({ actions, title = 'More actions' }) {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs hover:opacity-70 transition-opacity"
-        style={{
-          borderColor: open ? 'var(--color-primary)' : 'var(--color-border)',
-          color: open ? 'var(--color-primary)' : 'var(--color-muted)',
-        }}
+        className={
+          variant === 'icon'
+            ? `w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0 ${className}`
+            : `flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs hover:opacity-70 transition-opacity ${className}`
+        }
+        style={
+          variant === 'icon'
+            ? { color: open ? 'var(--color-primary)' : 'var(--color-muted)' }
+            : {
+              borderColor: open ? 'var(--color-primary)' : 'var(--color-border)',
+              color: open ? 'var(--color-primary)' : 'var(--color-muted)',
+            }
+        }
         title={title}
       >
-        {getIcon('more-horizontal', { size: 14 })}
+        {getIcon('more-horizontal', { size: variant === 'icon' ? 13 : 14 })}
       </button>
 
       {open && (

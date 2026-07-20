@@ -86,7 +86,13 @@ function App() {
       }
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
-        openNewChatModal();
+        const path = window.location.pathname || '';
+        const match = path.match(/^\/projects\/(\d+)\/chat/);
+        if (match?.[1]) {
+          openNewChatModal({ defaultMode: 'project', defaultProjectId: match[1] });
+        } else {
+          openNewChatModal({ defaultMode: 'quick' });
+        }
       }
     };
     document.addEventListener('keydown', handler);

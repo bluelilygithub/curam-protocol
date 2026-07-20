@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
@@ -58,6 +58,8 @@ const PERIODS = [
 
 export default function ChatHistoryPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const projectFilterId = searchParams.get('projectId');
   const getIcon = useIcon();
   const { projects, fetchProjects } = useProjectStore();
 
@@ -221,13 +223,14 @@ export default function ChatHistoryPage() {
   }
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const filteredSessions = search.trim()
+  const filteredSessions = (search.trim()
     ? sessions.filter(s =>
         (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
         (s.projectName || '').toLowerCase().includes(search.toLowerCase()) ||
         (s.lastMsg || '').toLowerCase().includes(search.toLowerCase())
       )
-    : sessions;
+    : sessions
+  ).filter((s) => !projectFilterId || String(s.projectId || '') === String(projectFilterId));
   const filteredDeletedSessions = search.trim()
     ? deletedSessions.filter(s =>
         (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -253,9 +256,32 @@ export default function ChatHistoryPage() {
     return groups;
   }, []);
 
+  const projectFilterName = projectFilterId
+    ? projects.find((p) => String(p.id) === String(projectFilterId))?.name
+    : null;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
+
+      {projectFilterId && (
+        <div
+          className="rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 text-sm"
+          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          <span>
+            Showing chats for <strong>{projectFilterName || `project #${projectFilterId}`}</strong>
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate('/history')}
+            className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity flex-shrink-0"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Header + tab switcher */}
       <div className="flex items-center justify-between gap-4">

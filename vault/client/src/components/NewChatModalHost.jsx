@@ -1,26 +1,26 @@
 import React, { useEffect } from 'react';
-import NewChatModal from './NewChatModal';
+import { useNavigate } from 'react-router-dom';
 import useNewChatStore from '../store/newChatStore';
-import useProjectStore from '../store/projectStore';
 
-/** Renders NewChatModal once at app root — see openNewChatModal(). */
+/** Handles global "new chat" actions and routes immediately. */
 export default function NewChatModalHost() {
+  const navigate = useNavigate();
   const options = useNewChatStore((s) => s.options);
   const closeNewChatModal = useNewChatStore((s) => s.closeNewChatModal);
-  const { projects, fetchProjects } = useProjectStore();
 
   useEffect(() => {
-    if (options) fetchProjects();
-  }, [options, fetchProjects]);
+    if (!options) return;
+    const mode = options.defaultMode || 'quick';
+    const projectId = options.defaultProjectId;
 
-  if (!options) return null;
+    document.dispatchEvent(new CustomEvent('vault:new-chat'));
+    if (mode === 'project' && projectId) {
+      navigate(`/projects/${projectId}/chat`);
+    } else {
+      navigate('/chat');
+    }
+    closeNewChatModal();
+  }, [options, navigate, closeNewChatModal]);
 
-  return (
-    <NewChatModal
-      projects={projects}
-      defaultMode={options.defaultMode || 'quick'}
-      defaultProjectId={options.defaultProjectId || ''}
-      onClose={closeNewChatModal}
-    />
-  );
+  return null;
 }

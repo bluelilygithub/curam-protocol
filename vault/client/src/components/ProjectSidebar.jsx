@@ -6,10 +6,12 @@ import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
+import { openRecentSession, loadSessionById } from '../utils/chatNavigation';
+import OverflowMenu from './OverflowMenu';
 import { SIDEBAR_WORKSPACE_LINKS } from '../config/appNavigation';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
-function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
+function ProjectSidebar({ onClose, showHabits = true, showClientContext = false, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
@@ -21,7 +23,12 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const [dragOverFolderId, setDragOverFolderId] = useState(null);
   const [dragOverProjectId, setDragOverProjectId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [moveProjectTarget, setMoveProjectTarget] = useState(null);
+  const [moveProjectFolderId, setMoveProjectFolderId] = useState('');
+  const [moveProjectSaving, setMoveProjectSaving] = useState(false);
   const [moveSessionTarget, setMoveSessionTarget] = useState(null);
+  const [recentSessions, setRecentSessions] = useState([]);
   const [moveSessionProjectId, setMoveSessionProjectId] = useState('');
   const [moveSessionSaving, setMoveSessionSaving] = useState(false);
   const navigate = useNavigate();
@@ -53,6 +60,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       fetchProjects();
       api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
       api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
+      api.get('/api/chat/recent?limit=5').then(r => r.json()).then(data => setRecentSessions(Array.isArray(data) ? data : [])).catch(() => {});
       if (expandedProjectId) {
         api.get(`/api/chat/sessions/${expandedProjectId}`)
           .then(r => r.json())
@@ -135,6 +143,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
 
   const enterProject = async (projectId) => {
     setActive(projectId);
+    setExpandedProjectId(projectId);
     let sessions = projectSessions[projectId];
     if (!sessions) {
       sessions = await api.get(`/api/chat/sessions/${projectId}`).then(r => r.json()).catch(() => []);
@@ -142,13 +151,11 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
     }
     navigate(`/projects/${projectId}/chat`);
     if (onClose) onClose();
-    setTimeout(() => {
-      if (sessions?.length > 0) {
-        document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessions[0].sessionId }));
-      } else {
-        openNewChatModal({ defaultMode: 'project', defaultProjectId: String(projectId) });
-      }
-    }, 80);
+    if (sessions?.length > 0) {
+      loadSessionById(sessions[0].sessionId);
+    } else {
+      document.dispatchEvent(new CustomEvent('vault:new-chat'));
+    }
   };
 
   const startQuickChat = () => {
@@ -256,13 +263,6 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
     const project = await create(data);
     setShowModal(false);
     navigate(`/projects/${project.id}`);
-  };
-
-  const startRename = (e, project) => {
-    e.stopPropagation();
-    setRenamingId(project.id);
-    setRenameValue(project.name);
-    setTimeout(() => renameInputRef.current?.focus(), 0);
   };
 
   const saveRename = async (id) => {
@@ -396,6 +396,34 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
         )}
       </div>
 
+      {recentSessions.length > 0 && (
+        <div className="px-2 pb-2">
+          <p className="px-1 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+            Recent
+          </p>
+          <div className="space-y-0.5 max-h-40 overflow-y-auto">
+            {recentSessions.map((s) => (
+              <button
+                key={s.sessionId}
+                type="button"
+                onClick={() => {
+                  openRecentSession(s, navigate, setActive);
+                  if (onClose) onClose();
+                }}
+                className="w-full text-left px-2 py-1.5 rounded-lg hover:opacity-70 transition-opacity"
+              >
+                <div className="text-xs truncate" style={{ color: 'var(--color-text)' }}>
+                  {formatSessionLabel(s)}
+                </div>
+                <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  {s.projectName || 'Quick chat'}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="px-3 pb-1">
         <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
       </div>
@@ -476,6 +504,78 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       )}
 
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
+
+      {archiveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Archive "{archiveTarget.name}"?</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              The project will be hidden from the sidebar. You can restore it from Archived Projects on the home page.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setArchiveTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={async () => {
+                  await archive(archiveTarget.id);
+                  setArchiveTarget(null);
+                  if (activeProjectId === archiveTarget.id) navigate('/');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Archive project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveProjectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move to collection</h3>
+            <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+              Group "{moveProjectTarget.name}" under a sidebar collection.
+            </p>
+            <select
+              value={moveProjectFolderId}
+              onChange={e => setMoveProjectFolderId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border text-sm outline-none mb-5"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">No collection</option>
+              {folders.map(folder => (
+                <option key={folder.id} value={folder.id}>{folder.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setMoveProjectTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={async () => {
+                  setMoveProjectSaving(true);
+                  try {
+                    await update(moveProjectTarget.id, {
+                      folderId: moveProjectFolderId ? Number(moveProjectFolderId) : null,
+                    });
+                    if (moveProjectFolderId) {
+                      setCollapsedFolders(prev => ({ ...prev, [moveProjectFolderId]: false }));
+                    }
+                    setMoveProjectTarget(null);
+                    setMoveProjectFolderId('');
+                  } finally {
+                    setMoveProjectSaving(false);
+                  }
+                }}
+                disabled={moveProjectSaving}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-50"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {moveProjectSaving ? 'Moving…' : 'Move'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
@@ -619,51 +719,57 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                           </span>
                         )}
                       </button>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
-                        style={{ color: 'var(--color-muted)' }}
-                        data-tip="Project settings"
-                      >
-                        {getIcon('external-link', { size: 11 })}
-                      </span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActive(project.id);
-                          openNewChatModal({ defaultMode: 'project', defaultProjectId: String(project.id) });
-                          if (onClose) onClose();
-                        }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
-                        style={{ color: 'var(--color-primary)' }}
-                        data-tip="New chat in project"
-                      >
-                        {getIcon('plus', { size: 11 })}
-                      </span>
-                      <span
-                        onClick={(e) => startRename(e, project)}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
-                        style={{ color: 'var(--color-muted)' }}
-                        data-tip="Rename"
-                      >
-                        {getIcon('edit', { size: 11 })}
-                      </span>
-                      <span
-                        onClick={async (e) => { e.stopPropagation(); await archive(project.id); if (activeProjectId === project.id) navigate('/'); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
-                        style={{ color: 'var(--color-muted)' }}
-                        data-tip="Archive project"
-                      >
-                        {getIcon('archive', { size: 11 })}
-                      </span>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer p-1"
-                        style={{ color: '#ef4444' }}
-                        data-tip="Delete project"
-                      >
-                        {getIcon('trash', { size: 11 })}
-                      </span>
+                      <div className="opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity">
+                        <OverflowMenu
+                          variant="icon"
+                          title="Project actions"
+                          actions={[
+                            {
+                              label: 'New chat',
+                              icon: 'plus',
+                              onClick: () => {
+                                setActive(project.id);
+                                openNewChatModal({ defaultMode: 'project', defaultProjectId: String(project.id) });
+                                if (onClose) onClose();
+                              },
+                            },
+                            {
+                              label: 'Overview',
+                              icon: 'external-link',
+                              onClick: () => { navigate(`/projects/${project.id}`); if (onClose) onClose(); },
+                            },
+                            {
+                              label: 'Move to collection…',
+                              icon: 'folder',
+                              onClick: () => {
+                                setMoveProjectTarget(project);
+                                setMoveProjectFolderId(project.folderId ? String(project.folderId) : '');
+                              },
+                            },
+                            { divider: true, key: `div-${project.id}` },
+                            {
+                              label: 'Rename',
+                              icon: 'edit',
+                              onClick: () => {
+                                setRenamingId(project.id);
+                                setRenameValue(project.name);
+                                setTimeout(() => renameInputRef.current?.focus(), 0);
+                              },
+                            },
+                            {
+                              label: 'Archive',
+                              icon: 'archive',
+                              onClick: () => setArchiveTarget(project),
+                            },
+                            {
+                              label: 'Delete',
+                              icon: 'trash',
+                              danger: true,
+                              onClick: () => setDeleteTarget(project),
+                            },
+                          ]}
+                        />
+                      </div>
                     </div>
                     {isExpanded && (
                       <div className="mt-0.5 space-y-0.5">
@@ -686,6 +792,16 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
                           <p className="text-xs py-1" style={{ color: 'var(--color-muted)', paddingLeft: indent ? '3rem' : '2.25rem' }}>
                             No chats yet
                           </p>
+                        )}
+                        {sessions.length > 10 && (
+                          <button
+                            type="button"
+                            onClick={() => { navigate(`/history?projectId=${project.id}`); if (onClose) onClose(); }}
+                            className="w-full text-left py-1 text-[10px] hover:opacity-70 transition-opacity"
+                            style={{ color: 'var(--color-primary)', paddingLeft: indent ? '3rem' : '2.25rem' }}
+                          >
+                            View all {sessions.length} chats →
+                          </button>
                         )}
                         {(() => {
                           const stats = projectStats[project.id];
@@ -835,7 +951,7 @@ function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
       )}
 
       {/* Client context section */}
-      {(() => {
+      {showClientContext && (() => {
         const activeProject = projects.find(p => p.id === activeProjectId);
         if (!activeProject?.clientId || !activeProject?.clientName) return null;
         return (
