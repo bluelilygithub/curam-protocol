@@ -36,6 +36,7 @@ const {
 const { roundMoney } = require('./tables');
 const { buildEligibleLenderProducts } = require('./eligibleProducts');
 const { buildBankPostureFit } = require('./bankPosture');
+const { buildProformaSupplement } = require('./proformaSupplement');
 
 function getCheck(checks, id) {
   return (checks || []).find((c) => c.id === id) || null;
@@ -271,11 +272,13 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
       excluded: EXCLUDED_LEVERS,
       lenderFit: null,
       bankPosture: null,
+      supplement: null,
     };
   }
 
   const levers = buildLevers(strict, inputs);
   const bankPosture = buildBankPostureFit(inputs, strict.summary || {}, strict.checks || []);
+  const supplement = buildProformaSupplement(strict, inputs, bankPosture);
   const lenderFit = Array.isArray(allNormalized) && allNormalized.length > 0
     ? buildLenderFit(allNormalized, {
       loanAmount: strict.summary.loan_requested,
@@ -292,8 +295,9 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
     excluded: EXCLUDED_LEVERS,
     lenderFit,
     bankPosture,
+    supplement,
     meta: {
-      caveat: 'Levers describe legitimate presentation, timing, documentation, and lender-selection choices only — none of them involve changing a true fact about income, debts, or employment. The "excluded" list exists to show where that line sits. Bank posture rows are curated broker knowledge, not CDR fields and not credit decisions.',
+      caveat: 'Levers describe legitimate presentation, timing, documentation, and lender-selection choices only — none of them involve changing a true fact about income, debts, or employment. The "excluded" list exists to show where that line sits. Bank posture rows are curated broker knowledge, not CDR fields and not credit decisions. The supplement adds rate stress, product-fit guidance, and post-settlement cashflow notes — indicative only.',
     },
   };
 }

@@ -969,6 +969,7 @@ function QualificationProformaDocument({ proforma, inputs }) {
   const excluded = proforma?.excluded || [];
   const lenderFit = proforma?.lenderFit;
   const bankPosture = proforma?.bankPosture;
+  const supplement = proforma?.supplement;
   const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
   const inp = inputs || {};
 
@@ -1111,6 +1112,125 @@ function QualificationProformaDocument({ proforma, inputs }) {
 
         <ReportFooter generatedAt={generatedAt} />
       </Page>
+
+      {supplement && (
+        <Page size="A4" style={s.page}>
+          <View style={s.header}>
+            <Text style={s.title}>Additional Analysis</Text>
+            <Text style={s.subtitle}>
+              Supplementary · {generatedAt} · Extending the strict file review — rate stress, lender/product fit, and post-settlement cashflow. Indicative only; not a credit decision.
+            </Text>
+          </View>
+
+          {/* Product fit */}
+          {supplement.productFit && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>{supplement.productFit.title}</Text>
+              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 4 }}>
+                {supplement.productFit.intro}
+              </Text>
+              {(supplement.productFit.bullets || []).map((b, i) => (
+                <View key={i} style={{ marginBottom: 7 }}>
+                  <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 1 }}>
+                    {i + 1}. {b.title}
+                  </Text>
+                  <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{b.body}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Rate stress */}
+          {supplement.rateStress?.rows?.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>{supplement.rateStress.title}</Text>
+              <Text style={{ fontSize: 8, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+                {supplement.rateStress.intro}
+              </Text>
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#d1d5db', paddingBottom: 3, marginBottom: 2 }}>
+                <Text style={{ width: '28%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Rate</Text>
+                <Text style={{ width: '36%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Monthly repayment</Text>
+                <Text style={{ width: '36%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>
+                  Buffer vs ${Number(supplement.rateStress.surplus_monthly || 0).toLocaleString('en-AU')} surplus
+                </Text>
+              </View>
+              {supplement.rateStress.rows.map((row, i) => (
+                <View key={i} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                  <Text style={{ width: '28%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+                    {Number(row.rate_pct).toFixed(1)}%{row.label ? ` (${row.label})` : ''}
+                  </Text>
+                  <Text style={{ width: '36%', fontSize: 8, color: '#111827' }}>{fmtMoney(row.monthly_repayment)}</Text>
+                  <Text style={{ width: '36%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: row.still_buffered ? '#15803d' : '#b91c1c' }}>
+                    {fmtMoney(row.buffer_vs_surplus)}
+                  </Text>
+                </View>
+              ))}
+              {supplement.rateStress.narrative && (
+                <Text style={{ fontSize: 8, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>{supplement.rateStress.narrative}</Text>
+              )}
+            </View>
+          )}
+
+          {/* Income stress */}
+          {supplement.incomeStress && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>{supplement.incomeStress.title}</Text>
+              <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4, marginBottom: 4 }}>{supplement.incomeStress.note}</Text>
+              {supplement.incomeStress.example && (
+                <Text style={{ fontSize: 8, color: '#374151', lineHeight: 1.4, marginBottom: 4 }}>{supplement.incomeStress.example}</Text>
+              )}
+              <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827', lineHeight: 1.4 }}>
+                {supplement.incomeStress.brokerAsk}
+              </Text>
+            </View>
+          )}
+
+          <ReportFooter generatedAt={generatedAt} />
+        </Page>
+      )}
+
+      {supplement?.postSettlement && (
+        <Page size="A4" style={s.page}>
+          <View style={s.header}>
+            <Text style={s.title}>Post-settlement cashflow</Text>
+            <Text style={s.subtitle}>
+              Supplementary · {generatedAt} · Features and buffer after you move in — educational only
+            </Text>
+          </View>
+
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>{supplement.postSettlement.title}</Text>
+            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 6 }}>
+              {supplement.postSettlement.intro}
+            </Text>
+            {supplement.postSettlement.headroom_note && (
+              <Text style={{ fontSize: 8, color: '#374151', lineHeight: 1.4, marginBottom: 8 }}>
+                {supplement.postSettlement.headroom_note}
+              </Text>
+            )}
+            <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 2 }}>
+              Offset vs redraw
+            </Text>
+            <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4, marginBottom: 8 }}>
+              {supplement.postSettlement.offset_vs_redraw}
+            </Text>
+            <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827', lineHeight: 1.4, marginBottom: 6 }}>
+              {supplement.postSettlement.ask_lenders}
+            </Text>
+            {supplement.postSettlement.employment_note && (
+              <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{supplement.postSettlement.employment_note}</Text>
+            )}
+          </View>
+
+          <View style={s.section}>
+            <View style={s.warning}>
+              <Text>{supplement.caveat}</Text>
+            </View>
+          </View>
+
+          <ReportFooter generatedAt={generatedAt} />
+        </Page>
+      )}
     </Document>
   );
 }

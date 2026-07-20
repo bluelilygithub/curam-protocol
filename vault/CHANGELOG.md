@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-20 (proforma-supplement)
+
+### Qualification proforma — supplementary analysis (best of breed)
+- **Supplement pages** — PDF and on-screen proforma now include Additional Analysis: lender/product fit guidance, modelled rate-stress table (target ± buffer vs APRA floor), indicative income-stress caveats, and post-settlement cashflow (headroom, offset vs redraw).
+- **Server** — `proformaSupplement.js` builds the payload from the strict serviceability result; returned as `supplement` on `buildQualificationProforma`.
+
+---
+
 ## 2026-07-20 (property-scenario-input-ux)
 
 ### Thousand separators + calculation step log

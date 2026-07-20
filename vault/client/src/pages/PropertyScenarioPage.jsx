@@ -2086,6 +2086,102 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Live lender fit unavailable right now: {proforma.live_lender_error}</p>
           )}
 
+          {/* Supplementary analysis (rate stress, product fit, post-settlement) */}
+          {proforma.supplement && (
+            <div className="space-y-5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Additional analysis</h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  Extends the strict file review with rate stress, lender/product fit, and post-settlement cashflow. Indicative only — not a credit decision.
+                </p>
+              </div>
+
+              {proforma.supplement.productFit && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                    {proforma.supplement.productFit.title}
+                  </h4>
+                  <p className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>{proforma.supplement.productFit.intro}</p>
+                  <div className="space-y-3">
+                    {(proforma.supplement.productFit.bullets || []).map((b, i) => (
+                      <div key={i}>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{i + 1}. {b.title}</p>
+                        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {proforma.supplement.rateStress?.rows?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                    {proforma.supplement.rateStress.title}
+                  </h4>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.rateStress.intro}</p>
+                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="grid grid-cols-3 gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+                      <span>Rate</span>
+                      <span>Monthly repayment</span>
+                      <span>Buffer vs ${Number(proforma.supplement.rateStress.surplus_monthly || 0).toLocaleString('en-AU')} surplus</span>
+                    </div>
+                    {proforma.supplement.rateStress.rows.map((row, i) => (
+                      <div key={i} className="grid grid-cols-3 gap-2 px-3 py-2 text-xs border-t" style={{ borderColor: 'var(--color-border)' }}>
+                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                          {Number(row.rate_pct).toFixed(1)}%{row.label ? ` (${row.label})` : ''}
+                        </span>
+                        <span style={{ color: 'var(--color-text)' }}>
+                          ${Number(row.monthly_repayment || 0).toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+                        </span>
+                        <span className="font-semibold" style={{ color: row.still_buffered ? '#15803d' : '#b91c1c' }}>
+                          ${Number(row.buffer_vs_surplus || 0).toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {proforma.supplement.rateStress.narrative && (
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.rateStress.narrative}</p>
+                  )}
+                </div>
+              )}
+
+              {proforma.supplement.incomeStress && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                    {proforma.supplement.incomeStress.title}
+                  </h4>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.incomeStress.note}</p>
+                  {proforma.supplement.incomeStress.example && (
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>{proforma.supplement.incomeStress.example}</p>
+                  )}
+                  <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-text)' }}>{proforma.supplement.incomeStress.brokerAsk}</p>
+                </div>
+              )}
+
+              {proforma.supplement.postSettlement && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                    {proforma.supplement.postSettlement.title}
+                  </h4>
+                  <p className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>{proforma.supplement.postSettlement.intro}</p>
+                  {proforma.supplement.postSettlement.headroom_note && (
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>{proforma.supplement.postSettlement.headroom_note}</p>
+                  )}
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Offset vs redraw</p>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.postSettlement.offset_vs_redraw}</p>
+                  <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-text)' }}>{proforma.supplement.postSettlement.ask_lenders}</p>
+                  {proforma.supplement.postSettlement.employment_note && (
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.postSettlement.employment_note}</p>
+                  )}
+                </div>
+              )}
+
+              {proforma.supplement.caveat && (
+                <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.supplement.caveat}</p>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             disabled={pdfBusy}
