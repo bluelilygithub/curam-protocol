@@ -62,7 +62,7 @@ Feature flag: `productScout` in Settings → Feature Access.
 
 After **Build my guide**, the brief splits into:
 
-- **Key specs** — measurable requirements for **this product category**, aligned with **Amazon left-sidebar filters** (e.g. headphone **Wearing style**: Over-ear / On-ear / In-ear). LLM picks labels, units, and quick-pick options. Quick-pick chips + range slider + custom value. Marked *Not important* to skip.
+- **Key specs** — Amazon sidebar-style filters for **this** product (first 2–5 items from `amazon_sidebar_filters` in the brief JSON). Type/form factor always leads when relevant.
 - **Features & capabilities** — compact grid; click each tile to cycle skip → nice → must. *All must* / *Clear all* bulk actions. *Why these matter* expands rationale text.
 
 Spec values are passed into tier scouting and the final recommendation as concrete requirements (e.g. `Battery life: at least 30h`). Options and units are **category-specific** — generated per query, not hardcoded to laptops.
@@ -83,7 +83,7 @@ Each item in `feature_brief.features`:
 
 **Client:** `ProductScoutFeatureBrief.jsx` + `productScoutFeatureTypes.js` (normalise only — no hardcoded product-category patterns).
 
-**Server:** `productScoutGuideService.js` (`buildBriefPrompt`, `formatFeatureRequirement`) passes must-have specs into tier scouting via `shopperPriorities` on `executeScoutComparison`.
+**Server:** `productScoutGuideService.js` — brief prompt requires `amazon_sidebar_filters` (2–5 Amazon sidebar dimensions per query), merged into `features` for the UI. `formatFeatureRequirement` passes must-have specs into tier scouting via `shopperPriorities`.
 
 | Field | Type | Notes |
 |-------|------|-------|

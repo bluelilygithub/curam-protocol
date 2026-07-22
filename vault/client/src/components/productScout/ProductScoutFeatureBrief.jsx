@@ -279,7 +279,7 @@ export default function ProductScoutFeatureBrief({
             Key specs
           </h2>
           <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-            Measurable requirements for this product type — options come from your search, not a fixed laptop list.
+            Amazon-style filters for this product type — type, form factor, size, style, etc.
           </p>
           <div className="space-y-3">
             {specs.map((spec) => {
