@@ -34,7 +34,7 @@ function compactCandidates(candidates) {
   }));
 }
 
-function buildComparePrompt(query, primary, stretch, budget, { compact = false, tierLabel, tierFeatures } = {}) {
+function buildComparePrompt(query, primary, stretch, budget, { compact = false, tierLabel, tierFeatures, shopperPriorities } = {}) {
   const summaryLimit = compact
     ? 'selection_summary: max 80 words total (one short paragraph). value_rationale: max 20 words each.'
     : 'selection_summary: max 150 words total. value_rationale: max 30 words each.';
@@ -45,6 +45,10 @@ function buildComparePrompt(query, primary, stretch, budget, { compact = false, 
 
   const tierBlock = tierLabel
     ? `Price tier: ${tierLabel}. Weight value for: ${(tierFeatures || []).slice(0, 5).join(', ') || 'this tier'}.\n`
+    : '';
+
+  const shopperBlock = (shopperPriorities || []).length
+    ? `Shopper must-haves (weight heavily in value_score): ${shopperPriorities.join('; ')}\n`
     : '';
 
   const stretchBlock = stretch.length
@@ -59,7 +63,7 @@ For stretch_suggestions use candidate_id from the stretch list. Include stretch_
     : 'No in-budget candidates — return "top3": [].';
 
   return `The user is shopping for: ${query}
-${tierBlock}${budgetBlock}
+${tierBlock}${shopperBlock}${budgetBlock}
 IN-BUDGET candidates:
 ${JSON.stringify({ candidates: compactCandidates(primary) })}
 ${stretchBlock}
@@ -228,6 +232,7 @@ async function executeScoutComparison(userId, query, {
   candidates: poolIn,
   tierLabel,
   tierFeatures,
+  shopperPriorities,
   includeExternals = true,
 } = {}) {
   const q = String(query || '').trim();
@@ -274,7 +279,7 @@ async function executeScoutComparison(userId, query, {
     stretchScored,
     budget,
     model,
-    { tierLabel, tierFeatures }
+    { tierLabel, tierFeatures, shopperPriorities }
   );
   const top3 = comparison.top3 || [];
   const stretchSuggestions = comparison.stretch_suggestions || [];

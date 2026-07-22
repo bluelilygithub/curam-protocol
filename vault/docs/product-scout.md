@@ -52,15 +52,38 @@ Feature flag: `productScout` in Settings → Feature Access.
 
 **Primary journey:** Buy guide → Product Scout per price tier.
 
-1. Describe product + features → **feature brief** (editable)
+1. Describe product + features → **feature brief** (editable): category-specific **key specs** + compact **feature grid** (click to cycle must/nice/skip)
 2. **Scout products for each tier** — full top-3 comparison at Essentials, Smart upgrade, Enthusiast, and Pro price bands
 3. Optional **Compare URL** against tier picks
 
 **Quick scout** (collapsed): single max-price comparison without the guide — for when you already know your budget.
 
-Runs store `result.mode` as `scout` or `guide`. Guide runs include `tiers[].scout` with full comparison payloads.
+### Feature brief (Step 2)
 
-### Run body
+After **Build my guide**, the brief splits into:
+
+- **Key specs** — measurable requirements for **this product category** (LLM picks labels, units, and quick-pick options — e.g. laptop RAM, headphone battery hours, camera sensor size). Quick-pick chips + custom value. Marked *Not important* to skip.
+- **Features & capabilities** — compact grid; click each tile to cycle skip → nice → must. *All must* / *Clear all* bulk actions. *Why these matter* expands rationale text.
+
+Spec values are passed into tier scouting and the final recommendation as concrete requirements (e.g. `Battery life: at least 30h`). Options and units are **category-specific** — generated per query, not hardcoded to laptops.
+
+### Feature brief schema (guide)
+
+Each item in `feature_brief.features`:
+
+| Field | `kind: feature` | `kind: spec` |
+|-------|-----------------|--------------|
+| `feature` | Capability label | Measurable attribute label |
+| `importance` | `must` \| `nice` \| `skip` | Usually `must` when set; `skip` when shopper dismisses |
+| `why_it_matters` | Optional rationale | Optional rationale |
+| `spec_type` | — | `numeric_min` \| `numeric_max` \| `enum` \| `text` |
+| `spec_unit` | — | e.g. `GB`, `h`, `kg`, or `null` |
+| `spec_value` | — | Default / shopper selection |
+| `spec_options` | — | 3–6 category-appropriate quick-picks (LLM-generated) |
+
+**Client:** `ProductScoutFeatureBrief.jsx` + `productScoutFeatureTypes.js` (normalise only — no hardcoded product-category patterns).
+
+**Server:** `productScoutGuideService.js` (`buildBriefPrompt`, `formatFeatureRequirement`) passes must-have specs into tier scouting via `shopperPriorities` on `executeScoutComparison`.
 
 | Field | Type | Notes |
 |-------|------|-------|

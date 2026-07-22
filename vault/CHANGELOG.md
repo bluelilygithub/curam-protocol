@@ -4,7 +4,17 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
-## 2026-07-20 (proforma-bank-capacity)
+## 2026-07-22 (product-scout-feature-brief-ui)
+
+### Product Scout — feature brief UX
+- **Specs section** — category-specific measurable requirements from the LLM (type, unit, quick-pick options per product — not a fixed laptop/RAM list).
+- **Feature grid** — capabilities shown as a compact 2–3 column tile grid; click to cycle skip / nice / must.
+- **Server** — brief prompt asks for `kind: spec` vs `kind: feature` with tailored `spec_options`; requirements flow into tier scouting and recommendations.
+- **Docs / tour** — `docs/product-scout.md` (feature brief schema), `CLAUDE.md`, in-app tour step updated.
+
+---
+
+## 2026-07-22 (proforma-bank-capacity)
 
 ### Per-bank indicative capacity + report/UX polish
 - **Bank capacity** — each bank’s overtime shade, rental shade, and HEM stance now runs through the same surplus engine; dollars move by lender (e.g. Macquarie vs CommBank on overtime files). Clearly labelled indicative, not a quote.

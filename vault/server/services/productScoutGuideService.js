@@ -55,13 +55,57 @@ function collectTierPicks(tiers) {
     .filter(Boolean);
 }
 
+function formatFeatureRequirement(f) {
+  if (!f || f.importance === 'skip') return null;
+  if (f.kind === 'spec' && f.spec_value != null && f.spec_value !== '') {
+    const v = f.spec_value;
+    const unit = f.spec_unit || '';
+    if (f.spec_type === 'numeric_min') return `${f.feature}: at least ${v}${unit}`;
+    if (f.spec_type === 'numeric_max') return `${f.feature}: at most ${v}${unit}`;
+    if (f.spec_type === 'enum') return v === 'Any' ? null : `${f.feature}: ${v}`;
+    if (f.spec_type === 'text') return `${f.feature}: ${v}`;
+  }
+  return f.feature;
+}
+
+function normalizeBriefFeature(f) {
+  if (!f?.feature) return null;
+  const name = String(f.feature).trim();
+  const out = { ...f, feature: name };
+  const validTypes = new Set(['numeric_min', 'numeric_max', 'enum', 'text']);
+
+  if (out.kind === 'spec' || out.spec_type) {
+    out.kind = 'spec';
+    out.spec_type = validTypes.has(out.spec_type) ? out.spec_type : 'text';
+    out.spec_unit = out.spec_unit != null && out.spec_unit !== '' ? String(out.spec_unit) : null;
+    out.spec_options = Array.isArray(out.spec_options)
+      ? out.spec_options.map((o) => (typeof o === 'number' ? o : String(o).trim())).filter((o) => o !== '')
+      : [];
+    if (out.spec_type === 'enum' && !out.spec_options.length) out.spec_type = 'text';
+    if (out.importance === 'skip' && out.spec_value != null && out.spec_value !== '') {
+      out.importance = 'must';
+    }
+    return out;
+  }
+
+  out.kind = 'feature';
+  if (!['must', 'nice', 'skip'].includes(out.importance)) out.importance = 'nice';
+  return out;
+}
+
+function normalizeBriefFeatures(features) {
+  return (features || []).map(normalizeBriefFeature).filter(Boolean);
+}
+
 function buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks) {
   const mustFeatures = (featureBrief?.features || [])
     .filter((f) => f.importance === 'must')
-    .map((f) => f.feature);
+    .map(formatFeatureRequirement)
+    .filter(Boolean);
   const niceFeatures = (featureBrief?.features || [])
     .filter((f) => f.importance === 'nice')
-    .map((f) => f.feature)
+    .map(formatFeatureRequirement)
+    .filter(Boolean)
     .slice(0, 5);
 
   const budgetBlock = budgetHint
@@ -190,9 +234,18 @@ ${featuresBlock}${budgetBlock}
 Return a feature brief and 4-tier framework for Amazon AU-style pricing (AUD).
 
 1. summary — 2–3 sentences on what matters most for THIS use case.
-2. features — 6–10 items merging shopper list + important additions they may have missed. Each:
-   {"feature":"Hybrid ANC","importance":"must|nice|skip","why_it_matters":"..."}
-   Mark shopper-mentioned items as must unless clearly wrong for the category.
+2. features — split into two kinds. Choose specs and options for THIS product category only (laptop vs headphones vs camera vs appliance — do not reuse laptop defaults on non-laptop queries).
+   a) kind "spec" — 2–6 measurable requirements that shoppers compare on listings for THIS category. Each:
+      {"feature":"<label>","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min|numeric_max|enum|text","spec_unit":"<unit or null>","spec_value":<default>,"spec_options":[...]}
+      spec_type rules:
+      - numeric_min — higher is better (e.g. RAM GB, storage GB, battery hours, suction Pa, megapixels)
+      - numeric_max — lower/capped is better (e.g. weight kg, noise dB)
+      - enum — discrete choices; spec_options MUST be realistic for this category (e.g. laptop resolution ["1080p","1440p","4K"], headphone codec ["SBC","AAC","aptX","LDAC"], drill chuck ["10mm","13mm"])
+      - text — only when not numeric/enum; use sparingly
+      spec_options: 3–6 sensible quick-picks for this spec in this category (include "Any" or "No preference" on enum when appropriate). spec_value should match one option or a sensible default.
+   b) kind "feature" — 4–10 capability/yes-no items (noise cancelling, waterproof, foldable, OLED panel, etc.). Each:
+      {"feature":"Hybrid ANC","kind":"feature","importance":"must|nice|skip","why_it_matters":"..."}
+   Mark shopper-mentioned items as must unless clearly wrong. Put measurable/compare-on-listing attributes in kind "spec"; put capabilities in kind "feature".
 3. tier_framework — exactly 4 tiers in order (cheapest to pro). Each:
    {"key":"essentials|smart_upgrade|enthusiast|pro","label":"Essentials","subtitle":"short tagline","price_min":40,"price_max":80,"feature_adds":["what this tier adds vs below"]}
 
@@ -201,7 +254,7 @@ Labels suggested: Essentials, Smart upgrade, Enthusiast, Pro / no budget.
 Ensure price bands do not overlap awkwardly — each tier price_min should be above the previous tier price_max.
 
 JSON only:
-{"summary":"...","features":[{"feature":"...","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
+{"summary":"...","features":[{"feature":"Battery life","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min","spec_unit":"h","spec_value":30,"spec_options":[20,30,40,50,60]},{"feature":"Hybrid ANC","kind":"feature","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
 }
 
 async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM } = {}) {
@@ -228,6 +281,7 @@ function parseBriefResponse(text) {
     ...t,
     key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
   }));
+  parsed.features = normalizeBriefFeatures(parsed.features);
   return parsed;
 }
 
@@ -288,7 +342,7 @@ function scoutedTierKeysFromExisting(existing) {
 }
 
 async function scoutTier(userId, query, frame, index, framework, allCandidates, opts) {
-  const { amazonDomain, modelId } = opts;
+  const { amazonDomain, modelId, shopperPriorities } = opts;
   const priceMin = tierMinPrice(frame, index, framework);
   const priceMax = frame.price_max != null ? Number(frame.price_max) : null;
   const isPro = frame.key === 'pro' || index === framework.length - 1;
@@ -306,6 +360,7 @@ async function scoutTier(userId, query, frame, index, framework, allCandidates, 
     modelId,
     tierLabel: frame.label,
     tierFeatures: frame.feature_adds,
+    shopperPriorities,
     includeExternals: false,
   });
 }
@@ -371,6 +426,11 @@ async function runBuyGuide(userId, {
   const amazonDomain = existing?.amazonDomain || await getAmazonDomain(pool);
   const { standard: modelId } = await getModelsForUser(userId);
 
+  const shopperPriorities = (featureBrief.features || [])
+    .filter((f) => f.importance === 'must')
+    .map(formatFeatureRequirement)
+    .filter(Boolean);
+
   const allCandidates = await searchProducts(q, { maxResults: 40, amazonDomain });
   const scoutsByKey = {};
 
@@ -386,7 +446,7 @@ async function runBuyGuide(userId, {
       i,
       framework,
       allCandidates,
-      { amazonDomain, modelId }
+      { amazonDomain, modelId, shopperPriorities }
     );
   }
 

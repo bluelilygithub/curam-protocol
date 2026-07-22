@@ -63,7 +63,7 @@ export function startProductScoutTour(navigate) {
   tour.addStep({
     id: 'scout-input',
     title: 'Describe What You Want',
-    text: "Type what you're looking for in plain English — \"noise cancelling headphones under $200\" or \"standing desk for small home office\". The more specific you are, the better the value scoring. You can also set a maximum price and allow a small variance for deals slightly over your budget.",
+    text: "Start with **Build my guide**: describe the product and any features you care about. Step 2 shows a **key specs** section (measurable requirements tailored to your product type — battery hours, RAM, chuck size, etc.) and a compact **feature grid** where you click tiles to cycle skip → nice → must. Then pick price tiers to search.",
     attachTo: { element: '[data-tour="scout-input"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise(resolve => {
