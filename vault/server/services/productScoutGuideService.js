@@ -17,7 +17,43 @@ const { executeScoutComparison, getRun } = require('./productScoutService');
 const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
 const BRIEF_SYSTEM = `You are a product buying advisor. Help shoppers understand which features matter for their use case before they choose a price tier.
+Think like Amazon's left-sidebar filters: include the standard narrowing dimensions shoppers use on Amazon for this product category.
 Return ONLY valid JSON. No markdown fences.`;
+
+/** Safety net when the LLM omits obvious Amazon sidebar dimensions. */
+const CATEGORY_SIDEBAR_SPECS = [
+  {
+    match: /\b(headphones?|earbuds?|earphones?|in-?ear|over-?ear|on-?ear|headsets?|airpods?)\b/i,
+    specs: [
+      {
+        detect: /\b(form factor|wearing style|headphone type|fit type|ear style)\b/i,
+        spec: {
+          feature: 'Wearing style',
+          kind: 'spec',
+          importance: 'must',
+          why_it_matters: 'Over-ear, on-ear, and in-ear sit differently — this matches Amazon’s Form Factor filter and is usually the first decision.',
+          spec_type: 'enum',
+          spec_unit: null,
+          spec_value: 'Any',
+          spec_options: ['Any', 'Over-ear', 'On-ear', 'In-ear / earbuds', 'Neckband', 'Open-ear'],
+        },
+      },
+      {
+        detect: /\b(connection type|connectivity|wired or wireless)\b/i,
+        spec: {
+          feature: 'Connection',
+          kind: 'spec',
+          importance: 'nice',
+          why_it_matters: 'Wired vs wireless changes battery, latency, and which listings apply — a standard Amazon filter.',
+          spec_type: 'enum',
+          spec_unit: null,
+          spec_value: 'Any',
+          spec_options: ['Any', 'True wireless', 'Wireless', 'Wired'],
+        },
+      },
+    ],
+  },
+];
 
 const RECOMMEND_SYSTEM = `You are an unbiased product analyst. Recommend the single best VALUE FOR MONEY pick across price tiers for this shopper — not the most expensive or cheapest by default.
 Judge features, quality, price, and review evidence. No brand loyalty. No Amazon placement bias.
@@ -95,6 +131,26 @@ function normalizeBriefFeature(f) {
 
 function normalizeBriefFeatures(features) {
   return (features || []).map(normalizeBriefFeature).filter(Boolean);
+}
+
+function specAlreadyPresent(features, detect) {
+  return (features || []).some((f) => detect.test(`${f.feature} ${f.why_it_matters || ''}`));
+}
+
+function supplementCategorySpecs(query, features) {
+  const q = String(query || '');
+  const out = [...(features || [])];
+
+  for (const category of CATEGORY_SIDEBAR_SPECS) {
+    if (!category.match.test(q)) continue;
+    for (const required of category.specs) {
+      if (specAlreadyPresent(out, required.detect)) continue;
+      const added = normalizeBriefFeature(required.spec);
+      if (added) out.unshift(added);
+    }
+  }
+
+  return out;
 }
 
 function buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks) {
@@ -233,14 +289,22 @@ function buildBriefPrompt(query, userFeatures, budgetHint) {
 ${featuresBlock}${budgetBlock}
 Return a feature brief and 4-tier framework for Amazon AU-style pricing (AUD).
 
+AMAZON SIDEBAR FILTERS (critical):
+Your kind "spec" items must mirror Amazon’s left-sidebar filter dimensions for THIS product category — the ones shoppers click to narrow results. List these FIRST.
+- Headphones / earbuds: Wearing style (Over-ear, On-ear, In-ear/earbuds, Neckband, Open-ear) is REQUIRED — never omit it; Connection (True wireless, Wireless, Wired); Battery life (h); Codec if relevant
+- Laptops: Screen size; RAM; Storage; CPU tier
+- Monitors / TVs: Screen size; Resolution; Panel or refresh rate
+- Appliances / tools: Type/subtype; Capacity or power; Size
+Do not copy specs from a different category. Capabilities (ANC, waterproof, foldable) stay kind "feature".
+
 1. summary — 2–3 sentences on what matters most for THIS use case.
-2. features — split into two kinds. Choose specs and options for THIS product category only (laptop vs headphones vs camera vs appliance — do not reuse laptop defaults on non-laptop queries).
+2. features — split into two kinds. Choose specs and options for THIS product category only.
    a) kind "spec" — 2–6 measurable requirements that shoppers compare on listings for THIS category. Each:
       {"feature":"<label>","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min|numeric_max|enum|text","spec_unit":"<unit or null>","spec_value":<default>,"spec_options":[...]}
       spec_type rules:
       - numeric_min — higher is better (e.g. RAM GB, storage GB, battery hours, suction Pa, megapixels)
       - numeric_max — lower/capped is better (e.g. weight kg, noise dB)
-      - enum — discrete choices; spec_options MUST be realistic for this category (e.g. laptop resolution ["1080p","1440p","4K"], headphone codec ["SBC","AAC","aptX","LDAC"], drill chuck ["10mm","13mm"])
+      - enum — discrete choices; spec_options MUST be realistic for this category (e.g. headphone wearing style ["Any","Over-ear","On-ear","In-ear / earbuds","Neckband"], laptop resolution ["1080p","1440p","4K"], drill chuck ["10mm","13mm"])
       - text — only when not numeric/enum; use sparingly
       spec_options: 3–6 sensible quick-picks for this spec in this category (include "Any" or "No preference" on enum when appropriate). spec_value should match one option or a sensible default.
    b) kind "feature" — 4–10 capability/yes-no items (noise cancelling, waterproof, foldable, OLED panel, etc.). Each:
@@ -254,7 +318,7 @@ Labels suggested: Essentials, Smart upgrade, Enthusiast, Pro / no budget.
 Ensure price bands do not overlap awkwardly — each tier price_min should be above the previous tier price_max.
 
 JSON only:
-{"summary":"...","features":[{"feature":"Battery life","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min","spec_unit":"h","spec_value":30,"spec_options":[20,30,40,50,60]},{"feature":"Hybrid ANC","kind":"feature","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
+{"summary":"...","features":[{"feature":"Wearing style","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"enum","spec_unit":null,"spec_value":"Any","spec_options":["Any","Over-ear","On-ear","In-ear / earbuds","Neckband"]},{"feature":"Battery life","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min","spec_unit":"h","spec_value":30,"spec_options":[20,30,40,50,60]},{"feature":"Hybrid ANC","kind":"feature","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
 }
 
 async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM } = {}) {
@@ -273,7 +337,7 @@ async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM }
   return result.text;
 }
 
-function parseBriefResponse(text) {
+function parseBriefResponse(text, query = '') {
   const parsed = parseModelJson(String(text || '').trim());
   if (!parsed?.features?.length) throw new Error('Feature brief missing features list');
   if (!parsed?.tier_framework?.length) throw new Error('Feature brief missing tier framework');
@@ -281,7 +345,7 @@ function parseBriefResponse(text) {
     ...t,
     key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
   }));
-  parsed.features = normalizeBriefFeatures(parsed.features);
+  parsed.features = supplementCategorySpecs(query, normalizeBriefFeatures(parsed.features));
   return parsed;
 }
 
@@ -380,7 +444,7 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
 
   const { standard: modelId } = await getModelsForUser(userId);
   const text = await callGuideModel(userId, modelId, buildBriefPrompt(q, userFeatures, hint));
-  const brief = parseBriefResponse(text);
+  const brief = parseBriefResponse(text, q);
 
   return {
     query: q,

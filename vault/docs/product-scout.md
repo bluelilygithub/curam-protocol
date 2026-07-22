@@ -62,7 +62,7 @@ Feature flag: `productScout` in Settings → Feature Access.
 
 After **Build my guide**, the brief splits into:
 
-- **Key specs** — measurable requirements for **this product category** (LLM picks labels, units, and quick-pick options — e.g. laptop RAM, headphone battery hours, camera sensor size). Quick-pick chips + custom value. Marked *Not important* to skip.
+- **Key specs** — measurable requirements for **this product category**, aligned with **Amazon left-sidebar filters** (e.g. headphone **Wearing style**: Over-ear / On-ear / In-ear). LLM picks labels, units, and quick-pick options. Quick-pick chips + range slider + custom value. Marked *Not important* to skip.
 - **Features & capabilities** — compact grid; click each tile to cycle skip → nice → must. *All must* / *Clear all* bulk actions. *Why these matter* expands rationale text.
 
 Spec values are passed into tier scouting and the final recommendation as concrete requirements (e.g. `Battery life: at least 30h`). Options and units are **category-specific** — generated per query, not hardcoded to laptops.
