@@ -80,11 +80,35 @@ function SpecControl({ spec, onChange, onSkip }) {
 
   if (spec.spec_type === 'numeric_min' || spec.spec_type === 'numeric_max') {
     const label = spec.spec_type === 'numeric_max' ? 'Max' : 'Min';
+    const numericOptions = options.map((opt) => Number(opt)).filter((n) => Number.isFinite(n));
+    const sliderMin = numericOptions.length ? Math.min(...numericOptions) : 0;
+    const sliderMax = numericOptions.length ? Math.max(...numericOptions) : 100;
+    const sliderValue = active && spec.spec_value != null ? Number(spec.spec_value) : sliderMin;
+
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        {options.length > 0 && (
+      <div className="space-y-2">
+        {numericOptions.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="range"
+              min={sliderMin}
+              max={sliderMax}
+              step={numericOptions.length > 2 ? Math.max(1, Math.round((sliderMax - sliderMin) / (numericOptions.length - 1))) : 1}
+              value={sliderValue}
+              disabled={!active}
+              onChange={(e) => onChange({ spec_value: Number(e.target.value), importance: 'must' })}
+              className="flex-1 min-w-[120px]"
+              style={{ accentColor: 'var(--color-primary)' }}
+            />
+            <span className="text-xs font-medium tabular-nums shrink-0" style={{ color: 'var(--color-text)' }}>
+              {sliderValue}{spec.spec_unit || ''}
+            </span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+        {numericOptions.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {options.map((opt) => {
+            {numericOptions.map((opt) => {
               const selected = active && Number(spec.spec_value) === Number(opt);
               return (
                 <button
@@ -134,6 +158,7 @@ function SpecControl({ spec, onChange, onSkip }) {
             Not important
           </button>
         )}
+        </div>
       </div>
     );
   }
@@ -159,20 +184,36 @@ function SpecControl({ spec, onChange, onSkip }) {
 
 function FeatureToggleCell({ feature, onCycle }) {
   const imp = feature.importance || 'skip';
-  const style = importanceStyle(imp);
+  const checked = imp !== 'skip';
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = imp === 'nice';
+    }
+  }, [imp]);
+
   return (
-    <button
-      type="button"
-      onClick={onCycle}
-      title={feature.why_it_matters || `${feature.feature} — click to cycle ${IMPORTANCE_LABELS.skip} / ${IMPORTANCE_LABELS.nice} / ${IMPORTANCE_LABELS.must}`}
-      className="text-left px-2.5 py-2 rounded-xl border transition-opacity duration-200 hover:opacity-70 min-h-[2.75rem] flex flex-col justify-center"
-      style={style}
+    <label
+      className="flex items-start gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition-opacity duration-200 hover:opacity-70 min-h-[2.75rem]"
+      style={importanceStyle(imp)}
+      title={feature.why_it_matters || `${feature.feature} — click checkbox to cycle skip / nice / must`}
     >
-      <span className="text-[11px] font-medium leading-snug line-clamp-2">{feature.feature}</span>
-      <span className="text-[9px] uppercase tracking-wide mt-0.5 opacity-80">
-        {IMPORTANCE_LABELS[imp]}
+      <input
+        ref={inputRef}
+        type="checkbox"
+        checked={checked}
+        onChange={onCycle}
+        className="mt-0.5 rounded shrink-0"
+        style={{ accentColor: 'var(--color-primary)' }}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="text-[11px] font-medium leading-snug line-clamp-2 block">{feature.feature}</span>
+        <span className="text-[9px] uppercase tracking-wide mt-0.5 opacity-80 block">
+          {IMPORTANCE_LABELS[imp]}
+        </span>
       </span>
-    </button>
+    </label>
   );
 }
 
@@ -289,7 +330,7 @@ export default function ProductScoutFeatureBrief({
                 Features &amp; capabilities
               </h2>
               <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                Click each tile to cycle: skip → nice to have → must have.
+                Tick a checkbox to include; click again to cycle nice → must → skip. Dash = nice to have.
               </p>
             </div>
             <div className="flex gap-1.5">
@@ -363,7 +404,6 @@ export default function ProductScoutFeatureBrief({
             disabled={loading}
             className="px-4 py-2 rounded-xl text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-          }}
           >
             Back
           </button>
