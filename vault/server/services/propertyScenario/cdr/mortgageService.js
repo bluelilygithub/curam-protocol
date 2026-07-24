@@ -191,15 +191,17 @@ function peekLiveMortgageLenders() {
 }
 
 /**
- * Mean advertised rate across mainstream owner-occupier variable products.
+ * Mean advertised rate across mainstream owner-occupier products of a given type.
  * Used as the UI default for Interest Rate / Target rate fields.
  *
  * @param {object[]} lenders — normalized CDR (or mock) lender rows
+ * @param {'variable'|'fixed'} [rateType='variable']
  * @returns {{ rate_pct: number|null, sample_size: number }}
  */
-function averageOwnerOccupiedVariableRate(lenders) {
+function averageOwnerOccupiedRate(lenders, rateType = 'variable') {
+  const kind = rateType === 'fixed' ? 'fixed' : 'variable';
   const pool = (Array.isArray(lenders) ? lenders : [])
-    .filter((l) => l && l.fixed_or_variable === 'variable')
+    .filter((l) => l && l.fixed_or_variable === kind)
     .filter((l) => !l.special_eligibility)
     .filter((l) => !l.loan_purpose || l.loan_purpose === 'OWNER_OCCUPIED');
 
@@ -207,10 +209,10 @@ function averageOwnerOccupiedVariableRate(lenders) {
     .map((l) => Number(l.rate))
     .filter((r) => Number.isFinite(r) && r > 0 && r < 25);
 
-  // If purpose tagging was sparse, fall back to any mainstream variable rate.
+  // If purpose tagging was sparse, fall back to any mainstream rate of that type.
   if (!rates.length) {
     rates = (Array.isArray(lenders) ? lenders : [])
-      .filter((l) => l && l.fixed_or_variable === 'variable' && !l.special_eligibility)
+      .filter((l) => l && l.fixed_or_variable === kind && !l.special_eligibility)
       .map((l) => Number(l.rate))
       .filter((r) => Number.isFinite(r) && r > 0 && r < 25);
   }
@@ -223,11 +225,17 @@ function averageOwnerOccupiedVariableRate(lenders) {
   };
 }
 
+/** @deprecated use averageOwnerOccupiedRate(lenders, 'variable') */
+function averageOwnerOccupiedVariableRate(lenders) {
+  return averageOwnerOccupiedRate(lenders, 'variable');
+}
+
 module.exports = {
   getLiveMortgageLenders,
   peekLiveMortgageLenders,
   fetchBankMortgages,
   clearCdrCache,
+  averageOwnerOccupiedRate,
   averageOwnerOccupiedVariableRate,
   DEFAULT_TTL_MS,
   MAX_DETAILS_PER_BANK,

@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (rate-type-aware-defaults)
+
+### Property Scenario — fixed vs variable market-rate defaults
+- **Rate type** asked before interest rate on calculators, lite qualify, proforma, and refinance; default rate switches between live OO **variable** and **fixed** CDR averages.
+- **API:** `GET /market-rate` returns `variable_rate_pct` + `fixed_rate_pct` (fallbacks 6.1% / 5.5%).
+- NLP clarify forms update `*.rate` from the sibling `fixed_or_variable` choice.
+
+---
+
 ## 2026-07-24 (market-rate-instant-default)
 
 ### Property Scenario — interest rate fields never start empty

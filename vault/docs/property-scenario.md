@@ -62,7 +62,7 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `POST` | `/parse` | `{ text, asOf? }` → `runFromText`; LLM failures → `{ ok:false, error:'parse_failed' }` (422) |
 | `POST` | `/clarify` | `{ scenario, answers?, selling_cost_pct?, … }` → re-validate → calculate when ready |
 | `GET` | `/lenders` | CDR PRD rows (`live=0` for stubs; `refresh=1` bypass cache); includes `average_variable_rate_pct` when live |
-| `GET` | `/market-rate` | Prevailing average OO variable rate for form defaults (`cdr_prd_average`, stub average, or 6.1% fallback) |
+| `GET` | `/market-rate` | OO variable + fixed averages for form defaults (`variable_rate_pct`, `fixed_rate_pct`; optional `?type=fixed|variable` mirrors into `rate_pct`; warm cache or stub, 6.1%/5.5% fallbacks) |
 | `POST` | `/cdr/refresh` | Clear CDR cache and refetch |
 | `POST` | `/insights` | `{ product\|product_id, question }` — cited document Q&A |
 | `POST` | `/insights/compare` | `{ products\|product_ids, question }` — multi-doc compare |
@@ -102,7 +102,7 @@ Homepage (Describe path) scenario cards:
 2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
 3. **Quick tools** — Standalone calculators  
 
-**Interest rate defaults:** Every interest-rate input (calculators, lite qualify, proforma, refinance current + specific target, and NLP clarify `*.rate` / comparison-rate fields) starts with a value immediately (`getInitialMarketRateInput` — cached CDR average or 6.1% fallback), then upgrades to the live `GET /market-rate` average when available if the user hasn’t edited. Buy/sell forms have no rate fields. **State** selects default to **QLD** (overridable; profile/seed still wins).
+**Interest rate defaults:** Every interest-rate input asks **Rate type** (variable/fixed) first where relevant. The rate field then defaults to the matching OO average from `GET /market-rate` (`variable_rate_pct` / `fixed_rate_pct`, with 6.1% / 5.5% fallbacks). Changing type updates the rate if the user hasn’t overridden it. NLP clarify forms follow the sibling `fixed_or_variable` answer. Buy/sell have no rate fields. **State** selects default to **QLD**.
 
 Also:
 

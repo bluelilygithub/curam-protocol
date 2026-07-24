@@ -13,11 +13,13 @@ const {
   getLiveMortgageLenders,
   peekLiveMortgageLenders,
   clearCdrCache,
-  averageOwnerOccupiedVariableRate,
+  averageOwnerOccupiedRate,
 } = require('../services/propertyScenario/cdr');
 
-/** Static fallback when CDR is unavailable — matches long-standing UI placeholder. */
+/** Static fallbacks when CDR/stub averages unavailable. */
 const FALLBACK_MARKET_RATE_PCT = 6.1;
+const FALLBACK_FIXED_RATE_PCT = 5.5;
+
 const { calculateRepayment } = require('../services/propertyScenario/calc/repayment');
 const { calculateExtraRepayments } = require('../services/propertyScenario/calc/extraRepayments');
 const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/offset');
@@ -160,13 +162,17 @@ router.post('/clarify', async (req, res) => {
 
 /**
  * GET /api/property-scenario/market-rate
- * Prevailing average owner-occupier variable rate for form defaults.
+ * Prevailing average owner-occupier rates for form defaults (variable + fixed).
  * Uses warm CDR cache when available; otherwise stub/fallback immediately.
- * Does not wait on a cold multi-bank CDR fetch (that left rate fields empty).
+ * Query: type=variable|fixed (optional) — rate_pct mirrors that type for callers
+ * that only read a single number; both averages are always returned.
  */
 router.get('/market-rate', async (req, res) => {
   try {
     const force = req.query.refresh === '1' || req.query.force === '1';
+    const wantType = String(req.query.type || 'variable').toLowerCase() === 'fixed'
+      ? 'fixed'
+      : 'variable';
     let live = null;
     let error = null;
 
@@ -177,34 +183,49 @@ router.get('/market-rate', async (req, res) => {
     } else {
       live = peekLiveMortgageLenders();
       if (!live?.ok) {
-        // Warm cache for later without blocking this response.
         getLiveMortgageLenders().catch(() => {});
       }
     }
 
     const usingLive = Boolean(live?.ok && (live.lenders || []).length);
     const lenders = usingLive ? live.lenders : MOCK_LENDERS;
-    const { rate_pct, sample_size } = averageOwnerOccupiedVariableRate(lenders);
-    const rate = rate_pct != null ? rate_pct : FALLBACK_MARKET_RATE_PCT;
+    const variable = averageOwnerOccupiedRate(lenders, 'variable');
+    const fixed = averageOwnerOccupiedRate(lenders, 'fixed');
+    const variableRate = variable.rate_pct != null ? variable.rate_pct : FALLBACK_MARKET_RATE_PCT;
+    const fixedRate = fixed.rate_pct != null ? fixed.rate_pct : FALLBACK_FIXED_RATE_PCT;
+    const primary = wantType === 'fixed' ? fixedRate : variableRate;
+    const primarySample = wantType === 'fixed' ? fixed.sample_size : variable.sample_size;
+    const primaryFound = wantType === 'fixed' ? fixed.rate_pct != null : variable.rate_pct != null;
+
     return res.json({
       ok: true,
-      rate_pct: rate,
-      sample_size: rate_pct != null ? sample_size : 0,
-      source: usingLive && rate_pct != null
+      rate_pct: primary,
+      variable_rate_pct: variableRate,
+      fixed_rate_pct: fixedRate,
+      sample_size: primaryFound ? primarySample : 0,
+      variable_sample_size: variable.rate_pct != null ? variable.sample_size : 0,
+      fixed_sample_size: fixed.rate_pct != null ? fixed.sample_size : 0,
+      type: wantType,
+      source: usingLive && primaryFound
         ? 'cdr_prd_average'
-        : (rate_pct != null ? 'stub_average' : 'fallback'),
+        : (primaryFound ? 'stub_average' : 'fallback'),
       fetched_at: live?.fetched_at || null,
-      note: usingLive && rate_pct != null
-        ? `Average of ${sample_size} live owner-occupier variable CDR products.`
+      note: usingLive && primaryFound
+        ? `OO ${wantType} average from ${primarySample} live CDR products (var ${variableRate}% · fixed ${fixedRate}%).`
         : (error
-          ? `CDR unavailable (${error}) — using ${rate}%.`
-          : `Using ${rate}% (${rate_pct != null ? 'stub average' : 'static fallback'}).`),
+          ? `CDR unavailable (${error}) — using var ${variableRate}% / fixed ${fixedRate}%.`
+          : `Using var ${variableRate}% / fixed ${fixedRate}% (${primaryFound ? 'stub average' : 'static fallback'}).`),
     });
   } catch (err) {
     return res.json({
       ok: true,
       rate_pct: FALLBACK_MARKET_RATE_PCT,
+      variable_rate_pct: FALLBACK_MARKET_RATE_PCT,
+      fixed_rate_pct: FALLBACK_FIXED_RATE_PCT,
       sample_size: 0,
+      variable_sample_size: 0,
+      fixed_sample_size: 0,
+      type: 'variable',
       source: 'fallback',
       fetched_at: null,
       note: err.message || 'Failed to load market rate — using fallback.',

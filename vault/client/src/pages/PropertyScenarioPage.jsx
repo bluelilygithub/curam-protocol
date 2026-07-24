@@ -11,7 +11,7 @@ import {
   formatNumberForInput,
   parseFormattedNumber,
 } from '../utils/numericInput';
-import { useMarketRateDefault, isInterestRateClarifyField, formatMarketRateInput, getInitialMarketRateInput } from '../hooks/useAverageMarketRate';
+import { useMarketRateDefault, isInterestRateClarifyField, isRateTypeClarifyField, formatMarketRateInput, getInitialMarketRateInput, normalizeRateType } from '../hooks/useAverageMarketRate';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { LENDER_PROFILES } from '../utils/lenderProfiles';
 import {
@@ -938,8 +938,9 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
   const [qExpenses, setQExpenses] = useState('');
   // Loan
   const [qTerm, setQTerm]       = useState('30');
-  const [qRate, setQRate]       = useState(() => getInitialMarketRateInput());
-  const { formatted: marketRateFormatted } = useMarketRateDefault(setQRate);
+  const [qRateType, setQRateType] = useState('variable');
+  const [qRate, setQRate]       = useState(() => getInitialMarketRateInput('variable'));
+  const { formatted: marketRateFormatted } = useMarketRateDefault(setQRate, { rateType: qRateType });
   // Extra checks
   const [qAge, setQAge]               = useState('');
   const [qPropTypeClass, setQPropTypeClass] = useState('house_town');
@@ -1193,7 +1194,14 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Defaults to the live average owner-occupier variable rate from CDR lender data. Override with the rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable and fixed products price differently. Choosing the type sets the interest-rate default to the live CDR average for that book." /></span>
+              <select value={qRateType} onChange={(e) => setQRateType(e.target.value)} style={FIELD}>
+                <option value="variable">Variable</option>
+                <option value="fixed">Fixed</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text={`Defaults to the live average owner-occupier ${qRateType} rate from CDR. Override with the rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer).`} /></span>
               <FormattedNumberInput value={qRate} onChange={setQRate} allowDecimals placeholder={marketRateFormatted || 'Loading market average…'} style={FIELD} />
             </label>
             <label className="block space-y-1">
@@ -1573,8 +1581,12 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [pDepositGift, setPDepositGift] = useState(() => seeded?.deposit_gift_amount ? formatNumberForInput(seeded.deposit_gift_amount) : '');
   // Loan
   const [pTerm, setPTerm]       = useState(() => seeded?.loan_term_years ? String(seeded.loan_term_years) : '30');
-  const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true }) : getInitialMarketRateInput());
+  const [pRateType, setPRateType] = useState(() => seeded?.rate_type === 'fixed' ? 'fixed' : 'variable');
+  const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null
+    ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true })
+    : getInitialMarketRateInput(seeded?.rate_type === 'fixed' ? 'fixed' : 'variable'));
   const { formatted: marketRateFormatted } = useMarketRateDefault(setPRate, {
+    rateType: pRateType,
     skip: seeded?.target_rate_pct != null,
   });
   // Extra checks
@@ -1940,7 +1952,14 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Defaults to the live average owner-occupier variable rate from CDR. Override with your expected rate. Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable and fixed products price differently. Choosing the type sets the interest-rate default to the live CDR average for that book." /></span>
+              <select value={pRateType} onChange={(e) => setPRateType(e.target.value)} style={FIELD}>
+                <option value="variable">Variable</option>
+                <option value="fixed">Fixed</option>
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text={`Defaults to the live average owner-occupier ${pRateType} rate from CDR. Override with your expected rate. Serviceability is tested at this rate plus 3% (APRA buffer).`} /></span>
               <FormattedNumberInput value={pRate} onChange={setPRate} allowDecimals placeholder={marketRateFormatted || 'Loading market average…'} style={FIELD} />
             </label>
             <label className="block space-y-1">
@@ -2287,7 +2306,8 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
  */
 function StandaloneCalculators({ getIcon }) {
   const [loanAmount, setLoanAmount] = useState('');
-  const [rate, setRate] = useState(() => getInitialMarketRateInput());
+  const [rateType, setRateType] = useState('variable');
+  const [rate, setRate] = useState(() => getInitialMarketRateInput('variable'));
   const [termYears, setTermYears] = useState('');
   const [extra, setExtra] = useState('200');
   const [offsetBalance, setOffsetBalance] = useState('50000');
@@ -2297,7 +2317,7 @@ function StandaloneCalculators({ getIcon }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const { formatted: marketRateFormatted } = useMarketRateDefault(setRate);
+  const { formatted: marketRateFormatted } = useMarketRateDefault(setRate, { rateType });
 
   async function runCalcs() {
     const amount = parseFormattedNumber(loanAmount);
@@ -2359,13 +2379,20 @@ function StandaloneCalculators({ getIcon }) {
             Enter your own numbers to get instant estimates. These calculators are standalone — they do not create a scenario and have no connection to stamp duty, CGT, or lender comparisons.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="block space-y-1.5">
             <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan amount ($)<FieldTip text="The amount you're borrowing — purchase price minus your deposit. Not the property value." /></span>
             <FormattedNumberInput value={loanAmount} onChange={setLoanAmount} placeholder="e.g. 500000" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text="Defaults to the live average Australian owner-occupier variable rate from CDR lender data. Replace with your own rate when you know it." /></span>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable and fixed products price differently. Choosing the type sets the interest-rate default to the live CDR average for that book." /></span>
+            <select value={rateType} onChange={(e) => setRateType(e.target.value)} style={FIELD}>
+              <option value="variable">Variable</option>
+              <option value="fixed">Fixed</option>
+            </select>
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text={`Defaults to the live average Australian owner-occupier ${rateType} rate from CDR. Replace with your own rate when you know it.`} /></span>
             <FormattedNumberInput value={rate} onChange={setRate} allowDecimals placeholder={marketRateFormatted || 'Loading market average…'} style={FIELD} />
           </label>
           <label className="block space-y-1.5">
@@ -2935,14 +2962,14 @@ export default function PropertyScenarioPage() {
   // Refinance form fields
   const [rfState, setRfState] = useState(DEFAULT_STATE);
   const [rfBalance, setRfBalance] = useState('');
-  const [rfRate, setRfRate] = useState(() => getInitialMarketRateInput());
   const [rfRateType, setRfRateType] = useState('variable');
+  const [rfRate, setRfRate] = useState(() => getInitialMarketRateInput('variable'));
   const [rfTermMonths, setRfTermMonths] = useState('');
   const [rfFixedPeriod, setRfFixedPeriod] = useState('');
   const [rfTargetMode, setRfTargetMode] = useState('cdr');
-  const [rfTargetRate, setRfTargetRate] = useState(() => getInitialMarketRateInput());
-  const { rate: marketRate, formatted: marketRateFormatted } = useMarketRateDefault(setRfRate);
-  useMarketRateDefault(setRfTargetRate);
+  const [rfTargetRate, setRfTargetRate] = useState(() => getInitialMarketRateInput('variable'));
+  const { rate: marketRate, rates: marketRates, formatted: marketRateFormatted } = useMarketRateDefault(setRfRate, { rateType: rfRateType });
+  useMarketRateDefault(setRfTargetRate, { rateType: 'variable' });
 
   // Sell form fields
   const [sellState, setSellState] = useState(DEFAULT_STATE);
@@ -3014,21 +3041,57 @@ export default function PropertyScenarioPage() {
 
   const formRows = useMemo(() => pipeline?.clarifying_form || [], [pipeline]);
 
-  // Prefill any clarify-form interest/comparison rate fields with the market average.
+  const rateTypeAnswerKey = useMemo(
+    () => formRows
+      .filter(isRateTypeClarifyField)
+      .map((r) => `${r.id}:${answers[r.id] || ''}`)
+      .join('|'),
+    [formRows, answers]
+  );
+
+  const clarifyAutoRatesRef = useRef({});
+
+  // Prefill clarify interest-rate fields from the matching fixed/variable average.
   useEffect(() => {
-    if (marketRate == null || !formRows.length) return;
+    if (!formRows.length) return;
+    const rates = marketRates || {
+      variable: marketRate,
+      fixed: marketRate,
+    };
     setAnswers((prev) => {
       let changed = false;
       const next = { ...prev };
+
       for (const row of formRows) {
-        if (!isInterestRateClarifyField(row)) continue;
+        if (!isRateTypeClarifyField(row)) continue;
         if (next[row.id] != null && String(next[row.id]).trim() !== '') continue;
-        next[row.id] = formatMarketRateInput(marketRate);
+        next[row.id] = 'variable';
         changed = true;
       }
+
+      for (const row of formRows) {
+        if (!isInterestRateClarifyField(row)) continue;
+        const path = String(row.field_path || '');
+        const parentPath = path.replace(/\.(rate|comparison_rate)$/, '');
+        const typeRow = formRows.find(
+          (r) => String(r.field_path || '') === `${parentPath}.fixed_or_variable`
+        ) || formRows.find(isRateTypeClarifyField);
+        const kind = normalizeRateType(typeRow ? next[typeRow.id] : 'variable');
+        const desired = formatMarketRateInput(rates[kind] ?? marketRate);
+        const auto = clarifyAutoRatesRef.current[row.id];
+        const cur = next[row.id];
+        if (cur == null || String(cur).trim() === '' || cur === auto) {
+          if (cur !== desired) {
+            next[row.id] = desired;
+            changed = true;
+          }
+          clarifyAutoRatesRef.current[row.id] = desired;
+        }
+      }
+
       return changed ? next : prev;
     });
-  }, [formRows, marketRate]);
+  }, [formRows, marketRate, marketRates, rateTypeAnswerKey]);
 
   const hasSellEvent = useMemo(
     () => (pipeline?.scenario?.events || []).some((e) => e.type === 'sell'),
@@ -3477,8 +3540,8 @@ export default function PropertyScenarioPage() {
               <button
                 type="button"
                 onClick={goBack}
-                className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-70"
-                style={{ color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-60"
+                style={{ color: '#166534', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
               >
                 {getIcon('arrow-left', { size: 14 })}
                 Back to scenario types
@@ -3524,15 +3587,15 @@ export default function PropertyScenarioPage() {
                       <FormattedNumberInput value={rfBalance} onChange={setRfBalance} allowDecimals placeholder="e.g. 100000" style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *<FieldTip text="Defaults to the live average owner-occupier variable rate from CDR. Replace with your actual contract rate from your statement when you know it." /></span>
-                      <FormattedNumberInput value={rfRate} onChange={setRfRate} allowDecimals placeholder={marketRateFormatted || 'Loading market average…'} style={FIELD} />
-                    </label>
-                    <label className="block space-y-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Variable rates can change with RBA movements. Fixed rates lock in certainty but may carry significant break costs if you exit the fixed period early." /></span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Rate type<FieldTip text="Ask this first — variable and fixed books price differently. Choosing the type sets the interest-rate default to the live CDR average for that book." /></span>
                       <select value={rfRateType} onChange={(e) => setRfRateType(e.target.value)} style={FIELD}>
                         <option value="variable">Variable</option>
                         <option value="fixed">Fixed</option>
                       </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Current interest rate (%) *<FieldTip text={`Defaults to the live average owner-occupier ${rfRateType} rate from CDR. Replace with your actual contract rate from your statement when you know it.`} /></span>
+                      <FormattedNumberInput value={rfRate} onChange={setRfRate} allowDecimals placeholder={marketRateFormatted || 'Loading market average…'} style={FIELD} />
                     </label>
                     <label className="block space-y-1.5">
                       <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Term remaining (months) *<FieldTip text="How many months are left on your current loan. E.g. 20 years remaining = 240 months. Check your loan schedule or call your lender." /></span>
@@ -3794,8 +3857,8 @@ export default function PropertyScenarioPage() {
                 <button
                   type="button"
                   onClick={goBack}
-                  className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-70"
-                  style={{ color: 'var(--color-muted)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  className="inline-flex items-center gap-1.5 text-sm transition-opacity duration-200 hover:opacity-60"
+                  style={{ color: '#166534', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 >
                   {getIcon('arrow-left', { size: 14 })}
                   Back to scenario types
