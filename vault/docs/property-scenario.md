@@ -102,6 +102,8 @@ Homepage (Describe path) scenario cards:
 2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
 3. **Quick tools** — Standalone calculators  
 
+Each card has an **info** control that opens a purpose modal (what it does / doesn’t, best for).
+
 **Interest rate defaults:** Every interest-rate input asks **Rate type** (variable/fixed) first where relevant. The rate field then defaults to the matching OO average from `GET /market-rate` (`variable_rate_pct` / `fixed_rate_pct`, with 6.1% / 5.5% fallbacks). Changing type updates the rate if the user hasn’t overridden it. NLP clarify forms follow the sibling `fixed_or_variable` answer. Buy/sell have no rate fields. **State** selects default to **QLD**.
 
 Also:

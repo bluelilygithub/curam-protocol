@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (agent-purpose-modals)
+
+### Property Scenario — purpose modals on dashboard cards
+- Each of the 7 homepage agent cards has an info button that opens a modal covering purpose, what it does / doesn’t, and when to use it.
+
+---
+
 ## 2026-07-24 (rate-type-aware-defaults)
 
 ### Property Scenario — fixed vs variable market-rate defaults

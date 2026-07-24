@@ -69,6 +69,157 @@ const MODES = [
   { id: 'example', label: 'See an example' },
 ];
 
+/** Homepage agent cards + purpose-modal copy (7 tools on the mortgage dashboard). */
+const SCENARIO_AGENT_GROUPS = [
+  {
+    group: 'Check my file',
+    items: [
+      {
+        id: 'proforma',
+        icon: 'shield-check',
+        label: 'Qualification proforma',
+        desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.',
+        featured: true,
+        purpose: 'Will a bank look at this file — and what would make it stronger?',
+        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available.',
+        does: [
+          'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
+          'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
+          'Risk-rated structuring levers with indicative capacity uplifts — never invents income or hides debts',
+          'Per-bank posture + indicative capacity panel and optional PDF executive summary',
+        ],
+        doesNot: [
+          'Issue a loan approval, pre-approval, or credit decision',
+          'Replace a broker’s full credit assessment or bank policy override',
+        ],
+        bestFor: 'When you want the featured “is this file bankable?” path before you commit to a purchase or refinance.',
+      },
+      {
+        id: 'qualify',
+        icon: 'check-circle',
+        label: 'Lite serviceability check',
+        desc: 'Serviceability, LVR, DTI, and genuine-savings snapshot.',
+        purpose: 'A fast pass/fail-style snapshot of serviceability and key ratios.',
+        about: 'A lighter version of the proforma engine. Same core AU checks (serviceability, LVR, DTI, genuine savings), without the full levers matrix, bank capacity panel, or supplementary analysis.',
+        does: [
+          'Quick serviceability at your target rate + APRA buffer',
+          'LVR / DTI / genuine-savings style checks',
+          'A short path into refinance compare or the full proforma',
+        ],
+        doesNot: [
+          'Run the full broker lever / bank-capacity report',
+          'Model stamp duty, CGT, or multi-event scenarios',
+        ],
+        bestFor: 'A quick “am I in the ballpark?” check before investing time in the full proforma.',
+      },
+    ],
+  },
+  {
+    group: 'Plan a transaction',
+    items: [
+      {
+        id: 'refinance',
+        icon: 'refresh-cw',
+        label: 'Compare lenders / refinance',
+        desc: 'See if switching saves money. Instant calculation — no AI.',
+        purpose: 'Does switching lender (or rate) actually save money after costs?',
+        about: 'Deterministic refinance math: current loan vs a target rate or live CDR lender rates. No AI parse step — you enter the numbers directly.',
+        does: [
+          'Day-one repayment comparison and break-even style switching costs',
+          'Optional live CDR rate substitution for “compare against the market”',
+          'Fixed-rate IRD-style break-cost estimates when relevant',
+        ],
+        doesNot: [
+          'Guarantee the rate a bank will actually offer you',
+          'Assess serviceability of the new loan (use Qualify / Proforma for that)',
+        ],
+        bestFor: 'When you already know your current loan details and want an instant savings check.',
+      },
+      {
+        id: 'buy',
+        icon: 'key',
+        label: 'Buy a property',
+        desc: 'Stamp duty, LMI, and upfront purchase costs.',
+        purpose: 'What does this purchase cost up-front in my state?',
+        about: 'Deterministic purchase-cost calculator: stamp duty, LMI when LVR is high, and related upfront figures using Australian state rules.',
+        does: [
+          'State-based stamp duty with FHB / PPOR concessions where modelled',
+          'Indicative LMI when deposit is under 20%',
+          'A clear cash-needed-at-settlement style view of upfront costs',
+        ],
+        doesNot: [
+          'Underwrite the loan or pick a lender product',
+          'Model sell + buy bridging or compound multi-event cashflow (use Multiple events)',
+        ],
+        bestFor: 'Isolating purchase costs before you combine them with a sale or refinance.',
+      },
+      {
+        id: 'sell',
+        icon: 'home',
+        label: 'Sell a property',
+        desc: 'CGT, selling costs, and net proceeds.',
+        purpose: 'What do I walk away with after selling costs and CGT?',
+        about: 'Deterministic sale calculator: selling costs and capital gains tax treatment based on PPOR vs investment (and mixed-use flags).',
+        does: [
+          'Net proceeds after typical selling costs',
+          'CGT framing for PPOR exemption vs investment / mixed history',
+          'Indicative tax-on-gain context at common marginal rates',
+        ],
+        doesNot: [
+          'Replace a tax agent’s full CGT calculation (partial exemptions, 6-year rule detail)',
+          'Model the linked purchase or refinance in the same run (use Multiple events)',
+        ],
+        bestFor: 'Understanding sale proceeds and CGT exposure on a single property.',
+      },
+      {
+        id: 'compound',
+        icon: 'layers',
+        label: 'Multiple events at once',
+        desc: 'Sell + buy + switch lender together — describe in plain English.',
+        purpose: 'Model a compound move — sell, buy, and/or switch lender — from one description.',
+        about: 'The NLP scenario path. You describe the situation in plain English; the system extracts numbers you literally wrote, asks clarifying questions, then runs deterministic AU calcs across linked events.',
+        does: [
+          'Parse multi-event scenarios (sell → buy → refinance/switch)',
+          'Ground numbers to your text (no invented dollar amounts)',
+          'Charts, timelines, lender compare, and optional document insights',
+        ],
+        doesNot: [
+          'Guess missing critical facts (state, PPOR, fixed period) — it asks instead',
+          'Let AI rewrite calculation totals (math stays in deterministic modules)',
+        ],
+        bestFor: 'Complex “moving house and changing loans” stories that don’t fit a single form.',
+      },
+    ],
+  },
+  {
+    group: 'Quick tools',
+    items: [
+      {
+        id: 'calculators',
+        icon: 'calculator',
+        label: 'Quick calculators',
+        desc: 'Repayment, offset, extra repayments, and borrowing power.',
+        purpose: 'Run standalone loan maths without building a full scenario.',
+        about: 'Four quick calculators that share your loan amount, rate type, and rate: repayments, extra repayments, offset benefit, and a simplified borrowing-power sketch.',
+        does: [
+          'P&I repayment estimates',
+          'Extra repayment and offset illustrations',
+          'Indicative borrowing power (not a credit decision)',
+        ],
+        doesNot: [
+          'Create a saved scenario or stamp-duty / CGT outputs',
+          'Replace lender serviceability (no HEM / full debt treatment)',
+        ],
+        bestFor: 'Quick “what if I pay extra?” or “rough borrowing power?” questions.',
+      },
+    ],
+  },
+];
+
+const AGENT_PURPOSE_BY_ID = Object.fromEntries(
+  SCENARIO_AGENT_GROUPS.flatMap((g) => g.items.map((t) => [t.id, t]))
+);
+
 const FIELD = {
   width: '100%',
   padding: '10px 12px',
@@ -2789,6 +2940,84 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
   );
 }
 
+function AgentPurposeModal({ agent, onClose, getIcon }) {
+  if (!agent) return null;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="agent-purpose-title"
+    >
+      <div
+        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 520, maxHeight: '85dvh' }}
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(agent.icon, { size: 20 })}</span>
+            <div className="min-w-0">
+              <p id="agent-purpose-title" className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{agent.label}</p>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{agent.purpose}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 transition-opacity duration-200 hover:opacity-60"
+            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 0 }}
+            aria-label="Close"
+          >
+            {getIcon('x', { size: 18 })}
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm" style={{ color: 'var(--color-text)' }}>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>{agent.about}</p>
+
+          {agent.does?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>What it does</p>
+              <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                {agent.does.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {agent.doesNot?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>What it doesn’t do</p>
+              <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                {agent.doesNot.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {agent.bestFor && (
+            <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>Best for</p>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{agent.bestFor}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PropertyScenarioHelp({ onClose, getIcon }) {
   const BOUNDARY_ROWS = [
     { crossing: 'Free text → structured Scenario', what: 'Your sentences → events/fields', enforcement: 'Deterministic span extraction runs first (currency, %, dates found in your literal text). The LLM only assigns those spans — it never invents new numbers. Grounding strips anything in the LLM\'s output with no matching span.' },
@@ -2936,6 +3165,7 @@ export default function PropertyScenarioPage() {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const isAdmin = Boolean(user?.isAdmin);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [agentGuideId, setAgentGuideId] = useState(null);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [mode, setMode] = useState('describe');
   const [tab, setTab] = useState('overview');
@@ -3398,6 +3628,13 @@ export default function PropertyScenarioPage() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {helpOpen && <PropertyScenarioHelp onClose={() => setHelpOpen(false)} getIcon={getIcon} />}
+      {agentGuideId && AGENT_PURPOSE_BY_ID[agentGuideId] && (
+        <AgentPurposeModal
+          agent={AGENT_PURPOSE_BY_ID[agentGuideId]}
+          onClose={() => setAgentGuideId(null)}
+          getIcon={getIcon}
+        />
+      )}
       <header
         className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -3477,57 +3714,57 @@ export default function PropertyScenarioPage() {
             {scenarioType === null && !calcResult && (
               <div className="space-y-6">
                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What would you like to explore?</p>
-                {[
-                  {
-                    group: 'Check my file',
-                    items: [
-                      { id: 'proforma', icon: 'shield-check', label: 'Qualification proforma', desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.', featured: true },
-                      { id: 'qualify', icon: 'check-circle', label: 'Lite serviceability check', desc: 'Serviceability, LVR, DTI, and genuine-savings snapshot.' },
-                    ],
-                  },
-                  {
-                    group: 'Plan a transaction',
-                    items: [
-                      { id: 'refinance', icon: 'refresh-cw', label: 'Compare lenders / refinance', desc: 'See if switching saves money. Instant calculation — no AI.' },
-                      { id: 'buy', icon: 'key', label: 'Buy a property', desc: 'Stamp duty, LMI, and upfront purchase costs.' },
-                      { id: 'sell', icon: 'home', label: 'Sell a property', desc: 'CGT, selling costs, and net proceeds.' },
-                      { id: 'compound', icon: 'layers', label: 'Multiple events at once', desc: 'Sell + buy + switch lender together — describe in plain English.' },
-                    ],
-                  },
-                  {
-                    group: 'Quick tools',
-                    items: [
-                      { id: 'calculators', icon: 'calculator', label: 'Quick calculators', desc: 'Repayment, offset, extra repayments, and borrowing power.' },
-                    ],
-                  },
-                ].map((section) => (
+                {SCENARIO_AGENT_GROUPS.map((section) => (
                   <div key={section.group} className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{section.group}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {section.items.map((t) => (
-                        <button
+                        <div
                           key={t.id}
-                          type="button"
-                          onClick={() => handleTypePick(t.id)}
-                          className={`flex items-start gap-3 p-4 rounded-xl border text-left transition-opacity duration-200 hover:opacity-70${t.featured ? ' sm:col-span-2' : ''}`}
+                          className={`relative flex items-start gap-3 p-4 rounded-xl border text-left${t.featured ? ' sm:col-span-2' : ''}`}
                           style={{
                             borderColor: t.featured ? 'var(--color-primary)' : 'var(--color-border)',
                             background: t.featured ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-bg))' : 'var(--color-bg)',
                           }}
                         >
-                          <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
-                          <div>
-                            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                              {t.label}
-                              {t.featured && (
-                                <span className="ml-2 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                                  Recommended
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
-                          </div>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTypePick(t.id)}
+                            className="flex items-start gap-3 flex-1 min-w-0 text-left transition-opacity duration-200 hover:opacity-70"
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                          >
+                            <span className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon(t.icon, { size: 18 })}</span>
+                            <div className="min-w-0 pr-7">
+                              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                                {t.label}
+                                {t.featured && (
+                                  <span className="ml-2 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                                    Recommended
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{t.desc}</p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setAgentGuideId(t.id); }}
+                            className="absolute top-3 right-3 inline-flex items-center justify-center rounded-lg transition-opacity duration-200 hover:opacity-60"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              color: 'var(--color-primary)',
+                              background: 'var(--color-surface)',
+                              border: '1px solid var(--color-border)',
+                              cursor: 'pointer',
+                              padding: 0,
+                            }}
+                            title={`About ${t.label}`}
+                            aria-label={`About ${t.label}`}
+                          >
+                            {getIcon('info', { size: 14 })}
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
