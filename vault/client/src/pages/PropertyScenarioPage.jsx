@@ -19,7 +19,9 @@ import {
   saveFileProfileFromPayload,
   saveLastProformaSummary,
 } from '../utils/propertyScenarioFileProfile';
-// Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
+
+/** Default Australian state for property / mortgage form selects. */
+const DEFAULT_STATE = 'QLD';// Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
 async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers) {
   const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
   return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers);
@@ -921,7 +923,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
   // Property
   const [qPrice, setQPrice]     = useState('');
   const [qDeposit, setQDeposit] = useState('');
-  const [qState, setQState]     = useState('');
+  const [qState, setQState]     = useState(DEFAULT_STATE);
   const [qFhb, setQFhb]         = useState('');
   const [qPpor, setQPpor]       = useState('ppor');
   // Income & household
@@ -1536,7 +1538,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   // Property
   const [pPrice, setPPrice]     = useState(() => seeded?.property_value != null ? formatNumberForInput(seeded.property_value) : '');
   const [pDeposit, setPDeposit] = useState(() => seeded?.deposit_amount != null ? formatNumberForInput(seeded.deposit_amount) : '');
-  const [pState, setPState]     = useState(() => seeded?.state || '');
+  const [pState, setPState]     = useState(() => seeded?.state || DEFAULT_STATE);
   const [pFhb, setPFhb]         = useState(() => {
     if (seeded?.is_fhb === true || seeded?.is_fhb === 'yes') return 'yes';
     if (seeded?.is_fhb === false || seeded?.is_fhb === 'no') return 'no';
@@ -2941,7 +2943,7 @@ export default function PropertyScenarioPage() {
   // Live NLP path
   const [text, setText] = useState('');
   // Pre-parse context (collected before LLM call to reduce clarifying questions)
-  const [preState, setPreState] = useState('');
+  const [preState, setPreState] = useState(DEFAULT_STATE);
   const [prePpor, setPrePpor] = useState('');
   const [pipeline, setPipeline] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
@@ -2953,7 +2955,7 @@ export default function PropertyScenarioPage() {
   const [scenarioType, setScenarioType] = useState(null);
 
   // Refinance form fields
-  const [rfState, setRfState] = useState('');
+  const [rfState, setRfState] = useState(DEFAULT_STATE);
   const [rfBalance, setRfBalance] = useState('');
   const [rfRate, setRfRate] = useState('');
   const [rfRateType, setRfRateType] = useState('variable');
@@ -2963,14 +2965,14 @@ export default function PropertyScenarioPage() {
   const [rfTargetRate, setRfTargetRate] = useState('');
 
   // Sell form fields
-  const [sellState, setSellState] = useState('');
+  const [sellState, setSellState] = useState(DEFAULT_STATE);
   const [sellPrice, setSellPrice] = useState('');
   const [sellPurchasePrice, setSellPurchasePrice] = useState('');
   const [sellPurchaseYear, setSellPurchaseYear] = useState('');
   const [sellPpor, setSellPpor] = useState('ppor');
 
   // Buy form fields
-  const [buyState, setBuyState] = useState('');
+  const [buyState, setBuyState] = useState(DEFAULT_STATE);
   const [buyPrice, setBuyPrice] = useState('');
   const [buyDeposit, setBuyDeposit] = useState('');
   const [buyFhb, setBuyFhb] = useState('no');

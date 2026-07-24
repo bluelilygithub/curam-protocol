@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (default-state-qld)
+
+### Property Scenario — default state QLD
+- All state selects (qualify, proforma, refinance, buy, sell, NLP pre-state) default to **QLD**. Seeded/profile state still wins when present.
+
+---
+
 ## 2026-07-24 (shares-metals-daily + market-rate-default)
 
 ### Shares — metals on daily Portfolio Note only

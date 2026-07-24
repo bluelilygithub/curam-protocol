@@ -102,7 +102,7 @@ Homepage (Describe path) scenario cards:
 2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
 3. **Quick tools** — Standalone calculators  
 
-**Interest rate defaults:** Calculators, lite qualify, and proforma prefill **Interest rate / Target interest rate** from `GET /market-rate` (mean of live mainstream owner-occupier variable CDR products). Refinance **current** rate stays blank so the user enters their contract rate.
+**Interest rate defaults:** Calculators, lite qualify, and proforma prefill **Interest rate / Target interest rate** from `GET /market-rate` (mean of live mainstream owner-occupier variable CDR products). Refinance **current** rate stays blank so the user enters their contract rate. **State** selects default to **QLD** (overridable; profile/seed still wins).
 
 Also:
 
