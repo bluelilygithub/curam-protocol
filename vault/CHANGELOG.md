@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (market-rate-all-fields)
+
+### Property Scenario — market rate on every interest-rate input
+- Prefill now covers refinance **current** and **specific target** rates, plus NLP clarify form rows for `*.rate` / comparison rate / “Interest rate” labels (not only qualify / proforma / calculators).
+- Shared helper: `useMarketRateDefault` + `isInterestRateClarifyField` in `useAverageMarketRate.js`.
+
+---
+
 ## 2026-07-24 (default-state-qld)
 
 ### Property Scenario — default state QLD

@@ -37,7 +37,7 @@ const FIELD_LABEL_OVERRIDES = {
 
 const FIELD_PLACEHOLDER_OVERRIDES = {
   balance: 'e.g. 520000',
-  rate: 'e.g. 6.10',
+  rate: 'Defaults to live market average',
   term_remaining_months: 'e.g. 300',
   fixed_period_remaining_months: 'e.g. 24',
   deposit_amount: 'e.g. 200000',
@@ -67,7 +67,7 @@ function placeholderForLastSegment(fieldPath) {
 // Sub-fields required for every loan snapshot (in display order)
 const LOAN_SUB_FIELDS = [
   { sub: 'balance',                       label: 'Loan balance ($)',                           type: 'number',    placeholder: 'e.g. 520000' },
-  { sub: 'rate',                          label: 'Interest rate (%)',                           type: 'number',    placeholder: 'e.g. 6.10' },
+  { sub: 'rate',                          label: 'Interest rate (%)',                           type: 'number',    placeholder: 'Defaults to live market average' },
   { sub: 'fixed_or_variable',             label: 'Rate type',                                  type: 'rate_type', placeholder: '' },
   { sub: 'term_remaining_months',         label: 'Loan term remaining (months)',                type: 'number',    placeholder: 'e.g. 300' },
   { sub: 'fixed_period_remaining_months', label: 'Fixed-rate period remaining (months)',        type: 'number',    placeholder: 'e.g. 24 — omit if variable' },
