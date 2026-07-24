@@ -102,7 +102,7 @@ Homepage (Describe path) scenario cards:
 2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
 3. **Quick tools** — Standalone calculators  
 
-**Interest rate defaults:** Every interest-rate input (calculators, lite qualify, proforma, refinance current + specific target, and NLP clarify `*.rate` / comparison-rate fields) prefills from `GET /market-rate` (mean of live mainstream owner-occupier variable CDR products). Users can override. Buy/sell forms have no rate fields. **State** selects default to **QLD** (overridable; profile/seed still wins).
+**Interest rate defaults:** Every interest-rate input (calculators, lite qualify, proforma, refinance current + specific target, and NLP clarify `*.rate` / comparison-rate fields) starts with a value immediately (`getInitialMarketRateInput` — cached CDR average or 6.1% fallback), then upgrades to the live `GET /market-rate` average when available if the user hasn’t edited. Buy/sell forms have no rate fields. **State** selects default to **QLD** (overridable; profile/seed still wins).
 
 Also:
 

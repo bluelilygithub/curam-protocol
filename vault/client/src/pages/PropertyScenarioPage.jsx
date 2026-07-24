@@ -11,7 +11,7 @@ import {
   formatNumberForInput,
   parseFormattedNumber,
 } from '../utils/numericInput';
-import { useMarketRateDefault, isInterestRateClarifyField, formatMarketRateInput } from '../hooks/useAverageMarketRate';
+import { useMarketRateDefault, isInterestRateClarifyField, formatMarketRateInput, getInitialMarketRateInput } from '../hooks/useAverageMarketRate';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { LENDER_PROFILES } from '../utils/lenderProfiles';
 import {
@@ -938,7 +938,7 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
   const [qExpenses, setQExpenses] = useState('');
   // Loan
   const [qTerm, setQTerm]       = useState('30');
-  const [qRate, setQRate]       = useState('');
+  const [qRate, setQRate]       = useState(() => getInitialMarketRateInput());
   const { formatted: marketRateFormatted } = useMarketRateDefault(setQRate);
   // Extra checks
   const [qAge, setQAge]               = useState('');
@@ -1573,7 +1573,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [pDepositGift, setPDepositGift] = useState(() => seeded?.deposit_gift_amount ? formatNumberForInput(seeded.deposit_gift_amount) : '');
   // Loan
   const [pTerm, setPTerm]       = useState(() => seeded?.loan_term_years ? String(seeded.loan_term_years) : '30');
-  const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true }) : '');
+  const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true }) : getInitialMarketRateInput());
   const { formatted: marketRateFormatted } = useMarketRateDefault(setPRate, {
     skip: seeded?.target_rate_pct != null,
   });
@@ -2287,7 +2287,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
  */
 function StandaloneCalculators({ getIcon }) {
   const [loanAmount, setLoanAmount] = useState('');
-  const [rate, setRate] = useState('');
+  const [rate, setRate] = useState(() => getInitialMarketRateInput());
   const [termYears, setTermYears] = useState('');
   const [extra, setExtra] = useState('200');
   const [offsetBalance, setOffsetBalance] = useState('50000');
@@ -2935,12 +2935,12 @@ export default function PropertyScenarioPage() {
   // Refinance form fields
   const [rfState, setRfState] = useState(DEFAULT_STATE);
   const [rfBalance, setRfBalance] = useState('');
-  const [rfRate, setRfRate] = useState('');
+  const [rfRate, setRfRate] = useState(() => getInitialMarketRateInput());
   const [rfRateType, setRfRateType] = useState('variable');
   const [rfTermMonths, setRfTermMonths] = useState('');
   const [rfFixedPeriod, setRfFixedPeriod] = useState('');
   const [rfTargetMode, setRfTargetMode] = useState('cdr');
-  const [rfTargetRate, setRfTargetRate] = useState('');
+  const [rfTargetRate, setRfTargetRate] = useState(() => getInitialMarketRateInput());
   const { rate: marketRate, formatted: marketRateFormatted } = useMarketRateDefault(setRfRate);
   useMarketRateDefault(setRfTargetRate);
 

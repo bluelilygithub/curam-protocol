@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (market-rate-instant-default)
+
+### Property Scenario — interest rate fields never start empty
+- Rate inputs (incl. refinance **Current interest rate**) initialise immediately to cached/live average or **6.1%** fallback — no wait on cold CDR.
+- `GET /market-rate` uses warm CDR cache or stub average; cold CDR warm-up is background-only.
+- Hook: `getInitialMarketRateInput` + upgrade-in-place when live average arrives (if user hasn’t edited).
+
+---
+
 ## 2026-07-24 (market-rate-all-fields)
 
 ### Property Scenario — market rate on every interest-rate input

@@ -182,6 +182,14 @@ function clearCdrCache() {
   cache = { at: 0, payload: null };
 }
 
+/** Return warm CDR cache only — never triggers a network fetch. */
+function peekLiveMortgageLenders() {
+  if (cache.payload && Date.now() - cache.at < DEFAULT_TTL_MS) {
+    return { ...cache.payload, cache: { hit: true, age_ms: Date.now() - cache.at } };
+  }
+  return null;
+}
+
 /**
  * Mean advertised rate across mainstream owner-occupier variable products.
  * Used as the UI default for Interest Rate / Target rate fields.
@@ -217,6 +225,7 @@ function averageOwnerOccupiedVariableRate(lenders) {
 
 module.exports = {
   getLiveMortgageLenders,
+  peekLiveMortgageLenders,
   fetchBankMortgages,
   clearCdrCache,
   averageOwnerOccupiedVariableRate,

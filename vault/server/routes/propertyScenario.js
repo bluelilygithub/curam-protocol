@@ -11,6 +11,7 @@ const { buildPresentationPayload } = require('../services/propertyScenario/prese
 const { MOCK_LENDERS } = require('../services/propertyScenario/mockLenders');
 const {
   getLiveMortgageLenders,
+  peekLiveMortgageLenders,
   clearCdrCache,
   averageOwnerOccupiedVariableRate,
 } = require('../services/propertyScenario/cdr');
@@ -159,12 +160,28 @@ router.post('/clarify', async (req, res) => {
 
 /**
  * GET /api/property-scenario/market-rate
- * Prevailing average owner-occupier variable rate from live CDR (cached),
- * used to default Interest Rate / Target rate inputs. Falls back to 6.1% if CDR is down.
+ * Prevailing average owner-occupier variable rate for form defaults.
+ * Uses warm CDR cache when available; otherwise stub/fallback immediately.
+ * Does not wait on a cold multi-bank CDR fetch (that left rate fields empty).
  */
 router.get('/market-rate', async (req, res) => {
   try {
-    const { live, error } = await loadLiveLenders(req);
+    const force = req.query.refresh === '1' || req.query.force === '1';
+    let live = null;
+    let error = null;
+
+    if (force) {
+      const fetched = await loadLiveLenders(req);
+      live = fetched.live;
+      error = fetched.error;
+    } else {
+      live = peekLiveMortgageLenders();
+      if (!live?.ok) {
+        // Warm cache for later without blocking this response.
+        getLiveMortgageLenders().catch(() => {});
+      }
+    }
+
     const usingLive = Boolean(live?.ok && (live.lenders || []).length);
     const lenders = usingLive ? live.lenders : MOCK_LENDERS;
     const { rate_pct, sample_size } = averageOwnerOccupiedVariableRate(lenders);

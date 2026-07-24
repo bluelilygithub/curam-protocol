@@ -7,9 +7,17 @@ let cachedRate = null;
 let cachedMeta = null;
 let inflight = null;
 
+/** Matches server FALLBACK_MARKET_RATE_PCT — used so fields are never empty while loading. */
+export const FALLBACK_MARKET_RATE_PCT = 6.1;
+
 export function formatMarketRateInput(rate) {
   if (rate == null || !Number.isFinite(Number(rate))) return '';
   return formatNumberForInput(Number(rate), { allowDecimals: true });
+}
+
+/** Synchronous initial value for interest-rate inputs (cached live rate or 6.1%). */
+export function getInitialMarketRateInput() {
+  return formatMarketRateInput(cachedRate ?? FALLBACK_MARKET_RATE_PCT);
 }
 
 async function loadAverageMarketRate() {
@@ -31,11 +39,13 @@ async function loadAverageMarketRate() {
         return { rate: cachedRate, meta: cachedMeta };
       }
     } catch {
-      // leave null — forms keep empty until user types
+      // fall through to static default
     } finally {
       inflight = null;
     }
-    return { rate: null, meta: null };
+    cachedRate = FALLBACK_MARKET_RATE_PCT;
+    cachedMeta = { source: 'fallback', sampleSize: 0, note: 'Using static fallback rate.' };
+    return { rate: cachedRate, meta: cachedMeta };
   })();
 
   return inflight;
@@ -43,10 +53,11 @@ async function loadAverageMarketRate() {
 
 /**
  * Live (or fallback) average AU owner-occupier variable mortgage rate for form defaults.
+ * Always resolves to a number — never leaves callers waiting on null.
  * @returns {{ rate: number|null, meta: object|null, loading: boolean, formatted: string }}
  */
 export function useAverageMarketRate() {
-  const [rate, setRate] = useState(cachedRate);
+  const [rate, setRate] = useState(() => cachedRate ?? FALLBACK_MARKET_RATE_PCT);
   const [meta, setMeta] = useState(cachedMeta);
   const [loading, setLoading] = useState(cachedRate == null);
 
@@ -61,39 +72,47 @@ export function useAverageMarketRate() {
     setLoading(true);
     loadAverageMarketRate().then(({ rate: next, meta: nextMeta }) => {
       if (cancelled) return;
-      setRate(next);
+      setRate(next ?? FALLBACK_MARKET_RATE_PCT);
       setMeta(nextMeta);
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, []);
 
+  const resolved = rate ?? FALLBACK_MARKET_RATE_PCT;
   return {
-    rate,
+    rate: resolved,
     meta,
     loading,
-    formatted: formatMarketRateInput(rate),
+    formatted: formatMarketRateInput(resolved),
   };
 }
 
 /**
- * Prefill a string state setter once with the market average when the field is still empty.
+ * Prefill a string state setter with the market average.
+ * Starts from cached/fallback immediately; upgrades to live API rate if the user hasn't edited.
  * @param {(updater: string | ((prev: string) => string)) => void} setValue
  * @param {{ skip?: boolean }} [opts] — set skip when a seeded/prefilled value already exists
  */
 export function useMarketRateDefault(setValue, { skip = false } = {}) {
   const { rate, meta, loading, formatted } = useAverageMarketRate();
-  const applied = useRef(skip);
+  const autoValueRef = useRef(skip ? null : getInitialMarketRateInput());
 
   useEffect(() => {
-    if (skip) applied.current = true;
-  }, [skip]);
-
-  useEffect(() => {
-    if (applied.current || rate == null) return;
-    applied.current = true;
-    setValue((prev) => (prev === '' || prev == null ? formatMarketRateInput(rate) : prev));
-  }, [rate, setValue]);
+    if (skip) {
+      autoValueRef.current = null;
+      return;
+    }
+    const next = formatMarketRateInput(rate ?? FALLBACK_MARKET_RATE_PCT);
+    setValue((prev) => {
+      // Empty, or still showing our previous auto-default → apply / upgrade
+      if (prev === '' || prev == null || prev === autoValueRef.current) {
+        autoValueRef.current = next;
+        return next;
+      }
+      return prev;
+    });
+  }, [rate, setValue, skip]);
 
   return { rate, meta, loading, formatted };
 }
