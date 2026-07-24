@@ -182,10 +182,44 @@ function clearCdrCache() {
   cache = { at: 0, payload: null };
 }
 
+/**
+ * Mean advertised rate across mainstream owner-occupier variable products.
+ * Used as the UI default for Interest Rate / Target rate fields.
+ *
+ * @param {object[]} lenders — normalized CDR (or mock) lender rows
+ * @returns {{ rate_pct: number|null, sample_size: number }}
+ */
+function averageOwnerOccupiedVariableRate(lenders) {
+  const pool = (Array.isArray(lenders) ? lenders : [])
+    .filter((l) => l && l.fixed_or_variable === 'variable')
+    .filter((l) => !l.special_eligibility)
+    .filter((l) => !l.loan_purpose || l.loan_purpose === 'OWNER_OCCUPIED');
+
+  let rates = pool
+    .map((l) => Number(l.rate))
+    .filter((r) => Number.isFinite(r) && r > 0 && r < 25);
+
+  // If purpose tagging was sparse, fall back to any mainstream variable rate.
+  if (!rates.length) {
+    rates = (Array.isArray(lenders) ? lenders : [])
+      .filter((l) => l && l.fixed_or_variable === 'variable' && !l.special_eligibility)
+      .map((l) => Number(l.rate))
+      .filter((r) => Number.isFinite(r) && r > 0 && r < 25);
+  }
+
+  if (!rates.length) return { rate_pct: null, sample_size: 0 };
+  const mean = rates.reduce((sum, r) => sum + r, 0) / rates.length;
+  return {
+    rate_pct: Math.round(mean * 100) / 100,
+    sample_size: rates.length,
+  };
+}
+
 module.exports = {
   getLiveMortgageLenders,
   fetchBankMortgages,
   clearCdrCache,
+  averageOwnerOccupiedVariableRate,
   DEFAULT_TTL_MS,
   MAX_DETAILS_PER_BANK,
 };

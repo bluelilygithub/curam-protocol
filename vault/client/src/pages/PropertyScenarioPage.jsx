@@ -11,6 +11,7 @@ import {
   formatNumberForInput,
   parseFormattedNumber,
 } from '../utils/numericInput';
+import { useAverageMarketRate } from '../hooks/useAverageMarketRate';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { LENDER_PROFILES } from '../utils/lenderProfiles';
 import {
@@ -936,6 +937,15 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
   // Loan
   const [qTerm, setQTerm]       = useState('30');
   const [qRate, setQRate]       = useState('');
+  const { rate: marketRate } = useAverageMarketRate();
+  const qRateDefaulted = useRef(false);
+  useEffect(() => {
+    if (qRateDefaulted.current || marketRate == null) return;
+    qRateDefaulted.current = true;
+    setQRate((prev) => (prev === ''
+      ? formatNumberForInput(marketRate, { allowDecimals: true })
+      : prev));
+  }, [marketRate]);
   // Extra checks
   const [qAge, setQAge]               = useState('');
   const [qPropTypeClass, setQPropTypeClass] = useState('house_town');
@@ -1189,8 +1199,8 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="The rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer). Check live CDR rates in the Lenders tab for a real-market starting point." /></span>
-              <FormattedNumberInput value={qRate} onChange={setQRate} allowDecimals placeholder="e.g. 6.10 (see Lenders tab for live rates)" style={FIELD} />
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Defaults to the live average owner-occupier variable rate from CDR lender data. Override with the rate you expect to borrow at. Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
+              <FormattedNumberInput value={qRate} onChange={setQRate} allowDecimals placeholder="Loading market average…" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="Typically 30 years for maximum borrowing capacity. A shorter term raises the minimum repayment and lowers the amount a lender will approve." /></span>
@@ -1570,6 +1580,15 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   // Loan
   const [pTerm, setPTerm]       = useState(() => seeded?.loan_term_years ? String(seeded.loan_term_years) : '30');
   const [pRate, setPRate]       = useState(() => seeded?.target_rate_pct != null ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true }) : '');
+  const { rate: marketRate } = useAverageMarketRate();
+  const pRateDefaulted = useRef(seeded?.target_rate_pct != null);
+  useEffect(() => {
+    if (pRateDefaulted.current || marketRate == null) return;
+    pRateDefaulted.current = true;
+    setPRate((prev) => (prev === ''
+      ? formatNumberForInput(marketRate, { allowDecimals: true })
+      : prev));
+  }, [marketRate]);
   // Extra checks
   const [pAge, setPAge]               = useState(() => seeded?.applicant_age ? String(seeded.applicant_age) : '');
   const [pPropTypeClass, setPPropTypeClass] = useState(() => seeded?.property_type_class || 'house_town');
@@ -1933,8 +1952,8 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Loan</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
-              <FormattedNumberInput value={pRate} onChange={setPRate} allowDecimals placeholder="e.g. 6.10" style={FIELD} />
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Target interest rate (% p.a.)<FieldTip text="Defaults to the live average owner-occupier variable rate from CDR. Override with your expected rate. Serviceability is tested at this rate plus 3% (APRA buffer)." /></span>
+              <FormattedNumberInput value={pRate} onChange={setPRate} allowDecimals placeholder="Loading market average…" style={FIELD} />
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="30 years maximises borrowing capacity." /></span>
@@ -2290,6 +2309,15 @@ function StandaloneCalculators({ getIcon }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const { rate: marketRate } = useAverageMarketRate();
+  const rateDefaulted = useRef(false);
+  useEffect(() => {
+    if (rateDefaulted.current || marketRate == null) return;
+    rateDefaulted.current = true;
+    setRate((prev) => (prev === ''
+      ? formatNumberForInput(marketRate, { allowDecimals: true })
+      : prev));
+  }, [marketRate]);
 
   async function runCalcs() {
     const amount = parseFormattedNumber(loanAmount);
@@ -2357,8 +2385,8 @@ function StandaloneCalculators({ getIcon }) {
             <FormattedNumberInput value={loanAmount} onChange={setLoanAmount} placeholder="e.g. 500000" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text="Your annual interest rate. Check your current statement or the live rates in the Lenders tab." /></span>
-            <FormattedNumberInput value={rate} onChange={setRate} allowDecimals placeholder="e.g. 6.10" style={FIELD} />
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Interest rate (% p.a.)<FieldTip text="Defaults to the live average Australian owner-occupier variable rate from CDR lender data. Replace with your own rate when you know it." /></span>
+            <FormattedNumberInput value={rate} onChange={setRate} allowDecimals placeholder="Loading market average…" style={FIELD} />
           </label>
           <label className="block space-y-1.5">
             <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Loan term (years)<FieldTip text="The full repayment period. Typically 25 or 30 years. Shorter terms mean higher repayments but significantly less total interest paid." /></span>

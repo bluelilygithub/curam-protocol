@@ -25,13 +25,13 @@ Runs after each NYSE/NASDAQ quote poll (`runSharesPoll(['NYSE','NASDAQ'])`).
 
 **Content (raw data tables only — no commentary or news):**
 - **Shares:** portfolio summary (day % and $AUD change vs previous close; cash excluded) + per-holding table: Holding · Price · **% off Peak** · **% off Cost** · Day % · Day $AUD · Value · **Alert** — sorted by largest day mover
-- **Gold & minerals:** same column layout for physical metal lots from `metal_purchases` (description as holding name). Day % uses XAU/AUD spot vs prior-day snapshot (`metal_spot_snapshots`).
+- **Metals are not included** — gold spot is fetched once daily and reported only in the Portfolio Note (avoids burning the metalpriceapi free tier on hourly polls).
 
-**% off Peak / % off Cost:** `(current − reference) ÷ reference × 100`. Peak = rolling high-water mark since purchase, persisted in settings key `shares_high_water_marks` (updated every US poll; seeded from prior marks, snapshot peaks, and max buy price). Cost = average cost per share/oz.
+**% off Peak / % off Cost:** `(current − reference) ÷ reference × 100`. Peak = rolling high-water mark since purchase, persisted in settings key `shares_high_water_marks` (updated every US poll for shares; metals HWM updated with the daily note). Cost = average cost per share.
 
 **Alert column:** blank when clear; ⚠️ when within 1pp of either trigger (10% off peak · 4% off cost); 🔴 when either trigger is breached. Row background tinted to match flag.
 
-**Code:** `buildHourlyHtml()` / `sendDropAlertEmail()` in `sharesCron.js`; alert math in `portfolioAlerts.js`. Spot recorded each US poll via `metalsPortfolio.recordSpotSnapshot()`.
+**Code:** `buildHourlyHtml()` / `sendDropAlertEmail()` in `sharesCron.js`; alert math in `portfolioAlerts.js`.
 
 ---
 
@@ -71,7 +71,7 @@ Narrative sections:
 9. **INTERNAL CONSISTENCY CHECK** — baseline and currency contradictions
 10. **ONE-LINER**
 
-**Metals & minerals (when `metal_purchases` exist):** full parallel analyst block under `## METALS & MINERALS` with ### subsections (TOP LINE through ONE-LINER). Gold spot day % from `metal_spot_snapshots` baseline; per-lot movers/position check; `METALS` news tag in LLM inputs. Email header adds Gold (XAU/AUD) benchmark and metals day-move chip.
+**Metals & minerals (when `metal_purchases` exist):** full parallel analyst block under `## METALS & MINERALS` with ### subsections (TOP LINE through ONE-LINER). Gold spot is recorded once here via `metalsPortfolio.recordSpotSnapshot()` (not on the hourly poll); day % uses prior-day `metal_spot_snapshots` baseline; per-lot movers/position check; `METALS` news tag in LLM inputs. Email header adds Gold (XAU/AUD) benchmark and metals day-move chip. Metals HWM / alert rows refresh with this daily run.
 
 Observations and decision framing only — not buy/sell advice.
 

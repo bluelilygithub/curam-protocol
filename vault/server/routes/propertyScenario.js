@@ -9,7 +9,14 @@ const {
 const { runFromScenario } = require('../services/propertyScenario/runPipeline');
 const { buildPresentationPayload } = require('../services/propertyScenario/presentation');
 const { MOCK_LENDERS } = require('../services/propertyScenario/mockLenders');
-const { getLiveMortgageLenders, clearCdrCache } = require('../services/propertyScenario/cdr');
+const {
+  getLiveMortgageLenders,
+  clearCdrCache,
+  averageOwnerOccupiedVariableRate,
+} = require('../services/propertyScenario/cdr');
+
+/** Static fallback when CDR is unavailable — matches long-standing UI placeholder. */
+const FALLBACK_MARKET_RATE_PCT = 6.1;
 const { calculateRepayment } = require('../services/propertyScenario/calc/repayment');
 const { calculateExtraRepayments } = require('../services/propertyScenario/calc/extraRepayments');
 const { calculateOffsetBenefit } = require('../services/propertyScenario/calc/offset');
@@ -151,6 +158,44 @@ router.post('/clarify', async (req, res) => {
 });
 
 /**
+ * GET /api/property-scenario/market-rate
+ * Prevailing average owner-occupier variable rate from live CDR (cached),
+ * used to default Interest Rate / Target rate inputs. Falls back to 6.1% if CDR is down.
+ */
+router.get('/market-rate', async (req, res) => {
+  try {
+    const { live, error } = await loadLiveLenders(req);
+    const usingLive = Boolean(live?.ok && (live.lenders || []).length);
+    const lenders = usingLive ? live.lenders : MOCK_LENDERS;
+    const { rate_pct, sample_size } = averageOwnerOccupiedVariableRate(lenders);
+    const rate = rate_pct != null ? rate_pct : FALLBACK_MARKET_RATE_PCT;
+    return res.json({
+      ok: true,
+      rate_pct: rate,
+      sample_size: rate_pct != null ? sample_size : 0,
+      source: usingLive && rate_pct != null
+        ? 'cdr_prd_average'
+        : (rate_pct != null ? 'stub_average' : 'fallback'),
+      fetched_at: live?.fetched_at || null,
+      note: usingLive && rate_pct != null
+        ? `Average of ${sample_size} live owner-occupier variable CDR products.`
+        : (error
+          ? `CDR unavailable (${error}) — using ${rate}%.`
+          : `Using ${rate}% (${rate_pct != null ? 'stub average' : 'static fallback'}).`),
+    });
+  } catch (err) {
+    return res.json({
+      ok: true,
+      rate_pct: FALLBACK_MARKET_RATE_PCT,
+      sample_size: 0,
+      source: 'fallback',
+      fetched_at: null,
+      note: err.message || 'Failed to load market rate — using fallback.',
+    });
+  }
+});
+
+/**
  * GET /api/property-scenario/lenders
  * Query: live=1 (default) for CDR PRD; live=0 for stubs; refresh=1 bypass cache.
  */
@@ -199,6 +244,7 @@ router.get('/lenders', async (req, res) => {
     stub: false,
     source: 'cdr_prd',
     lenders: pack.lenders,
+    average_variable_rate_pct: averageOwnerOccupiedVariableRate(live.lenders).rate_pct,
     note: pack.data_note,
     coverage: live.coverage,
     fetched_at: live.fetched_at,

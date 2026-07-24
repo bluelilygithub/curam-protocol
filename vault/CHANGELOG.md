@@ -4,6 +4,21 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-24 (shares-metals-daily + market-rate-default)
+
+### Shares — metals on daily Portfolio Note only
+- **Hourly US-session email** no longer fetches gold spot or includes metals tables.
+- **Metals** spot snapshot + **METALS & MINERALS** reporting stay on the daily Portfolio Note (`generateObservation` / 7 AM cron).
+- **Docs:** `docs/shares-portfolio-note.md` updated.
+
+### Property Scenario — default interest rate from live CDR average
+- **Interest rate / Target interest rate** fields (calculators, lite qualify, proforma) now default to the prevailing average owner-occupier variable rate from CDR PRD, not a placeholder-only hint. Users can override.
+- **API:** `GET /api/property-scenario/market-rate` (`averageOwnerOccupiedVariableRate` in `cdr/mortgageService.js`); falls back to 6.1% if CDR is unavailable.
+- **Client:** `useAverageMarketRate` shared hook. Refinance *current* rate left empty (borrower’s own loan).
+- **Docs:** `docs/property-scenario.md` API table + UI note.
+
+---
+
 ## 2026-07-22 (product-scout-feature-brief-ui)
 
 ### Product Scout — feature brief UX

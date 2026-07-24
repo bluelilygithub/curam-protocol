@@ -3,7 +3,6 @@
 const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
-const metalsPortfolio = require('../services/metalsPortfolio');
 const marketData = require('../services/marketData');
 const {
   holdingKey,
@@ -187,11 +186,10 @@ function buildPortfolioSummaryTable(movement, label) {
   </table>`;
 }
 
-function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey }) {
+function buildHourlyHtml({ movement, threshold, testMode, positions, alertByKey }) {
   const pct = movement?.changePct;
   const now = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
   const hasShares = movement && (positions || []).length > 0;
-  const hasMetals = metalsMovement && (metalsPositions || []).length > 0;
   const alerts = alertByKey || {};
 
   return `
@@ -209,33 +207,28 @@ function buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovem
   ${hasShares ? buildPortfolioSummaryTable(movement, 'Shares') : ''}
   ${hasShares ? buildHoldingsTable(positions, 'Share holdings', { alertByKey: alerts }) : ''}
 
-  ${hasMetals ? buildPortfolioSummaryTable(metalsMovement, 'Gold & minerals') : ''}
-  ${hasMetals ? buildHoldingsTable(metalsPositions, 'Metal holdings', { nameKey: 'label', alertByKey: alerts }) : ''}
+  ${!hasShares ? '<p style="color:#888;">No priced holdings.</p>' : ''}
 
-  ${!hasShares && !hasMetals ? '<p style="color:#888;">No priced holdings.</p>' : ''}
-
-  <p style="margin-top:20px;font-size:11px;color:#aaa;">Observations only — not financial advice.</p>
+  <p style="margin-top:20px;font-size:11px;color:#aaa;">Observations only — not financial advice. Metals are reported in the daily Portfolio Note.</p>
 </div>`;
 }
 
-async function sendDropAlertEmail(to, { movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey }) {
+async function sendDropAlertEmail(to, { movement, threshold, testMode, positions, alertByKey }) {
   const sharePct = movement?.changePct;
-  const metalPct = metalsMovement?.changePct;
   const subject = testMode
-    ? `Portfolio update ${signedPct(sharePct ?? metalPct)} (test mode)`
+    ? `Portfolio update ${signedPct(sharePct)} (test mode)`
     : `Shares alert — portfolio down ${Math.abs(sharePct).toFixed(2)}% today`;
-  const html = buildHourlyHtml({ movement, threshold, testMode, positions, metalsMovement, metalsPositions, alertByKey });
+  const html = buildHourlyHtml({ movement, threshold, testMode, positions, alertByKey });
   await sendEmail({ to, subject, html });
 }
 
 // Runs after each US market poll. Emails admins when the daily drop reaches the
 // configured threshold; in test mode (threshold 0) it emails the movement every run.
+// Metals spot + reporting are daily-only (Portfolio Note) — not fetched here.
 async function checkDailyDropAlerts() {
   const threshold = await getDailyDropThresholdPct();
   const testMode = threshold <= 0;
   const tz = await getWorkspaceTimezone();
-
-  await metalsPortfolio.recordSpotSnapshot('XAU');
 
   let admins;
   try {
@@ -257,34 +250,25 @@ async function checkDailyDropAlerts() {
     try {
       const dashboard = await portfolio.buildDashboard(admin.id);
       const movement = computeDayMovement(dashboard);
-      const metalsDash = await metalsPortfolio.buildMetalsDashboard(admin.id, tz);
-      const metalsMovement = metalsDash.portfolioMove;
-      const metalsPositions = metalsDash.positions || [];
 
       const { alertByKey } = await refreshHighWaterMarksAndAlerts(admin.id, {
         sharePositions: dashboard.positions || [],
-        metalsPositions,
-        metalsSpotAud: metalsDash.spot?.audPerOz ?? null,
         asOfDate: today,
       });
 
-      if (!movement && !metalsMovement) continue;
+      if (!movement) continue;
 
-      const dropPct = movement ? -movement.changePct : 0;
-      if (!testMode && (!movement || dropPct < threshold)) continue;
+      const dropPct = -movement.changePct;
+      if (!testMode && dropPct < threshold) continue;
 
       await sendDropAlertEmail(admin.email, {
         movement,
         threshold,
         testMode,
         positions: dashboard.positions || [],
-        metalsMovement,
-        metalsPositions,
         alertByKey,
       });
-      const sharePct = movement ? movement.changePct.toFixed(2) : 'n/a';
-      const metalPct = metalsMovement ? metalsMovement.changePct.toFixed(2) : 'n/a';
-      console.log(`[shares-cron] drop-alert sent to ${admin.email} (shares ${sharePct}%, metals ${metalPct}%, threshold ${threshold}%)`);
+      console.log(`[shares-cron] drop-alert sent to ${admin.email} (shares ${movement.changePct.toFixed(2)}%, threshold ${threshold}%)`);
     } catch (err) {
       console.error(`[shares-cron] drop-alert user ${admin.id}:`, err.message);
     }

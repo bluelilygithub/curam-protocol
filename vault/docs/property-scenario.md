@@ -61,7 +61,8 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `GET` | `/demo` | Fixture compound sell→buy→switch + Stage 6 presentation (+ CDR when available) |
 | `POST` | `/parse` | `{ text, asOf? }` → `runFromText`; LLM failures → `{ ok:false, error:'parse_failed' }` (422) |
 | `POST` | `/clarify` | `{ scenario, answers?, selling_cost_pct?, … }` → re-validate → calculate when ready |
-| `GET` | `/lenders` | CDR PRD rows (`live=0` for stubs; `refresh=1` bypass cache) |
+| `GET` | `/lenders` | CDR PRD rows (`live=0` for stubs; `refresh=1` bypass cache); includes `average_variable_rate_pct` when live |
+| `GET` | `/market-rate` | Prevailing average OO variable rate for form defaults (`cdr_prd_average`, stub average, or 6.1% fallback) |
 | `POST` | `/cdr/refresh` | Clear CDR cache and refetch |
 | `POST` | `/insights` | `{ product\|product_id, question }` — cited document Q&A |
 | `POST` | `/insights/compare` | `{ products\|product_ids, question }` — multi-doc compare |
@@ -100,6 +101,8 @@ Homepage (Describe path) scenario cards:
 1. **Check my file** — Qualification proforma (featured) · Lite serviceability check  
 2. **Plan a transaction** — Refinance · Buy · Sell · Multiple events (NLP)  
 3. **Quick tools** — Standalone calculators  
+
+**Interest rate defaults:** Calculators, lite qualify, and proforma prefill **Interest rate / Target interest rate** from `GET /market-rate` (mean of live mainstream owner-occupier variable CDR products). Refinance **current** rate stays blank so the user enters their contract rate.
 
 Also:
 
