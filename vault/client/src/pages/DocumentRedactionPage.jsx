@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
-import useProcessingStore from '../store/processingStore';
+import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import useAuthStore from '../store/authStore';
+import useModels from '../hooks/useModels';
+import { getModelShortName } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import DocumentRedactionCompare from '../components/DocumentRedactionCompare';
 
@@ -66,7 +68,14 @@ export default function DocumentRedactionPage() {
   const navigate = useNavigate();
   const getIcon = useIcon();
   const isAdmin = useAuthStore((s) => s.user?.isAdmin);
-  const { startProcessing, stopProcessing } = useProcessingStore();
+  const processing = useProcessingStore();
+  const { documentRedactionLocalModel, documentRedactionFrontierModel } = useModels();
+  const candidateModelLabel = documentRedactionLocalModel
+    ? (getModelShortName(documentRedactionLocalModel) || documentRedactionLocalModel)
+    : 'not set in Settings';
+  const frontierModelLabel = documentRedactionFrontierModel
+    ? (getModelShortName(documentRedactionFrontierModel) || documentRedactionFrontierModel)
+    : 'not set in Settings';
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
 
   const [jobs, setJobs] = useState([]);
@@ -237,32 +246,53 @@ export default function DocumentRedactionPage() {
     setError('');
     const controller = new AbortController();
     applyAbortRef.current = controller;
-    startProcessing(
-      'Extracting redaction candidates…',
-      skipLlm ? 'Pattern-match only.' : 'Local model + pattern backstop. You can Cancel.',
-      {
-        onCancel: () => {
-          controller.abort();
-          setError('Propose cancelled');
-        },
-      },
-    );
+    const steps = skipLlm
+      ? [
+        'Uploading document',
+        'Normalizing to working .docx',
+        'Running pattern match',
+        'Merging candidates',
+      ]
+      : [
+        'Uploading document',
+        'Normalizing to working .docx',
+        'Running pattern match',
+        `Calling candidate model (${candidateModelLabel})`,
+        'Merging & scoring candidates',
+      ];
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('brief', brief.trim());
-      if (skipLlm) fd.append('skipLlm', '1');
-      const res = await api.postForm('/api/document-redaction/propose', fd, { signal: controller.signal });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Propose failed');
-      await loadJobList();
-      navigate(`/document-redaction/${data.job.id}`);
+      await runWithStepLog(
+        processing,
+        'Extracting redaction candidates…',
+        skipLlm
+          ? 'Pattern-match only — usually seconds. Cancel anytime.'
+          : `Using ${candidateModelLabel} from Settings · Cancel anytime.`,
+        steps,
+        async () => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('brief', brief.trim());
+          if (skipLlm) fd.append('skipLlm', '1');
+          const res = await api.postForm('/api/document-redaction/propose', fd, { signal: controller.signal });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Propose failed');
+          await loadJobList();
+          navigate(`/document-redaction/${data.job.id}`);
+          return data;
+        },
+        {
+          onCancel: () => {
+            controller.abort();
+            setError('Propose cancelled');
+          },
+          stepIntervalMs: skipLlm ? 700 : 3500,
+        },
+      );
     } catch (err) {
       if (err.name === 'AbortError') setError('Propose cancelled');
       else setError(err.message || 'Propose failed');
     } finally {
       applyAbortRef.current = null;
-      stopProcessing();
     }
   }
 
@@ -351,17 +381,28 @@ export default function DocumentRedactionPage() {
   async function requestMore() {
     if (!job) return;
     setError('');
-    startProcessing('Requesting more suggestions…', 'Re-running the local model with your approve/reject feedback.');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/resuggest`, {});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Resuggest failed');
-      setCandidates(data.candidates || []);
-      setSummary(data.summary || decisionSummaryLocal(data.candidates || []));
+      await runWithStepLog(
+        processing,
+        'Requesting more suggestions…',
+        `Using ${candidateModelLabel} with your approve/reject feedback.`,
+        [
+          'Packing HITL feedback',
+          `Calling candidate model (${candidateModelLabel})`,
+          'Merging new suggestions',
+        ],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/resuggest`, {});
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Resuggest failed');
+          setCandidates(data.candidates || []);
+          setSummary(data.summary || decisionSummaryLocal(data.candidates || []));
+          return data;
+        },
+        { stepIntervalMs: 3500 },
+      );
     } catch (err) {
       setError(err.message || 'Resuggest failed');
-    } finally {
-      stopProcessing();
     }
   }
 
@@ -370,19 +411,36 @@ export default function DocumentRedactionPage() {
     const pending = candidates.filter((c) => !c.decision || c.decision === 'pending');
     if (!pending.length) return;
     setError('');
-    startProcessing(`Approving ${pending.length} pending…`, 'Saving decisions.', {
-      onCancel: () => setError('Bulk approve interrupted — refresh if counts look wrong.'),
-    });
+    const total = pending.length;
     try {
-      for (const c of pending) {
-        // Sequential to avoid race on candidate file writes
-        // eslint-disable-next-line no-await-in-loop
-        await patch(c.id, { decision: 'approved' });
-      }
+      await runWithStepLog(
+        processing,
+        `Approving ${total} pending…`,
+        'Saving decisions one by one.',
+        [
+          `Approving batch (0 / ${total})`,
+          `Saving decisions…`,
+          'Refreshing summary',
+        ],
+        async () => {
+          let i = 0;
+          for (const c of pending) {
+            i += 1;
+            if (typeof processing.setActiveProcessingLabel === 'function') {
+              processing.setActiveProcessingLabel(`Approving ${i} / ${total}`);
+            }
+            // Sequential to avoid race on candidate file writes
+            // eslint-disable-next-line no-await-in-loop
+            await patch(c.id, { decision: 'approved' });
+          }
+        },
+        {
+          onCancel: () => setError('Bulk approve interrupted — refresh if counts look wrong.'),
+          stepIntervalMs: Math.max(600, Math.min(2000, Math.floor((total * 80) / 3))),
+        },
+      );
     } catch (err) {
       setError(err.message || 'Bulk approve failed');
-    } finally {
-      stopProcessing();
     }
   }
 
@@ -422,58 +480,81 @@ export default function DocumentRedactionPage() {
 
     const controller = new AbortController();
     applyAbortRef.current = controller;
-    startProcessing(
-      applyPass === 'frontier' ? 'Applying frontier suggestions…' : 'Applying redactions…',
-      `${style.label} · ${skipLlm ? 'fast heuristics' : 'local model'} · you can Cancel`,
-      {
-        onCancel: () => {
-          controller.abort();
-          setError('Apply cancelled');
-        },
-        steps: ['Building replacements', 'Writing redacted document', 'PDF export (if available)'],
-      },
-    );
+    const modelBit = skipLlm ? 'fast heuristics' : `model ${candidateModelLabel}`;
+    const steps = skipLlm
+      ? [
+        `Building ${style.label} replacements`,
+        'Writing redacted.docx',
+        'PDF export (if available)',
+      ]
+      : [
+        `Building ${style.label} replacements`,
+        `Synthetics via ${candidateModelLabel}`,
+        'Writing redacted.docx',
+        'PDF export (if available)',
+      ];
+    let trackedChangesError = null;
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/apply`, {
-        confirmApply: true,
-        applyPass,
-        acceptTrackedChanges: Boolean(opts.acceptTrackedChanges),
-        target: style.target,
-        skipLlm,
-      }, { signal: controller.signal });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (data.code === 'CANCELLED') {
-          setError('Apply cancelled');
-          return;
-        }
-        if (data.code === 'TRACKED_CHANGES') {
-          stopProcessing();
-          const proceed = window.confirm(
-            `${data.error}\n\nAccept all tracked changes and scrub them? This can change visible content.`,
-          );
-          if (proceed) {
-            return handleApply({
-              skipStyleModal: true,
-              skipConfirm: true,
-              acceptTrackedChanges: true,
-              applyPass,
-              styleId: style.id,
-              useModel: opts.useModel,
-            });
+      const data = await runWithStepLog(
+        processing,
+        applyPass === 'frontier' ? 'Applying frontier suggestions…' : 'Applying redactions…',
+        `${style.label} · ${modelBit} · Cancel anytime`,
+        steps,
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/apply`, {
+            confirmApply: true,
+            applyPass,
+            acceptTrackedChanges: Boolean(opts.acceptTrackedChanges),
+            target: style.target,
+            skipLlm,
+          }, { signal: controller.signal });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (body.code === 'CANCELLED') {
+              const err = new Error('Apply cancelled');
+              err.name = 'AbortError';
+              throw err;
+            }
+            if (body.code === 'TRACKED_CHANGES') {
+              trackedChangesError = body.error || 'Tracked changes blocked apply';
+              return null;
+            }
+            const detail = body.blocking?.length
+              ? ` Blocking: ${body.blocking.map((b) => b.entityText || b.id).join(', ')}`
+              : '';
+            throw new Error((body.error || 'Apply failed') + detail);
           }
-          setError(data.error || 'Tracked changes blocked apply');
-          return;
+          setApplyResult(body);
+          if (body.job) setJob((prev) => ({ ...prev, ...body.job }));
+          setViewMode('compare');
+          await loadCompare(job.id);
+          return body;
+        },
+        {
+          onCancel: () => {
+            controller.abort();
+            setError('Apply cancelled');
+          },
+          stepIntervalMs: skipLlm ? 900 : 3200,
+        },
+      );
+      if (trackedChangesError) {
+        const proceed = window.confirm(
+          `${trackedChangesError}\n\nAccept all tracked changes and scrub them? This can change visible content.`,
+        );
+        if (proceed) {
+          return handleApply({
+            skipStyleModal: true,
+            skipConfirm: true,
+            acceptTrackedChanges: true,
+            applyPass,
+            styleId: style.id,
+            useModel: opts.useModel,
+          });
         }
-        const detail = data.blocking?.length
-          ? ` Blocking: ${data.blocking.map((b) => b.entityText || b.id).join(', ')}`
-          : '';
-        throw new Error((data.error || 'Apply failed') + detail);
+        setError(trackedChangesError);
+        return data;
       }
-      setApplyResult(data);
-      if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
-      setViewMode('compare');
-      await loadCompare(job.id);
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('Apply cancelled');
@@ -482,7 +563,6 @@ export default function DocumentRedactionPage() {
       }
     } finally {
       applyAbortRef.current = null;
-      stopProcessing();
     }
   }
 
@@ -521,83 +601,119 @@ export default function DocumentRedactionPage() {
   async function handleCoherence() {
     if (!job) return;
     setError('');
-    startProcessing('Running coherence check…', 'Local model only — no frontier calls.');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/coherence`, {});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Coherence check failed');
-      setCoherence(data.coherence);
+      await runWithStepLog(
+        processing,
+        'Running coherence check…',
+        `Candidate model ${candidateModelLabel} — no frontier calls.`,
+        [
+          'Loading redacted text',
+          `Calling ${candidateModelLabel}`,
+          'Scoring coherence',
+        ],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/coherence`, {});
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Coherence check failed');
+          setCoherence(data.coherence);
+          return data;
+        },
+        { stepIntervalMs: 2800 },
+      );
     } catch (err) {
       setError(err.message || 'Coherence check failed');
-    } finally {
-      stopProcessing();
     }
   }
 
   async function handleRetryPdf() {
     if (!job) return;
     setError('');
-    startProcessing('Retrying PDF conversion…', 'LibreOffice convert of redacted.docx only.');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/retry-pdf`, {});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'PDF conversion failed');
-      if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
-      await loadCompare(job.id);
+      await runWithStepLog(
+        processing,
+        'Retrying PDF conversion…',
+        'LibreOffice convert of redacted.docx only.',
+        ['Queuing conversion', 'Running LibreOffice', 'Verifying sanitized.pdf'],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/retry-pdf`, {});
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'PDF conversion failed');
+          if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
+          await loadCompare(job.id);
+          return data;
+        },
+        { stepIntervalMs: 2000 },
+      );
     } catch (err) {
       setError(err.message || 'PDF conversion failed');
-    } finally {
-      stopProcessing();
     }
   }
 
   async function handleFixLeftovers() {
     if (!job) return;
     setError('');
-    startProcessing('Fixing leftovers…', 'Patching redacted.docx from the entity map (no frontier calls).');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/fix-leftovers`, {});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Fix leftovers failed');
-      if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
-      if (data.compare) setCompare(data.compare);
-      else await loadCompare(job.id);
+      await runWithStepLog(
+        processing,
+        'Fixing leftovers…',
+        'Patching redacted.docx from the entity map (no frontier calls).',
+        ['Scanning for leftovers', 'Patching redacted.docx', 'Re-checking'],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/fix-leftovers`, {});
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Fix leftovers failed');
+          if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
+          if (data.compare) setCompare(data.compare);
+          else await loadCompare(job.id);
+          return data;
+        },
+        { stepIntervalMs: 1200 },
+      );
     } catch (err) {
       setError(err.message || 'Fix leftovers failed');
-    } finally {
-      stopProcessing();
     }
   }
 
   async function handleFrontierAnalyze() {
     if (!job) return;
     setError('');
-    startProcessing('Running frontier analysis…', 'Sanitized PDF only — entity map stays local.');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/frontier-analyze`, {
-        instructions: frontierInstructions,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (data.code === 'ENTITY_LEAK_IN_PAYLOAD') {
-          throw new Error(data.error || 'Entity leak blocked the frontier call');
-        }
-        throw new Error(data.error || 'Frontier analysis failed');
-      }
-      setFrontierAnalysis({
-        analysis: data.analysis,
-        ranAt: data.frontier?.ranAt,
-        modelId: data.frontier?.modelId,
-        suggestionCount: data.suggestionCount,
-        parseError: data.frontier?.parseError,
-      });
-      if (data.candidates) setCandidates(data.candidates);
-      if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
-      setSummary(decisionSummaryLocal(data.candidates || candidates));
+      await runWithStepLog(
+        processing,
+        'Running frontier analysis…',
+        `Residual-risk model ${frontierModelLabel} · sanitized PDF only.`,
+        [
+          'Verifying sanitized PDF',
+          `Calling frontier model (${frontierModelLabel})`,
+          'Parsing residual-risk suggestions',
+        ],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/frontier-analyze`, {
+            instructions: frontierInstructions,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (data.code === 'ENTITY_LEAK_IN_PAYLOAD') {
+              throw new Error(data.error || 'Entity leak blocked the frontier call');
+            }
+            throw new Error(data.error || 'Frontier analysis failed');
+          }
+          setFrontierAnalysis({
+            analysis: data.analysis,
+            ranAt: data.frontier?.ranAt,
+            modelId: data.frontier?.modelId,
+            suggestionCount: data.suggestionCount,
+            parseError: data.frontier?.parseError,
+          });
+          if (data.candidates) setCandidates(data.candidates);
+          if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
+          setSummary(decisionSummaryLocal(data.candidates || candidates));
+          return data;
+        },
+        { stepIntervalMs: 4000 },
+      );
     } catch (err) {
       setError(err.message || 'Frontier analysis failed');
-    } finally {
-      stopProcessing();
     }
   }
 
@@ -631,19 +747,26 @@ export default function DocumentRedactionPage() {
       return;
     }
     setError('');
-    startProcessing('Finalizing document…', 'Writing INTERNAL-ONLY audit trail and marking the job complete.');
     try {
-      const res = await api.post(`/api/document-redaction/jobs/${job.id}/approve-final`, { confirm: true });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || 'Final approval failed');
-      }
-      if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
-      await loadCompare(job.id);
+      await runWithStepLog(
+        processing,
+        'Finalizing document…',
+        'Writing INTERNAL-ONLY audit trail and marking the job complete.',
+        ['Writing audit trail', 'Packaging exports', 'Marking job complete'],
+        async () => {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/approve-final`, { confirm: true });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.error || 'Final approval failed');
+          }
+          if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
+          await loadCompare(job.id);
+          return data;
+        },
+        { stepIntervalMs: 900 },
+      );
     } catch (err) {
       setError(err.message || 'Final approval failed');
-    } finally {
-      stopProcessing();
     }
   }
 
@@ -747,11 +870,13 @@ export default function DocumentRedactionPage() {
                 <span>
                   <strong style={{ color: 'var(--color-text)' }}>Fast extract (pattern-match only)</strong>
                   {' '}— figures, %, emails, phones. Usually seconds.
-                  Uncheck to also run the local AI model (can take several minutes on denser docs).
+                  Uncheck to also run the candidate model from Settings (can take several minutes).
                 </span>
               </label>
               <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                Redaction <em>style</em> (Blackout / Realistic / …) is chosen on the next screen while you review candidates — not during extract.
+                Candidate / apply model: <strong style={{ color: 'var(--color-text)' }}>{candidateModelLabel}</strong>
+                {isAdmin ? ' (change in Settings → AI & Chat → Document redaction agent).' : '.'}
+                {' '}Style (Blackout / Realistic / …) is chosen on the next screen while you review candidates.
               </p>
             </div>
             <button

@@ -1544,8 +1544,9 @@ function SettingsPage() {
               Document redaction agent
             </label>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Pick any models from your inventory for the candidate pass and the residual-risk pass.
-              For demos, both can be the same lighter model.
+              Pick any models from your inventory. <strong style={{ color: 'var(--color-text)' }}>Candidate / apply</strong> runs extract,
+              resuggest, coherence, and Realistic synthetics — DeepSeek (or any connected model) is fine here and explains long waits if Fast extract is off.
+              <strong style={{ color: 'var(--color-text)' }}> Residual-risk / frontier</strong> only sees the sanitized PDF after local apply.
             </p>
           </div>
 

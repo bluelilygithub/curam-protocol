@@ -38,6 +38,17 @@ const useProcessingStore = create((set, get) => ({
     });
   },
 
+  updateProcessingDetail: (detail) => set({ detail }),
+
+  setActiveProcessingLabel: (label) => {
+    if (!label) return;
+    const { steps } = get();
+    if (!steps.length) return;
+    set({
+      steps: steps.map((s) => (s.status === 'active' ? { ...s, label } : s)),
+    });
+  },
+
   setProcessingSteps: (labelsOrSteps) => {
     if (!Array.isArray(labelsOrSteps)) return;
     const steps = labelsOrSteps.map((item, i) => {
@@ -115,54 +126,96 @@ const useProcessingStore = create((set, get) => ({
 
 export default useProcessingStore;
 
+function formatElapsed(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 /**
  * Run an async job while showing a rolling step log in ProcessingModal.
  * Advances through `stepLabels` on a timer while `asyncFn` runs; finishes
- * remaining steps when the promise settles.
+ * remaining steps when the promise settles. Updates elapsed time so long
+ * model calls still feel alive.
  *
  * @param {object} store — return value of useProcessingStore.getState() or hook
  * @param {string} title
  * @param {string|null} detail
  * @param {string[]} stepLabels
  * @param {() => Promise<T>} asyncFn
+ * @param {{ onCancel?: () => void, stepIntervalMs?: number, heartbeatMs?: number }} [opts]
  * @returns {Promise<T>}
  */
-export async function runWithStepLog(store, title, detail, stepLabels, asyncFn) {
+export async function runWithStepLog(store, title, detail, stepLabels, asyncFn, opts = {}) {
   const labels = (stepLabels || []).filter(Boolean);
-  store.startProcessing(title, detail, { steps: labels });
+  const baseLabels = [...labels];
+  store.startProcessing(title, detail, {
+    steps: labels,
+    onCancel: opts.onCancel,
+  });
 
   let advanceTimer = null;
+  let heartbeatTimer = null;
   let stepIndex = 0;
+  const startedAt = Date.now();
+  const stepInterval = opts.stepIntervalMs
+    ?? (labels.length > 1
+      ? Math.max(800, Math.min(4500, Math.floor(12000 / labels.length)))
+      : 0);
 
-  const clearAdvance = () => {
+  const clearTimers = () => {
     if (advanceTimer != null) {
       clearInterval(advanceTimer);
       advanceTimer = null;
     }
+    if (heartbeatTimer != null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
   };
 
-  if (labels.length > 1) {
+  const tickHeartbeat = () => {
+    const elapsed = formatElapsed(Date.now() - startedAt);
+    const activeIdx = Math.min(stepIndex, Math.max(0, baseLabels.length - 1));
+    const base = baseLabels[activeIdx] || title;
+    if (typeof store.setActiveProcessingLabel === 'function') {
+      store.setActiveProcessingLabel(`${base} · ${elapsed}`);
+    }
+    if (typeof store.updateProcessingDetail === 'function') {
+      const suffix = detail ? `${detail} · ` : '';
+      store.updateProcessingDetail(`${suffix}Elapsed ${elapsed} — still working`);
+    }
+  };
+
+  if (labels.length > 1 && stepInterval > 0) {
     advanceTimer = setInterval(() => {
-      stepIndex += 1;
-      if (stepIndex >= labels.length) {
-        clearAdvance();
+      if (stepIndex >= labels.length - 1) {
+        if (advanceTimer != null) {
+          clearInterval(advanceTimer);
+          advanceTimer = null;
+        }
         return;
       }
-      store.advanceProcessingStep();
-    }, Math.max(450, Math.min(900, Math.floor(2800 / labels.length))));
+      stepIndex += 1;
+      store.advanceProcessingStep(baseLabels[stepIndex]);
+    }, stepInterval);
   }
+
+  heartbeatTimer = setInterval(tickHeartbeat, opts.heartbeatMs || 1000);
+  tickHeartbeat();
 
   try {
     const result = await asyncFn();
-    clearAdvance();
+    clearTimers();
     store.completeAllProcessingSteps();
     await new Promise((r) => setTimeout(r, 280));
     return result;
   } catch (err) {
-    clearAdvance();
+    clearTimers();
     throw err;
   } finally {
-    clearAdvance();
+    clearTimers();
     store.stopProcessing();
   }
 }
