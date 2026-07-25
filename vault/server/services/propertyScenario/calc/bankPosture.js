@@ -388,6 +388,68 @@ function documentsForBank(bank, employmentType) {
   return [...base, ...extra];
 }
 
+const FIT_TIER_FLOORS = { strong: 70, fair: 45, weak: 25, unsuitable: 0 };
+const FIT_NEXT_DOWN = { strong: 'fair', fair: 'weak', weak: 'unsuitable' };
+
+/**
+ * Margin to the next tier down + concrete loan-headroom cues (indicative only).
+ */
+function describeFitSensitivity({
+  fit,
+  score,
+  loanRequested,
+  strictCapacity,
+  bankCap,
+  strictUtil,
+}) {
+  const floor = FIT_TIER_FLOORS[fit] ?? 0;
+  const margin = Math.max(0, Math.round(Number(score) || 0) - floor);
+  const next = FIT_NEXT_DOWN[fit] || null;
+  const parts = [];
+
+  if (next) {
+    parts.push(
+      `${String(fit).toUpperCase()} by ${margin} pts (score ${Math.round(score)}). `
+      + `Drops to ${next.toUpperCase()} if the score falls below ${floor}.`,
+    );
+  } else {
+    parts.push(`Score ${Math.round(score)} at the lowest curated tier.`);
+  }
+
+  if (bankCap != null && loanRequested > 0 && fit === 'strong') {
+    const loanAt60 = Math.round(bankCap * 0.6);
+    const loanAt90 = Math.round(bankCap * 0.9);
+    if (loanRequested < loanAt60) {
+      parts.push(
+        `Bank-capacity utilisation bonuses thin once the loan approaches ~$${loanAt60.toLocaleString('en-AU')} `
+        + `(~60% of this bank's capacity); near ~$${loanAt90.toLocaleString('en-AU')} the buffer looks thin.`,
+      );
+    } else if (loanRequested < loanAt90) {
+      parts.push(
+        `Approaching a thin buffer near ~$${loanAt90.toLocaleString('en-AU')} (~90% of this bank's capacity).`,
+      );
+    }
+  }
+
+  if (strictCapacity > 0 && loanRequested > 0 && strictUtil != null && strictUtil <= 0.5 && fit === 'strong') {
+    const loanAt50 = Math.round(strictCapacity * 0.5);
+    const loanAt70 = Math.round(strictCapacity * 0.7);
+    parts.push(
+      `Strict headroom bonus shrinks if the loan rises past ~$${loanAt50.toLocaleString('en-AU')} `
+      + `(50% of strict capacity) and further past ~$${loanAt70.toLocaleString('en-AU')}.`,
+    );
+  }
+
+  parts.push('LVR above 80%, DTI above 4x, adverse credit, short tenure, or density flags also cut the score.');
+
+  return {
+    margin_pts: margin,
+    tier_floor: floor,
+    next_tier_down: next,
+    note: parts.join(' '),
+  };
+}
+
 /**
  * Score how a bank's curated posture fits this applicant file.
  * Attaches per-bank indicative capacity from estimateBankCapacity().
@@ -435,6 +497,14 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
         postureSummary: bank.postureSummary,
         fit: 'unsuitable',
         score: 0,
+        fit_sensitivity: describeFitSensitivity({
+          fit: 'unsuitable',
+          score: 0,
+          loanRequested,
+          strictCapacity,
+          bankCap: capacity?.indicative_capacity != null ? Number(capacity.indicative_capacity) : null,
+          strictUtil,
+        }),
         reasons: ['Up currently offers owner-occupier P&I only — investment is out of scope.'],
         capacity,
         documents: documentsForBank(bank, employmentType),
@@ -660,6 +730,15 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       reasons.push(capacity?.narrative || 'No strong positive or negative posture flags — treat as a mainstream shop.');
     }
 
+    const fitSensitivity = describeFitSensitivity({
+      fit,
+      score,
+      loanRequested,
+      strictCapacity,
+      bankCap,
+      strictUtil,
+    });
+
     return {
       id: bank.id,
       name: bank.name,
@@ -668,6 +747,7 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       postureSummary: bank.postureSummary,
       fit,
       score,
+      fit_sensitivity: fitSensitivity,
       reasons,
       capacity,
       documents: documentsForBank(bank, employmentType),
@@ -707,7 +787,12 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
     fit_vs_overall_note:
       'Overall PASS/FAIL is the strict lending-check verdict (serviceability, LVR, DTI, employment, etc.). '
       + 'Fit is a separate relative score of how each bank\'s curated posture and indicative capacity align with this file. '
-      + 'A PASS file can still show Fair Fit when headroom is thin or a bank is a weaker policy match; Strong Fit is not an approval.',
+      + 'A PASS file can still show Fair Fit when headroom is thin or a bank is a weaker policy match; Strong Fit is not an approval. '
+      + 'Each bank shows its numeric score so you can see distance to the next tier (e.g. 98 vs 71).',
+    overtime_shade_note:
+      'OT shade = the % of declared overtime/bonus/commission credited into assessable income for that bank\'s indicative capacity. '
+      + '0% means none declared, or treated as irregular/not credited under that bank\'s curated stance; higher % (e.g. a generous bank on evidenced history) counts more of your OT. '
+      + 'Driven by each bank\'s overtimeCrediting knob through the same surplus engine — not a published lender quote.',
     capacity_note: minCap != null && maxCap != null && maxCap !== minCap
       ? `Indicative capacity across this panel ranges from ~$${minCap.toLocaleString('en-AU')} to ~$${maxCap.toLocaleString('en-AU')} depending on each bank's overtime, rental, and expense stance — same engine, different knobs. Not a quote or approval.`
       : 'Indicative capacity uses each bank\'s curated overtime/rental/HEM stance through the same surplus engine. Not a quote or approval.',
@@ -751,6 +836,7 @@ function buildMergedBankPanel(bankPosture, lenderFit) {
     }),
     fit_legend: bankPosture?.fit_legend || null,
     fit_vs_overall_note: bankPosture?.fit_vs_overall_note || null,
+    overtime_shade_note: bankPosture?.overtime_shade_note || null,
     capacity_note: bankPosture?.capacity_note || null,
     note: bankPosture?.note || null,
     has_live_rates: products.length > 0,
@@ -763,4 +849,6 @@ module.exports = {
   estimateBankCapacity,
   buildMergedBankPanel,
   overtimeShadeForBank,
+  describeFitSensitivity,
+  FIT_TIER_FLOORS,
 };

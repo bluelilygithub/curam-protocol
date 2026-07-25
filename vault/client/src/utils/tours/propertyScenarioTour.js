@@ -127,7 +127,7 @@ export function startPropertyScenarioTour(navigate) {
   tour.addStep({
     id: 'ps-lender-guidance',
     title: 'How Each Bank May See This File',
-    text: "The bank panel ranks CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and BOQ with Fit (strong/fair/weak/unsuitable), indicative capacity, and reasons. Fit is scored from capacity headroom, LVR/DTI, and each bank\'s curated knobs — separate from the overall PASS/FAIL verdict. Clean PAYG files still differentiate on FHBG, offset-on-fixed, cashback, and turnaround. Expand \"Documents they\'d typically ask for\" per bank. Curated policy knobs plus CDR rates — not an underwriting system.",
+    text: "The bank panel ranks CommBank, Westpac, ANZ, NAB, ING, Macquarie, UBank, Up, and BOQ with Fit tier + numeric score, indicative capacity, OT shade (% of overtime credited), and a short sensitivity note (margin to the next tier). Fit is scored from capacity headroom, LVR/DTI, and each bank\'s curated knobs — separate from the overall PASS/FAIL verdict. Expand \"Documents they\'d typically ask for\" per bank. Curated policy knobs plus CDR rates — not an underwriting system.",
     when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });

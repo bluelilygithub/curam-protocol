@@ -2301,7 +2301,12 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                 <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
                   Fit tiers: {(proforma.bankPanel?.fit_legend || proforma.bankPosture.fit_legend).map((t) => (
                     `${String(t.tier).toUpperCase()} (${t.score_min}+)`
-                  )).join(' · ')}. Stronger Fit is not an approval.
+                  )).join(' · ')}. Numeric score shown per bank. Stronger Fit is not an approval.
+                </p>
+              )}
+              {(proforma.bankPanel?.overtime_shade_note || proforma.bankPosture?.overtime_shade_note) && (
+                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  {proforma.bankPanel?.overtime_shade_note || proforma.bankPosture?.overtime_shade_note}
                 </p>
               )}
               <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
@@ -2319,10 +2324,17 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
                         </div>
                         <div className="shrink-0 text-right space-y-0.5">
-                          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: fitColor }}>{b.fit}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: fitColor }}>
+                            {b.fit}{b.score != null ? ` · ${Math.round(b.score)}` : ''}
+                          </p>
                           {cap != null && (
                             <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                               ~${Number(cap).toLocaleString('en-AU')}
+                            </p>
+                          )}
+                          {b.capacity?.overtime_shade_pct != null && (
+                            <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                              OT shade {b.capacity.overtime_shade_pct}%
                             </p>
                           )}
                           {b.live_rate != null && (
@@ -2332,6 +2344,9 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                           )}
                         </div>
                       </div>
+                      {b.fit_sensitivity?.note && (
+                        <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.fit_sensitivity.note}</p>
+                      )}
                       {b.capacity?.narrative && (
                         <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-primary)' }}>{b.capacity.narrative}</p>
                       )}

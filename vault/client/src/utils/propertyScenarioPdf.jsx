@@ -1050,27 +1050,36 @@ function QualificationProformaDocument({ proforma, inputs }) {
                   : ''}
               </Text>
             )}
+            {bankPanel?.overtime_shade_note && (
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+                {pdfSafeText(bankPanel.overtime_shade_note)}
+              </Text>
+            )}
             <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#d1d5db', paddingBottom: 3, marginBottom: 2 }}>
-              <Text style={{ width: '28%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Bank</Text>
-              <Text style={{ width: '14%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Fit</Text>
-              <Text style={{ width: '22%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Capacity</Text>
-              <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Live rate</Text>
-              <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>OT shade</Text>
+              <Text style={{ width: '22%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Bank</Text>
+              <Text style={{ width: '16%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Fit</Text>
+              <Text style={{ width: '10%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Score</Text>
+              <Text style={{ width: '20%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Capacity</Text>
+              <Text style={{ width: '16%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Live rate</Text>
+              <Text style={{ width: '16%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>OT shade</Text>
             </View>
             {banks.map((b) => (
               <View key={b.id} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                <Text style={{ width: '28%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{pdfSafeText(b.shortName || b.name)}</Text>
+                <Text style={{ width: '22%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{pdfSafeText(b.shortName || b.name)}</Text>
                 <Text style={{
-                  width: '14%', fontSize: 8, fontFamily: 'Helvetica-Bold',
+                  width: '16%', fontSize: 8, fontFamily: 'Helvetica-Bold',
                   color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
                 }}>{(b.fit || '').toUpperCase()}</Text>
-                <Text style={{ width: '22%', fontSize: 8, color: '#111827' }}>
+                <Text style={{ width: '10%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+                  {b.score != null ? String(Math.round(b.score)) : '-'}
+                </Text>
+                <Text style={{ width: '20%', fontSize: 8, color: '#111827' }}>
                   {b.capacity?.indicative_capacity != null ? fmtMoney(b.capacity.indicative_capacity) : '-'}
                 </Text>
-                <Text style={{ width: '18%', fontSize: 8, color: '#111827' }}>
+                <Text style={{ width: '16%', fontSize: 8, color: '#111827' }}>
                   {b.live_rate != null ? `${Number(b.live_rate).toFixed(2)}%` : '-'}
                 </Text>
-                <Text style={{ width: '18%', fontSize: 8, color: MUTED }}>
+                <Text style={{ width: '16%', fontSize: 8, color: MUTED }}>
                   {b.capacity?.overtime_shade_pct != null ? `${b.capacity.overtime_shade_pct}%` : '-'}
                 </Text>
               </View>
@@ -1119,10 +1128,14 @@ function QualificationProformaDocument({ proforma, inputs }) {
         {leversDelta && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Capacity if you structure the file</Text>
-            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 4, lineHeight: 1.4 }}>{leversDelta.note}</Text>
+            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 4, lineHeight: 1.4 }}>{pdfSafeText(leversDelta.note)}</Text>
             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
-              Strict {fmtMoney(leversDelta.base_capacity)}
-              {leversDelta.stacked_uplift > 0 ? ` → with levers ~${fmtMoney(leversDelta.optimistic_capacity)}` : ''}
+              {pdfSafeText(
+                `Strict ${fmtMoney(leversDelta.base_capacity)}`
+                + (leversDelta.stacked_uplift > 0
+                  ? ` -> with levers ~${fmtMoney(leversDelta.optimistic_capacity)}`
+                  : ''),
+              )}
             </Text>
           </View>
         )}
@@ -1165,8 +1178,13 @@ function QualificationProformaDocument({ proforma, inputs }) {
               {pdfSafeText(bankPanel?.note || 'Curated posture knobs drive indicative capacity. Not a credit decision.')}
             </Text>
             {bankPanel?.fit_vs_overall_note && (
-              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 8, lineHeight: 1.35 }}>
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
                 {pdfSafeText(bankPanel.fit_vs_overall_note)}
+              </Text>
+            )}
+            {bankPanel?.overtime_shade_note && (
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 8, lineHeight: 1.35 }}>
+                {pdfSafeText(bankPanel.overtime_shade_note)}
               </Text>
             )}
             {banks.map((b) => (
@@ -1178,10 +1196,16 @@ function QualificationProformaDocument({ proforma, inputs }) {
                     color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
                   }}>
                     {(b.fit || '').toUpperCase()}
+                    {b.score != null ? ` ${Math.round(b.score)}` : ''}
                     {b.capacity?.indicative_capacity != null ? ` · ${fmtMoney(b.capacity.indicative_capacity)}` : ''}
                     {b.live_rate != null ? ` · ${Number(b.live_rate).toFixed(2)}%` : ''}
                   </Text>
                 </View>
+                {b.fit_sensitivity?.note && (
+                  <Text style={{ fontSize: 7.5, color: '#6b7280', marginBottom: 2, lineHeight: 1.35 }}>
+                    {pdfSafeText(b.fit_sensitivity.note)}
+                  </Text>
+                )}
                 {b.capacity?.narrative && (
                   <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2, lineHeight: 1.35 }}>
                     {pdfSafeText(b.capacity.narrative)}
