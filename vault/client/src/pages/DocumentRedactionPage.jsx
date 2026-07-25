@@ -72,7 +72,7 @@ export default function DocumentRedactionPage() {
   const [jobs, setJobs] = useState([]);
   const [brief, setBrief] = useState('');
   const [file, setFile] = useState(null);
-  const [skipLlm, setSkipLlm] = useState(false);
+  const [skipLlm, setSkipLlm] = useState(true); // fast default — LLM can take minutes
   const [error, setError] = useState('');
   const [loadingJob, setLoadingJob] = useState(false);
   const [job, setJob] = useState(null);
@@ -365,6 +365,27 @@ export default function DocumentRedactionPage() {
     }
   }
 
+  async function approveAllPending() {
+    if (!job) return;
+    const pending = candidates.filter((c) => !c.decision || c.decision === 'pending');
+    if (!pending.length) return;
+    setError('');
+    startProcessing(`Approving ${pending.length} pending…`, 'Saving decisions.', {
+      onCancel: () => setError('Bulk approve interrupted — refresh if counts look wrong.'),
+    });
+    try {
+      for (const c of pending) {
+        // Sequential to avoid race on candidate file writes
+        // eslint-disable-next-line no-await-in-loop
+        await patch(c.id, { decision: 'approved' });
+      }
+    } catch (err) {
+      setError(err.message || 'Bulk approve failed');
+    } finally {
+      stopProcessing();
+    }
+  }
+
   async function handleApply(opts = {}) {
     if (!job) return;
     const applyPass = opts.applyPass === 'frontier' ? 'frontier' : 'local';
@@ -373,22 +394,20 @@ export default function DocumentRedactionPage() {
       : candidates.filter((c) => c.source !== 'frontier_suggested' && c.sourceLabel !== 'frontier');
     const pendingHigh = scoped.filter((c) => (!c.decision || c.decision === 'pending') && Number(c.score || 0) >= 0.5);
     const approvedCount = scoped.filter((c) => c.decision === 'approved' || c.decision === 'edited').length;
-    if (pendingHigh.length) {
-      setError(`${pendingHigh.length} high-score pending ${applyPass === 'frontier' ? 'frontier ' : ''}candidate(s) — approve or reject them before applying.`);
+    if (pendingHigh.length && !opts.skipPendingCheck) {
+      setError(`${pendingHigh.length} high-score pending still need Approve/Reject. Use “Approve all pending” or decide each one, then Apply.`);
       return;
     }
     if (approvedCount < 1) {
       setError(applyPass === 'frontier'
         ? 'Approve at least one frontier suggestion before applying.'
-        : 'Approve at least one candidate before applying.');
+        : 'Approve at least one candidate first (or “Approve all pending”), then Apply — you’ll confirm style & preview there.');
       return;
     }
 
-    // Open style + preview modal unless already confirmed from the modal
+    // Open confirm modal with preview (style already chosen in toolbar)
     if (!opts.skipStyleModal) {
       setApplyModal({ applyPass, approvedCount });
-      setApplyStyleId('Blackout');
-      setApplyUseModel(false);
       setStylePreview(null);
       setStylePreviewError('');
       return;
@@ -716,10 +735,25 @@ export default function DocumentRedactionPage() {
                 style={FIELD}
               />
             </div>
-            <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-              <input type="checkbox" checked={skipLlm} onChange={(e) => setSkipLlm(e.target.checked)} />
-              Pattern-match only (skip local LLM — debug)
-            </label>
+            <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Extract speed</p>
+              <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={skipLlm}
+                  onChange={(e) => setSkipLlm(e.target.checked)}
+                />
+                <span>
+                  <strong style={{ color: 'var(--color-text)' }}>Fast extract (pattern-match only)</strong>
+                  {' '}— figures, %, emails, phones. Usually seconds.
+                  Uncheck to also run the local AI model (can take several minutes on denser docs).
+                </span>
+              </label>
+              <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                Redaction <em>style</em> (Blackout / Realistic / …) is chosen on the next screen while you review candidates — not during extract.
+              </p>
+            </div>
             <button
               type="submit"
               className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity duration-200 hover:opacity-80"
@@ -905,6 +939,16 @@ export default function DocumentRedactionPage() {
                     {getIcon('refresh-cw', { size: 12 })}
                     Request more suggestions
                   </button>
+                  {summary.pending > 0 && (
+                    <button
+                      type="button"
+                      onClick={approveAllPending}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      Approve all pending ({summary.pending})
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleApply}
@@ -924,6 +968,35 @@ export default function DocumentRedactionPage() {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2"
+                style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }}
+              >
+                <label className="text-xs font-semibold" style={{ color: 'var(--color-text)' }} htmlFor="redaction-style-toolbar">
+                  Redaction style
+                </label>
+                <select
+                  id="redaction-style-toolbar"
+                  value={applyStyleId}
+                  onChange={(e) => setApplyStyleId(e.target.value)}
+                  className="px-2 py-1 rounded-lg border text-xs outline-none"
+                  style={FIELD}
+                >
+                  {STYLE_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+                <span className="text-[11px] flex-1 min-w-[12rem]" style={{ color: 'var(--color-muted)' }}>
+                  {STYLE_OPTIONS.find((s) => s.id === applyStyleId)?.hint}
+                </span>
+                {(applyStyleId === 'Realistic' || applyStyleId === 'Realistic + arithmetic') && (
+                  <label className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    <input type="checkbox" checked={applyUseModel} onChange={(e) => setApplyUseModel(e.target.checked)} />
+                    Use local model (slower)
+                  </label>
+                )}
               </div>
               {(applyResult || job?.redactedLocalDocx) && (
                 <div
@@ -1081,10 +1154,10 @@ export default function DocumentRedactionPage() {
           >
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-                Choose redaction style
+                Confirm apply — {applyStyleId}
               </h2>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Preview a sample paragraph, then apply {applyModal.approvedCount} approved
+                Style is set in the toolbar above. Preview a sample, then apply {applyModal.approvedCount} approved
                 {applyModal.applyPass === 'frontier' ? ' frontier' : ''} redaction(s).
               </p>
             </div>
