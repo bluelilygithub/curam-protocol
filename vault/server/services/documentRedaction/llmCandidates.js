@@ -8,6 +8,7 @@
 const crypto = require('crypto');
 const { callModel } = require('../callModel');
 const { findOccurrences, locateInParagraph } = require('./docxParse');
+const { normalizeCategoryLabel } = require('./categories');
 
 const SYSTEM = `You are a document redaction analyst running on a local machine.
 Given document excerpts and the user's redaction brief, propose redaction candidates.
@@ -16,19 +17,20 @@ Return ONLY valid JSON (no markdown fences) with this shape:
   "candidates": [
     {
       "entityText": "exact substring from the excerpt",
-      "categoryLabel": "short free-form category",
+      "categoryLabel": "short category from: Person name, Organisation, Bank name, Banking product, Interest rate, Financial figure, Capacity amount, Credit card limit, Loan amount, Repayment, Buffer, Email, Phone, Address, Date, Account number, ABN",
       "paragraphId": "id from the excerpt headers",
       "confidence": 0.0,
       "rationale": "why this should be redacted given the brief",
-      "suggestedReplacement": "synthetic but plausible replacement"
+      "suggestedReplacement": "synthetic but plausible replacement (never placeholders like $[redacted] or $X,XXX)"
     }
   ]
 }
 Rules:
 - entityText MUST appear verbatim in the cited paragraph.
 - Prefer specific people, orgs, amounts, IDs, locations that match the brief.
+- Prefer specific categories (e.g. Capacity amount, Loan amount) over generic Financial figure when the context is clear.
 - Do not invent text that is not in the excerpt.
-- Use unique synthetic replacements (not black bars).
+- Use unique synthetic replacements (not black bars or $[redacted]).
 - confidence is 0-1.`;
 
 function newId() {
@@ -135,7 +137,7 @@ async function extractLlmCandidates({ ir, brief, modelId, jobId }) {
           jobId,
           source: 'local_llm',
           sourceLabel: 'llm',
-          categoryLabel: String(item.categoryLabel || 'sensitive').trim() || 'sensitive',
+          categoryLabel: normalizeCategoryLabel(item.categoryLabel || 'sensitive'),
           entityKey: null,
           surfaceForms: [entityText],
           locations,

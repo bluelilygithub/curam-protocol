@@ -10,6 +10,7 @@ const { findOccurrences, locateInParagraph } = require('./docxParse');
 const { extractLlmCandidates } = require('./llmCandidates');
 const { mergeAndDeduplicateCandidates, expandOccurrencesWithIr, entityKeyFor, normalizeEntity } = require('./mergeCandidates');
 const { resolveDocumentRedactionModels } = require('../documentRedactionModelResolver');
+const { normalizeCategoryLabel } = require('./categories');
 
 function decisionSummary(candidates) {
   const list = candidates || [];
@@ -67,7 +68,7 @@ function patchCandidate(jobId, userId, candidateId, patch = {}) {
   }
 
   if (patch.categoryLabel != null) {
-    const cat = String(patch.categoryLabel).trim();
+    const cat = normalizeCategoryLabel(patch.categoryLabel);
     if (!cat) {
       const err = new Error('categoryLabel cannot be empty');
       err.status = 400;
@@ -75,7 +76,7 @@ function patchCandidate(jobId, userId, candidateId, patch = {}) {
     }
     next.categoryLabel = cat;
     const primary = (next.surfaceForms && next.surfaceForms[0]) || next.entityText || '';
-    next.entityKey = entityKeyFor(primary, cat);
+    next.entityKey = entityKeyFor(primary);
   }
 
   if (patch.rationale != null) {
@@ -115,7 +116,7 @@ function addUserCandidate(jobId, userId, body = {}) {
     throw err;
   }
 
-  const categoryLabel = String(body.categoryLabel || 'user_added').trim() || 'user_added';
+  const categoryLabel = normalizeCategoryLabel(body.categoryLabel || 'user_added');
   const suggestedReplacement = String(body.suggestedReplacement || `REDACTED_${entityText.slice(0, 12)}`).trim();
   const paragraphId = body.paragraphId ? String(body.paragraphId).trim() : null;
 

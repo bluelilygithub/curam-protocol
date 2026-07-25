@@ -48,7 +48,7 @@ async function run() {
   assert.ok(typeof janeLocs[0].startOffset === 'number', 'location has offsets');
 
   const patterns = extractPatternCandidates(ir, 'job-test');
-  assert.ok(patterns.some((c) => c.categoryLabel === 'email'), 'email pattern');
+  assert.ok(patterns.some((c) => c.categoryLabel === 'Email'), 'email pattern');
   assert.ok(patterns.some((c) => c.source === 'deterministic' && c.sourceLabel === 'pattern-match'));
 
   // Simulate LLM stubs for Jane Smith (one location) + merge should expand

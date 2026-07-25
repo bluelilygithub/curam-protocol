@@ -1,23 +1,49 @@
 'use strict';
 
 /**
- * Merge LLM + pattern candidates; dedupe same entity into one grouped candidate
- * with all occurrence locations.
+ * Merge LLM + pattern candidates; dedupe same real entity into one candidate.
+ *
+ * Identity key = normalized surface value (NOT category). Category disagreements
+ * (e.g. "Financial figure" vs "Capacity amount" for $1,173,624) collapse into
+ * one candidate with the more specific category and the better replacement.
  */
 
 const crypto = require('crypto');
+const {
+  normalizeCategoryLabel,
+  pickPreferredCategory,
+} = require('./categories');
 
 function normalizeEntity(text) {
-  return String(text || '')
+  let s = String(text || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+  if (!s) return '';
+
+  // Currency identity: $1,173,624 / $1173624 / 1,173,624.00 → amt:1173624[.xx]
+  const currency = s.match(/^\$?\s*([\d,]+(?:\.\d{1,2})?)$/);
+  if (currency) {
+    const raw = currency[1].replace(/,/g, '');
+    if (/^\d+(\.\d{1,2})?$/.test(raw)) return `amt:${raw}`;
+  }
+
+  // Percentage identity: 5.29% / 5.290% → pct:5.29%
+  const pct = s.match(/^([\d,]+(?:\.\d+)?)\s*%$/);
+  if (pct) {
+    const n = Number(pct[1].replace(/,/g, ''));
+    if (Number.isFinite(n)) return `pct:${n}%`;
+  }
+
+  return s;
 }
 
-function entityKeyFor(surface, categoryLabel) {
-  const n = normalizeEntity(surface);
-  const cat = String(categoryLabel || 'sensitive').toLowerCase().replace(/\s+/g, '_');
-  return `${cat}::${n}`;
+/**
+ * Entity identity from surface text. Second arg kept for call-site compatibility
+ * but is intentionally ignored — category must not split the same real value.
+ */
+function entityKeyFor(surface, _categoryLabel) {
+  return normalizeEntity(surface);
 }
 
 function locationKey(loc) {
@@ -61,6 +87,38 @@ function pickPreferredSource(sources) {
   return sources[0] || 'local_llm';
 }
 
+function isPlaceholderReplacement(s) {
+  const t = String(s || '').trim();
+  if (!t) return true;
+  if (/\[redacted\]/i.test(t)) return true;
+  if (/^redacted$/i.test(t)) return true;
+  if (/\$\s*X/i.test(t) || /\$\s*N/i.test(t) || /\$\s*#/.test(t)) return true;
+  if (/^[X#N]+([,.][X#N]+)*$/i.test(t)) return true;
+  if (/^\$?[X#N]+([,.][X#N]+)*$/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Prefer realistic synthetics over placeholder-style replacements.
+ * When quality is equal, prefer the replacement from the more specific category.
+ */
+function pickPreferredReplacement(current, incoming, currentCat, incomingCat) {
+  const a = current || '';
+  const b = incoming || '';
+  if (!a) return b;
+  if (!b) return a;
+  const aPh = isPlaceholderReplacement(a);
+  const bPh = isPlaceholderReplacement(b);
+  if (aPh && !bPh) return b;
+  if (bPh && !aPh) return a;
+  const preferredCat = pickPreferredCategory(currentCat, incomingCat);
+  if (normalizeCategoryLabel(incomingCat) === preferredCat
+    && normalizeCategoryLabel(currentCat) !== preferredCat) {
+    return b;
+  }
+  return a;
+}
+
 function compositeScore(candidate) {
   const confidence = Number(candidate.confidence) || 0;
   const locBoost = Math.min(1, (candidate.locations || []).length / 5) * 0.2;
@@ -87,42 +145,53 @@ function mergeAndDeduplicateCandidates(candidates, jobId) {
 
   for (const c of candidates || []) {
     const primary = (c.surfaceForms && c.surfaceForms[0]) || c.locations?.[0]?.quote || '';
-    const key = c.entityKey || entityKeyFor(primary, c.categoryLabel);
+    // Ignore legacy category::value keys — re-key on normalized value only
+    const key = (c.entityKey && !String(c.entityKey).includes('::'))
+      ? c.entityKey
+      : entityKeyFor(primary);
+    if (!key) continue;
+
+    const categoryLabel = normalizeCategoryLabel(c.categoryLabel);
+
     if (!groups.has(key)) {
       groups.set(key, {
         ...c,
         id: c.id || crypto.randomUUID(),
         jobId: jobId || c.jobId,
         entityKey: key,
+        categoryLabel,
         sources: [c.source],
         surfaceForms: [...(c.surfaceForms || [])],
         locations: [...(c.locations || [])],
       });
       continue;
     }
+
     const g = groups.get(key);
     g.surfaceForms = mergeSurfaceForms(g.surfaceForms, c.surfaceForms);
     g.locations = mergeLocations(g.locations, c.locations);
     g.sources = [...new Set([...(g.sources || []), c.source])];
     g.confidence = Math.max(Number(g.confidence) || 0, Number(c.confidence) || 0);
-    if (c.suggestedReplacement && (!g.suggestedReplacement || g.source === 'deterministic' && c.source === 'local_llm')) {
-      g.suggestedReplacement = c.suggestedReplacement;
-    }
+
+    g.suggestedReplacement = pickPreferredReplacement(
+      g.suggestedReplacement,
+      c.suggestedReplacement,
+      g.categoryLabel,
+      categoryLabel,
+    );
+
     if (c.rationale) {
       g.rationale = g.rationale && g.rationale !== c.rationale
         ? `${g.rationale} | ${c.rationale}`
-        : c.rationale;
+        : (g.rationale || c.rationale);
     }
-    if (c.categoryLabel && c.source === 'local_llm') {
-      g.categoryLabel = c.categoryLabel;
-    }
+
+    g.categoryLabel = pickPreferredCategory(g.categoryLabel, categoryLabel);
     g.updatedAt = new Date().toISOString();
   }
 
   const merged = [];
   for (const g of groups.values()) {
-    // Expand locations: if we only captured one occurrence but the surface form
-    // appears elsewhere, caller may pass ir via re-scan — optional second pass below.
     g.source = pickPreferredSource(g.sources || [g.source]);
     g.sourceLabel = g.source === 'local_llm'
       ? 'llm'
@@ -130,7 +199,10 @@ function mergeAndDeduplicateCandidates(candidates, jobId) {
         ? 'pattern-match'
         : g.source === 'user_added'
           ? 'user-added-later'
-          : g.source;
+          : g.source === 'frontier_suggested'
+            ? 'frontier'
+            : g.source;
+    g.categoryLabel = normalizeCategoryLabel(g.categoryLabel);
     const scored = compositeScore(g);
     g.score = scored.score;
     g.scoreBreakdown = scored.scoreBreakdown;
@@ -160,6 +232,7 @@ function expandOccurrencesWithIr(candidates, ir, findOccurrencesFn) {
       ...c,
       locations,
       occurrenceCount: locations.length,
+      categoryLabel: normalizeCategoryLabel(c.categoryLabel),
     };
     const scored = compositeScore(next);
     next.score = scored.score;
@@ -173,4 +246,6 @@ module.exports = {
   expandOccurrencesWithIr,
   normalizeEntity,
   entityKeyFor,
+  isPlaceholderReplacement,
+  pickPreferredReplacement,
 };

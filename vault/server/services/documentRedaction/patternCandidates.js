@@ -1,12 +1,38 @@
 'use strict';
 
 /**
- * Deterministic regex / pattern backstop for well-known PII shapes.
+ * Deterministic regex / pattern backstop for well-known PII / figure shapes.
  * Source tag: deterministic (architecture) ≈ pattern-match.
+ *
+ * Always runs alongside the LLM in proposeCandidates — never LLM-gated.
  */
 
 const { locateInParagraph } = require('./docxParse');
+const { normalizeCategoryLabel } = require('./categories');
 const crypto = require('crypto');
+
+function currencyReplacement(i, quote) {
+  const digits = String(quote).replace(/[^\d.]/g, '');
+  const n = Number(digits);
+  if (!Number.isFinite(n) || n <= 0) {
+    return `$${(1200 + i * 37).toLocaleString('en-US')}`;
+  }
+  const factor = 0.91 + ((i % 19) / 100);
+  const v = Math.max(1, Math.round(n * factor));
+  const hasCents = /\.\d{1,2}$/.test(digits);
+  if (hasCents) {
+    const cents = Math.round(n * factor * 100) / 100;
+    return `$${cents.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `$${v.toLocaleString('en-US')}`;
+}
+
+function percentReplacement(i, quote) {
+  const n = Number(String(quote).replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(n)) return `${((i % 9) + 1)}.${i % 10}%`;
+  const v = Math.max(0.01, Math.round(n * (0.88 + (i % 12) / 100) * 100) / 100);
+  return `${v}%`;
+}
 
 const PATTERNS = [
   {
@@ -19,14 +45,12 @@ const PATTERNS = [
   {
     categoryLabel: 'phone',
     confidence: 0.85,
-    // AU / intl-ish phones
     regex: /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}\b/g,
     replacement: (i) => `555-01${String(100 + i).slice(-2)}`,
     rationale: 'Matched phone-number-like pattern',
     validate: (s) => {
       const digits = String(s).replace(/\D/g, '');
       if (digits.length < 8 || digits.length > 15) return false;
-      // Avoid TFN/SSN-like ###-###-### colliding with phone
       if (/^\d{3}[-\s]?\d{3}[-\s]?\d{3}$/.test(String(s).trim()) && digits.length === 9) return false;
       return true;
     },
@@ -34,7 +58,6 @@ const PATTERNS = [
   {
     categoryLabel: 'national_id',
     confidence: 0.9,
-    // US SSN-like or AU TFN-ish 8–9 digit with separators
     regex: /\b(?:\d{3}[-\s]?\d{2}[-\s]?\d{4}|\d{3}[-\s]?\d{3}[-\s]?\d{3})\b/g,
     replacement: (i) => `***-**-${String(1000 + i).slice(-4)}`,
     rationale: 'Matched national-ID / SSN-like numeric pattern',
@@ -65,6 +88,31 @@ const PATTERNS = [
     replacement: (i) => `${100 + i} Example Street`,
     rationale: 'Matched street-address-like pattern',
   },
+  {
+    // $1,173,624 / $12,400.50 / $500 (comma-grouped or plain, optional cents)
+    categoryLabel: 'financial_figure',
+    confidence: 0.88,
+    regex: /\$\s?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\b/g,
+    replacement: currencyReplacement,
+    rationale: 'Matched currency amount pattern',
+    validate: (s) => {
+      const digits = String(s).replace(/[^\d.]/g, '');
+      const n = Number(digits);
+      return Number.isFinite(n) && n > 0;
+    },
+  },
+  {
+    // 5.29% / 12% / 0.5%
+    categoryLabel: 'interest_rate',
+    confidence: 0.86,
+    regex: /\b\d{1,3}(?:\.\d{1,4})?\s*%/g,
+    replacement: percentReplacement,
+    rationale: 'Matched percentage / rate pattern',
+    validate: (s) => {
+      const n = Number(String(s).replace(/[^\d.]/g, ''));
+      return Number.isFinite(n) && n >= 0 && n <= 1000;
+    },
+  },
 ];
 
 function newId() {
@@ -87,7 +135,6 @@ function extractPatternCandidates(ir, jobId) {
       while ((m = rule.regex.exec(text)) !== null) {
         const quote = rule.group != null ? (m[rule.group] || m[0]) : m[0];
         if (!quote || (rule.validate && !rule.validate(quote))) continue;
-        // Skip tiny digit runs that look like years alone for phone rule
         if (rule.categoryLabel === 'phone' && /^\d{4}$/.test(quote.replace(/\D/g, ''))) continue;
 
         let startOffset = m.index;
@@ -101,13 +148,15 @@ function extractPatternCandidates(ir, jobId) {
         }
 
         const location = locateInParagraph(paragraph, startOffset, endOffset, quote);
-        const suggestedReplacement = rule.replacement(replIndex++);
+        const suggestedReplacement = typeof rule.replacement === 'function'
+          ? rule.replacement(replIndex++, quote)
+          : rule.replacement;
         out.push({
           id: newId(),
           jobId,
           source: 'deterministic',
           sourceLabel: 'pattern-match',
-          categoryLabel: rule.categoryLabel,
+          categoryLabel: normalizeCategoryLabel(rule.categoryLabel),
           entityKey: null,
           surfaceForms: [quote],
           locations: [location],
