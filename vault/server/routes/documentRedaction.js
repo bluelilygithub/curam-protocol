@@ -19,15 +19,17 @@ const {
   decisionSummary,
 } = require('../services/documentRedaction/reviewService');
 const { createDownloadHandler } = require('../services/documentRedaction/exportDownload');
+const { isAcceptedUpload } = require('../services/documentRedaction/ingestNormalize');
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const name = String(file.originalname || '').toLowerCase();
-    const ok = name.endsWith('.docx')
-      || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    if (!ok) return cb(new Error('Only .docx uploads are supported'));
+    if (!isAcceptedUpload(file.originalname, file.mimetype)) {
+      return cb(new Error(
+        'Unsupported file type. Upload .docx, .doc, .pdf, .txt, .odt, .rtf, .md, .csv, .json, or .html.',
+      ));
+    }
     cb(null, true);
   },
 });
@@ -39,6 +41,9 @@ function publicJobView(job) {
     status: job.status,
     pdfStatus: job.pdfStatus || null,
     originalFilename: job.originalFilename,
+    sourceExt: job.sourceExt || null,
+    ingestConverted: job.ingestConverted || false,
+    ingestNote: job.ingestNote || null,
     brief: job.brief,
     candidateCount: job.candidateCount,
     decisionSummary: job.decisionSummary,
@@ -65,12 +70,12 @@ function publicJobView(job) {
 
 /**
  * POST /api/document-redaction/propose
- * multipart: file (.docx), brief (text), optional skipLlm=1 for pattern-only debug
+ * multipart: file (.docx/.doc/.pdf/.txt/…), brief (text), optional skipLlm=1 for pattern-only debug
  */
 router.post('/propose', upload.single('file'), async (req, res) => {
   try {
     if (!req.file?.buffer) {
-      return res.status(400).json({ error: 'file (.docx) is required' });
+      return res.status(400).json({ error: 'file is required (.docx, .doc, .pdf, .txt, …)' });
     }
     const brief = req.body?.brief || req.body?.context || '';
     const skipLlm = String(req.body?.skipLlm || '') === '1' || req.body?.skipLlm === true;
@@ -79,6 +84,7 @@ router.post('/propose', upload.single('file'), async (req, res) => {
       userId: req.user.id,
       buffer: req.file.buffer,
       filename: req.file.originalname,
+      mimetype: req.file.mimetype,
       brief,
       skipLlm,
     });

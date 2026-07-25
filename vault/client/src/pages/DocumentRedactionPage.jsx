@@ -192,7 +192,7 @@ export default function DocumentRedactionPage() {
   async function handlePropose(e) {
     e.preventDefault();
     if (!file || !brief.trim()) {
-      setError('Choose a .docx and enter a redaction brief.');
+      setError('Choose a document and enter a redaction brief.');
       return;
     }
     setError('');
@@ -568,19 +568,28 @@ export default function DocumentRedactionPage() {
         </div>
       )}
 
+      {job?.ingestNote && (
+        <div className="mx-4 sm:mx-6 mt-3 px-3 py-2 rounded-xl text-xs" style={{ background: '#FFFBEB', color: '#92400e' }}>
+          {job.ingestNote}
+        </div>
+      )}
+
       {!routeJobId && (
         <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-6">
           <form onSubmit={handlePropose} className="rounded-2xl border p-6 space-y-4 max-w-2xl" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New review</h2>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>.docx file</label>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Document</label>
               <input
                 type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".docx,.doc,.odt,.rtf,.pdf,.txt,.md,.csv,.json,.html,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv,application/json,text/html"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
                 className="block w-full text-sm"
                 style={{ color: 'var(--color-text)' }}
               />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
+                .docx, .doc, .pdf, .txt, .odt, .rtf, .md, .csv, .json, .html — non-Word files are converted to a working .docx for redaction (PDF layout is not preserved).
+              </p>
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>What should be redacted?</label>

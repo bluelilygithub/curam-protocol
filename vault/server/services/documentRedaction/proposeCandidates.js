@@ -16,12 +16,14 @@ const {
   saveIr,
 } = require('./jobStore');
 const { resolveDocumentRedactionModels } = require('../documentRedactionModelResolver');
+const { normalizeUploadToDocx } = require('./ingestNormalize');
 
 /**
  * @param {object} opts
  * @param {number|string} opts.userId
  * @param {Buffer} opts.buffer
  * @param {string} opts.filename
+ * @param {string} [opts.mimetype]
  * @param {string} opts.brief — free-text redaction instructions
  * @param {boolean} [opts.skipLlm=false] — pattern-only (debug)
  */
@@ -29,6 +31,7 @@ async function proposeRedactionCandidates({
   userId,
   buffer,
   filename,
+  mimetype,
   brief,
   skipLlm = false,
 }) {
@@ -39,7 +42,7 @@ async function proposeRedactionCandidates({
     throw err;
   }
   if (!buffer || !Buffer.isBuffer(buffer)) {
-    const err = new Error('DOCX file buffer required');
+    const err = new Error('Upload file buffer required');
     err.status = 400;
     throw err;
   }
@@ -55,13 +58,19 @@ async function proposeRedactionCandidates({
     throw err;
   }
 
+  const normalized = await normalizeUploadToDocx({ buffer, filename, mimetype });
+  const workingBuffer = normalized.docxBuffer;
+
   let job = createJobShell(userId, {
     status: 'extracting',
     brief: { rawText: briefText },
-    originalFilename: filename || 'upload.docx',
+    originalFilename: normalized.originalFilename || filename || 'upload.docx',
+    sourceExt: normalized.sourceExt,
+    ingestConverted: normalized.converted,
+    ingestNote: normalized.conversionNote,
   });
 
-  const paths = saveOriginalDocx(job.id, buffer, filename);
+  const paths = saveOriginalDocx(job.id, workingBuffer, normalized.originalFilename);
   job = saveJob({
     ...job,
     ...paths,
@@ -70,7 +79,7 @@ async function proposeRedactionCandidates({
     frontierModelId: resolved.frontier?.modelId || null,
   });
 
-  const ir = await parseDocxBuffer(buffer);
+  const ir = await parseDocxBuffer(workingBuffer);
   saveIr(job.id, ir);
   job = saveJob({
     ...job,
