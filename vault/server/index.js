@@ -133,6 +133,7 @@ app.use('/api/recipes', requireFeature('recipes'), require('./routes/recipes'));
 app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
 app.use('/api/product-scout', requireFeature('productScout'), require('./routes/productScout'));
 app.use('/api/property-scenario', requireFeature('propertyScenario'), require('./routes/propertyScenario'));
+app.use('/api/document-redaction', requireFeature('documentRedaction'), require('./routes/documentRedaction'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 
 if (process.env.NODE_ENV === 'production') {

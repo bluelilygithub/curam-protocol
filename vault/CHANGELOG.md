@@ -4,6 +4,92 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-25 (document-redaction-m6)
+
+### Document redaction — Milestone 6 (selective frontier apply + three-way + final)
+- Same HITL review UI for `frontier_suggested` candidates (approve / reject / edit).
+- `POST .../apply` with `applyPass: 'frontier'` — shared M3 pipeline on current `redacted.docx` (not original); merges entity map; snapshots `local-pass.docx`; tracked-changes / pending / PDF gates unchanged.
+- Three-way compare: original / local pass / final, synced scroll, spans colored by pass (local vs frontier).
+- `POST .../approve-final` requires PDF + zero leftovers; writes `INTERNAL-ONLY-audit-trail.json` (candidates, entity map, audit events) — downloadable only after final approval, filename labeled INTERNAL-ONLY.
+- Smoke: `npm run test:document-redaction-m6`.
+
+---
+
+## 2026-07-25 (document-redaction-m5)
+
+### Document redaction — Milestone 5 (frontier analysis)
+- `POST /api/document-redaction/jobs/:id/frontier-analyze` re-verifies live job state at fire time: current `frontierApprovedAt`, PDF present, SHA256 matches `frontierApprovedPdfSha256` from approve, zero leftovers — does not trust the client.
+- Approve stamps `frontierApprovedPdfSha256`; apply / fix-leftovers / PDF retry clear approval + SHA.
+- Sends `sanitized.pdf` + optional instructions; never original / entity map. Hard `ENTITY_LEAK_IN_PAYLOAD` check before every call (native PDF or extracted-text path).
+- Gate aborts (including leak catches) audit as `frontier_analysis_blocked` with masked hits only; successful calls audit request/response (no keys / no PDF base64).
+- Returns analysis text + `frontier_suggested` candidates (same review UI; filter Source → Frontier).
+- Smoke: `npm run test:document-redaction-m5`.
+
+---
+
+## 2026-07-25 (document-redaction-m4)
+
+### Document redaction — Milestone 4 (compare / HITL₂)
+- Side-by-side original ↔ redacted DOCX with synced scroll and category-colored substitution highlights.
+- Local coherence check (`POST .../coherence`); leftover real-value scan (masked in API).
+- **Approve for frontier analysis** (`POST .../approve-frontier`) requires `sanitized.pdf` **and** zero leftover leaks (`PDF_REQUIRED` / `UNRESOLVED_LEFTOVERS`); audit-logged. No frontier API calls.
+- **Fix leftovers** (`POST .../fix-leftovers`) — targeted entity-map patch of `redacted.docx` (invalidates PDF).
+- **Retry PDF conversion** (`POST .../retry-pdf`) convert-only.
+- Smoke: `npm run test:document-redaction-m4`.
+
+---
+
+## 2026-07-25 (document-redaction-m3)
+
+### Document redaction — Milestone 3 (apply)
+- `POST /api/document-redaction/jobs/:id/apply` with `confirmApply: true` — blocks if high-score pending remain; applies approved entities with consistent synthetics from the local agent-card model.
+- Writes `redacted.docx`; PDF via LibreOffice when available. Job status is **`pdf_ready`** or **`docx_ready_pdf_pending`** (never silent full success without PDF).
+- Tracked changes: **fail-closed** (409) unless `acceptTrackedChanges: true`.
+- Entity map + audit under `uploads/document-redaction/{jobId}/internal/` — download route only allows `redacted.docx` / `sanitized.pdf` (HTTP test asserts 403 on `internal/entity-map.json`).
+- Smoke: `npm run test:document-redaction-m3`.
+
+---
+
+## 2026-07-25 (document-redaction-m2)
+
+### Document redaction — Milestone 2 (HITL review)
+- UI at `/document-redaction` (+ `/:jobId`): candidate table (sort/filter by score, category, source, decision), approve/reject/edit, document preview with select-to-add, running decision summary.
+- Decisions persist on the job (`PATCH .../candidates/:id`); last job id remembered in `localStorage`.
+- **Request more suggestions** re-runs the local slot model with approve/reject feedback (`POST .../resuggest`) — no frontier calls.
+
+---
+
+## 2026-07-25 (document-redaction-m1)
+
+### Document redaction — Milestone 1 (ingest + candidates)
+- `POST /api/document-redaction/propose` — upload `.docx` + free-text brief → scored candidate JSON.
+- DOCX IR with paragraph/run locations; local LLM via `resolveDocumentRedactionModels().local`; deterministic email/phone/ID/DOB/address patterns; merge + dedupe by entity.
+- Jobs stored under `uploads/document-redaction/<jobId>/`. Feature flag `documentRedaction`.
+- Smoke: `npm run test:document-redaction-m1`.
+
+---
+
+## 2026-07-25 (document-redaction-agent-model-card)
+
+### Document redaction agent — model configuration card
+- Settings → AI Models card for agentId **`document-redaction-agent`** with two slots:
+  - **Local** (`document_redaction_local_model`) — dropdown from **`getModelsByExecution('local')` only** (no full-inventory fallback).
+  - **Frontier** (`document_redaction_frontier_model`) — any connected model.
+- Runtime resolver: **`resolveDocumentRedactionModels({ userId, jobId? })`** in `server/services/documentRedactionModelResolver.js`.
+- Server rejects saving a hosted model into the local slot.
+
+---
+
+## 2026-07-25 (vault-models-execution)
+
+### Model inventory — admin-confirmed local vs hosted
+- Each `vault_models` entry now requires **`execution`: `local` | `hosted`** (explicit admin choice; never inferred from provider/id).
+- `POST /api/settings` rejects `vault_models` saves until every entry has a valid `execution`.
+- Settings → AI Models: required Execution control on add/edit; banner for **N connected models need execution type confirmed**; inline confirm + Save inventory for backfill.
+- Server helper: **`getModelsByExecution(userId, 'local'|'hosted')`** for agents that must bind to local-only models.
+
+---
+
 ## 2026-07-25 (proforma-fit-pdf-fixes)
 
 ### Property Scenario — Fit scoring, bank table, PDF polish

@@ -24,6 +24,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   domains: true,
   productScout: true,
   propertyScenario: true,
+  documentRedaction: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -52,5 +53,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'domains', label: 'Domain & Brand' },
   { key: 'productScout', label: 'Amazon Search' },
   { key: 'propertyScenario', label: 'Property scenario' },
+  { key: 'documentRedaction', label: 'Document redaction' },
 ];
 

@@ -4,7 +4,13 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
-const { getVaultModelsConfigForUser } = require('../services/modelResolver');
+const { getVaultModelsConfigForUser, validateVaultModelsCatalog, getModelsByExecution } = require('../services/modelResolver');
+const {
+  SLOT_KEYS: DOC_REDACTION_SLOT_KEYS,
+  assertLocalSlotAllowed,
+  assertFrontierSlotAllowed,
+  getDocumentRedactionAgentCardConfig,
+} = require('../services/documentRedactionModelResolver');
 const { resolveEmbeddingConfig, getGeminiEmbeddingOptions } = require('../services/embeddingResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
@@ -59,9 +65,27 @@ router.get('/embedding-config', async (req, res) => {
 router.get('/effective-models', async (req, res) => {
   try {
     const config = await getVaultModelsConfigForUser(req.user.id);
-    res.json(config);
+    // Privacy boundary inventory — ONLY getModelsByExecution('local'); never fall back to full catalog.
+    const localExecutionModels = await getModelsByExecution(req.user.id, 'local');
+    const documentRedactionAgent = await getDocumentRedactionAgentCardConfig(req.user.id);
+    res.json({
+      ...config,
+      localExecutionModels,
+      localExecutionModelIds: localExecutionModels.map((m) => m.id),
+      documentRedactionAgent,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/document-redaction-agent — agent card + resolved slot choices
+router.get('/document-redaction-agent', async (req, res) => {
+  try {
+    const card = await getDocumentRedactionAgentCardConfig(req.user.id);
+    res.json(card);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -159,12 +183,49 @@ router.post('/', async (req, res) => {
   try {
     if (value === null || value === undefined || value === '') {
       await pool.query('DELETE FROM settings WHERE "userId"=$1 AND key=$2', [req.user.id, key]);
-    } else {
-      await pool.query(
-        'INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value',
-        [req.user.id, key, String(value)]
-      );
+      return res.json({ ok: true });
     }
+
+    if (key === 'vault_models') {
+      let parsed;
+      try {
+        parsed = JSON.parse(String(value));
+      } catch {
+        return res.status(400).json({ error: 'vault_models must be valid JSON' });
+      }
+      const validation = validateVaultModelsCatalog(parsed);
+      if (!validation.ok) {
+        return res.status(400).json({
+          error: validation.error,
+          needsConfirmation: validation.needsConfirmation,
+          invalid: validation.invalid,
+        });
+      }
+    }
+
+    if (key === DOC_REDACTION_SLOT_KEYS.local) {
+      try {
+        await assertLocalSlotAllowed(req.user.id, value);
+      } catch (err) {
+        return res.status(err.status || 400).json({
+          error: err.message,
+          localExecutionModelIds: err.localExecutionModelIds || [],
+        });
+      }
+    }
+
+    if (key === DOC_REDACTION_SLOT_KEYS.frontier) {
+      try {
+        await assertFrontierSlotAllowed(req.user.id, value);
+      } catch (err) {
+        return res.status(err.status || 400).json({ error: err.message });
+      }
+    }
+
+    await pool.query(
+      'INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value',
+      [req.user.id, key, String(value)]
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -23,6 +23,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   gmailIntel: true,
   productScout: true,
   propertyScenario: true,
+  documentRedaction: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

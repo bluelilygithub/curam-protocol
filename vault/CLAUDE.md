@@ -29,6 +29,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
 - `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)
+- `server/services/documentRedaction/` — Document redaction agent (M1–M6: candidates → HITL → apply → compare → frontier analysis → selective frontier apply → three-way → final approve + INTERNAL-ONLY audit); model card via `documentRedactionModelResolver.js`; docs: `docs/document-redaction-agent-architecture.md`
 - `server/services/propertyScenario/` — Mortgage / Property Scenario agent (Stages 1–11); see `docs/property-scenario.md` + `OPEN_ITEMS.md`
 - `server/services/SuggestionService.js` — **all services/crons/agents call this** to emit inbox findings
 - `server/routes/suggestions.js` — agent suggestion inbox API
@@ -120,9 +121,13 @@ buf = lines.pop(); // keep partial line
 
 | Key | Role |
 |---|---|
-| **`vault_models`** | JSON array of `{ id, name, emoji, … }` — allowed ids for this user’s UI and resolver input order |
+| **`vault_models`** | JSON array of `{ id, name, emoji, provider, execution, … }` — allowed ids for this user’s UI and resolver input order. **`execution`** is admin-confirmed **`local` \| `hosted`** (required to save; never inferred from provider/id). Entries missing it need re-confirmation in Settings. |
 | **`default_model`** | Optional. If present **and** that `id` is in **`vault_models`**, it becomes the **`standard`** tier; otherwise **`standard`** is the **first** id in **`vault_models`** |
 | **`branch_eval_model`** | Separate from chat default — branch-suggestion evaluation only |
+
+**Helpers:** `getModelsByExecution(userId, 'local'|'hosted')` returns only inventory entries with that confirmed `execution`. Use this for privacy-sensitive agents (e.g. document redaction local slot).
+
+**Document redaction agent card** (`document-redaction-agent`): settings keys `document_redaction_local_model` + `document_redaction_frontier_model`. Resolve at runtime via `resolveDocumentRedactionModels({ userId, jobId })` in `server/services/documentRedactionModelResolver.js` — never hardcode model ids. Local slot inventory is exclusively `getModelsByExecution(userId, 'local')`.
 
 If the user has no **`vault_models`** row (or empty list), resolver uses the **first admin’s** **`vault_models` / `default_model`**.
 
@@ -304,7 +309,9 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
+
+**Document redaction** (`/document-redaction`): Privacy-preserving DOCX redaction. Local LLM proposes candidates → HITL approve/reject/edit → synthetic apply (`redacted.docx` + `sanitized.pdf`) → local compare / leftover scan → HITL₂ → frontier residual-risk analysis on **sanitized PDF only** (entity map never leaves the machine) → selective frontier apply (shared apply pipeline on redacted base) → three-way compare → final approve + INTERNAL-ONLY audit trail. Feature flag `documentRedaction`. Model card `document-redaction-agent`. Docs: **`docs/document-redaction-agent-architecture.md`**.
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 

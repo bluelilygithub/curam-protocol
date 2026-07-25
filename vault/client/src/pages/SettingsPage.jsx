@@ -4,7 +4,7 @@ import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
-import { MODELS as DEFAULT_MODELS } from '../utils/models';
+import { MODELS as DEFAULT_MODELS, MODEL_EXECUTION_OPTIONS, isValidModelExecution, modelsNeedingExecutionConfirm } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
@@ -100,6 +100,7 @@ function SettingsPage() {
   const [modelStatus, setModelStatus] = useState(null);
   const {
     models,
+    setModels,
     saveModels,
     defaultModel,
     saveDefaultModel,
@@ -110,9 +111,19 @@ function SettingsPage() {
     embeddingModel,
     saveEmbeddingModel,
     embeddingConfig,
+    needsExecutionConfirm,
+    localExecutionModels,
+    documentRedactionLocalModel,
+    documentRedactionFrontierModel,
+    saveDocumentRedactionLocalModel,
+    saveDocumentRedactionFrontierModel,
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
+  const [modelInventoryError, setModelInventoryError] = useState('');
+  const [modelInventorySaving, setModelInventorySaving] = useState(false);
+  const [modelInventoryDirty, setModelInventoryDirty] = useState(false);
+  const [docRedactionSlotError, setDocRedactionSlotError] = useState('');
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
   const [tab, setTab] = useState(() => {
@@ -412,33 +423,94 @@ function SettingsPage() {
       .catch(() => setLocalVoiceAvailable(false));
   }, []);
 
-  const EMPTY_MODEL = { emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '' };
+  const EMPTY_MODEL = {
+    emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '', execution: '',
+  };
 
-  function openAdd() { setModelForm(EMPTY_MODEL); setEditingModel('new'); }
-  function openEdit(m) { setModelForm({ ...m }); setEditingModel(m.id); }
+  function openAdd() { setModelForm(EMPTY_MODEL); setEditingModel('new'); setModelInventoryError(''); }
+  function openEdit(m) {
+    setModelForm({ ...m, execution: isValidModelExecution(m.execution) ? m.execution : '' });
+    setEditingModel(m.id);
+    setModelInventoryError('');
+  }
   function cancelEdit() { setEditingModel(null); setModelForm({}); }
+
+  async function persistModelInventory(nextModels) {
+    setModelInventorySaving(true);
+    setModelInventoryError('');
+    try {
+      await saveModels(nextModels);
+      setModelInventoryDirty(false);
+    } catch (err) {
+      setModelInventoryError(err.message || 'Could not save model inventory');
+      throw err;
+    } finally {
+      setModelInventorySaving(false);
+    }
+  }
 
   async function saveModel() {
     if (!modelForm.id.trim() || !modelForm.name.trim()) return;
+    if (!isValidModelExecution(modelForm.execution)) {
+      setModelInventoryError('Choose Local execution or Hosted / API — required, and never inferred from provider.');
+      return;
+    }
     let updated;
     if (editingModel === 'new') {
-      updated = [...models, { ...modelForm, id: modelForm.id.trim() }];
+      updated = [...models, { ...modelForm, id: modelForm.id.trim(), execution: modelForm.execution }];
     } else {
-      updated = models.map(m => m.id === editingModel ? { ...modelForm, id: modelForm.id.trim() } : m);
+      updated = models.map((m) => (
+        m.id === editingModel
+          ? { ...modelForm, id: modelForm.id.trim(), execution: modelForm.execution }
+          : m
+      ));
     }
-    await saveModels(updated);
-    if (modelForm.provider === 'serper' || modelForm.provider === 'serpapi') {
-      await api.post('/api/settings', { key: 'shopping_search_provider', value: modelForm.provider }).catch(() => {});
+    try {
+      await persistModelInventory(updated);
+      if (modelForm.provider === 'serper' || modelForm.provider === 'serpapi') {
+        await api.post('/api/settings', { key: 'shopping_search_provider', value: modelForm.provider }).catch(() => {});
+      }
+      cancelEdit();
+    } catch {
+      /* error already set — siblings may still need execution confirmation */
     }
-    cancelEdit();
   }
 
   async function deleteModel(id) {
-    await saveModels(models.filter(m => m.id !== id));
+    const next = models.filter((m) => m.id !== id);
+    setModels(next);
+    setModelInventoryDirty(true);
+    if (next.length === 0 || modelsNeedingExecutionConfirm(next).length === 0) {
+      try {
+        await persistModelInventory(next);
+      } catch {
+        /* error already set */
+      }
+    } else {
+      setModelInventoryError('Model removed locally. Confirm Local or Hosted on remaining models, then Save inventory.');
+    }
   }
 
-  async function resetModels() {
-    await saveModels(DEFAULT_MODELS);
+  function resetModels() {
+    // Seed catalog has no execution — do not POST (server would reject) and do not invent defaults.
+    setModels(DEFAULT_MODELS.map((m) => ({ ...m })));
+    setModelInventoryDirty(true);
+    setModelInventoryError('Defaults loaded locally with no execution type. Confirm Local or Hosted for every model, then Save inventory.');
+    cancelEdit();
+  }
+
+  function setRowExecution(modelId, execution) {
+    setModels((prev) => prev.map((m) => (m.id === modelId ? { ...m, execution } : m)));
+    setModelInventoryDirty(true);
+    setModelInventoryError('');
+  }
+
+  async function saveInventoryAfterConfirm() {
+    try {
+      await persistModelInventory(models);
+    } catch {
+      /* error already set */
+    }
   }
 
   const [testResults, setTestResults] = useState({}); // { [modelId]: { status: 'testing'|'ok'|'error', message } }
@@ -1274,7 +1346,49 @@ function SettingsPage() {
         </div>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
           Add, edit, or remove models. The model ID must match the exact API identifier from your provider.
+          Each model also needs an admin-confirmed <strong>execution</strong> type (Local or Hosted) — never inferred from provider.
         </p>
+
+        {(needsExecutionConfirm?.length > 0 || modelInventoryError || modelInventoryDirty) && (
+          <div
+            className="mb-4 p-4 rounded-xl border space-y-3"
+            style={{ background: '#FFFBEB', borderColor: '#F59E0B' }}
+          >
+            {needsExecutionConfirm?.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
+                  {needsExecutionConfirm.length} connected model{needsExecutionConfirm.length === 1 ? '' : 's'} need execution type confirmed
+                </p>
+                <p className="text-xs mt-1" style={{ color: '#92400e' }}>
+                  Older inventory entries are missing <code>execution</code>. Choose Local or Hosted for each below — nothing is guessed from provider (including Ollama). Save inventory once every model is confirmed.
+                </p>
+                <ul className="mt-2 text-xs space-y-1" style={{ color: '#78350f' }}>
+                  {needsExecutionConfirm.map((m) => (
+                    <li key={m.id}>· {m.name || m.id} <span className="font-mono opacity-70">({m.id})</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {modelInventoryError && (
+              <p className="text-xs" style={{ color: '#b45309' }}>{modelInventoryError}</p>
+            )}
+            {modelInventoryDirty && !(needsExecutionConfirm?.length > 0) && !modelInventoryError && (
+              <p className="text-xs" style={{ color: '#92400e' }}>
+                Execution types updated locally — Save inventory to persist.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={saveInventoryAfterConfirm}
+              disabled={modelInventorySaving || (needsExecutionConfirm?.length > 0) || !modelInventoryDirty}
+              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+              title={needsExecutionConfirm?.length > 0 ? 'Set Local or Hosted on every model first' : 'Save model inventory'}
+            >
+              {modelInventorySaving ? 'Saving…' : 'Save inventory'}
+            </button>
+          </div>
+        )}
 
         {/* Default model selector */}
         <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -1316,6 +1430,87 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
           </select>
+        </div>
+
+        {/* Document redaction agent — two model slots */}
+        <div className="mb-4 p-4 rounded-xl border space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Document redaction agent
+            </label>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Agent card <code>document-redaction-agent</code>. Local slot is the privacy boundary — only models with admin-confirmed <code>execution: local</code> (via <code>getModelsByExecution(&apos;local&apos;)</code>). No fallback to the full inventory.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Local model (candidate extraction &amp; redaction application)
+            </label>
+            <select
+              value={documentRedactionLocalModel}
+              onChange={async (e) => {
+                setDocRedactionSlotError('');
+                try {
+                  await saveDocumentRedactionLocalModel(e.target.value);
+                } catch (err) {
+                  setDocRedactionSlotError(err.message || 'Could not save local model');
+                }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              disabled={localExecutionModels.length === 0}
+            >
+              <option value="">
+                {localExecutionModels.length === 0
+                  ? 'No local-execution models confirmed'
+                  : 'Select local model…'}
+              </option>
+              {localExecutionModels.map((m) => (
+                <option key={m.id} value={m.id}>{m.emoji || '💻'} {m.name || m.id} — {m.id}</option>
+              ))}
+            </select>
+            <p className="text-[11px] mt-1.5 font-mono" style={{ color: 'var(--color-muted)' }}>
+              Filtered list ({localExecutionModels.length}):{' '}
+              {localExecutionModels.length === 0
+                ? '(empty — confirm execution: local on inventory models above)'
+                : localExecutionModels.map((m) => m.id).join(', ')}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Frontier model (residual-risk analysis on sanitized output)
+            </label>
+            <select
+              value={documentRedactionFrontierModel}
+              onChange={async (e) => {
+                setDocRedactionSlotError('');
+                try {
+                  await saveDocumentRedactionFrontierModel(e.target.value);
+                } catch (err) {
+                  setDocRedactionSlotError(err.message || 'Could not save frontier model');
+                }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Select frontier model…</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.emoji || '🤖'} {m.name || m.id} — {m.id}
+                  {m.execution ? ` (${m.execution})` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
+              Any connected model (local or hosted). Only receives already-redacted content.
+            </p>
+          </div>
+
+          {docRedactionSlotError && (
+            <p className="text-xs" style={{ color: '#b45309' }}>{docRedactionSlotError}</p>
+          )}
         </div>
 
         {/* Theme builder design model */}
@@ -1475,6 +1670,27 @@ function SettingsPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Execution *</label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{
+                    background: 'var(--color-bg)',
+                    borderColor: isValidModelExecution(modelForm.execution) ? 'var(--color-border)' : '#F59E0B',
+                    color: 'var(--color-text)',
+                  }}
+                  value={modelForm.execution || ''}
+                  onChange={(e) => setModelForm((f) => ({ ...f, execution: e.target.value }))}
+                >
+                  <option value="">Select… (required)</option>
+                  {MODEL_EXECUTION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Admin-confirmed. Not pre-filled from provider — even Ollama must be chosen explicitly.
+                </p>
+              </div>
+              <div>
                 <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Emoji</label>
                 <input
                   className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
@@ -1508,7 +1724,7 @@ function SettingsPage() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={saveModel}
-                disabled={!modelForm.id.trim() || !modelForm.name.trim()}
+                disabled={!modelForm.id.trim() || !modelForm.name.trim() || !isValidModelExecution(modelForm.execution)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)' }}
               >
@@ -1529,6 +1745,7 @@ function SettingsPage() {
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
           {models.map((m, i) => {
             const configured = modelStatus ? modelStatus[modelProviderStatusKey(m.provider)] : null;
+            const needsExec = !isValidModelExecution(m.execution);
             return (
               <div
                 key={m.id}
@@ -1541,9 +1758,18 @@ function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <span className="text-xl flex-shrink-0">{m.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{m.name}</span>
                       {m.label && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>{m.label}</span>}
+                      {m.execution === 'local' && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#d1fae5', color: '#047857' }}>Local</span>
+                      )}
+                      {m.execution === 'hosted' && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#e0e7ff', color: '#3730a3' }}>Hosted</span>
+                      )}
+                      {needsExec && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>Needs execution confirm</span>
+                      )}
                     </div>
                     <div className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{m.id}</div>
                   </div>
@@ -1578,6 +1804,22 @@ function SettingsPage() {
                     </button>
                   </div>
                 </div>
+                {needsExec && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="text-xs font-medium" style={{ color: '#92400e' }}>Confirm execution:</label>
+                    <select
+                      className="px-2 py-1 rounded-lg border text-xs outline-none"
+                      style={{ background: 'var(--color-bg)', borderColor: '#F59E0B', color: 'var(--color-text)' }}
+                      value={m.execution || ''}
+                      onChange={(e) => setRowExecution(m.id, e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {MODEL_EXECUTION_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {testResults[m.id] && testResults[m.id].status !== 'testing' && (
                   <div
                     className="mt-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2"

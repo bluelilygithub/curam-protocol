@@ -8,6 +8,7 @@ export const MODELS = [
     desc: 'Best for quick tasks, drafts, and simple Q&A',
     color: '#059669',
     provider: 'anthropic',
+    // execution intentionally omitted — admin must confirm local|hosted; never inferred from provider
   },
   {
     id: 'claude-sonnet-4-6',
@@ -81,6 +82,20 @@ export const MODELS = [
   },
 ];
 
+/** Admin-confirmed execution boundary for vault_models entries. */
+export const MODEL_EXECUTION_OPTIONS = [
+  { value: 'local', label: 'Local execution' },
+  { value: 'hosted', label: 'Hosted / API' },
+];
+
+export function isValidModelExecution(value) {
+  return value === 'local' || value === 'hosted';
+}
+
+export function modelsNeedingExecutionConfirm(models) {
+  if (!Array.isArray(models)) return [];
+  return models.filter((m) => m && !isValidModelExecution(m.execution));
+}
 export const PROJECT_TYPES = [
   {
     id: 'development',
