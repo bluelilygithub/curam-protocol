@@ -141,6 +141,44 @@ UI sorts by score; low-score items remain visible but collapsed.
 - **Metadata scrub pass** (always, not optional): strip author/company/revision, remove comments & tracked changes (or accept “accept all then scrub” policy — see open questions), clear custom properties, remove personal info from core.xml / app.xml.
 - Emit redacted `.docx` + intermediate plain-text manifest for diff.
 
+#### Substitution target (chain-ready interface)
+
+Apply takes a **`target` object**, not a bare style string:
+
+```json
+{
+  "consumer": "human-review | frontier-logic-check | legal-disclosure | public-summary | …",
+  "requirement": "must-remain-readable | must-be-unambiguously-withheld | must-preserve-aggregate-properties | must-remain-arithmetically-consistent | …"
+}
+```
+
+- `consumer` / `requirement` are **free text for now** (not closed enums) so future orchestrating agents can name new consumers without a schema break.
+- **Why this shape:** the eventual caller is another agent specifying *what it needs from the redacted output*. The human Settings/HITL dropdown is **one caller** that maps a friendly label → `target` (e.g. Realistic → `{ consumer: "human-review", requirement: "must-remain-readable" }`). Agent-to-agent orchestration itself is **NOT built yet** — this refactor only makes the apply interface ready.
+- Optional `strategyOverride` forces a plugin id (`blackout` | `realistic` | `generalized`) when a caller disagrees with the requirement’s default mapping.
+- Implementation: `server/services/documentRedaction/substitution/` (`target.js`, `strategies/*`, `arithmeticConsistency.js`, `index.js` → `generateSubstitutions`).
+
+#### Strategy plugins (requirement → default)
+
+| Strategy | Satisfies (default) | Behaviour |
+|---|---|---|
+| **`blackout`** | `must-be-unambiguously-withheld` | Token replacement (`[REDACTED_CATEGORY_N]`). No plausible fabrication. |
+| **`realistic`** | `must-remain-readable` | Current behaviour: local-model plausible fakes + heuristics. |
+| **`generalized`** | `must-preserve-aggregate-properties` | Buckets/ranges (`$1.1M–$1.2M`, `Major Bank`) — not a specific false fact. |
+
+#### Arithmetic consistency (orthogonal constraint, not a strategy)
+
+- Requirement `must-remain-arithmetically-consistent` defaults to the **`realistic`** strategy **plus** a linked-entity pass.
+- **`blackout`** and **`generalized`** satisfy this requirement **for free by construction** (no precise fabricated numbers that can disagree).
+- Only **`realistic`** actively rewrites linked values today.
+- **Implemented relationship (minimum):** `income_surplus_capacity`  
+  - `surplus′ = income′ × (surplus/income)`  
+  - `capacity′ = surplus′ × (capacity/surplus)`  
+- **Gaps (follow-up):** no general constraint solver; no automatic relationship discovery from the document; only currency entities with income/surplus/capacity(/buffer) category cues; multi-loan graphs unsupported.
+
+#### Human UI status
+
+Dropdown → `target` mapping is defined in code (`UI_STYLE_TO_TARGET`) but **not wired into DocumentRedactionPage yet**. Until then, apply defaults to `{ consumer: "human-review", requirement: "must-remain-readable" }` (realistic). Callers may already POST `target` / `strategyOverride` on `/apply`.
+
 ### 3.7 Diff / compare view
 
 - **Two-way:** original vs local-redacted (word/paragraph-level diff + highlight of substituted spans).

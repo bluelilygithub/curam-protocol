@@ -214,6 +214,10 @@ async function applyRedactions(jobId, userId, opts = {}) {
   const syn = await generateSyntheticReplacements({
     modelId: resolved.local.modelId,
     entities,
+    // Chain-ready input: callers (UI later, agents later) supply target — not a bare style string.
+    // Default remains realistic / human-review when omitted.
+    target: opts.target || undefined,
+    strategyOverride: opts.strategyOverride || undefined,
   });
 
   const newEntries = buildEntityMapEntries(gate.approved, syn.map, applyPass);
@@ -314,6 +318,12 @@ async function applyRedactions(jobId, userId, opts = {}) {
     localModelId: resolved.local.modelId,
     syntheticErrors: syn.errors || [],
     entityMapEntryCount: entityMapEntries.length,
+    substitution: {
+      target: syn.plan?.target || null,
+      strategyId: syn.plan?.strategyId || null,
+      arithmeticConsistent: syn.plan?.arithmeticConsistent || false,
+      arithmetic: syn.arithmetic || null,
+    },
   };
   appendAudit(jobId, auditEvent);
 
@@ -323,6 +333,8 @@ async function applyRedactions(jobId, userId, opts = {}) {
     pdfStatus,
     redactedLocalDocx: 'redacted.docx',
     localPassDocx: 'local-pass.docx',
+    substitutionPlan: syn.plan || null,
+    substitutionArithmetic: syn.arithmetic || null,
     sanitizedPdf: pdfOk ? 'sanitized.pdf' : null,
     frontierApprovedAt: null,
     frontierApprovedPdfSha256: null,

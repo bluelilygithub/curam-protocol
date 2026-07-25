@@ -193,9 +193,10 @@ router.post('/jobs/:id/resuggest', async (req, res) => {
 
 /**
  * POST /api/document-redaction/jobs/:id/apply
- * Body: { confirmApply: true, applyPass?: 'local'|'frontier', pendingScoreThreshold?, acceptTrackedChanges? }
- * local (default): original.docx → redacted.docx (+ local-pass snapshot)
- * frontier: redacted.docx base → merge entity map (same gates / PDF status transitions)
+ * Body: { confirmApply: true, applyPass?, pendingScoreThreshold?, acceptTrackedChanges?,
+ *         target?: { consumer, requirement }, strategyOverride?: 'blackout'|'realistic'|'generalized' }
+ * `target` is the chain-ready apply input (preferred). Human UI dropdown will map to it later;
+ * agent callers may supply target directly. Bare style strings are not the apply contract.
  */
 router.post('/jobs/:id/apply', async (req, res) => {
   try {
