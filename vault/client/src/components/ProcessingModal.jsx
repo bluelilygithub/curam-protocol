@@ -8,6 +8,9 @@ export default function ProcessingModal({ open, title, message }) {
   const storeMessage = useProcessingStore((s) => s.message);
   const storeDetail = useProcessingStore((s) => s.detail);
   const steps = useProcessingStore((s) => s.steps);
+  const cancellable = useProcessingStore((s) => s.cancellable);
+  const cancelHandler = useProcessingStore((s) => s.cancelHandler);
+  const stopProcessing = useProcessingStore((s) => s.stopProcessing);
   const logRef = useRef(null);
 
   const isOpen = open !== undefined ? open : !!storeMessage;
@@ -28,6 +31,14 @@ export default function ProcessingModal({ open, title, message }) {
   }, [steps, hasSteps]);
 
   if (!isOpen) return null;
+
+  function handleCancel() {
+    try {
+      cancelHandler?.();
+    } finally {
+      stopProcessing();
+    }
+  }
 
   return (
     <div
@@ -84,6 +95,17 @@ export default function ProcessingModal({ open, title, message }) {
           <p className="text-[11px] text-center" style={{ color: 'var(--color-muted)' }}>
             Please don’t navigate away
           </p>
+
+          {cancellable && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="mt-1 w-full px-3 py-2 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </div>

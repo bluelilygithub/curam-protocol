@@ -78,7 +78,7 @@ function heuristicFallback(realValue, categoryLabel, seed) {
   return `${real[0]}${'x'.repeat(Math.min(6, real.length - 1))}${real[real.length - 1]}`;
 }
 
-async function generate({ modelId, entities }) {
+async function generate({ modelId, entities, skipLlm = false }) {
   const list = entities || [];
   const map = new Map();
   const errors = [];
@@ -93,7 +93,7 @@ async function generate({ modelId, entities }) {
     }
   }
 
-  if (needLlm.length && modelId) {
+  if (!skipLlm && needLlm.length && modelId) {
     try {
       const payload = needLlm.map((e) => ({
         entityKey: e.entityKey,

@@ -194,14 +194,19 @@ router.post('/jobs/:id/resuggest', async (req, res) => {
 /**
  * POST /api/document-redaction/jobs/:id/apply
  * Body: { confirmApply: true, applyPass?, pendingScoreThreshold?, acceptTrackedChanges?,
- *         target?: { consumer, requirement }, strategyOverride?: 'blackout'|'realistic'|'generalized' }
- * `target` is the chain-ready apply input (preferred). Human UI dropdown will map to it later;
- * agent callers may supply target directly. Bare style strings are not the apply contract.
+ *         target?: { consumer, requirement }, strategyOverride?, skipLlm? }
+ * `target` is the chain-ready apply input. Human UI maps style dropdown → target.
  */
 router.post('/jobs/:id/apply', async (req, res) => {
+  const cancelState = { cancelled: false };
+  const onClose = () => { cancelState.cancelled = true; };
+  req.on('close', onClose);
   try {
     const { applyRedactions } = require('../services/documentRedaction/applyService');
-    const result = await applyRedactions(req.params.id, req.user.id, req.body || {});
+    const result = await applyRedactions(req.params.id, req.user.id, {
+      ...(req.body || {}),
+      cancelState,
+    });
     res.json(result);
   } catch (err) {
     console.error('[document-redaction] apply failed:', err.message);
@@ -212,6 +217,22 @@ router.post('/jobs/:id/apply', async (req, res) => {
       parts: err.parts,
       resolver: err.resolver || undefined,
     });
+  } finally {
+    req.off?.('close', onClose);
+  }
+});
+
+/**
+ * POST /api/document-redaction/jobs/:id/preview-substitution
+ * Fast before/after sample for a style target — does not write DOCX/PDF.
+ */
+router.post('/jobs/:id/preview-substitution', async (req, res) => {
+  try {
+    const { previewSubstitution } = require('../services/documentRedaction/previewSubstitution');
+    const result = await previewSubstitution(req.params.id, req.user.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 

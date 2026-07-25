@@ -18,12 +18,13 @@ const realistic = require('./substitution/strategies/realistic');
  * @deprecated Prefer generateSubstitutions({ modelId, entities, target })
  * Defaults to realistic / human-review when no target is supplied.
  */
-async function generateSyntheticReplacements({ modelId, entities, target, strategyOverride } = {}) {
+async function generateSyntheticReplacements({ modelId, entities, target, strategyOverride, skipLlm } = {}) {
   const result = await generateSubstitutions({
     modelId,
     entities,
     target: target || DEFAULT_TARGET,
     strategyOverride,
+    skipLlm,
   });
   return {
     map: result.map,

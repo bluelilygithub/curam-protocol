@@ -35,11 +35,16 @@ function listStrategies() {
  * @returns {Promise<{ map: Map, errors: string[], modelId: string, plan: object, strategyMeta: object, arithmetic: object }>}
  */
 async function generateSubstitutions(opts = {}) {
-  const { modelId, entities = [], target, strategyOverride } = opts;
+  const { modelId, entities = [], target, strategyOverride, skipLlm = false } = opts;
   const plan = resolveSubstitutionPlan({ target, strategyOverride });
   const strategy = STRATEGIES[plan.strategyId] || STRATEGIES.realistic;
 
-  const result = await strategy.generate({ modelId, entities, target: plan.target });
+  const result = await strategy.generate({
+    modelId,
+    entities,
+    target: plan.target,
+    skipLlm: Boolean(skipLlm) || plan.strategyId !== 'realistic',
+  });
   const map = result.map instanceof Map ? result.map : new Map(Object.entries(result.map || {}));
   const errors = result.errors || [];
 

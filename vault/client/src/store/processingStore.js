@@ -19,6 +19,8 @@ const useProcessingStore = create((set, get) => ({
   detail: null,
   /** @type {{ id: string, label: string, status: 'pending'|'active'|'done'|'error' }[]} */
   steps: [],
+  cancellable: false,
+  cancelHandler: null,
 
   startProcessing: (message, detail = null, opts = {}) => {
     const labels = Array.isArray(opts.steps) ? opts.steps.filter(Boolean) : [];
@@ -27,7 +29,13 @@ const useProcessingStore = create((set, get) => ({
       label,
       status: i === 0 ? 'active' : 'pending',
     }));
-    set({ message, detail, steps });
+    set({
+      message,
+      detail,
+      steps,
+      cancellable: Boolean(opts.onCancel),
+      cancelHandler: typeof opts.onCancel === 'function' ? opts.onCancel : null,
+    });
   },
 
   setProcessingSteps: (labelsOrSteps) => {
@@ -96,7 +104,13 @@ const useProcessingStore = create((set, get) => ({
     set({ steps: steps.map((s) => ({ ...s, status: 'done' })) });
   },
 
-  stopProcessing: () => set({ message: null, detail: null, steps: [] }),
+  stopProcessing: () => set({
+    message: null,
+    detail: null,
+    steps: [],
+    cancellable: false,
+    cancelHandler: null,
+  }),
 }));
 
 export default useProcessingStore;

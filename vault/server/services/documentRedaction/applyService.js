@@ -120,9 +120,27 @@ function collectReplacementOps(approved, entityMapEntries, ir) {
 
 /**
  * Apply approved redactions for a job.
- * @param {{ confirmApply?: boolean, applyPass?: 'local'|'frontier', pendingScoreThreshold?: number, acceptTrackedChanges?: boolean }} opts
+ * @param {object} opts
+ * @param {boolean} [opts.confirmApply]
+ * @param {'local'|'frontier'} [opts.applyPass]
+ * @param {number} [opts.pendingScoreThreshold]
+ * @param {boolean} [opts.acceptTrackedChanges]
+ * @param {{ consumer: string, requirement: string }} [opts.target]
+ * @param {string} [opts.strategyOverride]
+ * @param {boolean} [opts.skipLlm] — skip local-model synthetics (heuristics / non-LLM strategies)
+ * @param {{ cancelled?: boolean }} [opts.cancelState]
  */
 async function applyRedactions(jobId, userId, opts = {}) {
+  const cancelState = opts.cancelState || { cancelled: false };
+  const throwIfCancelled = () => {
+    if (cancelState.cancelled) {
+      const err = new Error('Apply cancelled');
+      err.status = 499;
+      err.code = 'CANCELLED';
+      throw err;
+    }
+  };
+
   const job = loadJob(jobId, userId);
   if (!job) {
     const err = new Error('Job not found');
@@ -150,7 +168,6 @@ async function applyRedactions(jobId, userId, opts = {}) {
       err.code = 'NOT_APPLIED';
       throw err;
     }
-    // Freeze local-pass snapshot before first frontier write
     if (!hasLocalPassDocx(jobId)) {
       saveLocalPassDocx(jobId, baseBuf);
     }
@@ -165,8 +182,21 @@ async function applyRedactions(jobId, userId, opts = {}) {
     ir = loadIr(jobId);
   }
 
+  throwIfCancelled();
+
+  const { resolveSubstitutionPlan } = require('./substitution');
+  const planPeek = resolveSubstitutionPlan({
+    target: opts.target,
+    strategyOverride: opts.strategyOverride,
+  });
+  const skipLlm = opts.skipLlm === true
+    || opts.skipLlm === 'true'
+    || opts.skipLlm === 1
+    || planPeek.strategyId === 'blackout'
+    || planPeek.strategyId === 'generalized';
+
   const resolved = await resolveDocumentRedactionModels({ userId, jobId });
-  if (!resolved.ok || !resolved.local?.modelId) {
+  if (!skipLlm && (!resolved.ok || !resolved.local?.modelId)) {
     const err = new Error(
       resolved.errors?.join('; ')
       || 'Local model not configured for document redaction',
@@ -211,14 +241,17 @@ async function applyRedactions(jobId, userId, opts = {}) {
     }
   }
 
+  throwIfCancelled();
+
   const syn = await generateSyntheticReplacements({
-    modelId: resolved.local.modelId,
+    modelId: skipLlm ? null : resolved.local?.modelId,
     entities,
-    // Chain-ready input: callers (UI later, agents later) supply target — not a bare style string.
-    // Default remains realistic / human-review when omitted.
     target: opts.target || undefined,
     strategyOverride: opts.strategyOverride || undefined,
+    skipLlm,
   });
+
+  throwIfCancelled();
 
   const newEntries = buildEntityMapEntries(gate.approved, syn.map, applyPass);
   let entityMapEntries;
@@ -249,6 +282,7 @@ async function applyRedactions(jobId, userId, opts = {}) {
   let metadataReport;
   let paragraphsTouched;
   try {
+    throwIfCancelled();
     ({ buffer: redactedBuf, metadataReport, paragraphsTouched } = await applyReplacementsToDocx(
       baseBuf,
       ops,
@@ -281,7 +315,13 @@ async function applyRedactions(jobId, userId, opts = {}) {
     saveLocalPassDocx(jobId, redactedBuf);
   }
 
-  const pdfResult = await exportSanitizedPdf(redactedBuf);
+  const pdfResult = await (async () => {
+    throwIfCancelled();
+    return exportSanitizedPdf(redactedBuf);
+  })().catch((err) => {
+    if (err.code === 'CANCELLED') throw err;
+    return { buffer: null, pdfMetaScrub: null, error: err.message || String(err) };
+  });
   const pdfOk = Boolean(pdfResult.buffer);
   if (pdfOk) saveSanitizedPdf(jobId, pdfResult.buffer);
 
@@ -315,14 +355,14 @@ async function applyRedactions(jobId, userId, opts = {}) {
     pdfStatus,
     pdfExported: pdfOk,
     pdfError: pdfResult.error,
-    localModelId: resolved.local.modelId,
+    localModelId: skipLlm ? null : resolved.local?.modelId,
     syntheticErrors: syn.errors || [],
-    entityMapEntryCount: entityMapEntries.length,
     substitution: {
       target: syn.plan?.target || null,
       strategyId: syn.plan?.strategyId || null,
       arithmeticConsistent: syn.plan?.arithmeticConsistent || false,
       arithmetic: syn.arithmetic || null,
+      skipLlm: Boolean(skipLlm),
     },
   };
   appendAudit(jobId, auditEvent);
@@ -352,7 +392,7 @@ async function applyRedactions(jobId, userId, opts = {}) {
       pdfExported: pdfOk,
       pdfError: pdfResult.error || null,
       trackedChangesAccepted: Boolean(metadataReport.trackedChangesAccepted),
-      localModelId: resolved.local.modelId,
+      localModelId: skipLlm ? null : resolved.local?.modelId,
     },
     decisionSummary: summary,
   });
@@ -410,8 +450,10 @@ async function applyRedactions(jobId, userId, opts = {}) {
       pdfStatus,
     },
     synthetic: {
-      modelId: resolved.local.modelId,
+      modelId: skipLlm ? null : resolved.local?.modelId,
       errors: syn.errors || [],
+      plan: syn.plan || null,
+      skipLlm: Boolean(skipLlm),
     },
   };
 }

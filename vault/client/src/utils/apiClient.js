@@ -23,45 +23,50 @@ const api = {
     const res = await fetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
-  post: async (url, body) => {
+  post: async (url, body, opts = {}) => {
     const res = await fetch(url, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
     return handleResponse(res);
   },
-  put: async (url, body) => {
+  put: async (url, body, opts = {}) => {
     const res = await fetch(url, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
     return handleResponse(res);
   },
-  patch: async (url, body) => {
+  patch: async (url, body, opts = {}) => {
     const res = await fetch(url, {
       method: 'PATCH',
       headers: getHeaders(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: opts.signal,
     });
     return handleResponse(res);
   },
-  delete: async (url, body) => {
+  delete: async (url, body, opts = {}) => {
     const res = await fetch(url, {
       method: 'DELETE',
       headers: getHeaders(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: opts.signal,
     });
     return handleResponse(res);
   },
   // For multipart/form-data uploads — do NOT set Content-Type (browser sets it with boundary)
-  postForm: async (url, formData) => {
+  postForm: async (url, formData, opts = {}) => {
     const token = useAuthStore.getState().token;
     const res = await fetch(url, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
+      signal: opts.signal,
     });
     return handleResponse(res);
   },

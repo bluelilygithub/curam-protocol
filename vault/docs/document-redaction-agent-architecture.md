@@ -177,7 +177,7 @@ Apply takes a **`target` object**, not a bare style string:
 
 #### Human UI status
 
-Dropdown → `target` mapping is defined in code (`UI_STYLE_TO_TARGET`) but **not wired into DocumentRedactionPage yet**. Until then, apply defaults to `{ consumer: "human-review", requirement: "must-remain-readable" }` (realistic). Callers may already POST `target` / `strategyOverride` on `/apply`.
+HITL **Apply redactions** opens a style picker (Blackout / Generalized / Realistic / Realistic + linked figures) with a **before/after sample preview**. Apply defaults to fast heuristics; optional “Higher-quality names via local model” can be slow. Processing overlay includes **Cancel** (aborts the client request; server stops between apply stages when the connection closes).
 
 ### 3.7 Diff / compare view
 

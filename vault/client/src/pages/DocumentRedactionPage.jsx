@@ -14,6 +14,38 @@ const FIELD = {
   color: 'var(--color-text)',
 };
 
+/** Human style picker → apply `target` (mirrors server UI_STYLE_TO_TARGET). */
+const STYLE_OPTIONS = [
+  {
+    id: 'Blackout',
+    label: 'Blackout',
+    hint: 'Replace with [REDACTED_…] tokens. Fast — no model call.',
+    fast: true,
+    target: { consumer: 'legal-disclosure', requirement: 'must-be-unambiguously-withheld' },
+  },
+  {
+    id: 'Generalized',
+    label: 'Generalized',
+    hint: 'Ranges/buckets like $1.1M–$1.2M or “Major Bank”. Fast.',
+    fast: true,
+    target: { consumer: 'public-summary', requirement: 'must-preserve-aggregate-properties' },
+  },
+  {
+    id: 'Realistic',
+    label: 'Realistic',
+    hint: 'Plausible fake values. Default uses fast heuristics; optional model call is slower.',
+    fast: true,
+    target: { consumer: 'human-review', requirement: 'must-remain-readable' },
+  },
+  {
+    id: 'Realistic + arithmetic',
+    label: 'Realistic + linked figures',
+    hint: 'Keeps income → surplus → capacity ratios. Fast heuristics by default.',
+    fast: true,
+    target: { consumer: 'frontier-logic-check', requirement: 'must-remain-arithmetically-consistent' },
+  },
+];
+
 function sourceBadge(c) {
   const label = c.sourceLabel || c.source || 'unknown';
   if (label === 'llm' || c.source === 'local_llm') return { text: 'LLM', bg: '#e0e7ff', color: '#3730a3' };
@@ -68,6 +100,13 @@ export default function DocumentRedactionPage() {
   const [coherence, setCoherence] = useState(null);
   const [frontierAnalysis, setFrontierAnalysis] = useState(null);
   const [frontierInstructions, setFrontierInstructions] = useState('');
+  const [applyModal, setApplyModal] = useState(null); // { applyPass }
+  const [applyStyleId, setApplyStyleId] = useState('Blackout');
+  const [applyUseModel, setApplyUseModel] = useState(false);
+  const [stylePreview, setStylePreview] = useState(null);
+  const [stylePreviewLoading, setStylePreviewLoading] = useState(false);
+  const [stylePreviewError, setStylePreviewError] = useState('');
+  const applyAbortRef = useRef(null);
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -196,20 +235,33 @@ export default function DocumentRedactionPage() {
       return;
     }
     setError('');
-    startProcessing('Extracting redaction candidates…', 'Local model + pattern backstop. Stay on this page.');
+    const controller = new AbortController();
+    applyAbortRef.current = controller;
+    startProcessing(
+      'Extracting redaction candidates…',
+      skipLlm ? 'Pattern-match only.' : 'Local model + pattern backstop. You can Cancel.',
+      {
+        onCancel: () => {
+          controller.abort();
+          setError('Propose cancelled');
+        },
+      },
+    );
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('brief', brief.trim());
       if (skipLlm) fd.append('skipLlm', '1');
-      const res = await api.postForm('/api/document-redaction/propose', fd);
+      const res = await api.postForm('/api/document-redaction/propose', fd, { signal: controller.signal });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Propose failed');
       await loadJobList();
       navigate(`/document-redaction/${data.job.id}`);
     } catch (err) {
-      setError(err.message || 'Propose failed');
+      if (err.name === 'AbortError') setError('Propose cancelled');
+      else setError(err.message || 'Propose failed');
     } finally {
+      applyAbortRef.current = null;
       stopProcessing();
     }
   }
@@ -331,37 +383,66 @@ export default function DocumentRedactionPage() {
         : 'Approve at least one candidate before applying.');
       return;
     }
-    if (!opts.skipConfirm) {
-      const ok = window.confirm(
-        applyPass === 'frontier'
-          ? `Apply ${approvedCount} approved frontier suggestion(s) on top of the current redacted document? Uses the same apply pipeline (tracked changes, leftovers, PDF).`
-          : `Apply ${approvedCount} approved redaction(s)? Rejected stay out; low-score pending are skipped. This writes redacted.docx (and PDF if LibreOffice is available).`,
-      );
-      if (!ok) return;
+
+    // Open style + preview modal unless already confirmed from the modal
+    if (!opts.skipStyleModal) {
+      setApplyModal({ applyPass, approvedCount });
+      setApplyStyleId('Blackout');
+      setApplyUseModel(false);
+      setStylePreview(null);
+      setStylePreviewError('');
+      return;
     }
+
+    const style = STYLE_OPTIONS.find((s) => s.id === opts.styleId) || STYLE_OPTIONS[0];
+    const skipLlm = !opts.useModel || style.id === 'Blackout' || style.id === 'Generalized';
 
     setError('');
     setApplyResult(null);
+    setApplyModal(null);
+
+    const controller = new AbortController();
+    applyAbortRef.current = controller;
     startProcessing(
       applyPass === 'frontier' ? 'Applying frontier suggestions…' : 'Applying redactions…',
-      applyPass === 'frontier'
-        ? 'Shared apply engine on redacted.docx — entity map merge + PDF refresh.'
-        : 'Local model invents synthetics, then writes the sanitized .docx.',
+      `${style.label} · ${skipLlm ? 'fast heuristics' : 'local model'} · you can Cancel`,
+      {
+        onCancel: () => {
+          controller.abort();
+          setError('Apply cancelled');
+        },
+        steps: ['Building replacements', 'Writing redacted document', 'PDF export (if available)'],
+      },
     );
     try {
       const res = await api.post(`/api/document-redaction/jobs/${job.id}/apply`, {
         confirmApply: true,
         applyPass,
         acceptTrackedChanges: Boolean(opts.acceptTrackedChanges),
-      });
+        target: style.target,
+        skipLlm,
+      }, { signal: controller.signal });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (data.code === 'CANCELLED') {
+          setError('Apply cancelled');
+          return;
+        }
         if (data.code === 'TRACKED_CHANGES') {
           stopProcessing();
           const proceed = window.confirm(
             `${data.error}\n\nAccept all tracked changes and scrub them? This can change visible content.`,
           );
-          if (proceed) return handleApply({ skipConfirm: true, acceptTrackedChanges: true, applyPass });
+          if (proceed) {
+            return handleApply({
+              skipStyleModal: true,
+              skipConfirm: true,
+              acceptTrackedChanges: true,
+              applyPass,
+              styleId: style.id,
+              useModel: opts.useModel,
+            });
+          }
           setError(data.error || 'Tracked changes blocked apply');
           return;
         }
@@ -375,11 +456,44 @@ export default function DocumentRedactionPage() {
       setViewMode('compare');
       await loadCompare(job.id);
     } catch (err) {
-      setError(err.message || 'Apply failed');
+      if (err.name === 'AbortError') {
+        setError('Apply cancelled');
+      } else {
+        setError(err.message || 'Apply failed');
+      }
     } finally {
+      applyAbortRef.current = null;
       stopProcessing();
     }
   }
+
+  async function loadStylePreview(styleId) {
+    if (!job || !applyModal) return;
+    const style = STYLE_OPTIONS.find((s) => s.id === styleId) || STYLE_OPTIONS[0];
+    setStylePreviewLoading(true);
+    setStylePreviewError('');
+    try {
+      const res = await api.post(`/api/document-redaction/jobs/${job.id}/preview-substitution`, {
+        target: style.target,
+        applyPass: applyModal.applyPass,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Preview failed');
+      setStylePreview(data);
+    } catch (err) {
+      setStylePreview(null);
+      setStylePreviewError(err.message || 'Preview failed');
+    } finally {
+      setStylePreviewLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!applyModal) return undefined;
+    loadStylePreview(applyStyleId);
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyModal, applyStyleId]);
 
   async function handleApplyFrontier(opts = {}) {
     return handleApply({ ...opts, applyPass: 'frontier' });
@@ -949,6 +1063,145 @@ export default function DocumentRedactionPage() {
               {visible.length === 0 && (
                 <p className="px-4 py-8 text-center text-xs" style={{ color: 'var(--color-muted)' }}>No candidates match these filters.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {applyModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90dvh] overflow-auto rounded-2xl border shadow-2xl p-5 space-y-4"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+          >
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                Choose redaction style
+              </h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Preview a sample paragraph, then apply {applyModal.approvedCount} approved
+                {applyModal.applyPass === 'frontier' ? ' frontier' : ''} redaction(s).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {STYLE_OPTIONS.map((opt) => {
+                const selected = applyStyleId === opt.id;
+                return (
+                  <label
+                    key={opt.id}
+                    className="flex gap-3 p-3 rounded-xl border cursor-pointer transition-opacity duration-200 hover:opacity-80"
+                    style={{
+                      borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                      background: 'var(--color-surface)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="redaction-style"
+                      className="mt-1"
+                      checked={selected}
+                      onChange={() => setApplyStyleId(opt.id)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium" style={{ color: 'var(--color-text)' }}>{opt.label}</span>
+                      <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{opt.hint}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {(applyStyleId === 'Realistic' || applyStyleId === 'Realistic + arithmetic') && (
+              <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={applyUseModel}
+                  onChange={(e) => setApplyUseModel(e.target.checked)}
+                />
+                <span>
+                  Higher-quality names via local model (can take several minutes). Leave unchecked for a fast apply.
+                </span>
+              </label>
+            )}
+
+            <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+                  Sample preview
+                </p>
+                <button
+                  type="button"
+                  onClick={() => loadStylePreview(applyStyleId)}
+                  className="text-xs underline transition-opacity duration-200 hover:opacity-70"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  Refresh
+                </button>
+              </div>
+              {stylePreviewLoading && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Building preview…</p>
+              )}
+              {stylePreviewError && (
+                <p className="text-xs" style={{ color: '#991b1b' }}>{stylePreviewError}</p>
+              )}
+              {stylePreview?.preview && !stylePreviewLoading && (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase mb-1" style={{ color: 'var(--color-muted)' }}>Before</p>
+                    <pre className="text-xs whitespace-pre-wrap break-words rounded-lg border p-2 max-h-48 overflow-auto" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                      {stylePreview.preview.before || '(empty)'}
+                    </pre>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase mb-1" style={{ color: 'var(--color-muted)' }}>After ({applyStyleId})</p>
+                    <pre className="text-xs whitespace-pre-wrap break-words rounded-lg border p-2 max-h-48 overflow-auto" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                      {stylePreview.preview.after || '(empty)'}
+                    </pre>
+                  </div>
+                </div>
+              )}
+              {stylePreview?.samplePairs?.length > 0 && !stylePreviewLoading && (
+                <ul className="text-[11px] space-y-1 pt-1" style={{ color: 'var(--color-muted)' }}>
+                  {stylePreview.samplePairs.slice(0, 6).map((p) => (
+                    <li key={p.entityKey}>
+                      <span style={{ color: 'var(--color-text)' }}>{p.realValue}</span>
+                      {' → '}
+                      <span style={{ color: 'var(--color-primary)' }}>{p.syntheticValue}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setApplyModal(null)}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApply({
+                  skipStyleModal: true,
+                  applyPass: applyModal.applyPass,
+                  styleId: applyStyleId,
+                  useModel: applyUseModel,
+                })}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Apply with this style
+              </button>
             </div>
           </div>
         </div>
