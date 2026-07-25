@@ -48,7 +48,7 @@ async function proposeRedactionCandidates({
   if (!skipLlm && (!resolved.ok || !resolved.local?.modelId)) {
     const err = new Error(
       resolved.errors?.join('; ')
-      || 'Document redaction local model is not configured. Assign a local-execution model on the agent card in Settings.',
+      || 'Document redaction candidate model is not configured. Assign a model on the agent card in Settings.',
     );
     err.status = 400;
     err.resolver = resolved;

@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
-const { getVaultModelsConfigForUser, validateVaultModelsCatalog, getModelsByExecution } = require('../services/modelResolver');
+const { getVaultModelsConfigForUser, validateVaultModelsCatalog } = require('../services/modelResolver');
 const {
   SLOT_KEYS: DOC_REDACTION_SLOT_KEYS,
   assertLocalSlotAllowed,
@@ -65,13 +65,9 @@ router.get('/embedding-config', async (req, res) => {
 router.get('/effective-models', async (req, res) => {
   try {
     const config = await getVaultModelsConfigForUser(req.user.id);
-    // Privacy boundary inventory — ONLY getModelsByExecution('local'); never fall back to full catalog.
-    const localExecutionModels = await getModelsByExecution(req.user.id, 'local');
     const documentRedactionAgent = await getDocumentRedactionAgentCardConfig(req.user.id);
     res.json({
       ...config,
-      localExecutionModels,
-      localExecutionModelIds: localExecutionModels.map((m) => m.id),
       documentRedactionAgent,
     });
   } catch (err) {
@@ -197,7 +193,6 @@ router.post('/', async (req, res) => {
       if (!validation.ok) {
         return res.status(400).json({
           error: validation.error,
-          needsConfirmation: validation.needsConfirmation,
           invalid: validation.invalid,
         });
       }

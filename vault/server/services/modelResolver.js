@@ -11,64 +11,30 @@ const EMPTY_MODELS = {
   ollama: null,
 };
 
-/** Admin-confirmed execution boundary — never infer from provider/id. */
-const VALID_EXECUTIONS = new Set(['local', 'hosted']);
-
-function normalizeExecution(value) {
-  const v = String(value || '').trim().toLowerCase();
-  return VALID_EXECUTIONS.has(v) ? v : null;
-}
-
-function isValidExecution(value) {
-  return normalizeExecution(value) != null;
-}
-
-/** True when a catalog entry is missing an admin-confirmed execution type. */
-function modelNeedsExecutionConfirm(entry) {
-  if (!entry || typeof entry !== 'object') return true;
-  return !isValidExecution(entry.execution);
-}
-
 /**
  * Validate a vault_models array before persist.
- * Does not invent defaults — every entry must already carry local|hosted.
+ * Requires a non-empty id on each entry — no Local/Hosted designation.
  */
 function validateVaultModelsCatalog(models) {
   if (!Array.isArray(models)) {
     return {
       ok: false,
       error: 'vault_models must be a JSON array',
-      needsConfirmation: [],
       invalid: [],
     };
   }
-  const needsConfirmation = [];
   const invalid = [];
   models.forEach((entry, index) => {
     const id = entry && typeof entry.id === 'string' ? entry.id.trim() : '';
     const label = id || `(index ${index})`;
     if (!id) {
       invalid.push({ index, id: label, reason: 'missing id' });
-      return;
-    }
-    if (modelNeedsExecutionConfirm(entry)) {
-      needsConfirmation.push({
-        index,
-        id,
-        name: entry?.name || id,
-        reason: 'execution must be explicitly set to "local" or "hosted" (admin-confirmed; not inferred from provider)',
-      });
     }
   });
-  const ok = invalid.length === 0 && needsConfirmation.length === 0;
+  const ok = invalid.length === 0;
   return {
     ok,
-    error: ok
-      ? null
-      : (needsConfirmation.length
-        ? `${needsConfirmation.length} model(s) need execution type confirmed before the inventory can be saved`
-        : 'vault_models catalog is invalid'),
-    needsConfirmation,
+    error: ok ? null : 'vault_models catalog is invalid',
     invalid,
   };
 }
@@ -190,7 +156,6 @@ function parseConfiguredModelEntries(rawVaultModels) {
     .map((m) => ({
       id: m && typeof m.id === 'string' ? m.id.trim() : '',
       provider: m && typeof m.provider === 'string' ? m.provider.trim().toLowerCase() : '',
-      execution: normalizeExecution(m && m.execution),
     }))
     .filter((m) => m.id);
 }
@@ -302,12 +267,6 @@ async function getVaultModelsConfigForUser(userId) {
   try {
     const { vault_models, default_model, fromAdmin } = await resolveVaultModelSettings(userId);
     const models = parseVaultModelsCatalog(vault_models);
-    const needsConfirmation = models
-      .filter((m) => modelNeedsExecutionConfirm(m))
-      .map((m) => ({
-        id: String(m.id).trim(),
-        name: m.name || String(m.id).trim(),
-      }));
     const textIds = models
       .filter((m) => !isNonTextModel(m))
       .map((m) => String(m.id).trim())
@@ -319,33 +278,14 @@ async function getVaultModelsConfigForUser(userId) {
       models,
       defaultModel,
       fromAdmin,
-      executionNeedsConfirmation: needsConfirmation,
-      executionNeedsConfirmationCount: needsConfirmation.length,
     };
   } catch {
     return {
       models: [],
       defaultModel: '',
       fromAdmin: false,
-      executionNeedsConfirmation: [],
-      executionNeedsConfirmationCount: 0,
     };
   }
-}
-
-/**
- * Models whose admin-confirmed execution matches `execution` ('local' | 'hosted').
- * Entries missing execution are excluded (not inferred).
- */
-async function getModelsByExecution(userId, execution) {
-  const normalized = normalizeExecution(execution);
-  if (!normalized) {
-    const err = new Error('execution must be "local" or "hosted"');
-    err.status = 400;
-    throw err;
-  }
-  const { models } = await getVaultModelsConfigForUser(userId);
-  return models.filter((m) => normalizeExecution(m.execution) === normalized);
 }
 
 /** First usable text model — same fallback chain as shares/news. prefer: 'standard' | 'light' */
@@ -359,14 +299,9 @@ function pickTextModel(tiers, prefer = 'standard') {
 module.exports = {
   getModelsForUser,
   getVaultModelsConfigForUser,
-  getModelsByExecution,
   pickTextModel,
   isNonTextModel,
-  isValidExecution,
-  normalizeExecution,
-  modelNeedsExecutionConfirm,
   validateVaultModelsCatalog,
   ensureShoppingSearchModelInVault,
   SHOPPING_SEARCH_MODEL,
-  VALID_EXECUTIONS: ['local', 'hosted'],
 };

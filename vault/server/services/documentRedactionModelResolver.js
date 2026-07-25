@@ -4,20 +4,15 @@
  * Document Redaction Agent — model card + runtime resolver.
  *
  * agentId: document-redaction-agent
- * Slots (settings keys, same pattern as default_model / branch_eval_model):
- *   - local    → document_redaction_local_model  (on-device / candidate pass)
+ * Slots (settings keys):
+ *   - local    → document_redaction_local_model  (candidate / apply pass)
  *   - frontier → document_redaction_frontier_model (residual-risk pass)
  *
- * Both slots accept any connected vault_models entry so demos can use two
- * local models. Admin UI shows Local/Hosted icons on every option; execution
- * type is informational, not a dropdown filter.
+ * Both slots accept any connected vault_models entry. No Local/Hosted designation.
  */
 
 const { pool } = require('../db');
-const {
-  getVaultModelsConfigForUser,
-  isValidExecution,
-} = require('./modelResolver');
+const { getVaultModelsConfigForUser } = require('./modelResolver');
 
 const AGENT_ID = 'document-redaction-agent';
 
@@ -33,14 +28,14 @@ const AGENT_CARD = {
     {
       id: 'local',
       settingsKey: SLOT_KEYS.local,
-      label: 'Local model (candidate extraction & redaction application)',
+      label: 'Candidate / apply model',
       required: true,
       inventory: 'any_connected',
     },
     {
       id: 'frontier',
       settingsKey: SLOT_KEYS.frontier,
-      label: 'Frontier model (residual-risk analysis on sanitized output)',
+      label: 'Residual-risk / frontier model',
       required: true,
       inventory: 'any_connected',
     },
@@ -85,9 +80,7 @@ function catalogEntryById(models, modelId) {
   return models.find((m) => m && String(m.id).trim() === modelId) || null;
 }
 
-/**
- * Either agent slot: must be a connected vault_models entry (local or hosted).
- */
+/** Either agent slot: must be a connected vault_models entry. */
 async function assertConnectedModel(userId, modelId, slotLabel) {
   const id = String(modelId || '').trim();
   if (!id) {
@@ -108,11 +101,11 @@ async function assertConnectedModel(userId, modelId, slotLabel) {
 }
 
 async function assertLocalSlotAllowed(userId, modelId) {
-  return assertConnectedModel(userId, modelId, 'Local');
+  return assertConnectedModel(userId, modelId, 'Candidate / apply');
 }
 
 async function assertFrontierSlotAllowed(userId, modelId) {
-  return assertConnectedModel(userId, modelId, 'Frontier');
+  return assertConnectedModel(userId, modelId, 'Residual-risk');
 }
 
 /**
@@ -142,13 +135,12 @@ async function resolveDocumentRedactionModels(ctx = {}) {
 
   try {
     if (!localSlot.modelId) {
-      errors.push('No local model assigned on the document-redaction-agent card');
+      errors.push('No candidate / apply model assigned on the document-redaction-agent card');
     } else {
       const entry = await assertLocalSlotAllowed(userId, localSlot.modelId);
       localHandle = {
         slot: 'local',
         modelId: localSlot.modelId,
-        execution: isValidExecution(entry?.execution) ? entry.execution : null,
         provider: entry?.provider || null,
         name: entry?.name || null,
         fromAdminFallback: localSlot.fromAdmin,
@@ -160,13 +152,12 @@ async function resolveDocumentRedactionModels(ctx = {}) {
 
   try {
     if (!frontierSlot.modelId) {
-      errors.push('No frontier model assigned on the document-redaction-agent card');
+      errors.push('No residual-risk model assigned on the document-redaction-agent card');
     } else {
       const entry = await assertFrontierSlotAllowed(userId, frontierSlot.modelId);
       frontierHandle = {
         slot: 'frontier',
         modelId: frontierSlot.modelId,
-        execution: isValidExecution(entry?.execution) ? entry.execution : null,
         provider: entry?.provider || null,
         name: entry?.name || null,
         fromAdminFallback: frontierSlot.fromAdmin,
@@ -186,9 +177,7 @@ async function resolveDocumentRedactionModels(ctx = {}) {
   };
 }
 
-/**
- * Card state for admin Settings UI — both slots share the full connected inventory.
- */
+/** Card state for admin Settings UI — both slots share the full connected inventory. */
 async function getDocumentRedactionAgentCardConfig(userId) {
   const { models: allConnected } = await getVaultModelsConfigForUser(userId);
   const localSlot = await resolveSlotSetting(userId, SLOT_KEYS.local);
@@ -207,7 +196,6 @@ async function getDocumentRedactionAgentCardConfig(userId) {
       assignedModelId: localSlot.modelId,
       assignmentValid: !localSlot.modelId || !!localEntry,
       fromAdmin: localSlot.fromAdmin,
-      execution: localEntry?.execution || null,
       choices: allConnected,
       choiceIds: allConnected.map((m) => m.id),
     },
@@ -218,7 +206,6 @@ async function getDocumentRedactionAgentCardConfig(userId) {
       assignedModelId: frontierSlot.modelId,
       assignmentValid: !frontierSlot.modelId || !!frontierEntry,
       fromAdmin: frontierSlot.fromAdmin,
-      execution: frontierEntry?.execution || null,
       choices: allConnected,
     },
   };

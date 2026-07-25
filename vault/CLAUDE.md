@@ -121,13 +121,11 @@ buf = lines.pop(); // keep partial line
 
 | Key | Role |
 |---|---|
-| **`vault_models`** | JSON array of `{ id, name, emoji, provider, execution, … }` — allowed ids for this user’s UI and resolver input order. **`execution`** is admin-confirmed **`local` \| `hosted`** (required to save; never inferred from provider/id). Entries missing it need re-confirmation in Settings. |
+| **`vault_models`** | JSON array of `{ id, name, emoji, provider, … }` — allowed ids for this user’s UI and resolver input order |
 | **`default_model`** | Optional. If present **and** that `id` is in **`vault_models`**, it becomes the **`standard`** tier; otherwise **`standard`** is the **first** id in **`vault_models`** |
 | **`branch_eval_model`** | Separate from chat default — branch-suggestion evaluation only |
 
-**Helpers:** `getModelsByExecution(userId, 'local'|'hosted')` returns only inventory entries with that confirmed `execution`. Use this for privacy-sensitive agents (e.g. document redaction local slot).
-
-**Document redaction agent card** (`document-redaction-agent`): settings keys `document_redaction_local_model` + `document_redaction_frontier_model`. Resolve at runtime via `resolveDocumentRedactionModels({ userId, jobId })` in `server/services/documentRedactionModelResolver.js` — never hardcode model ids. Both slots accept any connected `vault_models` entry (including two Local models for demos). Admin dropdowns show Local/Hosted icons; they are not filtered by execution type.
+**Document redaction agent card** (`document-redaction-agent`): settings keys `document_redaction_local_model` + `document_redaction_frontier_model`. Resolve at runtime via `resolveDocumentRedactionModels({ userId, jobId })` in `server/services/documentRedactionModelResolver.js` — never hardcode model ids. Both slots accept any connected `vault_models` entry.
 
 If the user has no **`vault_models`** row (or empty list), resolver uses the **first admin’s** **`vault_models` / `default_model`**.
 

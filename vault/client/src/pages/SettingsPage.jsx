@@ -4,7 +4,7 @@ import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
-import { MODELS as DEFAULT_MODELS, MODEL_EXECUTION_OPTIONS, isValidModelExecution, modelsNeedingExecutionConfirm, formatModelSelectLabel, modelExecutionIcon, modelExecutionLabel } from '../utils/models';
+import { formatModelSelectLabel } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
@@ -98,7 +98,6 @@ function SettingsPage() {
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
   const [modelStatus, setModelStatus] = useState(null);
-  const [ollamaStatus, setOllamaStatus] = useState(null);
   const modelFormCardRef = useRef(null);
   const modelIdInputRef = useRef(null);
   const {
@@ -114,11 +113,11 @@ function SettingsPage() {
     embeddingModel,
     saveEmbeddingModel,
     embeddingConfig,
-    needsExecutionConfirm,
     documentRedactionLocalModel,
     documentRedactionFrontierModel,
     saveDocumentRedactionLocalModel,
     saveDocumentRedactionFrontierModel,
+    reload: reloadModels,
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
@@ -309,7 +308,6 @@ function SettingsPage() {
 
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
-    api.get('/api/chat/ollama-status').then(r => r.json()).then(setOllamaStatus).catch(() => setOllamaStatus(null));
     // Load allowedFileTypes from DB. If no DB value exists yet, seed it with the
     // current comprehensive default (also fixes stale localStorage values from older builds).
     const DEFAULT_FILE_TYPES = '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*';
@@ -427,15 +425,8 @@ function SettingsPage() {
   }, []);
 
   const EMPTY_MODEL = {
-    emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '', execution: '',
+    emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '',
   };
-
-  function refreshOllamaStatus() {
-    api.get('/api/chat/ollama-status')
-      .then((r) => r.json())
-      .then(setOllamaStatus)
-      .catch(() => setOllamaStatus(null));
-  }
 
   function focusModelFormCard() {
     requestAnimationFrame(() => {
@@ -450,13 +441,11 @@ function SettingsPage() {
     setModelForm(EMPTY_MODEL);
     setEditingModel('new');
     setModelInventoryError('');
-    refreshOllamaStatus();
   }
   function openEdit(m) {
-    setModelForm({ ...m, execution: isValidModelExecution(m.execution) ? m.execution : '' });
+    setModelForm({ ...m });
     setEditingModel(m.id);
     setModelInventoryError('');
-    refreshOllamaStatus();
   }
   function cancelEdit() { setEditingModel(null); setModelForm({}); }
 
@@ -466,26 +455,13 @@ function SettingsPage() {
     return undefined;
   }, [editingModel]);
 
-  function applyInstalledOllamaModel(modelIdOrName) {
-    const raw = String(modelIdOrName || '').trim();
-    if (!raw) return;
-    const id = raw.startsWith('ollama:') ? raw : `ollama:${raw}`;
-    const short = id.replace(/^ollama:/, '');
-    setModelForm((f) => ({
-      ...f,
-      id,
-      name: f.name?.trim() ? f.name : short,
-      provider: 'ollama',
-      execution: 'local',
-      emoji: f.emoji || '💻',
-    }));
-  }
-
   async function persistModelInventory(nextModels) {
     setModelInventorySaving(true);
     setModelInventoryError('');
     try {
-      await saveModels(nextModels);
+      // Drop legacy Local/Hosted designation if present on older inventory rows.
+      const cleaned = (nextModels || []).map(({ execution: _ignored, ...rest }) => rest);
+      await saveModels(cleaned);
       setModelInventoryDirty(false);
     } catch (err) {
       setModelInventoryError(err.message || 'Could not save model inventory');
@@ -497,17 +473,13 @@ function SettingsPage() {
 
   async function saveModel() {
     if (!modelForm.id.trim() || !modelForm.name.trim()) return;
-    if (!isValidModelExecution(modelForm.execution)) {
-      setModelInventoryError('Choose Local execution or Hosted / API — required, and never inferred from provider.');
-      return;
-    }
     let updated;
     if (editingModel === 'new') {
-      updated = [...models, { ...modelForm, id: modelForm.id.trim(), execution: modelForm.execution }];
+      updated = [...models, { ...modelForm, id: modelForm.id.trim() }];
     } else {
       updated = models.map((m) => (
         m.id === editingModel
-          ? { ...modelForm, id: modelForm.id.trim(), execution: modelForm.execution }
+          ? { ...modelForm, id: modelForm.id.trim() }
           : m
       ));
     }
@@ -518,7 +490,7 @@ function SettingsPage() {
       }
       cancelEdit();
     } catch {
-      /* error already set — siblings may still need execution confirmation */
+      /* error already set */
     }
   }
 
@@ -526,30 +498,21 @@ function SettingsPage() {
     const next = models.filter((m) => m.id !== id);
     setModels(next);
     setModelInventoryDirty(true);
-    if (next.length === 0 || modelsNeedingExecutionConfirm(next).length === 0) {
-      try {
-        await persistModelInventory(next);
-      } catch {
-        /* error already set */
-      }
-    } else {
-      setModelInventoryError('Model removed locally. Confirm Local or Hosted on remaining models, then Save inventory.');
+    try {
+      await persistModelInventory(next);
+    } catch {
+      /* error already set */
     }
   }
 
-  function resetModels() {
-    // Seed catalog has no execution — do not POST (server would reject) and do not invent defaults.
-    setModels(DEFAULT_MODELS.map((m) => ({ ...m })));
-    setModelInventoryDirty(true);
-    setModelInventoryError('Defaults loaded locally with no execution type. Confirm Local or Hosted for every model, then Save inventory.');
+  async function resetModels() {
+    // Discard local draft and reload saved inventory — never inject a hardcoded catalog.
+    setModelInventoryError('');
+    setModelInventoryDirty(false);
     cancelEdit();
+    await reloadModels();
   }
 
-  function setRowExecution(modelId, execution) {
-    setModels((prev) => prev.map((m) => (m.id === modelId ? { ...m, execution } : m)));
-    setModelInventoryDirty(true);
-    setModelInventoryError('');
-  }
 
   async function saveInventoryAfterConfirm() {
     try {
@@ -752,23 +715,6 @@ function SettingsPage() {
     ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'fal' }, ...graphicsModelChoices]
     : graphicsModelChoices;
 
-  function modelById(id) {
-    return models.find((m) => m.id === id) || null;
-  }
-
-  function SelectedModelExecutionHint({ modelId }) {
-    const m = modelById(modelId);
-    if (!modelId || !m) return null;
-    return (
-      <p className="text-[11px] mt-1.5 flex items-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
-        <span aria-hidden="true">{modelExecutionIcon(m.execution)}</span>
-        <span>{modelExecutionLabel(m.execution)}</span>
-        {!isValidModelExecution(m.execution) && (
-          <span style={{ color: '#b45309' }}>— confirm Local or Hosted on this inventory entry</span>
-        )}
-      </p>
-    );
-  }
 
   function modelProviderStatusKey(provider) {
     if (provider === 'serpapi') return 'search';
@@ -1395,9 +1341,9 @@ function SettingsPage() {
               onClick={resetModels}
               className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-              title="Reset to defaults"
+              title="Reload saved inventory from the server"
             >
-              Reset defaults
+              Reload inventory
             </button>
             <button
               onClick={openAdd}
@@ -1409,45 +1355,29 @@ function SettingsPage() {
           </div>
         </div>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          Add, edit, or remove models. Set <strong>Local or Hosted</strong> on each inventory entry.
-          Admin dropdowns list every connected model with a 💻 Local / ☁️ Hosted icon — they are not filtered by execution type.
+          Manage your model inventory, then assign models on the agent cards below. Dropdowns only list models you have configured.
         </p>
 
-        {(needsExecutionConfirm?.length > 0 || modelInventoryError || modelInventoryDirty) && (
+        {(modelInventoryError || modelInventoryDirty) && (
           <div
             className="mb-4 p-4 rounded-xl border space-y-3"
             style={{ background: '#FFFBEB', borderColor: '#F59E0B' }}
           >
-            {needsExecutionConfirm?.length > 0 && (
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
-                  {needsExecutionConfirm.length} connected model{needsExecutionConfirm.length === 1 ? '' : 's'} need execution type confirmed
-                </p>
-                <p className="text-xs mt-1" style={{ color: '#92400e' }}>
-                  Older inventory entries are missing <code>execution</code>. Choose Local or Hosted for each below — nothing is guessed from provider (including Ollama). Save inventory once every model is confirmed.
-                </p>
-                <ul className="mt-2 text-xs space-y-1" style={{ color: '#78350f' }}>
-                  {needsExecutionConfirm.map((m) => (
-                    <li key={m.id}>· {m.name || m.id} <span className="font-mono opacity-70">({m.id})</span></li>
-                  ))}
-                </ul>
-              </div>
-            )}
             {modelInventoryError && (
               <p className="text-xs" style={{ color: '#b45309' }}>{modelInventoryError}</p>
             )}
-            {modelInventoryDirty && !(needsExecutionConfirm?.length > 0) && !modelInventoryError && (
+            {modelInventoryDirty && !modelInventoryError && (
               <p className="text-xs" style={{ color: '#92400e' }}>
-                Execution types updated locally — Save inventory to persist.
+                Inventory updated locally — Save inventory to persist.
               </p>
             )}
             <button
               type="button"
               onClick={saveInventoryAfterConfirm}
-              disabled={modelInventorySaving || (needsExecutionConfirm?.length > 0) || !modelInventoryDirty}
+              disabled={modelInventorySaving || !modelInventoryDirty}
               className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}
-              title={needsExecutionConfirm?.length > 0 ? 'Set Local or Hosted on every model first' : 'Save model inventory'}
+              title="Save model inventory"
             >
               {modelInventorySaving ? 'Saving…' : 'Save inventory'}
             </button>
@@ -1465,126 +1395,14 @@ function SettingsPage() {
               {editingModel === 'new' ? 'Add model' : 'Edit model'}
             </div>
 
-            <div
-              className="rounded-lg px-3 py-2 text-xs space-y-1"
-              style={{
-                background: ollamaStatus?.available ? '#ecfdf5' : '#FFFBEB',
-                color: ollamaStatus?.available ? '#065f46' : '#92400e',
-                border: `1px solid ${ollamaStatus?.available ? '#a7f3d0' : '#fcd34d'}`,
-              }}
-            >
-              {ollamaStatus?.available ? (
-                <>
-                  <p className="font-medium">
-                    Ollama is active — you can select and use installed local models
-                    {ollamaStatus.models?.length != null ? ` (${ollamaStatus.models.length} installed)` : ''}.
-                  </p>
-                  <p style={{ opacity: 0.85 }}>
-                    Base URL <code>{ollamaStatus.baseUrl || '—'}</code>. Choose Local below, then pick from the installed list (or type a hosted API id).
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium">
-                    {ollamaStatus?.isLocalRuntime === false
-                      ? 'Ollama is not available in this environment (hosted runtime).'
-                      : 'Ollama is not active right now.'}
-                  </p>
-                  <p style={{ opacity: 0.85 }}>
-                    {ollamaStatus?.reason || 'Start Ollama locally, then refresh.'}
-                    {' '}
-                    <button
-                      type="button"
-                      onClick={refreshOllamaStatus}
-                      className="underline transition-opacity duration-200 hover:opacity-70"
-                    >
-                      Check again
-                    </button>
-                  </p>
-                </>
-              )}
-            </div>
-
-            {ollamaStatus?.available && (
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Installed local models (Ollama)
-                </label>
-                <select
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  value={
-                    (ollamaStatus?.models || []).some((m) => m.id === modelForm.id || m.name === String(modelForm.id || '').replace(/^ollama:/, ''))
-                      ? ((ollamaStatus.models.find((m) => m.id === modelForm.id)?.id)
-                        || (ollamaStatus.models.find((m) => m.name === String(modelForm.id || '').replace(/^ollama:/, ''))?.id)
-                        || '')
-                      : ''
-                  }
-                  onChange={(e) => applyInstalledOllamaModel(e.target.value)}
-                  disabled={!(ollamaStatus?.models?.length > 0)}
-                >
-                  <option value="">
-                    {!(ollamaStatus?.models?.length > 0)
-                      ? 'No models installed in Ollama'
-                      : 'Select an installed Ollama model…'}
-                  </option>
-                  {(ollamaStatus?.models || []).map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
-                  Selecting fills Model API ID as <code>ollama:&lt;tag&gt;</code>, sets provider to Ollama, and marks <strong>Local or Hosted</strong> as Local.
-                </p>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Local or Hosted *</label>
-                <select
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{
-                    background: 'var(--color-bg)',
-                    borderColor: isValidModelExecution(modelForm.execution) ? 'var(--color-border)' : '#F59E0B',
-                    color: 'var(--color-text)',
-                  }}
-                  value={modelForm.execution || ''}
-                  onChange={(e) => {
-                    const execution = e.target.value;
-                    setModelForm((f) => ({
-                      ...f,
-                      execution,
-                      ...(execution === 'local' && editingModel === 'new' && (f.provider === 'anthropic' || !f.provider)
-                        ? { provider: 'ollama' }
-                        : {}),
-                    }));
-                    if (execution === 'local') refreshOllamaStatus();
-                  }}
-                >
-                  <option value="">Select… (required)</option>
-                  {MODEL_EXECUTION_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
-                  Required admin choice. Shown as 💻 / ☁️ on every admin model dropdown — dropdowns are not filtered by this.
-                </p>
-              </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Provider</label>
                 <select
                   className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   value={modelForm.provider}
-                  onChange={(e) => {
-                    const provider = e.target.value;
-                    setModelForm((f) => ({
-                      ...f,
-                      provider,
-                      ...(provider === 'ollama' ? { execution: f.execution || 'local' } : {}),
-                    }));
-                    if (provider === 'ollama') refreshOllamaStatus();
-                  }}
+                  onChange={(e) => setModelForm((f) => ({ ...f, provider: e.target.value }))}
                 >
                   <option value="anthropic">Anthropic</option>
                   <option value="gemini">Google Gemini</option>
@@ -1601,7 +1419,7 @@ function SettingsPage() {
                   ref={modelIdInputRef}
                   className="w-full px-3 py-2 rounded-lg border text-xs outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. claude-… or ollama:qwen2.5:14b"
+                  placeholder="Exact provider model id"
                   value={modelForm.id}
                   onChange={e => setModelForm(f => ({ ...f, id: e.target.value }))}
                 />
@@ -1611,7 +1429,7 @@ function SettingsPage() {
                 <input
                   className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. Haiku 4.5"
+                  placeholder="Display name"
                   value={modelForm.name}
                   onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))}
                 />
@@ -1660,7 +1478,7 @@ function SettingsPage() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={saveModel}
-                disabled={!modelForm.id.trim() || !modelForm.name.trim() || !isValidModelExecution(modelForm.execution)}
+                disabled={!modelForm.id.trim() || !modelForm.name.trim()}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)' }}
               >
@@ -1696,7 +1514,6 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
-          <SelectedModelExecutionHint modelId={defaultModel} />
         </div>
 
         {/* Branch evaluation model selector */}
@@ -1718,7 +1535,6 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
-          <SelectedModelExecutionHint modelId={branchEvalModel} />
         </div>
 
         {/* Document redaction agent — two model slots */}
@@ -1728,31 +1544,14 @@ function SettingsPage() {
               Document redaction agent
             </label>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Agent card <code>document-redaction-agent</code>. Both slots accept any connected model — including two Local models for demos.
-              Options show 💻 Local / ☁️ Hosted from the inventory (not filtered).
+              Pick any models from your inventory for the candidate pass and the residual-risk pass.
+              For demos, both can be the same lighter model.
             </p>
           </div>
 
-          {ollamaStatus && (
-            <div
-              className="rounded-lg px-3 py-2 text-xs"
-              style={{
-                background: ollamaStatus.available ? '#ecfdf5' : 'var(--color-bg)',
-                color: ollamaStatus.available ? '#065f46' : 'var(--color-muted)',
-                border: `1px solid ${ollamaStatus.available ? '#a7f3d0' : 'var(--color-border)'}`,
-              }}
-            >
-              {ollamaStatus.available
-                ? `Ollama active · ${ollamaStatus.models?.length || 0} installed`
-                : (ollamaStatus.isLocalRuntime === false
-                  ? 'Ollama unavailable on this host'
-                  : 'Ollama not active')}
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-              Local model (candidate extraction &amp; redaction application)
+              Candidate / apply model
             </label>
             <select
               value={documentRedactionLocalModel}
@@ -1761,7 +1560,7 @@ function SettingsPage() {
                 try {
                   await saveDocumentRedactionLocalModel(e.target.value);
                 } catch (err) {
-                  setDocRedactionSlotError(err.message || 'Could not save local model');
+                  setDocRedactionSlotError(err.message || 'Could not save model');
                 }
               }}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1772,12 +1571,11 @@ function SettingsPage() {
                 <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
-            <SelectedModelExecutionHint modelId={documentRedactionLocalModel} />
           </div>
 
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-              Frontier model (residual-risk analysis on sanitized output)
+              Residual-risk / frontier model
             </label>
             <select
               value={documentRedactionFrontierModel}
@@ -1786,7 +1584,7 @@ function SettingsPage() {
                 try {
                   await saveDocumentRedactionFrontierModel(e.target.value);
                 } catch (err) {
-                  setDocRedactionSlotError(err.message || 'Could not save frontier model');
+                  setDocRedactionSlotError(err.message || 'Could not save model');
                 }
               }}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1797,10 +1595,6 @@ function SettingsPage() {
                 <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
-            <SelectedModelExecutionHint modelId={documentRedactionFrontierModel} />
-            <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>
-              Only receives already-redacted content. May be the same Local model as above for demos.
-            </p>
           </div>
 
           {docRedactionSlotError && (
@@ -1828,7 +1622,6 @@ function SettingsPage() {
                 <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
-            <SelectedModelExecutionHint modelId={themeBuilderDesignModel} />
             {themeBuilderDesignMeta?.effectiveModel && (
               <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
                 Currently resolves to <code>{themeBuilderDesignMeta.effectiveModel}</code>
@@ -1901,7 +1694,6 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
-          <SelectedModelExecutionHint modelId={graphicsModel} />
           <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
             This dropdown lists models configured below with provider `fal`. Leave blank to use the server fallback.
           </p>
@@ -1916,7 +1708,6 @@ function SettingsPage() {
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
           {models.map((m, i) => {
             const configured = modelStatus ? modelStatus[modelProviderStatusKey(m.provider)] : null;
-            const needsExec = !isValidModelExecution(m.execution);
             return (
               <div
                 key={m.id}
@@ -1932,15 +1723,6 @@ function SettingsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{m.name}</span>
                       {m.label && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>{m.label}</span>}
-                      {m.execution === 'local' && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#d1fae5', color: '#047857' }}>Local</span>
-                      )}
-                      {m.execution === 'hosted' && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#e0e7ff', color: '#3730a3' }}>Hosted</span>
-                      )}
-                      {needsExec && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#b45309' }}>Needs execution confirm</span>
-                      )}
                     </div>
                     <div className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{m.id}</div>
                   </div>
@@ -1975,22 +1757,6 @@ function SettingsPage() {
                     </button>
                   </div>
                 </div>
-                {needsExec && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="text-xs font-medium" style={{ color: '#92400e' }}>Confirm execution:</label>
-                    <select
-                      className="px-2 py-1 rounded-lg border text-xs outline-none"
-                      style={{ background: 'var(--color-bg)', borderColor: '#F59E0B', color: 'var(--color-text)' }}
-                      value={m.execution || ''}
-                      onChange={(e) => setRowExecution(m.id, e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {MODEL_EXECUTION_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
                 {testResults[m.id] && testResults[m.id].status !== 'testing' && (
                   <div
                     className="mt-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
@@ -2009,7 +1775,7 @@ function SettingsPage() {
           })}
           {models.length === 0 && (
             <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>
-              No models configured. Add one above or reset to defaults.
+              No models configured. Add one above.
             </div>
           )}
         </div>
