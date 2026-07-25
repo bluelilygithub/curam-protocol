@@ -4,6 +4,24 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-25 (proforma-fit-pdf-fixes)
+
+### Property Scenario — Fit scoring, bank table, PDF polish
+- **Fit** now incorporates strict capacity headroom, LVR, DTI, and per-bank capacity utilisation so a strong PASS file no longer sticks on decorative **FAIR** for every lender.
+- PDF/UI: Fit legend + note that overall PASS/FAIL ≠ per-bank Fit; summary table lists **all** banks (UBank was dropped by `slice(0, 8)`).
+- Assessment rates rounded to 2dp; Unicode `>=` / `<=` / `->` (and PDF `pdfSafeText`) so Helvetica no longer garbles check headlines.
+
+---
+
+## 2026-07-25 (proforma-file-profile-all-agents)
+
+### Property Scenario — proforma file carries into every agent
+- After running (or leaving) **Qualification proforma** / lite check, shared `fileProfile` pre-fills related fields on lite qualify, buy, sell, refinance, calculators, and NLP pre-context.
+- Loan amount derived as price − deposit; monthly income for calculators from annual ÷ 12; rate type + target rate included.
+- Child forms remount when the profile stamp changes so fresh values load.
+
+---
+
 ## 2026-07-24 (agent-purpose-modals)
 
 ### Property Scenario — purpose modals on dashboard cards

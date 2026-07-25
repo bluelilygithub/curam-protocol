@@ -18,6 +18,10 @@ import {
   mergeInitialWithProfile,
   saveFileProfileFromPayload,
   saveLastProformaSummary,
+  loadFileProfile,
+  profileLoanAmount,
+  profileYesNo,
+  profilePporSelect,
 } from '../utils/propertyScenarioFileProfile';
 
 /** Default Australian state for property / mortgage form selects. */
@@ -1071,37 +1075,82 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
     padding: '8px 12px', fontSize: 14, width: '100%', outline: 'none',
   };
 
+  const seeded = useMemo(() => mergeInitialWithProfile(), []);
+  const seededRateType = seeded?.rate_type === 'fixed' ? 'fixed' : 'variable';
+
   // Property
-  const [qPrice, setQPrice]     = useState('');
-  const [qDeposit, setQDeposit] = useState('');
-  const [qState, setQState]     = useState(DEFAULT_STATE);
-  const [qFhb, setQFhb]         = useState('');
-  const [qPpor, setQPpor]       = useState('ppor');
+  const [qPrice, setQPrice]     = useState(() => seeded?.property_value != null ? formatNumberForInput(seeded.property_value) : '');
+  const [qDeposit, setQDeposit] = useState(() => seeded?.deposit_amount != null ? formatNumberForInput(seeded.deposit_amount) : '');
+  const [qState, setQState]     = useState(() => seeded?.state || DEFAULT_STATE);
+  const [qFhb, setQFhb]         = useState(() => {
+    const v = profileYesNo(seeded?.is_fhb);
+    return v === 'yes' || v === 'no' ? v : '';
+  });
+  const [qPpor, setQPpor]       = useState(() => profilePporSelect(seeded?.is_ppor) || 'ppor');
   // Income & household
-  const [qIncome, setQIncome]     = useState('');
-  const [qPartner, setQPartner]   = useState('');
-  const [qHousehold, setQHousehold] = useState('single');
-  const [qEmployment, setQEmployment] = useState('payg_fulltime');
+  const [qIncome, setQIncome]     = useState(() => seeded?.gross_annual_income != null ? formatNumberForInput(seeded.gross_annual_income) : '');
+  const [qPartner, setQPartner]   = useState(() => seeded?.partner_gross_income ? formatNumberForInput(seeded.partner_gross_income) : '');
+  const [qHousehold, setQHousehold] = useState(() => seeded?.household_type || 'single');
+  const [qEmployment, setQEmployment] = useState(() => seeded?.employment_type || 'payg_fulltime');
   // Debts
-  const [qHecs, setQHecs]       = useState('no');
-  const [qNewBuild, setQNewBuild] = useState('no');
-  const [qDebts, setQDebts]     = useState('');
-  const [qExpenses, setQExpenses] = useState('');
+  const [qHecs, setQHecs]       = useState(() => (seeded?.has_hecs === true || seeded?.has_hecs === 'yes') ? 'yes' : 'no');
+  const [qNewBuild, setQNewBuild] = useState(() => (seeded?.is_new_build === true || seeded?.is_new_build === 'yes') ? 'yes' : 'no');
+  const [qDebts, setQDebts]     = useState(() => seeded?.monthly_debt_repayments ? formatNumberForInput(seeded.monthly_debt_repayments) : '');
+  const [qExpenses, setQExpenses] = useState(() => seeded?.monthly_expenses ? formatNumberForInput(seeded.monthly_expenses) : '');
   // Loan
-  const [qTerm, setQTerm]       = useState('30');
-  const [qRateType, setQRateType] = useState('variable');
-  const [qRate, setQRate]       = useState(() => getInitialMarketRateInput('variable'));
-  const { formatted: marketRateFormatted } = useMarketRateDefault(setQRate, { rateType: qRateType });
+  const [qTerm, setQTerm]       = useState(() => seeded?.loan_term_years ? String(seeded.loan_term_years) : '30');
+  const [qRateType, setQRateType] = useState(seededRateType);
+  const [qRate, setQRate]       = useState(() => seeded?.target_rate_pct != null
+    ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true })
+    : getInitialMarketRateInput(seededRateType));
+  const { formatted: marketRateFormatted } = useMarketRateDefault(setQRate, {
+    rateType: qRateType,
+    skip: seeded?.target_rate_pct != null,
+  });
   // Extra checks
-  const [qAge, setQAge]               = useState('');
-  const [qPropTypeClass, setQPropTypeClass] = useState('house_town');
-  const [qRentalIncome, setQRentalIncome]   = useState('');
+  const [qAge, setQAge]               = useState(() => seeded?.applicant_age ? String(seeded.applicant_age) : '');
+  const [qPropTypeClass, setQPropTypeClass] = useState(() => seeded?.property_type_class || 'house_town');
+  const [qRentalIncome, setQRentalIncome]   = useState(() => seeded?.gross_rental_income ? formatNumberForInput(seeded.gross_rental_income) : '');
   // Results
   const [result, setResult]     = useState(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [expanded, setExpanded] = useState({});
   const qualifyResultRef        = useRef(null);
+
+  function buildQualifyPayload() {
+    return {
+      property_value:          parseFormattedNumber(qPrice),
+      deposit_amount:          parseFormattedNumber(qDeposit),
+      state:                   qState,
+      is_fhb:                  qFhb === 'yes',
+      is_ppor:                 qPpor === 'ppor',
+      gross_annual_income:     parseFormattedNumber(qIncome),
+      partner_gross_income:    qPartner ? parseFormattedNumber(qPartner) : 0,
+      household_type:          qHousehold,
+      employment_type:         qEmployment,
+      has_hecs:                qHecs === 'yes',
+      is_new_build:            qNewBuild === 'yes',
+      monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
+      monthly_expenses:        qExpenses ? parseFormattedNumber(qExpenses) : undefined,
+      loan_term_years:         parseFormattedNumber(qTerm) || 30,
+      target_rate_pct:         parseFormattedNumber(qRate),
+      rate_type:               qRateType,
+      applicant_age:           qAge ? parseFormattedNumber(qAge) : undefined,
+      property_type_class:     qPropTypeClass || undefined,
+      gross_rental_income:     qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
+    };
+  }
+
+  // Persist when leaving so other agents pick up the latest file.
+  const qualifyPayloadRef = useRef(null);
+  qualifyPayloadRef.current = buildQualifyPayload();
+  useEffect(() => () => {
+    const p = qualifyPayloadRef.current;
+    if (p?.property_value && p?.deposit_amount && p?.gross_annual_income) {
+      saveFileProfileFromPayload(p);
+    }
+  }, []);
 
   async function runQualify() {
     const price = parseFormattedNumber(qPrice);
@@ -1128,52 +1177,14 @@ function BuyerQualifyForm({ getIcon, addToast, onSwitchToRefinance, onSwitchToPr
           'Building lender guidance',
         ],
         async () => {
-          const res = await api.post('/api/property-scenario/calculators/buyer-qualify', {
-            property_value:          price,
-            deposit_amount:          deposit,
-            state:                   qState,
-            is_fhb:                  qFhb === 'yes',
-            is_ppor:                 qPpor === 'ppor',
-            gross_annual_income:     income,
-            partner_gross_income:    qPartner ? parseFormattedNumber(qPartner) : 0,
-            household_type:          qHousehold,
-            employment_type:         qEmployment,
-            has_hecs:                qHecs === 'yes',
-            is_new_build:            qNewBuild === 'yes',
-            monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
-            monthly_expenses:        qExpenses ? parseFormattedNumber(qExpenses) : undefined,
-            loan_term_years:         parseFormattedNumber(qTerm) || 30,
-            target_rate_pct:         rate,
-            applicant_age:           qAge ? parseFormattedNumber(qAge) : undefined,
-            property_type_class:     qPropTypeClass || undefined,
-            gross_rental_income:     qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
-          });
+          const res = await api.post('/api/property-scenario/calculators/buyer-qualify', buildQualifyPayload());
           const payload = await res.json();
           if (!payload.ok) throw new Error(payload.errors?.[0] || 'Qualification check failed');
           return payload;
         },
       );
       setResult(data);
-      saveFileProfileFromPayload({
-        property_value: price,
-        deposit_amount: deposit,
-        state: qState,
-        is_fhb: qFhb === 'yes',
-        is_ppor: qPpor === 'ppor',
-        gross_annual_income: income,
-        partner_gross_income: qPartner ? parseFormattedNumber(qPartner) : 0,
-        household_type: qHousehold,
-        employment_type: qEmployment,
-        has_hecs: qHecs === 'yes',
-        is_new_build: qNewBuild === 'yes',
-        monthly_debt_repayments: qDebts ? parseFormattedNumber(qDebts) : 0,
-        monthly_expenses: qExpenses ? parseFormattedNumber(qExpenses) : undefined,
-        loan_term_years: parseFormattedNumber(qTerm) || 30,
-        target_rate_pct: rate,
-        applicant_age: qAge ? parseFormattedNumber(qAge) : undefined,
-        property_type_class: qPropTypeClass || undefined,
-        gross_rental_income: qRentalIncome ? parseFormattedNumber(qRentalIncome) : undefined,
-      });
+      saveFileProfileFromPayload(buildQualifyPayload());
       const init = {};
       (data.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
@@ -1789,11 +1800,22 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       adverse_credit_severity: pAdverseSeverity,
       loan_term_years:         parseFormattedNumber(pTerm) || 30,
       target_rate_pct:         parseFormattedNumber(pRate),
+      rate_type:               pRateType,
       applicant_age:           pAge ? parseFormattedNumber(pAge) : undefined,
       property_type_class:     pPropTypeClass || undefined,
       gross_rental_income:     pRentalIncome ? parseFormattedNumber(pRentalIncome) : undefined,
     };
   }
+
+  // Persist when leaving so refinance / buy / calculators / NLP pick up the latest file.
+  const proformaPayloadRef = useRef(null);
+  proformaPayloadRef.current = buildInputPayload();
+  useEffect(() => () => {
+    const p = proformaPayloadRef.current;
+    if (p?.property_value && p?.deposit_amount && p?.gross_annual_income) {
+      saveFileProfileFromPayload(p);
+    }
+  }, []);
 
   async function runProforma() {
     const price = parseFormattedNumber(pPrice);
@@ -2270,6 +2292,18 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {proforma.bankPanel?.capacity_note || proforma.bankPosture?.capacity_note}
               </p>
+              {(proforma.bankPanel?.fit_vs_overall_note || proforma.bankPosture?.fit_vs_overall_note) && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {proforma.bankPanel?.fit_vs_overall_note || proforma.bankPosture?.fit_vs_overall_note}
+                </p>
+              )}
+              {(proforma.bankPanel?.fit_legend || proforma.bankPosture?.fit_legend)?.length > 0 && (
+                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                  Fit tiers: {(proforma.bankPanel?.fit_legend || proforma.bankPosture.fit_legend).map((t) => (
+                    `${String(t.tier).toUpperCase()} (${t.score_min}+)`
+                  )).join(' · ')}. Stronger Fit is not an approval.
+                </p>
+              )}
               <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
                 {proforma.bankPanel?.note || proforma.bankPosture?.note}
               </p>
@@ -2456,19 +2490,41 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
  * into scenario totals, CGT, stamp duty, or any other calculation.
  */
 function StandaloneCalculators({ getIcon }) {
-  const [loanAmount, setLoanAmount] = useState('');
-  const [rateType, setRateType] = useState('variable');
-  const [rate, setRate] = useState(() => getInitialMarketRateInput('variable'));
-  const [termYears, setTermYears] = useState('');
+  const seeded = useMemo(() => mergeInitialWithProfile(), []);
+  const seededRateType = seeded?.rate_type === 'fixed' ? 'fixed' : 'variable';
+  const seededLoan = profileLoanAmount(seeded);
+  const seededMonthlyIncome = seeded?.gross_annual_income != null
+    ? Math.round(Number(seeded.gross_annual_income) / 12)
+    : null;
+
+  const [loanAmount, setLoanAmount] = useState(() => (
+    seededLoan != null ? formatNumberForInput(Math.round(seededLoan)) : ''
+  ));
+  const [rateType, setRateType] = useState(seededRateType);
+  const [rate, setRate] = useState(() => seeded?.target_rate_pct != null
+    ? formatNumberForInput(seeded.target_rate_pct, { allowDecimals: true })
+    : getInitialMarketRateInput(seededRateType));
+  const [termYears, setTermYears] = useState(() => (
+    seeded?.loan_term_years != null ? String(seeded.loan_term_years) : ''
+  ));
   const [extra, setExtra] = useState('200');
   const [offsetBalance, setOffsetBalance] = useState('50000');
-  const [monthlyIncome, setMonthlyIncome] = useState('');
-  const [monthlyExpenses, setMonthlyExpenses] = useState('');
+  const [monthlyIncome, setMonthlyIncome] = useState(() => (
+    seededMonthlyIncome != null && seededMonthlyIncome > 0
+      ? formatNumberForInput(seededMonthlyIncome)
+      : ''
+  ));
+  const [monthlyExpenses, setMonthlyExpenses] = useState(() => (
+    seeded?.monthly_expenses ? formatNumberForInput(seeded.monthly_expenses) : ''
+  ));
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const { formatted: marketRateFormatted } = useMarketRateDefault(setRate, { rateType });
+  const { formatted: marketRateFormatted } = useMarketRateDefault(setRate, {
+    rateType,
+    skip: seeded?.target_rate_pct != null,
+  });
 
   async function runCalcs() {
     const amount = parseFormattedNumber(loanAmount);
@@ -3217,6 +3273,8 @@ export default function PropertyScenarioPage() {
 
   // Prefill when continuing into the qualification proforma from buy / qualify / refinance
   const [proformaPrefill, setProformaPrefill] = useState(null);
+  /** Remount child forms when the shared file profile updates after proforma/qualify. */
+  const [profileStamp, setProfileStamp] = useState(() => loadFileProfile()?.updatedAt || 'none');
 
   // Direct calculation result (structured forms — no LLM)
   const [calcResult, setCalcResult] = useState(null);
@@ -3479,9 +3537,52 @@ export default function PropertyScenarioPage() {
   const handleTypePick = useCallback((type) => {
     if (type === 'calculators') {
       setScenarioType('calculators');
+      setProfileStamp(loadFileProfile()?.updatedAt || 'none');
       return;
     }
     if (type !== 'proforma') setProformaPrefill(null);
+
+    const profile = loadFileProfile();
+    setProfileStamp(profile?.updatedAt || 'none');
+
+    if (profile) {
+      const loan = profileLoanAmount(profile);
+      const rateType = profile.rate_type === 'fixed' ? 'fixed' : 'variable';
+      const fhb = profileYesNo(profile.is_fhb);
+      const ppor = profilePporSelect(profile.is_ppor);
+
+      if (type === 'buy') {
+        if (profile.property_value != null) setBuyPrice(formatNumberForInput(profile.property_value));
+        if (profile.deposit_amount != null) setBuyDeposit(formatNumberForInput(profile.deposit_amount));
+        if (profile.state) setBuyState(profile.state);
+        if (fhb === 'yes' || fhb === 'no') setBuyFhb(fhb);
+        if (ppor) setBuyPpor(ppor);
+      }
+
+      if (type === 'sell') {
+        if (profile.state) setSellState(profile.state);
+        if (profile.property_value != null) setSellPrice(formatNumberForInput(profile.property_value));
+        if (ppor) setSellPpor(ppor);
+      }
+
+      if (type === 'refinance') {
+        if (profile.state) setRfState(profile.state);
+        if (loan != null) setRfBalance(formatNumberForInput(Math.round(loan)));
+        if (profile.rate_type === 'fixed' || profile.rate_type === 'variable') setRfRateType(rateType);
+        if (profile.target_rate_pct != null) {
+          setRfRate(formatNumberForInput(profile.target_rate_pct, { allowDecimals: true }));
+        }
+        if (profile.loan_term_years != null) {
+          setRfTermMonths(formatNumberForInput(Math.round(Number(profile.loan_term_years) * 12)));
+        }
+      }
+
+      if (type === 'compound') {
+        if (profile.state) setPreState(profile.state);
+        if (ppor) setPrePpor(ppor);
+      }
+    }
+
     setScenarioType(type);
     setCalcError(null);
   }, []);
@@ -3787,18 +3888,26 @@ export default function PropertyScenarioPage() {
 
             {/* ── Standalone calculators ───────────────────────────── */}
             {scenarioType === 'calculators' && (
-              <StandaloneCalculators getIcon={getIcon} />
+              <StandaloneCalculators key={`calcs-${profileStamp}`} getIcon={getIcon} />
             )}
 
             {/* ── Buyer qualification ──────────────────────────────── */}
             {scenarioType === 'qualify' && (
-              <BuyerQualifyForm getIcon={getIcon} addToast={addToast} onSwitchToRefinance={handleSwitchToRefinance} onSwitchToProforma={handleSwitchToProforma} />
+              <BuyerQualifyForm
+                key={`qualify-${profileStamp}`}
+                getIcon={getIcon}
+                addToast={addToast}
+                onSwitchToRefinance={handleSwitchToRefinance}
+                onSwitchToProforma={handleSwitchToProforma}
+              />
             )}
 
             {/* ── Qualification proforma (broker-realistic review) ─── */}
             {scenarioType === 'proforma' && (
               <QualificationProformaForm
-                key={proformaPrefill ? `prefill-${JSON.stringify(proformaPrefill).slice(0, 80)}` : 'blank'}
+                key={proformaPrefill
+                  ? `prefill-${JSON.stringify(proformaPrefill).slice(0, 80)}`
+                  : `proforma-${profileStamp}`}
                 getIcon={getIcon}
                 addToast={addToast}
                 onSwitchToBuy={handleSwitchToBuy}

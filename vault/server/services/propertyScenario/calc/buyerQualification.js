@@ -287,13 +287,15 @@ function assessBuyerQualification(inputs = {}) {
     : 0;
   const totalGrossAnnual = roundMoney(baseGrossAnnual + overtimeAssessed + addbacksAssessed);
   const isJoint = (partnerGrossIncome || 0) > 0;
-  const assessmentRatePct = Math.max(targetRatePct + 3.0, APRA_FLOOR_RATE_PCT);
+  // Round to 2dp so strings never leak float artifacts (e.g. 8.629999999999999%).
+  const assessmentRatePct = Math.round(Math.max(Number(targetRatePct) + 3.0, APRA_FLOOR_RATE_PCT) * 100) / 100;
+  const targetRateDisplay = Math.round(Number(targetRatePct) * 100) / 100;
 
   assumptions.push(`Loan term: ${loanTermYears} years (${termMonths} months).`);
-  assumptions.push(`Target product rate: ${targetRatePct}% p.a. APRA assessment rate applied: ${assessmentRatePct}% p.a. (higher of product + 3pp or ${APRA_FLOOR_RATE_PCT}% floor).`);
+  assumptions.push(`Target product rate: ${targetRateDisplay}% p.a. APRA assessment rate applied: ${assessmentRatePct}% p.a. (higher of product + 3pp or ${APRA_FLOOR_RATE_PCT}% floor).`);
   if (isJoint) assumptions.push(`Joint application — combined base gross income: $${baseGrossAnnual.toLocaleString('en-AU')} p.a.`);
   if (overtimeAssessed > 0) {
-    assumptions.push(`Overtime/bonus/commission $${Number(overtimeBonusAnnual).toLocaleString('en-AU')}/yr shaded at ${Math.round(overtimeShade * 100)}% (${overtimeBonusRegularity.replace(/_/g, ' ')}) → +$${overtimeAssessed.toLocaleString('en-AU')} assessable. Individual lenders may credit more or less.`);
+    assumptions.push(`Overtime/bonus/commission $${Number(overtimeBonusAnnual).toLocaleString('en-AU')}/yr shaded at ${Math.round(overtimeShade * 100)}% (${overtimeBonusRegularity.replace(/_/g, ' ')}) -> +$${overtimeAssessed.toLocaleString('en-AU')} assessable. Individual lenders may credit more or less.`);
   } else if ((Number(overtimeBonusAnnual) || 0) > 0) {
     assumptions.push(`Overtime/bonus/commission $${Number(overtimeBonusAnnual).toLocaleString('en-AU')}/yr declared as irregular — not credited in the strict serviceability figure (lender shopping may still credit a portion).`);
   }
@@ -405,7 +407,7 @@ function assessBuyerQualification(inputs = {}) {
   } else if (maxBorrowing >= loanRequested) {
     serviceStatus = 'pass';
     serviceHeadline = `Income supports up to $${maxBorrowing.toLocaleString('en-AU', { maximumFractionDigits: 0 })} — loan fits`;
-    serviceDetail = `Net monthly surplus available to service a new loan: $${netSurplus.toLocaleString('en-AU')}. At the APRA assessment rate of ${assessmentRatePct}% over ${loanTermYears} years, that supports a maximum loan of $${maxBorrowing.toLocaleString('en-AU', { maximumFractionDigits: 0 })}. Your requested loan of $${loanRequested.toLocaleString('en-AU')} fits within this capacity. Estimated monthly repayment at your target rate of ${targetRatePct}%: $${repaymentAtProductRate?.toLocaleString('en-AU') ?? '—'}.`;
+    serviceDetail = `Net monthly surplus available to service a new loan: $${netSurplus.toLocaleString('en-AU')}. At the APRA assessment rate of ${assessmentRatePct}% over ${loanTermYears} years, that supports a maximum loan of $${maxBorrowing.toLocaleString('en-AU', { maximumFractionDigits: 0 })}. Your requested loan of $${loanRequested.toLocaleString('en-AU')} fits within this capacity. Estimated monthly repayment at your target rate of ${targetRateDisplay}%: $${repaymentAtProductRate?.toLocaleString('en-AU') ?? '—'}.`;
   } else {
     serviceStatus = 'warn';
     const shortfall = roundMoney(loanRequested - maxBorrowing);
@@ -507,7 +509,7 @@ function assessBuyerQualification(inputs = {}) {
 
   if (depositAmount >= propertyValue * 0.20) {
     genuineStatus = 'pass';
-    genuineHeadline = 'Deposit ≥ 20% — genuine savings check generally not required';
+    genuineHeadline = 'Deposit >= 20% — genuine savings check generally not required';
     genuineDetail = 'At 20%+ deposit, most lenders do not require formal proof of genuine savings. The deposit must still be verified (bank statements, evidence of funds), but the genuine-savings holding period requirement typically does not apply.';
   } else if (countableGenuine < minGenuineSavings) {
     genuineStatus = 'fail';
@@ -707,7 +709,7 @@ function assessBuyerQualification(inputs = {}) {
         ? lmiEstimate != null
           ? `LMI required — estimated $${lmiEstimate.toLocaleString('en-AU')} (LVR ${((loanRequested / propertyValue) * 100).toFixed(1)}%)`
           : 'LMI required — could not estimate (check loan/deposit inputs)'
-        : 'LMI not required (LVR ≤ 80%)',
+        : 'LMI not required (LVR <= 80%)',
       detail: lmiRequired
         ? `At ${((loanRequested / propertyValue) * 100).toFixed(1)}% LVR, Lenders Mortgage Insurance is required. ${lmiEstimate != null ? `Estimated LMI premium: $${lmiEstimate.toLocaleString('en-AU')} (indicative rate applied to $${loanRequested.toLocaleString('en-AU')} loan).` : ''} LMI is typically capitalised into the loan (added to the balance) rather than paid as cash on settlement day, but it increases the effective loan cost and total interest paid. LMI protects the lender — not you. Saving to 80% LVR (deposit of $${roundMoney(propertyValue * 0.20).toLocaleString('en-AU')}) eliminates LMI entirely.`
         : `Your LVR of ${((loanRequested / propertyValue) * 100).toFixed(1)}% is at or below 80% — no LMI required.`,
@@ -743,7 +745,7 @@ function assessBuyerQualification(inputs = {}) {
       if (!priceEligible) {
         // Not a lending fail — FHOG is a state grant, unrelated to loan approval.
         fhogStatus = 'info';
-        fhogHeadline = `FHOG — not available (price $${propertyValue.toLocaleString('en-AU')} ≥ $${fhogData.max_value?.toLocaleString('en-AU')} ${state} cap)`;
+        fhogHeadline = `FHOG — not available (price $${propertyValue.toLocaleString('en-AU')} >= $${fhogData.max_value?.toLocaleString('en-AU')} ${state} cap)`;
         fhogDetail = `The ${state} First Home Owner Grant ($${fhogData.amount.toLocaleString('en-AU')}) is not available — the property value of $${propertyValue.toLocaleString('en-AU')} meets or exceeds the cap of $${fhogData.max_value?.toLocaleString('en-AU')}. This does not affect whether a lender will approve your loan — FHOG is a separate state government grant. ${fhogData.note}`;
       } else if (!newBuildEligible) {
         fhogStatus = 'info';

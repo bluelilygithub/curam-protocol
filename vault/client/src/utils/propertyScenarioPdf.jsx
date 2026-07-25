@@ -58,8 +58,22 @@ function fmtMoney(n) {
 
 function fmtMonthly(n) {
   const v = Number(n);
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return '-';
   return `$${Math.round(v).toLocaleString('en-AU')}/month`;
+}
+
+/** Helvetica in react-pdf mishandles many Unicode glyphs (>=, arrows, fancy dashes). */
+function pdfSafeText(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/≥/g, '>=')
+    .replace(/≤/g, '<=')
+    .replace(/→/g, '->')
+    .replace(/[—–]/g, '-')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/\u00a0/g, ' ');
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
@@ -666,9 +680,9 @@ function QualifyCheckRow({ check }) {
           {col.label}
         </Text>
       </View>
-      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{check.headline}</Text>
+      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{pdfSafeText(check.headline)}</Text>
       {check.detail ? (
-        <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{check.detail}</Text>
+        <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4 }}>{pdfSafeText(check.detail)}</Text>
       ) : null}
     </View>
   );
@@ -941,18 +955,18 @@ function LeverRow({ lever }) {
         <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: col.text, backgroundColor: col.bg, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 2, marginRight: 6 }}>
           {col.label}
         </Text>
-        <Text style={{ fontSize: 7, color: MUTED, textTransform: 'uppercase' }}>{lever.category}</Text>
+        <Text style={{ fontSize: 7, color: MUTED, textTransform: 'uppercase' }}>{pdfSafeText(lever.category)}</Text>
       </View>
-      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{lever.title}</Text>
-      <Text style={{ fontSize: 8, color: '#374151', lineHeight: 1.4, marginBottom: 2 }}>{lever.whatItIs}</Text>
+      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1A1A1A', marginBottom: 2 }}>{pdfSafeText(lever.title)}</Text>
+      <Text style={{ fontSize: 8, color: '#374151', lineHeight: 1.4, marginBottom: 2 }}>{pdfSafeText(lever.whatItIs)}</Text>
       <Text style={{ fontSize: 8, color: MUTED, lineHeight: 1.4, marginBottom: 2 }}>
-        <Text style={{ fontFamily: 'Helvetica-Bold' }}>Why it's allowed: </Text>{lever.whyItsAllowed}
+        <Text style={{ fontFamily: 'Helvetica-Bold' }}>Why it's allowed: </Text>{pdfSafeText(lever.whyItsAllowed)}
       </Text>
       {lever.impact && (
-        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2 }}>{lever.impact}</Text>
+        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2 }}>{pdfSafeText(lever.impact)}</Text>
       )}
       {lever.regulatoryNote && (
-        <Text style={{ fontSize: 7.5, color: '#b91c1c', lineHeight: 1.4 }}>⚠ {lever.regulatoryNote}</Text>
+        <Text style={{ fontSize: 7.5, color: '#b91c1c', lineHeight: 1.4 }}>! {pdfSafeText(lever.regulatoryNote)}</Text>
       )}
     </View>
   );
@@ -979,11 +993,10 @@ function QualificationProformaDocument({ proforma, inputs }) {
   const statusColors = STATUS_COLORS_PDF[s2.overall_status] || STATUS_COLORS_PDF.info;
   const inp = inputs || {};
   const topActions = [
-    ...failing.slice(0, 2).map((c) => `Resolve: ${c.headline}`),
-    ...warning.slice(0, 1).map((c) => `Verify: ${c.headline}`),
-    ...(leversDelta?.items || []).slice(0, 1).map((i) => `Consider: ${i.title}`),
+    ...failing.slice(0, 2).map((c) => `Resolve: ${pdfSafeText(c.headline)}`),
+    ...warning.slice(0, 1).map((c) => `Verify: ${pdfSafeText(c.headline)}`),
+    ...(leversDelta?.items || []).slice(0, 1).map((i) => `Consider: ${pdfSafeText(i.title)}`),
   ].slice(0, 3);
-  const topBanks = banks.filter((b) => b.fit === 'strong' || b.fit === 'fair').slice(0, 3);
 
   return (
     <Document title="Qualification Proforma" author="Curam Vault" creator="Curam Vault">
@@ -1022,11 +1035,20 @@ function QualificationProformaDocument({ proforma, inputs }) {
           )}
         </View>
 
-        {topBanks.length > 0 && (
+        {banks.length > 0 && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Indicative capacity by bank (same engine, different knobs)</Text>
             {bankPanel?.capacity_note && (
-              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>{bankPanel.capacity_note}</Text>
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>{pdfSafeText(bankPanel.capacity_note)}</Text>
+            )}
+            {(bankPanel?.fit_vs_overall_note || bankPanel?.fit_legend) && (
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+                {pdfSafeText(bankPanel.fit_vs_overall_note
+                  || 'Overall PASS/FAIL is the strict lending-check verdict. Fit is a separate relative score of bank posture vs this file — not an approval.')}
+                {(bankPanel.fit_legend || []).length > 0
+                  ? ` Fit tiers: ${(bankPanel.fit_legend || []).map((t) => `${String(t.tier).toUpperCase()} (${t.score_min}+)`).join(', ')}.`
+                  : ''}
+              </Text>
             )}
             <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#d1d5db', paddingBottom: 3, marginBottom: 2 }}>
               <Text style={{ width: '28%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Bank</Text>
@@ -1035,21 +1057,21 @@ function QualificationProformaDocument({ proforma, inputs }) {
               <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>Live rate</Text>
               <Text style={{ width: '18%', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: MUTED }}>OT shade</Text>
             </View>
-            {banks.slice(0, 8).map((b) => (
+            {banks.map((b) => (
               <View key={b.id} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-                <Text style={{ width: '28%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{b.shortName || b.name}</Text>
+                <Text style={{ width: '28%', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{pdfSafeText(b.shortName || b.name)}</Text>
                 <Text style={{
                   width: '14%', fontSize: 8, fontFamily: 'Helvetica-Bold',
                   color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
                 }}>{(b.fit || '').toUpperCase()}</Text>
                 <Text style={{ width: '22%', fontSize: 8, color: '#111827' }}>
-                  {b.capacity?.indicative_capacity != null ? fmtMoney(b.capacity.indicative_capacity) : '—'}
+                  {b.capacity?.indicative_capacity != null ? fmtMoney(b.capacity.indicative_capacity) : '-'}
                 </Text>
                 <Text style={{ width: '18%', fontSize: 8, color: '#111827' }}>
-                  {b.live_rate != null ? `${Number(b.live_rate).toFixed(2)}%` : '—'}
+                  {b.live_rate != null ? `${Number(b.live_rate).toFixed(2)}%` : '-'}
                 </Text>
                 <Text style={{ width: '18%', fontSize: 8, color: MUTED }}>
-                  {b.capacity?.overtime_shade_pct != null ? `${b.capacity.overtime_shade_pct}%` : '—'}
+                  {b.capacity?.overtime_shade_pct != null ? `${b.capacity.overtime_shade_pct}%` : '-'}
                 </Text>
               </View>
             ))}
@@ -1139,13 +1161,18 @@ function QualificationProformaDocument({ proforma, inputs }) {
           </View>
 
           <View style={s.section}>
-            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 8, lineHeight: 1.35 }}>
-              {bankPanel?.note || 'Curated posture knobs drive indicative capacity. Not a credit decision.'}
+            <Text style={{ fontSize: 8, color: MUTED, marginBottom: 6, lineHeight: 1.35 }}>
+              {pdfSafeText(bankPanel?.note || 'Curated posture knobs drive indicative capacity. Not a credit decision.')}
             </Text>
+            {bankPanel?.fit_vs_overall_note && (
+              <Text style={{ fontSize: 7.5, color: MUTED, marginBottom: 8, lineHeight: 1.35 }}>
+                {pdfSafeText(bankPanel.fit_vs_overall_note)}
+              </Text>
+            )}
             {banks.map((b) => (
               <View key={b.id} style={{ marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{b.name}</Text>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827' }}>{pdfSafeText(b.name)}</Text>
                   <Text style={{
                     fontSize: 8, fontFamily: 'Helvetica-Bold',
                     color: b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c',
@@ -1157,16 +1184,16 @@ function QualificationProformaDocument({ proforma, inputs }) {
                 </View>
                 {b.capacity?.narrative && (
                   <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: PRIMARY, marginBottom: 2, lineHeight: 1.35 }}>
-                    {b.capacity.narrative}
+                    {pdfSafeText(b.capacity.narrative)}
                   </Text>
                 )}
-                <Text style={{ fontSize: 7.5, color: '#374151', marginBottom: 2 }}>{b.postureSummary}</Text>
+                <Text style={{ fontSize: 7.5, color: '#374151', marginBottom: 2 }}>{pdfSafeText(b.postureSummary)}</Text>
                 {(b.reasons || []).filter((r) => r !== b.capacity?.narrative).slice(0, 2).map((reason, ri) => (
-                  <Text key={ri} style={{ fontSize: 7.5, color: '#6b7280', lineHeight: 1.35 }}>· {reason}</Text>
+                  <Text key={ri} style={{ fontSize: 7.5, color: '#6b7280', lineHeight: 1.35 }}>· {pdfSafeText(reason)}</Text>
                 ))}
                 {(b.documents || []).length > 0 && (
                   <Text style={{ fontSize: 7, color: MUTED, marginTop: 3, lineHeight: 1.35 }}>
-                    Docs: {(b.documents || []).slice(0, 3).join(' · ')}
+                    Docs: {pdfSafeText((b.documents || []).slice(0, 3).join(' · '))}
                   </Text>
                 )}
               </View>

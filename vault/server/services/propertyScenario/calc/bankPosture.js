@@ -45,7 +45,7 @@ function hemMultiplierForStance(stance) {
 const DOCS_BY_EMPLOYMENT = {
   payg_fulltime: ['2–3 recent payslips', 'Employment contract or letter confirming ongoing role', 'Last 2 FY group certificates / income statements', '3 months bank statements'],
   payg_parttime: ['2–3 recent payslips', 'Employer letter confirming hours and ongoing intent', 'Last 2 FY income statements', '3 months bank statements'],
-  casual: ['Payslips covering ≥6–12 months (lender-dependent)', 'Employer letter confirming ongoing casual engagement', 'Last 2 FY income statements', '3 months bank statements'],
+  casual: ['Payslips covering >=6-12 months (lender-dependent)', 'Employer letter confirming ongoing casual engagement', 'Last 2 FY income statements', '3 months bank statements'],
   contract: ['Current contract + remaining term', 'Evidence of prior contract renewals if available', 'Last 2 FY tax returns / income statements', '3 months bank statements'],
   self_employed: ['2 years personal tax returns', '2 years business/company returns or BAS', 'Accountant letter on add-backs (if claimed)', '6–12 months business bank statements'],
 };
@@ -358,7 +358,7 @@ function estimateBankCapacity(inputs = {}, bank = {}, strictSummary = {}) {
   if (bank.hemStance === 'pragmatic') parts.push('pragmatic HEM');
   else if (bank.hemStance === 'conservative') parts.push('conservative HEM');
   const knobs = parts.length ? parts.join(', ') : 'standard PAYG assessment';
-  const narrative = `${bank.shortName || bank.name}: ${knobs} → assessable ~$${Math.round(assessableGross).toLocaleString('en-AU')}/yr → indicative capacity ~$${Math.round(capacity).toLocaleString('en-AU')}`;
+  const narrative = `${bank.shortName || bank.name}: ${knobs} -> assessable ~$${Math.round(assessableGross).toLocaleString('en-AU')}/yr -> indicative capacity ~$${Math.round(capacity).toLocaleString('en-AU')}`;
 
   return {
     unsuitable: false,
@@ -414,11 +414,17 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
   const isDensity = densityTypes.has(propertyType) || (propCheck && densityTypes.has(propCheck.data?.property_type));
   const ruralLike = propertyType === 'rural_acreage' || propCheck?.data?.property_type === 'rural_acreage';
   const cleanPayg = overallPass && employmentType === 'payg_fulltime' && !hasAdverse && !isDensity && !ruralLike;
+  const loanRequested = Number(strictSummary.loan_requested) || 0;
+  const strictCapacity = Number(strictSummary.max_borrowing_capacity) || 0;
+  const strictUtil = strictCapacity > 0 && loanRequested > 0 ? loanRequested / strictCapacity : null;
 
   const rows = BANK_POSTURES.map((bank) => {
     const reasons = [];
     let score = 50;
     const capacity = estimateBankCapacity(inputs, bank, strictSummary);
+    const bankCap = capacity?.indicative_capacity != null && !capacity.unsuitable
+      ? Number(capacity.indicative_capacity)
+      : null;
 
     if (!isPpor && bank.id === 'up') {
       return {
@@ -552,6 +558,61 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       reasons.push(`Investment rental shading often around ${bank.rentalShadingPct}% (less conservative).`);
     }
 
+    // File strength from strict checks (capacity headroom, LVR, DTI).
+    // Without this, a clean PASS file with huge surplus stayed stuck at "fair"
+    // because clean-PAYG bonuses rarely pushed score past the strong threshold.
+    if (overallPass) {
+      score += 10;
+    } else {
+      score -= 8;
+    }
+
+    if (strictUtil != null) {
+      if (strictUtil <= 0.5) {
+        score += 16;
+        reasons.push(`Requested loan uses ~${Math.round(strictUtil * 100)}% of strict capacity — wide headroom.`);
+      } else if (strictUtil <= 0.7) {
+        score += 10;
+        reasons.push(`Requested loan uses ~${Math.round(strictUtil * 100)}% of strict capacity — solid headroom.`);
+      } else if (strictUtil <= 0.85) {
+        score += 4;
+      } else if (strictUtil > 1) {
+        score -= 18;
+        reasons.push('Requested loan exceeds strict capacity — most lenders will struggle without levers.');
+      }
+    }
+
+    if (dti > 0 && dti <= 4) {
+      score += 8;
+      reasons.push(`DTI of ${dti.toFixed(1)}x is well inside typical lender comfort (under 4x).`);
+    } else if (dti > 0 && dti <= 5) {
+      score += 3;
+    }
+
+    if (lvr > 0 && lvr <= 80) {
+      score += 6;
+      reasons.push(`LVR of ${lvr.toFixed(1)}% is at or below 80% — no-LMI path at most lenders.`);
+    } else if (lvr > 0 && lvr <= 85) {
+      score += 2;
+    }
+
+    // Per-bank capacity vs requested — spreads Fit when knobs move dollars
+    if (bankCap != null && loanRequested > 0) {
+      const bankUtil = loanRequested / bankCap;
+      if (bankCap < loanRequested) {
+        score -= 25;
+        reasons.push(`This bank's indicative capacity (~$${Math.round(bankCap).toLocaleString('en-AU')}) sits below the requested loan.`);
+      } else if (bankUtil <= 0.45) {
+        score += 6;
+        reasons.push(`Comfortable vs this bank's capacity (~${Math.round(bankUtil * 100)}% utilised).`);
+      } else if (bankUtil <= 0.6) {
+        score += 3;
+      } else if (bankUtil > 0.9) {
+        score -= 4;
+        reasons.push("Requested loan sits near this bank's modelled capacity — thinner buffer.");
+      }
+    }
+
     // Clean PAYG differentiators — otherwise every major looks the same
     if (cleanPayg) {
       if (isFhb && bank.fhbgParticipant) {
@@ -637,6 +698,16 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
   return {
     banks: rows,
     basis: 'curated_broker_posture',
+    fit_legend: [
+      { tier: 'strong', score_min: 70, meaning: 'Strong alignment: file clears checks with comfortable headroom and/or this bank\'s posture knobs suit the file well.' },
+      { tier: 'fair', score_min: 45, meaning: 'Workable mainstream match: no major red flags, but headroom is thinner or policy knobs are a weaker fit than top-tier options.' },
+      { tier: 'weak', score_min: 25, meaning: 'Material friction expected (tenure, density, DTI, adverse credit, or capacity near the edge).' },
+      { tier: 'unsuitable', score_min: 0, meaning: 'Out of appetite for this product/purpose under curated notes (e.g. investment at an OO-only lender).' },
+    ],
+    fit_vs_overall_note:
+      'Overall PASS/FAIL is the strict lending-check verdict (serviceability, LVR, DTI, employment, etc.). '
+      + 'Fit is a separate relative score of how each bank\'s curated posture and indicative capacity align with this file. '
+      + 'A PASS file can still show Fair Fit when headroom is thin or a bank is a weaker policy match; Strong Fit is not an approval.',
     capacity_note: minCap != null && maxCap != null && maxCap !== minCap
       ? `Indicative capacity across this panel ranges from ~$${minCap.toLocaleString('en-AU')} to ~$${maxCap.toLocaleString('en-AU')} depending on each bank's overtime, rental, and expense stance — same engine, different knobs. Not a quote or approval.`
       : 'Indicative capacity uses each bank\'s curated overtime/rental/HEM stance through the same surplus engine. Not a quote or approval.',
@@ -678,6 +749,8 @@ function buildMergedBankPanel(bankPosture, lenderFit) {
         })),
       };
     }),
+    fit_legend: bankPosture?.fit_legend || null,
+    fit_vs_overall_note: bankPosture?.fit_vs_overall_note || null,
     capacity_note: bankPosture?.capacity_note || null,
     note: bankPosture?.note || null,
     has_live_rates: products.length > 0,
