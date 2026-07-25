@@ -84,9 +84,32 @@ export const MODELS = [
 
 /** Admin-confirmed execution boundary for vault_models entries. */
 export const MODEL_EXECUTION_OPTIONS = [
-  { value: 'local', label: 'Local execution' },
-  { value: 'hosted', label: 'Hosted / API' },
+  { value: 'local', label: 'Local' },
+  { value: 'hosted', label: 'Hosted' },
 ];
+
+/** Icons used in admin model <option> labels (native selects cannot render React icons). */
+export function modelExecutionIcon(execution) {
+  if (execution === 'local') return '💻';
+  if (execution === 'hosted') return '☁️';
+  return '❔';
+}
+
+export function modelExecutionLabel(execution) {
+  if (execution === 'local') return 'Local';
+  if (execution === 'hosted') return 'Hosted';
+  return 'Unconfirmed';
+}
+
+/** Consistent option text for every admin model dropdown. */
+export function formatModelSelectLabel(m, { includeId = true } = {}) {
+  if (!m) return '';
+  const execIcon = modelExecutionIcon(m.execution);
+  const emoji = m.emoji || '🤖';
+  const name = m.name || m.id || 'model';
+  if (!includeId) return `${execIcon} ${emoji} ${name}`;
+  return `${execIcon} ${emoji} ${name} — ${m.id}`;
+}
 
 export function isValidModelExecution(value) {
   return value === 'local' || value === 'hosted';

@@ -27,6 +27,68 @@ async function isOllamaAvailable() {
   }
 }
 
+/**
+ * Installed Ollama tags (local runtime only). Never invents models.
+ * @returns {{ available: boolean, isLocalRuntime: boolean, baseUrl: string, models: Array<{ name: string, id: string, size: number|null }> }}
+ */
+async function listOllamaModels() {
+  const baseUrl = ollamaBaseUrl();
+  const isLocalRuntime = Boolean(runtimeConfig.isLocal);
+  if (!isLocalRuntime) {
+    return {
+      available: false,
+      isLocalRuntime: false,
+      baseUrl,
+      models: [],
+      reason: 'Ollama is only available when APP_ENV=local',
+    };
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      return {
+        available: false,
+        isLocalRuntime: true,
+        baseUrl,
+        models: [],
+        reason: `Ollama responded with HTTP ${res.status}`,
+      };
+    }
+    const data = await res.json().catch(() => ({}));
+    const models = (Array.isArray(data.models) ? data.models : [])
+      .map((m) => {
+        const name = String(m?.name || m?.model || '').trim();
+        if (!name) return null;
+        return {
+          name,
+          id: name.startsWith('ollama:') ? name : `ollama:${name}`,
+          size: typeof m.size === 'number' ? m.size : null,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      available: true,
+      isLocalRuntime: true,
+      baseUrl,
+      models,
+      reason: null,
+    };
+  } catch (err) {
+    return {
+      available: false,
+      isLocalRuntime: true,
+      baseUrl,
+      models: [],
+      reason: err.name === 'AbortError' ? 'Ollama did not respond in time' : (err.message || 'Ollama unreachable'),
+    };
+  }
+}
+
+
 async function callOllamaModel(modelId, messages, { temperature = 0.7, maxTokens = 500, stream = false } = {}) {
   if (!runtimeConfig.isLocal) {
     throw new Error('Local Ollama models are only available when APP_ENV=local');
@@ -58,6 +120,7 @@ async function callOllamaModel(modelId, messages, { temperature = 0.7, maxTokens
 module.exports = {
   callOllamaModel,
   isOllamaAvailable,
+  listOllamaModels,
   isOllamaModel,
   normalizeOllamaModel,
   ollamaBaseUrl,

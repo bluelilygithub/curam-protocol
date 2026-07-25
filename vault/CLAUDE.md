@@ -127,7 +127,7 @@ buf = lines.pop(); // keep partial line
 
 **Helpers:** `getModelsByExecution(userId, 'local'|'hosted')` returns only inventory entries with that confirmed `execution`. Use this for privacy-sensitive agents (e.g. document redaction local slot).
 
-**Document redaction agent card** (`document-redaction-agent`): settings keys `document_redaction_local_model` + `document_redaction_frontier_model`. Resolve at runtime via `resolveDocumentRedactionModels({ userId, jobId })` in `server/services/documentRedactionModelResolver.js` — never hardcode model ids. Local slot inventory is exclusively `getModelsByExecution(userId, 'local')`.
+**Document redaction agent card** (`document-redaction-agent`): settings keys `document_redaction_local_model` + `document_redaction_frontier_model`. Resolve at runtime via `resolveDocumentRedactionModels({ userId, jobId })` in `server/services/documentRedactionModelResolver.js` — never hardcode model ids. Both slots accept any connected `vault_models` entry (including two Local models for demos). Admin dropdowns show Local/Hosted icons; they are not filtered by execution type.
 
 If the user has no **`vault_models`** row (or empty list), resolver uses the **first admin’s** **`vault_models` / `default_model`**.
 

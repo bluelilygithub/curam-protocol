@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-07-25 (admin-models-local-hosted-ui)
+
+### Settings — AI Models add flow + Local/Hosted icons
+- **+ Add model** / Edit scrolls the form into view and focuses Model API ID.
+- Add form shows Ollama active status + installed-tag picker (`GET /api/chat/ollama-status`).
+- Inventory still requires Local or Hosted; admin model dropdowns are **not** filtered by execution — options use 💻 Local / ☁️ Hosted / ❔ icons consistently (Default, Branch, Redaction both slots, Theme builder, Graphics, Gmail PDF).
+- Document redaction agent both slots accept any connected model (including two Local models for demos).
+
+---
+
 ## 2026-07-25 (document-redaction-m6)
 
 ### Document redaction — Milestone 6 (selective frontier apply + three-way + final)
@@ -87,6 +97,16 @@ A log of bugs found and fixed in the Curam Vault application.
 - `POST /api/settings` rejects `vault_models` saves until every entry has a valid `execution`.
 - Settings → AI Models: required Execution control on add/edit; banner for **N connected models need execution type confirmed**; inline confirm + Save inventory for backfill.
 - Server helper: **`getModelsByExecution(userId, 'local'|'hosted')`** for agents that must bind to local-only models.
+
+---
+
+## 2026-07-25 (proforma-fit-score-sensitivity)
+
+### Property Scenario — Fit scores, OT shade legend, sensitivity
+- PDF/UI show each bank's **numeric Fit score** beside the tier (so 98 vs 71 is visible).
+- **OT shade** explained in the bank panel (share of overtime/bonus credited per bank).
+- Per-bank **sensitivity** note: points of margin above the tier floor + loan levels where utilisation bonuses thin.
+- Fixed remaining Helvetica arrow garble on "Strict $X -> with levers ~$Y".
 
 ---
 

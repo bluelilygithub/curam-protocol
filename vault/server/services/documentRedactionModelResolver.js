@@ -5,16 +5,16 @@
  *
  * agentId: document-redaction-agent
  * Slots (settings keys, same pattern as default_model / branch_eval_model):
- *   - local    → document_redaction_local_model
- *   - frontier → document_redaction_frontier_model
+ *   - local    → document_redaction_local_model  (on-device / candidate pass)
+ *   - frontier → document_redaction_frontier_model (residual-risk pass)
  *
- * Local slot is privacy-critical: only models with admin-confirmed
- * execution === 'local' (via getModelsByExecution) may be assigned.
+ * Both slots accept any connected vault_models entry so demos can use two
+ * local models. Admin UI shows Local/Hosted icons on every option; execution
+ * type is informational, not a dropdown filter.
  */
 
 const { pool } = require('../db');
 const {
-  getModelsByExecution,
   getVaultModelsConfigForUser,
   isValidExecution,
 } = require('./modelResolver');
@@ -35,8 +35,7 @@ const AGENT_CARD = {
       settingsKey: SLOT_KEYS.local,
       label: 'Local model (candidate extraction & redaction application)',
       required: true,
-      /** Only admin-confirmed execution:local — never provider/id heuristics. */
-      inventory: 'local_execution_only',
+      inventory: 'any_connected',
     },
     {
       id: 'frontier',
@@ -87,48 +86,33 @@ function catalogEntryById(models, modelId) {
 }
 
 /**
- * Validate a proposed local-slot assignment.
- * Must appear in getModelsByExecution(userId, 'local') — no full-inventory fallback.
+ * Either agent slot: must be a connected vault_models entry (local or hosted).
  */
-async function assertLocalSlotAllowed(userId, modelId) {
+async function assertConnectedModel(userId, modelId, slotLabel) {
   const id = String(modelId || '').trim();
   if (!id) {
-    const err = new Error('Local model is required for the document redaction agent');
-    err.status = 400;
-    throw err;
-  }
-  const localModels = await getModelsByExecution(userId, 'local');
-  const allowed = localModels.some((m) => String(m.id).trim() === id);
-  if (!allowed) {
-    const err = new Error(
-      'Local redaction model must be chosen from admin-confirmed local-execution inventory '
-      + '(getModelsByExecution("local")). Hosted/API models cannot be assigned to this slot.',
-    );
-    err.status = 400;
-    err.localExecutionModelIds = localModels.map((m) => m.id);
-    throw err;
-  }
-  return localModels.find((m) => String(m.id).trim() === id);
-}
-
-/**
- * Frontier may be any connected catalog model (local or hosted) that exists in vault_models.
- */
-async function assertFrontierSlotAllowed(userId, modelId) {
-  const id = String(modelId || '').trim();
-  if (!id) {
-    const err = new Error('Frontier model is required for the document redaction agent');
+    const err = new Error(`${slotLabel} model is required for the document redaction agent`);
     err.status = 400;
     throw err;
   }
   const { models } = await getVaultModelsConfigForUser(userId);
   const entry = catalogEntryById(models, id);
   if (!entry) {
-    const err = new Error('Frontier model must be a connected model in the vault_models inventory');
+    const err = new Error(
+      `${slotLabel} model must be a connected model in the vault_models inventory`,
+    );
     err.status = 400;
     throw err;
   }
   return entry;
+}
+
+async function assertLocalSlotAllowed(userId, modelId) {
+  return assertConnectedModel(userId, modelId, 'Local');
+}
+
+async function assertFrontierSlotAllowed(userId, modelId) {
+  return assertConnectedModel(userId, modelId, 'Frontier');
 }
 
 /**
@@ -164,11 +148,10 @@ async function resolveDocumentRedactionModels(ctx = {}) {
       localHandle = {
         slot: 'local',
         modelId: localSlot.modelId,
-        execution: 'local',
+        execution: isValidExecution(entry?.execution) ? entry.execution : null,
         provider: entry?.provider || null,
         name: entry?.name || null,
-        fromAdmin: localSlot.fromAdmin,
-        settingsKey: SLOT_KEYS.local,
+        fromAdminFallback: localSlot.fromAdmin,
       };
     }
   } catch (err) {
@@ -186,8 +169,7 @@ async function resolveDocumentRedactionModels(ctx = {}) {
         execution: isValidExecution(entry?.execution) ? entry.execution : null,
         provider: entry?.provider || null,
         name: entry?.name || null,
-        fromAdmin: frontierSlot.fromAdmin,
-        settingsKey: SLOT_KEYS.frontier,
+        fromAdminFallback: frontierSlot.fromAdmin,
       };
     }
   } catch (err) {
@@ -205,17 +187,15 @@ async function resolveDocumentRedactionModels(ctx = {}) {
 }
 
 /**
- * Card state for admin Settings UI.
- * localChoices comes ONLY from getModelsByExecution('local') — empty means empty dropdown.
+ * Card state for admin Settings UI — both slots share the full connected inventory.
  */
 async function getDocumentRedactionAgentCardConfig(userId) {
-  const localChoices = await getModelsByExecution(userId, 'local');
   const { models: allConnected } = await getVaultModelsConfigForUser(userId);
   const localSlot = await resolveSlotSetting(userId, SLOT_KEYS.local);
   const frontierSlot = await resolveSlotSetting(userId, SLOT_KEYS.frontier);
 
-  const localStillValid = localSlot.modelId
-    && localChoices.some((m) => String(m.id).trim() === localSlot.modelId);
+  const localEntry = catalogEntryById(allConnected, localSlot.modelId);
+  const frontierEntry = catalogEntryById(allConnected, frontierSlot.modelId);
 
   return {
     agentId: AGENT_ID,
@@ -223,19 +203,22 @@ async function getDocumentRedactionAgentCardConfig(userId) {
     local: {
       settingsKey: SLOT_KEYS.local,
       label: AGENT_CARD.slots[0].label,
-      modelId: localStillValid ? localSlot.modelId : '',
+      modelId: localEntry ? localSlot.modelId : '',
       assignedModelId: localSlot.modelId,
-      assignmentValid: !localSlot.modelId || !!localStillValid,
+      assignmentValid: !localSlot.modelId || !!localEntry,
       fromAdmin: localSlot.fromAdmin,
-      /** Sole source for the local dropdown — never substitute full inventory. */
-      choices: localChoices,
-      choiceIds: localChoices.map((m) => m.id),
+      execution: localEntry?.execution || null,
+      choices: allConnected,
+      choiceIds: allConnected.map((m) => m.id),
     },
     frontier: {
       settingsKey: SLOT_KEYS.frontier,
       label: AGENT_CARD.slots[1].label,
-      modelId: frontierSlot.modelId || '',
+      modelId: frontierEntry ? frontierSlot.modelId : '',
+      assignedModelId: frontierSlot.modelId,
+      assignmentValid: !frontierSlot.modelId || !!frontierEntry,
       fromAdmin: frontierSlot.fromAdmin,
+      execution: frontierEntry?.execution || null,
       choices: allConnected,
     },
   };

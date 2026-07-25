@@ -519,6 +519,23 @@ router.get('/model-status', async (req, res) => {
   });
 });
 
+// GET /api/chat/ollama-status — local Ollama reachability + installed tags for Settings
+router.get('/ollama-status', async (req, res) => {
+  try {
+    const { listOllamaModels } = require('../services/ollamaClient');
+    const status = await listOllamaModels();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({
+      available: false,
+      isLocalRuntime: false,
+      baseUrl: null,
+      models: [],
+      reason: err.message || 'Could not query Ollama',
+    });
+  }
+});
+
 // POST /api/chat/test-model — quick non-streaming test of a single model
 router.post('/test-model', async (req, res) => {
   const { modelId } = req.body;

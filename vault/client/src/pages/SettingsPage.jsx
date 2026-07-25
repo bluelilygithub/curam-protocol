@@ -4,7 +4,7 @@ import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
-import { MODELS as DEFAULT_MODELS, MODEL_EXECUTION_OPTIONS, isValidModelExecution, modelsNeedingExecutionConfirm } from '../utils/models';
+import { MODELS as DEFAULT_MODELS, MODEL_EXECUTION_OPTIONS, isValidModelExecution, modelsNeedingExecutionConfirm, formatModelSelectLabel, modelExecutionIcon, modelExecutionLabel } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
@@ -98,6 +98,9 @@ function SettingsPage() {
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
   const [modelStatus, setModelStatus] = useState(null);
+  const [ollamaStatus, setOllamaStatus] = useState(null);
+  const modelFormCardRef = useRef(null);
+  const modelIdInputRef = useRef(null);
   const {
     models,
     setModels,
@@ -112,7 +115,6 @@ function SettingsPage() {
     saveEmbeddingModel,
     embeddingConfig,
     needsExecutionConfirm,
-    localExecutionModels,
     documentRedactionLocalModel,
     documentRedactionFrontierModel,
     saveDocumentRedactionLocalModel,
@@ -307,6 +309,7 @@ function SettingsPage() {
 
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
+    api.get('/api/chat/ollama-status').then(r => r.json()).then(setOllamaStatus).catch(() => setOllamaStatus(null));
     // Load allowedFileTypes from DB. If no DB value exists yet, seed it with the
     // current comprehensive default (also fixes stale localStorage values from older builds).
     const DEFAULT_FILE_TYPES = '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*';
@@ -427,13 +430,56 @@ function SettingsPage() {
     emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '', execution: '',
   };
 
-  function openAdd() { setModelForm(EMPTY_MODEL); setEditingModel('new'); setModelInventoryError(''); }
+  function refreshOllamaStatus() {
+    api.get('/api/chat/ollama-status')
+      .then((r) => r.json())
+      .then(setOllamaStatus)
+      .catch(() => setOllamaStatus(null));
+  }
+
+  function focusModelFormCard() {
+    requestAnimationFrame(() => {
+      modelFormCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        modelIdInputRef.current?.focus({ preventScroll: true });
+      }, 280);
+    });
+  }
+
+  function openAdd() {
+    setModelForm(EMPTY_MODEL);
+    setEditingModel('new');
+    setModelInventoryError('');
+    refreshOllamaStatus();
+  }
   function openEdit(m) {
     setModelForm({ ...m, execution: isValidModelExecution(m.execution) ? m.execution : '' });
     setEditingModel(m.id);
     setModelInventoryError('');
+    refreshOllamaStatus();
   }
   function cancelEdit() { setEditingModel(null); setModelForm({}); }
+
+  useEffect(() => {
+    if (!editingModel) return undefined;
+    focusModelFormCard();
+    return undefined;
+  }, [editingModel]);
+
+  function applyInstalledOllamaModel(modelIdOrName) {
+    const raw = String(modelIdOrName || '').trim();
+    if (!raw) return;
+    const id = raw.startsWith('ollama:') ? raw : `ollama:${raw}`;
+    const short = id.replace(/^ollama:/, '');
+    setModelForm((f) => ({
+      ...f,
+      id,
+      name: f.name?.trim() ? f.name : short,
+      provider: 'ollama',
+      execution: 'local',
+      emoji: f.emoji || '💻',
+    }));
+  }
 
   async function persistModelInventory(nextModels) {
     setModelInventorySaving(true);
@@ -705,6 +751,24 @@ function SettingsPage() {
   const graphicsModelOptions = graphicsModel && !graphicsModelChoices.some(m => m.id === graphicsModel)
     ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'fal' }, ...graphicsModelChoices]
     : graphicsModelChoices;
+
+  function modelById(id) {
+    return models.find((m) => m.id === id) || null;
+  }
+
+  function SelectedModelExecutionHint({ modelId }) {
+    const m = modelById(modelId);
+    if (!modelId || !m) return null;
+    return (
+      <p className="text-[11px] mt-1.5 flex items-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
+        <span aria-hidden="true">{modelExecutionIcon(m.execution)}</span>
+        <span>{modelExecutionLabel(m.execution)}</span>
+        {!isValidModelExecution(m.execution) && (
+          <span style={{ color: '#b45309' }}>— confirm Local or Hosted on this inventory entry</span>
+        )}
+      </p>
+    );
+  }
 
   function modelProviderStatusKey(provider) {
     if (provider === 'serpapi') return 'search';
@@ -1345,8 +1409,8 @@ function SettingsPage() {
           </div>
         </div>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          Add, edit, or remove models. The model ID must match the exact API identifier from your provider.
-          Each model also needs an admin-confirmed <strong>execution</strong> type (Local or Hosted) — never inferred from provider.
+          Add, edit, or remove models. Set <strong>Local or Hosted</strong> on each inventory entry.
+          Admin dropdowns list every connected model with a 💻 Local / ☁️ Hosted icon — they are not filtered by execution type.
         </p>
 
         {(needsExecutionConfirm?.length > 0 || modelInventoryError || modelInventoryDirty) && (
@@ -1390,6 +1454,229 @@ function SettingsPage() {
           </div>
         )}
 
+        {/* Add / Edit form — placed near "+ Add model" so it scrolls into focus immediately */}
+        {editingModel && (
+          <div
+            ref={modelFormCardRef}
+            className="rounded-xl border p-4 mb-4 space-y-3"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}
+          >
+            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
+              {editingModel === 'new' ? 'Add model' : 'Edit model'}
+            </div>
+
+            <div
+              className="rounded-lg px-3 py-2 text-xs space-y-1"
+              style={{
+                background: ollamaStatus?.available ? '#ecfdf5' : '#FFFBEB',
+                color: ollamaStatus?.available ? '#065f46' : '#92400e',
+                border: `1px solid ${ollamaStatus?.available ? '#a7f3d0' : '#fcd34d'}`,
+              }}
+            >
+              {ollamaStatus?.available ? (
+                <>
+                  <p className="font-medium">
+                    Ollama is active — you can select and use installed local models
+                    {ollamaStatus.models?.length != null ? ` (${ollamaStatus.models.length} installed)` : ''}.
+                  </p>
+                  <p style={{ opacity: 0.85 }}>
+                    Base URL <code>{ollamaStatus.baseUrl || '—'}</code>. Choose Local below, then pick from the installed list (or type a hosted API id).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">
+                    {ollamaStatus?.isLocalRuntime === false
+                      ? 'Ollama is not available in this environment (hosted runtime).'
+                      : 'Ollama is not active right now.'}
+                  </p>
+                  <p style={{ opacity: 0.85 }}>
+                    {ollamaStatus?.reason || 'Start Ollama locally, then refresh.'}
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={refreshOllamaStatus}
+                      className="underline transition-opacity duration-200 hover:opacity-70"
+                    >
+                      Check again
+                    </button>
+                  </p>
+                </>
+              )}
+            </div>
+
+            {ollamaStatus?.available && (
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Installed local models (Ollama)
+                </label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  value={
+                    (ollamaStatus?.models || []).some((m) => m.id === modelForm.id || m.name === String(modelForm.id || '').replace(/^ollama:/, ''))
+                      ? ((ollamaStatus.models.find((m) => m.id === modelForm.id)?.id)
+                        || (ollamaStatus.models.find((m) => m.name === String(modelForm.id || '').replace(/^ollama:/, ''))?.id)
+                        || '')
+                      : ''
+                  }
+                  onChange={(e) => applyInstalledOllamaModel(e.target.value)}
+                  disabled={!(ollamaStatus?.models?.length > 0)}
+                >
+                  <option value="">
+                    {!(ollamaStatus?.models?.length > 0)
+                      ? 'No models installed in Ollama'
+                      : 'Select an installed Ollama model…'}
+                  </option>
+                  {(ollamaStatus?.models || []).map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Selecting fills Model API ID as <code>ollama:&lt;tag&gt;</code>, sets provider to Ollama, and marks <strong>Local or Hosted</strong> as Local.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Local or Hosted *</label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{
+                    background: 'var(--color-bg)',
+                    borderColor: isValidModelExecution(modelForm.execution) ? 'var(--color-border)' : '#F59E0B',
+                    color: 'var(--color-text)',
+                  }}
+                  value={modelForm.execution || ''}
+                  onChange={(e) => {
+                    const execution = e.target.value;
+                    setModelForm((f) => ({
+                      ...f,
+                      execution,
+                      ...(execution === 'local' && editingModel === 'new' && (f.provider === 'anthropic' || !f.provider)
+                        ? { provider: 'ollama' }
+                        : {}),
+                    }));
+                    if (execution === 'local') refreshOllamaStatus();
+                  }}
+                >
+                  <option value="">Select… (required)</option>
+                  {MODEL_EXECUTION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Required admin choice. Shown as 💻 / ☁️ on every admin model dropdown — dropdowns are not filtered by this.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Provider</label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  value={modelForm.provider}
+                  onChange={(e) => {
+                    const provider = e.target.value;
+                    setModelForm((f) => ({
+                      ...f,
+                      provider,
+                      ...(provider === 'ollama' ? { execution: f.execution || 'local' } : {}),
+                    }));
+                    if (provider === 'ollama') refreshOllamaStatus();
+                  }}
+                >
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="ollama">Ollama local</option>
+                  <option value="fal">FAL</option>
+                  <option value="serper">Serper (Google Shopping)</option>
+                  <option value="serpapi">SerpAPI (Google Shopping)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Model API ID *</label>
+                <input
+                  ref={modelIdInputRef}
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none font-mono"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. claude-… or ollama:qwen2.5:14b"
+                  value={modelForm.id}
+                  onChange={e => setModelForm(f => ({ ...f, id: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Display name *</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Haiku 4.5"
+                  value={modelForm.name}
+                  onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Label</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Economy"
+                  value={modelForm.label}
+                  onChange={e => setModelForm(f => ({ ...f, label: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Emoji</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="⚡"
+                  value={modelForm.emoji}
+                  onChange={e => setModelForm(f => ({ ...f, emoji: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Tagline</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Fast & affordable"
+                  value={modelForm.tagline}
+                  onChange={e => setModelForm(f => ({ ...f, tagline: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Description</label>
+              <input
+                className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                placeholder="e.g. Best for quick tasks, drafts, and simple Q&A"
+                value={modelForm.desc}
+                onChange={e => setModelForm(f => ({ ...f, desc: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={saveModel}
+                disabled={!modelForm.id.trim() || !modelForm.name.trim() || !isValidModelExecution(modelForm.execution)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {editingModel === 'new' ? 'Add' : 'Save'}
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Default model selector */}
         <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
@@ -1406,9 +1693,10 @@ function SettingsPage() {
           >
             <option value="">No default selected</option>
             {textModelChoices.map(m => (
-              <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
+              <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          <SelectedModelExecutionHint modelId={defaultModel} />
         </div>
 
         {/* Branch evaluation model selector */}
@@ -1427,9 +1715,10 @@ function SettingsPage() {
           >
             <option value="">Use current chat model</option>
             {textModelChoices.map(m => (
-              <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
+              <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          <SelectedModelExecutionHint modelId={branchEvalModel} />
         </div>
 
         {/* Document redaction agent — two model slots */}
@@ -1439,9 +1728,27 @@ function SettingsPage() {
               Document redaction agent
             </label>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Agent card <code>document-redaction-agent</code>. Local slot is the privacy boundary — only models with admin-confirmed <code>execution: local</code> (via <code>getModelsByExecution(&apos;local&apos;)</code>). No fallback to the full inventory.
+              Agent card <code>document-redaction-agent</code>. Both slots accept any connected model — including two Local models for demos.
+              Options show 💻 Local / ☁️ Hosted from the inventory (not filtered).
             </p>
           </div>
+
+          {ollamaStatus && (
+            <div
+              className="rounded-lg px-3 py-2 text-xs"
+              style={{
+                background: ollamaStatus.available ? '#ecfdf5' : 'var(--color-bg)',
+                color: ollamaStatus.available ? '#065f46' : 'var(--color-muted)',
+                border: `1px solid ${ollamaStatus.available ? '#a7f3d0' : 'var(--color-border)'}`,
+              }}
+            >
+              {ollamaStatus.available
+                ? `Ollama active · ${ollamaStatus.models?.length || 0} installed`
+                : (ollamaStatus.isLocalRuntime === false
+                  ? 'Ollama unavailable on this host'
+                  : 'Ollama not active')}
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
@@ -1459,23 +1766,13 @@ function SettingsPage() {
               }}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              disabled={localExecutionModels.length === 0}
             >
-              <option value="">
-                {localExecutionModels.length === 0
-                  ? 'No local-execution models confirmed'
-                  : 'Select local model…'}
-              </option>
-              {localExecutionModels.map((m) => (
-                <option key={m.id} value={m.id}>{m.emoji || '💻'} {m.name || m.id} — {m.id}</option>
+              <option value="">Select model…</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
-            <p className="text-[11px] mt-1.5 font-mono" style={{ color: 'var(--color-muted)' }}>
-              Filtered list ({localExecutionModels.length}):{' '}
-              {localExecutionModels.length === 0
-                ? '(empty — confirm execution: local on inventory models above)'
-                : localExecutionModels.map((m) => m.id).join(', ')}
-            </p>
+            <SelectedModelExecutionHint modelId={documentRedactionLocalModel} />
           </div>
 
           <div>
@@ -1495,16 +1792,14 @@ function SettingsPage() {
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             >
-              <option value="">Select frontier model…</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.emoji || '🤖'} {m.name || m.id} — {m.id}
-                  {m.execution ? ` (${m.execution})` : ''}
-                </option>
+              <option value="">Select model…</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
-            <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
-              Any connected model (local or hosted). Only receives already-redacted content.
+            <SelectedModelExecutionHint modelId={documentRedactionFrontierModel} />
+            <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>
+              Only receives already-redacted content. May be the same Local model as above for demos.
             </p>
           </div>
 
@@ -1530,9 +1825,10 @@ function SettingsPage() {
             >
               <option value="">Use default model / local dev env</option>
               {textModelChoices.map(m => (
-                <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
+            <SelectedModelExecutionHint modelId={themeBuilderDesignModel} />
             {themeBuilderDesignMeta?.effectiveModel && (
               <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
                 Currently resolves to <code>{themeBuilderDesignMeta.effectiveModel}</code>
@@ -1602,9 +1898,10 @@ function SettingsPage() {
           >
             <option value="">No graphics model selected</option>
             {graphicsModelOptions.map(m => (
-              <option key={m.id} value={m.id}>{m.emoji || '🎨'} {m.name || m.id} — {m.id}</option>
+              <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          <SelectedModelExecutionHint modelId={graphicsModel} />
           <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
             This dropdown lists models configured below with provider `fal`. Leave blank to use the server fallback.
           </p>
@@ -1614,132 +1911,6 @@ function SettingsPage() {
             </p>
           )}
         </div>
-
-        {/* Add / Edit form */}
-        {editingModel && (
-          <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
-            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
-              {editingModel === 'new' ? 'Add model' : 'Edit model'}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Model API ID *</label>
-                <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. provider-model-id"
-                  value={modelForm.id}
-                  onChange={e => setModelForm(f => ({ ...f, id: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Display name *</label>
-                <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. Haiku 4.5"
-                  value={modelForm.name}
-                  onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Label</label>
-                <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. Economy"
-                  value={modelForm.label}
-                  onChange={e => setModelForm(f => ({ ...f, label: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Provider</label>
-                <select
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  value={modelForm.provider}
-                  onChange={e => setModelForm(f => ({ ...f, provider: e.target.value }))}
-                >
-                  <option value="anthropic">Anthropic</option>
-                  <option value="gemini">Google Gemini</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="ollama">Ollama local</option>
-                  <option value="fal">FAL</option>
-                  <option value="serper">Serper (Google Shopping)</option>
-                  <option value="serpapi">SerpAPI (Google Shopping)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Execution *</label>
-                <select
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{
-                    background: 'var(--color-bg)',
-                    borderColor: isValidModelExecution(modelForm.execution) ? 'var(--color-border)' : '#F59E0B',
-                    color: 'var(--color-text)',
-                  }}
-                  value={modelForm.execution || ''}
-                  onChange={(e) => setModelForm((f) => ({ ...f, execution: e.target.value }))}
-                >
-                  <option value="">Select… (required)</option>
-                  {MODEL_EXECUTION_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
-                  Admin-confirmed. Not pre-filled from provider — even Ollama must be chosen explicitly.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Emoji</label>
-                <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="⚡"
-                  value={modelForm.emoji}
-                  onChange={e => setModelForm(f => ({ ...f, emoji: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Tagline</label>
-                <input
-                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. Fast & affordable"
-                  value={modelForm.tagline}
-                  onChange={e => setModelForm(f => ({ ...f, tagline: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Description</label>
-              <input
-                className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                placeholder="e.g. Best for quick tasks, drafts, and simple Q&A"
-                value={modelForm.desc}
-                onChange={e => setModelForm(f => ({ ...f, desc: e.target.value }))}
-              />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={saveModel}
-                disabled={!modelForm.id.trim() || !modelForm.name.trim() || !isValidModelExecution(modelForm.execution)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {editingModel === 'new' ? 'Add' : 'Save'}
-              </button>
-              <button
-                onClick={cancelEdit}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Model list */}
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
@@ -2331,7 +2502,7 @@ function SettingsPage() {
                   ? [{ id: branchEvalModel, name: branchEvalModel }]
                   : []),
               ].map(m => (
-                <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
           </div>

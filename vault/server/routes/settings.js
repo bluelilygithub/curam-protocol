@@ -209,7 +209,6 @@ router.post('/', async (req, res) => {
       } catch (err) {
         return res.status(err.status || 400).json({
           error: err.message,
-          localExecutionModelIds: err.localExecutionModelIds || [],
         });
       }
     }
