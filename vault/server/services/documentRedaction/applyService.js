@@ -375,6 +375,13 @@ async function applyRedactions(jobId, userId, opts = {}) {
     localPassDocx: 'local-pass.docx',
     substitutionPlan: syn.plan || null,
     substitutionArithmetic: syn.arithmetic || null,
+    lastRedactionStyle: {
+      styleId: opts.styleId || syn.plan?.strategyId || null,
+      target: syn.plan?.target || null,
+      label: opts.styleLabel || null,
+      skipLlm: Boolean(skipLlm),
+      appliedAt: new Date().toISOString(),
+    },
     sanitizedPdf: pdfOk ? 'sanitized.pdf' : null,
     frontierApprovedAt: null,
     frontierApprovedPdfSha256: null,

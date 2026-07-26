@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 /**
  * Side-by-side (and optional three-way) compare with synced scroll.
@@ -17,9 +18,14 @@ export default function DocumentRedactionCompare({
   onApproveFrontier,
   onApproveFinal,
   onDownload,
+  onChangeStyle,
   onBackToReview,
   onReviewFrontierSuggestions,
   onApplyFrontier,
+  briefSummary,
+  briefFull,
+  briefIntents,
+  lastStyleLabel,
 }) {
   const paneRefs = useRef([]);
   const syncing = useRef(false);
@@ -104,21 +110,50 @@ export default function DocumentRedactionCompare({
           <button type="button" onClick={onBackToReview} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
             Back to candidates
           </button>
+          {onChangeStyle && (
+            <button type="button" onClick={onChangeStyle} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              Change style{lastStyleLabel ? ` (${lastStyleLabel})` : ''}
+            </button>
+          )}
           <button type="button" onClick={onRunCoherence} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             Run coherence check
           </button>
           {onDownload && (
-            <button type="button" onClick={() => onDownload('redacted.docx')} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            <button type="button" onClick={() => onDownload('redacted.docx')} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
               Download .docx
+            </button>
+          )}
+          {onDownload && pdfReady && (
+            <button type="button" onClick={() => onDownload('sanitized.pdf')} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              Download .pdf
             </button>
           )}
         </div>
       </div>
 
+      {(briefSummary || briefFull) && (
+        <div className="shrink-0 mx-4 mt-3 px-3 py-2 rounded-xl text-xs space-y-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+            Redaction brief
+          </p>
+          {briefSummary && (
+            <p className="font-medium" style={{ color: 'var(--color-text)' }}>{briefSummary}</p>
+          )}
+          {briefFull && briefFull !== briefSummary && (
+            <p className="leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-muted)' }}>{briefFull}</p>
+          )}
+          {Array.isArray(briefIntents) && briefIntents.length > 0 && (
+            <p style={{ color: 'var(--color-muted)' }}>Intent tags: {briefIntents.join(' · ')}</p>
+          )}
+        </div>
+      )}
+
       {!pdfReady && (
         <div className="shrink-0 mx-4 mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#FFFBEB', color: '#92400e' }}>
           <span>
-            DOCX compare available — sanitized PDF is pending. Frontier / final approval is blocked until PDF conversion succeeds.
+            DOCX compare available — server PDF conversion is pending. Download the .docx above; convert or tidy in{' '}
+            <Link to="/pdf" className="underline transition-opacity duration-200 hover:opacity-70">PDF Tools</Link>
+            {' '}if you need a PDF now. Frontier / final approval stays blocked until sanitized.pdf succeeds.
           </span>
           <button type="button" onClick={onRetryPdf} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
             Retry PDF conversion

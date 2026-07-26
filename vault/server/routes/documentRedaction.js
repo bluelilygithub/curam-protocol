@@ -51,6 +51,7 @@ function publicJobView(job) {
     updatedAt: job.updatedAt,
     lastApplyAt: job.lastApplyAt,
     lastApplyPass: job.lastApplyPass || null,
+    lastRedactionStyle: job.lastRedactionStyle || null,
     apply: job.apply || null,
     redactedLocalDocx: job.redactedLocalDocx || null,
     localPassDocx: job.localPassDocx || null,

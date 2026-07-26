@@ -13,6 +13,7 @@ const {
   normalizeCategoryLabel,
   pickPreferredCategory,
 } = require('./categories');
+const { bankEntityKey, findBankFamily } = require('./bankLexicon');
 
 function normalizeEntity(text) {
   let s = String(text || '')
@@ -41,8 +42,11 @@ function normalizeEntity(text) {
 /**
  * Entity identity from surface text. Second arg kept for call-site compatibility
  * but is intentionally ignored — category must not split the same real value.
+ * Known bank aliases share one key (Macquarie ≡ Macquarie Bank).
  */
 function entityKeyFor(surface, _categoryLabel) {
+  const bank = bankEntityKey(surface);
+  if (bank) return bank;
   return normalizeEntity(surface);
 }
 
@@ -221,19 +225,98 @@ function mergeAndDeduplicateCandidates(candidates, jobId) {
  * After merge, re-scan IR so every surface form gets all occurrence locations.
  */
 function expandOccurrencesWithIr(candidates, ir, findOccurrencesFn) {
+  const { BANK_FAMILIES } = require('./bankLexicon');
+
+  function findWordBoundary(irDoc, needle) {
+    const raw = String(needle || '');
+    if (!raw) return [];
+    const locations = [];
+    const re = new RegExp(`\\b${raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    for (const p of irDoc.paragraphs || []) {
+      const text = p.text || '';
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const quote = m[0];
+        locations.push({
+          part: p.part,
+          paragraphId: p.paragraphId,
+          xmlPath: p.xmlPath,
+          startOffset: m.index,
+          endOffset: m.index + quote.length,
+          quote,
+        });
+      }
+    }
+    return locations;
+  }
+
+  function dedupePreferLonger(locs) {
+    const sorted = [...locs].sort((a, b) => {
+      const lenA = (a.endOffset - a.startOffset) || String(a.quote || '').length;
+      const lenB = (b.endOffset - b.startOffset) || String(b.quote || '').length;
+      return lenB - lenA;
+    });
+    const kept = [];
+    for (const loc of sorted) {
+      const overlaps = kept.some((k) => (
+        k.paragraphId === loc.paragraphId
+        && loc.startOffset < k.endOffset
+        && loc.endOffset > k.startOffset
+      ));
+      if (!overlaps) kept.push(loc);
+    }
+    return kept;
+  }
+
   return (candidates || []).map((c) => {
-    const forms = c.surfaceForms || [];
+    let forms = [...(c.surfaceForms || [])];
+    const primary = forms[0] || c.entityText || '';
+    let family = findBankFamily(primary);
+    if (!family && c.entityKey && String(c.entityKey).startsWith('bank:')) {
+      const id = String(c.entityKey).slice(5);
+      const row = BANK_FAMILIES.find((f) => f.id === id);
+      if (row) {
+        family = {
+          id: row.id,
+          canonical: row.canonical,
+          replacement: row.replacement,
+          aliases: row.aliases,
+        };
+      }
+    }
+    if (family?.aliases) {
+      forms = mergeSurfaceForms(forms, family.aliases);
+    }
+
     let locations = [...(c.locations || [])];
     for (const form of forms) {
-      const found = findOccurrencesFn(ir, form);
+      const found = family
+        ? findWordBoundary(ir, form)
+        : findOccurrencesFn(ir, form);
       locations = mergeLocations(locations, found);
     }
+    if (family) {
+      locations = dedupePreferLonger(locations);
+    }
+
+    const presentLower = new Set(
+      locations.map((l) => String(l.quote || '').trim().toLowerCase()).filter(Boolean),
+    );
+    const surfaceForms = forms.filter((f) => presentLower.has(String(f).toLowerCase()));
+
     const next = {
       ...c,
+      surfaceForms: surfaceForms.length ? surfaceForms : forms.slice(0, 1),
       locations,
       occurrenceCount: locations.length,
       categoryLabel: normalizeCategoryLabel(c.categoryLabel),
+      entityText: (surfaceForms.length ? surfaceForms : forms).sort((a, b) => b.length - a.length)[0]
+        || c.entityText,
     };
+    if (family && (!next.suggestedReplacement || isPlaceholderReplacement(next.suggestedReplacement))) {
+      next.suggestedReplacement = family.replacement;
+    }
     const scored = compositeScore(next);
     next.score = scored.score;
     next.scoreBreakdown = scored.scoreBreakdown;

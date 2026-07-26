@@ -155,6 +155,10 @@ export default function DocumentRedactionPage() {
       setCompare(null);
       setCoherence(data.job?.coherence || null);
       setFrontierAnalysis(data.job?.frontierAnalysis || null);
+      if (data.job?.lastRedactionStyle?.styleId
+        && STYLE_OPTIONS.some((s) => s.id === data.job.lastRedactionStyle.styleId)) {
+        setApplyStyleId(data.job.lastRedactionStyle.styleId);
+      }
       const applied = Boolean(data.job?.redactedLocalDocx)
         || ['pdf_ready', 'docx_ready_pdf_pending', 'ready_for_frontier', 'hitl_frontier', 'ready_for_final', 'completed'].includes(data.job?.status);
       setViewMode(applied ? 'compare' : 'review');
@@ -506,6 +510,8 @@ export default function DocumentRedactionPage() {
             applyPass,
             acceptTrackedChanges: Boolean(opts.acceptTrackedChanges),
             target: style.target,
+            styleId: style.id,
+            styleLabel: style.label,
             skipLlm,
           }, { signal: controller.signal });
           const body = await res.json().catch(() => ({}));
@@ -772,23 +778,22 @@ export default function DocumentRedactionPage() {
 
   function downloadArtifact(name) {
     if (!job?.id || !name) return;
-    // apiClient doesn't expose blob download helpers — use token from store
-    const token = useAuthStore.getState().token;
-    const url = `/api/document-redaction/jobs/${job.id}/download/${name}`;
-    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Download failed');
-        }
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = name;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      })
+    const url = `/api/document-redaction/jobs/${job.id}/download/${encodeURIComponent(name)}`;
+    const base = String(job.originalFilename || 'document').replace(/\.[^.]+$/, '');
+    api.download(url, `${base}-${name}`)
       .catch((err) => setError(err.message || 'Download failed'));
+  }
+
+  function briefText(j = job) {
+    if (!j?.brief) return '';
+    return typeof j.brief === 'string' ? j.brief : (j.brief.rawText || '');
+  }
+
+  function briefSummaryLine(j = job) {
+    if (!j?.brief) return '';
+    if (typeof j.brief === 'object' && j.brief.summary) return j.brief.summary;
+    const t = briefText(j);
+    return t.length > 160 ? `${t.slice(0, 160)}…` : t;
   }
 
   if (!enabled) {
@@ -933,6 +938,21 @@ export default function DocumentRedactionPage() {
             onApproveFinal={handleApproveFinal}
             onApplyFrontier={handleApplyFrontier}
             onDownload={downloadArtifact}
+            onChangeStyle={() => {
+              const approvedCount = candidates.filter((c) => c.decision === 'approved' || c.decision === 'edited').length;
+              if (approvedCount < 1) {
+                setError('Approve at least one candidate before changing style.');
+                setViewMode('review');
+                return;
+              }
+              setApplyModal({ applyPass: 'local', approvedCount, changeStyle: true });
+              setStylePreview(null);
+              setStylePreviewError('');
+            }}
+            briefSummary={briefSummaryLine()}
+            briefFull={briefText()}
+            briefIntents={Array.isArray(job?.brief?.intents) ? job.brief.intents : []}
+            lastStyleLabel={job?.lastRedactionStyle?.label || job?.lastRedactionStyle?.styleId || applyStyleId}
             onBackToReview={() => setViewMode('review')}
             onReviewFrontierSuggestions={() => {
               setFilterSource('frontier');
@@ -974,6 +994,26 @@ export default function DocumentRedactionPage() {
                 </Link>
               </div>
             </div>
+            {(briefText() || briefSummaryLine()) && (
+              <div className="shrink-0 px-4 py-2.5 border-b space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+                  Redaction brief
+                </p>
+                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                  {briefSummaryLine()}
+                </p>
+                {briefText() && briefText() !== briefSummaryLine() && (
+                  <p className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-muted)' }}>
+                    {briefText()}
+                  </p>
+                )}
+                {Array.isArray(job?.brief?.intents) && job.brief.intents.length > 0 && (
+                  <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    Intent tags: {job.brief.intents.join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
             {selection && (
               <div className="shrink-0 px-4 py-3 space-y-2 border-b" style={{ borderColor: 'var(--color-border)', background: '#FFFBEB' }}>
                 <p className="text-xs" style={{ color: '#92400e' }}>
@@ -1135,12 +1175,12 @@ export default function DocumentRedactionPage() {
                     {(applyResult?.pdfStatus || job?.pdfStatus) === 'ready'
                       ? 'PDF ready'
                       : (applyResult?.pdfStatus || job?.pdfStatus) === 'pending'
-                        ? 'DOCX ready — PDF pending'
+                        ? 'DOCX ready — PDF pending (use PDF Tools if needed)'
                         : 'Applied'}
                     {applyResult?.stats ? ` · ${applyResult.stats.replacementsWritten} replacements` : ''}
                   </span>
                   {(applyResult?.artifacts?.redactedDocx || job?.redactedLocalDocx) && (
-                    <button type="button" onClick={() => downloadArtifact('redacted.docx')} className="underline transition-opacity duration-200 hover:opacity-70">
+                    <button type="button" onClick={() => downloadArtifact('redacted.docx')} className="underline font-medium transition-opacity duration-200 hover:opacity-70">
                       Download .docx
                     </button>
                   )}
@@ -1149,6 +1189,21 @@ export default function DocumentRedactionPage() {
                       Download .pdf
                     </button>
                   )}
+                  {(applyResult?.pdfStatus || job?.pdfStatus) === 'pending' && (
+                    <Link to="/pdf" className="underline transition-opacity duration-200 hover:opacity-70">
+                      Open PDF Tools
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const approvedCount = candidates.filter((c) => c.decision === 'approved' || c.decision === 'edited').length;
+                      setApplyModal({ applyPass: 'local', approvedCount, changeStyle: true });
+                    }}
+                    className="underline transition-opacity duration-200 hover:opacity-70"
+                  >
+                    Change style
+                  </button>
                 </div>
               )}
               <div className="flex flex-wrap gap-2 text-xs">
@@ -1282,7 +1337,11 @@ export default function DocumentRedactionPage() {
                 Confirm apply — {applyStyleId}
               </h2>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Style is set in the toolbar above. Preview a sample, then apply {applyModal.approvedCount} approved
+                {applyModal.changeStyle
+                  ? 'Pick a new style, preview the sample, then re-apply over the original document (same approved candidates).'
+                  : 'Style is set in the toolbar above. Preview a sample, then apply'}
+                {' '}
+                {applyModal.approvedCount} approved
                 {applyModal.applyPass === 'frontier' ? ' frontier' : ''} redaction(s).
               </p>
             </div>

@@ -17,6 +17,7 @@ const {
 } = require('./jobStore');
 const { resolveDocumentRedactionModels } = require('../documentRedactionModelResolver');
 const { normalizeUploadToDocx } = require('./ingestNormalize');
+const { summarizeBriefIntents } = require('./bankLexicon');
 
 /**
  * @param {object} opts
@@ -58,12 +59,14 @@ async function proposeRedactionCandidates({
     throw err;
   }
 
+  const briefMeta = summarizeBriefIntents(briefText);
+
   const normalized = await normalizeUploadToDocx({ buffer, filename, mimetype });
   const workingBuffer = normalized.docxBuffer;
 
   let job = createJobShell(userId, {
     status: 'extracting',
-    brief: { rawText: briefText },
+    brief: briefMeta,
     originalFilename: normalized.originalFilename || filename || 'upload.docx',
     sourceExt: normalized.sourceExt,
     ingestConverted: normalized.converted,
@@ -107,6 +110,22 @@ async function proposeRedactionCandidates({
 
   let merged = mergeAndDeduplicateCandidates([...patternRaw, ...llmRaw], job.id);
   merged = expandOccurrencesWithIr(merged, ir, findOccurrences);
+
+  // Brief asked for banks / lenders → keep bank lexicon hits highly visible
+  if ((briefMeta.intents || []).some((i) => /bank/i.test(i))) {
+    merged = merged.map((c) => {
+      if (String(c.categoryLabel || '').toLowerCase() !== 'bank name') return c;
+      const score = Math.min(1, Math.max(Number(c.score) || 0, 0.94));
+      return {
+        ...c,
+        score,
+        rationale: c.rationale
+          ? `${c.rationale} | Brief asks for bank/lender names.`
+          : 'Brief asks for bank/lender names.',
+      };
+    }).sort((a, b) => (b.score || 0) - (a.score || 0));
+  }
+
   saveCandidates(job.id, merged);
 
   job = saveJob({

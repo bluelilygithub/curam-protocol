@@ -9,6 +9,7 @@
 
 const { locateInParagraph } = require('./docxParse');
 const { normalizeCategoryLabel } = require('./categories');
+const { extractBankNameCandidates } = require('./bankLexicon');
 const crypto = require('crypto');
 
 function currencyReplacement(i, quote) {
@@ -124,8 +125,12 @@ function newId() {
  * @returns {object[]} raw candidate stubs (pre-merge)
  */
 function extractPatternCandidates(ir, jobId) {
-  const out = [];
-  let replIndex = 0;
+  const out = extractBankNameCandidates(ir, jobId, {
+    newId,
+    locateInParagraph,
+    normalizeCategoryLabel,
+  });
+  let replIndex = out.length;
 
   for (const rule of PATTERNS) {
     for (const paragraph of ir.paragraphs || []) {
