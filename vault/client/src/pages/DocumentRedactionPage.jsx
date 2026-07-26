@@ -776,12 +776,29 @@ export default function DocumentRedactionPage() {
     }
   }
 
-  function downloadArtifact(name) {
+  async function downloadArtifact(name) {
     if (!job?.id || !name) return;
     const url = `/api/document-redaction/jobs/${job.id}/download/${encodeURIComponent(name)}`;
     const base = String(job.originalFilename || 'document').replace(/\.[^.]+$/, '');
-    api.download(url, `${base}-${name}`)
-      .catch((err) => setError(err.message || 'Download failed'));
+    try {
+      await api.download(url, `${base}-${name}`);
+    } catch (err) {
+      // PDF missing → run conversion (LibreOffice or text fallback), then retry
+      if (name === 'sanitized.pdf') {
+        try {
+          const res = await api.post(`/api/document-redaction/jobs/${job.id}/retry-pdf`, {});
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || err.message);
+          if (data.job) setJob((prev) => ({ ...prev, ...data.job }));
+          await api.download(url, `${base}-${name}`);
+          return;
+        } catch (retryErr) {
+          setError(retryErr.message || 'PDF download failed — try Download .docx, then convert in PDF Tools');
+          return;
+        }
+      }
+      setError(err.message || 'Download failed');
+    }
   }
 
   function briefText(j = job) {

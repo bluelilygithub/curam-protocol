@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { Loader2, Check, Circle } from 'lucide-react';
+import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 
 // Non-dismissable busy overlay. Normally rendered once in App.jsx and driven by
 // useProcessingStore; explicit props still override the store for back-compat.
 export default function ProcessingModal({ open, title, message }) {
+  const getIcon = useIcon();
   const storeMessage = useProcessingStore((s) => s.message);
   const storeDetail = useProcessingStore((s) => s.detail);
   const steps = useProcessingStore((s) => s.steps);
@@ -54,7 +55,9 @@ export default function ProcessingModal({ open, title, message }) {
       >
         <div className={`px-6 ${hasSteps ? 'pt-6 pb-4' : 'py-7'} flex flex-col ${hasSteps ? 'items-stretch' : 'items-center text-center'} gap-3`}>
           <div className={`flex ${hasSteps ? 'items-start gap-3' : 'flex-col items-center gap-3'}`}>
-            <Loader2 size={hasSteps ? 22 : 28} className="animate-spin shrink-0 mt-0.5" style={{ color: 'var(--color-primary)' }} />
+            <span className={`shrink-0 ${hasSteps ? 'mt-0.5' : ''} animate-spin`} style={{ color: 'var(--color-primary)' }}>
+              {getIcon('loader', { size: hasSteps ? 22 : 28 })}
+            </span>
             <div className={hasSteps ? 'min-w-0 flex-1' : ''}>
               <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{heading}</div>
               {body && <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{body}</div>}
@@ -74,8 +77,15 @@ export default function ProcessingModal({ open, title, message }) {
                 const errored = step.status === 'error';
                 return (
                   <div key={step.id} className="flex items-start gap-2 py-0.5">
-                    <span className="mt-0.5 shrink-0" style={{ color: done ? '#16a34a' : errored ? '#ef4444' : active ? 'var(--color-primary)' : 'var(--color-muted)' }}>
-                      {done ? <Check size={14} strokeWidth={2.5} /> : active ? <Loader2 size={14} className="animate-spin" /> : <Circle size={14} strokeWidth={2} />}
+                    <span
+                      className={`mt-0.5 shrink-0 ${active ? 'animate-spin' : ''}`}
+                      style={{ color: done ? '#16a34a' : errored ? '#ef4444' : active ? 'var(--color-primary)' : 'var(--color-muted)' }}
+                    >
+                      {done
+                        ? getIcon('check', { size: 14 })
+                        : active
+                          ? getIcon('loader', { size: 14 })
+                          : getIcon('circle', { size: 14 })}
                     </span>
                     <span
                       className="text-xs leading-snug"

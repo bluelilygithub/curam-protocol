@@ -442,8 +442,11 @@ async function applyRedactions(jobId, userId, opts = {}) {
       : null,
     pdfError: pdfResult.error,
     warning: pdfOk
-      ? null
+      ? (pdfResult.fallback
+        ? `PDF ready via text fallback (layout not preserved — ${pdfResult.fallback}). DOCX is the primary artifact.`
+        : null)
       : `DOCX written, but PDF conversion failed (${pdfResult.error || 'LibreOffice unavailable'}). `
+        + 'Download redacted.docx, or retry PDF (plain-text PDF fallback when LibreOffice is down). '
         + 'Job status is docx_ready_pdf_pending — frontier / final steps need PDF when required.',
     stats: {
       applyPass,

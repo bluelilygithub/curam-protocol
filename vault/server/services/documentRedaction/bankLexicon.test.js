@@ -56,6 +56,13 @@ const mac = banks.find((b) => b.entityKey === 'bank:macquarie');
 assert.ok(mac, 'macquarie family');
 assert.ok(mac.surfaceForms.some((f) => /macquarie/i.test(f)));
 
+// PDF extract often glues tokens
+const glued = extractPatternCandidates({
+  paragraphs: [{ paragraphId: 'p0', part: 'body', xmlPath: 'w', text: 'NABSTRONG capacity vs ANZPLUS rates' }],
+}, 'job1');
+assert.ok(glued.some((c) => c.entityKey === 'bank:nab'), 'NAB in NABSTRONG');
+assert.ok(glued.some((c) => c.entityKey === 'bank:anz'), 'ANZ in ANZPLUS');
+
 const patterns = extractPatternCandidates(ir, 'job1');
 const bankPatterns = patterns.filter((c) => c.categoryLabel === 'Bank name');
 assert.ok(bankPatterns.length >= 3, 'pattern pass includes banks');

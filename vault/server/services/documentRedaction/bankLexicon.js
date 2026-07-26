@@ -117,6 +117,24 @@ function escapeRegExp(s) {
 }
 
 /**
+ * PDF→text often glues tokens (NABSTRONG). Word-boundary \\b misses those.
+ * Build case-insensitive alias match WITHOUT the `i` flag so lookarounds stay
+ * case-sensitive: (?![a-z]) still allows glued Capitals (NABSTRONG).
+ */
+function bankAliasRegex(alias) {
+  const chars = [...String(alias)].map((c) => {
+    if (/[a-zA-Z]/.test(c)) {
+      return `[${c.toLowerCase()}${c.toUpperCase()}]`;
+    }
+    return escapeRegExp(c);
+  }).join('');
+  if (/^[A-Z0-9]{2,6}$/i.test(alias)) {
+    return new RegExp(`(?<![A-Za-z0-9])${chars}(?![a-z])`, 'g');
+  }
+  return new RegExp(`(?<![A-Za-z])${chars}(?![a-z])`, 'g');
+}
+
+/**
  * @param {string} surface
  * @returns {{ id: string, canonical: string, replacement: string, aliases: string[] } | null}
  */
@@ -152,26 +170,36 @@ function extractBankNameCandidates(ir, jobId, { newId, locateInParagraph, normal
 
   for (const family of BANK_FAMILIES) {
     const aliases = [...family.aliases].sort((a, b) => b.length - a.length);
-    const foundForms = new Set();
     const locations = [];
 
     for (const alias of aliases) {
-      const re = new RegExp(`\\b${escapeRegExp(alias)}\\b`, 'gi');
+      const re = bankAliasRegex(alias);
       for (const paragraph of paragraphs) {
         const text = paragraph.text || '';
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(text)) !== null) {
           const quote = m[0];
-          foundForms.add(quote);
           locations.push(locateInParagraph(paragraph, m.index, m.index + quote.length, quote));
         }
       }
     }
 
-    if (!foundForms.size) continue;
+    // Prefer longer spans when overlaps collide
+    locations.sort((a, b) => (b.endOffset - b.startOffset) - (a.endOffset - a.startOffset));
+    const kept = [];
+    for (const loc of locations) {
+      const overlaps = kept.some((k) => (
+        k.paragraphId === loc.paragraphId
+        && loc.startOffset < k.endOffset
+        && loc.endOffset > k.startOffset
+      ));
+      if (!overlaps) kept.push(loc);
+    }
+    if (!kept.length) continue;
 
-    const surfaceForms = [...foundForms].sort((a, b) => b.length - a.length);
+    const surfaceForms = [...new Set(kept.map((l) => l.quote).filter(Boolean))]
+      .sort((a, b) => b.length - a.length);
     out.push({
       id: newId(),
       jobId,
@@ -180,7 +208,7 @@ function extractBankNameCandidates(ir, jobId, { newId, locateInParagraph, normal
       categoryLabel: normalizeCategoryLabel('bank_name'),
       entityKey: `bank:${family.id}`,
       surfaceForms,
-      locations,
+      locations: kept,
       confidence: 0.93,
       score: 0.93,
       scoreBreakdown: { pattern: 0.93, bankLexicon: 1 },
@@ -226,6 +254,7 @@ module.exports = {
   BANK_FAMILIES,
   findBankFamily,
   bankEntityKey,
+  bankAliasRegex,
   extractBankNameCandidates,
   summarizeBriefIntents,
 };

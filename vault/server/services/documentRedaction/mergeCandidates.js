@@ -228,10 +228,11 @@ function expandOccurrencesWithIr(candidates, ir, findOccurrencesFn) {
   const { BANK_FAMILIES } = require('./bankLexicon');
 
   function findWordBoundary(irDoc, needle) {
+    const { bankAliasRegex: aliasRe } = require('./bankLexicon');
     const raw = String(needle || '');
     if (!raw) return [];
     const locations = [];
-    const re = new RegExp(`\\b${raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    const re = aliasRe(raw);
     for (const p of irDoc.paragraphs || []) {
       const text = p.text || '';
       re.lastIndex = 0;

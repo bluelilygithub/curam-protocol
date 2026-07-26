@@ -123,9 +123,9 @@ export default function DocumentRedactionCompare({
               Download .docx
             </button>
           )}
-          {onDownload && pdfReady && (
+          {onDownload && (
             <button type="button" onClick={() => onDownload('sanitized.pdf')} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              Download .pdf
+              {pdfReady ? 'Download .pdf' : 'Get .pdf'}
             </button>
           )}
         </div>
@@ -151,9 +151,9 @@ export default function DocumentRedactionCompare({
       {!pdfReady && (
         <div className="shrink-0 mx-4 mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#FFFBEB', color: '#92400e' }}>
           <span>
-            DOCX compare available — server PDF conversion is pending. Download the .docx above; convert or tidy in{' '}
+            DOCX compare available — server PDF conversion is pending. Download the .docx, or click Download .pdf (retries conversion; may use a text PDF if LibreOffice is down). You can also use{' '}
             <Link to="/pdf" className="underline transition-opacity duration-200 hover:opacity-70">PDF Tools</Link>
-            {' '}if you need a PDF now. Frontier / final approval stays blocked until sanitized.pdf succeeds.
+            . Frontier / final approval needs sanitized.pdf.
           </span>
           <button type="button" onClick={onRetryPdf} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
             Retry PDF conversion
