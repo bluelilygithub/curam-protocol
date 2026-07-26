@@ -5,16 +5,8 @@
  * Accepts common document formats; pipeline still works on DOCX IR + apply.
  */
 
-const fs = require('fs');
-const fsp = require('fs').promises;
-const os = require('os');
-const path = require('path');
-const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
 const JSZip = require('jszip');
-
-const execFileAsync = promisify(execFile);
+const { libreConvert } = require('../officeConvert');
 
 /** Extensions accepted at upload (lowercase, with dot). */
 const ACCEPTED_EXTENSIONS = [
@@ -143,37 +135,8 @@ async function extractPdfTextFromBuffer(buffer) {
   return pages.join('\n').trim();
 }
 
-async function libreConvertToDocx(inputBuffer, sourceExt) {
-  const id = crypto.randomUUID();
-  const tmpDir = path.join(os.tmpdir(), `docredact_ingest_${id}`);
-  await fsp.mkdir(tmpDir, { recursive: true });
-  const inFile = path.join(tmpDir, `input${sourceExt}`);
-  await fsp.writeFile(inFile, inputBuffer);
-  try {
-    await execFileAsync(
-      'libreoffice',
-      ['--headless', '--convert-to', 'docx', '--outdir', tmpDir, inFile],
-      { timeout: 90_000 },
-    );
-    const outFile = path.join(tmpDir, 'input.docx');
-    if (!fs.existsSync(outFile)) {
-      throw new Error(`LibreOffice did not produce a .docx from ${sourceExt}`);
-    }
-    return await fsp.readFile(outFile);
-  } finally {
-    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
 /**
  * @param {{ buffer: Buffer, filename?: string, mimetype?: string }} opts
- * @returns {Promise<{
- *   docxBuffer: Buffer,
- *   sourceExt: string,
- *   converted: boolean,
- *   conversionNote: string|null,
- *   originalFilename: string,
- * }>}
  */
 async function normalizeUploadToDocx({ buffer, filename, mimetype }) {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
@@ -230,42 +193,63 @@ async function normalizeUploadToDocx({ buffer, filename, mimetype }) {
   }
 
   if (ext === '.pdf') {
-    let text;
+    // Prefer the same LibreOffice PDF→Word path as PDF Tools for better layout.
     try {
-      text = await extractPdfTextFromBuffer(buffer);
-    } catch (err) {
-      const e = new Error(`Could not read PDF text: ${err.message}`);
-      e.status = 400;
-      throw e;
-    }
-    if (!text.trim()) {
-      const err = new Error('PDF has no extractable text (scanned image PDFs are not supported yet)');
-      err.status = 400;
-      throw err;
-    }
-    const docxBuffer = await buildDocxFromParagraphs(textToParagraphs(text));
-    return {
-      docxBuffer,
-      sourceExt: ext,
-      converted: true,
-      conversionNote: 'Extracted text from PDF into a working .docx (layout is not preserved).',
-      originalFilename,
-    };
-  }
-
-  if (LIBRE_EXTENSIONS.has(ext)) {
-    try {
-      const docxBuffer = await libreConvertToDocx(buffer, ext);
+      const docxBuffer = await libreConvert(buffer, '.pdf', 'docx');
       return {
         docxBuffer,
         sourceExt: ext,
         converted: true,
-        conversionNote: `Converted ${ext} to .docx via LibreOffice.`,
+        conversionNote:
+          'Converted PDF → .docx via LibreOffice (same engine as PDF Tools → PDF → Word).',
+        originalFilename,
+      };
+    } catch (libreErr) {
+      let text;
+      try {
+        text = await extractPdfTextFromBuffer(buffer);
+      } catch (err) {
+        const e = new Error(
+          `Could not convert PDF. LibreOffice: ${libreErr.message}. Text extract: ${err.message}. `
+          + 'Tip: open PDF Tools → PDF → Word, then upload the .docx here.',
+        );
+        e.status = 400;
+        throw e;
+      }
+      if (!text.trim()) {
+        const err = new Error(
+          'PDF has no extractable text and LibreOffice conversion failed. '
+          + 'Use PDF Tools → PDF → Word for a layout-preserving .docx, then upload that.',
+        );
+        err.status = 400;
+        throw err;
+      }
+      const docxBuffer = await buildDocxFromParagraphs(textToParagraphs(text));
+      return {
+        docxBuffer,
+        sourceExt: ext,
+        converted: true,
+        conversionNote:
+          'LibreOffice unavailable — extracted text into a working .docx (layout not preserved). '
+          + 'For better layout use PDF Tools → PDF → Word, then upload the .docx.',
+        originalFilename,
+      };
+    }
+  }
+
+  if (LIBRE_EXTENSIONS.has(ext)) {
+    try {
+      const docxBuffer = await libreConvert(buffer, ext, 'docx');
+      return {
+        docxBuffer,
+        sourceExt: ext,
+        converted: true,
+        conversionNote: `Converted ${ext} to .docx via LibreOffice (same engine as PDF Tools).`,
         originalFilename,
       };
     } catch (err) {
       const e = new Error(
-        `Could not convert ${ext} to .docx. Install LibreOffice on the server, or upload a .docx / .pdf / .txt instead. (${err.message})`,
+        `Could not convert ${ext} to .docx. Use PDF Tools → Office → PDF / PDF → Word, or upload a .docx. (${err.message})`,
       );
       e.status = 400;
       throw e;

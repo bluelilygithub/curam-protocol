@@ -6,16 +6,10 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const sharp = require('sharp');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const os = require('os');
 const path = require('path');
-const fsp = require('fs').promises;
-const crypto = require('crypto');
 const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
-
-const execFileAsync = promisify(execFile);
+const { libreConvert } = require('../services/officeConvert');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -85,23 +79,7 @@ function googleWorkspaceMime(ext) {
   return null;
 }
 
-// ── Shared: LibreOffice headless conversion (optional — not required) ─────────
-async function libreConvert(inputBuf, ext, targetFmt) {
-  const id = crypto.randomUUID();
-  const tmpDir = path.join(os.tmpdir(), `libre_${id}`);
-  await fsp.mkdir(tmpDir, { recursive: true });
-  const inFile = path.join(tmpDir, `input${ext}`);
-  await fsp.writeFile(inFile, inputBuf);
-  try {
-    await execFileAsync('libreoffice', [
-      '--headless', '--convert-to', targetFmt, '--outdir', tmpDir, inFile,
-    ], { timeout: 90_000 });
-    const outFile = path.join(tmpDir, `input.${targetFmt}`);
-    return await fsp.readFile(outFile);
-  } finally {
-    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
+// ── Shared: LibreOffice headless conversion — see server/services/officeConvert.js
 
 // ── Shared: convert Office file to PDF via Google Drive API ──────────────────
 // Uses drive.file scope — uploads a temp file, exports as PDF, then deletes it.

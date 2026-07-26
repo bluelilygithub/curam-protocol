@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
@@ -512,6 +513,7 @@ function RunBtn({ onClick, busy, disabled, label, getIcon }) {
 export default function PdfPage() {
   const getIcon = useIcon();
   const { startProcessing, stopProcessing } = useProcessingStore();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Sidebar state
   const [mode, setMode] = useState('merge');
@@ -520,7 +522,9 @@ export default function PdfPage() {
   const [hoveredTool, setHoveredTool] = useState(null);
   const [helpTool, setHelpTool] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { dataUrl, filename, meta }
+  const [seedBanner, setSeedBanner] = useState('');
   const toolSearchRef = useRef(null);
+  const seedHandled = useRef(false);
 
   // Merge
   const [mergeFiles, setMergeFiles] = useState([]);
@@ -627,6 +631,52 @@ export default function PdfPage() {
   const [googleUrl, setGoogleUrl] = useState('');
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState('');
+
+  // Deep-link from Document Redaction (and others): /pdf?tool=officetopdf&seed=1
+  useEffect(() => {
+    if (seedHandled.current) return undefined;
+    const tool = searchParams.get('tool');
+    const wantSeed = searchParams.get('seed') === '1';
+    const known = new Set(MODES.map((t) => t.id));
+    if (tool && known.has(tool)) {
+      setMode(tool);
+      const group = MODE_GROUPS.find((g) => g.ids.includes(tool));
+      if (group) setOpenGroup(group.label);
+    }
+    if (wantSeed) {
+      seedHandled.current = true;
+      try {
+        const raw = sessionStorage.getItem('vault:pdfTools:seed');
+        sessionStorage.removeItem('vault:pdfTools:seed');
+        if (raw) {
+          const seed = JSON.parse(raw);
+          const file = {
+            name: seed.name || 'document.docx',
+            dataUrl: seed.dataUrl,
+            size: seed.size || 0,
+          };
+          if (seed.tool === 'pdftooffice' || tool === 'pdftooffice') {
+            setPtoFile(file);
+            setMode('pdftooffice');
+            setOpenGroup('Convert');
+            setSeedBanner(`Loaded “${file.name}” from Document redaction — convert with PDF → Word.`);
+          } else {
+            setOfficeFile(file);
+            setMode('officetopdf');
+            setOpenGroup('Convert');
+            setSeedBanner(`Loaded “${file.name}” from Document redaction — convert with Office → PDF.`);
+          }
+        }
+      } catch {
+        /* ignore bad seed */
+      }
+      const next = new URLSearchParams(searchParams);
+      next.delete('seed');
+      setSearchParams(next, { replace: true });
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Field Designer
   const [fdFile, setFdFile] = useState(null);
@@ -1378,6 +1428,12 @@ export default function PdfPage() {
         <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
           {descMap[mode] || ''}
         </p>
+        {seedBanner && (
+          <div className="mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#ecfdf5', color: '#065f46' }}>
+            <span>{seedBanner}</span>
+            <button type="button" onClick={() => setSeedBanner('')} className="underline transition-opacity duration-200 hover:opacity-70">Dismiss</button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 items-start">

@@ -783,7 +783,6 @@ export default function DocumentRedactionPage() {
     try {
       await api.download(url, `${base}-${name}`);
     } catch (err) {
-      // PDF missing → run conversion (LibreOffice or text fallback), then retry
       if (name === 'sanitized.pdf') {
         try {
           const res = await api.post(`/api/document-redaction/jobs/${job.id}/retry-pdf`, {});
@@ -793,11 +792,66 @@ export default function DocumentRedactionPage() {
           await api.download(url, `${base}-${name}`);
           return;
         } catch (retryErr) {
-          setError(retryErr.message || 'PDF download failed — try Download .docx, then convert in PDF Tools');
+          setError(
+            `${retryErr.message || 'PDF not ready'}. `
+            + 'Download the .docx, then use PDF Tools → Office → PDF (same LibreOffice engine).',
+          );
           return;
         }
       }
       setError(err.message || 'Download failed');
+    }
+  }
+
+  /** Hand redacted.docx (or original PDF) to PDF Tools with the right Convert mode. */
+  async function openInPdfTools({ artifact = 'redacted.docx', tool = 'officetopdf' } = {}) {
+    if (!job?.id) return;
+    setError('');
+    const controller = new AbortController();
+    try {
+      await runWithStepLog(
+        processing,
+        'Opening PDF Tools…',
+        'Loading file into Office → PDF / PDF → Word',
+        ['Fetching artifact', 'Handing off to PDF Tools'],
+        async () => {
+          const token = useAuthStore.getState().token;
+          const url = `/api/document-redaction/jobs/${job.id}/download/${encodeURIComponent(artifact)}`;
+          const res = await fetch(url, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `Could not load ${artifact}`);
+          }
+          const blob = await res.blob();
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Could not read file'));
+            reader.readAsDataURL(blob);
+          });
+          const base = String(job.originalFilename || 'document').replace(/\.[^.]+$/, '');
+          const name = artifact === 'sanitized.pdf'
+            ? `${base}-sanitized.pdf`
+            : `${base}-redacted.docx`;
+          sessionStorage.setItem('vault:pdfTools:seed', JSON.stringify({
+            tool,
+            name,
+            dataUrl,
+            size: blob.size,
+          }));
+          navigate(`/pdf?tool=${encodeURIComponent(tool)}&seed=1`);
+        },
+        {
+          onCancel: () => controller.abort(),
+          stepIntervalMs: 600,
+        },
+      );
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      setError(err.message || 'Could not open PDF Tools');
     }
   }
 
@@ -866,7 +920,9 @@ export default function DocumentRedactionPage() {
                 style={{ color: 'var(--color-text)' }}
               />
               <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
-                .docx, .doc, .pdf, .txt, .odt, .rtf, .md, .csv, .json, .html — non-Word files are converted to a working .docx for redaction (PDF layout is not preserved).
+                Prefer .docx. For PDFs with layout, convert first in{' '}
+                <Link to="/pdf?tool=pdftooffice" className="underline transition-opacity duration-200 hover:opacity-70">PDF Tools → PDF → Word</Link>
+                , then upload that .docx here. Direct PDF upload uses the same LibreOffice engine when available.
               </p>
             </div>
             <div>
@@ -955,6 +1011,7 @@ export default function DocumentRedactionPage() {
             onApproveFinal={handleApproveFinal}
             onApplyFrontier={handleApplyFrontier}
             onDownload={downloadArtifact}
+            onOpenInPdfTools={openInPdfTools}
             onChangeStyle={() => {
               const approvedCount = candidates.filter((c) => c.decision === 'approved' || c.decision === 'edited').length;
               if (approvedCount < 1) {
@@ -1206,11 +1263,13 @@ export default function DocumentRedactionPage() {
                       Download .pdf
                     </button>
                   )}
-                  {(applyResult?.pdfStatus || job?.pdfStatus) === 'pending' && (
-                    <Link to="/pdf" className="underline transition-opacity duration-200 hover:opacity-70">
-                      Open PDF Tools
-                    </Link>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openInPdfTools({ artifact: 'redacted.docx', tool: 'officetopdf' })}
+                    className="underline transition-opacity duration-200 hover:opacity-70"
+                  >
+                    Open in PDF Tools
+                  </button>
                   <button
                     type="button"
                     onClick={() => {

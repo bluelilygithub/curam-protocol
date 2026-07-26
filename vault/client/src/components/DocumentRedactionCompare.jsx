@@ -18,6 +18,7 @@ export default function DocumentRedactionCompare({
   onApproveFrontier,
   onApproveFinal,
   onDownload,
+  onOpenInPdfTools,
   onChangeStyle,
   onBackToReview,
   onReviewFrontierSuggestions,
@@ -123,9 +124,19 @@ export default function DocumentRedactionCompare({
               Download .docx
             </button>
           )}
-          {onDownload && (
+          {onDownload && pdfReady && (
             <button type="button" onClick={() => onDownload('sanitized.pdf')} className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              {pdfReady ? 'Download .pdf' : 'Get .pdf'}
+              Download .pdf
+            </button>
+          )}
+          {onOpenInPdfTools && (
+            <button
+              type="button"
+              onClick={() => onOpenInPdfTools({ artifact: 'redacted.docx', tool: 'officetopdf' })}
+              className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              Open in PDF Tools
             </button>
           )}
         </div>
@@ -151,13 +162,25 @@ export default function DocumentRedactionCompare({
       {!pdfReady && (
         <div className="shrink-0 mx-4 mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#FFFBEB', color: '#92400e' }}>
           <span>
-            DOCX compare available — server PDF conversion is pending. Download the .docx, or click Download .pdf (retries conversion; may use a text PDF if LibreOffice is down). You can also use{' '}
-            <Link to="/pdf" className="underline transition-opacity duration-200 hover:opacity-70">PDF Tools</Link>
-            . Frontier / final approval needs sanitized.pdf.
+            DOCX is ready. PDF conversion uses the same LibreOffice engine as{' '}
+            <Link to="/pdf?tool=officetopdf" className="underline transition-opacity duration-200 hover:opacity-70">PDF Tools → Office → PDF</Link>
+            . Retry here, or open the redacted file there for watermark / page numbers / merge.
           </span>
-          <button type="button" onClick={onRetryPdf} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
-            Retry PDF conversion
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={onRetryPdf} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
+              Retry PDF conversion
+            </button>
+            {onOpenInPdfTools && (
+              <button
+                type="button"
+                onClick={() => onOpenInPdfTools({ artifact: 'redacted.docx', tool: 'officetopdf' })}
+                className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+              >
+                Open in PDF Tools
+              </button>
+            )}
+          </div>
         </div>
       )}
 
