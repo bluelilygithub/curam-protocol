@@ -81,8 +81,9 @@ export default function DocumentRedactionPage() {
   const [jobs, setJobs] = useState([]);
   const [brief, setBrief] = useState('');
   const [file, setFile] = useState(null);
-  const [skipLlm, setSkipLlm] = useState(true); // fast default — LLM can take minutes
   const [error, setError] = useState('');
+  const [selectedJobIds, setSelectedJobIds] = useState(() => new Set());
+  const [deletingJobs, setDeletingJobs] = useState(false);
   const [loadingJob, setLoadingJob] = useState(false);
   const [job, setJob] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -134,7 +135,56 @@ export default function DocumentRedactionPage() {
     if (!res.ok) return;
     const data = await res.json();
     setJobs(data.jobs || []);
+    setSelectedJobIds(new Set());
   }, []);
+
+  async function deleteSelectedJobs() {
+    const ids = [...selectedJobIds];
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} job${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+      return;
+    }
+    setError('');
+    setDeletingJobs(true);
+    try {
+      const res = await api.post('/api/document-redaction/jobs/delete', { ids });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (data.failed?.length) {
+        setError(`Deleted ${data.deleted?.length || 0}; ${data.failed.length} failed.`);
+      }
+      const deletedSet = new Set(data.deleted || []);
+      if (job?.id && deletedSet.has(job.id)) {
+        setJob(null);
+        navigate('/document-redaction');
+      }
+      try {
+        const last = localStorage.getItem(LAST_JOB_KEY);
+        if (last && deletedSet.has(last)) localStorage.removeItem(LAST_JOB_KEY);
+      } catch { /* ignore */ }
+      await loadJobList();
+    } catch (err) {
+      setError(err.message || 'Delete failed');
+    } finally {
+      setDeletingJobs(false);
+    }
+  }
+
+  function toggleJobSelected(id) {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllJobs() {
+    setSelectedJobIds((prev) => {
+      if (prev.size === jobs.length) return new Set();
+      return new Set(jobs.map((j) => j.id));
+    });
+  }
 
   const loadJob = useCallback(async (id) => {
     if (!id) return;
@@ -250,33 +300,23 @@ export default function DocumentRedactionPage() {
     setError('');
     const controller = new AbortController();
     applyAbortRef.current = controller;
-    const steps = skipLlm
-      ? [
-        'Uploading document',
-        'Normalizing to working .docx',
-        'Running pattern match',
-        'Merging candidates',
-      ]
-      : [
-        'Uploading document',
-        'Normalizing to working .docx',
-        'Running pattern match',
-        `Calling candidate model (${candidateModelLabel})`,
-        'Merging & scoring candidates',
-      ];
+    const steps = [
+      'Uploading document',
+      'Normalizing to working .docx',
+      'Running pattern match',
+      'Merging candidates',
+    ];
     try {
       await runWithStepLog(
         processing,
         'Extracting redaction candidates…',
-        skipLlm
-          ? 'Pattern-match only — usually seconds. Cancel anytime.'
-          : `Using ${candidateModelLabel} from Settings · Cancel anytime.`,
+        'Pattern match + bank lexicon. Style is chosen on the next screen.',
         steps,
         async () => {
           const fd = new FormData();
           fd.append('file', file);
           fd.append('brief', brief.trim());
-          if (skipLlm) fd.append('skipLlm', '1');
+          fd.append('skipLlm', '1');
           const res = await api.postForm('/api/document-redaction/propose', fd, { signal: controller.signal });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || 'Propose failed');
@@ -289,7 +329,7 @@ export default function DocumentRedactionPage() {
             controller.abort();
             setError('Propose cancelled');
           },
-          stepIntervalMs: skipLlm ? 700 : 3500,
+          stepIntervalMs: 700,
         },
       );
     } catch (err) {
@@ -935,26 +975,10 @@ export default function DocumentRedactionPage() {
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={FIELD}
               />
-            </div>
-            <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Extract speed</p>
-              <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={skipLlm}
-                  onChange={(e) => setSkipLlm(e.target.checked)}
-                />
-                <span>
-                  <strong style={{ color: 'var(--color-text)' }}>Fast extract (pattern-match only)</strong>
-                  {' '}— figures, %, emails, phones. Usually seconds.
-                  Uncheck to also run the candidate model from Settings (can take several minutes).
-                </span>
-              </label>
-              <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-                Candidate / apply model: <strong style={{ color: 'var(--color-text)' }}>{candidateModelLabel}</strong>
-                {isAdmin ? ' (change in Settings → AI & Chat → Document redaction agent).' : '.'}
-                {' '}Style (Blackout / Realistic / …) is chosen on the next screen while you review candidates.
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
+                Extract finds figures, rates, bank names, emails, and phones from patterns.
+                Redaction style (Blackout / Realistic / …) is chosen on the next screen while you review candidates.
+                {isAdmin ? ` Model for “Request more suggestions”: ${candidateModelLabel}.` : ''}
               </p>
             </div>
             <button
@@ -968,23 +992,55 @@ export default function DocumentRedactionPage() {
 
           {jobs.length > 0 && (
             <div className="rounded-2xl border overflow-hidden max-w-2xl" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
-                Recent jobs
+              <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2" style={{ background: 'var(--color-surface)' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+                    Recent jobs
+                  </span>
+                  <label className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    <input
+                      type="checkbox"
+                      checked={jobs.length > 0 && selectedJobIds.size === jobs.length}
+                      onChange={toggleSelectAllJobs}
+                    />
+                    Select all
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  disabled={!selectedJobIds.size || deletingJobs}
+                  onClick={deleteSelectedJobs}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                  style={{ borderColor: '#fca5a5', color: '#991b1b', background: selectedJobIds.size ? '#fff1f2' : 'var(--color-bg)' }}
+                >
+                  {deletingJobs ? 'Deleting…' : `Delete selected${selectedJobIds.size ? ` (${selectedJobIds.size})` : ''}`}
+                </button>
               </div>
               {jobs.map((j) => (
-                <Link
+                <div
                   key={j.id}
-                  to={`/document-redaction/${j.id}`}
-                  className="block px-4 py-3 border-t transition-opacity duration-200 hover:opacity-70"
+                  className="flex items-start gap-3 px-4 py-3 border-t"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
                 >
-                  <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{j.originalFilename || 'Document'}</div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {j.brief || '—'} · {j.decisionSummary
-                      ? `${j.decisionSummary.approved}✓ ${j.decisionSummary.rejected}✗ ${j.decisionSummary.pending}?`
-                      : `${j.candidateCount ?? '—'} candidates`}
-                  </div>
-                </Link>
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selectedJobIds.has(j.id)}
+                    onChange={() => toggleJobSelected(j.id)}
+                    aria-label={`Select ${j.originalFilename || j.id}`}
+                  />
+                  <Link
+                    to={`/document-redaction/${j.id}`}
+                    className="min-w-0 flex-1 transition-opacity duration-200 hover:opacity-70"
+                  >
+                    <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{j.originalFilename || 'Document'}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {j.brief || '—'} · {j.decisionSummary
+                        ? `${j.decisionSummary.approved}✓ ${j.decisionSummary.rejected}✗ ${j.decisionSummary.pending}?`
+                        : `${j.candidateCount ?? '—'} candidates`}
+                    </div>
+                  </Link>
+                </div>
               ))}
             </div>
           )}

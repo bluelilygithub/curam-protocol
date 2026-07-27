@@ -10,6 +10,8 @@ const {
   loadIr,
   listJobsForUser,
   saveJob,
+  deleteJob,
+  deleteJobs,
   EXPORTABLE_ARTIFACTS,
 } = require('../services/documentRedaction/jobStore');
 const {
@@ -123,6 +125,30 @@ router.get('/jobs', (req, res) => {
     res.json({ ok: true, jobs });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/document-redaction/jobs/delete
+ * Body: { ids: string[] } — bulk delete (named route before /:id)
+ */
+router.post('/jobs/delete', (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const result = deleteJobs(ids, req.user.id);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/** DELETE /api/document-redaction/jobs/:id */
+router.delete('/jobs/:id', (req, res) => {
+  try {
+    const result = deleteJob(req.params.id, req.user.id);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

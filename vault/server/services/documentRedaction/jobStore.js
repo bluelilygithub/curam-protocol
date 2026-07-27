@@ -293,11 +293,59 @@ function listJobsForUser(userId, limit = 20) {
   return jobs.slice(0, limit);
 }
 
+/**
+ * Permanently delete a job directory owned by userId.
+ * @returns {{ deleted: true, id: string } | never}
+ */
+function deleteJob(jobId, userId) {
+  const job = loadJob(jobId, userId);
+  if (!job) {
+    const err = new Error('Job not found');
+    err.status = 404;
+    throw err;
+  }
+  const root = path.resolve(ensureJobsRoot());
+  const dir = path.resolve(jobDir(job.id));
+  if (dir !== root && !dir.startsWith(root + path.sep)) {
+    const err = new Error('Invalid job path');
+    err.status = 400;
+    throw err;
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { deleted: true, id: job.id };
+}
+
+/**
+ * @param {string[]} jobIds
+ * @param {number|string} userId
+ */
+function deleteJobs(jobIds, userId) {
+  const ids = [...new Set((jobIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) {
+    const err = new Error('No job ids provided');
+    err.status = 400;
+    throw err;
+  }
+  const deleted = [];
+  const failed = [];
+  for (const id of ids) {
+    try {
+      deleteJob(id, userId);
+      deleted.push(id);
+    } catch (err) {
+      failed.push({ id, error: err.message, status: err.status || 500 });
+    }
+  }
+  return { deleted, failed };
+}
+
 module.exports = {
   jobsRoot,
   createJobShell,
   saveJob,
   loadJob,
+  deleteJob,
+  deleteJobs,
   saveOriginalDocx,
   loadOriginalDocx,
   saveCandidates,
