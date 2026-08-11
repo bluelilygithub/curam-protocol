@@ -4,7 +4,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import useAuthStore from '../store/authStore';
-import useModels from '../hooks/useModels';
+import { useModels } from '../hooks/useModels';
 import { getModelShortName } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import DocumentRedactionCompare from '../components/DocumentRedactionCompare';
