@@ -63,7 +63,10 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         err.diagnostics = data.diagnostics || null;
         throw err;
       }
-      setFeatureBrief(data.feature_brief);
+      setFeatureBrief({
+        ...data.feature_brief,
+        budgetHint: data.budgetHint ?? data.feature_brief?.budgetHint ?? null,
+      });
       setMergeMode(false);
       setStep(STEPS.brief);
     } catch (err) {
@@ -246,6 +249,8 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         <ProductScoutTierSelect
           tiers={featureBrief.tier_framework}
           previouslyScouted={mergeMode ? scoutedTiers : []}
+          recommendedTierKey={featureBrief.recommended_tier_key}
+          recommendedTierWhy={featureBrief.recommended_tier_why}
           onConfirm={(keys) => runScoutForTiers(keys, { append: mergeMode })}
           onBack={() => {
             if (mergeMode) {

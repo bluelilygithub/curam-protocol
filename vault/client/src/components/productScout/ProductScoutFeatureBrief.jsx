@@ -5,6 +5,7 @@ import {
   normalizeBriefFeatures,
   partitionBriefFeatures,
 } from '../../utils/productScoutFeatureTypes';
+import { resolveRecommendedTier } from '../../utils/productScoutGuide';
 
 function formatPriceBand(min, max) {
   if (min != null && max != null) return `$${min}–$${max}`;
@@ -258,10 +259,19 @@ export default function ProductScoutFeatureBrief({
 
   const handleConfirm = (e) => {
     e.preventDefault();
+    const framework = tierFramework.length ? tierFramework : brief?.tier_framework;
+    const recommendation = resolveRecommendedTier({
+      features,
+      budgetHint: brief?.budgetHint ?? null,
+      tierFramework: framework,
+      llmKey: brief?.recommended_tier_key,
+      llmWhy: brief?.recommended_tier_why,
+    });
     onConfirm({
       ...brief,
       features,
-      tier_framework: tierFramework.length ? tierFramework : brief?.tier_framework,
+      tier_framework: framework,
+      ...recommendation,
     });
   };
 

@@ -5,18 +5,25 @@ function tierKey(tier, index) {
   return tier.key || ['essentials', 'smart_upgrade', 'enthusiast', 'pro'][index] || `tier_${index}`;
 }
 
-function defaultSelection(tiers, previouslyScouted = []) {
+function defaultSelection(tiers, previouslyScouted = [], recommendedKey = null) {
   const scouted = new Set(previouslyScouted);
-  const available = tiers.filter((t, i) => !scouted.has(tierKey(t, i)));
+  const available = tiers
+    .map((t, i) => ({ key: tierKey(t, i), index: i }))
+    .filter((t) => !scouted.has(t.key));
   if (!available.length) return [];
 
-  const first = available[0];
-  return [tierKey(first, tiers.indexOf(first))];
+  if (recommendedKey && available.some((t) => t.key === recommendedKey)) {
+    return [recommendedKey];
+  }
+
+  return [available[0].key];
 }
 
 export default function ProductScoutTierSelect({
   tiers = [],
   previouslyScouted = [],
+  recommendedTierKey = null,
+  recommendedTierWhy = null,
   onConfirm,
   onBack,
   loading = false,
@@ -24,7 +31,9 @@ export default function ProductScoutTierSelect({
 }) {
   const scoutedSet = useMemo(() => new Set(previouslyScouted), [previouslyScouted]);
 
-  const [selected, setSelected] = useState(() => defaultSelection(tiers, previouslyScouted));
+  const [selected, setSelected] = useState(() => (
+    defaultSelection(tiers, previouslyScouted, recommendedTierKey)
+  ));
 
   const toggle = (key, disabled) => {
     if (disabled) return;
@@ -44,6 +53,7 @@ export default function ProductScoutTierSelect({
   };
 
   const newCount = selected.filter((k) => !scoutedSet.has(k)).length;
+  const recommendedAvailable = recommendedTierKey && !scoutedSet.has(recommendedTierKey);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -56,6 +66,12 @@ export default function ProductScoutTierSelect({
             ? 'Select tiers that have not been searched yet. Each tier runs a full Amazon comparison.'
             : 'Select one or more tiers. We only search Amazon for the tiers you pick — faster than searching all four.'}
         </p>
+        {recommendedAvailable && recommendedTierWhy && !mergeMode && (
+          <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--color-text)' }}>
+            <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>Suggested start: </span>
+            {recommendedTierWhy}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -64,6 +80,7 @@ export default function ProductScoutTierSelect({
           const already = scoutedSet.has(key);
           const checked = selected.includes(key);
           const disabled = already;
+          const isRecommended = key === recommendedTierKey && !already;
 
           return (
             <button
@@ -73,8 +90,9 @@ export default function ProductScoutTierSelect({
               onClick={() => toggle(key, disabled)}
               className="text-left rounded-xl border p-3 transition-opacity hover:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                borderColor: checked ? 'var(--color-primary)' : 'var(--color-border)',
+                borderColor: checked || isRecommended ? 'var(--color-primary)' : 'var(--color-border)',
                 background: checked ? 'var(--color-bg)' : 'transparent',
+                boxShadow: isRecommended && !checked ? 'inset 0 0 0 1px var(--color-primary)' : undefined,
               }}
             >
               <div className="flex items-start gap-2">
@@ -90,6 +108,14 @@ export default function ProductScoutTierSelect({
                     <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                       {tier.label}
                     </span>
+                    {isRecommended && (
+                      <span
+                        className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
+                        style={{ background: 'rgba(204, 120, 92, 0.15)', color: 'var(--color-primary)' }}
+                      >
+                        Suggested
+                      </span>
+                    )}
                     {already && (
                       <span
                         className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded"
