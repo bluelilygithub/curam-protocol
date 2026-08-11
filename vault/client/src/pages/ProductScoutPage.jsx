@@ -259,10 +259,20 @@ export default function ProductScoutPage() {
           <ProductScoutUrlCompare
             runId={runId}
             comparisons={guideResult.url_comparisons || []}
-            onCompared={(entry) => {
+            onCompared={(data) => {
+              const entry = {
+                url: data.url,
+                asin: data.asin,
+                product: data.product,
+                analysis: data.analysis,
+                comparedAt: data.comparedAt,
+              };
               setGuideResult((prev) => ({
                 ...prev,
                 url_comparisons: [...(prev?.url_comparisons || []), entry],
+                ...(data.final_recommendation
+                  ? { final_recommendation: data.final_recommendation }
+                  : {}),
               }));
             }}
           />
@@ -323,7 +333,14 @@ export default function ProductScoutPage() {
                 <ProductScoutUrlCompare
                   runId={scoutResult.runId ?? loadedRunId}
                   comparisons={scoutResult.url_comparisons || []}
-                  onCompared={(entry) => {
+                  onCompared={(data) => {
+                    const entry = {
+                      url: data.url,
+                      asin: data.asin,
+                      product: data.product,
+                      analysis: data.analysis,
+                      comparedAt: data.comparedAt,
+                    };
                     setScoutResult((prev) => ({
                       ...prev,
                       url_comparisons: [...(prev?.url_comparisons || []), entry],

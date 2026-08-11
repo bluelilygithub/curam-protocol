@@ -14,7 +14,16 @@ function defaultSelection(tiers, previouslyScouted = [], recommendedKey = null) 
   if (!available.length) return [];
 
   if (recommendedKey && available.some((t) => t.key === recommendedKey)) {
-    return [recommendedKey];
+    const recIdx = tiers.findIndex((t, i) => tierKey(t, i) === recommendedKey);
+    const keys = [recommendedKey];
+    // When suggesting Enthusiast+, also preselect the band below — deals often live there.
+    if (recIdx >= 2) {
+      const lowerKey = tierKey(tiers[recIdx - 1], recIdx - 1);
+      if (available.some((t) => t.key === lowerKey) && !keys.includes(lowerKey)) {
+        keys.unshift(lowerKey);
+      }
+    }
+    return keys;
   }
 
   return [available[0].key];
@@ -65,12 +74,17 @@ export default function ProductScoutTierSelect({
         <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
           {mergeMode
             ? 'Select tiers that have not been searched yet. Each tier runs a full Amazon comparison.'
-            : 'Each step up the ladder usually buys better features — not just a higher price. Select one or more tiers to search on Amazon.'}
+            : 'Start at the lowest band that usually covers your must-haves. Good deals often sit one step below “premium” marketing — search that band too before climbing.'}
         </p>
         {recommendedAvailable && recommendedTierWhy && !mergeMode && (
           <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--color-text)' }}>
             <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>Suggested start: </span>
             {recommendedTierWhy}
+          </p>
+        )}
+        {!mergeMode && recommendedTierKey === 'enthusiast' && (
+          <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+            Smart upgrade is also selected by default so Best Deal–style options in that band are not skipped.
           </p>
         )}
       </div>

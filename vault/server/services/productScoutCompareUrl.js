@@ -70,7 +70,9 @@ ${JSON.stringify(compactUrlProduct(urlProduct))}
 ${summaryLimit}
 
 Return JSON only:
-{"upgrade_benefits":"...","budget_guidance":"...","feature_gaps":["..."],"worth_stretching":true,"budget_already_adequate":false,"recommended_budget_min":150,"recommended_budget_max":250,"recommended_budget_note":"short label"}`;
+{"upgrade_benefits":"...","budget_guidance":"...","feature_gaps":["..."],"worth_stretching":true,"budget_already_adequate":false,"prefer_url_over_picks":false,"recommended_budget_min":150,"recommended_budget_max":250,"recommended_budget_note":"short label"}
+
+prefer_url_over_picks: true when the URL product is equal/better for the use case at a lower or similar price than the budget picks (cheaper good options must not be ignored). false when budget picks remain the better overall value.`;
 }
 
 function parseCompareUrlResponse(text) {
@@ -141,11 +143,57 @@ function fallbackCompareAnalysis(product, budgetPicks, budget) {
     feature_gaps: gaps,
     worth_stretching,
     budget_already_adequate: avgPick != null && urlPrice != null ? urlPrice <= avgPick * 1.1 : null,
+    prefer_url_over_picks: urlPrice != null && avgPick != null && urlPrice <= avgPick,
     recommended_budget_min,
     recommended_budget_max,
     recommended_budget_note: 'Listing-stats fallback',
     ranking_fallback: 'listing_stats',
   };
+}
+
+function derivePreferUrlOverPicks(analysis, product, budgetPicks) {
+  if (analysis?.prefer_url_over_picks === true) return true;
+  if (analysis?.prefer_url_over_picks === false) {
+    // Still override when URL is clearly cheaper with similar/better rating — LLM sometimes
+    // frames "don't stretch" without flipping prefer_url when the URL is the better deal.
+  }
+
+  const urlPrice = parseMoney(product.price ?? product.price_display);
+  const top = budgetPicks[0];
+  const pickPrice = parseMoney(top?.price ?? top?.price_display);
+  const urlRating = Number(product.rating);
+  const pickRating = Number(top?.rating);
+
+  if (urlPrice != null && pickPrice != null && urlPrice <= pickPrice) {
+    const ratingOk = !Number.isFinite(urlRating)
+      || !Number.isFinite(pickRating)
+      || urlRating >= pickRating - 0.15;
+    if (ratingOk) return true;
+  }
+
+  // "Don't stretch" + cheaper URL usually means the URL already wins on value.
+  if (
+    analysis?.worth_stretching === false
+    && urlPrice != null
+    && pickPrice != null
+    && urlPrice < pickPrice
+  ) {
+    return true;
+  }
+
+  return analysis?.prefer_url_over_picks === true;
+}
+
+function suggestTierKeyForPrice(price, tiers) {
+  if (!Number.isFinite(price) || price <= 0 || !Array.isArray(tiers)) return null;
+  for (const t of tiers) {
+    const min = t.price_min != null ? Number(t.price_min) : null;
+    const max = t.price_max != null ? Number(t.price_max) : null;
+    const aboveMin = min == null || !Number.isFinite(min) || price >= min;
+    const belowMax = max == null || !Number.isFinite(max) || price <= max;
+    if (aboveMin && belowMax) return t.key || null;
+  }
+  return null;
 }
 
 function resolveBudgetPicks(scout) {
@@ -308,6 +356,10 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
     };
   }
 
+  analysis.prefer_url_over_picks = derivePreferUrlOverPicks(analysis, product, budgetPicks);
+  const urlPrice = parseMoney(product.price ?? product.price_display);
+  analysis.suggested_tier_key = suggestTierKeyForPrice(urlPrice, scout.tiers);
+
   const comparisonEntry = {
     url: sourceUrl || trimmedUrl,
     asin: product.asin,
@@ -316,16 +368,40 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
     comparedAt: new Date().toISOString(),
   };
 
+  let final_recommendation = null;
+
   if (runId) {
-    await appendUrlComparison(userId, Number(runId), comparisonEntry, scout);
+    const next = await appendUrlComparison(userId, Number(runId), comparisonEntry, scout);
+
+    if (next?.mode === 'guide') {
+      try {
+        const { generateFinalRecommendation, saveGuideResult } = require('./productScoutGuideService');
+        next.final_recommendation = await generateFinalRecommendation(userId, {
+          query: next.query,
+          featureBrief: next.feature_brief,
+          budgetHint: next.budgetHint,
+          tiers: next.tiers,
+          urlComparisons: next.url_comparisons || [],
+        });
+        await saveGuideResult(userId, Number(runId), next, next);
+        final_recommendation = next.final_recommendation;
+      } catch (err) {
+        console.warn('[productScout] compare-url recommendation refresh failed:', err.message);
+      }
+    }
   }
 
-  return comparisonEntry;
+  return {
+    ...comparisonEntry,
+    final_recommendation,
+    prefer_url_over_picks: analysis.prefer_url_over_picks,
+    suggested_tier_key: analysis.suggested_tier_key,
+  };
 }
 
 async function appendUrlComparison(userId, runId, entry, existingResult) {
   const scout = existingResult || (await getRun(userId, runId))?.result;
-  if (!scout) return;
+  if (!scout) return null;
 
   const next = {
     ...scout,
@@ -336,6 +412,7 @@ async function appendUrlComparison(userId, runId, entry, existingResult) {
     `UPDATE product_scout_runs SET result = $1 WHERE "userId" = $2 AND id = $3`,
     [JSON.stringify(next), userId, runId]
   );
+  return next;
 }
 
 module.exports = {
@@ -343,4 +420,5 @@ module.exports = {
   buildCompareUrlPrompt,
   parseCompareUrlResponse,
   fallbackCompareAnalysis,
+  derivePreferUrlOverPicks,
 };

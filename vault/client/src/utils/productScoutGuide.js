@@ -70,12 +70,14 @@ export function resolveTierFocus(tier, index = 0) {
   return TIER_LADDER_DEFAULTS[key]?.focus || '';
 }
 
-const PREMIUM_RE = /\b(anc|noise\s*cancell|flagship|audiophile|hi-?res|ldac|aptx|studio|pro\b|oled|4k|120hz|rtx|gaming|waterproof|ip6[78]|macbook\s*pro|mirrorless|full[\s-]?frame)\b/i;
-const BASIC_RE = /\b(basic|budget|simple|casual|entry[\s-]?level|bluetooth\s*only)\b/i;
+const PREMIUM_RE = /\b(adaptive\s*anc|hybrid\s*anc|flagship|audiophile|hi-?res|ldac|aptx\s*adaptive|studio|\bpro\b|oled|4k|120hz|rtx|gaming|ip6[78]|macbook\s*pro|mirrorless|full[\s-]?frame)\b/i;
+const ANC_EVERYDAY_RE = /\b(anc|active\s*noise|noise\s*cancell)\b/i;
+const BASIC_RE = /\b(basic|budget|simple|casual|entry[\s-]?level|bluetooth\s*only|everyday)\b/i;
 
 /**
  * Suggest the lowest price tier that usually meets must-have needs.
- * Budget hint nudges toward the matching band; LLM suggestion is used when valid.
+ * When the LLM aims higher than the heuristic, keep the lower start —
+ * Amazon deals often sit one band below “ideal feature” marketing.
  */
 export function resolveRecommendedTier({
   features = [],
@@ -91,15 +93,19 @@ export function resolveRecommendedTier({
     .toLowerCase();
 
   let idx = 1; // smart_upgrade default — everyday value
-  let why = 'Smart upgrade usually covers everyday needs without overspending.';
+  let why = 'Smart upgrade is the everyday sweet spot — many Best Deal–class products land here.';
 
   if (BASIC_RE.test(mustText) && must.length <= 2 && !PREMIUM_RE.test(mustText)) {
     idx = 0;
     why = 'Your must-haves look basic — Essentials is often enough.';
   }
+  if (ANC_EVERYDAY_RE.test(mustText) && !PREMIUM_RE.test(mustText)) {
+    idx = Math.max(idx, 1);
+    why = 'Everyday ANC usually appears in Smart upgrade; search Enthusiast only if results feel weak.';
+  }
   if (PREMIUM_RE.test(mustText) || must.length >= 5) {
     idx = Math.max(idx, 2);
-    why = 'Several must-haves usually appear in the Enthusiast band and above.';
+    why = 'Several premium must-haves usually appear in the Enthusiast band and above.';
   }
   if (/\b(best|no budget|top.?of.?range|flagship|uncompromising)\b/i.test(mustText)) {
     idx = 3;
@@ -125,10 +131,11 @@ export function resolveRecommendedTier({
 
   const llmIdx = GUIDE_TIER_KEYS.indexOf(String(llmKey || '').trim());
   if (llmIdx >= 0) {
-    // Prefer LLM when it is at least as demanding as the heuristic (don't under-suggest).
-    if (llmIdx >= idx) {
+    if (llmIdx <= idx) {
       idx = llmIdx;
       if (llmWhy && String(llmWhy).trim()) why = String(llmWhy).trim();
+    } else {
+      why = `${why} Climb one tier only if a must-have is missing.`;
     }
   }
 

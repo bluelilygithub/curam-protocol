@@ -247,6 +247,11 @@ export default function ProductScoutFinalRecommendation({
           >
             {pick.tier_label || 'Pick'}
           </span>
+          {pick.source === 'url_comparison' && (
+            <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+              From compared URL
+            </span>
+          )}
           {pick.value_score != null && (
             <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
               Value {pick.value_score}

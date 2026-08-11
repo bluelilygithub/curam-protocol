@@ -65,13 +65,28 @@ function UrlComparisonCard({ entry }) {
         )}
       </div>
 
+      {analysis.prefer_url_over_picks && (
+        <p
+          className="text-xs rounded-xl border p-3"
+          style={{ borderColor: 'var(--color-primary)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+        >
+          This compared listing looks like better value than your scouted tier picks
+          {analysis.suggested_tier_key
+            ? ` — it sits in the ${String(analysis.suggested_tier_key).replace(/_/g, ' ')} band`
+            : ''}
+          . Best value above will update to include it; search that tier too if you want Amazon rivals in the same band.
+        </p>
+      )}
+
       {analysis.worth_stretching != null && (
         <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
-          {analysis.budget_already_adequate
-            ? 'Your budget picks likely meet expectations for this search.'
-            : analysis.worth_stretching
-              ? 'Worth considering if you can stretch the budget.'
-              : 'Upgrade may not justify the extra cost for this use case.'}
+          {analysis.prefer_url_over_picks
+            ? 'Compared listing is at or below your picks’ price with a strong fit — treat it as a contender, not an upgrade stretch.'
+            : analysis.budget_already_adequate
+              ? 'Your budget picks likely meet expectations for this search.'
+              : analysis.worth_stretching
+                ? 'Worth considering if you can stretch the budget.'
+                : 'Upgrade may not justify the extra cost for this use case.'}
         </p>
       )}
 

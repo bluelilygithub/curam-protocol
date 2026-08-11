@@ -13,6 +13,7 @@ const {
   buildBudgetFitNote,
 } = require('./productScoutSettings');
 const { executeScoutComparison, getRun } = require('./productScoutService');
+const { looksLikeMonoCallHeadset, queryWantsStereoAudioWearable } = require('./productScoutRelevance');
 
 const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
@@ -21,6 +22,7 @@ For EVERY product category, start from Amazon's left-sidebar filters — the sta
 Return ONLY valid JSON. No markdown fences.`;
 
 const RECOMMEND_SYSTEM = `You are an unbiased product analyst. Recommend the single best VALUE FOR MONEY pick across price tiers for this shopper — not the most expensive or cheapest by default.
+Shopper-compared Amazon URLs are first-class candidates: if one fits the use case as well or better at a lower or similar price, pick it (tier_key "compared_url") — do not ignore cheaper good options just because a higher tier was scouted.
 Judge features, quality, price, and review evidence. No brand loyalty. No Amazon placement bias.
 Return ONLY valid JSON. No markdown fences.`;
 
@@ -161,7 +163,35 @@ function mergeBriefFeatures(sidebarFilters, features) {
   return merged;
 }
 
-function buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks) {
+function collectUrlComparisonPicks(urlComparisons) {
+  return (urlComparisons || [])
+    .filter((e) => e?.product?.title)
+    .map((e, i) => {
+      const p = e.product;
+      return {
+        tier_key: 'compared_url',
+        tier_label: 'Compared URL',
+        price_band: 'shopper-added',
+        asin: p.asin || e.asin,
+        title: p.title,
+        price: p.price_display || p.price,
+        value_score: null,
+        pre_score: null,
+        rating: p.rating,
+        review_count: p.review_count,
+        key_features: (p.feature_bullets || []).slice(0, 4),
+        value_rationale: e.analysis?.upgrade_benefits
+          ? String(e.analysis.upgrade_benefits).slice(0, 200)
+          : 'Shopper-compared Amazon listing',
+        link: p.link || e.url,
+        prefer_url_over_picks: e.analysis?.prefer_url_over_picks === true,
+        source: 'url_comparison',
+        compared_index: i,
+      };
+    });
+}
+
+function buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks, urlPicks = []) {
   const mustFeatures = (featureBrief?.features || [])
     .filter((f) => f.importance === 'must')
     .map(formatFeatureRequirement)
@@ -187,6 +217,18 @@ Key features: ${(p.key_features || []).slice(0, 4).join('; ') || '—'}
 Scout rationale: ${p.value_rationale || '—'}`
   )).join('\n\n');
 
+  const urlBlock = urlPicks.length
+    ? `\nShopper-compared Amazon URLs (FIRST-CLASS candidates — do not ignore these even if cheaper than scouted tiers or outside a scouted band):\n${urlPicks.map((p) => (
+      `Compared URL: ${p.title}
+ASIN: ${p.asin || '—'}
+Price: ${p.price || '—'}
+Rating: ${p.rating ?? '—'} · ${p.review_count ?? '—'} reviews
+Key features: ${(p.key_features || []).slice(0, 4).join('; ') || '—'}
+Compare note: ${p.value_rationale || '—'}
+Marked better value than picks: ${p.prefer_url_over_picks ? 'yes' : 'unspecified'}`
+    )).join('\n\n')}\n`
+    : '';
+
   return `Shopping goal: ${query}
 ${budgetBlock}Brief summary: ${featureBrief?.summary || '—'}
 Must-have features: ${mustFeatures.join(', ') || 'see brief'}
@@ -194,21 +236,29 @@ Nice-to-have: ${niceFeatures.join(', ') || '—'}
 
 One top pick per scouted price tier (already ranked within tier):
 ${picksBlock}
-
-Choose ONE overall best value-for-money product for THIS shopper across tiers.
-Explain tradeoffs vs the other tier winners. Say who should step up or stay down.
+${urlBlock}
+Choose ONE overall best value-for-money product for THIS shopper.
+You MAY pick a compared URL when it fits the use case better or costs less for equal/better capability — cheaper good options must not be ignored just because a higher tier was scouted.
+If only one tier was scouted, say the verdict is provisional until adjacent tiers are searched.
+Explain tradeoffs. Say who should step up or stay down.
 
 JSON only:
-{"headline":"One sentence verdict","rationale":"2-3 short paragraphs, plain text, no markdown","pick":{"tier_key":"essentials","tier_label":"Essentials","asin":"...","title":"...","price":"...","value_score":85},"worth_stepping_up":"When paying more is justified, or null","worth_staying_down":"When cheaper is enough, or null"}`;
+{"headline":"One sentence verdict","rationale":"2-3 short paragraphs, plain text, no markdown","pick":{"tier_key":"essentials|smart_upgrade|enthusiast|pro|compared_url","tier_label":"...","asin":"...","title":"...","price":"...","value_score":85},"worth_stepping_up":"When paying more is justified, or null","worth_staying_down":"When cheaper is enough, or null"}`;
 }
 
-function parseRecommendationResponse(text, tierPicks) {
+function parseRecommendationResponse(text, tierPicks, urlPicks = []) {
   const parsed = parseModelJson(String(text || '').trim());
   if (!parsed?.pick?.title) throw new Error('Recommendation missing pick');
 
-  const byAsin = Object.fromEntries(tierPicks.filter((p) => p.asin).map((p) => [p.asin, p]));
+  const allPicks = [...tierPicks, ...urlPicks];
+  const byAsin = Object.fromEntries(allPicks.filter((p) => p.asin).map((p) => [p.asin, p]));
   const byTier = Object.fromEntries(tierPicks.map((p) => [p.tier_key, p]));
-  const src = byAsin[parsed.pick.asin] || byTier[parsed.pick.tier_key];
+  const latestPreferredUrl = [...urlPicks].reverse().find((p) => p.prefer_url_over_picks) || null;
+  const src = byAsin[parsed.pick.asin]
+    || (parsed.pick.tier_key === 'compared_url'
+      ? (latestPreferredUrl || urlPicks[urlPicks.length - 1] || urlPicks[0])
+      : null)
+    || byTier[parsed.pick.tier_key];
 
   if (src) {
     parsed.pick.link = parsed.pick.link || src.link;
@@ -217,6 +267,7 @@ function parseRecommendationResponse(text, tierPicks) {
     parsed.pick.tier_key = parsed.pick.tier_key || src.tier_key;
     parsed.pick.tier_label = parsed.pick.tier_label || src.tier_label;
     parsed.pick.value_score = parsed.pick.value_score ?? src.value_score;
+    if (src.source) parsed.pick.source = src.source;
   }
 
   return {
@@ -229,20 +280,121 @@ function parseRecommendationResponse(text, tierPicks) {
   };
 }
 
-async function generateFinalRecommendation(userId, { query, featureBrief, budgetHint, tiers }) {
+function pickFromUrlComparison(urlPick) {
+  return {
+    tier_key: 'compared_url',
+    tier_label: 'Compared URL',
+    asin: urlPick.asin,
+    title: urlPick.title,
+    price: urlPick.price,
+    link: urlPick.link,
+    value_score: urlPick.value_score,
+    source: 'url_comparison',
+  };
+}
+
+/** Prefer shopper-compared URLs when flagged, or when tier winner is a form-factor mismatch. */
+function reconcileRecommendationWithUrls(rec, query, urlPicks) {
+  if (!rec?.pick || !urlPicks?.length) return rec;
+
+  const preferredFlagged = [...urlPicks].reverse().find((p) => p.prefer_url_over_picks) || null;
+  const mismatch = queryWantsStereoAudioWearable(query)
+    && looksLikeMonoCallHeadset(rec.pick.title);
+  const preferred = preferredFlagged
+    || (mismatch
+      ? [...urlPicks].reverse().find((p) => !looksLikeMonoCallHeadset(p.title))
+      : null);
+
+  if (!preferred?.title) return rec;
+
+  const alreadyUrl = rec.pick.tier_key === 'compared_url'
+    || (preferred.asin && rec.pick.asin && preferred.asin === rec.pick.asin);
+  if (alreadyUrl) return rec;
+
+  if (!preferredFlagged && !mismatch) return rec;
+
+  return {
+    ...rec,
+    headline: `${preferred.title} is better value than the scouted tier winner for this use case.`,
+    rationale: [
+      rec.rationale,
+      `Your compared listing (${preferred.price || 'price n/a'}) fits the search better and/or costs less than the scouted pick — it is included as a first-class option, not ignored because it sits in another price band.`,
+    ].filter(Boolean).join('\n\n'),
+    pick: pickFromUrlComparison(preferred),
+    ranking_note: mismatch && !preferredFlagged ? 'preferred_url_form_factor' : 'preferred_compared_url',
+    generated_at: new Date().toISOString(),
+  };
+}
+
+function fallbackRecommendation(query, tierPicks, urlPicks) {
+  const preferred = [...urlPicks].reverse().find((p) => p.prefer_url_over_picks)
+    || (queryWantsStereoAudioWearable(query)
+      ? urlPicks.find((p) => !looksLikeMonoCallHeadset(p.title))
+      : null)
+    || urlPicks[urlPicks.length - 1]
+    || null;
+
+  const tierWinner = tierPicks[0] || null;
+  const useUrl = preferred && (
+    preferred.prefer_url_over_picks
+    || !tierWinner
+    || (queryWantsStereoAudioWearable(query) && looksLikeMonoCallHeadset(tierWinner.title))
+  );
+
+  const pick = useUrl ? pickFromUrlComparison(preferred) : {
+    tier_key: tierWinner.tier_key,
+    tier_label: tierWinner.tier_label,
+    asin: tierWinner.asin,
+    title: tierWinner.title,
+    price: tierWinner.price,
+    link: tierWinner.link,
+    value_score: tierWinner.value_score,
+  };
+
+  return {
+    headline: useUrl
+      ? `${pick.title} wins on value once your compared URL is included.`
+      : `${pick.title} leads among scouted tiers (listing-stats fallback).`,
+    rationale: useUrl
+      ? 'AI recommendation was unavailable. Your compared Amazon listing was preferred because it looks like equal/better fit at a lower or similar price than the scouted tier winner.'
+      : 'AI recommendation was unavailable. Ranking used the top scouted-tier pick from listing stats only.',
+    pick,
+    worth_stepping_up: null,
+    worth_staying_down: null,
+    ranking_fallback: 'listing_stats',
+    generated_at: new Date().toISOString(),
+  };
+}
+
+async function generateFinalRecommendation(userId, {
+  query,
+  featureBrief,
+  budgetHint,
+  tiers,
+  urlComparisons = [],
+}) {
   const tierPicks = collectTierPicks(tiers);
-  if (!tierPicks.length) {
+  const urlPicks = collectUrlComparisonPicks(urlComparisons);
+  if (!tierPicks.length && !urlPicks.length) {
     throw new Error('Scout at least one tier before generating a recommendation');
   }
 
-  const { standard: modelId } = await getModelsForUser(userId);
-  const text = await callGuideModel(
-    userId,
-    modelId,
-    buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks),
-    { system: RECOMMEND_SYSTEM }
-  );
-  return parseRecommendationResponse(text, tierPicks);
+  let rec;
+  try {
+    const { standard: modelId } = await getModelsForUser(userId);
+    const text = await callGuideModel(
+      userId,
+      modelId,
+      buildRecommendationPrompt(query, featureBrief, budgetHint, tierPicks, urlPicks),
+      { system: RECOMMEND_SYSTEM }
+    );
+    rec = parseRecommendationResponse(text, tierPicks, urlPicks);
+  } catch (err) {
+    console.warn('[productScout] final recommendation LLM failed, using fallback:', err.message);
+    rec = fallbackRecommendation(query, tierPicks, urlPicks);
+  }
+
+  return reconcileRecommendationWithUrls(rec, query, urlPicks);
 }
 
 async function saveGuideResult(userId, runId, existing, result) {
@@ -306,9 +458,11 @@ ${whyLimit}
 CRITICAL: Emit fields in this exact order so truncation still keeps tiers: summary → recommended_tier_key → recommended_tier_why → tier_framework → amazon_sidebar_filters → features.
 
 1. summary — 1–2 sentences on what matters for THIS use case.
-2. recommended_tier_key — REQUIRED. The single best STARTING tier for this shopper's needs (not their wallet alone). Keys: essentials | smart_upgrade | enthusiast | pro.
-   Pick the LOWEST tier that usually satisfies their must-haves for this product. Example: basic Bluetooth earbuds → smart_upgrade or essentials; hybrid ANC + premium codecs → enthusiast; "best / no compromise" → pro.
-3. recommended_tier_why — one short sentence (max 20 words) explaining the requirement fit (not "because it's mid-price").
+2. recommended_tier_key — REQUIRED. The single best STARTING tier (search here first). Keys: essentials | smart_upgrade | enthusiast | pro.
+   Pick the LOWEST tier that usually satisfies MUST-haves only. Nice-to-haves must NOT bump the starting tier.
+   Amazon deals and mid-band bestsellers often meet everyday needs — prefer smart_upgrade over enthusiast when unsure.
+   Examples: everyday Bluetooth earbuds (fit, battery, pairing) → essentials or smart_upgrade; usable ANC as a must → still smart_upgrade; adaptive/hybrid ANC + premium codecs as musts → enthusiast; "best / no compromise" → pro.
+3. recommended_tier_why — one short sentence (max 20 words) on must-have fit. Mention that shoppers can climb one band if results miss a must.
 4. tier_framework — REQUIRED, exactly 4 tiers cheapest→pro. Keys must be essentials, smart_upgrade, enthusiast, pro.
    Each: {"key":"...","label":"...","subtitle":"one-line focus for this band","price_min":40,"price_max":80,"feature_adds":["what this tier typically adds vs the one below"]}
    Non-overlapping bands; each price_min above previous price_max. Pro may use a high price_min and omit price_max (null).
@@ -420,10 +574,11 @@ function featuresFromUserInput(userFeatures) {
   })).filter((f) => f.feature);
 }
 
-const PREMIUM_RE = /\b(anc|noise\s*cancell|flagship|audiophile|hi-?res|ldac|aptx|studio|pro\b|oled|4k|120hz|rtx|gaming|waterproof|ip6[78]|macbook\s*pro|mirrorless|full[\s-]?frame)\b/i;
-const BASIC_RE = /\b(basic|budget|simple|casual|entry[\s-]?level|bluetooth\s*only)\b/i;
+const PREMIUM_RE = /\b(adaptive\s*anc|hybrid\s*anc|flagship|audiophile|hi-?res|ldac|aptx\s*adaptive|studio|\bpro\b|oled|4k|120hz|rtx|gaming|ip6[78]|macbook\s*pro|mirrorless|full[\s-]?frame)\b/i;
+const ANC_EVERYDAY_RE = /\b(anc|active\s*noise|noise\s*cancell)\b/i;
+const BASIC_RE = /\b(basic|budget|simple|casual|entry[\s-]?level|bluetooth\s*only|everyday)\b/i;
 
-/** Lowest tier that usually meets must-haves; budget hint nudges; LLM suggestion floors upward. */
+/** Lowest starting tier for must-haves. Never auto-upgrade to Enthusiast+ just because the LLM aims high — deals often sit one band lower. */
 function resolveRecommendedTier({
   features = [],
   budgetHint = null,
@@ -438,15 +593,19 @@ function resolveRecommendedTier({
     .toLowerCase();
 
   let idx = 1;
-  let why = 'Smart upgrade usually covers everyday needs without overspending.';
+  let why = 'Smart upgrade is the everyday sweet spot — many Best Deal–class products land here.';
 
   if (BASIC_RE.test(mustText) && must.length <= 2 && !PREMIUM_RE.test(mustText)) {
     idx = 0;
     why = 'Your must-haves look basic — Essentials is often enough.';
   }
+  if (ANC_EVERYDAY_RE.test(mustText) && !PREMIUM_RE.test(mustText)) {
+    idx = Math.max(idx, 1);
+    why = 'Everyday ANC usually appears in Smart upgrade; search Enthusiast only if results feel weak.';
+  }
   if (PREMIUM_RE.test(mustText) || must.length >= 5) {
     idx = Math.max(idx, 2);
-    why = 'Several must-haves usually appear in the Enthusiast band and above.';
+    why = 'Several premium must-haves usually appear in the Enthusiast band and above.';
   }
   if (/\b(best|no budget|top.?of.?range|flagship|uncompromising)\b/i.test(mustText)) {
     idx = 3;
@@ -471,9 +630,16 @@ function resolveRecommendedTier({
   }
 
   const llmIdx = TIER_KEYS.indexOf(String(llmKey || '').trim());
-  if (llmIdx >= 0 && llmIdx >= idx) {
-    idx = llmIdx;
-    if (llmWhy && String(llmWhy).trim()) why = String(llmWhy).trim();
+  if (llmIdx >= 0) {
+    if (llmIdx <= idx) {
+      // LLM agrees or aims lower — take the cheaper start.
+      idx = llmIdx;
+      if (llmWhy && String(llmWhy).trim()) why = String(llmWhy).trim();
+    } else {
+      // LLM aimed higher (e.g. Enthusiast). Keep the lower heuristic start so
+      // shoppers see deal-band products first; they can climb after.
+      why = `${why} Climb one tier only if a must-have is missing.`;
+    }
   }
 
   return {
@@ -1018,6 +1184,7 @@ async function runBuyGuide(userId, {
       featureBrief,
       budgetHint: hint,
       tiers,
+      urlComparisons: result.url_comparisons,
     });
   } catch (err) {
     console.warn('[productScout] final recommendation failed:', err.message);
@@ -1043,6 +1210,7 @@ async function refreshGuideRecommendation(userId, runId) {
       featureBrief: existing.feature_brief,
       budgetHint: existing.budgetHint,
       tiers: existing.tiers,
+      urlComparisons: existing.url_comparisons || [],
     });
   } catch (err) {
     result.final_recommendation = { error: err.message };
@@ -1055,6 +1223,7 @@ module.exports = {
   buildGuideBrief,
   runBuyGuide,
   refreshGuideRecommendation,
+  generateFinalRecommendation,
   saveGuideResult,
   parseFeaturesInput,
   normalizeSelectedTierKeys,
