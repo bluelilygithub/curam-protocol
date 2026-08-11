@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   cycleImportance,
   IMPORTANCE_LABELS,
@@ -229,6 +229,12 @@ export default function ProductScoutFeatureBrief({
     () => normalizeBriefFeatures(brief?.features || [])
   );
   const [expandedHelp, setExpandedHelp] = useState(null);
+
+  // Remount isn't always enough when navigating Back — keep local edits in sync
+  // when the parent replaces the brief object.
+  useEffect(() => {
+    setFeatures(normalizeBriefFeatures(brief?.features || []));
+  }, [brief]);
 
   const { specs, features: toggles } = useMemo(
     () => partitionBriefFeatures(features),

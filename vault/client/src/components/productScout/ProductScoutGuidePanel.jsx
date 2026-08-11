@@ -79,8 +79,13 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   };
 
   const handleBriefContinue = (confirmedBrief) => {
+    // Edited criteria must drive the next scout — drop any prior run so we never
+    // reuse a stale feature_brief / runId from an earlier search.
     setFeatureBrief(confirmedBrief);
+    setResult(null);
     setMergeMode(false);
+    setError(null);
+    setErrorDiagnostics(null);
     setStep(STEPS.selectTiers);
   };
 
@@ -100,10 +105,12 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     setError(null);
     setErrorDiagnostics(null);
     try {
+      // Always prefer the latest edited brief — never fall back to a prior run's copy.
+      const briefForScout = featureBrief || result?.feature_brief;
       const res = await api.post('/api/product-scout/guide/run', {
         query: query.trim(),
         userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
-        featureBrief: result?.feature_brief || featureBrief,
+        featureBrief: briefForScout,
         selectedTierKeys,
         ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
       });
@@ -114,7 +121,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         throw err;
       }
       setResult(data);
-      setFeatureBrief(data.feature_brief || featureBrief);
+      setFeatureBrief(data.feature_brief || briefForScout);
       setStep(STEPS.results);
       setMergeMode(false);
       onRunSaved?.(data);

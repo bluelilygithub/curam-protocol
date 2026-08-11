@@ -165,6 +165,12 @@ export default function ProductScoutTierLadder({
         </p>
       )}
 
+      {result?.search_query && result.search_query !== result.query && (
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          Amazon search used: <span style={{ color: 'var(--color-text)' }}>{result.search_query}</span>
+        </p>
+      )}
+
       <ProductScoutFinalRecommendation
         recommendation={recommendation}
         onRefresh={onRefreshRecommendation}

@@ -69,6 +69,50 @@ function formatFeatureRequirement(f) {
   return f.feature;
 }
 
+/**
+ * Fold must-have specs/features into the Amazon search phrase so Rainforest
+ * results reflect the edited brief — not only the original free-text query.
+ */
+function buildEnrichedSearchQuery(baseQuery, featureBrief) {
+  const base = String(baseQuery || '').trim();
+  const terms = [];
+  const seen = new Set(base.toLowerCase().split(/\s+/).filter(Boolean));
+
+  const pushTerm = (raw) => {
+    const t = String(raw || '').trim();
+    if (!t || t.length < 2) return;
+    const lower = t.toLowerCase();
+    if (lower === 'any' || lower === 'no preference' || lower === 'n/a') return;
+    if (seen.has(lower)) return;
+    // Avoid dumping long sentences into the search box
+    if (t.split(/\s+/).length > 4) return;
+    seen.add(lower);
+    terms.push(t);
+  };
+
+  for (const f of featureBrief?.features || []) {
+    if (!f || f.importance === 'skip') continue;
+    if (f.kind === 'spec' && f.spec_value != null && f.spec_value !== '') {
+      const v = String(f.spec_value).trim();
+      if (/^any$/i.test(v) || /^no preference$/i.test(v)) continue;
+      if (f.spec_type === 'numeric_min' || f.spec_type === 'numeric_max') {
+        // Numbers alone are weak Amazon terms; keep label+value compact when short
+        const unit = f.spec_unit || '';
+        pushTerm(`${v}${unit}`);
+        continue;
+      }
+      pushTerm(v);
+      continue;
+    }
+    if (f.kind === 'feature' && f.importance === 'must') {
+      pushTerm(f.feature);
+    }
+  }
+
+  const enriched = [base, ...terms.slice(0, 6)].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return enriched.slice(0, 180) || base;
+}
+
 function normalizeBriefFeature(f) {
   if (!f?.feature) return null;
   const name = String(f.feature).trim();
@@ -727,19 +771,27 @@ async function runBuyGuide(userId, {
     .map(formatFeatureRequirement)
     .filter(Boolean);
 
+  const searchQuery = buildEnrichedSearchQuery(q, featureBrief);
+
   console.log('[productScout] guide/run start', {
     query: q,
+    searchQuery,
     runId: runId || null,
     keysToScout,
     modelId,
     amazonDomain,
-    mustFeatures: shopperPriorities.length,
+    mustFeatures: shopperPriorities,
   });
 
   let allCandidates;
   try {
-    console.log('[productScout] guide Rainforest search', { query: q, amazonDomain, maxResults: 40 });
-    allCandidates = await searchProducts(q, { maxResults: 40, amazonDomain });
+    console.log('[productScout] guide Rainforest search', {
+      query: q,
+      searchQuery,
+      amazonDomain,
+      maxResults: 40,
+    });
+    allCandidates = await searchProducts(searchQuery, { maxResults: 40, amazonDomain });
   } catch (err) {
     console.error('[productScout] guide Rainforest failed', {
       message: err.message,
@@ -749,6 +801,7 @@ async function runBuyGuide(userId, {
       stage: 'guide_rainforest',
       amazonDomain,
       modelId,
+      searchQuery,
       ...(err.diagnostics || {}),
     };
     throw err;
@@ -756,6 +809,7 @@ async function runBuyGuide(userId, {
 
   console.log('[productScout] guide candidates', {
     count: allCandidates.length,
+    searchQuery,
     samplePrices: allCandidates.slice(0, 8).map((c) => c.price_display || c.price),
   });
 
@@ -818,6 +872,7 @@ async function runBuyGuide(userId, {
   const result = {
     mode: 'guide',
     query: q,
+    search_query: searchQuery,
     userFeatures: userFeatures || existing?.userFeatures || [],
     budgetHint: hint,
     feature_brief: featureBrief,
