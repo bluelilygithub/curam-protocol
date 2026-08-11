@@ -348,6 +348,7 @@ async function crossMarketAlternatives(winner, originalQuery) {
  */
 async function executeScoutComparison(userId, query, {
   maxPrice,
+  minPrice = null,
   freeDelivery = false,
   within2Days = false,
   amazonDomain,
@@ -374,11 +375,14 @@ async function executeScoutComparison(userId, query, {
   }
 
   const max = Number(maxPrice);
+  const min = Number(minPrice);
   const hasBudget = Number.isFinite(max) && max > 0;
+  const hasMin = Number.isFinite(min) && min > 0;
 
   const { primary, stretch, budget } = applyBudgetFilter(
     allCandidates,
-    hasBudget ? max : null
+    hasBudget ? max : null,
+    hasMin ? min : null
   );
 
   const primaryScored = attachPreScores(primary);
@@ -393,15 +397,21 @@ async function executeScoutComparison(userId, query, {
     candidates: allCandidates.length,
     primary: primaryScored.length,
     stretch: stretchScored.length,
+    minPrice: hasMin ? min : null,
     maxPrice: hasBudget ? max : null,
-    samplePrices: allCandidates.slice(0, 5).map((c) => c.price_display || c.price),
+    samplePrices: primaryScored.slice(0, 5).map((c) => c.price_display || c.price),
   });
 
   if (!primaryScored.length && !stretchScored.length) {
+    const bandLabel = hasMin && hasBudget
+      ? `$${min}–$${max}`
+      : hasBudget
+        ? `max $${max}`
+        : hasMin
+          ? `from $${min}`
+          : 'this tier';
     return {
-      error: hasBudget
-        ? `No products in this price band (max $${max}).`
-        : 'No products matched this tier.',
+      error: `No products in this price band (${bandLabel}). Amazon’s top results for this search may sit outside the range — try a different tier or a more specific search phrase.`,
       candidates_fetched: allCandidates.length,
       comparison: { top3: [], stretch_suggestions: [] },
       budget,
@@ -411,6 +421,7 @@ async function executeScoutComparison(userId, query, {
         amazonDomain: domain,
         modelId: model,
         candidates: allCandidates.length,
+        minPrice: hasMin ? min : null,
         maxPrice: hasBudget ? max : null,
       },
     };

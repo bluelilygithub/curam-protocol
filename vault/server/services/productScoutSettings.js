@@ -72,9 +72,13 @@ function parseNumericPrice(candidate) {
   return m ? parseFloat(m[1]) : null;
 }
 
-function applyBudgetFilter(candidates, maxPrice) {
+function applyBudgetFilter(candidates, maxPrice, minPrice = null) {
   const max = Number(maxPrice);
-  if (!Number.isFinite(max) || max <= 0) {
+  const min = Number(minPrice);
+  const hasMax = Number.isFinite(max) && max > 0;
+  const hasMin = Number.isFinite(min) && min > 0;
+
+  if (!hasMax && !hasMin) {
     return { primary: [...candidates], stretch: [], budget: null };
   }
 
@@ -83,15 +87,23 @@ function applyBudgetFilter(candidates, maxPrice) {
   for (const c of candidates) {
     const p = parseNumericPrice(c);
     const base = { ...c, price_numeric: p };
-    if (p == null || p <= max) {
-      primary.push(base);
+    // Unpriced listings only allowed when no minimum is set (can't verify band).
+    if (p == null) {
+      if (!hasMin) primary.push(base);
+      continue;
     }
+    if (hasMin && p < min) continue;
+    if (hasMax && p > max) continue;
+    primary.push(base);
   }
 
   return {
     primary,
     stretch: [],
-    budget: { maxPrice: max },
+    budget: {
+      ...(hasMax ? { maxPrice: max } : {}),
+      ...(hasMin ? { minPrice: min } : {}),
+    },
   };
 }
 

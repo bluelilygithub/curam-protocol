@@ -641,22 +641,73 @@ function scoutedTierKeysFromExisting(existing) {
   return collectScoutedTierKeys(existing?.tiers || []);
 }
 
+function buildTierPriceSearchQuery(baseQuery, priceMin, priceMax, isPro) {
+  const base = String(baseQuery || '').trim();
+  if (isPro && priceMin != null && Number.isFinite(priceMin)) {
+    return `${base} over $${Math.round(priceMin)}`.replace(/\s+/g, ' ').trim().slice(0, 180);
+  }
+  if (priceMin != null && priceMax != null && Number.isFinite(priceMin) && Number.isFinite(priceMax)) {
+    return `${base} $${Math.round(priceMin)}-$${Math.round(priceMax)}`.replace(/\s+/g, ' ').trim().slice(0, 180);
+  }
+  if (priceMax != null && Number.isFinite(priceMax)) {
+    return `${base} under $${Math.round(priceMax)}`.replace(/\s+/g, ' ').trim().slice(0, 180);
+  }
+  return base.slice(0, 180);
+}
+
+function formatBandLabel(priceMin, priceMax, isPro) {
+  if (isPro && priceMin != null) return `from $${Math.round(priceMin)}`;
+  if (priceMin != null && priceMax != null) return `$${Math.round(priceMin)}–$${Math.round(priceMax)}`;
+  if (priceMax != null) return `up to $${Math.round(priceMax)}`;
+  if (priceMin != null) return `from $${Math.round(priceMin)}`;
+  return 'this tier';
+}
+
 async function scoutTier(userId, query, frame, index, framework, allCandidates, opts) {
-  const { amazonDomain, modelId, shopperPriorities } = opts;
+  const { amazonDomain, modelId, shopperPriorities, searchQuery } = opts;
   const priceMin = tierMinPrice(frame, index, framework);
   const priceMax = frame.price_max != null ? Number(frame.price_max) : null;
   const isPro = frame.key === 'pro' || index === framework.length - 1;
   const key = frame.key || TIER_KEYS[index];
+  const bandLabel = formatBandLabel(priceMin, isPro ? null : priceMax, isPro);
+  const baseSearch = searchQuery || query;
 
+  // Strict band only — never widen to cheaper products (that put $20 earbuds in Enthusiast).
   let band = filterByPriceBand(allCandidates, priceMin, isPro ? null : priceMax);
-  let bandSource = 'strict';
-  if (!band.length && priceMin != null) {
-    band = filterByPriceBand(allCandidates, null, isPro ? null : priceMax);
-    bandSource = 'max_only';
-  }
+  let bandSource = 'shared_pool_strict';
+
   if (!band.length) {
-    band = [...allCandidates];
-    bandSource = 'all_candidates';
+    const tierQuery = buildTierPriceSearchQuery(baseSearch, priceMin, isPro ? null : priceMax, isPro);
+    const sortBy = priceMin != null && priceMin >= 80 ? 'price_high_to_low' : null;
+    console.log('[productScout] tier band empty in shared pool — refetch', {
+      key,
+      bandLabel,
+      tierQuery,
+      sortBy,
+    });
+    try {
+      const refetch = await searchProducts(tierQuery, {
+        maxResults: 40,
+        amazonDomain,
+        sortBy,
+      });
+      band = filterByPriceBand(refetch, priceMin, isPro ? null : priceMax);
+      bandSource = 'tier_refetch_strict';
+    } catch (err) {
+      console.warn('[productScout] tier refetch failed:', err.message);
+      return {
+        error: `No products in ${bandLabel} (${err.message})`,
+        candidates_fetched: allCandidates.length,
+        comparison: { top3: [], stretch_suggestions: [] },
+        diagnostics: {
+          stage: 'tier_refetch',
+          key,
+          bandLabel,
+          message: err.message,
+          ...(err.diagnostics || {}),
+        },
+      };
+    }
   }
 
   console.log('[productScout] tier band', {
@@ -669,11 +720,30 @@ async function scoutTier(userId, query, frame, index, framework, allCandidates, 
     bandSource,
     modelId,
     amazonDomain,
+    samplePrices: band.slice(0, 5).map((c) => c.price_display || c.price),
   });
+
+  if (!band.length) {
+    return {
+      error: `No Amazon listings found in ${bandLabel}. Top search results were outside this range — try Smart upgrade, or a more specific brand/model search.`,
+      candidates_fetched: allCandidates.length,
+      comparison: { top3: [], stretch_suggestions: [] },
+      diagnostics: {
+        stage: 'tier_band_empty',
+        key,
+        bandLabel,
+        priceMin,
+        priceMax: isPro ? null : priceMax,
+        pool: allCandidates.length,
+        bandSource,
+      },
+    };
+  }
 
   try {
     return await executeScoutComparison(userId, query, {
       candidates: band,
+      minPrice: priceMin,
       maxPrice: isPro ? null : priceMax,
       amazonDomain,
       modelId,
@@ -884,7 +954,7 @@ async function runBuyGuide(userId, {
       i,
       framework,
       allCandidates,
-      { amazonDomain, modelId, shopperPriorities }
+      { amazonDomain, modelId, shopperPriorities, searchQuery }
     );
   }
 

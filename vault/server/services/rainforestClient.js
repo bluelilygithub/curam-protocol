@@ -173,6 +173,7 @@ async function searchProducts(query, {
   amazonDomain = 'amazon.com.au',
   freeDelivery = false,
   within2Days = false,
+  sortBy = null,
 } = {}) {
   const { applyDeliveryFilters } = require('./productScoutDelivery');
   const domain = String(amazonDomain || 'amazon.com.au').trim() || 'amazon.com.au';
@@ -186,6 +187,7 @@ async function searchProducts(query, {
     number_of_results: String(fetchCount),
     exclude_sponsored: 'true',
   });
+  if (sortBy) params.set('sort_by', String(sortBy));
 
   const data = await rainforestRequest(params);
 
