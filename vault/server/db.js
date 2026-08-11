@@ -1457,6 +1457,21 @@ async function initSchema() {
       ON share_news_briefings ("userId", date DESC)
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_qa (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      question    TEXT NOT NULL,
+      answer      TEXT NOT NULL,
+      model       TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_qa_user_created
+      ON share_qa ("userId", "createdAt" DESC)
+  `);
+
   // ── Precious metals ───────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS metal_purchases (

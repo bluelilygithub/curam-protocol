@@ -1648,24 +1648,87 @@ function SignalBadge({ signal }) {
 // ─── Questions tab ────────────────────────────────────────────────────────────
 
 const SUGGESTED_SHARE_QUESTIONS = [
+  'If I sold all shares, what rate of return would I have achieved over the life of the holdings?',
   'What is my largest position by value?',
   'Which holdings are down versus cost basis?',
   'Summarise today\'s movers across my portfolio.',
   'What is my total realised and unrealised P&L?',
   'How is my portfolio allocated across ASX vs US exchanges?',
-  'What did the latest news briefings say about my holdings?',
 ];
 
 function QuestionsTab() {
   const [question, setQuestion] = React.useState('');
   const [asking, setAsking] = React.useState(false);
   const [error, setError] = React.useState(null);
-  const [turns, setTurns] = React.useState([]);
+  const [archive, setArchive] = React.useState([]);
+  const [archiveLoading, setArchiveLoading] = React.useState(true);
+  const [selectedIds, setSelectedIds] = React.useState(() => new Set());
+  const [openId, setOpenId] = React.useState(null);
+  const [deleting, setDeleting] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
   const bottomRef = React.useRef(null);
 
+  const loadArchive = React.useCallback(async () => {
+    setArchiveLoading(true);
+    try {
+      const res = await api.get('/api/shares/ask');
+      const data = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(data.error || 'Failed to load question archive');
+      setArchive(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Failed to load archive');
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [turns.length, asking]);
+    loadArchive();
+  }, [loadArchive]);
+
+  React.useEffect(() => {
+    if (openId != null) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [openId, asking]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setConfirmDelete(false);
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === archive.length) return new Set();
+      return new Set(archive.map((row) => row.id));
+    });
+    setConfirmDelete(false);
+  };
+
+  const deleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length || deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await api.delete('/api/shares/ask', { ids });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      setArchive((prev) => prev.filter((row) => !selectedIds.has(row.id)));
+      if (openId != null && selectedIds.has(openId)) setOpenId(null);
+      setSelectedIds(new Set());
+      setConfirmDelete(false);
+    } catch (err) {
+      setError(err.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const ask = async (raw) => {
     const q = String(raw || '').trim();
@@ -1673,70 +1736,73 @@ function QuestionsTab() {
     setAsking(true);
     setError(null);
     setQuestion('');
-    setTurns((prev) => [...prev, { role: 'user', content: q }]);
     try {
-      const history = turns.slice(-6).map((t) => ({ role: t.role, content: t.content }));
+      const history = archive
+        .slice(0, 3)
+        .slice()
+        .reverse()
+        .flatMap((row) => [
+          { role: 'user', content: row.question },
+          { role: 'assistant', content: row.answer },
+        ])
+        .slice(0, 6);
       const res = await api.post('/api/shares/ask', { question: q, history });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Ask failed (${res.status})`);
-      setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '' }]);
+      const row = {
+        id: data.id,
+        question: q,
+        answer: data.answer || '',
+        model: data.model || null,
+        createdAt: data.createdAt || new Date().toISOString(),
+      };
+      setArchive((prev) => [row, ...prev.filter((r) => r.id !== row.id)]);
+      setOpenId(row.id);
     } catch (err) {
       setError(err.message || 'Ask failed');
-      setTurns((prev) => prev.slice(0, -1));
       setQuestion(q);
     } finally {
       setAsking(false);
     }
   };
 
+  const fmtWhen = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('en-AU', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch {
+      return String(iso).slice(0, 16);
+    }
+  };
+
+  const openRow = archive.find((r) => r.id === openId) || null;
+  const allSelected = archive.length > 0 && selectedIds.size === archive.length;
+
   return (
     <div className="max-w-3xl">
       <div className="mb-6">
         <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Ask about your portfolio</p>
         <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Answers are grounded in your holdings, cash, trades, snapshots, and news briefings — not live web research.
+          Answers use your holdings, trades, and precomputed lifetime return figures. Saved questions appear in the archive below.
         </p>
       </div>
 
-      {!turns.length && (
-        <div className="mb-6 flex flex-wrap gap-2">
-          {SUGGESTED_SHARE_QUESTIONS.map((q) => (
-            <button
-              key={q}
-              type="button"
-              disabled={asking}
-              onClick={() => ask(q)}
-              className="text-xs px-3 py-1.5 rounded-lg border text-left hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="space-y-4 mb-6">
-        {turns.map((t, i) => (
-          <div
-            key={`${t.role}-${i}`}
-            className="p-3 rounded-lg border"
-            style={{
-              borderColor: 'var(--color-border)',
-              background: t.role === 'user' ? 'var(--color-surface)' : 'var(--color-bg)',
-            }}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {SUGGESTED_SHARE_QUESTIONS.map((q) => (
+          <button
+            key={q}
+            type="button"
+            disabled={asking}
+            onClick={() => ask(q)}
+            className="text-xs px-3 py-1.5 rounded-lg border text-left hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
           >
-            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
-              {t.role === 'user' ? 'You' : 'Shares data'}
-            </p>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>
-              {t.content}
-            </p>
-          </div>
+            {q}
+          </button>
         ))}
-        {asking && (
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Looking up your Shares data…</p>
-        )}
-        <div ref={bottomRef} />
       </div>
 
       {error && (
@@ -1746,7 +1812,7 @@ function QuestionsTab() {
       )}
 
       <form
-        className="flex gap-2 items-end"
+        className="flex gap-2 items-end mb-8"
         onSubmit={(e) => {
           e.preventDefault();
           ask(question);
@@ -1757,7 +1823,7 @@ function QuestionsTab() {
           onChange={(e) => setQuestion(e.target.value)}
           rows={2}
           disabled={asking}
-          placeholder="e.g. How much have I made on NVDA overall?"
+          placeholder="e.g. If I sold everything today, what return have I achieved?"
           className="flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none resize-y min-h-[2.75rem]"
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           onKeyDown={(e) => {
@@ -1777,15 +1843,136 @@ function QuestionsTab() {
         </button>
       </form>
 
-      {turns.length > 0 && (
-        <button
-          type="button"
-          onClick={() => { setTurns([]); setError(null); }}
-          className="mt-3 text-xs hover:opacity-70 transition-opacity duration-200"
-          style={{ color: 'var(--color-muted)' }}
+      {asking && (
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>Looking up your Shares data…</p>
+      )}
+
+      {openRow && (
+        <div
+          ref={bottomRef}
+          className="mb-8 p-4 rounded-lg border space-y-3"
+          style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
         >
-          Clear conversation
-        </button>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Selected question</p>
+              <p className="text-sm font-medium mt-1" style={{ color: 'var(--color-text)' }}>{openRow.question}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenId(null)}
+              className="text-xs hover:opacity-70 transition-opacity duration-200 flex-shrink-0"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              Close
+            </button>
+          </div>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>
+            {openRow.answer}
+          </p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {fmtWhen(openRow.createdAt)}
+            {openRow.model ? ` · ${openRow.model}` : ''}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Question archive</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            Select rows to delete. Click a question to open the answer.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {archive.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="text-xs px-2.5 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {allSelected ? 'Clear selection' : 'Select all'}
+            </button>
+          )}
+          {selectedIds.size > 0 && !confirmDelete && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="text-xs px-2.5 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200"
+              style={{ borderColor: '#ef4444', color: '#ef4444' }}
+            >
+              Delete selected ({selectedIds.size})
+            </button>
+          )}
+          {confirmDelete && (
+            <span className="flex items-center gap-2 text-xs">
+              <span style={{ color: 'var(--color-muted)' }}>Delete {selectedIds.size}?</span>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={deleteSelected}
+                className="hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+                style={{ color: '#ef4444' }}
+              >
+                {deleting ? 'Deleting…' : 'Yes'}
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+                className="hover:opacity-70 transition-opacity duration-200"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                No
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {archiveLoading ? (
+        <p className="text-sm py-6" style={{ color: 'var(--color-muted)' }}>Loading archive…</p>
+      ) : !archive.length ? (
+        <p className="text-sm py-8 text-center" style={{ color: 'var(--color-muted)' }}>
+          No saved questions yet. Ask something above to start the archive.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {archive.map((row) => {
+            const selected = selectedIds.has(row.id);
+            const isOpen = openId === row.id;
+            return (
+              <div
+                key={row.id}
+                className="flex items-start gap-3 px-3 py-2.5 rounded-lg border"
+                style={{
+                  borderColor: isOpen ? 'var(--color-primary)' : 'var(--color-border)',
+                  background: selected ? 'var(--color-surface)' : 'var(--color-bg)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => toggleSelect(row.id)}
+                  className="mt-1"
+                  aria-label={`Select question ${row.id}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setOpenId(isOpen ? null : row.id)}
+                  className="flex-1 text-left hover:opacity-70 transition-opacity duration-200 min-w-0"
+                >
+                  <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>{row.question}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {fmtWhen(row.createdAt)}
+                    {isOpen ? ' · open' : ''}
+                  </p>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

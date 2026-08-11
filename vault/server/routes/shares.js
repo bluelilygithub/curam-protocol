@@ -7,7 +7,7 @@ const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
 const { checkDailyDropAlerts } = require('../cron/sharesCron');
 const { generateObservation } = require('../services/sharesNewsService');
-const { answerSharesQuestion } = require('../services/sharesAskService');
+const { answerSharesQuestion, listQa, deleteQa } = require('../services/sharesAskService');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
 
@@ -64,16 +64,45 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// GET /api/shares/ask — archived Q&A for this user
+router.get('/ask', async (req, res) => {
+  try {
+    const rows = await listQa(req.user.id);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/shares/ask — Q&A grounded in portfolio / news / trades dataset
 router.post('/ask', async (req, res) => {
   try {
     const { question, history } = req.body || {};
     const result = await answerSharesQuestion(req.user.id, question, { history });
-    res.json({ answer: result.answer, model: result.model });
+    res.json({
+      id: result.id,
+      answer: result.answer,
+      model: result.model,
+      createdAt: result.createdAt,
+    });
   } catch (err) {
     const status = /required|too long/i.test(err.message || '') ? 400 : 500;
     console.error('[shares] ask error:', err.message);
     res.status(status).json({ error: err.message || 'Ask failed' });
+  }
+});
+
+// DELETE /api/shares/ask — body { ids: number[] } delete archived Q&A
+router.delete('/ask', async (req, res) => {
+  try {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    const result = await deleteQa(req.user.id, ids);
+    res.json({ ok: true, deleted: result.deleted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
