@@ -124,6 +124,55 @@ async function callCompareModel(userId, modelId, prompt, maxTokens) {
   return result;
 }
 
+/** Rank by deterministic pre_score when the compare model returns empty/invalid JSON. */
+function fallbackComparisonFromPreScores(primary, stretch, query, tierOpts = {}) {
+  const primaryScored = attachPreScores(primary);
+  const stretchScored = attachPreScores(stretch);
+  const rankedPrimary = primaryScored
+    .map((c, idx) => ({ c, idx }))
+    .sort((a, b) => (b.c.pre_score ?? 0) - (a.c.pre_score ?? 0));
+  const rankedStretch = stretchScored
+    .map((c, idx) => ({ c, idx }))
+    .sort((a, b) => (b.c.pre_score ?? 0) - (a.c.pre_score ?? 0));
+
+  const toPick = ({ c, idx }, i) => ({
+    rank: i + 1,
+    candidate_id: idx + 1,
+    asin: c.asin,
+    title: c.title,
+    price: c.price_display || c.price,
+    rating: c.rating,
+    review_count: c.review_count,
+    key_features: (c.feature_bullets || []).slice(0, 4),
+    value_score: c.pre_score,
+    value_rationale: 'Ranked by price, rating, and review volume (AI compare unavailable).',
+  });
+
+  const top3 = rankedPrimary.slice(0, 3).map(toPick);
+  const stretch_suggestions = rankedStretch.slice(0, 2).map(({ c, idx }, i) => ({
+    candidate_id: idx + 1,
+    asin: c.asin,
+    title: c.title,
+    price: c.price_display || c.price,
+    rating: c.rating,
+    review_count: c.review_count,
+    key_features: (c.feature_bullets || []).slice(0, 4),
+    value_score: c.pre_score,
+    stretch_rationale: 'Shown from listing stats (AI compare unavailable).',
+  }));
+
+  const tierNote = tierOpts.tierLabel ? ` for ${tierOpts.tierLabel}` : '';
+  return {
+    summary: `Top picks${tierNote} for “${query}” ranked from listing price, star rating, and review count.`,
+    priority_features: [],
+    selection_summary: 'AI comparison returned no usable response, so ranking used listing stats only. Try again or switch model in Settings for richer rationale.',
+    feature_table: [],
+    top3,
+    stretch_suggestions,
+    ranking_fallback: 'pre_score',
+  };
+}
+
 async function scoreAndRank(userId, query, primary, stretch, budget, modelId, tierOpts = {}) {
   const attempts = [
     { prompt: buildComparePrompt(query, primary, stretch, budget, { ...tierOpts, compact: false }), compact: false },
@@ -142,6 +191,18 @@ async function scoreAndRank(userId, query, primary, stretch, budget, modelId, ti
       console.warn(`[productScout] compare attempt ${i + 1} failed:`, err.message);
       if (i === attempts.length - 1) break;
     }
+  }
+
+  if (primary.length || stretch.length) {
+    console.warn(
+      '[productScout] compare LLM failed — falling back to pre_score ranking:',
+      lastErr?.message || 'unknown'
+    );
+    return enrichComparison(
+      fallbackComparisonFromPreScores(primary, stretch, query, tierOpts),
+      primary,
+      stretch
+    );
   }
 
   throw lastErr || new Error('Product comparison failed');

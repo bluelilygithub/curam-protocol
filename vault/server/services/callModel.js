@@ -91,7 +91,12 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
   const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content: userPrompt }] };
   if (system) params.system = system;
   const response = await client.messages.create(params);
-  const text = response.content[0]?.text?.trim() || '';
+  // Prefer all text blocks — content[0] may be thinking/tool_use on newer models.
+  const text = (response.content || [])
+    .filter((b) => b?.type === 'text' || typeof b?.text === 'string')
+    .map((b) => b.text || '')
+    .join('')
+    .trim();
   if (!returnUsage) return text;
   return {
     text,
