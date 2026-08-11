@@ -240,55 +240,126 @@ function normalizeSelectedTierKeys(selectedTierKeys, framework) {
   return keys;
 }
 
-function buildBriefPrompt(query, userFeatures, budgetHint) {
+function buildBriefPrompt(query, userFeatures, budgetHint, { compact = false } = {}) {
   const featuresBlock = userFeatures.length
     ? `Features the shopper thinks they need:\n${userFeatures.map((f) => `- ${f}`).join('\n')}\n`
     : '';
 
   const budgetBlock = budgetHint
-    ? `Budget hint: around $${budgetHint} AUD — use this to anchor tier 1 pricing, not as a hard cap.\n`
+    ? `Budget hint: around $${budgetHint} AUD — use this to anchor Essentials pricing, not as a hard cap.\n`
     : '';
+
+  const filterCount = compact ? '2–3' : '2–5';
+  const featureCount = compact
+    ? '2–4 additional items total (mix of specs + capabilities)'
+    : '4–8 additional items (specs + capabilities)';
+  const whyLimit = compact ? 'why_it_matters: max 12 words each.' : 'why_it_matters: one short sentence each.';
 
   return `Shopping goal: ${query}
 ${featuresBlock}${budgetBlock}
 Return a feature brief and 4-tier framework for Amazon AU-style pricing (AUD).
+${whyLimit}
+CRITICAL: Emit fields in this exact order so truncation still keeps tiers: summary → tier_framework → amazon_sidebar_filters → features.
 
-STEP 1 — amazon_sidebar_filters (REQUIRED for every product, 2–5 items):
-Imagine this exact search on Amazon. What filter dimensions appear in the LEFT SIDEBAR? Every category has them — they are how shoppers narrow results before comparing listings.
-- Infer the correct filters for THIS query (not a fixed list). Examples only:
-  · Headphones → wearing style, connection type
-  · Laptops → screen size, RAM, storage
-  · Monitors → screen size, resolution, panel type
-  · Drills → power type, chuck size
-  · Coffee machines → machine type, capacity
-  · Shoes → style/type, gender/fit (if relevant)
-  · Cameras → camera type (mirrorless, DSLR, compact, action)
-Include the primary type/form-factor/style filter first. Each item: kind "spec", usually spec_type "enum", spec_options with "Any" or "No preference" plus 3–6 realistic Amazon values, spec_value defaulting to Any.
+1. summary — 1–2 sentences on what matters for THIS use case.
+2. tier_framework — REQUIRED, exactly 4 tiers cheapest→pro. Keys must be essentials, smart_upgrade, enthusiast, pro.
+   Each: {"key":"...","label":"...","subtitle":"short tagline","price_min":40,"price_max":80,"feature_adds":["what this tier adds"]}
+   Non-overlapping bands; each price_min above previous price_max. Pro may use a high price_min and omit price_max (null).
+3. amazon_sidebar_filters — ${filterCount} Amazon left-sidebar dimensions for THIS query (type/form-factor first).
+   Each: kind "spec", usually spec_type "enum", spec_options with "Any" plus 3–5 realistic values, spec_value "Any".
+4. features — ${featureCount}. Do not duplicate sidebar filters.
+   a) kind "spec" — measurable (battery h, weight kg, etc.)
+   b) kind "feature" — yes/no capabilities (ANC, waterproof, etc.)
 
-STEP 2 — features (additional specs + capabilities):
-   a) kind "spec" — numeric or extra measurable specs not already in amazon_sidebar_filters (battery hours, weight kg, wattage, etc.)
-   b) kind "feature" — 4–10 yes/no capabilities (noise cancelling, waterproof, foldable, smart TV, etc.)
-Do not duplicate amazon_sidebar_filters here. Capabilities stay kind "feature".
+Spec shape: {"feature":"<label>","kind":"spec","importance":"must|nice","why_it_matters":"...","spec_type":"numeric_min|numeric_max|enum|text","spec_unit":"<unit or null>","spec_value":<default>,"spec_options":[...]}
 
-3. summary — 2–3 sentences on what matters most for THIS use case.
-4. tier_framework — exactly 4 tiers in order (cheapest to pro). Each:
-   {"key":"essentials|smart_upgrade|enthusiast|pro","label":"Essentials","subtitle":"short tagline","price_min":40,"price_max":80,"feature_adds":["what this tier adds vs below"]}
-
-Spec object shape (sidebar + numeric specs):
-{"feature":"<label>","kind":"spec","importance":"must|nice","why_it_matters":"...","spec_type":"numeric_min|numeric_max|enum|text","spec_unit":"<unit or null>","spec_value":<default>,"spec_options":[...]}
-
-Tier keys must be: essentials, smart_upgrade, enthusiast, pro.
-Labels suggested: Essentials, Smart upgrade, Enthusiast, Pro / no budget.
-Ensure price bands do not overlap awkwardly — each tier price_min should be above the previous tier price_max.
-
-JSON only:
-{"summary":"...","amazon_sidebar_filters":[{"feature":"Wearing style","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"enum","spec_unit":null,"spec_value":"Any","spec_options":["Any","Over-ear","On-ear","In-ear / earbuds"]},{"feature":"Connection","kind":"spec","importance":"nice","why_it_matters":"...","spec_type":"enum","spec_unit":null,"spec_value":"Any","spec_options":["Any","True wireless","Wireless","Wired"]}],"features":[{"feature":"Battery life","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min","spec_unit":"h","spec_value":30,"spec_options":[20,30,40,50,60]},{"feature":"Hybrid ANC","kind":"feature","importance":"must","why_it_matters":"..."}],"tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]}]}`;
+JSON only (tier_framework BEFORE filters/features):
+{"summary":"...","tier_framework":[{"key":"essentials","label":"Essentials","subtitle":"...","price_min":40,"price_max":80,"feature_adds":["..."]},{"key":"smart_upgrade","label":"Smart upgrade","subtitle":"...","price_min":80,"price_max":150,"feature_adds":["..."]},{"key":"enthusiast","label":"Enthusiast","subtitle":"...","price_min":150,"price_max":300,"feature_adds":["..."]},{"key":"pro","label":"Pro / no budget","subtitle":"...","price_min":300,"price_max":null,"feature_adds":["..."]}],"amazon_sidebar_filters":[{"feature":"Wearing style","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"enum","spec_unit":null,"spec_value":"Any","spec_options":["Any","Over-ear","On-ear","In-ear / earbuds"]}],"features":[{"feature":"Battery life","kind":"spec","importance":"must","why_it_matters":"...","spec_type":"numeric_min","spec_unit":"h","spec_value":30,"spec_options":[20,30,40,50]},{"feature":"Active noise cancelling","kind":"feature","importance":"nice","why_it_matters":"..."}]}`;
 }
 
-async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM } = {}) {
+/** Sensible AUD bands when the model omits tiers (scaled from optional budget hint). */
+function defaultTierFramework(budgetHint) {
+  const anchor = Number.isFinite(Number(budgetHint)) && Number(budgetHint) > 0
+    ? Number(budgetHint)
+    : 120;
+  const eMax = Math.max(30, Math.round(anchor * 0.4 / 5) * 5);
+  const sMax = Math.max(eMax + 25, Math.round(anchor * 0.85 / 5) * 5);
+  const enMax = Math.max(sMax + 40, Math.round(anchor * 1.6 / 5) * 5);
+  const proMin = enMax;
+
+  return [
+    {
+      key: 'essentials',
+      label: 'Essentials',
+      subtitle: 'Solid basics',
+      price_min: null,
+      price_max: eMax,
+      feature_adds: ['Core function at the lowest sensible price'],
+    },
+    {
+      key: 'smart_upgrade',
+      label: 'Smart upgrade',
+      subtitle: 'Best everyday value',
+      price_min: eMax,
+      price_max: sMax,
+      feature_adds: ['Noticeably better build, comfort, or battery'],
+    },
+    {
+      key: 'enthusiast',
+      label: 'Enthusiast',
+      subtitle: 'Premium features',
+      price_min: sMax,
+      price_max: enMax,
+      feature_adds: ['Stronger specs and nicer experience'],
+    },
+    {
+      key: 'pro',
+      label: 'Pro / no budget',
+      subtitle: 'Top of range',
+      price_min: proMin,
+      price_max: null,
+      feature_adds: ['Flagship performance with few compromises'],
+    },
+  ];
+}
+
+function extractTierFramework(parsed) {
+  if (!parsed || typeof parsed !== 'object') return [];
+  const raw = parsed.tier_framework
+    || parsed.tierFramework
+    || parsed.tiers
+    || parsed.price_tiers
+    || parsed.priceTiers
+    || [];
+  return Array.isArray(raw) ? raw.filter((t) => t && (t.key || t.label || t.price_max != null || t.price_min != null)) : [];
+}
+
+function extractSidebarFilters(parsed) {
+  const raw = parsed?.amazon_sidebar_filters
+    || parsed?.amazonSidebarFilters
+    || parsed?.sidebar_filters
+    || [];
+  return Array.isArray(raw) ? raw : [];
+}
+
+function extractFeaturesList(parsed) {
+  const raw = parsed?.features || parsed?.feature_list || [];
+  return Array.isArray(raw) ? raw : [];
+}
+
+function featuresFromUserInput(userFeatures) {
+  return (userFeatures || []).slice(0, 8).map((f) => ({
+    feature: String(f).trim(),
+    kind: 'feature',
+    importance: 'must',
+    why_it_matters: 'You listed this as a need',
+  })).filter((f) => f.feature);
+}
+
+async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM, maxTokens = 8192 } = {}) {
   const result = await callModel(modelId, prompt, {
     system,
-    maxTokens: 8192,
+    maxTokens,
     returnUsage: true,
   });
   logUsage({
@@ -301,25 +372,41 @@ async function callGuideModel(userId, modelId, prompt, { system = BRIEF_SYSTEM }
   return result.text;
 }
 
-function parseBriefResponse(text) {
-  const parsed = parseModelJson(String(text || '').trim());
-  if (!parsed?.tier_framework?.length) throw new Error('Feature brief missing tier framework');
+function parseBriefResponse(text, { userFeatures = [], budgetHint = null, allowDefaultTiers = false } = {}) {
+  const rawParsed = parseModelJson(String(text || '').trim());
+  const parsed = (rawParsed && typeof rawParsed === 'object' && !Array.isArray(rawParsed))
+    ? rawParsed
+    : (allowDefaultTiers ? {} : null);
+  if (!parsed) {
+    throw new Error('Feature brief missing tier framework');
+  }
 
-  const sidebar = parsed.amazon_sidebar_filters || [];
-  const rest = parsed.features || [];
-  const merged = mergeBriefFeatures(sidebar, rest);
+  let tiers = extractTierFramework(parsed);
+  if (!tiers.length && allowDefaultTiers) {
+    console.warn('[productScout] Brief missing tier_framework — using default AUD bands');
+    tiers = defaultTierFramework(budgetHint);
+  }
+  if (!tiers.length) throw new Error('Feature brief missing tier framework');
+
+  const sidebar = extractSidebarFilters(parsed);
+  const rest = extractFeaturesList(parsed);
+  let merged = mergeBriefFeatures(sidebar, rest);
+  if (!merged.length && userFeatures.length) {
+    merged = featuresFromUserInput(userFeatures);
+  }
   if (!merged.length) throw new Error('Feature brief missing features list');
   if (!sidebar.length) {
     console.warn('[productScout] Brief missing amazon_sidebar_filters — using merged features only');
   }
 
-  parsed.tier_framework = parsed.tier_framework.slice(0, 4).map((t, i) => ({
-    ...t,
-    key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
-  }));
-  parsed.features = merged;
-  delete parsed.amazon_sidebar_filters;
-  return parsed;
+  return {
+    summary: String(parsed.summary || '').trim(),
+    tier_framework: tiers.slice(0, 4).map((t, i) => ({
+      ...t,
+      key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
+    })),
+    features: merged,
+  };
 }
 
 function tierMinPrice(frame, index, framework) {
@@ -416,15 +503,67 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
   }
 
   const { standard: modelId } = await getModelsForUser(userId);
-  const text = await callGuideModel(userId, modelId, buildBriefPrompt(q, userFeatures, hint));
-  const brief = parseBriefResponse(text);
+  const attempts = [
+    { compact: false, maxTokens: 8192 },
+    { compact: true, maxTokens: 4096 },
+  ];
 
-  return {
-    query: q,
-    userFeatures,
-    budgetHint: hint,
-    feature_brief: brief,
-  };
+  let lastText = '';
+  let lastErr;
+  for (let i = 0; i < attempts.length; i += 1) {
+    const { compact, maxTokens } = attempts[i];
+    try {
+      lastText = await callGuideModel(
+        userId,
+        modelId,
+        buildBriefPrompt(q, userFeatures, hint, { compact }),
+        { maxTokens }
+      );
+      const brief = parseBriefResponse(lastText, {
+        userFeatures,
+        budgetHint: hint,
+        allowDefaultTiers: false,
+      });
+      return {
+        query: q,
+        userFeatures,
+        budgetHint: hint,
+        feature_brief: brief,
+      };
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[productScout] guide brief attempt ${i + 1} failed:`, err.message);
+    }
+  }
+
+  // Last resort: keep whatever the model returned for features, fill default AUD tiers.
+  try {
+    const brief = parseBriefResponse(lastText || '{}', {
+      userFeatures,
+      budgetHint: hint,
+      allowDefaultTiers: true,
+    });
+    return {
+      query: q,
+      userFeatures,
+      budgetHint: hint,
+      feature_brief: brief,
+    };
+  } catch {
+    if (userFeatures.length) {
+      return {
+        query: q,
+        userFeatures,
+        budgetHint: hint,
+        feature_brief: {
+          summary: `Shopping for ${q}.`,
+          tier_framework: defaultTierFramework(hint),
+          features: featuresFromUserInput(userFeatures),
+        },
+      };
+    }
+    throw lastErr || new Error('Feature brief missing tier framework');
+  }
 }
 
 /**

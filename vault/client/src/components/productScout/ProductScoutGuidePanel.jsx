@@ -48,7 +48,10 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast('Describe what you are shopping for', 'error');
       return;
     }
-    startProcessing('Building feature brief…', 'Analysing your needs and planning price tiers.');
+    startProcessing(
+      'Building feature brief…',
+      'Planning must-have features and four price tiers — not searching Amazon yet.',
+    );
     setError(null);
     try {
       const res = await api.post('/api/product-scout/guide/brief', {
