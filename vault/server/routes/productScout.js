@@ -20,9 +20,12 @@ function handle(fn) {
       const data = await fn(req);
       res.json(data);
     } catch (err) {
-      console.error('[productScout]', err.message);
+      console.error('[productScout]', err.message, err.diagnostics || '');
       const status = err.status || (err.message.includes('not set') ? 503 : 500);
-      res.status(status).json({ error: err.message || 'Amazon Search failed' });
+      res.status(status).json({
+        error: err.message || 'Amazon Search failed',
+        ...(err.diagnostics ? { diagnostics: err.diagnostics } : {}),
+      });
     }
   };
 }
@@ -37,6 +40,12 @@ router.get('/config-check', handle(async () => {
     rainforest,
     llm: anthropic || gemini,
     search,
+    // Deploy fingerprint — confirms compare fallback + diagnostics build is live
+    scoutBuild: {
+      compareFallback: true,
+      diagnostics: true,
+      version: 'scout-diag-1',
+    },
     ...settings,
   };
 }));

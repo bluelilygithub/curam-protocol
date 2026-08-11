@@ -82,12 +82,18 @@ Return JSON only:
 
 function parseComparisonResponse(text, { primary, stretch } = {}) {
   const raw = String(text || '').trim();
-  if (!raw) throw new Error('LLM returned an empty response — try again or use a different model in Settings');
+  if (!raw) {
+    const err = new Error('LLM returned an empty response — try again or use a different model in Settings');
+    err.code = 'llm_empty';
+    throw err;
+  }
 
   const parsed = parseModelJson(raw);
   if (!parsed || typeof parsed !== 'object') {
     const preview = raw.slice(0, 200).replace(/\s+/g, ' ');
-    throw new Error(`LLM did not return valid JSON. Preview: ${preview || '(empty)'}`);
+    const err = new Error(`LLM did not return valid JSON. Preview: ${preview || '(empty)'}`);
+    err.code = 'llm_bad_json';
+    throw err;
   }
 
   if (!Array.isArray(parsed.top3)) parsed.top3 = [];
@@ -97,20 +103,39 @@ function parseComparisonResponse(text, { primary, stretch } = {}) {
   const hasStretch = stretch?.length > 0;
 
   if (hasPrimary && !parsed.top3.length) {
-    throw new Error('LLM comparison missing top3 array');
+    const err = new Error('LLM comparison missing top3 array');
+    err.code = 'llm_missing_top3';
+    throw err;
   }
   if (!hasPrimary && !hasStretch && !parsed.top3.length && !parsed.stretch_suggestions.length) {
-    throw new Error('LLM returned no product recommendations');
+    const err = new Error('LLM returned no product recommendations');
+    err.code = 'llm_no_picks';
+    throw err;
   }
 
   return parsed;
 }
 
 async function callCompareModel(userId, modelId, prompt, maxTokens) {
+  console.log('[productScout] compare LLM call', {
+    modelId,
+    maxTokens,
+    promptLen: String(prompt || '').length,
+    userId,
+  });
+
   const result = await callModel(modelId, prompt, {
     system: COMPARE_SYSTEM,
     maxTokens,
     returnUsage: true,
+  });
+
+  console.log('[productScout] compare LLM result', {
+    modelId: result.model || modelId,
+    textLen: String(result.text || '').length,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    diagnostics: result.diagnostics || null,
   });
 
   logUsage({
@@ -180,15 +205,22 @@ async function scoreAndRank(userId, query, primary, stretch, budget, modelId, ti
   ];
 
   let lastErr;
+  let lastDiagnostics = null;
   for (let i = 0; i < attempts.length; i += 1) {
     try {
-      const { prompt } = attempts[i];
-      const result = await callCompareModel(userId, modelId, prompt, 8192);
+      const { prompt, compact } = attempts[i];
+      const result = await callCompareModel(userId, modelId, prompt, compact ? 4096 : 8192);
+      lastDiagnostics = result.diagnostics || {
+        modelId,
+        textLen: String(result.text || '').length,
+        empty: !String(result.text || '').trim(),
+      };
       const parsed = parseComparisonResponse(result.text, { primary, stretch });
       return enrichComparison(parsed, primary, stretch);
     } catch (err) {
       lastErr = err;
-      console.warn(`[productScout] compare attempt ${i + 1} failed:`, err.message);
+      if (err.diagnostics) lastDiagnostics = err.diagnostics;
+      console.warn(`[productScout] compare attempt ${i + 1} failed:`, err.message, lastDiagnostics || '');
       if (i === attempts.length - 1) break;
     }
   }
@@ -196,16 +228,46 @@ async function scoreAndRank(userId, query, primary, stretch, budget, modelId, ti
   if (primary.length || stretch.length) {
     console.warn(
       '[productScout] compare LLM failed — falling back to pre_score ranking:',
-      lastErr?.message || 'unknown'
+      {
+        message: lastErr?.message || 'unknown',
+        modelId,
+        primary: primary.length,
+        stretch: stretch.length,
+        tierLabel: tierOpts.tierLabel || null,
+        diagnostics: lastDiagnostics,
+      }
     );
-    return enrichComparison(
+    await captureIf(true, {
+      userId,
+      source: 'productScout',
+      category: 'alert',
+      fingerprint: makeFingerprint('productScout', `compare-fallback:${modelId}:${String(query).slice(0, 30)}`),
+      title: 'Amazon Search: AI compare fell back to listing stats',
+      body: `${lastErr?.message || 'Empty/invalid LLM compare'} · model=${modelId} · candidates=${primary.length}`,
+      context: JSON.stringify(lastDiagnostics || {}).slice(0, 500),
+    });
+    const comparison = enrichComparison(
       fallbackComparisonFromPreScores(primary, stretch, query, tierOpts),
       primary,
       stretch
     );
+    comparison.diagnostics = {
+      compareFallback: 'pre_score',
+      lastError: lastErr?.message || null,
+      modelId,
+      ...(lastDiagnostics || {}),
+    };
+    return comparison;
   }
 
-  throw lastErr || new Error('Product comparison failed');
+  const fail = lastErr || new Error('Product comparison failed');
+  fail.diagnostics = {
+    modelId,
+    primary: primary.length,
+    stretch: stretch.length,
+    ...(lastDiagnostics || {}),
+  };
+  throw fail;
 }
 
 function enrichComparison(parsed, primary, stretch) {
@@ -302,6 +364,7 @@ async function executeScoutComparison(userId, query, {
 
   let allCandidates = poolIn;
   if (!allCandidates?.length) {
+    console.log('[productScout] Rainforest search', { query: q, domain, maxResults: 10, freeDelivery, within2Days });
     allCandidates = await searchProducts(q, {
       maxResults: 10,
       amazonDomain: domain,
@@ -321,6 +384,19 @@ async function executeScoutComparison(userId, query, {
   const primaryScored = attachPreScores(primary);
   const stretchScored = attachPreScores(stretch);
 
+  console.log('[productScout] scout pool', {
+    query: q,
+    tierLabel: tierLabel || null,
+    amazonDomain: domain,
+    modelId: model,
+    poolIn: Boolean(poolIn?.length),
+    candidates: allCandidates.length,
+    primary: primaryScored.length,
+    stretch: stretchScored.length,
+    maxPrice: hasBudget ? max : null,
+    samplePrices: allCandidates.slice(0, 5).map((c) => c.price_display || c.price),
+  });
+
   if (!primaryScored.length && !stretchScored.length) {
     return {
       error: hasBudget
@@ -330,18 +406,45 @@ async function executeScoutComparison(userId, query, {
       comparison: { top3: [], stretch_suggestions: [] },
       budget,
       external_alternatives: [],
+      diagnostics: {
+        stage: 'budget_filter',
+        amazonDomain: domain,
+        modelId: model,
+        candidates: allCandidates.length,
+        maxPrice: hasBudget ? max : null,
+      },
     };
   }
 
-  const comparison = await scoreAndRank(
-    userId,
-    q,
-    primaryScored,
-    stretchScored,
-    budget,
-    model,
-    { tierLabel, tierFeatures, shopperPriorities }
-  );
+  let comparison;
+  try {
+    comparison = await scoreAndRank(
+      userId,
+      q,
+      primaryScored,
+      stretchScored,
+      budget,
+      model,
+      { tierLabel, tierFeatures, shopperPriorities }
+    );
+  } catch (err) {
+    console.error('[productScout] scoreAndRank failed', {
+      message: err.message,
+      diagnostics: err.diagnostics || null,
+      tierLabel: tierLabel || null,
+      modelId: model,
+    });
+    err.diagnostics = {
+      stage: 'score_and_rank',
+      amazonDomain: domain,
+      modelId: model,
+      candidates: allCandidates.length,
+      primary: primaryScored.length,
+      ...(err.diagnostics || {}),
+    };
+    throw err;
+  }
+
   const top3 = comparison.top3 || [];
   const stretchSuggestions = comparison.stretch_suggestions || [];
   const winner = top3[0] || stretchSuggestions[0] || null;
@@ -356,6 +459,15 @@ async function executeScoutComparison(userId, query, {
     budget,
     comparison,
     external_alternatives,
+    diagnostics: {
+      stage: 'ok',
+      amazonDomain: domain,
+      modelId: model,
+      candidates: allCandidates.length,
+      primary: primaryScored.length,
+      top3: top3.length,
+      compareFallback: comparison.ranking_fallback || comparison.diagnostics?.compareFallback || null,
+    },
   };
 }
 

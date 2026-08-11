@@ -470,23 +470,63 @@ async function scoutTier(userId, query, frame, index, framework, allCandidates, 
   const priceMin = tierMinPrice(frame, index, framework);
   const priceMax = frame.price_max != null ? Number(frame.price_max) : null;
   const isPro = frame.key === 'pro' || index === framework.length - 1;
+  const key = frame.key || TIER_KEYS[index];
 
   let band = filterByPriceBand(allCandidates, priceMin, isPro ? null : priceMax);
+  let bandSource = 'strict';
   if (!band.length && priceMin != null) {
     band = filterByPriceBand(allCandidates, null, isPro ? null : priceMax);
+    bandSource = 'max_only';
   }
-  if (!band.length) band = [...allCandidates];
+  if (!band.length) {
+    band = [...allCandidates];
+    bandSource = 'all_candidates';
+  }
 
-  return executeScoutComparison(userId, query, {
-    candidates: band,
-    maxPrice: isPro ? null : priceMax,
-    amazonDomain,
+  console.log('[productScout] tier band', {
+    key,
+    label: frame.label,
+    priceMin,
+    priceMax: isPro ? null : priceMax,
+    pool: allCandidates.length,
+    band: band.length,
+    bandSource,
     modelId,
-    tierLabel: frame.label,
-    tierFeatures: frame.feature_adds,
-    shopperPriorities,
-    includeExternals: false,
+    amazonDomain,
   });
+
+  try {
+    return await executeScoutComparison(userId, query, {
+      candidates: band,
+      maxPrice: isPro ? null : priceMax,
+      amazonDomain,
+      modelId,
+      tierLabel: frame.label,
+      tierFeatures: frame.feature_adds,
+      shopperPriorities,
+      includeExternals: false,
+    });
+  } catch (err) {
+    console.error('[productScout] tier scout failed', {
+      key,
+      message: err.message,
+      diagnostics: err.diagnostics || null,
+    });
+    return {
+      error: err.message || 'Tier scout failed',
+      candidates_fetched: allCandidates.length,
+      comparison: { top3: [], stretch_suggestions: [] },
+      diagnostics: {
+        stage: 'tier_scout',
+        key,
+        band: band.length,
+        bandSource,
+        modelId,
+        amazonDomain,
+        ...(err.diagnostics || {}),
+      },
+    };
+  }
 }
 
 /**
@@ -607,7 +647,38 @@ async function runBuyGuide(userId, {
     .map(formatFeatureRequirement)
     .filter(Boolean);
 
-  const allCandidates = await searchProducts(q, { maxResults: 40, amazonDomain });
+  console.log('[productScout] guide/run start', {
+    query: q,
+    runId: runId || null,
+    keysToScout,
+    modelId,
+    amazonDomain,
+    mustFeatures: shopperPriorities.length,
+  });
+
+  let allCandidates;
+  try {
+    console.log('[productScout] guide Rainforest search', { query: q, amazonDomain, maxResults: 40 });
+    allCandidates = await searchProducts(q, { maxResults: 40, amazonDomain });
+  } catch (err) {
+    console.error('[productScout] guide Rainforest failed', {
+      message: err.message,
+      diagnostics: err.diagnostics || null,
+    });
+    err.diagnostics = {
+      stage: 'guide_rainforest',
+      amazonDomain,
+      modelId,
+      ...(err.diagnostics || {}),
+    };
+    throw err;
+  }
+
+  console.log('[productScout] guide candidates', {
+    count: allCandidates.length,
+    samplePrices: allCandidates.slice(0, 8).map((c) => c.price_display || c.price),
+  });
+
   const scoutsByKey = {};
 
   for (let i = 0; i < framework.length; i += 1) {
@@ -628,9 +699,35 @@ async function runBuyGuide(userId, {
 
   const tiers = buildAllTierRows(framework, scoutsByKey, existing?.tiers || []);
   const scouted_tiers = collectScoutedTierKeys(tiers);
+  const failedTiers = tiers.filter((t) => keysToScout.includes(t.key) && t.scout_error);
 
   if (!scouted_tiers.length) {
-    throw new Error('No products matched the selected tiers — try a broader search phrase');
+    const firstFail = failedTiers[0];
+    const err = new Error(
+      firstFail?.scout_error
+      || 'No products matched the selected tiers — try a broader search phrase'
+    );
+    err.diagnostics = {
+      stage: 'guide_no_scouted_tiers',
+      modelId,
+      amazonDomain,
+      candidates: allCandidates.length,
+      keysToScout,
+      failed: failedTiers.map((t) => ({
+        key: t.key,
+        error: t.scout_error,
+        diagnostics: t.scout?.diagnostics || null,
+      })),
+    };
+    console.error('[productScout] guide/run no scouted tiers', err.diagnostics);
+    throw err;
+  }
+
+  if (failedTiers.length) {
+    console.warn('[productScout] guide/run partial tier failures', failedTiers.map((t) => ({
+      key: t.key,
+      error: t.scout_error,
+    })));
   }
 
   const hint = budgetHint != null && budgetHint !== ''

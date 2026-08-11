@@ -19,6 +19,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
   const [featureBrief, setFeatureBrief] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [errorDiagnostics, setErrorDiagnostics] = useState(null);
   const [running, setRunning] = useState(false);
   const [mergeMode, setMergeMode] = useState(false);
   const [scoutingTierKey, setScoutingTierKey] = useState(null);
@@ -48,23 +49,26 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast('Describe what you are shopping for', 'error');
       return;
     }
-    startProcessing(
-      'Building feature brief…',
-      'Planning must-have features and four price tiers — not searching Amazon yet.',
-    );
+    startProcessing('Building feature brief…', 'Planning must-have features and four price tiers — not searching Amazon yet.');
     setError(null);
+    setErrorDiagnostics(null);
     try {
       const res = await api.post('/api/product-scout/guide/brief', {
         query: q,
         userFeatures,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Brief failed');
+      if (!res.ok) {
+        const err = new Error(data.error || 'Brief failed');
+        err.diagnostics = data.diagnostics || null;
+        throw err;
+      }
       setFeatureBrief(data.feature_brief);
       setMergeMode(false);
       setStep(STEPS.brief);
     } catch (err) {
       setError(err.message);
+      setErrorDiagnostics(err.diagnostics || null);
       addToast(err.message, 'error');
     } finally {
       stopProcessing();
@@ -91,6 +95,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         : 'Searching Amazon only for the tiers you selected.'
     );
     setError(null);
+    setErrorDiagnostics(null);
     try {
       const res = await api.post('/api/product-scout/guide/run', {
         query: query.trim(),
@@ -100,15 +105,26 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Guide failed');
+      if (!res.ok) {
+        const err = new Error(data.error || 'Guide failed');
+        err.diagnostics = data.diagnostics || null;
+        throw err;
+      }
       setResult(data);
       setFeatureBrief(data.feature_brief || featureBrief);
       setStep(STEPS.results);
       setMergeMode(false);
       onRunSaved?.(data);
-      addToast(singleTier || append ? 'Tier updated' : 'Buy guide ready', 'success');
+      const fallbackNote = data.tiers?.some((t) => t.scout?.comparison?.ranking_fallback || t.scout?.diagnostics?.compareFallback);
+      addToast(
+        fallbackNote
+          ? 'Tier updated — AI compare fell back to listing stats (see Railway logs)'
+          : (singleTier || append ? 'Tier updated' : 'Buy guide ready'),
+        'success'
+      );
     } catch (err) {
       setError(err.message);
+      setErrorDiagnostics(err.diagnostics || null);
       addToast(err.message, 'error');
     } finally {
       setRunning(false);
@@ -166,6 +182,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     setFeatureBrief(null);
     setResult(null);
     setError(null);
+    setErrorDiagnostics(null);
     setMergeMode(false);
     onRunSaved?.(null);
   };
@@ -288,12 +305,23 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
         </div>
       )}
 
-      {error && step !== STEPS.results && (
+      {error && (
         <div
-          className="rounded-xl border p-4 text-xs"
+          className="rounded-xl border p-4 text-xs space-y-2"
           style={{ borderColor: '#ef4444', background: 'var(--color-bg)', color: 'var(--color-text)' }}
         >
-          {error}
+          <div>{error}</div>
+          {errorDiagnostics && (
+            <pre
+              className="text-[10px] overflow-x-auto whitespace-pre-wrap break-all rounded-lg p-2"
+              style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}
+            >
+              {JSON.stringify(errorDiagnostics, null, 2)}
+            </pre>
+          )}
+          <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+            Server logs: search Railway for <code>[productScout]</code>, <code>[rainforest]</code>, or <code>[callModel]</code>.
+          </p>
         </div>
       )}
     </div>

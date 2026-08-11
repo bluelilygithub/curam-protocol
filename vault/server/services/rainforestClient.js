@@ -113,15 +113,30 @@ function normalizeProductPayload(data, amazonDomain, fallbackAsin) {
 
 async function rainforestRequest(params) {
   const res = await fetch(`${RAINFOREST_URL}?${params}`, { signal: AbortSignal.timeout(45000) });
-  if (res.status === 429) throw new Error('Rainforest API rate limit exceeded — try again shortly.');
-  if (res.status === 401) throw new Error('Rainforest API key invalid or unauthorised.');
+  if (res.status === 429) {
+    const err = new Error('Rainforest API rate limit exceeded — try again shortly.');
+    err.diagnostics = { stage: 'rainforest_http', status: 429 };
+    throw err;
+  }
+  if (res.status === 401) {
+    const err = new Error('Rainforest API key invalid or unauthorised.');
+    err.diagnostics = { stage: 'rainforest_http', status: 401 };
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Rainforest API error HTTP ${res.status}: ${text.slice(0, 300)}`);
+    const err = new Error(`Rainforest API error HTTP ${res.status}: ${text.slice(0, 300)}`);
+    err.diagnostics = { stage: 'rainforest_http', status: res.status };
+    throw err;
   }
   const data = await res.json();
   if (data?.request_info?.success === false) {
-    throw new Error(data.request_info?.message || 'Rainforest product lookup failed');
+    const err = new Error(data.request_info?.message || 'Rainforest product lookup failed');
+    err.diagnostics = {
+      stage: 'rainforest_request_info',
+      message: data.request_info?.message || null,
+    };
+    throw err;
   }
   return data;
 }
@@ -174,6 +189,15 @@ async function searchProducts(query, {
 
   const data = await rainforestRequest(params);
 
+  const rawCount = Array.isArray(data.search_results) ? data.search_results.length : 0;
+  console.log('[rainforest] search ok', {
+    domain,
+    query: query.trim().slice(0, 80),
+    requested: fetchCount,
+    rawResults: rawCount,
+    requestSuccess: data?.request_info?.success !== false,
+  });
+
   const candidates = [];
   for (const item of data.search_results || []) {
     if (candidates.length >= fetchCount) break;
@@ -200,11 +224,38 @@ async function searchProducts(query, {
 
   const filtered = applyDeliveryFilters(candidates, { freeDelivery, within2Days }).slice(0, maxResults);
 
+  console.log('[rainforest] search normalized', {
+    domain,
+    parsed: candidates.length,
+    afterDeliveryFilter: filtered.length,
+    freeDelivery,
+    within2Days,
+    sample: filtered.slice(0, 3).map((c) => ({
+      asin: c.asin,
+      price: c.price_display || c.price,
+      rating: c.rating,
+    })),
+  });
+
   if (!filtered.length) {
     const parts = [];
     if (freeDelivery) parts.push('free delivery');
     if (within2Days) parts.push('delivery within 2 days');
-    throw new Error(`No Amazon results matched filters: ${parts.join(' + ')}. Try turning off a filter.`);
+    const err = new Error(
+      parts.length
+        ? `No Amazon results matched filters: ${parts.join(' + ')}. Try turning off a filter.`
+        : 'No Amazon search results returned. Check Rainforest API / marketplace settings.'
+    );
+    err.diagnostics = {
+      stage: 'rainforest_search',
+      domain,
+      rawResults: rawCount,
+      parsed: candidates.length,
+      afterDeliveryFilter: filtered.length,
+      freeDelivery,
+      within2Days,
+    };
+    throw err;
   }
 
   return filtered;
