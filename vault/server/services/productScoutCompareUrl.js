@@ -9,10 +9,11 @@ const { parseModelJson } = require('../utils/parseModelJson');
 const { getAmazonDomain } = require('./productScoutSettings');
 const { getRun } = require('./productScoutService');
 
-const COMPARE_URL_SYSTEM = `You are an unbiased product analyst helping a shopper decide whether a premium Amazon listing is worth stretching their budget for.
+const COMPARE_URL_SYSTEM = `You are an unbiased product analyst helping a shopper decide whether an Amazon listing is worth stretching their budget for.
 Compare the URL product against their current budget picks using only supplied listing data — do not invent specs.
+The URL product may be cheaper, similar, or more expensive than the picks — judge fairly either way.
 Be honest when the budget picks already meet expectations for the use case.
-Return ONLY valid JSON. No markdown fences.`;
+Return ONLY a single valid JSON object. No markdown fences. No prose before or after.`;
 
 function compactPick(item) {
   return {
@@ -24,6 +25,7 @@ function compactPick(item) {
     key_features: (item.key_features || item.feature_bullets || []).slice(0, 4),
     value_score: item.value_score,
     pre_score: item.pre_score,
+    tier_label: item.tier_label || null,
   };
 }
 
@@ -41,46 +43,109 @@ function compactUrlProduct(product) {
   };
 }
 
-function buildCompareUrlPrompt({ query, budget, urlProduct, budgetPicks }) {
+function parseMoney(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const m = String(value ?? '').replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : null;
+}
+
+function buildCompareUrlPrompt({ query, budget, urlProduct, budgetPicks }, { compact = false } = {}) {
   const budgetBlock = budget?.maxPrice
     ? `Shopper budget: max $${budget.maxPrice}.\n`
     : 'Shopper did not set a strict max price — infer sensible budget tiers from the picks.\n';
 
   const picksJson = JSON.stringify(budgetPicks.map(compactPick));
+  const summaryLimit = compact
+    ? 'upgrade_benefits and budget_guidance: max 60 words each. feature_gaps: 3 items max.'
+    : 'upgrade_benefits and budget_guidance: one short paragraph each.';
 
   return `Original search: ${query}
 ${budgetBlock}
-BUDGET PICKS (ranked):
+BUDGET PICKS (ranked — may span price tiers):
 ${picksJson}
 
-URL PRODUCT (premium / out-of-budget candidate):
+URL PRODUCT (may be cheaper, similar, or premium vs picks):
 ${JSON.stringify(compactUrlProduct(urlProduct))}
 
-Write two paragraphs for the shopper:
-
-1. upgrade_benefits — One paragraph on the major benefits of the URL product over the budget set. Explain whether the price/feature gap is worth considering if they had a bigger budget. Be specific (ANC quality, brand, battery, codecs, comfort, etc.) using listing data only.
-
-2. budget_guidance — One paragraph listing meaningful features or experience gaps they are NOT getting on the budget picks. Then give a rough recommended budget range for a better mid-range experience (recommended_budget_min and recommended_budget_max as numbers in AUD). If the budget picks already meet expectations for this search, say so clearly and set budget_already_adequate to true with modest or null recommended range.
-
-Also return:
-- feature_gaps: 3–6 short bullet strings (features missing on budget picks)
-- worth_stretching: boolean — true only if the upgrade clearly justifies a meaningful budget increase for this query
-- budget_already_adequate: boolean
+${summaryLimit}
 
 Return JSON only:
-{"upgrade_benefits":"...","budget_guidance":"...","feature_gaps":["..."],"worth_stretching":true,"budget_already_adequate":false,"recommended_budget_min":150,"recommended_budget_max":250,"recommended_budget_note":"short label e.g. mid-range ANC tier"}`;
+{"upgrade_benefits":"...","budget_guidance":"...","feature_gaps":["..."],"worth_stretching":true,"budget_already_adequate":false,"recommended_budget_min":150,"recommended_budget_max":250,"recommended_budget_note":"short label"}`;
 }
 
 function parseCompareUrlResponse(text) {
-  const parsed = parseModelJson(String(text || '').trim());
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('AI did not return valid comparison JSON');
+  const raw = String(text || '').trim();
+  if (!raw) {
+    const err = new Error('AI returned an empty comparison response');
+    err.code = 'llm_empty';
+    throw err;
+  }
+
+  const parsed = parseModelJson(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const err = new Error('AI did not return valid comparison JSON');
+    err.code = 'llm_bad_json';
+    err.preview = raw.slice(0, 200).replace(/\s+/g, ' ');
+    throw err;
   }
   if (!parsed.upgrade_benefits?.trim() || !parsed.budget_guidance?.trim()) {
-    throw new Error('AI comparison missing required paragraphs');
+    const err = new Error('AI comparison missing required paragraphs');
+    err.code = 'llm_missing_fields';
+    throw err;
   }
   if (!Array.isArray(parsed.feature_gaps)) parsed.feature_gaps = [];
   return parsed;
+}
+
+function fallbackCompareAnalysis(product, budgetPicks, budget) {
+  const urlPrice = parseMoney(product.price ?? product.price_display);
+  const pickPrices = budgetPicks
+    .map((p) => parseMoney(p.price ?? p.price_display))
+    .filter((n) => Number.isFinite(n));
+  const avgPick = pickPrices.length
+    ? pickPrices.reduce((a, b) => a + b, 0) / pickPrices.length
+    : null;
+
+  let priceNote = 'Price comparison unavailable from listing data.';
+  let worth_stretching = false;
+  if (urlPrice != null && avgPick != null) {
+    const delta = urlPrice - avgPick;
+    if (delta > avgPick * 0.15) {
+      priceNote = `This listing (~$${Math.round(urlPrice)}) is meaningfully above your picks (avg ~$${Math.round(avgPick)}).`;
+      worth_stretching = false;
+    } else if (delta < -avgPick * 0.1) {
+      priceNote = `This listing (~$${Math.round(urlPrice)}) is cheaper than your picks (avg ~$${Math.round(avgPick)}).`;
+    } else {
+      priceNote = `This listing (~$${Math.round(urlPrice)}) is in a similar price band to your picks (avg ~$${Math.round(avgPick)}).`;
+    }
+  }
+
+  const bullets = (product.feature_bullets || []).slice(0, 4);
+  const gaps = bullets.length
+    ? bullets.map((b) => String(b).slice(0, 80))
+    : ['Detailed feature gaps need a successful AI compare — retry or switch model in Settings.'];
+
+  const budgetMax = budget?.maxPrice != null ? Number(budget.maxPrice) : null;
+  const recommended_budget_min = urlPrice != null
+    ? Math.round(urlPrice * 0.85)
+    : (budgetMax != null ? Math.round(budgetMax) : null);
+  const recommended_budget_max = urlPrice != null
+    ? Math.round(urlPrice * 1.15)
+    : (budgetMax != null ? Math.round(budgetMax * 1.4) : null);
+
+  return {
+    upgrade_benefits: `${product.title || 'This product'} vs your scout picks. ${priceNote} AI comparison was unavailable, so this is based on listing price and bullets only.`,
+    budget_guidance: urlPrice != null
+      ? `If you like this listing’s features, budget around $${recommended_budget_min}–$${recommended_budget_max} AUD and re-check reviews on Amazon. Retry Compare URL after switching model in Settings for a fuller write-up.`
+      : 'Retry Compare URL or switch model in Settings for fuller budget guidance.',
+    feature_gaps: gaps,
+    worth_stretching,
+    budget_already_adequate: avgPick != null && urlPrice != null ? urlPrice <= avgPick * 1.1 : null,
+    recommended_budget_min,
+    recommended_budget_max,
+    recommended_budget_note: 'Listing-stats fallback',
+    ranking_fallback: 'listing_stats',
+  };
 }
 
 function resolveBudgetPicks(scout) {
@@ -132,31 +197,116 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
   }
 
   const amazonDomain = scout.amazonDomain || await getAmazonDomain(pool);
-  const { product, sourceUrl } = await fetchProduct(trimmedUrl, amazonDomain);
-  const { standard: modelId } = await getModelsForUser(userId);
+  console.log('[productScout] compare-url fetch', {
+    url: trimmedUrl.slice(0, 120),
+    amazonDomain,
+    pickCount: budgetPicks.length,
+    query: scout.query,
+  });
 
-  const prompt = buildCompareUrlPrompt({
+  let product;
+  let sourceUrl;
+  try {
+    ({ product, sourceUrl } = await fetchProduct(trimmedUrl, amazonDomain));
+  } catch (err) {
+    console.error('[productScout] compare-url Rainforest failed', {
+      message: err.message,
+      diagnostics: err.diagnostics || null,
+    });
+    err.diagnostics = {
+      stage: 'compare_url_rainforest',
+      amazonDomain,
+      ...(err.diagnostics || {}),
+    };
+    throw err;
+  }
+
+  console.log('[productScout] compare-url product', {
+    asin: product.asin,
+    title: String(product.title || '').slice(0, 80),
+    price: product.price_display || product.price,
+    rating: product.rating,
+  });
+
+  const { standard: modelId } = await getModelsForUser(userId);
+  const baseArgs = {
     query: scout.query,
     budget: resolveBudgetContext(scout),
     urlProduct: product,
     budgetPicks,
-  });
+  };
 
-  const result = await callModel(modelId, prompt, {
-    system: COMPARE_URL_SYSTEM,
-    maxTokens: 4096,
-    returnUsage: true,
-  });
+  const attempts = [
+    { compact: false, maxTokens: 4096 },
+    { compact: true, maxTokens: 2048 },
+  ];
 
-  logUsage({
-    userId,
-    model: result.model,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-    feature: 'product_scout',
-  });
+  let analysis = null;
+  let lastErr = null;
+  let lastDiagnostics = null;
 
-  const analysis = parseCompareUrlResponse(result.text);
+  for (let i = 0; i < attempts.length; i += 1) {
+    const { compact, maxTokens } = attempts[i];
+    try {
+      const prompt = buildCompareUrlPrompt(baseArgs, { compact });
+      console.log('[productScout] compare-url LLM call', {
+        modelId,
+        compact,
+        maxTokens,
+        promptLen: prompt.length,
+        attempt: i + 1,
+      });
+
+      const result = await callModel(modelId, prompt, {
+        system: COMPARE_URL_SYSTEM,
+        maxTokens,
+        returnUsage: true,
+      });
+
+      lastDiagnostics = result.diagnostics || {
+        modelId,
+        textLen: String(result.text || '').length,
+        empty: !String(result.text || '').trim(),
+      };
+
+      console.log('[productScout] compare-url LLM result', {
+        modelId: result.model || modelId,
+        textLen: String(result.text || '').length,
+        diagnostics: lastDiagnostics,
+      });
+
+      logUsage({
+        userId,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        feature: 'product_scout',
+      });
+
+      analysis = parseCompareUrlResponse(result.text);
+      break;
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[productScout] compare-url attempt ${i + 1} failed:`, err.message, {
+        preview: err.preview || null,
+        diagnostics: lastDiagnostics,
+      });
+    }
+  }
+
+  if (!analysis) {
+    console.warn('[productScout] compare-url falling back to listing stats', {
+      message: lastErr?.message,
+      diagnostics: lastDiagnostics,
+    });
+    analysis = fallbackCompareAnalysis(product, budgetPicks, resolveBudgetContext(scout));
+    analysis.diagnostics = {
+      compareFallback: 'listing_stats',
+      lastError: lastErr?.message || null,
+      modelId,
+      ...(lastDiagnostics || {}),
+    };
+  }
 
   const comparisonEntry = {
     url: sourceUrl || trimmedUrl,
@@ -188,4 +338,9 @@ async function appendUrlComparison(userId, runId, entry, existingResult) {
   );
 }
 
-module.exports = { compareUrlToScout, buildCompareUrlPrompt, parseCompareUrlResponse };
+module.exports = {
+  compareUrlToScout,
+  buildCompareUrlPrompt,
+  parseCompareUrlResponse,
+  fallbackCompareAnalysis,
+};

@@ -75,6 +75,12 @@ function UrlComparisonCard({ entry }) {
         </p>
       )}
 
+      {(analysis.ranking_fallback || analysis.diagnostics?.compareFallback) && (
+        <p className="text-[10px]" style={{ color: '#b45309' }}>
+          AI write-up unavailable — this comparison used listing price and bullets only. Check model in Settings or retry.
+        </p>
+      )}
+
       <AnalysisBlock title="Why consider this over your picks?">
         {analysis.upgrade_benefits}
       </AnalysisBlock>
