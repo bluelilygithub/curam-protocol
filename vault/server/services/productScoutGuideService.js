@@ -310,8 +310,9 @@ CRITICAL: Emit fields in this exact order so truncation still keeps tiers: summa
    Pick the LOWEST tier that usually satisfies their must-haves for this product. Example: basic Bluetooth earbuds → smart_upgrade or essentials; hybrid ANC + premium codecs → enthusiast; "best / no compromise" → pro.
 3. recommended_tier_why — one short sentence (max 20 words) explaining the requirement fit (not "because it's mid-price").
 4. tier_framework — REQUIRED, exactly 4 tiers cheapest→pro. Keys must be essentials, smart_upgrade, enthusiast, pro.
-   Each: {"key":"...","label":"...","subtitle":"short tagline","price_min":40,"price_max":80,"feature_adds":["what this tier adds"]}
+   Each: {"key":"...","label":"...","subtitle":"one-line focus for this band","price_min":40,"price_max":80,"feature_adds":["what this tier typically adds vs the one below"]}
    Non-overlapping bands; each price_min above previous price_max. Pro may use a high price_min and omit price_max (null).
+   feature_adds: exactly 3 short bullets per tier describing capability gains (not marketing fluff). Essentials = what you get at entry; higher tiers = what you GAIN vs the tier below (battery, ANC quality, codecs, build, brand polish, etc. — tailored to THIS product).
 5. amazon_sidebar_filters — ${filterCount} Amazon left-sidebar dimensions for THIS query (type/form-factor first).
    Each: kind "spec", usually spec_type "enum", spec_options with "Any" plus 3–5 realistic values, spec_value "Any".
 6. features — ${featureCount}. Do not duplicate sidebar filters.
@@ -338,34 +339,50 @@ function defaultTierFramework(budgetHint) {
     {
       key: 'essentials',
       label: 'Essentials',
-      subtitle: 'Solid basics',
+      subtitle: 'Basics that work — lowest sensible spend',
       price_min: null,
       price_max: eMax,
-      feature_adds: ['Core function at the lowest sensible price'],
+      feature_adds: [
+        'Core function without premium extras',
+        'Accept shorter battery or simpler build',
+        'Fine when must-haves are few and basic',
+      ],
     },
     {
       key: 'smart_upgrade',
       label: 'Smart upgrade',
-      subtitle: 'Best everyday value',
+      subtitle: 'Everyday sweet spot — where most shoppers stop',
       price_min: eMax,
       price_max: sMax,
-      feature_adds: ['Noticeably better build, comfort, or battery'],
+      feature_adds: [
+        'Noticeably better battery, fit, or reliability',
+        'Daily features that matter (e.g. usable ANC, stabler connection)',
+        'Best value before diminishing returns',
+      ],
     },
     {
       key: 'enthusiast',
       label: 'Enthusiast',
-      subtitle: 'Premium features',
+      subtitle: 'Serious performance and brand-tier extras',
       price_min: sMax,
       price_max: enMax,
-      feature_adds: ['Stronger specs and nicer experience'],
+      feature_adds: [
+        'Stronger specialty features (better ANC, codecs, sensors)',
+        'Convenience polish (wireless charge, ambient modes, better calls)',
+        'Pay for refinement — not just “it works”',
+      ],
     },
     {
       key: 'pro',
       label: 'Pro / no budget',
-      subtitle: 'Top of range',
+      subtitle: 'Flagship / no-compromise',
       price_min: proMin,
       price_max: null,
-      feature_adds: ['Flagship performance with few compromises'],
+      feature_adds: [
+        'Best-in-class performance for the category',
+        'Ecosystem and brand premium (e.g. AirPods-class)',
+        'Only worth it if you need the top experience',
+      ],
     },
   ];
 }
@@ -508,20 +525,60 @@ function parseBriefResponse(text, { userFeatures = [], budgetHint = null, allowD
     console.warn('[productScout] Brief missing amazon_sidebar_filters — using merged features only');
   }
 
+  const normalizedTiers = tiers.slice(0, 4).map((t, i) => {
+    const key = TIER_KEYS[i] || t.key || TIER_KEYS[0];
+    const defaults = {
+      essentials: {
+        subtitle: 'Basics that work — lowest sensible spend',
+        feature_adds: [
+          'Core function without premium extras',
+          'Accept shorter battery or simpler build',
+          'Fine when must-haves are few and basic',
+        ],
+      },
+      smart_upgrade: {
+        subtitle: 'Everyday sweet spot — where most shoppers stop',
+        feature_adds: [
+          'Noticeably better battery, fit, or reliability',
+          'Daily features that matter (e.g. usable ANC, stabler connection)',
+          'Best value before diminishing returns',
+        ],
+      },
+      enthusiast: {
+        subtitle: 'Serious performance and brand-tier extras',
+        feature_adds: [
+          'Stronger specialty features (better ANC, codecs, sensors)',
+          'Convenience polish (wireless charge, ambient modes, better calls)',
+          'Pay for refinement — not just “it works”',
+        ],
+      },
+      pro: {
+        subtitle: 'Flagship / no-compromise',
+        feature_adds: [
+          'Best-in-class performance for the category',
+          'Ecosystem and brand premium (e.g. AirPods-class)',
+          'Only worth it if you need the top experience',
+        ],
+      },
+    }[key] || {};
+
+    const adds = (t.feature_adds || []).map((g) => String(g || '').trim()).filter(Boolean);
+    return {
+      ...t,
+      key,
+      subtitle: String(t.subtitle || '').trim() || defaults.subtitle || '',
+      feature_adds: adds.length ? adds.slice(0, 4) : (defaults.feature_adds || []),
+    };
+  });
+
   return {
     summary: String(parsed.summary || '').trim(),
-    tier_framework: tiers.slice(0, 4).map((t, i) => ({
-      ...t,
-      key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
-    })),
+    tier_framework: normalizedTiers,
     features: merged,
     ...resolveRecommendedTier({
       features: merged,
       budgetHint,
-      tierFramework: tiers.slice(0, 4).map((t, i) => ({
-        ...t,
-        key: TIER_KEYS[i] || t.key || TIER_KEYS[0],
-      })),
+      tierFramework: normalizedTiers,
       llmKey: parsed.recommended_tier_key || parsed.recommendedTierKey,
       llmWhy: parsed.recommended_tier_why || parsed.recommendedTierWhy,
     }),

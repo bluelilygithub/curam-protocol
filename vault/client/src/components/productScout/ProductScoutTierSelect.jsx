@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
+import { resolveTierFocus, resolveTierGains } from '../../utils/productScoutGuide';
 
 function tierKey(tier, index) {
   return tier.key || ['essentials', 'smart_upgrade', 'enthusiast', 'pro'][index] || `tier_${index}`;
@@ -64,7 +65,7 @@ export default function ProductScoutTierSelect({
         <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
           {mergeMode
             ? 'Select tiers that have not been searched yet. Each tier runs a full Amazon comparison.'
-            : 'Select one or more tiers. We only search Amazon for the tiers you pick — faster than searching all four.'}
+            : 'Each step up the ladder usually buys better features — not just a higher price. Select one or more tiers to search on Amazon.'}
         </p>
         {recommendedAvailable && recommendedTierWhy && !mergeMode && (
           <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--color-text)' }}>
@@ -74,6 +75,40 @@ export default function ProductScoutTierSelect({
         )}
       </div>
 
+      {!mergeMode && tiers.length > 0 && (
+        <div
+          className="rounded-xl border p-3 space-y-2"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+            What changes as you climb
+          </p>
+          <ol className="space-y-1.5">
+            {tiers.map((tier, i) => {
+              const key = tierKey(tier, i);
+              const focus = resolveTierFocus(tier, i);
+              const isSuggested = key === recommendedTierKey;
+              return (
+                <li key={`ladder-${key}`} className="flex gap-2 text-[10px] leading-snug">
+                  <span
+                    className="shrink-0 font-semibold tabular-nums w-4"
+                    style={{ color: isSuggested ? 'var(--color-primary)' : 'var(--color-muted)' }}
+                  >
+                    {i + 1}.
+                  </span>
+                  <span style={{ color: 'var(--color-text)' }}>
+                    <span className="font-medium">{tier.label}</span>
+                    <span style={{ color: 'var(--color-muted)' }}>
+                      {' '}({formatPriceBand(tier.price_min, tier.price_max)}) — {focus}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+
       <div className="grid gap-2 sm:grid-cols-2">
         {tiers.map((tier, i) => {
           const key = tierKey(tier, i);
@@ -81,6 +116,8 @@ export default function ProductScoutTierSelect({
           const checked = selected.includes(key);
           const disabled = already;
           const isRecommended = key === recommendedTierKey && !already;
+          const gains = resolveTierGains(tier, i);
+          const focus = resolveTierFocus(tier, i);
 
           return (
             <button
@@ -103,7 +140,7 @@ export default function ProductScoutTierSelect({
                   readOnly
                   className="mt-0.5 rounded"
                 />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                       {tier.label}
@@ -125,13 +162,25 @@ export default function ProductScoutTierSelect({
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-primary)' }}>
+                  <p className="text-[10px]" style={{ color: 'var(--color-primary)' }}>
                     {formatPriceBand(tier.price_min, tier.price_max)}
                   </p>
-                  {tier.subtitle && (
-                    <p className="text-[10px] mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                      {tier.subtitle}
+                  {focus && (
+                    <p className="text-[10px] leading-relaxed font-medium" style={{ color: 'var(--color-text)' }}>
+                      {focus}
                     </p>
+                  )}
+                  {gains.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase tracking-wide mb-0.5" style={{ color: 'var(--color-muted)' }}>
+                        {i === 0 ? 'Typically includes' : 'What you gain vs below'}
+                      </p>
+                      <ul className="text-[10px] space-y-0.5 pl-3 list-disc" style={{ color: 'var(--color-muted)' }}>
+                        {gains.map((g) => (
+                          <li key={g}>{g}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>

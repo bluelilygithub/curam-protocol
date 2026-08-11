@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
 import ProductScoutResults from './ProductScoutResults';
 import ProductScoutFinalRecommendation from './ProductScoutFinalRecommendation';
-import { getScoutedTierKeys, tierIsScouted } from '../../utils/productScoutGuide';
+import { getScoutedTierKeys, resolveTierFocus, resolveTierGains, tierIsScouted } from '../../utils/productScoutGuide';
 
-function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
+function TierStep({ tier, index, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
   const [open, setOpen] = useState(defaultOpen);
   const band = formatPriceBand(tier.price_min, tier.price_max);
-  const gains = tier.gains_vs_below || tier.feature_adds || [];
+  const gains = resolveTierGains(tier, index);
+  const focus = resolveTierFocus(tier, index);
   const scout = tier.scout;
   const scouted = tierIsScouted(tier);
   const hasScout = scout?.comparison?.top3?.length > 0;
@@ -67,6 +68,9 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
             {tier.subtitle && (
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>{tier.subtitle}</p>
             )}
+            {!tier.subtitle && focus && (
+              <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>{focus}</p>
+            )}
           </button>
           {!scouted && onScoutTier && (
             <button
@@ -85,7 +89,7 @@ function TierStep({ tier, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
             {gains.length > 0 && (
               <div className="pt-3">
                 <p className="text-[10px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
-                  What you gain at this step
+                  {index === 0 ? 'Typically includes' : 'What you gain at this step'}
                 </p>
                 <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
                   {gains.map((g) => (
@@ -193,6 +197,7 @@ export default function ProductScoutTierLadder({
           <TierStep
             key={tier.key || tier.label}
             tier={tier}
+            index={i}
             isLast={i === tiers.length - 1}
             defaultOpen={i === (firstScoutedIndex >= 0 ? firstScoutedIndex : 0)}
             onScoutTier={onScoutTier}

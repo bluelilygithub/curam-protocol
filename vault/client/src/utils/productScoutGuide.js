@@ -18,6 +18,58 @@ export function tierIsScouted(tier) {
 
 export const GUIDE_TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
+/** Fallback “what this tier is for” when the brief omits feature_adds. */
+export const TIER_LADDER_DEFAULTS = {
+  essentials: {
+    focus: 'Basics that work — lowest sensible spend',
+    gains: [
+      'Core function without premium extras',
+      'Accept shorter battery or simpler build',
+      'Fine when must-haves are few and basic',
+    ],
+  },
+  smart_upgrade: {
+    focus: 'Everyday sweet spot — where most shoppers stop',
+    gains: [
+      'Noticeably better battery, fit, or reliability',
+      'Daily features that matter (e.g. usable ANC, stabler connection)',
+      'Best value before diminishing returns',
+    ],
+  },
+  enthusiast: {
+    focus: 'Serious performance and brand-tier extras',
+    gains: [
+      'Stronger specialty features (better ANC, codecs, sensors)',
+      'Convenience polish (wireless charge, ambient modes, better calls)',
+      'Pay for refinement — not just “it works”',
+    ],
+  },
+  pro: {
+    focus: 'Flagship / no-compromise',
+    gains: [
+      'Best-in-class performance for the category',
+      'Ecosystem and brand premium (e.g. AirPods-class)',
+      'Only worth it if you need the top experience',
+    ],
+  },
+};
+
+export function resolveTierGains(tier, index = 0) {
+  const key = tier?.key || GUIDE_TIER_KEYS[index] || 'essentials';
+  const fromBrief = (tier?.feature_adds || tier?.gains_vs_below || [])
+    .map((g) => String(g || '').trim())
+    .filter(Boolean);
+  if (fromBrief.length) return fromBrief.slice(0, 4);
+  return TIER_LADDER_DEFAULTS[key]?.gains || TIER_LADDER_DEFAULTS.essentials.gains;
+}
+
+export function resolveTierFocus(tier, index = 0) {
+  const key = tier?.key || GUIDE_TIER_KEYS[index] || 'essentials';
+  const subtitle = String(tier?.subtitle || '').trim();
+  if (subtitle) return subtitle;
+  return TIER_LADDER_DEFAULTS[key]?.focus || '';
+}
+
 const PREMIUM_RE = /\b(anc|noise\s*cancell|flagship|audiophile|hi-?res|ldac|aptx|studio|pro\b|oled|4k|120hz|rtx|gaming|waterproof|ip6[78]|macbook\s*pro|mirrorless|full[\s-]?frame)\b/i;
 const BASIC_RE = /\b(basic|budget|simple|casual|entry[\s-]?level|bluetooth\s*only)\b/i;
 
