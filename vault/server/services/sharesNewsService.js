@@ -19,6 +19,7 @@ const { pool } = require('../db');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const { parseModelJson } = require('../utils/parseModelJson');
 const sharesPortfolio = require('./sharesPortfolio');
 const metalsPortfolio = require('./metalsPortfolio');
 const marketData = require('./marketData');
@@ -241,18 +242,36 @@ Only include stocks with something noteworthy. Omit stocks with no significant n
 
 async function generateBriefings(userId, holdings, newsMap, marketNews, modelId, today) {
   const prompt = buildDailyPrompt(holdings, newsMap, marketNews, today);
-  const result = await callModel(modelId, prompt, { maxTokens: 1500, system: DAILY_SYSTEM_PROMPT, returnUsage: true });
-  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_news' });
-  const raw = result.text;
+  const maxTokens = Math.min(8000, 2000 + holdings.length * 250);
 
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('AI returned invalid JSON for daily briefings');
+  async function callOnce(userPrompt, system) {
+    const result = await callModel(modelId, userPrompt, { maxTokens, system, returnUsage: true });
+    logUsage({
+      userId,
+      model: modelId,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      feature: 'shares_news',
+    });
+    return String(result.text || '').trim();
   }
+
+  let raw = await callOnce(prompt, DAILY_SYSTEM_PROMPT);
+  let parsed = parseModelJson(raw);
+
+  if (!parsed || typeof parsed !== 'object') {
+    raw = await callOnce(
+      `The previous response was not valid JSON. Return ONLY valid JSON matching this shape (no markdown, no commentary):\n{\n  "stocks": [{ "symbol": "NVDA", "exchange": "NYSE", "paragraph": "...", "signal": "bullish" }],\n  "market": { "paragraph": "...", "signal": "neutral" }\n}\n\nPrevious output:\n${raw.slice(0, 6000)}`,
+      'You fix malformed JSON for portfolio news briefings. Output valid JSON only.'
+    );
+    parsed = parseModelJson(raw);
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    console.error('[sharesNews] daily briefing JSON parse failed', { preview: raw.slice(0, 400) });
+    throw new Error('AI returned invalid JSON for daily briefings — try again');
+  }
+  return parsed;
 }
 
 // ─── generateDailyBriefing ────────────────────────────────────────────────────
@@ -260,12 +279,6 @@ async function generateBriefings(userId, holdings, newsMap, marketNews, modelId,
 async function generateDailyBriefing(userId) {
   const tz = await getWorkspaceTimezone();
   const today = getDateInTz(tz);
-
-  // Always delete today's daily entries first — allows re-generation from cron or manual trigger
-  await pool.query(
-    `DELETE FROM share_news_briefings WHERE "userId"=$1 AND date=$2 AND type='daily'`,
-    [userId, today]
-  );
 
   const dash = await sharesPortfolio.buildDashboard(userId);
   if (!dash.positions.length) return { skipped: true, reason: 'No holdings' };
@@ -291,42 +304,56 @@ async function generateDailyBriefing(userId) {
   const modelId = tiers.standard || tiers.light || tiers.gemini;
   if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
 
+  // Generate first — only replace stored rows after a successful parse so a failed
+  // run does not wipe today's briefing.
   const briefings = await generateBriefings(userId, holdings, newsMap, marketNews, modelId, today);
-
-  // Store per-stock briefings
   const stockBriefings = Array.isArray(briefings.stocks) ? briefings.stocks : [];
-  for (const b of stockBriefings) {
-    const holding = holdings.find((h) => h.symbol === b.symbol && h.exchange === b.exchange);
-    const headlines = (newsMap[`${b.symbol}:${b.exchange}`] || []).map((n) => n.title);
-    await pool.query(
-      `INSERT INTO share_news_briefings
-        ("userId", date, symbol, exchange, content, signal, headlines, "priceChangePct", type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'daily')`,
-      [
-        userId, today, b.symbol, b.exchange,
-        b.paragraph || '', b.signal || 'neutral',
-        JSON.stringify(headlines),
-        holding?.dayChangePct ?? null,
-      ]
-    );
-  }
 
-  // Store market summary
-  if (briefings.market?.paragraph) {
-    await pool.query(
-      `INSERT INTO share_news_briefings
-        ("userId", date, symbol, exchange, content, signal, headlines, type)
-       VALUES ($1,$2,NULL,NULL,$3,$4,'[]','daily')`,
-      [userId, today, briefings.market.paragraph, briefings.market.signal || 'neutral']
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM share_news_briefings WHERE "userId"=$1 AND date=$2 AND type='daily'`,
+      [userId, today]
     );
-  }
 
-  // Prune daily entries older than 45 days (monthly_summary rows are never deleted)
-  const cutoff = getDateInTz(tz, 45);
-  await pool.query(
-    `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='daily' AND date < $2`,
-    [userId, cutoff]
-  );
+    for (const b of stockBriefings) {
+      const holding = holdings.find((h) => h.symbol === b.symbol && h.exchange === b.exchange);
+      const headlines = (newsMap[`${b.symbol}:${b.exchange}`] || []).map((n) => n.title);
+      await client.query(
+        `INSERT INTO share_news_briefings
+          ("userId", date, symbol, exchange, content, signal, headlines, "priceChangePct", type)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'daily')`,
+        [
+          userId, today, b.symbol, b.exchange,
+          b.paragraph || '', b.signal || 'neutral',
+          JSON.stringify(headlines),
+          holding?.dayChangePct ?? null,
+        ]
+      );
+    }
+
+    if (briefings.market?.paragraph) {
+      await client.query(
+        `INSERT INTO share_news_briefings
+          ("userId", date, symbol, exchange, content, signal, headlines, type)
+         VALUES ($1,$2,NULL,NULL,$3,$4,'[]','daily')`,
+        [userId, today, briefings.market.paragraph, briefings.market.signal || 'neutral']
+      );
+    }
+
+    const cutoff = getDateInTz(tz, 45);
+    await client.query(
+      `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='daily' AND date < $2`,
+      [userId, cutoff]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+    throw err;
+  } finally {
+    client.release();
+  }
 
   console.log(`[sharesNews] Generated daily briefing for user ${userId} on ${today}: ${stockBriefings.length} stock(s)`);
   return { date: today, stockCount: stockBriefings.length };
@@ -407,18 +434,34 @@ async function generateMonthlySummary(userId) {
   if (!modelId) throw new Error('No model configured for user');
 
   const promptText = buildSummaryPrompt(dailyBriefings, today);
-  const result = await callModel(modelId, promptText, { maxTokens: 2000, system: SUMMARY_SYSTEM_PROMPT, returnUsage: true });
-  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_news' });
-  const raw = result.text;
+  const maxTokens = 4000;
 
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  let summaryData;
-  try {
-    summaryData = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) summaryData = JSON.parse(match[0]);
-    else throw new Error('AI returned invalid JSON for monthly summary');
+  async function callOnce(userPrompt, system) {
+    const result = await callModel(modelId, userPrompt, { maxTokens, system, returnUsage: true });
+    logUsage({
+      userId,
+      model: modelId,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      feature: 'shares_news',
+    });
+    return String(result.text || '').trim();
+  }
+
+  let raw = await callOnce(promptText, SUMMARY_SYSTEM_PROMPT);
+  let summaryData = parseModelJson(raw);
+
+  if (!summaryData || typeof summaryData !== 'object') {
+    raw = await callOnce(
+      `The previous response was not valid JSON. Return ONLY valid JSON with no markdown fences.\n\nPrevious output:\n${raw.slice(0, 6000)}`,
+      'You fix malformed JSON for a 30-day portfolio summary. Output valid JSON only.'
+    );
+    summaryData = parseModelJson(raw);
+  }
+
+  if (!summaryData || typeof summaryData !== 'object') {
+    console.error('[sharesNews] monthly summary JSON parse failed', { preview: raw.slice(0, 400) });
+    throw new Error('AI returned invalid JSON for monthly summary — try again');
   }
 
   // Delete any existing monthly summary for today before replacing

@@ -13,6 +13,7 @@ const TABS = [
   { id: 'cash', label: 'Cash' },
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
+  { id: 'questions', label: 'Questions' },
   { id: 'metals', label: 'Metals' },
 ];
 
@@ -413,13 +414,13 @@ export default function SharesPage() {
     startProcessing('Generating daily briefing…', 'Searching news and analysing price movements for your holdings.');
     try {
       const res = await api.post('/api/shares/news/generate');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate briefing');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to generate briefing (${res.status})`);
       if (Array.isArray(data.briefings)) setNewsBriefings(data.briefings);
       addToast(data.message || 'Briefing generated', 'success');
       setTab('news');
     } catch (err) {
-      addToast(err.message, 'error');
+      addToast(err.message || 'Failed to generate briefing', 'error');
     } finally {
       setGeneratingNews(false);
       stopProcessing();
@@ -431,12 +432,12 @@ export default function SharesPage() {
     startProcessing('Generating 30-day summary…', 'Reviewing daily signals and market movements over the past month.');
     try {
       const res = await api.post('/api/shares/news/generate-summary');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate summary');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to generate summary (${res.status})`);
       if (Array.isArray(data.briefings)) setNewsBriefings(data.briefings);
       addToast(data.message || '30-day summary generated', 'success');
     } catch (err) {
-      addToast(err.message, 'error');
+      addToast(err.message || 'Failed to generate summary', 'error');
     } finally {
       setGeneratingSummary(false);
       stopProcessing();
@@ -1151,6 +1152,8 @@ export default function SharesPage() {
               />
             )}
 
+            {tab === 'questions' && <QuestionsTab />}
+
             {tab === 'metals' && <MetalsTab />}
           </>
         )}
@@ -1639,6 +1642,152 @@ function SignalBadge({ signal }) {
       <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.bg }} />
       {s.label}
     </span>
+  );
+}
+
+// ─── Questions tab ────────────────────────────────────────────────────────────
+
+const SUGGESTED_SHARE_QUESTIONS = [
+  'What is my largest position by value?',
+  'Which holdings are down versus cost basis?',
+  'Summarise today\'s movers across my portfolio.',
+  'What is my total realised and unrealised P&L?',
+  'How is my portfolio allocated across ASX vs US exchanges?',
+  'What did the latest news briefings say about my holdings?',
+];
+
+function QuestionsTab() {
+  const [question, setQuestion] = React.useState('');
+  const [asking, setAsking] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [turns, setTurns] = React.useState([]);
+  const bottomRef = React.useRef(null);
+
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [turns.length, asking]);
+
+  const ask = async (raw) => {
+    const q = String(raw || '').trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setError(null);
+    setQuestion('');
+    setTurns((prev) => [...prev, { role: 'user', content: q }]);
+    try {
+      const history = turns.slice(-6).map((t) => ({ role: t.role, content: t.content }));
+      const res = await api.post('/api/shares/ask', { question: q, history });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Ask failed (${res.status})`);
+      setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '' }]);
+    } catch (err) {
+      setError(err.message || 'Ask failed');
+      setTurns((prev) => prev.slice(0, -1));
+      setQuestion(q);
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl">
+      <div className="mb-6">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Ask about your portfolio</p>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+          Answers are grounded in your holdings, cash, trades, snapshots, and news briefings — not live web research.
+        </p>
+      </div>
+
+      {!turns.length && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {SUGGESTED_SHARE_QUESTIONS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              disabled={asking}
+              onClick={() => ask(q)}
+              className="text-xs px-3 py-1.5 rounded-lg border text-left hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-4 mb-6">
+        {turns.map((t, i) => (
+          <div
+            key={`${t.role}-${i}`}
+            className="p-3 rounded-lg border"
+            style={{
+              borderColor: 'var(--color-border)',
+              background: t.role === 'user' ? 'var(--color-surface)' : 'var(--color-bg)',
+            }}
+          >
+            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+              {t.role === 'user' ? 'You' : 'Shares data'}
+            </p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>
+              {t.content}
+            </p>
+          </div>
+        ))}
+        {asking && (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Looking up your Shares data…</p>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {error && (
+        <p className="text-xs mb-3 px-3 py-2 rounded-md" style={{ background: '#fff1f2', color: '#ef4444' }}>
+          {error}
+        </p>
+      )}
+
+      <form
+        className="flex gap-2 items-end"
+        onSubmit={(e) => {
+          e.preventDefault();
+          ask(question);
+        }}
+      >
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={2}
+          disabled={asking}
+          placeholder="e.g. How much have I made on NVDA overall?"
+          className="flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none resize-y min-h-[2.75rem]"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              ask(question);
+            }
+          }}
+        />
+        <button
+          type="submit"
+          disabled={asking || !question.trim()}
+          className="text-sm px-4 py-2.5 rounded-lg hover:opacity-70 transition-opacity duration-200 disabled:opacity-40 flex-shrink-0"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {asking ? 'Asking…' : 'Ask'}
+        </button>
+      </form>
+
+      {turns.length > 0 && (
+        <button
+          type="button"
+          onClick={() => { setTurns([]); setError(null); }}
+          className="mt-3 text-xs hover:opacity-70 transition-opacity duration-200"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Clear conversation
+        </button>
+      )}
+    </div>
   );
 }
 
