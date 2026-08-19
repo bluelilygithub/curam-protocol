@@ -1566,6 +1566,43 @@ async function initSchema() {
       ON product_scout_runs ("userId", "createdAt" DESC)
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS seo_projects (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL DEFAULT 'Untitled',
+      url             TEXT NOT NULL,
+      notes           TEXT NOT NULL DEFAULT '',
+      "siteSnapshot"  JSONB NOT NULL DEFAULT '{}',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_seo_projects_user_updated
+      ON seo_projects ("userId", "updatedAt" DESC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS seo_artifacts (
+      id              SERIAL PRIMARY KEY,
+      "projectId"     INTEGER NOT NULL REFERENCES seo_projects(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL,
+      payload         JSONB NOT NULL DEFAULT '{}',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_seo_artifacts_project_kind
+      ON seo_artifacts ("projectId", kind, "updatedAt" DESC)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_seo_artifacts_one_kind
+      ON seo_artifacts ("projectId", kind)
+  `);
+
   console.log('[db] Schema ready');
 }
 

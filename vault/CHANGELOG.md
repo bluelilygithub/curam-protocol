@@ -4,6 +4,17 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-19 (seo-agent-keywords)
+
+### SEO agent — projects + Google Ads keyword lists
+- New app at `/seo` (Content tools). Create a project from a website URL.
+- Scrapes the homepage plus up to four related same-origin pages (SSRF-safe `htmlFetch`).
+- Generates 100 keywords and 100 negative keywords for an initial Google Ads setup (`standard` model). Copy or CSV export.
+- Tables `seo_projects` + `seo_artifacts` so later SEO tools can attach without a new schema.
+- Feature flag `seo`. Docs: `docs/seo-agent.md`.
+
+---
+
 ## 2026-07-25 (admin-models-local-hosted-ui)
 
 ### Settings — AI Models add flow + Local/Hosted icons

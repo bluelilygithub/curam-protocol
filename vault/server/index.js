@@ -134,6 +134,7 @@ app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
 app.use('/api/product-scout', requireFeature('productScout'), require('./routes/productScout'));
 app.use('/api/property-scenario', requireFeature('propertyScenario'), require('./routes/propertyScenario'));
 app.use('/api/document-redaction', requireFeature('documentRedaction'), require('./routes/documentRedaction'));
+app.use('/api/seo', requireFeature('seo'), require('./routes/seo'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 
 if (process.env.NODE_ENV === 'production') {

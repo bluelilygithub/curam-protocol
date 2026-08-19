@@ -39,6 +39,7 @@ import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
 import PropertyScenarioPage from './pages/PropertyScenarioPage';
 import DocumentRedactionPage from './pages/DocumentRedactionPage';
+import SeoPage from './pages/SeoPage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
@@ -161,6 +162,8 @@ function App() {
               <Route path="/property-scenario" element={<PropertyScenarioPage />} />
               <Route path="/document-redaction" element={<DocumentRedactionPage />} />
               <Route path="/document-redaction/:jobId" element={<DocumentRedactionPage />} />
+              <Route path="/seo" element={<SeoPage />} />
+              <Route path="/seo/:id" element={<SeoPage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />

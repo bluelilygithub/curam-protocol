@@ -24,6 +24,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   productScout: true,
   propertyScenario: true,
   documentRedaction: true,
+  seo: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

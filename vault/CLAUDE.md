@@ -16,7 +16,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 ## Key Files
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
-- `server/db.js` — all 46 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
+- `server/db.js` — all tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
 - `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
 - `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
@@ -31,6 +31,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)
 - `server/services/documentRedaction/` — Document redaction agent (M1–M6: candidates → HITL → apply → compare → frontier analysis → selective frontier apply → three-way → final approve + INTERNAL-ONLY audit); model card via `documentRedactionModelResolver.js`; docs: `docs/document-redaction-agent-architecture.md`
 - `server/services/propertyScenario/` — Mortgage / Property Scenario agent (Stages 1–11); see `docs/property-scenario.md` + `OPEN_ITEMS.md`
+- `server/services/seo/` — SEO agent (projects + site scrape + Google Ads keyword/negative lists); docs: `docs/seo-agent.md`
 - `server/services/SuggestionService.js` — **all services/crons/agents call this** to emit inbox findings
 - `server/routes/suggestions.js` — agent suggestion inbox API
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
@@ -291,7 +292,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Schema Notes
 
-- 46 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
+- 48 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
 - `sessions."deletedAt"` is a soft-delete timestamp. Chat delete moves sessions to Deleted; messages remain for restore. Normal lists/search/RAG must filter `s."deletedAt" IS NULL`.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
@@ -307,7 +308,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **SEO** (site scrape + Google Ads keyword lists) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
 
 **Document redaction** (`/document-redaction`): Privacy-preserving DOCX redaction. Local LLM proposes candidates → HITL approve/reject/edit → synthetic apply (`redacted.docx` + `sanitized.pdf`) → local compare / leftover scan → HITL₂ → frontier residual-risk analysis on **sanitized PDF only** (entity map never leaves the machine) → selective frontier apply (shared apply pipeline on redacted base) → three-way compare → final approve + INTERNAL-ONLY audit trail. Feature flag `documentRedaction`. Model card `document-redaction-agent`. Docs: **`docs/document-redaction-agent-architecture.md`**.
 
@@ -320,6 +321,8 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 **Video Tools** (`/videos`): Phase 1 video suite mirroring Graphics — grouped sidebar (Create / Optimise / Transform / Compose / Library / Analyse). **Generate** expands brief via `light` tier then **Replicate** (`minimax/hailuo-2.3`, default when `REPLICATE_API_TOKEN` set) or FAL fallback. **ffmpeg** tools: clip, convert/compress, join (+ crossfade), reframe/crop, speed, mute/replace audio, overlay/watermark, extract audio, annotate (drawtext), probe, thumbnail. **Caption studio** — upload or library video + styled SRT (font, weight, size, colour). **Saved media** — save tool results (video/image) + transaction JSON to `video_library` (disk + DB), preview, delete, re-caption later. Local dev: optional whisper-cli transcribe; hosted → paste SRT. Feature flag `videos`. Docs: **`docs/video-tools.md`**. Dockerfile installs `ffmpeg`.
 
 **Recipes** (`/recipes`): Cooking assistant in Content tools. **Leftover recipes** — ingredients in → four cards → full recipe (steps, nutrition, links, auto dish photo). **Recipe by name** — Basic / Advanced / Master with accessible ingredient swaps. **Grocery prices** — "Get prices" inline under any open recipe (also standalone in Shop) → Coles/Woolworths prices **sourced from live search** (Google Shopping via Serper/SerpApi, or `site:` organic fallback), each row cites its source link; unmatched items show "Not found" + manual search link, never a guessed price. Requires `SEARCH_API_KEY`; no text model needed for pricing. Save to **`recipes`** table with tags. Text: `light`/`standard` tiers; images: **`graphicsImageService`** + **`graphics_model`**. Feature flag `recipes`. Docs: **`docs/recipes.md`**.
+
+**SEO** (`/seo`): Content-tools agent with its own projects (not Vault chat projects). Paste a URL → SSRF-safe scrape (homepage + a few same-origin pages) → **`standard`** model builds 100 Google Ads keywords and 100 negatives. Copy or CSV for Ads Editor. Later tools store extra rows on **`seo_artifacts`** (`kind`). Tables: `seo_projects`, `seo_artifacts`. Routes: `server/routes/seo.js`. Feature flag `seo`. Docs: **`docs/seo-agent.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
