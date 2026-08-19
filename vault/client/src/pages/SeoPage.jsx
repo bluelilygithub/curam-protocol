@@ -20,18 +20,13 @@ function googleAdsToken(item) {
   return `"${phrase}"`;
 }
 
-function toCsv(items) {
-  const header = 'Keyword,Match type';
-  const rows = (items || []).map((item) => {
-    const phrase = String(item.phrase || '').replace(/"/g, '""');
-    const match = item.matchType || 'phrase';
-    return `"${phrase}",${match}`;
-  });
-  return [header, ...rows].join('\n');
+function toKeywordExport(items) {
+  return (items || []).map(googleAdsToken).join('\n');
 }
 
 function downloadCsv(filename, text) {
-  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const mime = String(filename).endsWith('.txt') ? 'text/plain;charset=utf-8' : 'text/csv;charset=utf-8';
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -108,11 +103,8 @@ function KeywordList({ title, items, empty }) {
               className="flex items-start justify-between gap-2 rounded-lg border px-2.5 py-1.5"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
             >
-              <span className="text-xs leading-relaxed min-w-0" style={{ color: 'var(--color-text)' }}>
-                {item.phrase}
-              </span>
-              <span className="text-[10px] shrink-0 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
-                {item.matchType || 'phrase'}
+              <span className="text-xs leading-relaxed min-w-0 font-mono" style={{ color: 'var(--color-text)' }}>
+                {googleAdsToken(item)}
               </span>
             </li>
           ))}
@@ -767,19 +759,19 @@ export default function SeoPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => downloadCsv(`${project.name || 'seo'}-keywords.csv`, toCsv(keywords))}
+                    onClick={() => downloadCsv(`${project.name || 'seo'}-keywords.txt`, toKeywordExport(keywords))}
                     className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    Download keywords CSV
+                    Download keywords
                   </button>
                   <button
                     type="button"
-                    onClick={() => downloadCsv(`${project.name || 'seo'}-negatives.csv`, toCsv(negatives))}
+                    onClick={() => downloadCsv(`${project.name || 'seo'}-negatives.txt`, toKeywordExport(negatives))}
                     className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    Download negatives CSV
+                    Download negatives
                   </button>
                 </div>
 

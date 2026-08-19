@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-19 (seo-keyword-match-syntax)
+
+### SEO — copy/download keywords with match-type symbols
+- Phrase match is wrapped in quotes, exact in square brackets, broad left plain.
+- On-screen list, clipboard, and download all use that one-line-per-keyword format.
+
+---
+
 ## 2026-08-19 (seo-offer-ground-truth)
 
 ### SEO — offer field is ground truth for keywords/ads
