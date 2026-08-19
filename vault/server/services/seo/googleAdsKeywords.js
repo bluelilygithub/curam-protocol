@@ -9,14 +9,15 @@ const { assertUsableScrape } = require('./siteScraper');
 const TARGET = 100;
 const MATCH_TYPES = new Set(['broad', 'phrase', 'exact']);
 
-const KEYWORD_SYSTEM = `You are a senior Google Ads strategist building an initial Search campaign keyword list from a scraped website.
+const KEYWORD_SYSTEM = `You are a senior Google Ads strategist building an initial Search campaign keyword list.
 Return ONLY valid JSON. No markdown fences.
 Rules:
+- If an ADVERTISER OFFER is provided, that is GROUND TRUTH for what they sell. Keywords MUST match the offer. Ignore scraped page copy that describes a different industry or product.
+- If the scrape describes a different industry than the offer, do not write keywords for the scraped industry.
 - Keywords must be things a paying customer would type into Google.
 - Mix single words, 2–4 word phrases, and a few longer phrases.
-- Include brand terms from the site, core services/products, location + service combos if a city/region is clear, problem/solution phrasing, and commercial-intent variants (buy, near me, cost, quote, professional).
+- Include brand terms from the site (or domain), core services from the offer, location + service combos if a city/region is clear, problem/solution phrasing, and commercial-intent variants (near me, cost, quote).
 - Prefer phrase and exact match for most items; use broad sparingly.
-- Do not invent unrelated industries. Stay grounded in the site content.
 - No duplicate phrases (case-insensitive). No URLs. No punctuation except hyphens/apostrophes.`;
 
 const NEGATIVE_SYSTEM = `You are a senior Google Ads strategist writing an initial negative keyword list so the advertiser does not waste spend.
@@ -26,9 +27,9 @@ Negatives should block:
 - DIY / free / cheap / torrent / template / how to make
 - informational-only queries that will not convert (wikipedia, definition, meaning) when the site sells a commercial service
 - competitors only if they are clearly NOT this business
-- unrelated product categories that share words with this business
-- student, wholesale, used, second hand, diy, tutorial — when they do not match the offer
-Do not negate the advertiser's own brand or core service names from the positive list.
+- unrelated product categories
+- If the scraped page describes a DIFFERENT industry than the advertiser offer, add that scraped industry as negatives (so ads do not match it)
+Do not negate the advertiser's own brand or core service names from the offer / positive list.
 Phrase match for most negatives. No duplicates.`;
 
 function parseJsonField(val) {
@@ -127,14 +128,20 @@ function extractList(parsed, keys) {
   return [];
 }
 
-function siteBrief(snapshot, notes) {
+function siteBrief(snapshot, notes, offer = '') {
   const headings = (snapshot.headings || []).slice(0, 20).map((h) => h.text).join('; ');
-  return `Website: ${snapshot.finalUrl || snapshot.url}
-Title: ${snapshot.title || ''}
-Meta description: ${snapshot.description || ''}
+  const offerBlock = String(offer || '').trim()
+    ? `ADVERTISER OFFER (GROUND TRUTH — write keywords and ads for THIS, not for a conflicting scrape):
+${String(offer).trim()}
+
+`
+    : '';
+  return `${offerBlock}Website: ${snapshot.finalUrl || snapshot.url}
+Scraped title: ${snapshot.title || ''}
+Scraped meta description: ${snapshot.description || ''}
 Headings: ${headings}
-${notes ? `Advertiser notes: ${notes}\n` : ''}
-Site content:
+${notes ? `Extra notes: ${String(notes).trim()}\n` : ''}
+Scraped page text (supporting detail only; discard if it contradicts the offer):
 ${String(snapshot.text || '').slice(0, 12000)}`;
 }
 
@@ -166,17 +173,18 @@ Return JSON: { "items": [ { "phrase": "...", "matchType": "phrase|exact|broad" }
   return list.slice(0, TARGET);
 }
 
-async function generateGoogleAdsKeywords(userId, snapshot, { notes = '' } = {}) {
+async function generateGoogleAdsKeywords(userId, snapshot, { notes = '', offer = '' } = {}) {
   assertUsableScrape(snapshot);
   const modelId = await resolveModel(userId);
-  const brief = siteBrief(snapshot, notes);
+  const brief = siteBrief(snapshot, notes, offer);
+  const offerLine = String(offer || '').trim();
 
   const kwParsed = await callJson(userId, modelId, `${brief}
 
 Build the initial Google Ads keyword list for this advertiser.
 Return JSON:
 {
-  "business": "one-line what they sell",
+  "business": "one-line what they sell (copy the ADVERTISER OFFER if provided)",
   "geo": "city/region if clear, else empty string",
   "keywords": [
     { "phrase": "example phrase", "matchType": "phrase", "intent": "commercial" }
@@ -198,7 +206,7 @@ The keywords array MUST contain exactly ${TARGET} items.`, {
 
   const negParsed = await callJson(userId, modelId, `${brief}
 
-Business: ${kwParsed.business || snapshot.title || ''}
+Business: ${offerLine || kwParsed.business || snapshot.title || ''}
 Positive keywords (do not negate these):
 ${keywords.map((k) => k.phrase).join(', ')}
 
@@ -227,7 +235,7 @@ The negatives array MUST contain exactly ${TARGET} items.`, {
 
   return {
     kind: 'google_ads_keywords',
-    business: String(kwParsed.business || snapshot.title || '').slice(0, 240),
+    business: (offerLine || String(kwParsed.business || snapshot.title || '')).slice(0, 240),
     geo: String(kwParsed.geo || '').slice(0, 120),
     keywords,
     negatives,

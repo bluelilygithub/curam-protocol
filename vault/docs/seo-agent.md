@@ -10,12 +10,12 @@ Website SEO / Google Ads helper at **`/seo`**. Create a project from a URL, scra
 
 ## Flow
 
-1. **New project** — paste a website URL (optional name + notes: locations, offers, competitors).
+1. **New project** — paste a website URL and **what they sell** (the offer is ground truth for keywords and ads). Optional name + notes (locations, competitors).
 2. **Scrape** — homepage plus up to four same-origin pages (about / services / products / pricing when those links exist). SSRF-safe fetch via `htmlFetch.js` (DNS + private IP reject).
-3. **Keywords** — `standard` text model builds 100 keywords and 100 negatives grounded in the scrape.
+3. **Keywords** — `standard` text model builds 100 keywords and 100 negatives from the **offer**. Scrape supplies brand, URLs, and extra detail only when it matches.
 4. **Ads** — three RSA ad groups: 15 headlines (≤30 chars), 4 descriptions (≤90 chars), final URL from scraped pages, display paths, plus sitelinks.
 5. **Use** — copy (Google Ads token syntax for keywords; plain lines for copy) or download CSV.
-6. **Regenerate** — keywords and ads can be rebuilt independently from the stored scrape.
+6. **Regenerate** — keywords and ads can be rebuilt independently. Edit **What they sell** and save to rebuild from a corrected offer.
 
 Long operations use the global **ProcessingModal**.
 
@@ -33,9 +33,9 @@ The HTML extractor keeps header/nav/footer copy (many sites put unique text ther
 |---|---|---|
 | `GET` | `/api/seo/status` | Whether a text model is available |
 | `GET` | `/api/seo/projects` | List projects (no full scrape payload) |
-| `POST` | `/api/seo/projects` | `{ url, name?, notes? }` → scrape + keywords + ads |
+| `POST` | `/api/seo/projects` | `{ url, offer, name?, notes? }` → scrape + keywords + ads |
 | `GET` | `/api/seo/projects/:id` | Project + keyword and ads artifacts |
-| `PATCH` | `/api/seo/projects/:id` | `{ name?, notes? }` |
+| `PATCH` | `/api/seo/projects/:id` | `{ name?, notes?, offer? }` |
 | `DELETE` | `/api/seo/projects/:id` | Remove project and artifacts |
 | `POST` | `/api/seo/projects/:id/keywords` | Regenerates keyword lists from stored scrape |
 | `POST` | `/api/seo/projects/:id/ads` | Regenerates RSA copy from stored scrape |
@@ -48,7 +48,7 @@ Feature flag: **`seo`** (Settings → Feature Access).
 
 ## Data
 
-`seo_projects` holds the URL, notes, and `siteSnapshot` (title, description, headings, page texts).
+`seo_projects` holds the URL, **offer** (what they sell — keywords follow this), notes, and `siteSnapshot`. If the scrape describes a different industry than the offer, the UI warns and generation still follows the offer.
 
 `seo_artifacts` is keyed by `(projectId, kind)`:
 

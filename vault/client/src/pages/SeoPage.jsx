@@ -295,6 +295,8 @@ export default function SeoPage() {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [offer, setOffer] = useState('');
+  const [offerDraft, setOfferDraft] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pane, setPane] = useState('keywords');
 
@@ -328,7 +330,10 @@ export default function SeoPage() {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found');
-        if (!cancelled) setProject(data);
+        if (!cancelled) {
+          setProject(data);
+          setOfferDraft(data.offer || '');
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -355,12 +360,17 @@ export default function SeoPage() {
       addToast('Paste a website URL', 'error');
       return;
     }
+    if (!offer.trim()) {
+      addToast('Say what they sell — keywords follow this, not the live page copy', 'error');
+      return;
+    }
     startProcessing('Scraping the site…', 'Then building keywords, negatives, and RSA ad copy for Google Ads.');
     try {
       const res = await api.post('/api/seo/projects', {
         url: url.trim(),
         name: name.trim() || undefined,
         notes: notes.trim() || undefined,
+        offer: offer.trim() || undefined,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not create project');
@@ -368,6 +378,7 @@ export default function SeoPage() {
       setName('');
       setUrl('');
       setNotes('');
+      setOffer('');
       if (data.keywordError || data.adsError) {
         addToast([data.keywordError && `Keywords: ${data.keywordError}`, data.adsError && `Ads: ${data.adsError}`].filter(Boolean).join(' · '), 'error');
       } else {
@@ -381,9 +392,36 @@ export default function SeoPage() {
     }
   };
 
+  const handleSaveOfferAndRegen = async () => {
+    if (!id) return;
+    if (!offerDraft.trim()) {
+      addToast('Say what they sell before regenerating', 'error');
+      return;
+    }
+    startProcessing('Saving offer and regenerating…', 'Keywords and ads will follow this offer, not a conflicting scrape.');
+    try {
+      const patch = await api.patch(`/api/seo/projects/${id}`, { offer: offerDraft.trim() });
+      const patched = await patch.json();
+      if (!patch.ok) throw new Error(patched.error || 'Could not save offer');
+      const res = await api.post(`/api/seo/projects/${id}/keywords`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generate failed');
+      const adsRes = await api.post(`/api/seo/projects/${id}/ads`);
+      const adsData = await adsRes.json();
+      if (!adsRes.ok) throw new Error(adsData.error || 'Ads generate failed');
+      setProject(adsData);
+      await loadList();
+      addToast('Lists rebuilt from your offer', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
   const handleRegenerate = async () => {
     if (!id) return;
-    startProcessing('Generating keyword lists…', '100 keywords and 100 negatives from the scraped site.');
+    startProcessing('Generating keyword lists…', 'Keywords follow What they sell when that field is set.');
     try {
       const res = await api.post(`/api/seo/projects/${id}/keywords`);
       const data = await res.json();
@@ -400,7 +438,7 @@ export default function SeoPage() {
 
   const handleGenerateAds = async () => {
     if (!id) return;
-    startProcessing('Writing ads…', 'Headlines, descriptions, and destination URLs from the scraped site.');
+    startProcessing('Writing ads…', 'Headlines and descriptions follow What they sell when that field is set.');
     try {
       const res = await api.post(`/api/seo/projects/${id}/ads`);
       const data = await res.json();
@@ -534,7 +572,7 @@ export default function SeoPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO project</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Paste a website URL. We scrape the homepage plus a few related pages, then build 100 Google Ads keywords, 100 negatives, and RSA headlines, descriptions, and destination URLs.
+                Paste a website URL and what the business actually sells. Keyword lists follow the offer. The scrape is used for URLs, brand, and extra detail — not if it describes a different industry.
               </p>
             </div>
 
@@ -550,11 +588,23 @@ export default function SeoPage() {
             </label>
 
             <label className="block space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What they sell</span>
+              <textarea
+                value={offer}
+                onChange={(e) => setOffer(e.target.value)}
+                rows={2}
+                placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                style={FIELD}
+              />
+            </label>
+
+            <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Project name (optional)</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Defaults to the page title"
+                placeholder="Defaults to the offer or page title"
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={FIELD}
               />
@@ -565,8 +615,8 @@ export default function SeoPage() {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                placeholder="Locations you serve, offers to push, competitors to exclude…"
+                rows={2}
+                placeholder="Locations, competitors to exclude…"
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
                 style={FIELD}
               />
@@ -597,10 +647,10 @@ export default function SeoPage() {
                 >
                   {project.url}
                 </a>
-                {project.googleAdsKeywords?.business && (
+                {(project.offer || project.googleAdsKeywords?.business) && (
                   <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                    {project.googleAdsKeywords.business}
-                    {project.googleAdsKeywords.geo ? ` · ${project.googleAdsKeywords.geo}` : ''}
+                    {project.offer || project.googleAdsKeywords.business}
+                    {project.googleAdsKeywords?.geo ? ` · ${project.googleAdsKeywords.geo}` : ''}
                   </p>
                 )}
               </div>
@@ -622,6 +672,34 @@ export default function SeoPage() {
                   </button>
                 )}
               </div>
+            </div>
+
+            {project.scrapeMismatch && (
+              <div className="rounded-xl border p-3 text-xs leading-relaxed" style={{ borderColor: '#f59e0b', background: '#fef3c7', color: 'var(--color-text)' }}>
+                The live page reads as {snapshot.title || 'a different business'}. Keywords and ads will follow What they sell below, not that scrape. Google Ads Quality Score will still suffer if the landing page does not match the offer.
+              </div>
+            )}
+
+            <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What they sell</span>
+                <textarea
+                  value={offerDraft}
+                  onChange={(e) => setOfferDraft(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={FIELD}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleSaveOfferAndRegen}
+                className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Save offer & regenerate lists
+              </button>
             </div>
 
             {snapshot.title && (
@@ -707,7 +785,7 @@ export default function SeoPage() {
 
                 {!project.googleAdsKeywords && (
                   <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                    No keyword lists yet. Tap <strong>Generate keywords</strong> to build them from the scrape.
+                    No keyword lists yet. Tap Generate keywords — lists follow What they sell when that field is set.
                   </p>
                 )}
 

@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-19 (seo-offer-ground-truth)
+
+### SEO — offer field is ground truth for keywords/ads
+- New **What they sell** field. Lists follow that offer even if the scraped page is a different industry.
+- Warns when scrape title/copy does not match the offer (e.g. domain currently showing unrelated content).
+- Existing projects: edit the offer and **Save offer & regenerate lists**.
+
+---
+
 ## 2026-08-19 (seo-scrape-text)
 
 ### SEO scrape — empty “not enough text” false positive

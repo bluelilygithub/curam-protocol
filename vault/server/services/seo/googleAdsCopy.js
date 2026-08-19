@@ -21,10 +21,11 @@ Hard limits (count every character including spaces; never exceed):
 - path1 / path2: 15 characters or fewer, no slashes, no spaces, lowercase if possible
 - sitelink text: 25 characters or fewer; sitelink descriptions: 35 characters or fewer
 Rules:
-- Ground every claim in the scraped site. No invented prices, guarantees, or reviews.
+- If an ADVERTISER OFFER is provided, that is GROUND TRUTH. Headlines and descriptions MUST sell that offer. Ignore scraped copy that describes a different industry.
+- Do not invent prices, guarantees, or reviews. If the scrape contradicts the offer, do not use scrape claims.
 - Mix brand, offer, benefit, proof, CTA, and location (if geo is clear).
 - Headlines must stand alone; Google will mix them. Avoid repeating the same phrase.
-- Descriptions should include a clear next step (call, quote, book, shop).
+- Descriptions should include a clear next step (call, quote, book, inspect).
 - finalUrl MUST be one of the scraped page URLs (or the homepage). Do not invent paths.
 - Write 3 ad groups: (1) brand / homepage (2) primary offer (3) location or secondary offer.`;
 
@@ -142,21 +143,22 @@ function normaliseSitelink(raw, allowed, fallbackUrl) {
   };
 }
 
-async function generateGoogleAdsCopy(userId, snapshot, { notes = '', keywords = [], business = '', geo = '' } = {}) {
+async function generateGoogleAdsCopy(userId, snapshot, { notes = '', offer = '', keywords = [], business = '', geo = '' } = {}) {
   assertUsableScrape(snapshot);
   const modelId = await resolveModel(userId);
-  const brief = siteBrief(snapshot, notes);
+  const brief = siteBrief(snapshot, notes, offer);
   const pages = (snapshot.pages || []).map((p) => `${p.title || ''} ${p.url}`).join('\n');
   const kwSample = (keywords || []).slice(0, 30).map((k) => k.phrase).join(', ');
   const home = snapshot.finalUrl || snapshot.url;
   const allowed = allowedUrls(snapshot);
+  const offerLine = String(offer || business || '').trim();
 
   const parsed = await callJson(userId, modelId, `${brief}
 
 Scraped page URLs (use these as destination URLs only):
 ${pages || home}
 
-Business: ${business || snapshot.title || ''}
+Business: ${offerLine || snapshot.title || ''}
 Geo: ${geo || ''}
 Sample keywords: ${kwSample}
 

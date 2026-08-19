@@ -37,6 +37,7 @@ router.post('/projects', async (req, res) => {
       url: req.body?.url,
       name: req.body?.name,
       notes: req.body?.notes,
+      offer: req.body?.offer,
     });
     res.status(201).json(project);
   } catch (err) {
@@ -61,6 +62,7 @@ router.patch('/projects/:id', async (req, res) => {
     const project = await updateProject(req.user.id, Number(req.params.id), {
       name: req.body?.name,
       notes: req.body?.notes,
+      offer: req.body?.offer,
     });
     if (!project) return res.status(404).json({ error: 'Not found' });
     res.json(project);

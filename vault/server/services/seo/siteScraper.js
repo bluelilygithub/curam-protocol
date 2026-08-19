@@ -217,4 +217,20 @@ function assertUsableScrape(snapshot) {
   }
 }
 
-module.exports = { scrapeSite, combinedText, siteSignal, assertUsableScrape };
+const OFFER_STOP = new Set([
+  'that', 'this', 'with', 'from', 'your', 'their', 'about', 'have', 'been',
+  'were', 'will', 'would', 'could', 'should', 'into', 'over', 'under',
+  'services', 'service', 'and', 'for', 'the',
+]);
+
+function scrapeConflictsWithOffer(snapshot, offer) {
+  const raw = String(offer || '').trim();
+  if (!raw) return false;
+  const terms = (raw.toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !OFFER_STOP.has(w));
+  if (!terms.length) return false;
+  const hay = `${snapshot?.title || ''} ${snapshot?.description || ''} ${String(snapshot?.text || '').slice(0, 2500)}`.toLowerCase();
+  const hits = terms.filter((t) => hay.includes(t));
+  return hits.length === 0;
+}
+
+module.exports = { scrapeSite, combinedText, siteSignal, assertUsableScrape, scrapeConflictsWithOffer };

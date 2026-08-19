@@ -1602,6 +1602,7 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_seo_artifacts_one_kind
       ON seo_artifacts ("projectId", kind)
   `);
+  await pool.query(`ALTER TABLE seo_projects ADD COLUMN IF NOT EXISTS offer TEXT NOT NULL DEFAULT ''`);
 
   console.log('[db] Schema ready');
 }
