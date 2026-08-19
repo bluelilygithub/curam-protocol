@@ -2,6 +2,7 @@
 
 const { callJson, resolveModel, siteBrief } = require('./googleAdsKeywords');
 const { captureIf, makeFingerprint } = require('../SuggestionService');
+const { assertUsableScrape } = require('./siteScraper');
 
 const HEADLINE_MAX = 30;
 const DESCRIPTION_MAX = 90;
@@ -142,9 +143,7 @@ function normaliseSitelink(raw, allowed, fallbackUrl) {
 }
 
 async function generateGoogleAdsCopy(userId, snapshot, { notes = '', keywords = [], business = '', geo = '' } = {}) {
-  if (!snapshot?.text || snapshot.text.length < 80) {
-    throw new Error('Not enough text on that site to write ads — check the URL is a public page');
-  }
+  assertUsableScrape(snapshot);
   const modelId = await resolveModel(userId);
   const brief = siteBrief(snapshot, notes);
   const pages = (snapshot.pages || []).map((p) => `${p.title || ''} ${p.url}`).join('\n');

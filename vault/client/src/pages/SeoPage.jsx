@@ -633,6 +633,8 @@ export default function SeoPage() {
                 )}
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                   {(snapshot.pages || []).length} page{(snapshot.pages || []).length === 1 ? '' : 's'} · {snapshot.charCount || 0} characters
+                  {snapshot.htmlBytes ? ` · ${snapshot.htmlBytes} bytes HTML` : ''}
+                  {snapshot.statusCode ? ` · HTTP ${snapshot.statusCode}` : ''}
                 </p>
               </div>
             )}

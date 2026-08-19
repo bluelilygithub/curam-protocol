@@ -40,6 +40,43 @@ function extractHeadings(html) {
   return out;
 }
 
+function extractJsonLdText(html) {
+  const parts = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const data = JSON.parse(m[1]);
+      walkJsonLd(data, parts);
+    } catch { /* ignore broken JSON-LD */ }
+  }
+  return parts.join('\n').slice(0, 4000);
+}
+
+function walkJsonLd(node, parts, depth = 0) {
+  if (!node || depth > 8 || parts.length > 80) return;
+  if (typeof node === 'string') {
+    const t = node.replace(/\s+/g, ' ').trim();
+    if (t.length >= 12 && t.length < 400 && !/^https?:/i.test(t)) parts.push(t);
+    return;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkJsonLd(item, parts, depth + 1));
+    return;
+  }
+  if (typeof node !== 'object') return;
+  for (const key of ['name', 'legalName', 'alternateName', 'description', 'slogan', 'jobTitle', 'brand']) {
+    if (node[key]) walkJsonLd(node[key], parts, depth + 1);
+  }
+  if (Array.isArray(node.areaServed)) walkJsonLd(node.areaServed, parts, depth + 1);
+  if (node.address) {
+    const a = node.address;
+    const line = [a.addressLocality, a.addressRegion, a.addressCountry].filter(Boolean).join(', ');
+    if (line) parts.push(line);
+  }
+  if (node['@graph']) walkJsonLd(node['@graph'], parts, depth + 1);
+}
+
 function sameOriginLinks(html, baseUrl) {
   let base;
   try { base = new URL(baseUrl); } catch { return []; }
@@ -91,11 +128,14 @@ async function fetchPage(url) {
   }
   return {
     url: finalUrl || url,
-    title: extractTitle(body),
+    title: extractTitle(body) || metaContent(body, 'og:title'),
     description: metaContent(body, 'description') || metaContent(body, 'og:description'),
     headings: extractHeadings(body),
-    text: htmlToText(body, 8000),
+    jsonLd: extractJsonLdText(body),
+    text: htmlToText(body, 12000),
     html: body,
+    htmlBytes: body.length,
+    statusCode,
   };
 }
 
@@ -105,8 +145,9 @@ function combinedText(snapshot) {
   if (snapshot.description) parts.push(`Description: ${snapshot.description}`);
   const headings = (snapshot.headings || []).map((h) => h.text).filter(Boolean);
   if (headings.length) parts.push(`Headings:\n${headings.join('\n')}`);
+  if (snapshot.jsonLd) parts.push(`Structured data:\n${snapshot.jsonLd}`);
   for (const page of snapshot.pages || []) {
-    parts.push(`--- ${page.url} ---\n${page.title || ''}\n${page.text || ''}`);
+    parts.push(`--- ${page.url} ---\n${page.title || ''}\n${page.jsonLd || ''}\n${page.text || ''}`);
   }
   return parts.join('\n\n').slice(0, 18000);
 }
@@ -119,7 +160,7 @@ async function scrapeSite(rawUrl) {
   const extraPages = await Promise.all(extraUrls.map(async (url) => {
     try {
       const page = await fetchPage(url);
-      return { url: page.url, title: page.title, text: page.text };
+      return { url: page.url, title: page.title, text: page.text, jsonLd: page.jsonLd };
     } catch (err) {
       console.warn('[seo] extra page failed', url, err.message);
       return null;
@@ -127,7 +168,7 @@ async function scrapeSite(rawUrl) {
   }));
 
   const pages = [
-    { url: home.url, title: home.title, text: home.text },
+    { url: home.url, title: home.title, text: home.text, jsonLd: home.jsonLd },
     ...extraPages.filter(Boolean),
   ];
 
@@ -137,12 +178,43 @@ async function scrapeSite(rawUrl) {
     title: home.title,
     description: home.description,
     headings: home.headings,
+    jsonLd: home.jsonLd,
     pages,
     scrapedAt: new Date().toISOString(),
+    htmlBytes: home.htmlBytes || 0,
+    statusCode: home.statusCode,
   };
   snapshot.text = combinedText(snapshot);
   snapshot.charCount = snapshot.text.length;
+  console.log('[seo] scrape', {
+    url: snapshot.finalUrl,
+    status: snapshot.statusCode,
+    htmlBytes: snapshot.htmlBytes,
+    charCount: snapshot.charCount,
+    pages: pages.length,
+    title: (snapshot.title || '').slice(0, 80),
+  });
   return snapshot;
 }
 
-module.exports = { scrapeSite, combinedText };
+function siteSignal(snapshot) {
+  return [snapshot?.title, snapshot?.description, snapshot?.jsonLd, snapshot?.text]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function assertUsableScrape(snapshot) {
+  const signal = siteSignal(snapshot);
+  if (signal.length >= 40) return;
+  const status = snapshot?.statusCode || 0;
+  const bytes = snapshot?.htmlBytes || 0;
+  if (status >= 400 || bytes < 80) {
+    throw new Error(
+      `Could not read that page (HTTP ${status || 'unknown'}, ${bytes} bytes). The site may be blocking scrapes or the URL may be wrong.`
+    );
+  }
+}
+
+module.exports = { scrapeSite, combinedText, siteSignal, assertUsableScrape };

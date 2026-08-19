@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-19 (seo-scrape-text)
+
+### SEO scrape — empty “not enough text” false positive
+- Fetch uses a browser User-Agent and decompresses gzip/br (bot UA + compressed HTML was yielding almost no text).
+- HTML extractor no longer deletes header/nav/footer blocks; JSON-LD is included.
+- Keyword/ad generation only aborts on a real failed fetch, not a short text gate.
+
+---
+
 ## 2026-08-19 (seo-agent-ads)
 
 ### SEO agent — RSA ad copy

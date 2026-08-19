@@ -23,6 +23,8 @@ JavaScript-heavy sites may yield little text. The scrape is HTML-only (no headle
 
 RSA character limits are enforced after the model returns. Destination URLs are restricted to pages actually scraped (homepage fallback).
 
+The HTML extractor keeps header/nav/footer copy (many sites put unique text there), reads JSON-LD, and decompresses gzip. A bot User-Agent was causing empty pages on some hosts.
+
 ---
 
 ## API

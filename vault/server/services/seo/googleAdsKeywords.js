@@ -4,6 +4,7 @@ const { callModel } = require('../callModel');
 const { getModelsForUser, pickTextModel } = require('../modelResolver');
 const { logUsage } = require('../../utils/logUsage');
 const { parseModelJson } = require('../../utils/parseModelJson');
+const { assertUsableScrape } = require('./siteScraper');
 
 const TARGET = 100;
 const MATCH_TYPES = new Set(['broad', 'phrase', 'exact']);
@@ -166,9 +167,7 @@ Return JSON: { "items": [ { "phrase": "...", "matchType": "phrase|exact|broad" }
 }
 
 async function generateGoogleAdsKeywords(userId, snapshot, { notes = '' } = {}) {
-  if (!snapshot?.text || snapshot.text.length < 80) {
-    throw new Error('Not enough text on that site to build keywords — check the URL is a public page');
-  }
+  assertUsableScrape(snapshot);
   const modelId = await resolveModel(userId);
   const brief = siteBrief(snapshot, notes);
 

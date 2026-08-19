@@ -3,6 +3,7 @@
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
+const zlib = require('zlib');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
@@ -34,6 +35,26 @@ function checkSsrf(hostname) {
   });
 }
 
+function decodeBody(buffer, encoding) {
+  const enc = String(encoding || '').toLowerCase();
+  try {
+    if (enc.includes('br')) return zlib.brotliDecompressSync(buffer);
+    if (enc.includes('gzip')) return zlib.gunzipSync(buffer);
+    if (enc.includes('deflate')) {
+      try { return zlib.inflateSync(buffer); } catch {
+        return zlib.inflateRawSync(buffer);
+      }
+    }
+    if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
+      return zlib.gunzipSync(buffer);
+    }
+  } catch (err) {
+    console.warn('[htmlFetch] decompress failed:', err.message);
+    return buffer;
+  }
+  return buffer;
+}
+
 function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
@@ -51,9 +72,11 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
         path: parsed.pathname + parsed.search,
         method: 'GET',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; VaultFetcher/1.0)',
-          'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9',
-          'Accept-Language': 'en-US,en;q=0.9',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Accept-Language': 'en-AU,en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
         },
         timeout: timeoutMs,
       };
@@ -73,11 +96,16 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
           }
           chunks.push(chunk);
         });
-        res.on('end', () => resolve({
-          body: Buffer.concat(chunks).toString('utf8'),
-          statusCode: res.statusCode,
-          finalUrl: url,
-        }));
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks);
+          const decoded = decodeBody(raw, res.headers['content-encoding']);
+          resolve({
+            body: decoded.toString('utf8'),
+            statusCode: res.statusCode,
+            finalUrl: url,
+            htmlBytes: raw.length,
+          });
+        });
         res.on('error', reject);
       });
 
@@ -102,8 +130,8 @@ function extractTitle(html) {
 
 function htmlToText(html, maxChars = 15000) {
   return decodeEntities(html
-    .replace(/<(script|style|noscript|nav|header|footer|aside|iframe|svg|canvas|form)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/?(p|div|article|section|main|h[1-6]|li|tr|br|blockquote)[^>]*>/gi, '\n')
+    .replace(/<(script|style|noscript|svg|canvas|iframe)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/?(p|div|article|section|main|h[1-6]|li|tr|br|blockquote|header|footer|nav|aside)[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
