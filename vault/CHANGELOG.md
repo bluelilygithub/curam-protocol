@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-19 (seo-agent-ads)
+
+### SEO agent — RSA ad copy
+- Project **Ads** tab: three Responsive Search Ads (15 headlines ≤30, 4 descriptions ≤90), display paths, destination URLs from scraped pages, sitelinks.
+- `POST /api/seo/projects/:id/ads`; stored as `seo_artifacts.kind = google_ads_copy`. New projects generate ads after keywords.
+- Copy / CSV export. Character counts shown on each line.
+
+---
+
 ## 2026-08-19 (seo-agent-keywords)
 
 ### SEO agent — projects + Google Ads keyword lists

@@ -3,9 +3,11 @@
 const { pool } = require('../../db');
 const { scrapeSite } = require('./siteScraper');
 const { generateGoogleAdsKeywords, getSeoStatus } = require('./googleAdsKeywords');
+const { generateGoogleAdsCopy, reportCopyGaps } = require('./googleAdsCopy');
 const { capture, captureIf, makeFingerprint } = require('../SuggestionService');
 
-const ARTIFACT_KIND = 'google_ads_keywords';
+const KEYWORD_KIND = 'google_ads_keywords';
+const COPY_KIND = 'google_ads_copy';
 
 function parseJsonField(val) {
   if (val == null) return null;
@@ -17,8 +19,17 @@ function hostnameOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
-function rowToProject(row, artifact = null) {
+function artifactsByKind(rows) {
+  const out = {};
+  for (const row of rows || []) {
+    out[row.kind] = parseJsonField(row.payload);
+  }
+  return out;
+}
+
+function rowToProject(row, artifactRows = []) {
   if (!row) return null;
+  const byKind = artifactsByKind(artifactRows);
   return {
     id: row.id,
     name: row.name,
@@ -27,20 +38,24 @@ function rowToProject(row, artifact = null) {
     siteSnapshot: parseJsonField(row.siteSnapshot) || {},
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    googleAdsKeywords: artifact ? parseJsonField(artifact.payload) : null,
+    googleAdsKeywords: byKind[KEYWORD_KIND] || null,
+    googleAdsCopy: byKind[COPY_KIND] || null,
   };
 }
 
 async function listProjects(userId) {
   const { rows } = await pool.query(
     `SELECT p.id, p.name, p.url, p.notes, p."createdAt", p."updatedAt",
-            a.id AS "artifactId", a."updatedAt" AS "keywordsAt"
+            k.id AS "keywordId", k."updatedAt" AS "keywordsAt",
+            c.id AS "copyId", c."updatedAt" AS "adsAt"
        FROM seo_projects p
-  LEFT JOIN seo_artifacts a
-         ON a."projectId" = p.id AND a.kind = $2
+  LEFT JOIN seo_artifacts k
+         ON k."projectId" = p.id AND k.kind = $2
+  LEFT JOIN seo_artifacts c
+         ON c."projectId" = p.id AND c.kind = $3
       WHERE p."userId" = $1
       ORDER BY p."updatedAt" DESC, p.id DESC`,
-    [userId, ARTIFACT_KIND]
+    [userId, KEYWORD_KIND, COPY_KIND]
   );
   return rows.map((r) => ({
     id: r.id,
@@ -48,8 +63,10 @@ async function listProjects(userId) {
     url: r.url,
     notes: r.notes || '',
     hostname: hostnameOf(r.url),
-    hasKeywords: Boolean(r.artifactId),
+    hasKeywords: Boolean(r.keywordId),
+    hasAds: Boolean(r.copyId),
     keywordsAt: r.keywordsAt || null,
+    adsAt: r.adsAt || null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }));
@@ -62,10 +79,10 @@ async function getProject(userId, id) {
   );
   if (!rows[0]) return null;
   const { rows: arts } = await pool.query(
-    `SELECT * FROM seo_artifacts WHERE "projectId"=$1 AND "userId"=$2 AND kind=$3`,
-    [id, userId, ARTIFACT_KIND]
+    `SELECT * FROM seo_artifacts WHERE "projectId"=$1 AND "userId"=$2`,
+    [id, userId]
   );
-  return rowToProject(rows[0], arts[0] || null);
+  return rowToProject(rows[0], arts);
 }
 
 async function updateProject(userId, id, { name, notes } = {}) {
@@ -90,13 +107,13 @@ async function deleteProject(userId, id) {
   return rowCount > 0;
 }
 
-async function saveArtifact(userId, projectId, payload) {
+async function saveArtifact(userId, projectId, kind, payload) {
   await pool.query(
     `INSERT INTO seo_artifacts ("projectId", "userId", kind, payload, "updatedAt")
      VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT ("projectId", kind)
      DO UPDATE SET payload = EXCLUDED.payload, "updatedAt" = NOW()`,
-    [projectId, userId, ARTIFACT_KIND, JSON.stringify(payload)]
+    [projectId, userId, kind, JSON.stringify(payload)]
   );
   await pool.query(
     `UPDATE seo_projects SET "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
@@ -133,8 +150,25 @@ async function generateKeywordsForProject(userId, projectId) {
   const snapshot = project.siteSnapshot;
   if (!snapshot?.text) throw new Error('No scraped site content — recreate the project with a URL');
   const payload = await generateGoogleAdsKeywords(userId, snapshot, { notes: project.notes });
-  await saveArtifact(userId, projectId, payload);
+  await saveArtifact(userId, projectId, KEYWORD_KIND, payload);
   await reportKeywordGaps(userId, projectId, snapshot, payload);
+  return getProject(userId, projectId);
+}
+
+async function generateAdsForProject(userId, projectId) {
+  const project = await getProject(userId, projectId);
+  if (!project) throw new Error('Project not found');
+  const snapshot = project.siteSnapshot;
+  if (!snapshot?.text) throw new Error('No scraped site content — recreate the project with a URL');
+  const kw = project.googleAdsKeywords || {};
+  const payload = await generateGoogleAdsCopy(userId, snapshot, {
+    notes: project.notes,
+    keywords: kw.keywords || [],
+    business: kw.business || '',
+    geo: kw.geo || '',
+  });
+  await saveArtifact(userId, projectId, COPY_KIND, payload);
+  await reportCopyGaps(userId, projectId, payload);
   return getProject(userId, projectId);
 }
 
@@ -161,10 +195,12 @@ async function createProject(userId, { url, name, notes } = {}) {
   const projectId = rows[0].id;
 
   let keywordError = null;
+  let adsError = null;
+  let keywordPayload = null;
   try {
-    const payload = await generateGoogleAdsKeywords(userId, snapshot, { notes });
-    await saveArtifact(userId, projectId, payload);
-    await reportKeywordGaps(userId, projectId, snapshot, payload);
+    keywordPayload = await generateGoogleAdsKeywords(userId, snapshot, { notes });
+    await saveArtifact(userId, projectId, KEYWORD_KIND, keywordPayload);
+    await reportKeywordGaps(userId, projectId, snapshot, keywordPayload);
   } catch (err) {
     keywordError = err.message;
     await capture({
@@ -178,14 +214,38 @@ async function createProject(userId, { url, name, notes } = {}) {
     });
   }
 
+  try {
+    const copyPayload = await generateGoogleAdsCopy(userId, snapshot, {
+      notes,
+      keywords: keywordPayload?.keywords || [],
+      business: keywordPayload?.business || '',
+      geo: keywordPayload?.geo || '',
+    });
+    await saveArtifact(userId, projectId, COPY_KIND, copyPayload);
+    await reportCopyGaps(userId, projectId, copyPayload);
+  } catch (err) {
+    adsError = err.message;
+    await capture({
+      userId,
+      source: 'seo',
+      category: 'alert',
+      fingerprint: makeFingerprint('seo', `ads-failed:${projectId}`),
+      title: 'SEO ad copy failed after scrape',
+      body: `Keywords may be ready for ${snapshot.finalUrl || snapshot.url}, but RSA copy failed: ${err.message}. Open the project and tap Generate ads.`,
+      context: `/seo/${projectId}`,
+    });
+  }
+
   const project = await getProject(userId, projectId);
   if (!project) throw new Error('Project was not saved');
   if (keywordError) project.keywordError = keywordError;
+  if (adsError) project.adsError = adsError;
   return project;
 }
 
 module.exports = {
-  ARTIFACT_KIND,
+  KEYWORD_KIND,
+  COPY_KIND,
   getSeoStatus,
   listProjects,
   getProject,
@@ -193,4 +253,5 @@ module.exports = {
   updateProject,
   deleteProject,
   generateKeywordsForProject,
+  generateAdsForProject,
 };

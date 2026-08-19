@@ -9,6 +9,7 @@ const {
   updateProject,
   deleteProject,
   generateKeywordsForProject,
+  generateAdsForProject,
 } = require('../services/seo/seoProjectService');
 
 const router = express.Router();
@@ -86,6 +87,16 @@ router.post('/projects/:id/keywords', async (req, res) => {
     res.json(project);
   } catch (err) {
     console.error('[seo/projects/:id/keywords]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/projects/:id/ads', async (req, res) => {
+  try {
+    const project = await generateAdsForProject(req.user.id, Number(req.params.id));
+    res.json(project);
+  } catch (err) {
+    console.error('[seo/projects/:id/ads]', err.message);
     res.status(400).json({ error: err.message });
   }
 });

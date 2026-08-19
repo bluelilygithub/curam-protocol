@@ -40,6 +40,57 @@ function downloadCsv(filename, text) {
   URL.revokeObjectURL(url);
 }
 
+function displayHost(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function CharMeta({ text, max }) {
+  const n = (text || '').length;
+  const over = n > max;
+  return (
+    <span className="text-[10px] shrink-0 tabular-nums" style={{ color: over ? '#b45309' : 'var(--color-muted)' }}>
+      {n}/{max}
+    </span>
+  );
+}
+
+function LineList({ items, max, empty }) {
+  if (!items?.length) {
+    return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{empty}</p>;
+  }
+  return (
+    <ol className="space-y-1">
+      {items.map((text, i) => (
+        <li
+          key={`${text}-${i}`}
+          className="flex items-start justify-between gap-2 rounded-lg border px-2.5 py-1.5"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+        >
+          <span className="text-xs leading-relaxed min-w-0" style={{ color: 'var(--color-text)' }}>{text}</span>
+          <CharMeta text={text} max={max} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function adsToCsv(copy) {
+  const rows = ['Ad group,Asset type,Text,Final URL,Path 1,Path 2'];
+  const esc = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
+  for (const ad of copy?.ads || []) {
+    for (const h of ad.headlines || []) {
+      rows.push([esc(ad.adGroup), 'Headline', esc(h), esc(ad.finalUrl), esc(ad.path1), esc(ad.path2)].join(','));
+    }
+    for (const d of ad.descriptions || []) {
+      rows.push([esc(ad.adGroup), 'Description', esc(d), esc(ad.finalUrl), esc(ad.path1), esc(ad.path2)].join(','));
+    }
+  }
+  for (const link of copy?.sitelinks || []) {
+    rows.push([esc('Sitelinks'), 'Sitelink', esc(link.text), esc(link.url), esc(link.description1), esc(link.description2)].join(','));
+  }
+  return rows.join('\n');
+}
+
 function KeywordList({ title, items, empty }) {
   return (
     <section className="rounded-2xl border p-4 space-y-3 min-w-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -71,6 +122,158 @@ function KeywordList({ title, items, empty }) {
   );
 }
 
+function AdCopySection({ copy, projectName, onGenerate, onCopy, onDownload }) {
+  const ads = copy?.ads || [];
+  const sitelinks = copy?.sitelinks || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            {copy?.campaignName || 'Responsive search ads'}
+          </h3>
+          <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            Headlines 30 characters · descriptions 90 · destination URLs from scraped pages. Google mixes headlines at serving time.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onGenerate}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            {copy ? 'Regenerate ads' : 'Generate ads'}
+          </button>
+          {copy && (
+            <>
+              <button
+                type="button"
+                onClick={() => onCopy(ads.flatMap((a) => a.headlines), 'Headlines')}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Copy headlines
+              </button>
+              <button
+                type="button"
+                onClick={() => onCopy(ads.flatMap((a) => a.descriptions), 'Descriptions')}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Copy descriptions
+              </button>
+              <button
+                type="button"
+                onClick={() => onDownload(`${projectName || 'seo'}-ads.csv`, adsToCsv(copy))}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Download ads CSV
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!copy && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          No ads yet. Tap <strong>Generate ads</strong> to write headlines, descriptions, and destination URLs from the scrape.
+        </p>
+      )}
+
+      {ads.map((ad, i) => {
+        const path = [ad.path1, ad.path2].filter(Boolean).join('/');
+        const previewUrl = `${displayHost(ad.finalUrl)}${path ? `/${path}` : ''}`;
+        return (
+          <article
+            key={`${ad.adGroup}-${i}`}
+            className="rounded-2xl border p-4 space-y-3"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{ad.adGroup}</h4>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {ad.headlines?.length || 0} headlines · {ad.descriptions?.length || 0} descriptions
+              </span>
+            </div>
+
+            <div className="rounded-xl border px-3 py-2.5 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {(ad.headlines || []).slice(0, 3).join(' | ') || 'Headline preview'}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-primary)' }}>{previewUrl}</p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                {(ad.descriptions || [])[0] || ''}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Destination URL</p>
+              <a
+                href={ad.finalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs break-all transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {ad.finalUrl}
+              </a>
+              {(ad.path1 || ad.path2) && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  Display path: {previewUrl}
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Headlines</p>
+                <LineList items={ad.headlines} max={30} empty="No headlines." />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Descriptions</p>
+                <LineList items={ad.descriptions} max={90} empty="No descriptions." />
+              </div>
+            </div>
+          </article>
+        );
+      })}
+
+      {sitelinks.length > 0 && (
+        <section className="rounded-2xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Sitelinks</h4>
+          <ul className="space-y-2">
+            {sitelinks.map((link, i) => (
+              <li key={`${link.text}-${i}`} className="rounded-xl border p-3 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{link.text}</p>
+                  <CharMeta text={link.text} max={25} />
+                </div>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs break-all transition-opacity hover:opacity-70"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  {link.url}
+                </a>
+                {(link.description1 || link.description2) && (
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                    {[link.description1, link.description2].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export default function SeoPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -93,6 +296,7 @@ export default function SeoPage() {
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [pane, setPane] = useState('keywords');
 
   const loadList = useCallback(async () => {
     const res = await api.get('/api/seo/projects');
@@ -151,7 +355,7 @@ export default function SeoPage() {
       addToast('Paste a website URL', 'error');
       return;
     }
-    startProcessing('Scraping the site…', 'Then building 100 keywords and 100 negatives for Google Ads.');
+    startProcessing('Scraping the site…', 'Then building keywords, negatives, and RSA ad copy for Google Ads.');
     try {
       const res = await api.post('/api/seo/projects', {
         url: url.trim(),
@@ -164,10 +368,10 @@ export default function SeoPage() {
       setName('');
       setUrl('');
       setNotes('');
-      if (data.keywordError) {
-        addToast(`Site saved, but keywords failed: ${data.keywordError}`, 'error');
+      if (data.keywordError || data.adsError) {
+        addToast([data.keywordError && `Keywords: ${data.keywordError}`, data.adsError && `Ads: ${data.adsError}`].filter(Boolean).join(' · '), 'error');
       } else {
-        addToast('Keyword lists ready', 'success');
+        addToast('Keywords and ads ready', 'success');
       }
       navigate(`/seo/${data.id}`);
     } catch (err) {
@@ -194,6 +398,24 @@ export default function SeoPage() {
     }
   };
 
+  const handleGenerateAds = async () => {
+    if (!id) return;
+    startProcessing('Writing ads…', 'Headlines, descriptions, and destination URLs from the scraped site.');
+    try {
+      const res = await api.post(`/api/seo/projects/${id}/ads`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generate failed');
+      setProject(data);
+      await loadList();
+      setPane('ads');
+      addToast('Ad copy ready', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     try {
@@ -210,7 +432,9 @@ export default function SeoPage() {
   };
 
   const copyList = async (items, label) => {
-    const text = (items || []).map(googleAdsToken).join('\n');
+    const text = Array.isArray(items) && items.length && typeof items[0] === 'string'
+      ? items.join('\n')
+      : (items || []).map(googleAdsToken).join('\n');
     if (!text) {
       addToast(`No ${label} to copy`, 'error');
       return;
@@ -310,7 +534,7 @@ export default function SeoPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO project</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Paste a website URL. We scrape the homepage plus a few related pages, then build 100 Google Ads keywords and 100 negative keywords for the first campaign.
+                Paste a website URL. We scrape the homepage plus a few related pages, then build 100 Google Ads keywords, 100 negatives, and RSA headlines, descriptions, and destination URLs.
               </p>
             </div>
 
@@ -354,7 +578,7 @@ export default function SeoPage() {
               className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
               style={{ background: 'var(--color-primary)' }}
             >
-              Scrape & generate keywords
+              Scrape & generate campaign
             </button>
           </section>
         )}
@@ -381,14 +605,6 @@ export default function SeoPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  Regenerate
-                </button>
                 {deleteConfirm ? (
                   <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     Delete?
@@ -421,51 +637,94 @@ export default function SeoPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => copyList(keywords, 'Keywords')}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Copy keywords
-              </button>
-              <button
-                type="button"
-                onClick={() => copyList(negatives, 'Negatives')}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Copy negatives
-              </button>
-              <button
-                type="button"
-                onClick={() => downloadCsv(`${project.name || 'seo'}-keywords.csv`, toCsv(keywords))}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Download keywords CSV
-              </button>
-              <button
-                type="button"
-                onClick={() => downloadCsv(`${project.name || 'seo'}-negatives.csv`, toCsv(negatives))}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Download negatives CSV
-              </button>
+            <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              {[
+                { id: 'keywords', label: 'Keywords' },
+                { id: 'ads', label: 'Ads' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setPane(tab.id)}
+                  className="px-3 py-2 text-sm transition-opacity hover:opacity-70"
+                  style={{
+                    color: pane === tab.id ? 'var(--color-text)' : 'var(--color-muted)',
+                    borderBottom: pane === tab.id ? '2px solid var(--color-primary)' : '2px solid transparent',
+                    fontWeight: pane === tab.id ? 600 : 400,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {!project.googleAdsKeywords && (
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                No keyword lists yet. Tap <strong>Regenerate</strong> to build them from the scrape.
-              </p>
+            {pane === 'keywords' && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRegenerate}
+                    className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    {project.googleAdsKeywords ? 'Regenerate keywords' : 'Generate keywords'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyList(keywords, 'Keywords')}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Copy keywords
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyList(negatives, 'Negatives')}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Copy negatives
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv(`${project.name || 'seo'}-keywords.csv`, toCsv(keywords))}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Download keywords CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv(`${project.name || 'seo'}-negatives.csv`, toCsv(negatives))}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Download negatives CSV
+                  </button>
+                </div>
+
+                {!project.googleAdsKeywords && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    No keyword lists yet. Tap <strong>Generate keywords</strong> to build them from the scrape.
+                  </p>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <KeywordList title="Keywords" items={keywords} empty="No keywords yet." />
+                  <KeywordList title="Negative keywords" items={negatives} empty="No negatives yet." />
+                </div>
+              </>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <KeywordList title="Keywords" items={keywords} empty="No keywords yet." />
-              <KeywordList title="Negative keywords" items={negatives} empty="No negatives yet." />
-            </div>
+            {pane === 'ads' && (
+              <AdCopySection
+                copy={project.googleAdsCopy}
+                projectName={project.name}
+                onGenerate={handleGenerateAds}
+                onCopy={copyList}
+                onDownload={downloadCsv}
+              />
+            )}
           </section>
         )}
       </main>

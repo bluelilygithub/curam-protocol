@@ -253,4 +253,7 @@ module.exports = {
   getSeoStatus,
   uniqueTake,
   parseJsonField,
+  callJson,
+  resolveModel,
+  siteBrief,
 };
