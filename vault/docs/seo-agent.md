@@ -14,7 +14,7 @@ Website SEO / Google Ads helper at **`/seo`**. Create a project from a URL, scra
 2. **Scrape** — homepage plus up to four same-origin pages (about / services / products / pricing when those links exist). SSRF-safe fetch via `htmlFetch.js` (DNS + private IP reject).
 3. **Keywords** — `standard` text model builds 100 keywords and 100 negatives from the **offer**. Scrape supplies brand, URLs, and extra detail only when it matches.
 4. **Ads** — choose **RSA** (three ad groups: 15 headlines ≤30, 4 descriptions ≤90) or **10 headlines / 10 descriptions** (one copy pack). Destination URLs from scraped pages, plus sitelinks.
-5. **Use** — copy or download. Keyword lists use Google Ads syntax (`"phrase"`, `[exact]`, broad unquoted) one per line so they paste into Ads. Headlines and descriptions are plain lines or CSV.
+5. **Use** — on the **Ads** tab, headlines and descriptions list under the format buttons (copy or CSV). Keyword lists use Google Ads syntax (`"phrase"`, `[exact]`, broad unquoted) one per line.
 6. **Regenerate** — keywords and ads can be rebuilt independently. On Ads, pick the format then regenerate. Edit **What they sell** and save to rebuild from a corrected offer.
 
 Long operations use the global **ProcessingModal**.

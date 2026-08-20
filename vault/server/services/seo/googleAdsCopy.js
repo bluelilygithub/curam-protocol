@@ -170,6 +170,24 @@ function normaliseSitelink(raw, allowed, fallbackUrl) {
   };
 }
 
+function extractAdsRaw(parsed, fmt) {
+  if (Array.isArray(parsed?.ads) && parsed.ads.length) return parsed.ads.slice(0, fmt.adCount);
+  if (Array.isArray(parsed?.adGroups) && parsed.adGroups.length) return parsed.adGroups.slice(0, fmt.adCount);
+  if (parsed?.headlines || parsed?.descriptions) {
+    return [{
+      adGroup: parsed.adGroup || parsed.campaignName || 'Ad copy',
+      headlines: parsed.headlines,
+      descriptions: parsed.descriptions,
+      finalUrl: parsed.finalUrl,
+      path1: parsed.path1,
+      path2: parsed.path2,
+    }];
+  }
+  return Array.from({ length: fmt.adCount }, (_, i) => ({
+    adGroup: i === 0 ? 'Primary offer' : `Ad group ${i + 1}`,
+  }));
+}
+
 async function generateGoogleAdsCopy(userId, snapshot, {
   notes = '',
   offer = '',
@@ -221,10 +239,13 @@ Each ads[] item MUST have exactly ${fmt.headlineCount} headlines and ${fmt.descr
     feature: 'seo_ads',
   });
 
-  const adsRaw = Array.isArray(parsed?.ads) ? parsed.ads : [];
+  const adsRaw = extractAdsRaw(parsed, fmt);
+  while (adsRaw.length < fmt.adCount) {
+    adsRaw.push({ adGroup: `Ad group ${adsRaw.length + 1}` });
+  }
   const ads = adsRaw
     .slice(0, fmt.adCount)
-    .map((ad) => normaliseAd(ad, allowed, home, business || snapshot.title, fmt))
+    .map((ad) => normaliseAd(ad, allowed, home, business || snapshot.title || offerLine, fmt))
     .filter((ad) => ad.headlines.length && ad.descriptions.length);
 
   const sitelinks = [];

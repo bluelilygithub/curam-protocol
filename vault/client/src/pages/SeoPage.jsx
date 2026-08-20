@@ -117,6 +117,9 @@ function KeywordList({ title, items, empty }) {
 function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate, onCopy, onDownload }) {
   const ads = copy?.ads || [];
   const sitelinks = copy?.sitelinks || [];
+  const headlines = ads.flatMap((a) => a.headlines || []);
+  const descriptions = ads.flatMap((a) => a.descriptions || []);
+  const hasLines = headlines.length > 0 || descriptions.length > 0;
 
   return (
     <div className="space-y-4">
@@ -126,7 +129,7 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
             {copy?.campaignName || 'Ad copy'}
           </h3>
           <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-            Headlines 30 characters · descriptions 90. RSA is 15 headlines and 4 descriptions per ad group. Or generate a copy pack of 10 headlines and 10 descriptions.
+            Headlines (30) and descriptions (90) are listed below. RSA is 15/4 per ad group. 10/10 is one copy pack.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -138,11 +141,11 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
           >
             {copy ? 'Regenerate ads' : 'Generate ads'}
           </button>
-          {copy && (
+          {hasLines && (
             <>
               <button
                 type="button"
-                onClick={() => onCopy(ads.flatMap((a) => a.headlines), 'Headlines')}
+                onClick={() => onCopy(headlines, 'Headlines')}
                 className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
@@ -150,7 +153,7 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
               </button>
               <button
                 type="button"
-                onClick={() => onCopy(ads.flatMap((a) => a.descriptions), 'Descriptions')}
+                onClick={() => onCopy(descriptions, 'Descriptions')}
                 className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
@@ -192,8 +195,33 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
 
       {!copy && (
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          No ads yet. Choose a format, then tap Generate ads.
+          No ads yet. Choose a format, then tap Generate ads. Headlines and descriptions will appear here.
         </p>
+      )}
+
+      {copy && !hasLines && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          This campaign has no headlines yet. Tap Generate ads (or switch to 10/10 and generate) to write them.
+        </p>
+      )}
+
+      {hasLines && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <section className="rounded-2xl border p-4 space-y-2 min-w-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="flex items-baseline justify-between gap-2">
+              <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Headlines</h4>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{headlines.length}</span>
+            </div>
+            <LineList items={headlines} max={30} empty="No headlines." />
+          </section>
+          <section className="rounded-2xl border p-4 space-y-2 min-w-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="flex items-baseline justify-between gap-2">
+              <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Descriptions</h4>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{descriptions.length}</span>
+            </div>
+            <LineList items={descriptions} max={90} empty="No descriptions." />
+          </section>
+        </div>
       )}
 
       {ads.map((ad, i) => {
@@ -238,17 +266,6 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
                   Display path: {previewUrl}
                 </p>
               )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Headlines</p>
-                <LineList items={ad.headlines} max={30} empty="No headlines." />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Descriptions</p>
-                <LineList items={ad.descriptions} max={90} empty="No descriptions." />
-              </div>
             </div>
           </article>
         );

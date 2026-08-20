@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-20 (seo-ads-lists-visible)
+
+### SEO — headlines and descriptions listed on the Ads tab
+- Ads tab shows headline and description lists immediately under the format buttons.
+- If the model returns copy without an `ads` array, generation still fills a pack so the lists are not empty.
+
+---
+
 ## 2026-08-20 (seo-ads-missing-notice)
 
 ### SEO — scrape-mismatch copy and missing ads
