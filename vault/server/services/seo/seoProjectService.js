@@ -163,7 +163,7 @@ async function generateKeywordsForProject(userId, projectId) {
   return getProject(userId, projectId);
 }
 
-async function generateAdsForProject(userId, projectId) {
+async function generateAdsForProject(userId, projectId, { format } = {}) {
   const project = await getProject(userId, projectId);
   if (!project) throw new Error('Project not found');
   const snapshot = project.siteSnapshot;
@@ -175,6 +175,7 @@ async function generateAdsForProject(userId, projectId) {
     keywords: kw.keywords || [],
     business: project.offer || kw.business || '',
     geo: kw.geo || '',
+    format,
   });
   await saveArtifact(userId, projectId, COPY_KIND, payload);
   await reportCopyGaps(userId, projectId, payload);

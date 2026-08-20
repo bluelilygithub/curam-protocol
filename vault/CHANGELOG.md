@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-20 (seo-ten-copy-pack)
+
+### SEO — 10 headlines / 10 descriptions option
+- Ads tab can generate a copy pack of 10 headlines and 10 descriptions, or the existing RSA 15/4 set.
+- `POST /api/seo/projects/:id/ads` accepts `{ format: "rsa" | "ten" }`. New projects still generate RSA.
+
+---
+
 ## 2026-08-19 (seo-keyword-match-syntax)
 
 ### SEO — copy/download keywords with match-type symbols

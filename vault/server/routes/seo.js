@@ -95,7 +95,9 @@ router.post('/projects/:id/keywords', async (req, res) => {
 
 router.post('/projects/:id/ads', async (req, res) => {
   try {
-    const project = await generateAdsForProject(req.user.id, Number(req.params.id));
+    const project = await generateAdsForProject(req.user.id, Number(req.params.id), {
+      format: req.body?.format,
+    });
     res.json(project);
   } catch (err) {
     console.error('[seo/projects/:id/ads]', err.message);

@@ -114,7 +114,7 @@ function KeywordList({ title, items, empty }) {
   );
 }
 
-function AdCopySection({ copy, projectName, onGenerate, onCopy, onDownload }) {
+function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate, onCopy, onDownload }) {
   const ads = copy?.ads || [];
   const sitelinks = copy?.sitelinks || [];
 
@@ -123,10 +123,10 @@ function AdCopySection({ copy, projectName, onGenerate, onCopy, onDownload }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            {copy?.campaignName || 'Responsive search ads'}
+            {copy?.campaignName || 'Ad copy'}
           </h3>
           <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-            Headlines 30 characters · descriptions 90 · destination URLs from scraped pages. Google mixes headlines at serving time.
+            Headlines 30 characters · descriptions 90. RSA is 15 headlines and 4 descriptions per ad group. Or generate a copy pack of 10 headlines and 10 descriptions.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -169,9 +169,30 @@ function AdCopySection({ copy, projectName, onGenerate, onCopy, onDownload }) {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: 'rsa', label: 'RSA · 15 headlines / 4 descriptions' },
+          { id: 'ten', label: '10 headlines / 10 descriptions' },
+        ].map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => setAdsFormat(opt.id)}
+            className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+            style={{
+              borderColor: adsFormat === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
+              color: adsFormat === opt.id ? 'var(--color-text)' : 'var(--color-muted)',
+              fontWeight: adsFormat === opt.id ? 600 : 400,
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {!copy && (
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          No ads yet. Tap <strong>Generate ads</strong> to write headlines, descriptions, and destination URLs from the scrape.
+          No ads yet. Choose a format, then tap Generate ads.
         </p>
       )}
 
@@ -291,6 +312,7 @@ export default function SeoPage() {
   const [offerDraft, setOfferDraft] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pane, setPane] = useState('keywords');
+  const [adsFormat, setAdsFormat] = useState('rsa');
 
   const loadList = useCallback(async () => {
     const res = await api.get('/api/seo/projects');
@@ -325,6 +347,8 @@ export default function SeoPage() {
         if (!cancelled) {
           setProject(data);
           setOfferDraft(data.offer || '');
+          if (data.googleAdsCopy?.format === 'ten') setAdsFormat('ten');
+          else if (data.googleAdsCopy) setAdsFormat('rsa');
         }
       })
       .catch((err) => {
@@ -398,7 +422,7 @@ export default function SeoPage() {
       const res = await api.post(`/api/seo/projects/${id}/keywords`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
-      const adsRes = await api.post(`/api/seo/projects/${id}/ads`);
+      const adsRes = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
       const adsData = await adsRes.json();
       if (!adsRes.ok) throw new Error(adsData.error || 'Ads generate failed');
       setProject(adsData);
@@ -430,9 +454,14 @@ export default function SeoPage() {
 
   const handleGenerateAds = async () => {
     if (!id) return;
-    startProcessing('Writing ads…', 'Headlines and descriptions follow What they sell when that field is set.');
+    startProcessing(
+      'Writing ads…',
+      adsFormat === 'ten'
+        ? '10 headlines and 10 descriptions from What they sell.'
+        : 'RSA headlines and descriptions from What they sell.'
+    );
     try {
-      const res = await api.post(`/api/seo/projects/${id}/ads`);
+      const res = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
       setProject(data);
@@ -792,6 +821,8 @@ export default function SeoPage() {
               <AdCopySection
                 copy={project.googleAdsCopy}
                 projectName={project.name}
+                adsFormat={adsFormat}
+                setAdsFormat={setAdsFormat}
                 onGenerate={handleGenerateAds}
                 onCopy={copyList}
                 onDownload={downloadCsv}
