@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-20 (seo-ads-missing-notice)
+
+### SEO — scrape-mismatch copy and missing ads
+- Mismatch warning no longer says “a different business” when the scrape has no title, and it no longer lectures Quality Score.
+- If keywords exist but ads do not, a notice points to the Ads tab so headlines can be generated.
+
+---
+
 ## 2026-08-20 (seo-ten-copy-pack)
 
 ### SEO — 10 headlines / 10 descriptions option

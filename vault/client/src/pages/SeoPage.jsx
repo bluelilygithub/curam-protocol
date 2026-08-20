@@ -395,8 +395,12 @@ export default function SeoPage() {
       setUrl('');
       setNotes('');
       setOffer('');
-      if (data.keywordError || data.adsError) {
-        addToast([data.keywordError && `Keywords: ${data.keywordError}`, data.adsError && `Ads: ${data.adsError}`].filter(Boolean).join(' · '), 'error');
+      if (data.keywordError && data.adsError) {
+        addToast(`Keywords: ${data.keywordError} · Ads: ${data.adsError}`, 'error');
+      } else if (data.adsError) {
+        addToast(`Keywords ready. Ads failed: ${data.adsError}. Open the Ads tab to retry.`, 'error');
+      } else if (data.keywordError) {
+        addToast(`Keywords: ${data.keywordError}`, 'error');
       } else {
         addToast('Keywords and ads ready', 'success');
       }
@@ -422,12 +426,19 @@ export default function SeoPage() {
       const res = await api.post(`/api/seo/projects/${id}/keywords`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
-      const adsRes = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
-      const adsData = await adsRes.json();
-      if (!adsRes.ok) throw new Error(adsData.error || 'Ads generate failed');
-      setProject(adsData);
+      setProject(data);
       await loadList();
-      addToast('Lists rebuilt from your offer', 'success');
+      try {
+        const adsRes = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
+        const adsData = await adsRes.json();
+        if (!adsRes.ok) throw new Error(adsData.error || 'Ads generate failed');
+        setProject(adsData);
+        await loadList();
+        addToast('Keywords and ads rebuilt from your offer', 'success');
+      } catch (adsErr) {
+        addToast(`Keywords ready. Ads failed: ${adsErr.message}. Open the Ads tab to retry.`, 'error');
+        setPane('ads');
+      }
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -697,7 +708,21 @@ export default function SeoPage() {
 
             {project.scrapeMismatch && (
               <div className="rounded-xl border p-3 text-xs leading-relaxed" style={{ borderColor: '#f59e0b', background: '#fef3c7', color: 'var(--color-text)' }}>
-                The live page reads as {snapshot.title || 'a different business'}. Keywords and ads will follow What they sell below, not that scrape. Google Ads Quality Score will still suffer if the landing page does not match the offer.
+                The live page{snapshot.title ? ` (“${snapshot.title}”)` : ''} does not mention this offer. Keyword and ad copy still follow What they sell.
+              </div>
+            )}
+
+            {project.googleAdsKeywords && !project.googleAdsCopy && (
+              <div className="rounded-xl border p-3 text-xs leading-relaxed" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                Keywords are ready. Headlines and descriptions are on the Ads tab — choose RSA or 10/10, then Generate ads.
+                <button
+                  type="button"
+                  onClick={() => setPane('ads')}
+                  className="ml-2 transition-opacity hover:opacity-70"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  Open Ads
+                </button>
               </div>
             )}
 
@@ -741,7 +766,7 @@ export default function SeoPage() {
             <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
               {[
                 { id: 'keywords', label: 'Keywords' },
-                { id: 'ads', label: 'Ads' },
+                { id: 'ads', label: project.googleAdsCopy ? 'Ads' : 'Ads (none yet)' },
               ].map((tab) => (
                 <button
                   key={tab.id}

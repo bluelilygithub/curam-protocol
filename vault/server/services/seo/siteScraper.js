@@ -228,7 +228,10 @@ function scrapeConflictsWithOffer(snapshot, offer) {
   if (!raw) return false;
   const terms = (raw.toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !OFFER_STOP.has(w));
   if (!terms.length) return false;
-  const hay = `${snapshot?.title || ''} ${snapshot?.description || ''} ${String(snapshot?.text || '').slice(0, 2500)}`.toLowerCase();
+  const title = String(snapshot?.title || '').trim();
+  const description = String(snapshot?.description || '').trim();
+  if (!title && !description) return false;
+  const hay = `${title} ${description} ${String(snapshot?.text || '').slice(0, 2500)}`.toLowerCase();
   const hits = terms.filter((t) => hay.includes(t));
   return hits.length === 0;
 }

@@ -57,7 +57,7 @@ Feature flag: **`seo`** (Settings → Feature Access).
 
 ## Data
 
-`seo_projects` holds the URL, **offer** (what they sell — keywords follow this), notes, and `siteSnapshot`. If the scrape describes a different industry than the offer, the UI warns and generation still follows the offer.
+`seo_projects` holds the URL, **offer** (what they sell — keywords follow this), notes, and `siteSnapshot`. If the scrape describes a different industry than the offer, the UI warns and generation still follows the offer. New projects generate keywords then RSA; if ads fail, keywords are kept and the Ads tab shows **Ads (none yet)** so you can retry (RSA or 10/10).
 
 `seo_artifacts` is keyed by `(projectId, kind)`:
 
