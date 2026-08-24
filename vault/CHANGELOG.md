@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-serper-scrape)
+
+### SEO audit — scrape via Serper when the host returns HTTP 202
+- Direct HTML fetch still runs first. On empty/202, the page is scraped through Serper (`scrape.serper.dev`, `SERPER_SEARCH_API_KEY`) so Railway is not talking to the WAF.
+- Links from the scrape are injected so the crawl can continue. Report notes HTML came via Serper.
+
+---
+
 ## 2026-08-24 (seo-audit-delete-list)
 
 ### SEO audit — delete from the sidebar

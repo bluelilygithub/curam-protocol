@@ -229,6 +229,154 @@ async function fetchJsonList(url) {
   }
 }
 
+async function loadSerperKey() {
+  const fromEnv = String(process.env.SERPER_SEARCH_API_KEY || '').trim()
+    || (/^[a-f0-9]{40}$/i.test(String(process.env.SEARCH_API_KEY || '').trim())
+      ? String(process.env.SEARCH_API_KEY).trim()
+      : '');
+  if (fromEnv) return fromEnv;
+  try {
+    const { pool } = require('../db');
+    const { rows } = await pool.query(
+      `SELECT s.key, s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE u."isAdmin" = TRUE AND s.key IN ('SERPER_SEARCH_API_KEY', 'SEARCH_API_KEY')
+       ORDER BY s."userId" ASC`
+    );
+    const serper = rows.find((r) => r.key === 'SERPER_SEARCH_API_KEY' && String(r.value || '').trim());
+    if (serper) return String(serper.value).trim();
+    const search = rows.find((r) => r.key === 'SEARCH_API_KEY' && /^[a-f0-9]{40}$/i.test(String(r.value || '').trim()));
+    if (search) return String(search.value).trim();
+  } catch {
+    /* no db yet */
+  }
+  return '';
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function collectSerperLinks(data) {
+  const hrefs = [];
+  const push = (href) => {
+    if (!href || typeof href !== 'string') return;
+    if (!/^https?:\/\//i.test(href)) return;
+    hrefs.push(href);
+  };
+  const walk = (value) => {
+    if (!value) return;
+    if (typeof value === 'string') {
+      push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (typeof value === 'object') {
+      push(value.link || value.url || value.href);
+      walk(value.links);
+    }
+  };
+  walk(data.links);
+  walk(data.link);
+  const md = String(data.markdown || '');
+  const re = /\[[^\]]*\]\((https?:[^)\s]+)\)/g;
+  let m;
+  while ((m = re.exec(md))) push(m[1]);
+  return [...new Set(hrefs)];
+}
+
+function htmlFromSerper(data, pageUrl) {
+  const meta = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
+  const title = meta.title || meta['og:title'] || meta['twitter:title'] || '';
+  const desc = meta.description || meta['og:description'] || '';
+  const canonical = meta.canonical || meta['og:url'] || pageUrl;
+  const lang = meta.language || meta['og:locale'] || 'en';
+  const links = collectSerperLinks(data)
+    .map((href) => `<a href="${escapeHtml(href)}">${escapeHtml(href)}</a>`)
+    .join('\n');
+  const rawText = String(data.text || data.markdown || '').slice(0, 400000);
+  const body = escapeHtml(rawText).replace(/\n/g, '<br>\n');
+  return `<!DOCTYPE html><html lang="${escapeHtml(String(lang).slice(0, 12))}"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${desc ? `<meta name="description" content="${escapeHtml(desc).slice(0, 300)}">` : ''}<link rel="canonical" href="${escapeHtml(canonical)}"></head><body>${title ? `<h1>${escapeHtml(title)}</h1>` : ''}<nav>${links}</nav><main>${body}</main></body></html>`;
+}
+
+function postJson(hostname, pathname, headers, payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const req = https.request({
+      hostname,
+      path: pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        ...headers,
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let data = null;
+        try { data = JSON.parse(text); } catch { data = null; }
+        resolve({ statusCode: res.statusCode, data, text });
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function fetchViaSerper(pageUrl) {
+  try {
+    await checkSsrf(new URL(pageUrl).hostname);
+  } catch {
+    return null;
+  }
+  const apiKey = await loadSerperKey();
+  if (!apiKey) {
+    console.warn('[htmlFetch] Serper scrape skipped — set SERPER_SEARCH_API_KEY');
+    return null;
+  }
+  try {
+    const res = await postJson('scrape.serper.dev', '/', {
+      'X-API-KEY': apiKey,
+    }, {
+      url: pageUrl,
+      includeMarkdown: true,
+      includeLinks: true,
+    }, 25000);
+    if (res.statusCode >= 400 || !res.data) {
+      console.warn('[htmlFetch] Serper scrape HTTP', res.statusCode, String(res.text || '').slice(0, 180));
+      return null;
+    }
+    const text = String(res.data.text || res.data.markdown || '');
+    const links = collectSerperLinks(res.data);
+    if (text.replace(/\s+/g, '').length < 40 && !links.length && !res.data.metadata) return null;
+    return {
+      body: htmlFromSerper(res.data, pageUrl),
+      statusCode: 200,
+      finalUrl: pageUrl,
+      htmlBytes: text.length,
+      cookies: {},
+      via: 'serper',
+    };
+  } catch (err) {
+    console.warn('[htmlFetch] Serper scrape failed:', err.message);
+    return null;
+  }
+}
+
 async function fetchViaWordpress(pageUrl) {
   let origin;
   try { origin = new URL(pageUrl).origin; } catch { return null; }
@@ -356,6 +504,10 @@ async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
   }, cookies);
   result = pickRicher(result, bot);
   if (!isThinResponse(result)) return { ...result, via: result.via || 'direct' };
+
+  const serper = await fetchViaSerper(url);
+  result = pickRicher(result, serper);
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'serper' };
 
   const wp = await fetchViaWordpress(url);
   result = pickRicher(result, wp);

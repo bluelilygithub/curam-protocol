@@ -111,7 +111,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
         ? 'Host returned HTTP 202 with no usable HTML'
         : 'No HTML in the response',
       detail: 'The live site may show a full page in a browser while this crawl gets an empty or challenge response. Without HTML there are no links to follow.',
-      recommendation: 'Allow unknown crawlers (or Railway IPs) on the host/WAF, then run the audit again. Do not treat missing titles on this result as the real page.',
+      recommendation: 'If this host blocks cloud IPs (HTTP 202), Vault retries via Serper scrape. Set SERPER_SEARCH_API_KEY. Do not treat missing titles on an empty 202 as the real page.',
     });
   } else {
     addFinding(findings, {

@@ -11,7 +11,7 @@ On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl.
 ## Flow
 
 1. **New audit** — URL, optional name, **pages to crawl** (1–40, default 15).
-2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. SSRF-safe fetch via `htmlFetch.js`. Thin, HTTP 202, or empty responses are retried without compression, on the other host (`www` ↔ apex), then via WordPress REST, sitemap URLs, and a reader proxy so datacenter IPs can still get HTML. Empty bodies are not treated as on-page SEO fails.
+2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. Direct fetch is SSRF-safe via `htmlFetch.js`. If the host returns empty/HTTP 202 (common from Railway), Vault scrapes the page through **Serper** (`SERPER_SEARCH_API_KEY` / `scrape.serper.dev`) so HTML and links come from Serper’s IPs, then continues the crawl. WordPress REST and a reader proxy remain as extra fallbacks. Empty direct bodies are not treated as on-page SEO fails.
 3. **Per page** — title, meta description, H1, viewport, lang, canonical, robots meta, Open Graph, image alts, thin copy, HTTPS/status.
 4. **Site** — robots.txt, duplicate titles, crawl cap vs discovered URLs.
 5. **Recommendations** — every fail/warn becomes an action on that page (and site-level items at the top).
