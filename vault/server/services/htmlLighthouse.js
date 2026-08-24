@@ -69,6 +69,60 @@ function catScore(lr, id) {
   return Math.round(Number(s) * 100);
 }
 
+function stripMd(s) {
+  return String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim();
+}
+
+function firstDocLink(s) {
+  const m = String(s || '').match(/\((https?:\/\/[^)\s]+)\)/);
+  return m ? m[1] : '';
+}
+
+function categoryForAudit(lr, auditId) {
+  const cats = lr?.categories || {};
+  for (const [cid, cat] of Object.entries(cats)) {
+    if ((cat.auditRefs || []).some((r) => r.id === auditId)) return cid;
+  }
+  return '';
+}
+
+function itemRow(item) {
+  const node = item.node || {};
+  const src = item.source && typeof item.source === 'object' ? item.source : {};
+  const url = item.url || src.url || item.source || '';
+  return {
+    url: typeof url === 'string' ? url.slice(0, 400) : '',
+    label: String(item.label || item.entity || item.name || node.selector || '').slice(0, 220),
+    snippet: String(node.snippet || item.snippet || '').slice(0, 280),
+    wastedMs: item.wastedMs != null ? Math.round(Number(item.wastedMs)) : null,
+    wastedBytes: item.wastedBytes != null ? Math.round(Number(item.wastedBytes)) : null,
+    totalBytes: item.totalBytes != null ? Math.round(Number(item.totalBytes)) : null,
+  };
+}
+
+function tableRows(details, max = 20) {
+  const items = details?.items;
+  if (!Array.isArray(items) || !items.length) return [];
+  return items.slice(0, max).map(itemRow).filter((r) => r.url || r.label || r.snippet);
+}
+
+function expandAudit(lr, a) {
+  if (!a) return null;
+  return {
+    id: a.id,
+    title: a.title || a.id,
+    category: categoryForAudit(lr, a.id),
+    description: stripMd(a.description).slice(0, 900),
+    docsUrl: firstDocLink(a.description),
+    displayValue: a.displayValue || '',
+    score: a.score == null ? null : Number(a.score),
+    numericValue: a.numericValue,
+    savingsMs: Math.round(Number(a.details?.overallSavingsMs) || 0),
+    savingsBytes: Math.round(Number(a.details?.overallSavingsBytes) || 0),
+    items: tableRows(a.details),
+  };
+}
+
 function pickAudit(lr, id) {
   const a = lr?.audits?.[id];
   if (!a) return null;
@@ -85,15 +139,26 @@ function opportunities(lr) {
   const audits = lr?.audits || {};
   return Object.values(audits)
     .filter((a) => a && a.details?.type === 'opportunity' && a.score != null && a.score < 1)
-    .map((a) => ({
-      id: a.id,
-      title: a.title,
-      displayValue: a.displayValue || '',
-      score: a.score,
-      savingsMs: a.details?.overallSavingsMs || 0,
-    }))
-    .sort((a, b) => (b.savingsMs || 0) - (a.savingsMs || 0))
-    .slice(0, 12);
+    .map((a) => expandAudit(lr, a))
+    .sort((a, b) => (b.savingsMs || 0) - (a.savingsMs || 0) || (b.savingsBytes || 0) - (a.savingsBytes || 0));
+}
+
+function diagnostics(lr) {
+  const skip = new Set(METRIC_IDS);
+  const audits = lr?.audits || {};
+  return Object.values(audits)
+    .filter((a) => a
+      && !skip.has(a.id)
+      && a.details
+      && a.details.type !== 'opportunity'
+      && a.details.type !== 'screenshot'
+      && a.details.type !== 'filmstrip'
+      && a.details.type !== 'debugdata'
+      && a.scoreDisplayMode === 'numeric'
+      && a.score != null
+      && a.score < 0.9)
+    .map((a) => expandAudit(lr, a))
+    .sort((a, b) => (a.score ?? 1) - (b.score ?? 1));
 }
 
 function failedAudits(lr) {
@@ -101,12 +166,75 @@ function failedAudits(lr) {
   const audits = lr?.audits || {};
   return Object.values(audits)
     .filter((a) => a && a.score != null && a.score < 0.5 && a.scoreDisplayMode === 'binary' && !skip.has(a.id))
-    .map((a) => ({
-      id: a.id,
-      title: a.title,
-      description: String(a.description || '').replace(/\[.*?\]\(.*?\)/g, '').slice(0, 220),
-    }))
-    .slice(0, 15);
+    .map((a) => expandAudit(lr, a));
+}
+
+function warningAudits(lr) {
+  const audits = lr?.audits || {};
+  return Object.values(audits)
+    .filter((a) => a && a.scoreDisplayMode === 'binary' && a.score != null && a.score >= 0.5 && a.score < 1)
+    .map((a) => expandAudit(lr, a));
+}
+
+function cruxMetrics(data) {
+  const crux = data?.loadingExperience?.metrics || {};
+  return Object.entries(crux).map(([id, m]) => ({
+    id,
+    category: m?.category || '',
+    percentile: m?.percentile,
+  }));
+}
+
+function environment(lr) {
+  const env = lr?.environment || {};
+  const cfg = lr?.configSettings || {};
+  return {
+    lighthouseVersion: lr?.lighthouseVersion || '',
+    fetchTime: lr?.fetchTime || null,
+    formFactor: cfg.formFactor || cfg.emulatedFormFactor || '',
+    throttlingMethod: cfg.throttlingMethod || '',
+    hostUserAgent: String(env.hostUserAgent || '').slice(0, 180),
+    benchmarkIndex: env.benchmarkIndex || null,
+  };
+}
+
+function briefLines(view) {
+  const lines = [
+    `# Lighthouse developer brief (${view.strategy})`,
+    `URL: ${view.finalUrl}`,
+    `Lighthouse ${view.lighthouseVersion || ''} · ${view.fetchTime || ''}`,
+    `Scores — Performance ${view.categories.performance ?? '—'} · Accessibility ${view.categories.accessibility ?? '—'} · Best practices ${view.categories.bestPractices ?? '—'} · SEO ${view.categories.seo ?? '—'}`,
+    '',
+    '## Lab metrics',
+  ];
+  for (const m of view.metrics || []) lines.push(`- ${m.title}: ${m.displayValue || '—'}`);
+  const addBlock = (title, items) => {
+    lines.push('', `## ${title}`);
+    if (!items.length) {
+      lines.push('- None');
+      return;
+    }
+    for (const o of items) {
+      const save = [
+        o.savingsMs ? `${o.savingsMs} ms` : '',
+        o.savingsBytes ? `${Math.round(o.savingsBytes / 1024)} KiB` : '',
+        o.displayValue || '',
+      ].filter(Boolean).join(', ');
+      lines.push(`### ${o.title}${save ? ` (${save})` : ''}`);
+      if (o.description) lines.push(o.description);
+      if (o.docsUrl) lines.push(`Docs: ${o.docsUrl}`);
+      for (const it of o.items || []) {
+        const bits = [it.url || it.label, it.snippet, it.wastedMs != null ? `${it.wastedMs} ms wasted` : '', it.wastedBytes != null ? `${it.wastedBytes} bytes wasted` : '']
+          .filter(Boolean);
+        if (bits.length) lines.push(`- ${bits.join(' · ')}`);
+      }
+    }
+  };
+  addBlock('Performance opportunities', view.opportunities || []);
+  addBlock('Diagnostics', view.diagnostics || []);
+  addBlock('Failed checks (fix these)', view.failedAudits || []);
+  addBlock('Warnings', view.warnings || []);
+  return lines.join('\n');
 }
 
 function summarisePsi(data, strategy) {
@@ -122,20 +250,24 @@ function summarisePsi(data, strategy) {
     seo: catScore(lr, 'seo'),
   };
   const score = categories.performance != null ? categories.performance : 0;
-  const crux = data.loadingExperience?.metrics || {};
-  return {
+  const view = {
     strategy,
     fetchTime: lr.fetchTime || null,
     finalUrl: lr.finalRequestedUrl || lr.requestedUrl || lr.finalUrl || '',
     lighthouseVersion: lr.lighthouseVersion || '',
+    environment: environment(lr),
     categories,
     metrics: METRIC_IDS.map((id) => pickAudit(lr, id)).filter(Boolean),
+    fieldData: cruxMetrics(data),
     opportunities: opportunities(lr),
+    diagnostics: diagnostics(lr),
     failedAudits: failedAudits(lr),
-    fieldData: Object.keys(crux).length ? crux : null,
+    warnings: warningAudits(lr),
     score,
     summary: `${strategy} · Perf ${categories.performance ?? '—'} · A11y ${categories.accessibility ?? '—'} · BP ${categories.bestPractices ?? '—'} · SEO ${categories.seo ?? '—'}`,
   };
+  view.developerBrief = briefLines(view);
+  return view;
 }
 
 function psiErrorMessage(statusCode, data, { keyConfigured } = {}) {
@@ -196,4 +328,47 @@ async function runLighthouse(rawUrl, { strategy = 'mobile' } = {}) {
   return summarisePsi(data, strat);
 }
 
-module.exports = { runLighthouse };
+async function runLighthousePair(rawUrl) {
+  const url = normaliseHttpUrl(rawUrl);
+  const settled = await Promise.allSettled([
+    runLighthouse(url, { strategy: 'mobile' }),
+    runLighthouse(url, { strategy: 'desktop' }),
+  ]);
+  const mobile = settled[0].status === 'fulfilled' ? settled[0].value : null;
+  const desktop = settled[1].status === 'fulfilled' ? settled[1].value : null;
+  if (!mobile && !desktop) {
+    const a = settled[0].reason?.message || 'mobile failed';
+    const b = settled[1].reason?.message || 'desktop failed';
+    throw new Error(`Mobile: ${a} Desktop: ${b}`);
+  }
+  const errors = {
+    mobile: settled[0].status === 'rejected' ? (settled[0].reason?.message || 'failed') : null,
+    desktop: settled[1].status === 'rejected' ? (settled[1].reason?.message || 'failed') : null,
+  };
+  const score = mobile?.score ?? desktop?.score ?? 0;
+  const finalUrl = mobile?.finalUrl || desktop?.finalUrl || url;
+  const parts = [];
+  if (mobile) parts.push(`Mobile perf ${mobile.score}`);
+  else parts.push(`Mobile failed`);
+  if (desktop) parts.push(`Desktop perf ${desktop.score}`);
+  else parts.push(`Desktop failed`);
+  return {
+    version: 2,
+    strategy: 'both',
+    finalUrl,
+    score,
+    summary: parts.join(' · '),
+    mobile,
+    desktop,
+    errors: (errors.mobile || errors.desktop) ? errors : null,
+    developerBrief: [
+      mobile?.developerBrief || '# Mobile\n(no result)',
+      '',
+      '---',
+      '',
+      desktop?.developerBrief || '# Desktop\n(no result)',
+    ].join('\n'),
+  };
+}
+
+module.exports = { runLighthouse, runLighthousePair };

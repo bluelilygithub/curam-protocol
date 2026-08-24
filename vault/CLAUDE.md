@@ -326,7 +326,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **SEO** (`/seo`): Crawl a URL (1–40 same-origin HTML pages, default 25) and score each page with recommendations (titles, headings, robots, HTTPS, alts). No Ads keywords. Table: `seo_audits`. Feature flag `seo`. Docs: **`docs/seo-agent.md`**.
 
-**HTML** (`/html`): Google Lighthouse via PageSpeed Insights (mobile/desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities. Table: `html_audits`. Flag `html`. Optional `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
+**HTML** (`/html`): Google Lighthouse via PageSpeed Insights (mobile **and** desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities with file URLs, failed checks, copyable developer brief. Table: `html_audits`. Flag `html`. Requires `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 

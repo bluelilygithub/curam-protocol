@@ -1,7 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
-const { runLighthouse } = require('./htmlLighthouse');
+const { runLighthousePair } = require('./htmlLighthouse');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 
 function parseJson(val) {
@@ -25,7 +25,7 @@ function rowToAudit(row) {
     hostname: hostnameOf(row.url),
     score: Number(row.score),
     summary: row.summary || report.summary || '',
-    strategy: row.strategy || report.strategy || 'mobile',
+    strategy: row.strategy || report.strategy || 'both',
     report,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -34,7 +34,7 @@ function rowToAudit(row) {
 
 async function listAudits(userId) {
   const { rows } = await pool.query(
-    `SELECT id, name, url, score, summary, strategy, report, "createdAt", "updatedAt"
+    `SELECT id, name, url, score, summary, strategy, "createdAt", "updatedAt"
        FROM html_audits
       WHERE "userId"=$1
       ORDER BY "updatedAt" DESC
@@ -61,10 +61,10 @@ async function deleteAudit(userId, id) {
   return rowCount > 0;
 }
 
-async function createAudit(userId, { url, name, strategy } = {}) {
-  const report = await runLighthouse(url, { strategy });
+async function createAudit(userId, { url, name } = {}) {
+  const report = await runLighthousePair(url);
   const host = hostnameOf(report.finalUrl || url);
-  const projectName = String(name || '').trim() || `${host} (${report.strategy})`;
+  const projectName = String(name || '').trim() || host;
 
   const { rows } = await pool.query(
     `INSERT INTO html_audits ("userId", name, url, score, summary, strategy, report)
@@ -76,7 +76,7 @@ async function createAudit(userId, { url, name, strategy } = {}) {
       report.finalUrl || url,
       report.score,
       report.summary,
-      report.strategy,
+      'both',
       JSON.stringify(report),
     ]
   );

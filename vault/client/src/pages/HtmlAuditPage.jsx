@@ -24,6 +24,77 @@ function scoreTint(n) {
   return '#ef4444';
 }
 
+function viewsOf(report) {
+  if (report?.mobile || report?.desktop) {
+    return { mobile: report.mobile || null, desktop: report.desktop || null };
+  }
+  if (report?.categories) {
+    const key = report.strategy === 'desktop' ? 'desktop' : 'mobile';
+    return { mobile: key === 'mobile' ? report : null, desktop: key === 'desktop' ? report : null };
+  }
+  return { mobile: null, desktop: null };
+}
+
+function formatSave(item) {
+  const bits = [];
+  if (item.displayValue) bits.push(item.displayValue);
+  else {
+    if (item.savingsMs) bits.push(`${item.savingsMs} ms`);
+    if (item.savingsBytes) bits.push(`${Math.round(item.savingsBytes / 1024)} KiB`);
+  }
+  return bits.join(' · ');
+}
+
+function FindingList({ title, items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+      <ul className="space-y-3">
+        {items.map((o) => (
+          <li
+            key={o.id}
+            className="rounded-xl border p-4 space-y-1"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{o.title}</p>
+              {formatSave(o) ? (
+                <span className="text-xs tabular-nums" style={{ color: 'var(--color-muted)' }}>{formatSave(o)}</span>
+              ) : null}
+            </div>
+            {o.description ? (
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{o.description}</p>
+            ) : null}
+            {o.docsUrl ? (
+              <a
+                href={o.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                Developer docs
+              </a>
+            ) : null}
+            {(o.items || []).length > 0 && (
+              <ul className="pt-1 space-y-0.5">
+                {o.items.map((it, i) => (
+                  <li key={`${o.id}-${i}`} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>
+                    {it.url || it.label || it.snippet}
+                    {it.wastedMs != null ? ` · ${it.wastedMs} ms` : ''}
+                    {it.wastedBytes != null ? ` · ${it.wastedBytes} B` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function HtmlAuditPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -41,7 +112,7 @@ export default function HtmlAuditPage() {
   const [search, setSearch] = useState('');
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
-  const [strategy, setStrategy] = useState('mobile');
+  const [view, setView] = useState('mobile');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
@@ -74,7 +145,11 @@ export default function HtmlAuditPage() {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found');
-        if (!cancelled) setAudit(data);
+        if (!cancelled) {
+          setAudit(data);
+          const v = viewsOf(data.report);
+          setView(v.mobile ? 'mobile' : 'desktop');
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -97,21 +172,20 @@ export default function HtmlAuditPage() {
       return;
     }
     startProcessing(
-      `Running Lighthouse (${strategy})…`,
-      'Google PageSpeed fetches the live page. This often takes 30–60 seconds.',
+      'Running Lighthouse on mobile and desktop…',
+      'Two PageSpeed runs in parallel. This often takes about a minute.',
     );
     try {
       const res = await api.post('/api/html/audits', {
         url: url.trim(),
         name: name.trim() || undefined,
-        strategy,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lighthouse run failed');
       setUrl('');
       setName('');
       await loadList();
-      addToast(`Performance ${data.score}`, 'success');
+      addToast(data.summary || `Performance ${data.score}`, 'success');
       navigate(`/html/${data.id}`);
     } catch (err) {
       addToast(err.message, 'error');
@@ -137,11 +211,22 @@ export default function HtmlAuditPage() {
     }
   };
 
+  const copyBrief = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast('Developer brief copied', 'success');
+    } catch {
+      addToast('Could not copy', 'error');
+    }
+  };
+
   if (!canUse) return <Navigate to="/" replace />;
 
-  const report = audit?.report || {};
-  const cats = report.categories || {};
-  const score = audit ? Number(audit.score) : null;
+  const pair = viewsOf(audit?.report);
+  const active = view === 'desktop' ? (pair.desktop || pair.mobile) : (pair.mobile || pair.desktop);
+  const cats = active?.categories || {};
+  const score = active ? Number(active.score) : (audit ? Number(audit.score) : null);
+  const runError = audit?.report?.errors?.[view];
 
   return (
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
@@ -167,11 +252,12 @@ export default function HtmlAuditPage() {
         <button
           type="button"
           onClick={() => navigate('/html')}
-          className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-          style={{
-            background: !id ? 'var(--color-bg)' : 'transparent',
-            color: !id ? 'var(--color-text)' : 'var(--color-muted)',
-          }}
+          className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+          style={
+            !id
+              ? { background: 'var(--color-primary)', color: '#fff' }
+              : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
+          }
         >
           New Lighthouse run
         </button>
@@ -204,7 +290,7 @@ export default function HtmlAuditPage() {
                   >
                     <span className="block truncate">{a.name}</span>
                     <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
-                      {a.score != null ? `${a.score} · ` : ''}{a.strategy || 'mobile'} · {a.hostname || hostOf(a.url)}
+                      {a.score != null ? `${a.score} · ` : ''}{a.hostname || hostOf(a.url)}
                     </span>
                   </button>
                   <button
@@ -224,12 +310,16 @@ export default function HtmlAuditPage() {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl">
+        {id && !audit && (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading audit…</p>
+        )}
+
         {!id && (
           <section className="space-y-4">
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>HTML · Lighthouse</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Run Google Lighthouse via PageSpeed Insights on a public URL. This measures performance, accessibility, best practices, and Lighthouse SEO — not the Vault on-page crawl. Set <span className="font-medium" style={{ color: 'var(--color-text)' }}>PAGESPEED_API_KEY</span> on Railway. Create a key in Google Cloud: enable PageSpeed Insights API, then Credentials → API key.
+                Runs Google Lighthouse on a public URL for <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then stores a developer brief (opportunities, files, failed checks, docs links). This is lab performance, not the SEO crawl.
               </p>
             </div>
             <label className="block space-y-1">
@@ -252,21 +342,6 @@ export default function HtmlAuditPage() {
                 style={FIELD}
               />
             </label>
-            <div className="flex gap-2">
-              {['mobile', 'desktop'].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStrategy(s)}
-                  className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                  style={strategy === s
-                    ? { background: 'var(--color-primary)', color: '#fff' }
-                    : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  {s === 'mobile' ? 'Mobile' : 'Desktop'}
-                </button>
-              ))}
-            </div>
             <button
               type="button"
               onClick={handleCreate}
@@ -301,7 +376,7 @@ export default function HtmlAuditPage() {
                   className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-semibold tabular-nums"
                   style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: scoreTint(score) }}
                 >
-                  {score}
+                  {score ?? '—'}
                 </div>
                 {deleteConfirm ? (
                   <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -322,64 +397,109 @@ export default function HtmlAuditPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                ['Performance', cats.performance],
-                ['Accessibility', cats.accessibility],
-                ['Best practices', cats.bestPractices],
-                ['Lighthouse SEO', cats.seo],
-              ].map(([label, n]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border p-4"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            <div className="flex flex-wrap items-center gap-2">
+              {['mobile', 'desktop'].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setView(s)}
+                  className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+                  style={view === s
+                    ? { background: 'var(--color-primary)', color: '#fff' }
+                    : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{label}</p>
-                  <p className="text-xl font-semibold tabular-nums mt-1" style={{ color: scoreTint(n) }}>{n ?? '—'}</p>
-                </div>
+                  {s === 'mobile' ? 'Mobile' : 'Desktop'}
+                  {pair[s]?.score != null ? ` ${pair[s].score}` : ''}
+                </button>
               ))}
+              {active?.developerBrief ? (
+                <button
+                  type="button"
+                  onClick={() => copyBrief(active.developerBrief)}
+                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Copy this report
+                </button>
+              ) : null}
+              {audit?.report?.developerBrief ? (
+                <button
+                  type="button"
+                  onClick={() => copyBrief(audit.report.developerBrief)}
+                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Copy mobile + desktop
+                </button>
+              ) : null}
             </div>
 
-            {(report.metrics || []).length > 0 && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Lab metrics</p>
-                <ul className="space-y-1">
-                  {report.metrics.map((m) => (
-                    <li key={m.id} className="flex justify-between gap-3 text-xs">
-                      <span style={{ color: 'var(--color-text)' }}>{m.title}</span>
-                      <span className="tabular-nums shrink-0" style={{ color: scoreTint(m.score == null ? null : Math.round(m.score * 100)) }}>{m.displayValue || '—'}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {runError && !active ? (
+              <p className="text-sm leading-relaxed" style={{ color: '#ef4444' }}>{runError}</p>
+            ) : null}
 
-            {(report.opportunities || []).length > 0 && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Opportunities</p>
-                <ul className="space-y-2">
-                  {report.opportunities.map((o) => (
-                    <li key={o.id} className="text-xs leading-relaxed">
-                      <p style={{ color: 'var(--color-text)' }}>{o.title}</p>
-                      {o.displayValue ? <p style={{ color: 'var(--color-muted)' }}>{o.displayValue}</p> : null}
-                    </li>
+            {active && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    ['Performance', cats.performance],
+                    ['Accessibility', cats.accessibility],
+                    ['Best practices', cats.bestPractices],
+                    ['Lighthouse SEO', cats.seo],
+                  ].map(([label, n]) => (
+                    <div
+                      key={label}
+                      className="rounded-2xl border p-4"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                      <p className="text-xl font-semibold tabular-nums mt-1" style={{ color: scoreTint(n) }}>{n ?? '—'}</p>
+                    </div>
                   ))}
-                </ul>
-              </div>
-            )}
+                </div>
 
-            {(report.failedAudits || []).length > 0 && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Failed checks</p>
-                <ul className="space-y-2">
-                  {report.failedAudits.map((a) => (
-                    <li key={a.id} className="text-xs leading-relaxed">
-                      <p style={{ color: 'var(--color-text)' }}>{a.title}</p>
-                      {a.description ? <p style={{ color: 'var(--color-muted)' }}>{a.description}</p> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                {active.environment?.lighthouseVersion ? (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Lighthouse {active.environment.lighthouseVersion}
+                    {active.environment.formFactor ? ` · ${active.environment.formFactor}` : ''}
+                    {active.environment.throttlingMethod ? ` · ${active.environment.throttlingMethod} throttling` : ''}
+                    {active.fetchTime ? ` · ${active.fetchTime}` : ''}
+                  </p>
+                ) : null}
+
+                {(active.fieldData || []).length > 0 && (
+                  <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Field data (Chrome UX Report)</p>
+                    <ul className="space-y-1">
+                      {active.fieldData.map((m) => (
+                        <li key={m.id} className="flex justify-between gap-3 text-xs">
+                          <span style={{ color: 'var(--color-text)' }}>{m.id.replace(/_/g, ' ')}</span>
+                          <span style={{ color: 'var(--color-muted)' }}>{m.category || '—'}{m.percentile != null ? ` · ${m.percentile}` : ''}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(active.metrics || []).length > 0 && (
+                  <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Lab metrics</p>
+                    <ul className="space-y-1">
+                      {active.metrics.map((m) => (
+                        <li key={m.id} className="flex justify-between gap-3 text-xs">
+                          <span style={{ color: 'var(--color-text)' }}>{m.title}</span>
+                          <span className="tabular-nums shrink-0" style={{ color: scoreTint(m.score == null ? null : Math.round(m.score * 100)) }}>{m.displayValue || '—'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <FindingList title="Opportunities" items={active.opportunities} />
+                <FindingList title="Diagnostics" items={active.diagnostics} />
+                <FindingList title="Failed checks" items={active.failedAudits} />
+                <FindingList title="Warnings" items={active.warnings} />
+              </>
             )}
           </section>
         )}

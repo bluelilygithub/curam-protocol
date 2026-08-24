@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (html-both-dev-brief)
+
+### HTML — mobile and desktop, developer brief
+- Each run calls PageSpeed for mobile and desktop in parallel. Toggle between reports.
+- Opportunities list URLs and savings; failed checks keep Lighthouse docs links. Copy this report / copy both as a brief for a developer.
+
+---
+
 ## 2026-08-24 (html-psi-key-blocked)
 
 ### HTML — PageSpeed “API blocked” errors

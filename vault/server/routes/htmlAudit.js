@@ -24,7 +24,6 @@ router.post('/audits', async (req, res) => {
     const audit = await createAudit(req.user.id, {
       url: req.body?.url,
       name: req.body?.name,
-      strategy: req.body?.strategy,
     });
     res.status(201).json(audit);
   } catch (err) {

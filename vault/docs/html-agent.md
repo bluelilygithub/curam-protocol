@@ -1,6 +1,6 @@
 # HTML · Lighthouse
 
-Lighthouse lab audit at **`/html`**. Paste a public URL, pick **Mobile** or **Desktop**, and Vault runs Google PageSpeed Insights (the hosted Lighthouse engine). This is not the SEO crawl at `/seo`.
+Lighthouse lab audit at **`/html`**. Paste a public URL. Vault runs Google PageSpeed Insights for **mobile and desktop**, then you toggle between the two reports. This is not the SEO crawl at `/seo`.
 
 **Frontend:** `vault/client/src/pages/HtmlAuditPage.jsx`  
 **Backend:** `vault/server/routes/htmlAudit.js` · `htmlLighthouse.js` · `htmlAuditService.js`  
@@ -10,9 +10,9 @@ Lighthouse lab audit at **`/html`**. Paste a public URL, pick **Mobile** or **De
 
 ## Flow
 
-1. **New run** — URL, optional name, strategy (mobile default).
-2. **PageSpeed** — `pagespeedonline/v5/runPagespeed` with performance, accessibility, best-practices, and SEO categories. Requires **`PAGESPEED_API_KEY`** on the Railway **web** service.
-3. **Report** — four category scores (the ring number is performance), lab metrics (FCP, LCP, TBT, CLS, Speed Index, TTI), opportunities, failed binary audits.
+1. **New run** — URL and optional name.
+2. **PageSpeed** — two `runPagespeed` calls in parallel (mobile + desktop), categories performance, accessibility, best-practices, SEO. Requires **`PAGESPEED_API_KEY`**.
+3. **Report** — toggle Mobile / Desktop. Each side has category scores, CrUX field data, lab metrics, opportunities (with URLs/savings), diagnostics, failed checks, warnings, and a copyable developer brief.
 
 SSRF-safe: the page URL is DNS-checked before it is sent to Google.
 
@@ -23,13 +23,13 @@ SSRF-safe: the page URL is DNS-checked before it is sent to Google.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/html/audits` | List runs |
-| `POST` | `/api/html/audits` | `{ url, name?, strategy? }` |
+| `POST` | `/api/html/audits` | `{ url, name? }` → mobile + desktop |
 | `GET` | `/api/html/audits/:id` | Full report |
 | `DELETE` | `/api/html/audits/:id` | Remove run |
 
 Feature flag: **`html`**.
 
-A run often takes 30–60 seconds. Use ProcessingModal. The boot log must show `[env] PAGESPEED_API_KEY: set`. If it says `NOT SET`, the key is not on this service (or the service was not redeployed).
+A run often takes about a minute (two PSI jobs in parallel). Use ProcessingModal.
 
 ## Get a PageSpeed Insights API key
 
