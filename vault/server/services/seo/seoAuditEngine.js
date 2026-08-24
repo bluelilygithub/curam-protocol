@@ -85,6 +85,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
   const https = /^https:/i.test(url || '');
   const charCount = String(text || '').replace(/\s+/g, ' ').trim().length;
   const where = isHome ? 'this page (homepage)' : 'this page';
+  const noHtml = !error && statusCode < 400 && !title && charCount < 40;
 
   if (error) {
     addFinding(findings, {
@@ -100,7 +101,17 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       severity: 'fail',
       title: `HTTP ${statusCode}`,
       detail: `${url} returned ${statusCode}.`,
-      recommendation: `Fix or redirect this URL so crawlers get 200 (or a 301 to the live page).`,
+      recommendation: 'Fix or redirect this URL so crawlers get 200 (or a 301 to the live page).',
+    });
+  } else if (noHtml || statusCode === 202 || statusCode === 204) {
+    addFinding(findings, {
+      id: 'fetch',
+      severity: 'fail',
+      title: statusCode === 202
+        ? 'Host returned HTTP 202 with no usable HTML'
+        : 'No HTML in the response',
+      detail: 'The live site may show a full page in a browser while this crawl gets an empty or challenge response. Without HTML there are no links to follow.',
+      recommendation: 'Allow unknown crawlers (or Railway IPs) on the host/WAF, then run the audit again. Do not treat missing titles on this result as the real page.',
     });
   } else {
     addFinding(findings, {
@@ -109,6 +120,21 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       title: `Fetched (HTTP ${statusCode || 200})`,
       detail: url,
     });
+  }
+
+  if (error || (statusCode >= 400) || noHtml || statusCode === 202 || statusCode === 204) {
+    const score = scoreFromFindings(findings);
+    return {
+      url,
+      title,
+      statusCode: statusCode || 0,
+      error: error || null,
+      isHome: Boolean(isHome),
+      score,
+      charCount,
+      findings,
+      recommendations: recommendationsFrom(findings),
+    };
   }
 
   if (!https) {
@@ -313,6 +339,8 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
 
 function buildSiteAudit({ crawl }) {
   const startUrl = crawl.startUrl;
+  let origin = '';
+  try { origin = new URL(startUrl).origin; } catch { origin = ''; }
   const pageReports = (crawl.pages || []).map((p, i) => auditPage({
     url: p.url || p.requestedUrl,
     html: p.html,
@@ -332,7 +360,7 @@ function buildSiteAudit({ crawl }) {
       severity: 'warn',
       title: robots.statusCode >= 400 ? `robots.txt returned HTTP ${robots.statusCode}` : 'robots.txt not found or empty',
       detail: 'Optional, but useful for crawlers.',
-      recommendation: 'Publish https://your-domain/robots.txt with User-agent: * and allow public pages.',
+      recommendation: `Publish ${origin}/robots.txt with User-agent: * and allow public pages.`,
     });
   } else if (/disallow:\s*\/\s*$/im.test(robotsBody) && /user-agent:\s*\*/i.test(robotsBody)) {
     addFinding(siteFindings, {

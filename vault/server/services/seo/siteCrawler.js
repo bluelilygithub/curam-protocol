@@ -95,8 +95,9 @@ function pathScore(url) {
 async function fetchRobots(startUrl) {
   try {
     const origin = new URL(normaliseHttpUrl(startUrl)).origin;
-    const { body, statusCode } = await fetchHtml(`${origin}/robots.txt`, 3, 8000);
-    const text = String(body || '');
+    const result = await fetchHtml(`${origin}/robots.txt`, 3, 8000);
+    const text = String(result.body || '');
+    const statusCode = result.statusCode;
     const ok = statusCode < 400 && /user-agent/i.test(text);
     return {
       ok,
@@ -111,10 +112,12 @@ async function fetchRobots(startUrl) {
 
 async function fetchPage(url) {
   try {
-    const { body, statusCode, finalUrl } = await fetchHtml(url, 4, PAGE_TIMEOUT_MS);
-    const html = String(body || '');
+    const result = await fetchHtml(url, 4, PAGE_TIMEOUT_MS);
+    const html = String(result.body || '');
+    const statusCode = result.statusCode;
+    const finalUrl = result.finalUrl || url;
     return {
-      url: canonicalUrl(finalUrl || url) || url,
+      url: canonicalUrl(finalUrl) || url,
       requestedUrl: url,
       statusCode,
       html,

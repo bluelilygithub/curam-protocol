@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-fetch)
+
+### SEO audit — empty HTTP 202 crawl
+- HTML fetch retries thin/202/empty responses without compression so link discovery can run.
+- Empty challenge responses are scored as a fetch failure, not as missing title/H1.
+
+---
+
 ## 2026-08-24 (seo-audit-crawl)
 
 ### SEO audit — crawl N pages and recommend per URL

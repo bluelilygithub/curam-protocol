@@ -55,7 +55,12 @@ function decodeBody(buffer, encoding) {
   return buffer;
 }
 
-function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
+function looksLikeHtml(text) {
+  const t = String(text || '').slice(0, 2000).toLowerCase();
+  return t.includes('<html') || t.includes('<!doctype') || t.includes('<title') || t.includes('<body');
+}
+
+function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders) {
   return new Promise((resolve, reject) => {
     if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
     let parsed;
@@ -73,10 +78,12 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
-          'Accept-Encoding': 'gzip, deflate, br',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
+          'Accept-Encoding': 'gzip, deflate',
           'Accept-Language': 'en-AU,en-US,en;q=0.9',
           'Cache-Control': 'no-cache',
+          Connection: 'close',
+          ...extraHeaders,
         },
         timeout: timeoutMs,
       };
@@ -84,7 +91,7 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
       const req = mod.request(opts, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchHtml(next, redirectsLeft - 1, timeoutMs));
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders));
         }
         const chunks = [];
         let bytesReceived = 0;
@@ -99,8 +106,9 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
         res.on('end', () => {
           const raw = Buffer.concat(chunks);
           const decoded = decodeBody(raw, res.headers['content-encoding']);
+          const text = decoded.toString('utf8');
           resolve({
-            body: decoded.toString('utf8'),
+            body: text,
             statusCode: res.statusCode,
             finalUrl: url,
             htmlBytes: raw.length,
@@ -114,6 +122,31 @@ function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
       req.end();
     }).catch(reject);
   });
+}
+
+function isThinResponse(result) {
+  const text = String(result?.body || '');
+  const status = result?.statusCode || 0;
+  if (status === 202 || status === 204 || status === 403 || status === 429) return true;
+  if (status >= 200 && status < 300 && !looksLikeHtml(text) && text.replace(/\s+/g, '').length < 80) return true;
+  return false;
+}
+
+async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
+  let result = await fetchOnce(url, redirectsLeft, timeoutMs, {});
+  if (!isThinResponse(result)) return result;
+
+  await new Promise((r) => setTimeout(r, 400));
+  const retry = await fetchOnce(url, redirectsLeft, timeoutMs, {
+    'Accept-Encoding': 'identity',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    Referer: url,
+  });
+  if (!isThinResponse(retry) || String(retry.body || '').length > String(result.body || '').length) {
+    return retry;
+  }
+  return result;
 }
 
 function decodeEntities(s) {
