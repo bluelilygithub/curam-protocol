@@ -36,12 +36,28 @@ function viewsOf(report) {
 }
 
 function formatSave(item) {
+  if (item.displayValue) return item.displayValue;
   const bits = [];
-  if (item.displayValue) bits.push(item.displayValue);
-  else {
-    if (item.savingsMs) bits.push(`${item.savingsMs} ms`);
-    if (item.savingsBytes) bits.push(`${Math.round(item.savingsBytes / 1024)} KiB`);
+  if (item.savingsMs) bits.push(`${item.savingsMs} ms`);
+  if (item.savingsBytes) bits.push(`${Math.round(item.savingsBytes / 1024)} KiB`);
+  return bits.join(' · ');
+}
+
+function itemText(it) {
+  const bits = [];
+  if (it.selector) bits.push(it.selector);
+  if (it.url) bits.push(it.url);
+  if (it.subpart) bits.push(it.duration != null ? `${it.subpart}: ${it.duration} ms` : it.subpart);
+  else if (it.label && it.label !== it.selector && it.label !== it.url) bits.push(it.label);
+  if (it.fg && it.bg) {
+    const ratio = it.contrastRatio != null ? ` ratio ${Number(it.contrastRatio).toFixed(2)} (need ≥ 4.5)` : '';
+    bits.push(`text ${it.fg} on ${it.bg}${ratio}`);
   }
+  if (it.fontSize) bits.push(String(it.fontSize));
+  if (it.wastedMs != null) bits.push(`${it.wastedMs} ms wasted`);
+  if (it.wastedBytes != null) bits.push(`${it.wastedBytes} bytes unused`);
+  if (it.explanation) bits.push(it.explanation);
+  if (!bits.length && it.snippet) bits.push(it.snippet);
   return bits.join(' · ');
 }
 
@@ -81,9 +97,7 @@ function FindingList({ title, items }) {
               <ul className="pt-1 space-y-0.5">
                 {o.items.map((it, i) => (
                   <li key={`${o.id}-${i}`} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>
-                    {it.url || it.label || it.snippet}
-                    {it.wastedMs != null ? ` · ${it.wastedMs} ms` : ''}
-                    {it.wastedBytes != null ? ` · ${it.wastedBytes} B` : ''}
+                    {itemText(it)}
                   </li>
                 ))}
               </ul>
@@ -466,6 +480,35 @@ export default function HtmlAuditPage() {
                     {active.fetchTime ? ` · ${active.fetchTime}` : ''}
                   </p>
                 ) : null}
+
+                {(active.workOrder || []).length > 0 && (
+                  <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Work order</p>
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                      Ranked tickets for a developer. Copy this report to paste the same list.
+                    </p>
+                    <ul className="space-y-3">
+                      {active.workOrder.map((t) => (
+                        <li
+                          key={`${t.priority}-${t.title}`}
+                          className="rounded-xl border p-4 space-y-1"
+                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                        >
+                          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>{t.priority}</p>
+                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.title}</p>
+                          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{t.action}</p>
+                          {(t.evidence || []).length > 0 && (
+                            <ul className="pt-1 space-y-0.5">
+                              {t.evidence.map((ev) => (
+                                <li key={ev} className="text-xs leading-relaxed break-all" style={{ color: 'var(--color-text)' }}>{ev}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {(active.fieldData || []).length > 0 && (
                   <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>

@@ -86,24 +86,165 @@ function categoryForAudit(lr, auditId) {
   return '';
 }
 
+function srcFromHtml(html) {
+  const m = String(html || '').match(/\bsrc=["']([^"']+)["']/i);
+  return m ? m[1] : '';
+}
+
+function flattenDetailItems(details, acc = []) {
+  const items = details?.items;
+  if (!Array.isArray(items)) return acc;
+  for (const item of items) {
+    acc.push(item);
+    if (item?.subItems?.items) flattenDetailItems({ items: item.subItems.items }, acc);
+  }
+  return acc;
+}
+
 function itemRow(item) {
-  const node = item.node || {};
+  const node = item.node && typeof item.node === 'object' ? item.node : {};
   const src = item.source && typeof item.source === 'object' ? item.source : {};
-  const url = item.url || src.url || item.source || '';
+  const snippet = String(node.snippet || item.snippet || '');
+  let url = item.url || src.url || (typeof item.source === 'string' ? item.source : '') || srcFromHtml(snippet);
+  if (typeof url !== 'string') url = '';
+  const duration = item.duration ?? item.phase ?? item.timing;
   return {
-    url: typeof url === 'string' ? url.slice(0, 400) : '',
-    label: String(item.label || item.entity || item.name || node.selector || '').slice(0, 220),
-    snippet: String(node.snippet || item.snippet || '').slice(0, 280),
+    url,
+    selector: String(node.selector || item.selector || '').slice(0, 300),
+    label: String(item.label || item.entity || item.name || item.subpart || node.nodeLabel || '').slice(0, 220),
+    snippet: snippet.slice(0, 600),
+    explanation: String(node.explanation || item.explanation || '').slice(0, 400),
     wastedMs: item.wastedMs != null ? Math.round(Number(item.wastedMs)) : null,
     wastedBytes: item.wastedBytes != null ? Math.round(Number(item.wastedBytes)) : null,
     totalBytes: item.totalBytes != null ? Math.round(Number(item.totalBytes)) : null,
+    wastedPercent: item.wastedPercent != null ? Number(item.wastedPercent) : null,
+    fg: item.fg || item.foreground || '',
+    bg: item.bg || item.background || '',
+    contrastRatio: item.contrastRatio != null ? Number(item.contrastRatio) : null,
+    fontSize: item.fontSize || '',
+    subpart: item.subpart || '',
+    duration: duration != null && duration !== '' ? Math.round(Number(duration)) : null,
   };
 }
 
-function tableRows(details, max = 20) {
-  const items = details?.items;
-  if (!Array.isArray(items) || !items.length) return [];
-  return items.slice(0, max).map(itemRow).filter((r) => r.url || r.label || r.snippet);
+function uniqRows(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const k = [r.url, r.selector, r.fg, r.bg, r.subpart, r.label, r.wastedBytes, r.wastedMs].join('|');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
+function tableRows(details, max = 25) {
+  const raw = flattenDetailItems(details).map(itemRow).filter((r) => (
+    r.url || r.selector || r.label || r.snippet || r.subpart || r.fg
+  ));
+  return uniqRows(raw).slice(0, max);
+}
+
+function formatItemLine(it) {
+  const bits = [];
+  if (it.selector) bits.push(it.selector);
+  if (it.url) bits.push(it.url);
+  if (it.subpart) bits.push(it.duration != null ? `${it.subpart}: ${it.duration} ms` : it.subpart);
+  else if (it.label && it.label !== it.selector && it.label !== it.url) bits.push(it.label);
+  if (it.fg && it.bg) {
+    const ratio = it.contrastRatio != null ? ` ratio ${it.contrastRatio.toFixed(2)} (need ≥ 4.5)` : '';
+    bits.push(`text ${it.fg} on ${it.bg}${ratio}`);
+  }
+  if (it.fontSize) bits.push(String(it.fontSize));
+  if (it.wastedMs != null) bits.push(`${it.wastedMs} ms wasted`);
+  if (it.wastedBytes != null) bits.push(`${it.wastedBytes} bytes unused`);
+  if (it.wastedPercent != null) bits.push(`${Math.round(it.wastedPercent)}% unused`);
+  if (it.explanation) bits.push(it.explanation);
+  if (!bits.length && it.snippet) bits.push(it.snippet);
+  return bits.join(' · ');
+}
+
+function findAudit(view, test) {
+  for (const bag of [view.opportunities, view.diagnostics, view.failedAudits, view.warnings]) {
+    for (const a of bag || []) {
+      if (test(a)) return a;
+    }
+  }
+  return null;
+}
+
+function workOrder(view) {
+  const tickets = [];
+  const redir = findAudit(view, (a) => a.id === 'redirects');
+  if (redir) {
+    tickets.push({
+      priority: 'P0',
+      title: 'Serve one host — drop the extra redirect',
+      action: 'Pick one canonical host (www or apex). 301 the other to it. Set WordPress Address, Site Address, canonicals, and sitemaps to that host so the first HTML response is already canonical. This hop is the largest mobile delay in this report.',
+      evidence: (redir.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  const lcp = findAudit(view, (a) => /lcp-breakdown|lcp-discovery/i.test(a.id || ''));
+  if (lcp) {
+    const hero = (lcp.items || []).map((i) => i.url || srcFromHtml(i.snippet)).find(Boolean);
+    const cls = (lcp.items || []).map((i) => i.selector).find(Boolean);
+    tickets.push({
+      priority: 'P0',
+      title: 'Make the hero LCP image discoverable immediately',
+      action: `${hero ? `Hero image: ${hero}. ` : ''}${cls ? `Selector: ${cls}. ` : ''}In the first HTML response give that <img> fetchpriority="high", width and height, and a matching <link rel="preload" as="image">. Do not lazy-load it. Compress and size it for mobile.`,
+      evidence: (lcp.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  const js = findAudit(view, (a) => a.id === 'unused-javascript');
+  if (js) {
+    tickets.push({
+      priority: 'P1',
+      title: 'Stop GTM from competing with first paint',
+      action: 'Load Google Tag Manager after first paint (requestIdleCallback or consent). Do not put gtm.js / gtag.js in the document head as a render-blocking script.',
+      evidence: (js.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  const cssUnused = findAudit(view, (a) => a.id === 'unused-css-rules');
+  const cssMin = findAudit(view, (a) => a.id === 'unminified-css');
+  if (cssUnused || cssMin) {
+    const items = uniqRows([...(cssUnused?.items || []), ...(cssMin?.items || [])]);
+    const file = items.map((i) => i.url).find(Boolean) || 'the theme stylesheet';
+    tickets.push({
+      priority: 'P1',
+      title: 'Minify and split unused CSS',
+      action: `Minify ${file}. Deliver only above-the-fold rules on this template; defer the rest.`,
+      evidence: items.map(formatItemLine).filter(Boolean),
+    });
+  }
+  const headings = findAudit(view, (a) => a.id === 'heading-order');
+  if (headings) {
+    tickets.push({
+      priority: 'P2',
+      title: 'Fix heading levels (do not skip h2→h4 / footer h5)',
+      action: 'Use sequential headings (do not skip levels, e.g. h2 then h4). Footer nav should not jump to h5. Match the selectors in evidence.',
+      evidence: (headings.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  const contrast = findAudit(view, (a) => a.id === 'color-contrast');
+  if (contrast) {
+    tickets.push({
+      priority: 'P2',
+      title: 'Raise text contrast on buttons, links, eyebrows, figcaptions',
+      action: 'Each evidence row lists selector, text colour, background, and ratio. Target 4.5:1 for normal text and 3:1 for large text. Fix the shared button/link/eyebrow/figcaption/footer tokens rather than one-off pages.',
+      evidence: (contrast.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  const reflow = findAudit(view, (a) => /forced-reflow/i.test(a.id || ''));
+  if (reflow && (reflow.items || []).length) {
+    tickets.push({
+      priority: 'P2',
+      title: 'Remove forced reflow in theme JS',
+      action: 'Avoid reading layout (offsetWidth/getBoundingClientRect) immediately after DOM/style writes. Batch reads, then writes. Check theme JS on this page.',
+      evidence: (reflow.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+  return tickets;
 }
 
 function expandAudit(lr, a) {
@@ -205,9 +346,22 @@ function briefLines(view) {
     `Lighthouse ${view.lighthouseVersion || ''} · ${view.fetchTime || ''}`,
     `Scores — Performance ${view.categories.performance ?? '—'} · Accessibility ${view.categories.accessibility ?? '—'} · Best practices ${view.categories.bestPractices ?? '—'} · SEO ${view.categories.seo ?? '—'}`,
     '',
-    '## Lab metrics',
+    '## Work order (do these)',
   ];
-  for (const m of view.metrics || []) lines.push(`- ${m.title}: ${m.displayValue || '—'}`);
+  if (!(view.workOrder || []).length) {
+    lines.push('- No ranked tickets — see sections below.');
+  } else {
+    for (const t of view.workOrder) {
+      lines.push(`### ${t.priority} — ${t.title}`);
+      lines.push(t.action);
+      for (const ev of t.evidence || []) lines.push(`- ${ev}`);
+    }
+  }
+  lines.push('', '## Lab metrics');
+  for (const m of view.metrics || []) {
+    const ms = m.numericValue != null ? ` (${Math.round(m.numericValue)} ms)` : '';
+    lines.push(`- ${m.title}: ${m.displayValue || '—'}${ms}`);
+  }
   const addBlock = (title, items) => {
     lines.push('', `## ${title}`);
     if (!items.length) {
@@ -215,18 +369,14 @@ function briefLines(view) {
       return;
     }
     for (const o of items) {
-      const save = [
-        o.savingsMs ? `${o.savingsMs} ms` : '',
-        o.savingsBytes ? `${Math.round(o.savingsBytes / 1024)} KiB` : '',
-        o.displayValue || '',
-      ].filter(Boolean).join(', ');
+      const save = o.displayValue
+        || [o.savingsMs ? `${o.savingsMs} ms` : '', o.savingsBytes ? `${Math.round(o.savingsBytes / 1024)} KiB` : ''].filter(Boolean).join(', ');
       lines.push(`### ${o.title}${save ? ` (${save})` : ''}`);
       if (o.description) lines.push(o.description);
       if (o.docsUrl) lines.push(`Docs: ${o.docsUrl}`);
       for (const it of o.items || []) {
-        const bits = [it.url || it.label, it.snippet, it.wastedMs != null ? `${it.wastedMs} ms wasted` : '', it.wastedBytes != null ? `${it.wastedBytes} bytes wasted` : '']
-          .filter(Boolean);
-        if (bits.length) lines.push(`- ${bits.join(' · ')}`);
+        const line = formatItemLine(it);
+        if (line) lines.push(`- ${line}`);
       }
     }
   };
@@ -266,6 +416,7 @@ function summarisePsi(data, strategy) {
     score,
     summary: `${strategy} · Perf ${categories.performance ?? '—'} · A11y ${categories.accessibility ?? '—'} · BP ${categories.bestPractices ?? '—'} · SEO ${categories.seo ?? '—'}`,
   };
+  view.workOrder = workOrder(view);
   view.developerBrief = briefLines(view);
   return view;
 }

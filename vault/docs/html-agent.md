@@ -12,7 +12,7 @@ Lighthouse lab audit at **`/html`**. Paste a public URL. Vault runs Google PageS
 
 1. **New run** — URL and optional name.
 2. **PageSpeed** — two `runPagespeed` calls in parallel (mobile + desktop), categories performance, accessibility, best-practices, SEO. Requires **`PAGESPEED_API_KEY`**.
-3. **Report** — toggle Mobile / Desktop. Each side has category scores, CrUX field data, lab metrics, opportunities (with URLs/savings), diagnostics, failed checks, warnings, and a copyable developer brief.
+3. **Report** — toggle Mobile / Desktop. **Work order** (P0–P2 tickets a developer can implement), category scores, CrUX, lab metrics, opportunities with URLs/savings, diagnostics, failed checks with selectors and contrast values, copyable brief.
 
 SSRF-safe: the page URL is DNS-checked before it is sent to Google.
 

@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (html-dev-work-order)
+
+### HTML — developer work order
+- Briefs now start with ranked P0–P2 tickets (canonical host, LCP image, GTM, CSS, headings, contrast).
+- Evidence rows include full URLs, selectors, unused bytes, and contrast fg/bg/ratio. Duplicate selectors are collapsed.
+
+---
+
 ## 2026-08-24 (html-both-dev-brief)
 
 ### HTML — mobile and desktop, developer brief
