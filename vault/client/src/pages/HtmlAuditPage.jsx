@@ -109,6 +109,33 @@ function FindingList({ title, items }) {
   );
 }
 
+const SORT_OPTIONS = [
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'name', label: 'Name A–Z' },
+  { id: 'score', label: 'Score' },
+];
+
+function runStamp(a) {
+  const raw = a?.createdAt || a?.updatedAt;
+  const t = raw ? new Date(raw).getTime() : 0;
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function sortAudits(list, sort) {
+  const rows = [...list];
+  if (sort === 'oldest') return rows.sort((a, b) => runStamp(a) - runStamp(b));
+  if (sort === 'name') return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }));
+  if (sort === 'score') return rows.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  return rows.sort((a, b) => runStamp(b) - runStamp(a));
+}
+  const raw = audit?.createdAt || audit?.report?.mobile?.fetchTime || audit?.report?.desktop?.fetchTime || audit?.report?.fetchTime;
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function HtmlAuditPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -124,6 +151,13 @@ export default function HtmlAuditPage() {
   const [audits, setAudits] = useState([]);
   const [audit, setAudit] = useState(null);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vault:htmlListSort');
+      if (SORT_OPTIONS.some((o) => o.id === saved)) return saved;
+    } catch { /* ignore */ }
+    return 'newest';
+  });
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [view, setView] = useState('mobile');
@@ -176,9 +210,11 @@ export default function HtmlAuditPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return audits;
-    return audits.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q));
-  }, [audits, search]);
+    const rows = q
+      ? audits.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q))
+      : audits;
+    return sortAudits(rows, sort);
+  }, [audits, search, sort]);
 
   const handleCreate = async () => {
     if (!url.trim()) {
@@ -263,6 +299,22 @@ export default function HtmlAuditPage() {
           style={FIELD}
         />
 
+        <select
+          aria-label="Sort runs"
+          value={sort}
+          onChange={(e) => {
+            const next = e.target.value;
+            setSort(next);
+            try { localStorage.setItem('vault:htmlListSort', next); } catch { /* ignore */ }
+          }}
+          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+          style={FIELD}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>Sort: {o.label}</option>
+          ))}
+        </select>
+
         <button
           type="button"
           onClick={() => navigate('/html')}
@@ -304,7 +356,11 @@ export default function HtmlAuditPage() {
                   >
                     <span className="block truncate">{a.name}</span>
                     <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
-                      {a.score != null ? `${a.score} · ` : ''}{a.hostname || hostOf(a.url)}
+                      {[
+                        a.score != null ? String(a.score) : null,
+                        formatRunDate(a) || null,
+                        a.hostname || hostOf(a.url),
+                      ].filter(Boolean).join(' · ')}
                     </span>
                   </button>
                   <button
@@ -371,7 +427,9 @@ export default function HtmlAuditPage() {
           <section className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{audit.name}</h2>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {audit.name}{formatRunDate(audit) ? ` (${formatRunDate(audit)})` : ''}
+                </h2>
                 <a
                   href={audit.url}
                   target="_blank"
