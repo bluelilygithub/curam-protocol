@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (html-psi-key-blocked)
+
+### HTML — PageSpeed “API blocked” errors
+- Require `PAGESPEED_API_KEY` on the server. Anonymous calls from Railway IPs are often blocked.
+- Map Google `API_KEY_SERVICE_BLOCKED` (API restrictions missing PageSpeed) separately from HTTP-referrer blocks. Log status/reason without the key.
+
+---
+
 ## 2026-08-24 (seo-new-audit-crash)
 
 ### SEO audit — blank report screen and New audit button

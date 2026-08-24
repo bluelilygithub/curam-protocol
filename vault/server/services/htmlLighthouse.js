@@ -12,16 +12,46 @@ const METRIC_IDS = [
   'interactive',
 ];
 
-function getJson(url, timeoutMs) {
+function readPsiKey() {
+  const raw = String(process.env.PAGESPEED_API_KEY || process.env.GOOGLE_PAGESPEED_API_KEY || '').trim();
+  return raw.replace(/^['"]|['"]$/g, '').trim();
+}
+
+function googleErrorReason(data) {
+  const details = data?.error?.details;
+  if (Array.isArray(details)) {
+    for (const d of details) {
+      if (d && d.reason) return String(d.reason);
+    }
+  }
+  return String(data?.error?.status || data?.error?.errors?.[0]?.reason || '');
+}
+
+function getJson(url, { timeoutMs, headers, redirectsLeft = 3 } = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: timeoutMs }, (res) => {
+    const u = new URL(url);
+    const opts = {
+      hostname: u.hostname,
+      path: `${u.pathname}${u.search}`,
+      method: 'GET',
+      timeout: timeoutMs,
+      headers: { Accept: 'application/json', ...headers },
+    };
+    const req = https.get(opts, (res) => {
+      const loc = res.headers.location;
+      if (res.statusCode >= 300 && res.statusCode < 400 && loc && redirectsLeft > 0) {
+        res.resume();
+        const next = loc.startsWith('http') ? loc : `${u.protocol}//${u.host}${loc}`;
+        getJson(next, { timeoutMs, headers, redirectsLeft: redirectsLeft - 1 }).then(resolve, reject);
+        return;
+      }
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8');
         let data;
         try { data = JSON.parse(text); } catch {
-          reject(new Error('PageSpeed returned invalid JSON'));
+          reject(new Error(`PageSpeed returned invalid JSON (HTTP ${res.statusCode})`));
           return;
         }
         resolve({ statusCode: res.statusCode, data });
@@ -108,21 +138,60 @@ function summarisePsi(data, strategy) {
   };
 }
 
+function psiErrorMessage(statusCode, data, { keyConfigured } = {}) {
+  const err = data?.error || {};
+  const reason = googleErrorReason(data).toUpperCase();
+  const msg = String(err.message || '');
+  if (!keyConfigured) {
+    return 'PAGESPEED_API_KEY is not set on this Railway service. Add it on the web app (not Postgres), then redeploy. Boot log must show [env] PAGESPEED_API_KEY: set. Calls without a key from Railway IPs are often blocked by Google.';
+  }
+  if (reason.includes('SERVICE_BLOCKED') || /requests to this api/i.test(msg)) {
+    return 'Google blocked this key for PageSpeed (API_KEY_SERVICE_BLOCKED). Application restrictions = None is not enough. Edit the key → API restrictions: either “Don\'t restrict key”, or Restrict key with PageSpeed Insights API ticked. Also enable PageSpeed Insights API in the Library on the same project as the key.';
+  }
+  if (reason.includes('HTTP_REFERRER') || /referer|referrer/i.test(msg)) {
+    return 'Google blocked this API key because it is restricted to HTTP referrers. Application restrictions → None. Vault calls Google from the server, not the browser.';
+  }
+  if (reason.includes('IP_ADDRESS') || /IP address/i.test(msg)) {
+    return 'Google blocked this API key because of an IP restriction. Do not lock it to a Railway IP. Application restrictions → None.';
+  }
+  if (/has not been used|is disabled/i.test(msg) || reason.includes('SERVICE_DISABLED')) {
+    return 'Enable PageSpeed Insights API on this Google Cloud project, then wait a minute and retry.';
+  }
+  if (reason.includes('API_KEY_INVALID') || /api key not valid/i.test(msg)) {
+    return 'Google rejected PAGESPEED_API_KEY (invalid or from a different project). Paste the key with no quotes, confirm it is on the Railway web service, and that PageSpeed Insights API is enabled on that key’s project.';
+  }
+  return msg || `PageSpeed HTTP ${statusCode}`;
+}
+
 async function runLighthouse(rawUrl, { strategy = 'mobile' } = {}) {
   const url = normaliseHttpUrl(rawUrl);
   const parsed = new URL(url);
   await checkSsrf(parsed.hostname);
 
+  const key = readPsiKey();
+  if (!key) {
+    throw new Error(psiErrorMessage(403, {}, { keyConfigured: false }));
+  }
+
   const strat = strategy === 'desktop' ? 'desktop' : 'mobile';
   const params = new URLSearchParams({ url, strategy: strat });
   ['performance', 'accessibility', 'best-practices', 'seo'].forEach((c) => params.append('category', c));
-  const key = String(process.env.PAGESPEED_API_KEY || process.env.GOOGLE_PAGESPEED_API_KEY || '').trim();
-  if (key) params.set('key', key);
+  params.set('key', key);
 
   const endpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`;
-  const { statusCode, data } = await getJson(endpoint, 120000);
+  const { statusCode, data } = await getJson(endpoint, {
+    timeoutMs: 120000,
+    headers: { 'X-Goog-Api-Key': key },
+  });
   if (statusCode >= 400) {
-    throw new Error(data?.error?.message || `PageSpeed HTTP ${statusCode}`);
+    const reason = googleErrorReason(data);
+    console.error('[html/psi]', JSON.stringify({
+      statusCode,
+      reason: reason || null,
+      message: data?.error?.message || null,
+      keyConfigured: true,
+    }));
+    throw new Error(psiErrorMessage(statusCode, data, { keyConfigured: true }));
   }
   return summarisePsi(data, strat);
 }
