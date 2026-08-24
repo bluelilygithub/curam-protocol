@@ -30,6 +30,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   googleAds: true,
   seo: true,
   html: true,
+  searchConsole: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

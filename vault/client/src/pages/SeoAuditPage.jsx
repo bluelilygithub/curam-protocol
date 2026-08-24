@@ -6,12 +6,34 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { formatRunDate, formatSeoCampaignBrief, seoBriefFilename } from '../utils/seoCampaignBrief';
 
 const FIELD = {
   background: 'var(--color-bg)',
   borderColor: 'var(--color-border)',
   color: 'var(--color-text)',
 };
+
+const SORT_OPTIONS = [
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'name', label: 'Name A–Z' },
+  { id: 'score', label: 'Score' },
+];
+
+function runStamp(a) {
+  const raw = a?.createdAt || a?.updatedAt;
+  const t = raw ? new Date(raw).getTime() : 0;
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function sortAudits(list, sort) {
+  const rows = [...list];
+  if (sort === 'oldest') return rows.sort((a, b) => runStamp(a) - runStamp(b));
+  if (sort === 'name') return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }));
+  if (sort === 'score') return rows.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  return rows.sort((a, b) => runStamp(b) - runStamp(a));
+}
 
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
@@ -44,6 +66,13 @@ export default function SeoAuditPage() {
   const [audits, setAudits] = useState([]);
   const [audit, setAudit] = useState(null);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vault:seoListSort');
+      if (SORT_OPTIONS.some((o) => o.id === saved)) return saved;
+    } catch { /* ignore */ }
+    return 'newest';
+  });
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [pageLimit, setPageLimit] = useState(25);
@@ -103,9 +132,11 @@ export default function SeoAuditPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return audits;
-    return audits.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q));
-  }, [audits, search]);
+    const rows = q
+      ? audits.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q))
+      : audits;
+    return sortAudits(rows, sort);
+  }, [audits, search, sort]);
 
   const handleCreate = async () => {
     if (!url.trim()) {
@@ -114,7 +145,7 @@ export default function SeoAuditPage() {
     }
     startProcessing(
       `Crawling up to ${pageLimit} pages…`,
-      'Same-origin HTML only. Then each page gets checks and recommendations.',
+      'Same-origin HTML for organic campaigns: indexation, SERP copy, thin pages, internal links.',
     );
     try {
       const res = await api.post('/api/seo/audits', {
@@ -154,7 +185,30 @@ export default function SeoAuditPage() {
     }
   };
 
-  if (!canUse) return <Navigate to="/" replace />;
+  const copyBrief = async () => {
+    try {
+      await navigator.clipboard.writeText(formatSeoCampaignBrief(audit));
+      addToast('Campaign brief copied', 'success');
+    } catch {
+      addToast('Could not copy', 'error');
+    }
+  };
+
+  const downloadBrief = () => {
+    try {
+      const text = formatSeoCampaignBrief(audit);
+      const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = seoBriefFilename(audit);
+      a.click();
+      URL.revokeObjectURL(href);
+      addToast('Brief downloaded', 'success');
+    } catch {
+      addToast('Could not download', 'error');
+    }
+  };
 
   const findings = audit?.report?.findings || [];
   const pages = audit?.report?.pages || [];
@@ -194,6 +248,22 @@ export default function SeoAuditPage() {
           className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
           style={FIELD}
         />
+
+        <select
+          aria-label="Sort audits"
+          value={sort}
+          onChange={(e) => {
+            const next = e.target.value;
+            setSort(next);
+            try { localStorage.setItem('vault:seoListSort', next); } catch { /* ignore */ }
+          }}
+          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+          style={FIELD}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>Sort: {o.label}</option>
+          ))}
+        </select>
 
         <button
           type="button"
@@ -249,7 +319,11 @@ export default function SeoAuditPage() {
                   >
                     <span className="block truncate">{a.name}</span>
                     <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
-                      {a.score != null ? `${a.score} · ` : ''}{a.hostname || hostOf(a.url)}
+                      {[
+                        a.score != null ? String(a.score) : null,
+                        formatRunDate(a.createdAt) || null,
+                        a.hostname || hostOf(a.url),
+                      ].filter(Boolean).join(' · ')}
                     </span>
                   </button>
                   <button
@@ -278,7 +352,7 @@ export default function SeoAuditPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO audit</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Paste a public URL and how many pages to crawl. Vault follows same-origin HTML links (no JavaScript), then scores every fetched page and lists what to fix on each one.
+                Crawl the site for an organic campaign: which URLs can be indexed, how titles and descriptions look in search, thin or duplicate pages, and internal links. Speed and Core Web Vitals are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>HTML</span>. Paid keywords are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>Adwords</span>.
               </p>
             </div>
             <label className="block space-y-1">
@@ -329,7 +403,9 @@ export default function SeoAuditPage() {
           <section className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{audit.name}</h2>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {audit.name}{formatRunDate(audit.createdAt) ? ` (${formatRunDate(audit.createdAt)})` : ''}
+                </h2>
                 <a
                   href={audit.url}
                   target="_blank"
@@ -351,6 +427,22 @@ export default function SeoAuditPage() {
                 >
                   {score}
                 </div>
+                <button
+                  type="button"
+                  onClick={copyBrief}
+                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadBrief}
+                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Download
+                </button>
                 {deleteConfirm ? (
                   <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     Delete?
@@ -458,6 +550,8 @@ export default function SeoAuditPage() {
                           <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.url}</span>
                           <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                             {recs.length} recommendation{recs.length === 1 ? '' : 's'}
+                            {p.depth != null ? ` · depth ${p.depth}` : ''}
+                            {p.titleChars ? ` · title ${p.titleChars} ch` : ''}
                           </span>
                         </span>
                         <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: p.score >= 80 ? '#166534' : p.score >= 55 ? '#b45309' : '#ef4444' }}>
@@ -506,7 +600,7 @@ export default function SeoAuditPage() {
               >
                 <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Not in this audit</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                  This crawl does not measure page speed, Core Web Vitals, mobile lab tests, or backlinks.
+                  Use HTML for Lighthouse (speed, CWV, contrast). Use Adwords for paid keywords. This crawl does not track rankings or backlinks.
                 </p>
                 <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
                   {notCovered.map((item) => (

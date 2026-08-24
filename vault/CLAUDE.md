@@ -46,6 +46,9 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
+- `server/routes/htmlAudit.js` — HTML Lighthouse API (`/api/html/audits`)
+- `server/routes/gsc.js` — Search Console OAuth + snapshots (`/api/gsc/*`; callback before requireAuth)
+- `server/services/gscService.js` — Search Console sites + 28-day searchanalytics
 - `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn
 - `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, styled captions, thumbnail)
 - `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
@@ -308,7 +311,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Google Ads** (site scrape + keywords / RSA) · **SEO** (crawl + per-page recommendations) · **HTML** (Lighthouse / PageSpeed) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Google Ads** (site scrape + keywords / RSA) · **SEO** (crawl + per-page recommendations) · **Search** (Google Search Console queries/pages) · **HTML** (Lighthouse / PageSpeed) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
 
 **Document redaction** (`/document-redaction`): Privacy-preserving DOCX redaction. Local LLM proposes candidates → HITL approve/reject/edit → synthetic apply (`redacted.docx` + `sanitized.pdf`) → local compare / leftover scan → HITL₂ → frontier residual-risk analysis on **sanitized PDF only** (entity map never leaves the machine) → selective frontier apply (shared apply pipeline on redacted base) → three-way compare → final approve + INTERNAL-ONLY audit trail. Feature flag `documentRedaction`. Model card `document-redaction-agent`. Docs: **`docs/document-redaction-agent-architecture.md`**.
 
@@ -324,7 +327,9 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Google Ads** (`/google-ads`): Content-tools agent with its own projects (not Vault chat projects). Paste a URL plus **what they sell** (offer is ground truth) → SSRF-safe scrape → **`standard`** model builds 100 Google Ads keywords, 100 negatives, and RSA copy. Ads tab can generate RSA (15/4) or a 10-headline / 10-description pack. Lists follow the offer if the live page is a different industry. Copy or CSV for Ads Editor. Tables: `seo_projects` (includes `offer`), `seo_artifacts`. API: `/api/google-ads`. Feature flag `googleAds`. Docs: **`docs/google-ads-agent.md`**.
 
-**SEO** (`/seo`): Crawl a URL (1–40 same-origin HTML pages, default 25) and score each page with recommendations (titles, headings, robots, HTTPS, alts). No Ads keywords. Table: `seo_audits`. Feature flag `seo`. Docs: **`docs/seo-agent.md`**.
+**SEO** (`/seo`): Crawl a URL (1–40 same-origin HTML pages, default 25) for organic campaigns — indexation, SERP titles/descriptions, thin/duplicate URLs, schema, hreflang, sitemap vs crawl, click depth, internal links. Not Lighthouse (use **HTML**), not Ads (use **Adwords**), not query data (use **Search**). Table: `seo_audits`. Flag `seo`. Docs: **`docs/seo-agent.md`**.
+
+**Search** (`/search-console`): Google Search Console — OAuth (`webmasters.readonly`), 28-day queries, pages, and query/URL cannibalisation. Tables: `gsc_tokens`, `gsc_snapshots`. Flag `searchConsole`. Redirect: `GSC_REDIRECT_URI` or `{APP_URL}/api/gsc/callback`. Docs: **`docs/search-console-agent.md`**.
 
 **HTML** (`/html`): Google Lighthouse via PageSpeed Insights (mobile **and** desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities with file URLs, failed checks, copyable developer brief. Table: `html_audits`. Flag `html`. Requires `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
 
@@ -374,6 +379,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
+| `GSC_REDIRECT_URI` | Search Console OAuth callback (default `{APP_URL}/api/gsc/callback`) |
 
 ---
 

@@ -1,6 +1,8 @@
 # SEO agent
 
-On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl. Vault fetches same-origin HTML links (no headless browser), scores **each** page, and lists recommendations for every URL fetched. No Google Ads keywords. No rank tracking.
+On-page crawl at **`/seo`** for **organic SEO campaigns**. Paste a public URL and how many pages to crawl. Vault fetches same-origin HTML links (no headless browser), scores **each** page, and lists campaign work: indexation, SERP titles/descriptions, thin or duplicate URLs, schema, and internal links.
+
+This is not HTML Lighthouse (`/html`), not Adwords (`/google-ads`), and not Search Console queries (`/search-console`).
 
 **Frontend:** `vault/client/src/pages/SeoAuditPage.jsx`  
 **Backend:** `vault/server/routes/seoAudit.js` · `siteCrawler.js` · `seoAuditEngine.js`  
@@ -8,16 +10,24 @@ On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl.
 
 ---
 
+## What it is for
+
+An SEO manager planning a campaign needs to know: which URLs Google can index, whether query-string filters create duplicates, whether titles/descriptions are unique enough for SERPs, which pages are thin, 4xx and orphans in this crawl, and www vs apex. Copy or download the campaign brief to share.
+
+## What it does not do
+
+Viewport, `html lang`, page speed, Core Web Vitals, contrast, and unused JS/CSS belong to **HTML**. Keywords and RSA copy belong to **Adwords**. Live Google queries, coverage, and rankings belong to **Search** (Search Console). No independent rank tracker or backlinks.
+
+---
+
 ## Flow
 
 1. **New audit** — URL, optional name, **pages to crawl** (1–40, default 25).
-2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. Direct fetch is SSRF-safe via `htmlFetch.js`. If the host returns empty/HTTP 202 (common from Railway), Vault scrapes the page through **Serper** (`SERPER_SEARCH_API_KEY` / `scrape.serper.dev`) so HTML and links come from Serper’s IPs, then continues the crawl. WordPress REST and a reader proxy remain as extra fallbacks. Empty direct bodies are not treated as on-page SEO fails.
-3. **Per page** — title, meta description, H1, viewport, lang, canonical (including query-string URLs vs the clean path), robots meta (noindex/nofollow), Open Graph, JSON-LD types, image alts, thin copy, HTTPS/status.
-4. **Site** — robots.txt, duplicate titles, crawl cap, 4xx URLs, query-string duplicate risk, www vs apex 301 + canonical host, inbound links in this crawl.
-5. **Site-wide updates** — issues that repeat across pages (viewport, lang, Open Graph, titles, H1, alts, HTTPS) folded into one theme / SEO-plugin / hosting change, with how many crawled pages they affect.
-6. **Per-page recommendations** — remaining fail/warn actions on each URL.
-
-JavaScript-rendered sites often look thin. Raise the page limit if important URLs were not linked in HTML.
+2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. Direct fetch is SSRF-safe via `htmlFetch.js`. If the host returns empty/HTTP 202, scrape via **Serper**, then WordPress REST / reader proxy.
+3. **Per page** — title, meta description, H1, canonical (query URLs vs clean path), robots meta (noindex/nofollow), Open Graph, JSON-LD types, image alts, thin copy, HTTPS/status, hreflang, X-Robots-Tag, redirect hops, click depth.
+4. **Site** — robots.txt (including Sitemap: lines), sitemap URLs not crawled or not linked, duplicate titles, crawl cap, 4xx, query-string risk, www vs apex, inbound links.
+5. **Site-wide updates** — repeated gaps folded into one plugin/theme/hosting change.
+6. **Copy / Download** — markdown campaign brief.
 
 ---
 
@@ -31,9 +41,3 @@ JavaScript-rendered sites often look thin. Raise the page limit if important URL
 | `DELETE` | `/api/seo/audits/:id` | Remove audit |
 
 Feature flag: **`seo`**.
-
----
-
-## Data
-
-`seo_audits.report` includes `score`, `summary`, `crawled`, `discovered`, `pageLimit`, site `findings` / `recommendations`, `globalUpdates[]` (`action`, `applyIn`, `pagesAffected`), `pages[]` (`url`, `title`, `score`, `findings[]`, `recommendations[]`), plus JSON-LD types, image alts, inbound links, 4xx list, and www/apex host probe. Page speed, CWV, and backlinks stay in `notCovered`. Raw HTML is not stored.

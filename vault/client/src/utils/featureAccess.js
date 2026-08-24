@@ -28,6 +28,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   googleAds: true,
   seo: true,
   html: true,
+  searchConsole: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -36,6 +37,7 @@ export const FEATURE_ACCESS_GROUPS = [
     label: 'Website',
     items: [
       { key: 'seo', label: 'SEO' },
+      { key: 'searchConsole', label: 'Search' },
       { key: 'googleAds', label: 'Adwords' },
       { key: 'domains', label: 'Domain' },
       { key: 'html', label: 'HTML' },

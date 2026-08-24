@@ -129,6 +129,8 @@ function sortAudits(list, sort) {
   if (sort === 'score') return rows.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   return rows.sort((a, b) => runStamp(b) - runStamp(a));
 }
+
+function formatRunDate(audit) {
   const raw = audit?.createdAt || audit?.report?.mobile?.fetchTime || audit?.report?.desktop?.fetchTime || audit?.report?.fetchTime;
   if (!raw) return '';
   const d = new Date(raw);

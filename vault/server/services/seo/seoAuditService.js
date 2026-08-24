@@ -17,14 +17,34 @@ function hostnameOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
+const LIGHTHOUSE_OVERLAP_IDS = new Set(['viewport', 'lang']);
+
+function stripLighthouseOverlap(report) {
+  const next = report && typeof report === 'object' ? { ...report } : {};
+  const drop = (list) => (list || []).filter((item) => {
+    const id = String(item.id || '');
+    return !LIGHTHOUSE_OVERLAP_IDS.has(id) && !id.startsWith('global-viewport') && !id.startsWith('global-lang');
+  });
+  next.pages = (next.pages || []).map((p) => ({
+    ...p,
+    findings: drop(p.findings),
+    recommendations: drop(p.recommendations),
+  }));
+  next.findings = drop(next.findings);
+  next.recommendations = drop(next.recommendations);
+  next.globalUpdates = drop(next.globalUpdates);
+  next.allRecommendations = drop(next.allRecommendations);
+  return next;
+}
+
 function withGlobalUpdates(report) {
   const next = report && typeof report === 'object' ? report : {};
-  if (Array.isArray(next.globalUpdates)) return next;
+  if (Array.isArray(next.globalUpdates)) return stripLighthouseOverlap(next);
   next.globalUpdates = buildGlobalUpdates(next.pages || [], next.findings || [], {
     crawled: next.crawled,
     discovered: next.discovered,
   });
-  return next;
+  return stripLighthouseOverlap(next);
 }
 
 function rowToAudit(row) {

@@ -47,6 +47,7 @@ export const APP_NAV_GROUPS = [
     label: 'Website',
     items: [
       { id: 'seo', label: 'SEO', path: '/seo', icon: 'scan-search', featureKey: 'seo', matchPrefix: true },
+      { id: 'searchConsole', label: 'Search', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole' },
       { id: 'googleAds', label: 'Adwords', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true },
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
       { id: 'html', label: 'HTML', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true },

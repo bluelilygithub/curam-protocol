@@ -4,6 +4,22 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-25 (search-console-agent)
+
+### Search — Google Search Console agent
+- New **Search** app at `/search-console`: OAuth, 28-day queries/pages, query/URL split list. Flag `searchConsole`.
+- SEO crawl adds sitemap vs crawled URLs, hreflang, X-Robots-Tag, redirect chains, and click depth. Vite build: `formatRunDate` is a function again on HTML.
+
+---
+
+## 2026-08-25 (seo-campaign-brief)
+
+### SEO — campaign crawl, no Lighthouse overlap
+- Drop viewport and html-lang checks (those stay on HTML / Lighthouse).
+- Report title shows the run date. Sidebar list sorts like HTML. Copy and download a markdown campaign brief.
+
+---
+
 ## 2026-08-24 (html-dev-work-order)
 
 ### HTML — developer work order

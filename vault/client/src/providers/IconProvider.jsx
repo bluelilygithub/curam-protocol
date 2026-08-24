@@ -108,6 +108,7 @@ const semanticMap = {
   'brush':          { lucide: 'Brush' },
   'scan-search':    { lucide: 'ScanSearch' },
   gauge: { lucide: 'Gauge' },
+  'line-chart': { lucide: 'LineChart' },
   'graduation-cap': { lucide: 'GraduationCap' },
   'clipboard-list': { lucide: 'ClipboardList' },
   'heart-pulse': { lucide: 'HeartPulse' },

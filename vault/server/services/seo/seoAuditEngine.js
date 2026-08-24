@@ -64,14 +64,6 @@ function recommendationsFrom(findings) {
 }
 
 const GLOBAL_SPECS = {
-  viewport: {
-    applyIn: 'Theme header',
-    action: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> in the global <head> (header.php or the SEO/theme head hook). One change covers every page.',
-  },
-  lang: {
-    applyIn: 'Theme html tag',
-    action: 'Set lang on the root <html> tag in the theme (e.g. en-AU). Do this once in the wrapper, not on individual posts.',
-  },
   https: {
     applyIn: 'Hosting / WordPress',
     action: 'Force HTTPS site-wide (hosting SSL + WordPress Address / Site Address) and 301 all http:// URLs.',
@@ -154,7 +146,7 @@ function buildGlobalUpdates(pageReports, siteFindings, crawl) {
     const hits = usable.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity !== 'pass'));
     if (!hits.length) return;
     const failCount = hits.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity === 'fail')).length;
-    const alwaysGlobal = ['viewport', 'lang', 'https', 'og', 'jsonld', 'canonical', 'query-canonical', 'schema'].includes(id);
+    const alwaysGlobal = ['https', 'og', 'jsonld', 'canonical', 'query-canonical', 'schema'].includes(id);
     if (!alwaysGlobal && hits.length < 2 && total > 1) return;
     if (!alwaysGlobal && total === 1 && hits.length === 1 && !['jsonld'].includes(id)) {
       /* still useful as a template note on a one-page crawl */
@@ -228,6 +220,51 @@ function walkJsonLd(node, types, depth) {
   if (node['@graph']) walkJsonLd(node['@graph'], types, depth + 1);
 }
 
+function jsonLdBlocks(html) {
+  const blocks = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html || ''))) {
+    try { blocks.push(JSON.parse(m[1])); } catch { /* ignore */ }
+  }
+  return blocks;
+}
+
+function jsonHasKey(node, key, depth = 0) {
+  if (!node || depth > 8) return false;
+  if (Array.isArray(node)) return node.some((item) => jsonHasKey(item, key, depth + 1));
+  if (typeof node !== 'object') return false;
+  if (node[key] != null && String(node[key]).trim() !== '') return true;
+  return Object.values(node).some((v) => jsonHasKey(v, key, depth + 1));
+}
+
+function schemaGaps(html, types) {
+  const blocks = jsonLdBlocks(html);
+  const has = (key) => blocks.some((b) => jsonHasKey(b, key));
+  const gaps = [];
+  if (types.some((t) => /organization/i.test(t)) && !has('name')) gaps.push('Organization.name');
+  if (types.some((t) => /localbusiness/i.test(t)) && !has('address')) gaps.push('LocalBusiness.address');
+  if (types.some((t) => /^product$/i.test(t)) && !has('name')) gaps.push('Product.name');
+  return gaps;
+}
+
+function hreflangTags(html) {
+  const out = [];
+  const re = /<link[^>]+rel=["']alternate["'][^>]*>/gi;
+  let m;
+  while ((m = re.exec(html || ''))) {
+    const tag = m[0];
+    const lang = (tag.match(/\bhreflang=["']([^"']+)["']/i) || [])[1];
+    const href = (tag.match(/\bhref=["']([^"']+)["']/i) || [])[1];
+    if (lang && href) out.push({ lang, href });
+  }
+  return out;
+}
+
+function serpLen(s) {
+  return String(s || '').trim().length;
+}
+
 function urlQueryKeys(url) {
   try {
     return [...new URL(url).searchParams.keys()].filter((k) => !/^utm_|^gclid$|^fbclid$/i.test(k));
@@ -260,7 +297,7 @@ function pageHost(url) {
   try { return new URL(url).host.toLowerCase(); } catch { return ''; }
 }
 
-function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome, via }) {
+function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome, via, xRobotsTag, redirectChain, depth, inbound }) {
   const findings = [];
   const skipChrome = via === 'serper' || via === 'jina';
   const htmlStr = String(html || '');
@@ -269,15 +306,12 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     || attr(htmlStr, /<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description["']/i);
   const headings = extractHeadings(htmlStr);
   const h1s = headings.filter((h) => h.level === 1).length;
-  const viewport = attr(htmlStr, /<meta[^>]+name=["']viewport["'][^>]*content=["']([^"']*)["']/i)
-    || attr(htmlStr, /<meta[^>]+content=["']([^"']*)["'][^>]*name=["']viewport["']/i);
   const canonical = attr(htmlStr, /<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)
     || attr(htmlStr, /<link[^>]+href=["']([^"']+)["'][^>]*rel=["']canonical["']/i);
   const robotsMeta = (
     attr(htmlStr, /<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)["']/i)
     || attr(htmlStr, /<meta[^>]+content=["']([^"']*)["'][^>]*name=["']robots["']/i)
   ).toLowerCase();
-  const htmlLang = attr(htmlStr, /<html[^>]*\blang=["']([^"']+)["']/i);
   const ogTitle = attr(htmlStr, /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i)
     || attr(htmlStr, /<meta[^>]+content=["']([^"']*)["'][^>]*property=["']og:title["']/i);
   const hasJsonLd = /application\/ld\+json/i.test(htmlStr);
@@ -423,26 +457,6 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (!skipChrome && !viewport) {
-    addFinding(findings, {
-      id: 'viewport',
-      severity: 'fail',
-      title: 'No viewport meta tag',
-      detail: where,
-      recommendation: 'Add <meta name="viewport" content="width=device-width, initial-scale=1">.',
-    });
-  }
-
-  if (!htmlLang) {
-    addFinding(findings, {
-      id: 'lang',
-      severity: 'warn',
-      title: 'html lang missing',
-      detail: where,
-      recommendation: 'Set lang on <html> (e.g. en-AU).',
-    });
-  }
-
   const resolvedCanonical = canonical ? resolveHref(canonical, url) : '';
   const queryKeysForUrl = urlQueryKeys(url);
   if (queryKeysForUrl.length) {
@@ -564,6 +578,49 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
+  const gaps = schemaGaps(htmlStr, schemaTypes);
+  if (gaps.length) {
+    addFinding(findings, {
+      id: 'schema-fields',
+      severity: 'warn',
+      title: `JSON-LD missing required-looking fields: ${gaps.join(', ')}`,
+      detail: where,
+      recommendation: 'Fill the named properties so rich results can qualify (name, address, offers as relevant).',
+    });
+  }
+
+  const alts = hreflangTags(htmlStr);
+  if (alts.length) {
+    addFinding(findings, {
+      id: 'hreflang',
+      severity: 'pass',
+      title: `${alts.length} hreflang alternate${alts.length === 1 ? '' : 's'}`,
+      detail: alts.slice(0, 8).map((a) => `${a.lang} → ${a.href}`).join('\n'),
+    });
+  }
+
+  const xrt = String(xRobotsTag || '').toLowerCase();
+  if (/noindex/.test(xrt)) {
+    addFinding(findings, {
+      id: 'x-robots',
+      severity: 'fail',
+      title: 'X-Robots-Tag includes noindex',
+      detail: String(xRobotsTag).slice(0, 200),
+      recommendation: 'Remove noindex from the HTTP header if this URL should rank.',
+    });
+  }
+
+  const hops = Array.isArray(redirectChain) ? redirectChain : [];
+  if (hops.length >= 2) {
+    addFinding(findings, {
+      id: 'redirect-chain',
+      severity: 'warn',
+      title: `Redirect chain (${hops.length} hops)`,
+      detail: hops.map((h) => `${h.status} ${h.from} → ${h.to}`).join('\n'),
+      recommendation: 'Point links and canonicals at the final URL. Collapse chains to a single 301.',
+    });
+  }
+
   if (img.total > 0 && img.missing > 0) {
     addFinding(findings, {
       id: 'alt',
@@ -614,6 +671,10 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     charCount,
     findings,
     recommendations: recommendationsFrom(findings),
+    titleChars: serpLen(title),
+    descriptionChars: serpLen(description),
+    depth: Number(depth) || 0,
+    inbound: Number(inbound) || 0,
   };
 }
 
@@ -630,6 +691,10 @@ function buildSiteAudit({ crawl }) {
     error: p.error,
     isHome: i === 0 || p.url === startUrl,
     via: p.via || null,
+    xRobotsTag: p.xRobotsTag || '',
+    redirectChain: p.redirectChain || [],
+    depth: p.depth,
+    inbound: p.inbound,
   }));
 
   const siteFindings = [];
@@ -786,14 +851,61 @@ function buildSiteAudit({ crawl }) {
       inbound.set(href, (inbound.get(href) || 0) + 1);
     }
   });
-  const orphans = pageReports.filter((p) => p.statusCode < 400 && !p.isHome && (inbound.get(p.url) || 0) === 0);
+  const orphans = pageReports.filter((p) => p.statusCode < 400 && !p.isHome && (p.inbound || inbound.get(p.url) || 0) === 0);
   if (orphans.length) {
     addFinding(siteFindings, {
       id: 'internal-links',
       severity: 'warn',
-      title: `${orphans.length} crawled page${orphans.length === 1 ? '' : 's'} had no inbound links in this crawl`,
+      title: `${orphans.length} crawled page${orphans.length === 1 ? '' : 's'} had no inbound HTML links in this crawl`,
       detail: orphans.map((p) => p.url).slice(0, 10).join('\n'),
-      recommendation: 'Link important URLs from the hub (e.g. /products) and main nav. Isolated pages are hard to discover.',
+      recommendation: 'Link important URLs from the hub and main nav. Isolated pages are hard to discover.',
+    });
+  }
+
+  const sitemapUrls = crawl.sitemapUrls || [];
+  const crawledSet = new Set(pageReports.map((p) => p.url));
+  const linkedSet = new Set();
+  (crawl.pages || []).forEach((p) => {
+    sameOriginLinks(p.html || '', p.url || p.requestedUrl).forEach((h) => linkedSet.add(h));
+  });
+  const inSitemapNotCrawled = sitemapUrls.filter((u) => !crawledSet.has(u)).slice(0, 20);
+  const inSitemapNotLinked = sitemapUrls.filter((u) => crawledSet.has(u) && !linkedSet.has(u) && u !== startUrl).slice(0, 15);
+  if (sitemapUrls.length && inSitemapNotCrawled.length) {
+    addFinding(siteFindings, {
+      id: 'sitemap-gap',
+      severity: 'warn',
+      title: `${inSitemapNotCrawled.length} sitemap URL${inSitemapNotCrawled.length === 1 ? '' : 's'} were not crawled (cap or robots)`,
+      detail: inSitemapNotCrawled.join('\n'),
+      recommendation: 'Raise the page limit or check robots. Sitemap URLs Google can see may still be missing from this sample.',
+    });
+  }
+  if (inSitemapNotLinked.length) {
+    addFinding(siteFindings, {
+      id: 'sitemap-orphans',
+      severity: 'warn',
+      title: `${inSitemapNotLinked.length} crawled sitemap URL${inSitemapNotLinked.length === 1 ? '' : 's'} had no HTML inbound link`,
+      detail: inSitemapNotLinked.join('\n'),
+      recommendation: 'Add nav or hub links so Google does not rely on the sitemap alone.',
+    });
+  }
+  if (/user-agent/i.test(String(robots.body || '')) && !/^\s*sitemap:/im.test(String(robots.body || ''))) {
+    addFinding(siteFindings, {
+      id: 'robots-sitemap',
+      severity: 'warn',
+      title: 'robots.txt has no Sitemap: line',
+      detail: '',
+      recommendation: `Add Sitemap: ${origin}/sitemap.xml (or your index URL).`,
+    });
+  }
+
+  const deep = pageReports.filter((p) => (p.depth || 0) >= 4);
+  if (deep.length) {
+    addFinding(siteFindings, {
+      id: 'click-depth',
+      severity: 'warn',
+      title: `${deep.length} URL${deep.length === 1 ? '' : 's'} are 4+ clicks from the start URL in this crawl`,
+      detail: deep.map((p) => `depth ${p.depth} ${p.url}`).slice(0, 12).join('\n'),
+      recommendation: 'Promote important pages into the main nav or a hub so they are closer to the homepage.',
     });
   }
 
@@ -821,9 +933,9 @@ function buildSiteAudit({ crawl }) {
     recommendations: siteRecommendations,
     globalUpdates,
     notCovered: [
-      'Page speed / Core Web Vitals',
-      'Mobile-friendliness lab tests (this crawl only sees HTML viewport tags)',
-      'Backlink profile',
+      'Page speed, Core Web Vitals, unused JS/CSS, contrast — use HTML (Lighthouse) at /html',
+      'Paid search keywords and RSA copy — use Adwords at /google-ads',
+      'Backlink profile and rank tracking',
     ],
     pages: pageReports.map((p) => ({
       url: p.url,
@@ -831,6 +943,10 @@ function buildSiteAudit({ crawl }) {
       statusCode: p.statusCode,
       score: p.score,
       isHome: p.isHome,
+      depth: p.depth,
+      inbound: p.inbound,
+      titleChars: p.titleChars,
+      descriptionChars: p.descriptionChars,
       findings: p.findings,
       recommendations: p.recommendations,
     })),

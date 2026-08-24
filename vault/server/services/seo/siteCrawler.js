@@ -178,6 +178,8 @@ async function fetchPage(url) {
       text: htmlToText(html, 8000),
       via: result.via || 'direct',
       error: null,
+      xRobotsTag: result.xRobotsTag || '',
+      redirectChain: result.redirectChain || [],
     };
   } catch (err) {
     return {
@@ -189,8 +191,19 @@ async function fetchPage(url) {
       text: '',
       via: null,
       error: err.message,
+      xRobotsTag: '',
+      redirectChain: [],
     };
   }
+}
+
+function parseSitemapLines(robotsBody) {
+  const urls = [];
+  for (const line of String(robotsBody || '').split(/\r?\n/)) {
+    const m = line.match(/^\s*sitemap:\s*(\S+)/i);
+    if (m) urls.push(m[1].trim());
+  }
+  return urls;
 }
 
 async function crawlSite(rawUrl, { pageLimit } = {}) {
@@ -204,17 +217,42 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
   const queued = new Set([start]);
   const visited = new Set();
   const pages = [];
+  const depth = new Map([[start, 0]]);
+  const inbound = new Map([[start, 0]]);
+  const sitemapUrls = [];
 
   const extras = await discoverSiteUrls(start);
+  for (const sm of parseSitemapLines(robots.body)) extras.push(sm);
   for (const href of extras) {
+    const isXml = /\.xml(\?|$)/i.test(href);
+    if (isXml) {
+      try {
+        const result = await fetchHtml(href, 3, 10000);
+        const locs = String(result.body || '').matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi);
+        for (const m of locs) {
+          const cand = canonicalUrl(m[1].trim());
+          if (!cand || !sameSite(cand, start)) continue;
+          if (SKIP_PATH.test(cand) || /\.xml(\?|$)/i.test(cand)) continue;
+          if (!sitemapUrls.includes(cand)) sitemapUrls.push(cand);
+          if (queued.has(cand)) continue;
+          if (!robotsAllows(cand, robots.disallows)) continue;
+          queued.add(cand);
+          queue.push(cand);
+          if (!depth.has(cand)) depth.set(cand, 1);
+        }
+      } catch { /* skip */ }
+      continue;
+    }
     const candidates = [href, stripQuery(href)].filter(Boolean);
     for (const cand of candidates) {
-      if (queued.has(cand)) continue;
       if (!sameSite(cand, start)) continue;
       if (SKIP_PATH.test(cand) || /\.xml(\?|$)/i.test(cand)) continue;
+      if (!sitemapUrls.includes(cand)) sitemapUrls.push(cand);
+      if (queued.has(cand)) continue;
       if (!robotsAllows(cand, robots.disallows)) continue;
       queued.add(cand);
       queue.push(cand);
+      if (!depth.has(cand)) depth.set(cand, 1);
     }
   }
 
@@ -226,12 +264,19 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
     if (!robotsAllows(next, robots.disallows)) continue;
 
     const page = await fetchPage(next);
+    page.depth = depth.get(next) || 0;
+    page.inbound = inbound.get(next) || 0;
+    page.fromSitemap = sitemapUrls.includes(next) || sitemapUrls.includes(page.url);
     pages.push(page);
 
     if (page.statusCode >= 400 || page.error || !page.html) continue;
+    const parentDepth = page.depth;
     for (const href of sameOriginLinks(page.html, page.url || next)) {
       const candidates = [href, stripQuery(href)].filter(Boolean);
       for (const cand of candidates) {
+        inbound.set(cand, (inbound.get(cand) || 0) + 1);
+        const nextDepth = parentDepth + 1;
+        if (!depth.has(cand) || nextDepth < depth.get(cand)) depth.set(cand, nextDepth);
         if (queued.has(cand)) continue;
         if (!sameSite(cand, start)) continue;
         if (!robotsAllows(cand, robots.disallows)) continue;
@@ -251,6 +296,7 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
     crawled: pages.length,
     robots,
     hostProbe,
+    sitemapUrls,
     pages,
   };
 }

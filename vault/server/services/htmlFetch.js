@@ -132,7 +132,11 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
         const jar = mergeCookies(cookies, res.headers || {});
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar));
+          const hop = { from: url, to: next, status: res.statusCode };
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar).then((r) => ({
+            ...r,
+            redirectChain: [hop, ...(r.redirectChain || [])],
+          })));
         }
         if (res.statusCode === 202 && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
@@ -157,6 +161,8 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
             finalUrl: url,
             htmlBytes: raw.length,
             cookies: jar,
+            xRobotsTag: String(res.headers['x-robots-tag'] || ''),
+            redirectChain: [],
           });
         });
         res.on('error', reject);

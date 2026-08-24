@@ -78,6 +78,7 @@ async function seedInitialUser() {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
+app.use('/api/gsc', require('./routes/gsc'));
 app.use('/api/calendar', require('./routes/calendar'));
 
 const { requireAuth, requireAdmin, requireFeature } = require('./middleware/auth');

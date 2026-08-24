@@ -1642,6 +1642,34 @@ async function initSchema() {
       ON html_audits ("userId", "updatedAt" DESC)
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gsc_tokens (
+      id             SERIAL PRIMARY KEY,
+      "userId"       INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      "accessToken"  TEXT NOT NULL,
+      "refreshToken" TEXT,
+      "tokenType"    TEXT DEFAULT 'Bearer',
+      "expiryDate"   BIGINT,
+      scope          TEXT,
+      email          TEXT,
+      "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gsc_snapshots (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "siteUrl"   TEXT NOT NULL,
+      report      JSONB NOT NULL DEFAULT '{}',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_gsc_snapshots_user_created
+      ON gsc_snapshots ("userId", "createdAt" DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 
