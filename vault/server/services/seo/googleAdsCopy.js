@@ -296,12 +296,12 @@ async function reportCopyGaps(userId, projectId, payload) {
   );
   await captureIf(shortAds.length > 0 || (payload?.ads || []).length < fmt.adCount, {
     userId,
-    source: 'seo',
+    source: 'googleAds',
     category: 'alert',
-    fingerprint: makeFingerprint('seo', `short-ads:${projectId}`),
+    fingerprint: makeFingerprint('googleAds', `short-ads:${projectId}`),
     title: 'SEO ad copy came in short of the requested set',
     body: `Project ${projectId} has ${payload?.counts?.ads || 0} ads (target ${fmt.adCount}), with some headline/description counts below ${fmt.headlineCount}/${fmt.descriptionCount}. Regenerate ads, or add notes about the offer.`,
-    context: `/seo/${projectId}`,
+    context: `/google-ads/${projectId}`,
   });
 }
 

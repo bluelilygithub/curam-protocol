@@ -152,7 +152,7 @@ function combinedText(snapshot) {
   return parts.join('\n\n').slice(0, 18000);
 }
 
-async function scrapeSite(rawUrl) {
+async function scrapeSite(rawUrl, { includeHtml = false } = {}) {
   const homeUrl = normaliseHttpUrl(rawUrl);
   const home = await fetchPage(homeUrl);
   const extraUrls = rankExtraUrls(sameOriginLinks(home.html, home.url), home.url);
@@ -184,6 +184,7 @@ async function scrapeSite(rawUrl) {
     htmlBytes: home.htmlBytes || 0,
     statusCode: home.statusCode,
   };
+  if (includeHtml) snapshot.html = home.html;
   snapshot.text = combinedText(snapshot);
   snapshot.charCount = snapshot.text.length;
   console.log('[seo] scrape', {

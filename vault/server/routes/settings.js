@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser, validateVaultModelsCatalog } = require('../services/modelResolver');
 const {
   SLOT_KEYS: DOC_REDACTION_SLOT_KEYS,
@@ -232,13 +232,7 @@ router.get('/feature-access', async (_req, res) => {
     const { rows } = await pool.query(
       "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
     );
-    const flags = { ...FEATURE_ACCESS_DEFAULTS };
-    rows.forEach((r) => {
-      const featureKey = String(r.key || '').replace(/^feature_/, '');
-      if (!FEATURE_ACCESS_KEYS.includes(featureKey)) return;
-      const rawValue = String(r.value || '').trim().toLowerCase();
-      flags[featureKey] = rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
-    });
+    const flags = flagsFromSettingRows(rows);
     res.json({ flags });
   } catch (err) {
     res.status(500).json({ error: err.message });

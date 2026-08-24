@@ -1604,6 +1604,25 @@ async function initSchema() {
   `);
   await pool.query(`ALTER TABLE seo_projects ADD COLUMN IF NOT EXISTS offer TEXT NOT NULL DEFAULT ''`);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS seo_audits (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL DEFAULT 'Untitled',
+      url             TEXT NOT NULL,
+      score           INTEGER NOT NULL DEFAULT 0,
+      summary         TEXT NOT NULL DEFAULT '',
+      snapshot        JSONB NOT NULL DEFAULT '{}',
+      report          JSONB NOT NULL DEFAULT '{}',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_seo_audits_user_updated
+      ON seo_audits ("userId", "updatedAt" DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

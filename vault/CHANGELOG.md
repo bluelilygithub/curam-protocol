@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (google-ads-and-seo-split)
+
+### Google Ads rename + SEO audit
+- The former SEO campaign starter is labelled **Google Ads** at `/google-ads` (API `/api/google-ads`, flag `googleAds`). Keyword and RSA behaviour is unchanged.
+- New **SEO** agent at `/seo` runs a simple HTML on-page audit (titles, headings, robots, HTTPS, alts). Table `seo_audits`. Flag `seo` now means the audit.
+- Apps launcher and Feature Access group Domain & Brand, Google Ads, SEO, and WP Theme Builder under **Website**. Old `/seo/:id` Ads bookmarks redirect when the id is still an Ads project.
+- Docs: `docs/google-ads-agent.md`, `docs/seo-agent.md`.
+
+---
+
 ## 2026-08-20 (seo-ads-lists-visible)
 
 ### SEO — headlines and descriptions listed on the Ads tab

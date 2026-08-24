@@ -161,7 +161,7 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
               </button>
               <button
                 type="button"
-                onClick={() => onDownload(`${projectName || 'seo'}-ads.csv`, adsToCsv(copy))}
+                onClick={() => onDownload(`${projectName || 'google-ads'}-ads.csv`, adsToCsv(copy))}
                 className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
@@ -314,7 +314,7 @@ export default function SeoPage() {
   const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
-  const canUse = isAdmin || featureAccess.seo !== false;
+  const canUse = isAdmin || featureAccess.googleAds !== false;
 
   const [status, setStatus] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -332,7 +332,7 @@ export default function SeoPage() {
   const [adsFormat, setAdsFormat] = useState('rsa');
 
   const loadList = useCallback(async () => {
-    const res = await api.get('/api/seo/projects');
+    const res = await api.get('/api/google-ads/projects');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not load projects');
     setProjects(Array.isArray(data) ? data : []);
@@ -347,7 +347,7 @@ export default function SeoPage() {
 
   useEffect(() => {
     if (!canUse) return;
-    api.get('/api/seo/status').then((r) => r.json()).then(setStatus).catch(() => {});
+    api.get('/api/google-ads/status').then((r) => r.json()).then(setStatus).catch(() => {});
     loadList().catch((err) => addToast(err.message, 'error'));
   }, [canUse, loadList, addToast]);
 
@@ -357,7 +357,7 @@ export default function SeoPage() {
       return;
     }
     let cancelled = false;
-    api.get(`/api/seo/projects/${id}`)
+    api.get(`/api/google-ads/projects/${id}`)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found');
@@ -371,7 +371,7 @@ export default function SeoPage() {
       .catch((err) => {
         if (!cancelled) {
           addToast(err.message, 'error');
-          navigate('/seo');
+          navigate('/google-ads');
         }
       });
     return () => { cancelled = true; };
@@ -399,7 +399,7 @@ export default function SeoPage() {
     }
     startProcessing('Scraping the site…', 'Then building keywords, negatives, and RSA ad copy for Google Ads.');
     try {
-      const res = await api.post('/api/seo/projects', {
+      const res = await api.post('/api/google-ads/projects', {
         url: url.trim(),
         name: name.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -421,7 +421,7 @@ export default function SeoPage() {
       } else {
         addToast('Keywords and ads ready', 'success');
       }
-      navigate(`/seo/${data.id}`);
+      navigate(`/google-ads/${data.id}`);
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -437,16 +437,16 @@ export default function SeoPage() {
     }
     startProcessing('Saving offer and regenerating…', 'Keywords and ads will follow this offer, not a conflicting scrape.');
     try {
-      const patch = await api.patch(`/api/seo/projects/${id}`, { offer: offerDraft.trim() });
+      const patch = await api.patch(`/api/google-ads/projects/${id}`, { offer: offerDraft.trim() });
       const patched = await patch.json();
       if (!patch.ok) throw new Error(patched.error || 'Could not save offer');
-      const res = await api.post(`/api/seo/projects/${id}/keywords`);
+      const res = await api.post(`/api/google-ads/projects/${id}/keywords`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
       setProject(data);
       await loadList();
       try {
-        const adsRes = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
+        const adsRes = await api.post(`/api/google-ads/projects/${id}/ads`, { format: adsFormat });
         const adsData = await adsRes.json();
         if (!adsRes.ok) throw new Error(adsData.error || 'Ads generate failed');
         setProject(adsData);
@@ -467,7 +467,7 @@ export default function SeoPage() {
     if (!id) return;
     startProcessing('Generating keyword lists…', 'Keywords follow What they sell when that field is set.');
     try {
-      const res = await api.post(`/api/seo/projects/${id}/keywords`);
+      const res = await api.post(`/api/google-ads/projects/${id}/keywords`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
       setProject(data);
@@ -489,7 +489,7 @@ export default function SeoPage() {
         : 'RSA headlines and descriptions from What they sell.'
     );
     try {
-      const res = await api.post(`/api/seo/projects/${id}/ads`, { format: adsFormat });
+      const res = await api.post(`/api/google-ads/projects/${id}/ads`, { format: adsFormat });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generate failed');
       setProject(data);
@@ -506,13 +506,13 @@ export default function SeoPage() {
   const handleDelete = async () => {
     if (!id) return;
     try {
-      const res = await api.delete(`/api/seo/projects/${id}`);
+      const res = await api.delete(`/api/google-ads/projects/${id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       setDeleteConfirm(false);
       await loadList();
       addToast('Project deleted', 'success');
-      navigate('/seo');
+      navigate('/google-ads');
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -546,9 +546,9 @@ export default function SeoPage() {
       >
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
-            {getIcon('scan-search', { size: 16 })}
+            {getIcon('megaphone', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>SEO</h1>
+          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Google Ads</h1>
         </div>
 
         <input
@@ -561,8 +561,8 @@ export default function SeoPage() {
 
         <button
           type="button"
-          data-tour="seo-new"
-          onClick={() => navigate('/seo')}
+          data-tour="google-ads-new"
+          onClick={() => navigate('/google-ads')}
           className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
           style={{
             background: !id ? 'var(--color-bg)' : 'transparent',
@@ -592,7 +592,7 @@ export default function SeoPage() {
                 <li key={p.id}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/seo/${p.id}`)}
+                    onClick={() => navigate(`/google-ads/${p.id}`)}
                     className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
                     style={{
                       background: String(id) === String(p.id) ? 'var(--color-bg)' : 'transparent',
@@ -619,7 +619,7 @@ export default function SeoPage() {
         {!id && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO project</h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New Google Ads project</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                 Paste a website URL and what the business actually sells. Keyword lists follow the offer. The scrape is used for URLs, brand, and extra detail — not if it describes a different industry.
               </p>
@@ -830,7 +830,7 @@ export default function SeoPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => downloadCsv(`${project.name || 'seo'}-keywords.txt`, toKeywordExport(keywords))}
+                    onClick={() => downloadCsv(`${project.name || 'google-ads'}-keywords.txt`, toKeywordExport(keywords))}
                     className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
@@ -838,7 +838,7 @@ export default function SeoPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => downloadCsv(`${project.name || 'seo'}-negatives.txt`, toKeywordExport(negatives))}
+                    onClick={() => downloadCsv(`${project.name || 'google-ads'}-negatives.txt`, toKeywordExport(negatives))}
                     className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >

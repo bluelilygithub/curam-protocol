@@ -129,23 +129,23 @@ async function saveArtifact(userId, projectId, kind, payload) {
 async function reportKeywordGaps(userId, projectId, snapshot, payload) {
   await captureIf(!snapshot?.text || snapshot.charCount < 400, {
     userId,
-    source: 'seo',
+    source: 'googleAds',
     category: 'alert',
-    fingerprint: makeFingerprint('seo', `thin-scrape:${projectId}`),
-    title: 'SEO scrape returned little text',
+    fingerprint: makeFingerprint('googleAds', `thin-scrape:${projectId}`),
+    title: 'Google Ads scrape returned little text',
     body: `Project ${projectId} scraped only ${snapshot?.charCount || 0} characters. Keyword lists may be generic. Try a different URL (homepage or services page) or a site that is not heavily JavaScript-rendered.`,
-    context: `/seo/${projectId}`,
+    context: `/google-ads/${projectId}`,
   });
   const kw = payload?.counts?.keywords || 0;
   const neg = payload?.counts?.negatives || 0;
   await captureIf(kw < 80 || neg < 80, {
     userId,
-    source: 'seo',
+    source: 'googleAds',
     category: 'alert',
-    fingerprint: makeFingerprint('seo', `short-lists:${projectId}`),
+    fingerprint: makeFingerprint('googleAds', `short-lists:${projectId}`),
     title: 'SEO keyword lists came in short of 100',
     body: `Google Ads lists for project ${projectId}: ${kw} keywords and ${neg} negatives (target 100 each). Regenerate, or add a notes hint about the offer and location.`,
-    context: `/seo/${projectId}`,
+    context: `/google-ads/${projectId}`,
   });
 }
 
@@ -221,12 +221,12 @@ async function createProject(userId, { url, name, notes, offer } = {}) {
     keywordError = err.message;
     await capture({
       userId,
-      source: 'seo',
+      source: 'googleAds',
       category: 'alert',
-      fingerprint: makeFingerprint('seo', `generate-failed:${projectId}`),
+      fingerprint: makeFingerprint('googleAds', `generate-failed:${projectId}`),
       title: 'SEO keywords failed after scrape',
       body: `Site scraped for ${snapshot.finalUrl || snapshot.url}, but keyword generation failed: ${err.message}. Open the project and tap Generate keywords.`,
-      context: `/seo/${projectId}`,
+      context: `/google-ads/${projectId}`,
     });
   }
 
@@ -244,12 +244,12 @@ async function createProject(userId, { url, name, notes, offer } = {}) {
     adsError = err.message;
     await capture({
       userId,
-      source: 'seo',
+      source: 'googleAds',
       category: 'alert',
-      fingerprint: makeFingerprint('seo', `ads-failed:${projectId}`),
+      fingerprint: makeFingerprint('googleAds', `ads-failed:${projectId}`),
       title: 'SEO ad copy failed after scrape',
       body: `Keywords may be ready for ${snapshot.finalUrl || snapshot.url}, but RSA copy failed: ${err.message}. Open the project and tap Generate ads.`,
-      context: `/seo/${projectId}`,
+      context: `/google-ads/${projectId}`,
     });
   }
 

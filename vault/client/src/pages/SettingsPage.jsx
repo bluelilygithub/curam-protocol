@@ -28,7 +28,7 @@ import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } fro
 import ConfirmModal from '../components/ConfirmModal';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
-import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
+import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
 
 const AUDIO_VOICE_SETTING_KEY = 'audio_voice_uri';
@@ -2882,32 +2882,39 @@ function SettingsPage() {
           Toggle features for all non-admin member accounts. Admins always retain access.
         </p>
 
-        <div className="space-y-2">
-          {FEATURE_ACCESS_OPTIONS.map((opt) => {
-            const enabled = featureAccess[opt.key] !== false;
-            return (
-              <div
-                key={opt.key}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: enabled ? 1 : 0.55 }}
-              >
-                <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
-                  {opt.label}
-                </span>
-                <button
-                  onClick={() => setFeatureAccess((prev) => ({ ...prev, [opt.key]: !enabled }))}
-                  className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
-                  style={{
-                    borderColor: enabled ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: enabled ? 'var(--color-primary)' : 'var(--color-muted)',
-                    background: 'transparent',
-                  }}
-                >
-                  {enabled ? 'On' : 'Off'}
-                </button>
-              </div>
-            );
-          })}
+        <div className="space-y-6">
+          {FEATURE_ACCESS_GROUPS.map((group) => (
+            <div key={group.id} className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
+                {group.label}
+              </h3>
+              {group.items.map((opt) => {
+                const enabled = featureAccess[opt.key] !== false;
+                return (
+                  <div
+                    key={opt.key}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: enabled ? 1 : 0.55 }}
+                  >
+                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
+                      {opt.label}
+                    </span>
+                    <button
+                      onClick={() => setFeatureAccess((prev) => ({ ...prev, [opt.key]: !enabled }))}
+                      className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+                      style={{
+                        borderColor: enabled ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: enabled ? 'var(--color-primary)' : 'var(--color-muted)',
+                        background: 'transparent',
+                      }}
+                    >
+                      {enabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         <button

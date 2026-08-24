@@ -50,6 +50,7 @@ const semanticMap = {
   'trending-up': { lucide: 'TrendingUp' },
   'eye': { lucide: 'Eye' },
   'scan-search': { lucide: 'ScanSearch' },
+  megaphone: { lucide: 'Megaphone' },
   link: { lucide: 'Link' },
   star: { lucide: 'Star' },
   'star-off': { lucide: 'StarOff' },
