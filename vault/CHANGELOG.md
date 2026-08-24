@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-crawl)
+
+### SEO audit — crawl N pages and recommend per URL
+- New audits follow same-origin HTML links up to a user-set page limit (1–40, default 15).
+- Each crawled page is scored with findings and recommendations, plus site-level robots/duplicate-title notes.
+
+---
+
 ## 2026-08-24 (seo-audit-suggestion-require)
 
 ### SEO audit — SuggestionService require path

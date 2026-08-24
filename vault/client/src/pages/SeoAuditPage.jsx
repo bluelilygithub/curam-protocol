@@ -46,6 +46,8 @@ export default function SeoAuditPage() {
   const [search, setSearch] = useState('');
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
+  const [pageLimit, setPageLimit] = useState(15);
+  const [openPages, setOpenPages] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const loadList = useCallback(async () => {
@@ -81,7 +83,13 @@ export default function SeoAuditPage() {
           navigate(data.redirectTo, { replace: true });
           return;
         }
-        if (!cancelled) setAudit(data);
+        if (!cancelled) {
+          setAudit(data);
+          const recPages = (data.report?.pages || [])
+            .filter((p) => (p.recommendations || []).length)
+            .map((p) => p.url);
+          setOpenPages(new Set(recPages.slice(0, 8)));
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -103,16 +111,21 @@ export default function SeoAuditPage() {
       addToast('Paste a website URL', 'error');
       return;
     }
-    startProcessing('Auditing the site…', 'Reading public HTML for titles, headings, and crawl basics.');
+    startProcessing(
+      `Crawling up to ${pageLimit} pages…`,
+      'Same-origin HTML only. Then each page gets checks and recommendations.',
+    );
     try {
       const res = await api.post('/api/seo/audits', {
         url: url.trim(),
         name: name.trim() || undefined,
+        pageLimit,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Audit failed');
       setUrl('');
       setName('');
+      setPageLimit(15);
       await loadList();
       addToast(`Audit scored ${data.score}`, 'success');
       navigate(`/seo/${data.id}`);
@@ -142,8 +155,20 @@ export default function SeoAuditPage() {
 
   const findings = audit?.report?.findings || [];
   const pages = audit?.report?.pages || [];
+  const siteRecs = audit?.report?.recommendations || [];
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
+  const crawled = audit?.report?.crawled || pages.length;
+  const discovered = audit?.report?.discovered || pages.length;
+
+  const togglePage = (pageUrl) => {
+    setOpenPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageUrl)) next.delete(pageUrl);
+      else next.add(pageUrl);
+      return next;
+    });
+  };
 
   return (
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
@@ -209,7 +234,7 @@ export default function SeoAuditPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO audit</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Paste a public URL. Vault reads the HTML (homepage plus a few linked pages) and checks titles, headings, robots, and a few on-page basics. This is not a full crawl or ranking report.
+                Paste a public URL and how many pages to crawl. Vault follows same-origin HTML links (no JavaScript), then scores every fetched page and lists what to fix on each one.
               </p>
             </div>
             <label className="block space-y-1">
@@ -231,6 +256,19 @@ export default function SeoAuditPage() {
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={FIELD}
               />
+            </label>
+            <label className="block space-y-1 max-w-xs">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Pages to crawl</span>
+              <input
+                type="number"
+                min={1}
+                max={40}
+                value={pageLimit}
+                onChange={(e) => setPageLimit(Number(e.target.value) || 15)}
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={FIELD}
+              />
+              <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>1–40. Homepage first, then other pages on the same site. Default 15.</span>
             </label>
             <button
               type="button"
@@ -257,7 +295,10 @@ export default function SeoAuditPage() {
                 >
                   {audit.url}
                 </a>
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{audit.summary}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  {audit.summary}
+                  {crawled ? ` · crawled ${crawled}${discovered > crawled ? ` of ${discovered} found` : ''}` : ''}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <div
@@ -285,6 +326,21 @@ export default function SeoAuditPage() {
               </div>
             </div>
 
+            {siteRecs.length > 0 && (
+              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Site recommendations</p>
+                <ul className="space-y-2">
+                  {siteRecs.map((r) => (
+                    <li key={r.id} className="text-xs leading-relaxed">
+                      <span className="font-semibold uppercase tracking-wider text-[10px]" style={{ color: severityColor(r.severity) }}>{severityLabel(r.severity)}</span>
+                      <p className="mt-0.5" style={{ color: 'var(--color-text)' }}>{r.action}</p>
+                      {r.why ? <p style={{ color: 'var(--color-muted)' }}>{r.why}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="space-y-2">
               {findings.map((f) => (
                 <div
@@ -306,17 +362,70 @@ export default function SeoAuditPage() {
             </div>
 
             {pages.length > 0 && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Pages read</p>
-                <ul className="space-y-1">
-                  {pages.map((p) => (
-                    <li key={p.url} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                      <span style={{ color: 'var(--color-text)' }}>{p.title || hostOf(p.url)}</span>
-                      {' · '}
-                      {p.url}
-                    </li>
-                  ))}
-                </ul>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Pages ({pages.length})
+                </p>
+                {pages.map((p) => {
+                  const open = openPages.has(p.url);
+                  const recs = p.recommendations || [];
+                  return (
+                    <div
+                      key={p.url}
+                      className="rounded-2xl border overflow-hidden"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => togglePage(p.url)}
+                        className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 transition-opacity hover:opacity-70"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                            {p.title || hostOf(p.url)}
+                            {p.isHome ? ' · Home' : ''}
+                          </span>
+                          <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.url}</span>
+                          <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                            {recs.length} recommendation{recs.length === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: p.score >= 80 ? '#166534' : p.score >= 55 ? '#b45309' : '#ef4444' }}>
+                          {p.score}
+                        </span>
+                      </button>
+                      {open && (
+                        <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                          {recs.length === 0 ? (
+                            <p className="text-xs pt-3" style={{ color: 'var(--color-muted)' }}>No fixes suggested for this page.</p>
+                          ) : (
+                            <ul className="pt-3 space-y-2">
+                              {recs.map((r) => (
+                                <li key={`${p.url}-${r.id}`} className="text-xs leading-relaxed">
+                                  <span className="font-semibold uppercase tracking-wider text-[10px]" style={{ color: severityColor(r.severity) }}>{severityLabel(r.severity)}</span>
+                                  <p className="mt-0.5" style={{ color: 'var(--color-text)' }}>{r.action}</p>
+                                  {r.why ? <p style={{ color: 'var(--color-muted)' }}>{r.why}</p> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {(p.findings || []).length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Checks</p>
+                              {(p.findings || []).map((f) => (
+                                <p key={`${p.url}-${f.id}`} className="text-xs leading-relaxed">
+                                  <span style={{ color: severityColor(f.severity) }}>{severityLabel(f.severity)}</span>
+                                  {' · '}
+                                  <span style={{ color: 'var(--color-text)' }}>{f.title}</span>
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

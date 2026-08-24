@@ -1,21 +1,22 @@
 # SEO agent
 
-Simple on-page SEO audit at **`/seo`**. Paste a public URL. Vault fetches the homepage HTML (plus a few same-origin links) and scores titles, headings, robots, HTTPS, and other crawl basics. No Google Ads keywords. No rank tracking.
+On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl. Vault fetches same-origin HTML links (no headless browser), scores **each** page, and lists recommendations for every URL fetched. No Google Ads keywords. No rank tracking.
 
 **Frontend:** `vault/client/src/pages/SeoAuditPage.jsx`  
-**Backend:** `vault/server/routes/seoAudit.js` · `vault/server/services/seo/seoAuditEngine.js`  
+**Backend:** `vault/server/routes/seoAudit.js` · `siteCrawler.js` · `seoAuditEngine.js`  
 **Table:** `seo_audits`
 
 ---
 
 ## Flow
 
-1. **New audit** — paste a website URL. Optional name (defaults to the page title).
-2. **Scrape** — same SSRF-safe HTML fetch as Google Ads (homepage + up to four extra pages). No headless browser.
-3. **Checks** — deterministic, no extra model call: HTTPS, title length, meta description, H1, viewport, `lang`, canonical, robots meta, robots.txt, Open Graph, JSON-LD, image alt text, thin copy, duplicate titles across scraped pages.
-4. **Score** — starts at 100; fails subtract 12, warnings subtract 5. Findings list pass / warn / fail.
+1. **New audit** — URL, optional name, **pages to crawl** (1–40, default 15).
+2. **Crawl** — BFS over same-origin `<a href>` links. Skips files (pdf/images/css/js). Honours `robots.txt` `User-agent: *` Disallow. SSRF-safe fetch via `htmlFetch.js`.
+3. **Per page** — title, meta description, H1, viewport, lang, canonical, robots meta, Open Graph, image alts, thin copy, HTTPS/status.
+4. **Site** — robots.txt, duplicate titles, crawl cap vs discovered URLs.
+5. **Recommendations** — every fail/warn becomes an action on that page (and site-level items at the top).
 
-JavaScript-rendered sites often look thin. That is expected on this first pass.
+JavaScript-rendered sites often look thin. Raise the page limit if important URLs were not linked in HTML.
 
 ---
 
@@ -24,8 +25,8 @@ JavaScript-rendered sites often look thin. That is expected on this first pass.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/seo/audits` | List audits |
-| `POST` | `/api/seo/audits` | `{ url, name? }` → scrape + report |
-| `GET` | `/api/seo/audits/:id` | Full report. If the id is an old Google Ads project, `{ redirectTo: "/google-ads/:id" }` |
+| `POST` | `/api/seo/audits` | `{ url, name?, pageLimit? }` → crawl + report |
+| `GET` | `/api/seo/audits/:id` | Full report. Old Google Ads project ids return `{ redirectTo: "/google-ads/:id" }` |
 | `DELETE` | `/api/seo/audits/:id` | Remove audit |
 
 Feature flag: **`seo`**.
@@ -34,4 +35,4 @@ Feature flag: **`seo`**.
 
 ## Data
 
-`seo_audits` stores `url`, `score`, `summary`, `snapshot` (scrape without raw HTML), and `report` (`findings[]`, `pages[]`, `score`).
+`seo_audits.report` includes `score`, `summary`, `crawled`, `discovered`, `pageLimit`, site `findings` / `recommendations`, and `pages[]` (`url`, `title`, `score`, `findings[]`, `recommendations[]`). Raw HTML is not stored.
