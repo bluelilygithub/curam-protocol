@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-suggestion-require)
+
+### SEO audit — SuggestionService require path
+- Linux deploy failed looking up `suggestionService`. The audit service now requires `SuggestionService.js`.
+
+---
+
 ## 2026-08-24 (google-ads-and-seo-split)
 
 ### Google Ads rename + SEO audit

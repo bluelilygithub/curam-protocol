@@ -4,7 +4,7 @@ const { pool } = require('../../db');
 const { scrapeSite, assertUsableScrape } = require('./siteScraper');
 const { fetchHtml, normaliseHttpUrl } = require('../htmlFetch');
 const { buildSeoAudit } = require('./seoAuditEngine');
-const { captureIf, makeFingerprint } = require('../suggestionService');
+const { captureIf, makeFingerprint } = require('../SuggestionService');
 
 function parseJson(val) {
   if (val == null) return {};
