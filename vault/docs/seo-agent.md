@@ -11,7 +11,7 @@ On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl.
 ## Flow
 
 1. **New audit** — URL, optional name, **pages to crawl** (1–40, default 15).
-2. **Crawl** — BFS over same-origin `<a href>` links. Skips files (pdf/images/css/js). Honours `robots.txt` `User-agent: *` Disallow. SSRF-safe fetch via `htmlFetch.js`. Thin or HTTP 202 responses are retried without compression; empty bodies are not treated as on-page SEO fails.
+2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. SSRF-safe fetch via `htmlFetch.js`. Thin, HTTP 202, or empty responses are retried without compression and on the alternate host (`www` ↔ apex). Cookies are kept across redirects. Empty bodies are not treated as on-page SEO fails.
 3. **Per page** — title, meta description, H1, viewport, lang, canonical, robots meta, Open Graph, image alts, thin copy, HTTPS/status.
 4. **Site** — robots.txt, duplicate titles, crawl cap vs discovered URLs.
 5. **Recommendations** — every fail/warn becomes an action on that page (and site-level items at the top).

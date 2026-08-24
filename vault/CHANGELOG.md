@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-www-apex)
+
+### SEO audit — www vs apex and blocked robots copy
+- Treat `www` and the apex host as the same site when following links, and retry the other host when a fetch is empty or HTTP 202.
+- Do not tell you to publish robots.txt when the host blocked the crawler. Site findings are listed once (no duplicate recommendation block).
+
+---
+
 ## 2026-08-24 (seo-audit-fetch)
 
 ### SEO audit — empty HTTP 202 crawl

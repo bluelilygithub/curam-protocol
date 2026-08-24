@@ -7,6 +7,19 @@ const zlib = require('zlib');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
+const CHROME_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Encoding': 'gzip, deflate',
+  'Accept-Language': 'en-AU,en-US,en;q=0.9',
+  'Upgrade-Insecure-Requests': '1',
+  'Cache-Control': 'max-age=0',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
+};
+
 function isPrivateIp(ip) {
   if (ip === '::1') return true;
   const lower = ip.toLowerCase();
@@ -60,7 +73,37 @@ function looksLikeHtml(text) {
   return t.includes('<html') || t.includes('<!doctype') || t.includes('<title') || t.includes('<body');
 }
 
-function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders) {
+function mergeCookies(jar, headers) {
+  const next = { ...jar };
+  const raw = headers['set-cookie'];
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  for (const line of list) {
+    const nv = String(line).split(';')[0];
+    const i = nv.indexOf('=');
+    if (i > 0) next[nv.slice(0, i).trim()] = nv.slice(i + 1).trim();
+  }
+  return next;
+}
+
+function cookieHeader(jar) {
+  const entries = Object.entries(jar || {});
+  if (!entries.length) return '';
+  return entries.map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+function altHostUrl(url) {
+  try {
+    const u = new URL(url);
+    if (!u.hostname) return null;
+    if (u.hostname.startsWith('www.')) u.hostname = u.hostname.slice(4);
+    else u.hostname = `www.${u.hostname}`;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
   return new Promise((resolve, reject) => {
     if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
     let parsed;
@@ -71,27 +114,29 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders) {
 
     checkSsrf(parsed.hostname).then(() => {
       const mod = parsed.protocol === 'https:' ? https : http;
+      const cookie = cookieHeader(cookies);
       const opts = {
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
         method: 'GET',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
-          'Accept-Encoding': 'gzip, deflate',
-          'Accept-Language': 'en-AU,en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          Connection: 'close',
+          ...CHROME_HEADERS,
           ...extraHeaders,
+          ...(cookie ? { Cookie: cookie } : {}),
         },
         timeout: timeoutMs,
       };
 
       const req = mod.request(opts, (res) => {
+        const jar = mergeCookies(cookies, res.headers || {});
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders));
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar));
+        }
+        if (res.statusCode === 202 && res.headers.location) {
+          const next = new URL(res.headers.location, url).toString();
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar));
         }
         const chunks = [];
         let bytesReceived = 0;
@@ -106,12 +151,12 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders) {
         res.on('end', () => {
           const raw = Buffer.concat(chunks);
           const decoded = decodeBody(raw, res.headers['content-encoding']);
-          const text = decoded.toString('utf8');
           resolve({
-            body: text,
+            body: decoded.toString('utf8'),
             statusCode: res.statusCode,
             finalUrl: url,
             htmlBytes: raw.length,
+            cookies: jar,
           });
         });
         res.on('error', reject);
@@ -132,19 +177,40 @@ function isThinResponse(result) {
   return false;
 }
 
+function pickRicher(a, b) {
+  if (!b) return a;
+  if (!a) return b;
+  const aHtml = looksLikeHtml(a.body);
+  const bHtml = looksLikeHtml(b.body);
+  if (bHtml && !aHtml) return b;
+  if (aHtml && !bHtml) return a;
+  if (String(b.body || '').length > String(a.body || '').length) return b;
+  return a;
+}
+
 async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
-  let result = await fetchOnce(url, redirectsLeft, timeoutMs, {});
+  let cookies = {};
+  let result = await fetchOnce(url, redirectsLeft, timeoutMs, {}, cookies);
+  cookies = result.cookies || cookies;
   if (!isThinResponse(result)) return result;
 
-  await new Promise((r) => setTimeout(r, 400));
-  const retry = await fetchOnce(url, redirectsLeft, timeoutMs, {
+  await new Promise((r) => setTimeout(r, 1200));
+  const identity = await fetchOnce(url, redirectsLeft, timeoutMs, {
     'Accept-Encoding': 'identity',
-    'Cache-Control': 'no-cache',
-    Pragma: 'no-cache',
-    Referer: url,
-  });
-  if (!isThinResponse(retry) || String(retry.body || '').length > String(result.body || '').length) {
-    return retry;
+    Referer: result.finalUrl || url,
+    'Sec-Fetch-Site': 'same-origin',
+  }, cookies);
+  cookies = identity.cookies || cookies;
+  result = pickRicher(result, identity);
+  if (!isThinResponse(result)) return result;
+
+  const alt = altHostUrl(result.finalUrl || url);
+  if (alt && alt !== url) {
+    const swapped = await fetchOnce(alt, redirectsLeft, timeoutMs, {
+      Referer: url,
+      'Sec-Fetch-Site': 'same-site',
+    }, cookies);
+    result = pickRicher(result, swapped);
   }
   return result;
 }

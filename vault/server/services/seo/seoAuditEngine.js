@@ -354,7 +354,16 @@ function buildSiteAudit({ crawl }) {
   const siteFindings = [];
   const robots = crawl.robots || {};
   const robotsBody = String(robots.body || '');
-  if (!robots.ok) {
+  const hostBlocked = pageReports.some((p) => p.statusCode === 202 || p.statusCode === 204)
+    || pageReports[0]?.findings?.some((f) => f.id === 'fetch' && f.severity === 'fail');
+  if (hostBlocked && (!robots.ok || robots.statusCode === 202)) {
+    addFinding(siteFindings, {
+      id: 'robots-txt',
+      severity: 'warn',
+      title: 'Could not check robots.txt (host blocked this crawler)',
+      detail: 'The same empty or HTTP 202 response that stopped the HTML crawl also blocked robots.txt. This is not proof the file is missing.',
+    });
+  } else if (!robots.ok) {
     addFinding(siteFindings, {
       id: 'robots-txt',
       severity: 'warn',

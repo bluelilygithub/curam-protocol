@@ -155,7 +155,6 @@ export default function SeoAuditPage() {
 
   const findings = audit?.report?.findings || [];
   const pages = audit?.report?.pages || [];
-  const siteRecs = audit?.report?.recommendations || [];
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
   const crawled = audit?.report?.crawled || pages.length;
@@ -325,21 +324,6 @@ export default function SeoAuditPage() {
                 )}
               </div>
             </div>
-
-            {siteRecs.length > 0 && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Site recommendations</p>
-                <ul className="space-y-2">
-                  {siteRecs.map((r) => (
-                    <li key={r.id} className="text-xs leading-relaxed">
-                      <span className="font-semibold uppercase tracking-wider text-[10px]" style={{ color: severityColor(r.severity) }}>{severityLabel(r.severity)}</span>
-                      <p className="mt-0.5" style={{ color: 'var(--color-text)' }}>{r.action}</p>
-                      {r.why ? <p style={{ color: 'var(--color-muted)' }}>{r.why}</p> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             <div className="space-y-2">
               {findings.map((f) => (

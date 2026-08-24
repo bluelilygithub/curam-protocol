@@ -20,6 +20,20 @@ function clampPageLimit(raw) {
   return Math.max(MIN_PAGES, Math.min(MAX_PAGES, Math.round(n)));
 }
 
+function hostKey(hostname) {
+  return String(hostname || '').replace(/^www\./i, '').toLowerCase();
+}
+
+function sameSite(urlA, urlB) {
+  try {
+    const a = new URL(urlA);
+    const b = new URL(urlB);
+    return a.protocol === b.protocol && hostKey(a.hostname) === hostKey(b.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function canonicalUrl(raw, base) {
   let u;
   try { u = base ? new URL(raw, base) : new URL(raw); } catch { return null; }
@@ -73,7 +87,7 @@ function sameOriginLinks(html, pageUrl) {
     if (!abs) continue;
     let parsed;
     try { parsed = new URL(abs); } catch { continue; }
-    if (parsed.origin !== origin) continue;
+    if (hostKey(parsed.hostname) !== hostKey(new URL(origin).hostname)) continue;
     if (SKIP_PATH.test(parsed.pathname)) continue;
     if (seen.has(abs)) continue;
     seen.add(abs);
@@ -163,7 +177,7 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
     if (page.statusCode >= 400 || page.error || !page.html) continue;
     for (const href of sameOriginLinks(page.html, page.url || next)) {
       if (queued.has(href)) continue;
-      if (!href.startsWith(origin)) continue;
+      if (!sameSite(href, start)) continue;
       if (!robotsAllows(href, robots.disallows)) continue;
       queued.add(href);
       queue.push(href);
