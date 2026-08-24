@@ -349,11 +349,21 @@ function buildSiteAudit({ crawl }) {
     text: p.text,
     error: p.error,
     isHome: i === 0 || p.url === startUrl,
+    via: p.via || null,
   }));
 
   const siteFindings = [];
   const robots = crawl.robots || {};
   const robotsBody = String(robots.body || '');
+  const fetchVia = [...new Set((crawl.pages || []).map((p) => p.via).filter((v) => v && v !== 'direct'))];
+  if (fetchVia.length) {
+    addFinding(siteFindings, {
+      id: 'fetch-via',
+      severity: 'warn',
+      title: `HTML came via ${fetchVia.join(' + ')} because the host blocked a direct fetch`,
+      detail: 'On-page checks still run on that HTML. Direct crawler access from this server was refused (often HTTP 202).',
+    });
+  }
   const hostBlocked = pageReports.some((p) => p.statusCode === 202 || p.statusCode === 204)
     || pageReports[0]?.findings?.some((f) => f.id === 'fetch' && f.severity === 'fail');
   if (hostBlocked && (!robots.ok || robots.statusCode === 202)) {

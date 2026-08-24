@@ -188,11 +188,147 @@ function pickRicher(a, b) {
   return a;
 }
 
+function hostKey(hostname) {
+  return String(hostname || '').replace(/^www\./i, '').toLowerCase();
+}
+
+function pathsMatch(a, b) {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    const pa = ua.pathname.replace(/\/+$/, '') || '/';
+    const pb = ub.pathname.replace(/\/+$/, '') || '/';
+    return hostKey(ua.hostname) === hostKey(ub.hostname) && pa === pb;
+  } catch {
+    return false;
+  }
+}
+
+function stripTags(s) {
+  return String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function htmlFromWpItem(item) {
+  const title = stripTags(item?.title?.rendered || item?.title || '');
+  const content = String(item?.content?.rendered || '').slice(0, 500000);
+  const excerpt = String(item?.excerpt?.rendered || '');
+  const yoast = String(item?.yoast_head || '');
+  const desc = stripTags(excerpt).slice(0, 170);
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${yoast}<title>${title}</title>${desc ? `<meta name="description" content="${desc.replace(/"/g, '&quot;')}">` : ''}</head><body><h1>${title}</h1>${excerpt}${content}</body></html>`;
+}
+
+async function fetchJsonList(url) {
+  try {
+    const result = await fetchOnce(url, 3, 10000, { Accept: 'application/json,text/plain,*/*;q=0.8' }, {});
+    const text = String(result.body || '').trim();
+    if (!text.startsWith('[') && !text.startsWith('{')) return [];
+    const data = JSON.parse(text);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchViaWordpress(pageUrl) {
+  let origin;
+  try { origin = new URL(pageUrl).origin; } catch { return null; }
+  const endpoints = [
+    `${origin}/wp-json/wp/v2/pages?per_page=40&_fields=link,slug,title,content,excerpt,yoast_head`,
+    `${origin}/wp-json/wp/v2/posts?per_page=20&_fields=link,slug,title,content,excerpt,yoast_head`,
+  ];
+  const wantedHome = (() => {
+    try { return (new URL(pageUrl).pathname.replace(/\/+$/, '') || '/') === '/'; } catch { return false; }
+  })();
+  for (const endpoint of endpoints) {
+    const items = await fetchJsonList(endpoint);
+    const match = items.find((item) => item?.link && pathsMatch(item.link, pageUrl))
+      || (wantedHome ? items.find((item) => {
+        try {
+          const p = new URL(item.link).pathname.replace(/\/+$/, '') || '/';
+          return p === '/' || item.slug === 'home' || item.slug === 'homepage' || item.slug === 'front-page';
+        } catch { return false; }
+      }) : null);
+    if (match) {
+      return {
+        body: htmlFromWpItem(match),
+        statusCode: 200,
+        finalUrl: match.link || pageUrl,
+        htmlBytes: 0,
+        cookies: {},
+        via: 'wordpress',
+      };
+    }
+  }
+  return null;
+}
+
+async function fetchViaJina(pageUrl) {
+  try {
+    const result = await fetchOnce(`https://r.jina.ai/${pageUrl}`, 3, 20000, {
+      Accept: 'text/html, text/plain',
+      'X-Return-Format': 'html',
+      'X-Timeout': '15',
+    }, {});
+    const body = String(result.body || '');
+    if (result.statusCode >= 400 || body.length < 80) return null;
+    if (!looksLikeHtml(body) && body.length < 200) return null;
+    const html = looksLikeHtml(body)
+      ? body
+      : `<!DOCTYPE html><html><head><meta charset="utf-8"><title></title></head><body><pre>${body.replace(/</g, '&lt;').slice(0, 400000)}</pre></body></html>`;
+    return {
+      body: html,
+      statusCode: 200,
+      finalUrl: pageUrl,
+      htmlBytes: body.length,
+      cookies: {},
+      via: 'jina',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function discoverSiteUrls(startUrl) {
+  let origin;
+  try { origin = new URL(startUrl).origin; } catch { return []; }
+  const found = [];
+  const seen = new Set();
+  const add = (raw) => {
+    try {
+      const u = new URL(raw);
+      if (hostKey(u.hostname) !== hostKey(new URL(origin).hostname)) return;
+      u.hash = '';
+      const href = u.toString();
+      if (seen.has(href)) return;
+      if (/\.(xml|xsl|jpg|jpeg|png|gif|webp|pdf|css|js)(\?|$)/i.test(u.pathname)) return;
+      seen.add(href);
+      found.push(href);
+    } catch { /* skip */ }
+  };
+
+  for (const path of ['/sitemap.xml', '/wp-sitemap.xml', '/sitemap_index.xml', '/page-sitemap.xml', '/wp-sitemap-pages-1.xml']) {
+    try {
+      const result = await fetchOnce(`${origin}${path}`, 3, 10000, { Accept: 'application/xml,text/xml,text/plain,*/*;q=0.8' }, {});
+      const locs = String(result.body || '').matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi);
+      for (const m of locs) add(m[1].trim());
+    } catch { /* skip */ }
+  }
+
+  for (const path of [
+    '/wp-json/wp/v2/pages?per_page=40&_fields=link',
+    '/wp-json/wp/v2/posts?per_page=20&_fields=link',
+  ]) {
+    const items = await fetchJsonList(`${origin}${path}`);
+    for (const item of items) if (item?.link) add(item.link);
+  }
+  return found;
+}
+
 async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
   let cookies = {};
   let result = await fetchOnce(url, redirectsLeft, timeoutMs, {}, cookies);
   cookies = result.cookies || cookies;
-  if (!isThinResponse(result)) return result;
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'direct' };
 
   await new Promise((r) => setTimeout(r, 1200));
   const identity = await fetchOnce(url, redirectsLeft, timeoutMs, {
@@ -202,7 +338,7 @@ async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
   }, cookies);
   cookies = identity.cookies || cookies;
   result = pickRicher(result, identity);
-  if (!isThinResponse(result)) return result;
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'direct' };
 
   const alt = altHostUrl(result.finalUrl || url);
   if (alt && alt !== url) {
@@ -211,7 +347,23 @@ async function fetchHtml(url, redirectsLeft = 5, timeoutMs = 12000) {
       'Sec-Fetch-Site': 'same-site',
     }, cookies);
     result = pickRicher(result, swapped);
+    if (!isThinResponse(result)) return { ...result, via: result.via || 'direct' };
   }
+
+  const bot = await fetchOnce(url, redirectsLeft, timeoutMs, {
+    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  }, cookies);
+  result = pickRicher(result, bot);
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'direct' };
+
+  const wp = await fetchViaWordpress(url);
+  result = pickRicher(result, wp);
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'wordpress' };
+
+  const jina = await fetchViaJina(url);
+  result = pickRicher(result, jina);
+  if (!isThinResponse(result)) return { ...result, via: result.via || 'jina' };
   return result;
 }
 
@@ -257,4 +409,5 @@ module.exports = {
   htmlToText,
   decodeEntities,
   normaliseHttpUrl,
+  discoverSiteUrls,
 };

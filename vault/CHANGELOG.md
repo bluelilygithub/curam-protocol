@@ -4,6 +4,21 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-delete-list)
+
+### SEO audit — delete from the sidebar
+- Each saved audit has a trash control. Confirm Yes/No, then it is removed.
+
+---
+
+## 2026-08-24 (seo-audit-blocked-host)
+
+### SEO audit — crawl when the host returns HTTP 202
+- After a blocked direct fetch, load WordPress REST + sitemaps for URLs, then fetch HTML through a reader proxy so Railway can still crawl.
+- Site report notes when HTML did not come from a direct request.
+
+---
+
 ## 2026-08-24 (seo-audit-www-apex)
 
 ### SEO audit — www vs apex and blocked robots copy

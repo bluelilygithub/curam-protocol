@@ -49,6 +49,7 @@ export default function SeoAuditPage() {
   const [pageLimit, setPageLimit] = useState(15);
   const [openPages, setOpenPages] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const loadList = useCallback(async () => {
     const res = await api.get('/api/seo/audits');
@@ -136,16 +137,18 @@ export default function SeoAuditPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!id) return;
+  const handleDelete = async (auditId) => {
+    const target = Number(auditId);
+    if (!target) return;
     try {
-      const res = await api.delete(`/api/seo/audits/${id}`);
+      const res = await api.delete(`/api/seo/audits/${target}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       setDeleteConfirm(false);
+      setPendingDeleteId(null);
       await loadList();
       addToast('Audit deleted', 'success');
-      navigate('/seo');
+      if (String(id) === String(target)) navigate('/seo');
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -208,20 +211,55 @@ export default function SeoAuditPage() {
           )}
           {filtered.map((a) => (
             <li key={a.id}>
-              <button
-                type="button"
-                onClick={() => navigate(`/seo/${a.id}`)}
-                className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-                style={{
-                  background: String(id) === String(a.id) ? 'var(--color-bg)' : 'transparent',
-                  color: String(id) === String(a.id) ? 'var(--color-text)' : 'var(--color-muted)',
-                }}
-              >
-                <span className="block truncate">{a.name}</span>
-                <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
-                  {a.score != null ? `${a.score} · ` : ''}{a.hostname || hostOf(a.url)}
-                </span>
-              </button>
+              {String(pendingDeleteId) === String(a.id) ? (
+                <div className="px-2 py-1.5 text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
+                  <span className="block truncate" style={{ color: 'var(--color-text)' }}>{a.name}</span>
+                  <span className="flex items-center gap-2">
+                    Delete?
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(a.id)}
+                      className="transition-opacity hover:opacity-70"
+                      style={{ color: '#ef4444' }}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteId(null)}
+                      className="transition-opacity hover:opacity-70"
+                    >
+                      No
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-start gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/seo/${a.id}`)}
+                    className="min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                    style={{
+                      background: String(id) === String(a.id) ? 'var(--color-bg)' : 'transparent',
+                      color: String(id) === String(a.id) ? 'var(--color-text)' : 'var(--color-muted)',
+                    }}
+                  >
+                    <span className="block truncate">{a.name}</span>
+                    <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
+                      {a.score != null ? `${a.score} · ` : ''}{a.hostname || hostOf(a.url)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${a.name}`}
+                    onClick={() => setPendingDeleteId(a.id)}
+                    className="shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {getIcon('trash', { size: 14 })}
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -309,7 +347,7 @@ export default function SeoAuditPage() {
                 {deleteConfirm ? (
                   <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     Delete?
-                    <button type="button" onClick={handleDelete} className="transition-opacity hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
+                    <button type="button" onClick={() => handleDelete(id)} className="transition-opacity hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
                     <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
                   </span>
                 ) : (

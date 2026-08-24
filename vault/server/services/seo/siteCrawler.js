@@ -5,6 +5,7 @@ const {
   extractTitle,
   htmlToText,
   normaliseHttpUrl,
+  discoverSiteUrls,
 } = require('../htmlFetch');
 
 const MIN_PAGES = 1;
@@ -137,6 +138,7 @@ async function fetchPage(url) {
       html,
       title: extractTitle(html),
       text: htmlToText(html, 8000),
+      via: result.via || 'direct',
       error: null,
     };
   } catch (err) {
@@ -147,6 +149,7 @@ async function fetchPage(url) {
       html: '',
       title: '',
       text: '',
+      via: null,
       error: err.message,
     };
   }
@@ -163,6 +166,16 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
   const queued = new Set([start]);
   const visited = new Set();
   const pages = [];
+
+  const extras = await discoverSiteUrls(start);
+  for (const href of extras) {
+    if (queued.has(href)) continue;
+    if (!sameSite(href, start)) continue;
+    if (SKIP_PATH.test(href) || /\.xml(\?|$)/i.test(href)) continue;
+    if (!robotsAllows(href, robots.disallows)) continue;
+    queued.add(href);
+    queue.push(href);
+  }
 
   while (queue.length && pages.length < limit) {
     queue.sort((a, b) => pathScore(a) - pathScore(b));
