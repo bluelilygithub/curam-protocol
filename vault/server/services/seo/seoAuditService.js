@@ -2,7 +2,7 @@
 
 const { pool } = require('../../db');
 const { crawlSite, clampPageLimit } = require('./siteCrawler');
-const { buildSiteAudit } = require('./seoAuditEngine');
+const { buildSiteAudit, buildGlobalUpdates } = require('./seoAuditEngine');
 const { captureIf, makeFingerprint } = require('../SuggestionService');
 
 function parseJson(val) {
@@ -17,8 +17,18 @@ function hostnameOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
+function withGlobalUpdates(report) {
+  const next = report && typeof report === 'object' ? report : {};
+  if (Array.isArray(next.globalUpdates)) return next;
+  next.globalUpdates = buildGlobalUpdates(next.pages || [], next.findings || [], {
+    crawled: next.crawled,
+    discovered: next.discovered,
+  });
+  return next;
+}
+
 function rowToAudit(row) {
-  const report = parseJson(row.report);
+  const report = withGlobalUpdates(parseJson(row.report));
   return {
     id: row.id,
     name: row.name,

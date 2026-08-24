@@ -158,6 +158,7 @@ export default function SeoAuditPage() {
 
   const findings = audit?.report?.findings || [];
   const pages = audit?.report?.pages || [];
+  const globalUpdates = audit?.report?.globalUpdates || [];
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
   const crawled = audit?.report?.crawled || pages.length;
@@ -362,6 +363,47 @@ export default function SeoAuditPage() {
                 )}
               </div>
             </div>
+
+            {globalUpdates.length > 0 && (
+              <div
+                className="rounded-2xl border p-6 space-y-4"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+              >
+                <div>
+                  <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Site-wide updates</p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                    Fix these once in the theme, SEO plugin, or hosting. They cover the crawled pages instead of editing URLs one by one.
+                  </p>
+                </div>
+                <ul className="space-y-3">
+                  {globalUpdates.map((u) => (
+                    <li
+                      key={u.id}
+                      className="rounded-xl border p-4 space-y-1"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: severityColor(u.severity) }}>
+                          {severityLabel(u.severity)}
+                        </span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+                          {u.applyIn}
+                        </span>
+                        {u.pagesAffected > 0 && u.totalPages > 0 ? (
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {u.pagesAffected} of {u.totalPages} page{u.totalPages === 1 ? '' : 's'}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{u.action}</p>
+                      {u.why ? (
+                        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{u.why}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="space-y-2">
               {findings.map((f) => (

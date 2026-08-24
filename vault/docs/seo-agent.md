@@ -14,7 +14,8 @@ On-page SEO audit at **`/seo`**. Paste a public URL and how many pages to crawl.
 2. **Crawl** — BFS over same-site HTML `<a href>` links (`www` and apex count as the same site). Skips files. Honours `robots.txt` `User-agent: *` Disallow. Direct fetch is SSRF-safe via `htmlFetch.js`. If the host returns empty/HTTP 202 (common from Railway), Vault scrapes the page through **Serper** (`SERPER_SEARCH_API_KEY` / `scrape.serper.dev`) so HTML and links come from Serper’s IPs, then continues the crawl. WordPress REST and a reader proxy remain as extra fallbacks. Empty direct bodies are not treated as on-page SEO fails.
 3. **Per page** — title, meta description, H1, viewport, lang, canonical, robots meta, Open Graph, image alts, thin copy, HTTPS/status.
 4. **Site** — robots.txt, duplicate titles, crawl cap vs discovered URLs.
-5. **Recommendations** — every fail/warn becomes an action on that page (and site-level items at the top).
+5. **Site-wide updates** — issues that repeat across pages (viewport, lang, Open Graph, titles, H1, alts, HTTPS) folded into one theme / SEO-plugin / hosting change, with how many crawled pages they affect.
+6. **Per-page recommendations** — remaining fail/warn actions on each URL.
 
 JavaScript-rendered sites often look thin. Raise the page limit if important URLs were not linked in HTML.
 
@@ -35,4 +36,4 @@ Feature flag: **`seo`**.
 
 ## Data
 
-`seo_audits.report` includes `score`, `summary`, `crawled`, `discovered`, `pageLimit`, site `findings` / `recommendations`, and `pages[]` (`url`, `title`, `score`, `findings[]`, `recommendations[]`). Raw HTML is not stored.
+`seo_audits.report` includes `score`, `summary`, `crawled`, `discovered`, `pageLimit`, site `findings` / `recommendations`, `globalUpdates[]` (`action`, `applyIn`, `pagesAffected`), and `pages[]` (`url`, `title`, `score`, `findings[]`, `recommendations[]`). Raw HTML is not stored.

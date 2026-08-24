@@ -61,8 +61,139 @@ function recommendationsFrom(findings) {
     }));
 }
 
-function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome }) {
+const GLOBAL_SPECS = {
+  viewport: {
+    applyIn: 'Theme header',
+    action: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> in the global <head> (header.php or the SEO/theme head hook). One change covers every page.',
+  },
+  lang: {
+    applyIn: 'Theme html tag',
+    action: 'Set lang on the root <html> tag in the theme (e.g. en-AU). Do this once in the wrapper, not on individual posts.',
+  },
+  https: {
+    applyIn: 'Hosting / WordPress',
+    action: 'Force HTTPS site-wide (hosting SSL + WordPress Address / Site Address) and 301 all http:// URLs.',
+  },
+  og: {
+    applyIn: 'SEO plugin defaults',
+    action: 'Turn on Open Graph in the SEO plugin (Yoast, Rank Math, or AIOSEO) with a default title, description, and share image. Then override per URL only where needed.',
+  },
+  jsonld: {
+    applyIn: 'Homepage / Knowledge Graph',
+    action: 'Add Organization or LocalBusiness JSON-LD once (plugin Knowledge Graph or a snippet in the theme footer).',
+  },
+  title: {
+    applyIn: 'SEO plugin title template',
+    action: 'Set a title template per post type (e.g. “%%title%% | Brand”) and make sure every URL has a unique title. Do not use the same homepage title on inner pages.',
+  },
+  description: {
+    applyIn: 'SEO plugin meta templates',
+    action: 'Set a meta description template (and write custom ones for key pages). Empty descriptions on many URLs are a template gap, not a one-page fix.',
+  },
+  h1: {
+    applyIn: 'Theme templates',
+    action: 'Output one H1 in each template (page, post, archive). If several templates omit H1, fix the theme rather than editing copy page by page.',
+  },
+  canonical: {
+    applyIn: 'SEO plugin',
+    action: 'Enable canonical URLs in the SEO plugin so every public URL self-canonicalises. Then 301 www vs apex to one host.',
+  },
+  alt: {
+    applyIn: 'Media library / theme',
+    action: 'Require alt text on new uploads and add alts to existing images in the media library. Theme decorative images can use empty alt="".',
+  },
+  thin: {
+    applyIn: 'Templates + content',
+    action: 'Put unique body copy in the page content (or server-render it). If many URLs are thin, the template is probably outputting chrome with no main text.',
+  },
+  'js-heavy': {
+    applyIn: 'Theme / page builder',
+    action: 'Ensure headings and body copy exist in the initial HTML, not only after JavaScript. Check the page builder and cookie/script banners.',
+  },
+};
+
+function hostKey(hostname) {
+  return String(hostname || '').replace(/^www\./i, '').toLowerCase();
+}
+
+function buildGlobalUpdates(pageReports, siteFindings, crawl) {
+  const usable = (pageReports || []).filter((p) => {
+    if (p.statusCode === 202 || p.statusCode === 204) return false;
+    return !(p.findings || []).some((f) => f.id === 'fetch' && f.severity === 'fail');
+  });
+  const total = usable.length;
+  const updates = [];
+
+  const add = (item) => {
+    updates.push({
+      id: item.id,
+      severity: item.severity,
+      action: item.action,
+      why: item.why,
+      applyIn: item.applyIn || 'Site-wide',
+      pagesAffected: item.pagesAffected || 0,
+      totalPages: total,
+    });
+  };
+
+  Object.entries(GLOBAL_SPECS).forEach(([id, spec]) => {
+    const hits = usable.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity !== 'pass'));
+    if (!hits.length) return;
+    const failCount = hits.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity === 'fail')).length;
+    const alwaysGlobal = ['viewport', 'lang', 'https', 'og', 'jsonld', 'canonical'].includes(id);
+    if (!alwaysGlobal && hits.length < 2 && total > 1) return;
+    if (!alwaysGlobal && total === 1 && hits.length === 1 && !['jsonld'].includes(id)) {
+      /* still useful as a template note on a one-page crawl */
+    }
+    add({
+      id: `global-${id}`,
+      severity: failCount ? 'fail' : 'warn',
+      action: spec.action,
+      applyIn: spec.applyIn,
+      pagesAffected: hits.length,
+      why: total
+        ? `Seen on ${hits.length} of ${total} crawled page${total === 1 ? '' : 's'}. Fix it once in ${spec.applyIn.toLowerCase()} rather than page by page.`
+        : spec.applyIn,
+    });
+  });
+
+  const hosts = new Set();
+  usable.forEach((p) => {
+    try { hosts.add(new URL(p.url).host.toLowerCase()); } catch { /* skip */ }
+  });
+  const hostNames = [...hosts];
+  if (hostNames.length > 1 && hostNames.some((h) => h.startsWith('www.')) && hostNames.some((h) => !h.startsWith('www.'))) {
+    add({
+      id: 'global-host',
+      severity: 'warn',
+      applyIn: 'DNS / redirects',
+      action: 'Pick one host (www or apex) and 301 the other. Mixed www and non-www URLs split ranking signals.',
+      pagesAffected: usable.length,
+      why: `Crawled both ${hostNames.join(' and ')}.`,
+    });
+  }
+
+  (siteFindings || []).forEach((f) => {
+    if (f.severity === 'pass' || !f.recommendation) return;
+    if (f.id === 'fetch-via' || f.id === 'crawl-cap') return;
+    add({
+      id: `global-site-${f.id}`,
+      severity: f.severity,
+      applyIn: 'Site settings',
+      action: f.recommendation,
+      pagesAffected: 0,
+      why: f.detail || f.title,
+    });
+  });
+
+  const order = { fail: 0, warn: 1 };
+  updates.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2) || (b.pagesAffected - a.pagesAffected));
+  return updates;
+}
+
+function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome, via }) {
   const findings = [];
+  const skipChrome = via === 'serper' || via === 'jina';
   const htmlStr = String(html || '');
   const title = String(fetchedTitle || attr(htmlStr, /<title[^>]*>([^<]{1,200})<\/title>/i)).trim();
   const description = attr(htmlStr, /<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["']/i)
@@ -222,7 +353,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (!viewport) {
+  if (!skipChrome && !viewport) {
     addFinding(findings, {
       id: 'viewport',
       severity: 'fail',
@@ -264,7 +395,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (!ogTitle) {
+  if (!skipChrome && !ogTitle) {
     addFinding(findings, {
       id: 'og',
       severity: 'warn',
@@ -274,7 +405,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (!hasJsonLd && isHome) {
+  if (!skipChrome && !hasJsonLd && isHome) {
     addFinding(findings, {
       id: 'jsonld',
       severity: 'warn',
@@ -284,7 +415,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (img.total > 0 && img.missing > 0) {
+  if (!skipChrome && img.total > 0 && img.missing > 0) {
     addFinding(findings, {
       id: 'alt',
       severity: img.missing / img.total > 0.5 ? 'fail' : 'warn',
@@ -313,7 +444,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
   }
 
   const scriptCount = countTags(htmlStr, /<script\b/gi);
-  if (scriptCount > 25 && charCount < 800) {
+  if (!skipChrome && scriptCount > 25 && charCount < 800) {
     addFinding(findings, {
       id: 'js-heavy',
       severity: 'warn',
@@ -441,6 +572,7 @@ function buildSiteAudit({ crawl }) {
 
   const siteRecommendations = recommendationsFrom(siteFindings);
   const pageRecommendations = pageReports.flatMap((p) => p.recommendations.map((r) => ({ ...r, url: p.url, pageTitle: p.title })));
+  const globalUpdates = buildGlobalUpdates(pageReports, siteFindings, crawl);
 
   return {
     score,
@@ -450,6 +582,7 @@ function buildSiteAudit({ crawl }) {
     discovered: crawl.discovered,
     findings: siteFindings,
     recommendations: siteRecommendations,
+    globalUpdates,
     pages: pageReports.map((p) => ({
       url: p.url,
       title: p.title,
@@ -463,4 +596,4 @@ function buildSiteAudit({ crawl }) {
   };
 }
 
-module.exports = { auditPage, buildSiteAudit };
+module.exports = { auditPage, buildSiteAudit, buildGlobalUpdates };

@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-audit-global-updates)
+
+### SEO audit — site-wide updates
+- Report includes a **Site-wide updates** list: repeated on-page gaps folded into one theme, SEO plugin, or hosting change, with how many crawled pages they affect.
+
+---
+
 ## 2026-08-24 (seo-audit-serper-scrape)
 
 ### SEO audit — scrape via Serper when the host returns HTTP 202
