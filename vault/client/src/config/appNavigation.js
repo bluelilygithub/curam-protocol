@@ -46,9 +46,10 @@ export const APP_NAV_GROUPS = [
     id: 'website',
     label: 'Website',
     items: [
-      { id: 'domains', label: 'Domain & Brand', path: '/domains', icon: 'globe', featureKey: 'domains' },
-      { id: 'googleAds', label: 'Google Ads', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true },
       { id: 'seo', label: 'SEO', path: '/seo', icon: 'scan-search', featureKey: 'seo', matchPrefix: true },
+      { id: 'googleAds', label: 'Adwords', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true },
+      { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
+      { id: 'html', label: 'HTML', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true },
       { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', icon: 'blocks', featureKey: 'themeBuilder' },
     ],
   },

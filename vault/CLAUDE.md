@@ -308,7 +308,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Google Ads** (site scrape + keywords / RSA) · **SEO** (crawl + per-page recommendations) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · **Document redaction** · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker) · **Product Scout** (Amazon comparison agent) · **Video Tools** (ffmpeg + FAL generate) · **Recipes** (leftover cooking assistant) · **Google Ads** (site scrape + keywords / RSA) · **SEO** (crawl + per-page recommendations) · **HTML** (Lighthouse / PageSpeed) · **Property Scenario** (mortgage / property calcs + CDR + document insights)
 
 **Document redaction** (`/document-redaction`): Privacy-preserving DOCX redaction. Local LLM proposes candidates → HITL approve/reject/edit → synthetic apply (`redacted.docx` + `sanitized.pdf`) → local compare / leftover scan → HITL₂ → frontier residual-risk analysis on **sanitized PDF only** (entity map never leaves the machine) → selective frontier apply (shared apply pipeline on redacted base) → three-way compare → final approve + INTERNAL-ONLY audit trail. Feature flag `documentRedaction`. Model card `document-redaction-agent`. Docs: **`docs/document-redaction-agent-architecture.md`**.
 
@@ -324,7 +324,9 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Google Ads** (`/google-ads`): Content-tools agent with its own projects (not Vault chat projects). Paste a URL plus **what they sell** (offer is ground truth) → SSRF-safe scrape → **`standard`** model builds 100 Google Ads keywords, 100 negatives, and RSA copy. Ads tab can generate RSA (15/4) or a 10-headline / 10-description pack. Lists follow the offer if the live page is a different industry. Copy or CSV for Ads Editor. Tables: `seo_projects` (includes `offer`), `seo_artifacts`. API: `/api/google-ads`. Feature flag `googleAds`. Docs: **`docs/google-ads-agent.md`**.
 
-**SEO** (`/seo`): Crawl a URL (1–40 same-origin HTML pages, default 15) and score each page with recommendations (titles, headings, robots, HTTPS, alts). No Ads keywords. Table: `seo_audits`. Feature flag `seo`. Docs: **`docs/seo-agent.md`**.
+**SEO** (`/seo`): Crawl a URL (1–40 same-origin HTML pages, default 25) and score each page with recommendations (titles, headings, robots, HTTPS, alts). No Ads keywords. Table: `seo_audits`. Feature flag `seo`. Docs: **`docs/seo-agent.md`**.
+
+**HTML** (`/html`): Google Lighthouse via PageSpeed Insights (mobile/desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities. Table: `html_audits`. Flag `html`. Optional `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 
@@ -371,6 +373,7 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
+| `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
 
 ---
 

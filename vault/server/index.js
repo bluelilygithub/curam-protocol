@@ -136,6 +136,7 @@ app.use('/api/property-scenario', requireFeature('propertyScenario'), require('.
 app.use('/api/document-redaction', requireFeature('documentRedaction'), require('./routes/documentRedaction'));
 app.use('/api/google-ads', requireFeature('googleAds'), require('./routes/seo'));
 app.use('/api/seo', requireFeature('seo'), require('./routes/seoAudit'));
+app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 
 if (process.env.NODE_ENV === 'production') {
@@ -184,7 +185,7 @@ async function start() {
   }
 
   // API key presence checks — visible in Railway logs
-  const apiKeyChecks = ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'FINNHUB_API_KEY', 'DOMSCAN_API_KEY', 'FAL_API_KEY', 'SERPER_SEARCH_API_KEY', 'SEARCH_API_KEY'];
+  const apiKeyChecks = ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'FINNHUB_API_KEY', 'DOMSCAN_API_KEY', 'FAL_API_KEY', 'SERPER_SEARCH_API_KEY', 'SEARCH_API_KEY', 'PAGESPEED_API_KEY'];
   apiKeyChecks.forEach(k => {
     const v = process.env[k];
     console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);

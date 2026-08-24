@@ -29,6 +29,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   documentRedaction: true,
   googleAds: true,
   seo: true,
+  html: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
@@ -57,7 +58,5 @@ function flagsFromSettingRows(rows) {
 module.exports = {
   FEATURE_ACCESS_DEFAULTS,
   FEATURE_ACCESS_KEYS,
-  FEATURE_ACCESS_KEYS: FEATURE_ACCESS_KEYS,
   flagsFromSettingRows,
-  flagsFromSettingRows: flagsFromSettingRows,
 };

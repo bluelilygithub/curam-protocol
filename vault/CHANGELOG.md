@@ -4,6 +4,23 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (html-lighthouse)
+
+### HTML — Lighthouse via PageSpeed Insights
+- Website apps order: SEO, Adwords, Domain, HTML.
+- New **HTML** tool at `/html` runs Google Lighthouse (mobile or desktop) and stores category scores, lab metrics, and opportunities. Table `html_audits`. Flag `html`.
+
+---
+
+## 2026-08-24 (seo-audit-query-host)
+
+### SEO audit — query URLs, www/apex, schema, 4xx
+- Query-string URLs must canonicalise to the clean path; `/products` is queued when `?series=` links are found.
+- Direct probe records whether www 301s to apex and which host canonicals use.
+- JSON-LD types, nofollow, image alts, inbound links, and 4xx URLs are reported. Page speed, CWV, and backlinks stay out of scope.
+
+---
+
 ## 2026-08-24 (seo-audit-global-updates)
 
 ### SEO audit — site-wide updates

@@ -1,5 +1,7 @@
 'use strict';
 
+const { sameOriginLinks } = require('./siteCrawler');
+
 function attr(html, tagRe) {
   const m = String(html || '').match(tagRe);
   return m ? String(m[1] || '').trim() : '';
@@ -108,7 +110,19 @@ const GLOBAL_SPECS = {
   },
   'js-heavy': {
     applyIn: 'Theme / page builder',
-    action: 'Ensure headings and body copy exist in the initial HTML, not only after JavaScript. Check the page builder and cookie/script banners.',
+    action: 'Ensure headings and body copy exist in the initial HTML, not only after JS. Check the page builder and cookie/script banners.',
+  },
+  'query-canonical': {
+    applyIn: 'SEO plugin / filters',
+    action: 'Query-string URLs (?series=, ?sort=, etc.) must canonicalise to the clean path (e.g. /products), not to themselves or to each other. Otherwise Google can treat filters as duplicate pages.',
+  },
+  schema: {
+    applyIn: 'SEO plugin / schema',
+    action: 'Add JSON-LD that matches the page type: Organization or LocalBusiness on the homepage, Product on product URLs, BreadcrumbList on inner pages.',
+  },
+  'robots-meta': {
+    applyIn: 'SEO plugin robots',
+    action: 'Review noindex/nofollow on templates. Public commercial pages must be indexable; thank-you and cart pages can stay noindex.',
   },
 };
 
@@ -140,7 +154,7 @@ function buildGlobalUpdates(pageReports, siteFindings, crawl) {
     const hits = usable.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity !== 'pass'));
     if (!hits.length) return;
     const failCount = hits.filter((p) => (p.findings || []).some((f) => f.id === id && f.severity === 'fail')).length;
-    const alwaysGlobal = ['viewport', 'lang', 'https', 'og', 'jsonld', 'canonical'].includes(id);
+    const alwaysGlobal = ['viewport', 'lang', 'https', 'og', 'jsonld', 'canonical', 'query-canonical', 'schema'].includes(id);
     if (!alwaysGlobal && hits.length < 2 && total > 1) return;
     if (!alwaysGlobal && total === 1 && hits.length === 1 && !['jsonld'].includes(id)) {
       /* still useful as a template note on a one-page crawl */
@@ -162,7 +176,7 @@ function buildGlobalUpdates(pageReports, siteFindings, crawl) {
     try { hosts.add(new URL(p.url).host.toLowerCase()); } catch { /* skip */ }
   });
   const hostNames = [...hosts];
-  if (hostNames.length > 1 && hostNames.some((h) => h.startsWith('www.')) && hostNames.some((h) => !h.startsWith('www.'))) {
+  if (!siteFindings?.some((f) => f.id === 'host-canonical') && hostNames.length > 1 && hostNames.some((h) => h.startsWith('www.')) && hostNames.some((h) => !h.startsWith('www.'))) {
     add({
       id: 'global-host',
       severity: 'warn',
@@ -191,6 +205,61 @@ function buildGlobalUpdates(pageReports, siteFindings, crawl) {
   return updates;
 }
 
+function jsonLdTypes(html) {
+  const types = new Set();
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html || ''))) {
+    try { walkJsonLd(JSON.parse(m[1]), types, 0); } catch { /* ignore */ }
+  }
+  return [...types];
+}
+
+function walkJsonLd(node, types, depth) {
+  if (!node || depth > 8) return;
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkJsonLd(item, types, depth + 1));
+    return;
+  }
+  if (typeof node !== 'object') return;
+  const t = node['@type'];
+  if (typeof t === 'string') types.add(t);
+  if (Array.isArray(t)) t.forEach((x) => { if (typeof x === 'string') types.add(x); });
+  if (node['@graph']) walkJsonLd(node['@graph'], types, depth + 1);
+}
+
+function urlQueryKeys(url) {
+  try {
+    return [...new URL(url).searchParams.keys()].filter((k) => !/^utm_|^gclid$|^fbclid$/i.test(k));
+  } catch {
+    return [];
+  }
+}
+
+function urlPathKey(url) {
+  try {
+    const u = new URL(url);
+    const path = (u.pathname.replace(/\/+$/, '') || '/');
+    return `${hostKey(u.hostname)}${path}`;
+  } catch {
+    return '';
+  }
+}
+
+function resolveHref(href, base) {
+  try {
+    const u = new URL(href, base);
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
+
+function pageHost(url) {
+  try { return new URL(url).host.toLowerCase(); } catch { return ''; }
+}
+
 function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome, via }) {
   const findings = [];
   const skipChrome = via === 'serper' || via === 'jina';
@@ -212,6 +281,7 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
   const ogTitle = attr(htmlStr, /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i)
     || attr(htmlStr, /<meta[^>]+content=["']([^"']*)["'][^>]*property=["']og:title["']/i);
   const hasJsonLd = /application\/ld\+json/i.test(htmlStr);
+  const schemaTypes = jsonLdTypes(htmlStr);
   const img = imagesMissingAlt(htmlStr);
   const https = /^https:/i.test(url || '');
   const charCount = String(text || '').replace(/\s+/g, ' ').trim().length;
@@ -373,7 +443,44 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
-  if (!canonical) {
+  const resolvedCanonical = canonical ? resolveHref(canonical, url) : '';
+  const queryKeysForUrl = urlQueryKeys(url);
+  if (queryKeysForUrl.length) {
+    const cleanPath = (() => {
+      try {
+        const u = new URL(url);
+        u.search = '';
+        u.hash = '';
+        return u.toString();
+      } catch { return url.split('?')[0]; }
+    })();
+    const canonQuery = resolvedCanonical ? urlQueryKeys(resolvedCanonical) : [];
+    const pointsAtClean = resolvedCanonical && urlPathKey(resolvedCanonical) === urlPathKey(cleanPath) && !canonQuery.length;
+    if (!resolvedCanonical) {
+      addFinding(findings, {
+        id: 'query-canonical',
+        severity: 'fail',
+        title: 'Query-string URL has no canonical',
+        detail: `${url} — parameters: ${queryKeysForUrl.join(', ')}.`,
+        recommendation: `Set canonical to the clean URL (${cleanPath}) so filtered views are not indexed as duplicates.`,
+      });
+    } else if (!pointsAtClean) {
+      addFinding(findings, {
+        id: 'query-canonical',
+        severity: 'fail',
+        title: 'Query-string URL does not canonicalise to the clean path',
+        detail: `Page: ${url}. Canonical: ${resolvedCanonical || '(none)'}.`,
+        recommendation: `Point canonical at ${cleanPath} (not this query URL, and not another ?series= variant).`,
+      });
+    } else {
+      addFinding(findings, {
+        id: 'query-canonical',
+        severity: 'pass',
+        title: 'Query-string URL canonicalises to the clean path',
+        detail: resolvedCanonical,
+      });
+    }
+  } else if (!canonical) {
     addFinding(findings, {
       id: 'canonical',
       severity: 'warn',
@@ -381,9 +488,16 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       detail: where,
       recommendation: `Add <link rel="canonical" href="${url}"> (or the preferred version of this URL).`,
     });
+  } else {
+    addFinding(findings, {
+      id: 'canonical',
+      severity: 'pass',
+      title: 'Canonical present',
+      detail: resolvedCanonical,
+    });
   }
 
-  if (robotsMeta.includes('noindex')) {
+  if (robotsMeta.includes('noindex') || robotsMeta.includes('none')) {
     addFinding(findings, {
       id: 'robots-meta',
       severity: isHome ? 'fail' : 'warn',
@@ -392,6 +506,16 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       recommendation: isHome
         ? 'Remove noindex from the homepage unless you intend to hide the whole site.'
         : 'Keep noindex only if this page should stay out of Google (thank-you, cart, login).',
+    });
+  }
+
+  if (robotsMeta.includes('nofollow')) {
+    addFinding(findings, {
+      id: 'robots-meta',
+      severity: 'warn',
+      title: 'nofollow is set on this page',
+      detail: robotsMeta,
+      recommendation: 'Remove nofollow on public pages so Google can follow internal links. Keep it only on untrusted or utility URLs.',
     });
   }
 
@@ -405,6 +529,8 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
+  const pathLower = (() => { try { return new URL(url).pathname.toLowerCase(); } catch { return ''; } })();
+  const looksProduct = /product|shop|store|cabinet|series/i.test(pathLower) || queryKeysForUrl.includes('series');
   if (!skipChrome && !hasJsonLd && isHome) {
     addFinding(findings, {
       id: 'jsonld',
@@ -413,9 +539,32 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       detail: '',
       recommendation: 'Add Organization or LocalBusiness JSON-LD on the homepage.',
     });
+  } else if (!skipChrome && looksProduct && !schemaTypes.some((t) => /product/i.test(t))) {
+    addFinding(findings, {
+      id: 'schema',
+      severity: 'warn',
+      title: 'No Product schema on this commercial URL',
+      detail: schemaTypes.length ? `Found: ${schemaTypes.join(', ')}` : 'No JSON-LD found.',
+      recommendation: 'Add Product JSON-LD (name, image, offers) on product and filtered product URLs, or canonicalise filters to a Product page that has it.',
+    });
+  } else if (!skipChrome && !isHome && hasJsonLd && !schemaTypes.some((t) => /breadcrumb/i.test(t))) {
+    addFinding(findings, {
+      id: 'schema',
+      severity: 'warn',
+      title: 'JSON-LD has no BreadcrumbList',
+      detail: schemaTypes.join(', ') || '',
+      recommendation: 'Add BreadcrumbList schema so Google can show path trails.',
+    });
+  } else if (schemaTypes.length) {
+    addFinding(findings, {
+      id: 'schema',
+      severity: 'pass',
+      title: `Schema: ${schemaTypes.slice(0, 6).join(', ')}`,
+      detail: '',
+    });
   }
 
-  if (!skipChrome && img.total > 0 && img.missing > 0) {
+  if (img.total > 0 && img.missing > 0) {
     addFinding(findings, {
       id: 'alt',
       severity: img.missing / img.total > 0.5 ? 'fail' : 'warn',
@@ -560,6 +709,94 @@ function buildSiteAudit({ crawl }) {
     });
   }
 
+  const broken = (crawl.pages || []).filter((p) => p.statusCode >= 400 || p.error);
+  if (broken.length) {
+    addFinding(siteFindings, {
+      id: 'broken',
+      severity: 'fail',
+      title: `${broken.length} crawled URL${broken.length === 1 ? '' : 's'} returned an error`,
+      detail: broken.map((p) => `${p.statusCode || 'err'} ${p.url || p.requestedUrl}`).join('\n'),
+      recommendation: 'Fix or 301 these URLs. If a hub such as /products fails, filtered URLs under it are unverified duplicates.',
+    });
+  }
+
+  const queryPages = pageReports.filter((p) => urlQueryKeys(p.url).length && p.statusCode < 400);
+  const queryBad = queryPages.filter((p) => (p.findings || []).some((f) => f.id === 'query-canonical' && f.severity === 'fail'));
+  if (queryPages.length) {
+    addFinding(siteFindings, {
+      id: 'query-params',
+      severity: queryBad.length ? 'fail' : 'warn',
+      title: `${queryPages.length} query-string URL${queryPages.length === 1 ? '' : 's'} in the crawl`,
+      detail: queryPages.map((p) => p.url).slice(0, 12).join('\n'),
+      recommendation: queryBad.length
+        ? 'These filtered URLs are duplicate-content risk until each canonical points at the clean path (e.g. /products).'
+        : 'Confirm each filtered URL canonicalises to the clean hub path, not to itself.',
+    });
+  }
+
+  const probe = crawl.hostProbe;
+  if (probe?.www && probe?.apex) {
+    const wwwHost = pageHost(probe.www.requested);
+    const apexHost = pageHost(probe.apex.requested);
+    const wwwFinalHost = pageHost(probe.www.finalUrl) || wwwHost;
+    const apexFinalHost = pageHost(probe.apex.finalUrl) || apexHost;
+    const wwwToApex = probe.www.redirected && hostKey(wwwFinalHost) === hostKey(apexHost) && !/^www\./i.test(wwwFinalHost);
+    const apexToWww = probe.apex.redirected && /^www\./i.test(apexFinalHost);
+    const canonHosts = [...new Set(pageReports.map((p) => {
+      const can = (p.findings || []).find((f) => f.id === 'canonical' && f.detail);
+      return pageHost(can?.detail || p.url);
+    }).filter(Boolean))];
+    const preferred = wwwToApex ? apexHost : (apexToWww ? wwwHost : (canonHosts[0] || apexHost));
+    if (wwwToApex || apexToWww) {
+      addFinding(siteFindings, {
+        id: 'host-canonical',
+        severity: canonHosts.length > 1 ? 'warn' : 'pass',
+        title: wwwToApex
+          ? `www 301s to ${apexHost}`
+          : `apex 301s to ${wwwHost}`,
+        detail: `www request → ${probe.www.finalUrl || probe.www.statusCode}\napex request → ${probe.apex.finalUrl || probe.apex.statusCode}\nCanonical hosts on crawled pages: ${canonHosts.join(', ') || 'none found'}.`,
+        recommendation: canonHosts.length > 1
+          ? `Redirects pick ${preferred}. Make every canonical use that host only.`
+          : undefined,
+      });
+    } else if (probe.www.statusCode === 202 || probe.apex.statusCode === 202 || !probe.www.statusCode) {
+      addFinding(siteFindings, {
+        id: 'host-canonical',
+        severity: 'warn',
+        title: 'Could not confirm www vs apex 301 (direct fetch blocked)',
+        detail: `www HTTP ${probe.www.statusCode}; apex HTTP ${probe.apex.statusCode}. Canonical hosts: ${canonHosts.join(', ') || 'unknown'}.`,
+        recommendation: `Pick one host (${preferred}) and 301 the other. Then set canonicals to that host.`,
+      });
+    } else {
+      addFinding(siteFindings, {
+        id: 'host-canonical',
+        severity: 'fail',
+        title: 'www and apex both respond without a 301 between them',
+        detail: `www → ${probe.www.finalUrl} (${probe.www.statusCode})\napex → ${probe.apex.finalUrl} (${probe.apex.statusCode})\nCanonical hosts: ${canonHosts.join(', ') || 'none found'}.`,
+        recommendation: `301 one host to the other (prefer ${preferred}) and point all canonicals at that host.`,
+      });
+    }
+  }
+
+  const inbound = new Map();
+  pageReports.forEach((p) => inbound.set(p.url, 0));
+  (crawl.pages || []).forEach((p) => {
+    if (!p.html) return;
+    for (const href of sameOriginLinks(p.html, p.url || p.requestedUrl)) {
+      inbound.set(href, (inbound.get(href) || 0) + 1);
+    }
+  });
+  const orphans = pageReports.filter((p) => p.statusCode < 400 && !p.isHome && (inbound.get(p.url) || 0) === 0);
+  if (orphans.length) {
+    addFinding(siteFindings, {
+      id: 'internal-links',
+      severity: 'warn',
+      title: `${orphans.length} crawled page${orphans.length === 1 ? '' : 's'} had no inbound links in this crawl`,
+      detail: orphans.map((p) => p.url).slice(0, 10).join('\n'),
+      recommendation: 'Link important URLs from the hub (e.g. /products) and main nav. Isolated pages are hard to discover.',
+    });
+  }
+
   const pageScores = pageReports.map((p) => p.score);
   const avg = pageScores.length
     ? Math.round(pageScores.reduce((a, b) => a + b, 0) / pageScores.length)
@@ -583,6 +820,11 @@ function buildSiteAudit({ crawl }) {
     findings: siteFindings,
     recommendations: siteRecommendations,
     globalUpdates,
+    notCovered: [
+      'Page speed / Core Web Vitals',
+      'Mobile-friendliness lab tests (this crawl only sees HTML viewport tags)',
+      'Backlink profile',
+    ],
     pages: pageReports.map((p) => ({
       url: p.url,
       title: p.title,

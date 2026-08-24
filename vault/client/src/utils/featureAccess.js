@@ -27,6 +27,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   documentRedaction: true,
   googleAds: true,
   seo: true,
+  html: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -34,9 +35,10 @@ export const FEATURE_ACCESS_GROUPS = [
     id: 'website',
     label: 'Website',
     items: [
-      { key: 'domains', label: 'Domain & Brand' },
-      { key: 'googleAds', label: 'Google Ads' },
       { key: 'seo', label: 'SEO' },
+      { key: 'googleAds', label: 'Adwords' },
+      { key: 'domains', label: 'Domain' },
+      { key: 'html', label: 'HTML' },
       { key: 'themeBuilder', label: 'WP Theme Builder' },
     ],
   },

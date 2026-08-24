@@ -1623,6 +1623,25 @@ async function initSchema() {
       ON seo_audits ("userId", "updatedAt" DESC)
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS html_audits (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL DEFAULT 'Untitled',
+      url             TEXT NOT NULL,
+      score           INTEGER NOT NULL DEFAULT 0,
+      summary         TEXT NOT NULL DEFAULT '',
+      strategy        TEXT NOT NULL DEFAULT 'mobile',
+      report          JSONB NOT NULL DEFAULT '{}',
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_html_audits_user_updated
+      ON html_audits ("userId", "updatedAt" DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

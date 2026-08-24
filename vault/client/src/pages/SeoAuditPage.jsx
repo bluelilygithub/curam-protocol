@@ -46,7 +46,7 @@ export default function SeoAuditPage() {
   const [search, setSearch] = useState('');
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
-  const [pageLimit, setPageLimit] = useState(15);
+  const [pageLimit, setPageLimit] = useState(25);
   const [openPages, setOpenPages] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
@@ -126,7 +126,7 @@ export default function SeoAuditPage() {
       if (!res.ok) throw new Error(data.error || 'Audit failed');
       setUrl('');
       setName('');
-      setPageLimit(15);
+      setPageLimit(25);
       await loadList();
       addToast(`Audit scored ${data.score}`, 'success');
       navigate(`/seo/${data.id}`);
@@ -161,7 +161,7 @@ export default function SeoAuditPage() {
   const globalUpdates = audit?.report?.globalUpdates || [];
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
-  const crawled = audit?.report?.crawled || pages.length;
+  const notCovered = audit?.report?.notCovered || [];
   const discovered = audit?.report?.discovered || pages.length;
 
   const togglePage = (pageUrl) => {
@@ -302,11 +302,11 @@ export default function SeoAuditPage() {
                 min={1}
                 max={40}
                 value={pageLimit}
-                onChange={(e) => setPageLimit(Number(e.target.value) || 15)}
+                onChange={(e) => setPageLimit(Number(e.target.value) || 25)}
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={FIELD}
               />
-              <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>1–40. Homepage first, then other pages on the same site. Default 15.</span>
+              <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>1–40. Homepage first, then hubs like /products, then other pages. Query-string URLs last. Default 25.</span>
             </label>
             <button
               type="button"
@@ -490,6 +490,23 @@ export default function SeoAuditPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {notCovered.length > 0 && (
+              <div
+                className="rounded-2xl border p-4 space-y-2"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+              >
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Not in this audit</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                  This crawl does not measure page speed, Core Web Vitals, mobile lab tests, or backlinks.
+                </p>
+                <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
+                  {notCovered.map((item) => (
+                    <li key={item}>· {item}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </section>

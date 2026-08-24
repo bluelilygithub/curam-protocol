@@ -296,14 +296,15 @@ function htmlFromSerper(data, pageUrl) {
   const meta = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
   const title = meta.title || meta['og:title'] || meta['twitter:title'] || '';
   const desc = meta.description || meta['og:description'] || '';
-  const canonical = meta.canonical || meta['og:url'] || pageUrl;
+  const canonical = meta.canonical || meta['og:url'] || '';
   const lang = meta.language || meta['og:locale'] || 'en';
   const links = collectSerperLinks(data)
     .map((href) => `<a href="${escapeHtml(href)}">${escapeHtml(href)}</a>`)
     .join('\n');
   const rawText = String(data.text || data.markdown || '').slice(0, 400000);
   const body = escapeHtml(rawText).replace(/\n/g, '<br>\n');
-  return `<!DOCTYPE html><html lang="${escapeHtml(String(lang).slice(0, 12))}"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${desc ? `<meta name="description" content="${escapeHtml(desc).slice(0, 300)}">` : ''}<link rel="canonical" href="${escapeHtml(canonical)}"></head><body>${title ? `<h1>${escapeHtml(title)}</h1>` : ''}<nav>${links}</nav><main>${body}</main></body></html>`;
+  const canonTag = canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : '';
+  return `<!DOCTYPE html><html lang="${escapeHtml(String(lang).slice(0, 12))}"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${desc ? `<meta name="description" content="${escapeHtml(desc).slice(0, 300)}">` : ''}${canonTag}</head><body>${title ? `<h1>${escapeHtml(title)}</h1>` : ''}<nav>${links}</nav><main>${body}</main></body></html>`;
 }
 
 function postJson(hostname, pathname, headers, payload, timeoutMs) {
@@ -555,11 +556,18 @@ function normaliseHttpUrl(raw) {
   return parsed.toString();
 }
 
+async function fetchDirect(url, redirectsLeft = 5, timeoutMs = 12000) {
+  const result = await fetchOnce(url, redirectsLeft, timeoutMs, {}, {});
+  return { ...result, requestedUrl: url };
+}
+
 module.exports = {
   fetchHtml,
+  fetchDirect,
   extractTitle,
   htmlToText,
   decodeEntities,
   normaliseHttpUrl,
   discoverSiteUrls,
+  checkSsrf,
 };

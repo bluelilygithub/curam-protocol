@@ -41,6 +41,7 @@ import PropertyScenarioPage from './pages/PropertyScenarioPage';
 import DocumentRedactionPage from './pages/DocumentRedactionPage';
 import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
+import HtmlAuditPage from './pages/HtmlAuditPage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
@@ -167,6 +168,8 @@ function App() {
               <Route path="/google-ads/:id" element={<SeoPage />} />
               <Route path="/seo" element={<SeoAuditPage />} />
               <Route path="/seo/:id" element={<SeoAuditPage />} />
+              <Route path="/html" element={<HtmlAuditPage />} />
+              <Route path="/html/:id" element={<HtmlAuditPage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />

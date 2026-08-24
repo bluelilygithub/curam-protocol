@@ -2,6 +2,7 @@
 
 const {
   fetchHtml,
+  fetchDirect,
   extractTitle,
   htmlToText,
   normaliseHttpUrl,
@@ -10,7 +11,7 @@ const {
 
 const MIN_PAGES = 1;
 const MAX_PAGES = 40;
-const DEFAULT_PAGES = 15;
+const DEFAULT_PAGES = 25;
 const PAGE_TIMEOUT_MS = 10000;
 const SKIP_PATH = /\.(pdf|jpe?g|png|gif|svg|webp|ico|css|js|mjs|map|zip|mp4|mp3|woff2?|ttf|eot)(\?|$)/i;
 const SKIP_PREFIX = /^(mailto:|tel|javascript:|data:)/i;
@@ -97,14 +98,51 @@ function sameOriginLinks(html, pageUrl) {
   return found;
 }
 
+function stripQuery(url) {
+  try {
+    const u = new URL(url);
+    u.search = '';
+    u.hash = '';
+    return canonicalUrl(u.toString());
+  } catch {
+    return null;
+  }
+}
+
 function pathScore(url) {
   try {
-    const p = new URL(url).pathname;
+    const parsed = new URL(url);
+    const p = parsed.pathname;
     const useful = /about|service|product|pricing|blog|contact|location|work|shop|store|faq|team|case/i.test(p);
-    return (useful ? 0 : 1) * 1000 + p.split('/').length * 10 + p.length;
+    const queryPenalty = parsed.searchParams.toString() ? 8000 : 0;
+    return queryPenalty + (useful ? 0 : 1) * 1000 + p.split('/').length * 10 + p.length;
   } catch {
     return 9999;
   }
+}
+
+async function probeWwwApex(startUrl) {
+  let parsed;
+  try { parsed = new URL(startUrl); } catch { return null; }
+  const apexHost = parsed.hostname.replace(/^www\./i, '');
+  const path = parsed.pathname || '/';
+  const wwwUrl = `${parsed.protocol}//www.${apexHost}${path}`;
+  const apexUrl = `${parsed.protocol}//${apexHost}${path}`;
+  const read = async (url) => {
+    try {
+      const r = await fetchDirect(url, 4, 10000);
+      return {
+        requested: url,
+        finalUrl: r.finalUrl || url,
+        statusCode: r.statusCode || 0,
+        redirected: String(r.finalUrl || url).replace(/\/$/, '') !== String(url).replace(/\/$/, ''),
+      };
+    } catch (err) {
+      return { requested: url, finalUrl: '', statusCode: 0, redirected: false, error: err.message };
+    }
+  };
+  const [www, apex] = await Promise.all([read(wwwUrl), read(apexUrl)]);
+  return { www, apex };
 }
 
 async function fetchRobots(startUrl) {
@@ -169,12 +207,15 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
 
   const extras = await discoverSiteUrls(start);
   for (const href of extras) {
-    if (queued.has(href)) continue;
-    if (!sameSite(href, start)) continue;
-    if (SKIP_PATH.test(href) || /\.xml(\?|$)/i.test(href)) continue;
-    if (!robotsAllows(href, robots.disallows)) continue;
-    queued.add(href);
-    queue.push(href);
+    const candidates = [href, stripQuery(href)].filter(Boolean);
+    for (const cand of candidates) {
+      if (queued.has(cand)) continue;
+      if (!sameSite(cand, start)) continue;
+      if (SKIP_PATH.test(cand) || /\.xml(\?|$)/i.test(cand)) continue;
+      if (!robotsAllows(cand, robots.disallows)) continue;
+      queued.add(cand);
+      queue.push(cand);
+    }
   }
 
   while (queue.length && pages.length < limit) {
@@ -189,13 +230,18 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
 
     if (page.statusCode >= 400 || page.error || !page.html) continue;
     for (const href of sameOriginLinks(page.html, page.url || next)) {
-      if (queued.has(href)) continue;
-      if (!sameSite(href, start)) continue;
-      if (!robotsAllows(href, robots.disallows)) continue;
-      queued.add(href);
-      queue.push(href);
+      const candidates = [href, stripQuery(href)].filter(Boolean);
+      for (const cand of candidates) {
+        if (queued.has(cand)) continue;
+        if (!sameSite(cand, start)) continue;
+        if (!robotsAllows(cand, robots.disallows)) continue;
+        queued.add(cand);
+        queue.push(cand);
+      }
     }
   }
+
+  const hostProbe = await probeWwwApex(start);
 
   return {
     startUrl: start,
@@ -204,6 +250,7 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
     discovered: queued.size,
     crawled: pages.length,
     robots,
+    hostProbe,
     pages,
   };
 }
@@ -211,6 +258,7 @@ async function crawlSite(rawUrl, { pageLimit } = {}) {
 module.exports = {
   crawlSite,
   clampPageLimit,
+  sameOriginLinks,
   MIN_PAGES,
   MAX_PAGES,
   DEFAULT_PAGES,
