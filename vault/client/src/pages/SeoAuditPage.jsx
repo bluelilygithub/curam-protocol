@@ -162,7 +162,8 @@ export default function SeoAuditPage() {
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
   const notCovered = audit?.report?.notCovered || [];
-  const discovered = audit?.report?.discovered || pages.length;
+  const crawled = Number(audit?.report?.crawled) || pages.length;
+  const discovered = Number(audit?.report?.discovered) || pages.length;
 
   const togglePage = (pageUrl) => {
     setOpenPages((prev) => {
@@ -197,11 +198,12 @@ export default function SeoAuditPage() {
         <button
           type="button"
           onClick={() => navigate('/seo')}
-          className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-          style={{
-            background: !id ? 'var(--color-bg)' : 'transparent',
-            color: !id ? 'var(--color-text)' : 'var(--color-muted)',
-          }}
+          className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+          style={
+            !id
+              ? { background: 'var(--color-primary)', color: '#fff' }
+              : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
+          }
         >
           New audit
         </button>
@@ -267,6 +269,10 @@ export default function SeoAuditPage() {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl">
+        {id && !audit && (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading audit…</p>
+        )}
+
         {!id && (
           <section className="space-y-4">
             <div>

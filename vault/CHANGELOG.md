@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-08-24 (seo-new-audit-crash)
+
+### SEO audit — blank report screen and New audit button
+- Opening a saved audit no longer crashes (missing `crawled` in the report header).
+- **New audit** in the sidebar is a primary/secondary button, not a list-style text control.
+
+---
+
 ## 2026-08-24 (html-lighthouse)
 
 ### HTML — Lighthouse via PageSpeed Insights

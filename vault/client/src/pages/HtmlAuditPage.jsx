@@ -229,7 +229,7 @@ export default function HtmlAuditPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>HTML · Lighthouse</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Run Google Lighthouse via PageSpeed Insights on a public URL. This measures performance, accessibility, best practices, and Lighthouse SEO — not the Vault on-page crawl.
+                Run Google Lighthouse via PageSpeed Insights on a public URL. This measures performance, accessibility, best practices, and Lighthouse SEO — not the Vault on-page crawl. Set <span className="font-medium" style={{ color: 'var(--color-text)' }}>PAGESPEED_API_KEY</span> on Railway. Create a key in Google Cloud: enable PageSpeed Insights API, then Credentials → API key.
               </p>
             </div>
             <label className="block space-y-1">
