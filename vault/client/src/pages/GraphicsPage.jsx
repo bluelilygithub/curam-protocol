@@ -6463,6 +6463,10 @@ export default function GraphicsPage() {
       )}
 
       {mode === 'perspective' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Perspective correct</h2>
             <button type="button" onClick={() => setHelpTool('perspective')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
           </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
