@@ -131,6 +131,7 @@ const semanticMap = {
   'layout-grid': { lucide: 'LayoutGrid' },
   info: { lucide: 'Info' },
   'file-stack': { lucide: 'FileStack' },
+  printer: { lucide: 'Printer' },
   'bar-chart': { lucide: 'BarChart3' },
   contrast: { lucide: 'Contrast' },
   film: { lucide: 'Film' },

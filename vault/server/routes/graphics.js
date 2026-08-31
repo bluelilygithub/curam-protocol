@@ -3078,4 +3078,126 @@ router.post('/batch-text', async (req, res) => {
   }
 });
 
+// ── Print Ready ──────────────────────────────────────────────────────────────
+// Converts any raster image into a print-ready file: sets the target DPI in
+// metadata, optionally flattens alpha transparency, optionally adds bleed
+// padding, and outputs as TIFF (LZW), PDF, or PNG.
+router.post('/print-ready', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+
+    const dpi = Math.min(1200, Math.max(72, Number(req.body?.dpi) || 300));
+    const format = ['tiff', 'pdf', 'png'].includes(String(req.body?.format || '').toLowerCase())
+      ? String(req.body.format).toLowerCase()
+      : 'tiff';
+    const background = String(req.body?.background || 'white').toLowerCase() === 'transparent'
+      ? 'transparent'
+      : 'white';
+    const bleedMm = Math.min(25, Math.max(0, Number(req.body?.bleedMm) || 0));
+
+    const meta = await sharp(buffer).metadata();
+    const hasAlpha = (meta.channels === 4 || meta.hasAlpha);
+
+    // Start the sharp pipeline
+    let pipeline = sharp(buffer);
+
+    // Flatten transparency → white background when requested (or when outputting
+    // TIFF/PDF, which technically support alpha but most RIPs don't expect it)
+    if (background === 'white' && hasAlpha) {
+      pipeline = pipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
+    }
+
+    // Add bleed padding (white or transparent depending on background setting)
+    if (bleedMm > 0) {
+      // Convert mm → pixels at the target DPI
+      const bleedPx = Math.round((bleedMm / 25.4) * dpi);
+      const bleedColor = background === 'white'
+        ? { r: 255, g: 255, b: 255, alpha: 1 }
+        : { r: 255, g: 255, b: 255, alpha: 0 };
+      pipeline = pipeline.extend({
+        top: bleedPx, bottom: bleedPx, left: bleedPx, right: bleedPx,
+        background: bleedColor,
+      });
+    }
+
+    // Embed DPI in output metadata
+    pipeline = pipeline.withMetadata({ density: dpi });
+
+    let outputBuffer;
+    let mimeType;
+    let ext;
+
+    if (format === 'tiff') {
+      outputBuffer = await pipeline.tiff({ compression: 'lzw', xres: dpi / 25.4, yres: dpi / 25.4 }).toBuffer();
+      mimeType = 'image/tiff';
+      ext = 'tiff';
+    } else if (format === 'png') {
+      outputBuffer = await pipeline.png({ compressionLevel: 9 }).toBuffer();
+      mimeType = 'image/png';
+      ext = 'png';
+    } else {
+      // PDF: embed image at the correct physical size using pdf-lib
+      // First render to PNG (best lossless intermediate for PDF embedding)
+      const pngBuf = await pipeline.png().toBuffer();
+      const finalMeta = await sharp(pngBuf).metadata();
+      const { PDFDocument } = require('pdf-lib');
+      const pdfDoc = await PDFDocument.create();
+      const embedded = await pdfDoc.embedPng(pngBuf);
+      // Physical dimensions in points (1 inch = 72 points)
+      const widthPt = (finalMeta.width / dpi) * 72;
+      const heightPt = (finalMeta.height / dpi) * 72;
+      const page = pdfDoc.addPage([widthPt, heightPt]);
+      page.drawImage(embedded, { x: 0, y: 0, width: widthPt, height: heightPt });
+      outputBuffer = Buffer.from(await pdfDoc.save());
+      mimeType = 'application/pdf';
+      ext = 'pdf';
+    }
+
+    // Calculate physical print size for the UI
+    const finalMeta = format === 'pdf'
+      ? await sharp(buffer).metadata()
+      : await sharp(outputBuffer).metadata();
+    const pxW = finalMeta.width || meta.width || 0;
+    const pxH = finalMeta.height || meta.height || 0;
+    const printWidthIn = pxW / dpi;
+    const printHeightIn = pxH / dpi;
+    const printWidthMm = Math.round(printWidthIn * 25.4);
+    const printHeightMm = Math.round(printHeightIn * 25.4);
+
+    // Quality assessment
+    const effectiveDpi = dpi;
+    let qualityNote = '';
+    if (pxW < dpi * 1 || pxH < dpi * 1) {
+      qualityNote = 'warning: image is smaller than 1×1 inch at this DPI — output may appear pixelated when printed';
+    } else if (pxW < dpi * 2 || pxH < dpi * 2) {
+      qualityNote = 'note: image is suitable for small print sizes only';
+    }
+
+    const dataUrl = `data:${mimeType};base64,${outputBuffer.toString('base64')}`;
+    res.json({
+      ok: true,
+      imageDataUrl: dataUrl,
+      ext,
+      format,
+      dpi: effectiveDpi,
+      bytes: outputBuffer.length,
+      pixelWidth: pxW,
+      pixelHeight: pxH,
+      printWidthMm,
+      printHeightMm,
+      printWidthIn: Math.round(printWidthIn * 100) / 100,
+      printHeightIn: Math.round(printHeightIn * 100) / 100,
+      hasAlpha: hasAlpha && background === 'transparent',
+      bleedMm,
+      qualityNote,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Print-ready conversion failed' });
+  }
+});
+
 module.exports = router;
