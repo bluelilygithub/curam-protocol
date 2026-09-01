@@ -75,11 +75,12 @@ function Modal({ title, onClose, children, wide }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, hint, children }) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</label>
       {children}
+      {hint && <p className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.75 }}>{hint}</p>}
     </div>
   );
 }
@@ -1109,7 +1110,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
         <Modal title={`Send ${sendModal.number}`} onClose={() => setSendModal(null)}>
           <div className="flex flex-col gap-3">
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              {sendModal.docType === 'quote' ? 'The quote' : 'The invoice'} will be emailed as an HTML document using your MailChannels API key.
+              {sendModal.docType === 'quote' ? 'The quote' : 'The invoice'} will be sent as a styled email with a <strong>PDF attachment</strong>. The client's email address is pre-filled from their record and can be edited before sending.
             </p>
             <Field label={sendModal.clientEmail ? 'Recipient email (pre-filled from client)' : 'Recipient email'}>
               <Input
@@ -2938,8 +2939,9 @@ function SettingsTab() {
               {testMsg && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{testMsg}</span>}
             </div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              A daily email is sent to the admin address listing all unanswered quotes and unpaid invoices past their due date.
-              A copy of every sent invoice and quote is also CC'd to that address.
+              Every Monday morning, a summary email is sent to the admin address listing all unanswered quotes and unpaid invoices past their due date.
+              Individual reminder emails are also sent directly to each overdue client.
+              A copy of every sent invoice and quote is CC'd to the admin address.
             </p>
           </div>
         </div>

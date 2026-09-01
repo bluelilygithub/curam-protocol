@@ -26,7 +26,7 @@ function buildEmailHtml({ bizName, overdueQuotes, overdueInvoices }) {
   const header = `
     <div style="background:#1f2937;padding:24px 32px;">
       <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Finance Reminders</h1>
-      <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${bizName || 'Daily summary'}  &nbsp;·&nbsp; ${new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${bizName || 'Weekly summary'}  &nbsp;·&nbsp; ${new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
     </div>`;
 
   function table(rows, label) {
@@ -70,7 +70,7 @@ function buildEmailHtml({ bizName, overdueQuotes, overdueInvoices }) {
     <div style="padding:28px 32px;">
       ${quotesSection}
       ${invoicesSection}
-      <p style="margin:0;font-size:12px;color:#9ca3af;">This is an automated daily reminder. No action is required if items have already been handled.</p>
+      <p style="margin:0;font-size:12px;color:#9ca3af;">This is an automated weekly reminder sent every Monday. No action is required if items have already been handled.</p>
     </div>
   </div>
 </body>

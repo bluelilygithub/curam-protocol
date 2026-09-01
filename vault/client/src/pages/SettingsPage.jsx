@@ -2345,7 +2345,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Finance Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                7-step walkthrough of invoicing, expenses, GST auto-calc, BAS workflow, and the double-entry journal
+                9-step walkthrough of invoices, quotes, expenses, recurring schedules, BAS, double-entry journal, exports, and Monday reminders
               </p>
             </div>
             <button

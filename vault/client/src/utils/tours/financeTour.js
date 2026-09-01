@@ -4,7 +4,7 @@ import './goalsTour.css'; // shared vault-tour styles
 
 export const TOUR_KEY = 'vault_tour_finance_completed';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 9;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -68,7 +68,7 @@ export function startFinanceTour(navigate) {
   tour.addStep({
     id: 'finance-welcome',
     title: 'Curam Finance — Quick Tour',
-    text: "This tour covers the Finance module: invoicing, expenses, wages, the double-entry journal, and the Australian BAS workflow. Everything in one place — no spreadsheet required.",
+    text: "This tour covers the Finance module: invoices, quotes, expenses, wages, the double-entry journal, BAS, and automated reminders. Built for a small Australian business — no spreadsheet required.",
     when: { show() { injectStepCounter(1); } },
     buttons: [
       btnSecondary('Skip Tour', () => tour.cancel()),
@@ -79,8 +79,8 @@ export function startFinanceTour(navigate) {
   // ── Step 2: Tab navigation ────────────────────────────────────────────────
   tour.addStep({
     id: 'finance-tabs',
-    title: '8 Tabs — One Module',
-    text: "Dashboard · Invoices · Clients · Expenses · Wages · Journal · BAS · Settings. Each tab is a self-contained workspace. The Journal and BAS tabs update automatically as you record transactions — you never touch them manually.",
+    title: '16 Tabs — One Module',
+    text: "Dashboard · Invoices · Quotes · Clients · Suppliers · Expenses · Recurring · Wages · Interest · Journal · Accounts · Codes · BAS · Position · Balances · Settings. The Journal and BAS tabs update automatically as you record transactions.",
     attachTo: { element: '[data-tour="finance-tabs"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
@@ -114,11 +114,11 @@ export function startFinanceTour(navigate) {
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 4: Invoices ──────────────────────────────────────────────────────
+  // ── Step 4: Invoices & Quotes ─────────────────────────────────────────────
   tour.addStep({
     id: 'finance-invoices',
-    title: 'Invoices — Draft → Sent → Paid',
-    text: "Create a line-item invoice with + New Invoice. GST is calculated per line. Send directly from Vault via email — the styled HTML template is sent automatically. Mark as Paid when money arrives. Download a PDF for your records. Overdue invoices are flagged separately in the filter tabs.",
+    title: 'Invoices & Quotes',
+    text: "Create line-item invoices or quotes. GST is calculated per line — use the <strong>N-T</strong> option for non-taxable items. The <strong>⊞</strong> button next to Unit Price opens a calculator. The due date defaults to your configured payment terms. Send directly from Vault — the email includes a <strong>PDF attachment</strong> and goes to the client's address pre-filled from their record. Convert a quote to an invoice in one click.",
     attachTo: { element: '[data-tour="finance-invoices"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
@@ -137,7 +137,7 @@ export function startFinanceTour(navigate) {
   tour.addStep({
     id: 'finance-expenses',
     title: 'Expenses — GST Auto-Calc & Receipts',
-    text: "Enter the total amount paid and tick GST Included — Vault calculates the GST component (÷ 11) automatically. Category autocompletes from your history. Attach a receipt PDF or image to any expense — a paperclip icon on the row confirms it's stored.",
+    text: "Enter the total amount paid and tick GST Included — Vault calculates the GST component (÷ 11) automatically. Category autocompletes from your history. Attach a receipt PDF or image to any expense. For recurring bills (subscriptions, rent, etc.) set up a schedule in the <strong>Recurring</strong> tab.",
     attachTo: { element: '[data-tour="finance-expenses"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
@@ -152,7 +152,26 @@ export function startFinanceTour(navigate) {
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 6: BAS ───────────────────────────────────────────────────────────
+  // ── Step 6: Recurring ─────────────────────────────────────────────────────
+  tour.addStep({
+    id: 'finance-recurring',
+    title: 'Recurring — Set & Forget',
+    text: "Set up weekly, fortnightly, monthly, quarterly, or annual schedules for invoices or expenses. Invoices are created as <strong>drafts</strong> each cycle so you can review before sending. Expenses are recorded automatically. Pause or resume any schedule at any time.",
+    attachTo: { element: '[data-tour="finance-recurring"]', on: 'bottom' },
+    beforeShowPromise() {
+      return new Promise((resolve) => {
+        clickFinanceTab('Recurring');
+        setTimeout(() => {
+          safeBeforeShow(tour, 'finance-recurring', '[data-tour="finance-recurring"]');
+          resolve();
+        }, 400);
+      });
+    },
+    when: { show() { injectStepCounter(6); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 7: BAS ───────────────────────────────────────────────────────────
   tour.addStep({
     id: 'finance-bas',
     title: 'BAS — Australian Tax Made Simple',
@@ -167,15 +186,15 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 7: Journal ───────────────────────────────────────────────────────
+  // ── Step 8: Journal ───────────────────────────────────────────────────────
   tour.addStep({
     id: 'finance-journal',
     title: 'Journal — Auto-Generated Double Entry',
-    text: "Every invoice payment, expense, and wage entry automatically creates a balanced double-entry journal record. You never write journal entries manually — Vault handles the bookkeeping. The Journal tab is your audit trail and accountant-ready ledger.",
+    text: "Journal entries are created automatically when an invoice is <strong>sent</strong> (not on draft save), when a payment is recorded, and when expenses or wages are entered. Deleting a record also cleans up its journal. Superannuation on wages is journalled as Super Payable. You can also add manual entries for adjustments.",
     attachTo: { element: '[data-tour="finance-journal"]', on: 'bottom' },
     beforeShowPromise() {
       return new Promise((resolve) => {
@@ -186,7 +205,22 @@ export function startFinanceTour(navigate) {
         }, 400);
       });
     },
-    when: { show() { injectStepCounter(7); } },
+    when: { show() { injectStepCounter(8); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 9: Exports & Reminders ───────────────────────────────────────────
+  tour.addStep({
+    id: 'finance-exports',
+    title: 'Exports & Reminders',
+    text: "Export to <strong>MYOB</strong> (general journal CSV) or <strong>Excel</strong> (real .xlsx with three sheets: Expenses, Invoices, Wages) for your accountant. Every Monday morning, Vault sends you an overdue-items summary <em>and</em> individual reminder emails directly to each overdue client. Configure the send time and admin email in <strong>Settings</strong>.",
+    beforeShowPromise() {
+      return new Promise((resolve) => {
+        navigate('/finance');
+        setTimeout(resolve, 400);
+      });
+    },
+    when: { show() { injectStepCounter(9); } },
     buttons: [
       btnBack(),
       {

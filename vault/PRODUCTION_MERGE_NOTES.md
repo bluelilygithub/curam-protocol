@@ -387,18 +387,14 @@ Do not migrate local wellbeing test results into Railway production unless expli
 
 ## Known Follow-Up Work
 
-These issues were discovered while investigating Finance balances and should be handled separately:
+These issues were discovered while investigating Finance balances:
 
-- Some source deletes can leave stale journal entries behind.
-  - Invoice delete should remove related invoice/payment journals.
-  - Expense delete should remove related expense journals.
-  - Wage delete should remove related wage journals.
-  - Credit-card unsettle should remove or reverse related settlement journals.
-- Manual journal entries should be validated server-side.
-  - Debits should equal credits.
-  - Account IDs should belong to the current user.
-- A cleanup/repair tool may be needed for orphaned journal entries already present in the database.
-- The Trial Balance bottom total should be labelled as a control total, not presented as a business metric.
+- ~~Some source deletes can leave stale journal entries behind.~~ **Fixed (Sep 2026)** — delete routes now run in transactions and call `deleteJournalForSource` for all related journal types. A startup migration also cleaned up any orphan entries already in the database.
+- ~~Draft invoices were posting AR/Income journals immediately on create.~~ **Fixed (Sep 2026)** — journals now post when the invoice is sent (or status manually set to 'sent'), not on draft save.
+- ~~Superannuation was stored on wage records but not journalled.~~ **Fixed (Sep 2026)** — wages now post DR Superannuation Expense / CR Super Payable when super > 0. New accounts 2300 (Super Payable) and 6100 (Superannuation Expense) added to the default chart.
+- Credit-card unsettle does not reverse the settlement journal — flag only. Still outstanding.
+- Manual journal entries should be validated server-side (debits = credits, accounts belong to current user). Still outstanding.
+- The Trial Balance bottom total should be labelled as a control total, not presented as a business metric. Still outstanding.
 
 ## Current Local Observations
 
