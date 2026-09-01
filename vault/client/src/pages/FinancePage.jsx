@@ -781,7 +781,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
       if (result.error) throw new Error(result.error);
       await load();
       setSendModal(null);
-      addToast(`Invoice sent to ${sendTo.trim()}`);
+      addToast(`${sendModal.docType === 'quote' ? 'Quote' : 'Invoice'} sent to ${sendTo.trim()}`);
     } catch (e) {
       setSendError(e.message);
     } finally {
@@ -1093,14 +1093,14 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
         </Modal>
       )}
 
-      {/* Send invoice modal */}
+      {/* Send invoice/quote modal */}
       {sendModal && (
         <Modal title={`Send ${sendModal.number}`} onClose={() => setSendModal(null)}>
           <div className="flex flex-col gap-3">
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              The invoice will be emailed as an HTML document using your MailChannels API key.
+              {sendModal.docType === 'quote' ? 'The quote' : 'The invoice'} will be emailed as an HTML document using your MailChannels API key.
             </p>
-            <Field label="Recipient email">
+            <Field label={sendModal.clientEmail ? 'Recipient email (pre-filled from client)' : 'Recipient email'}>
               <Input
                 type="email"
                 value={sendTo}
@@ -1111,7 +1111,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
             <ErrMsg msg={sendError} />
             <div className="flex gap-2 justify-end pt-1">
               <Btn variant="secondary" onClick={() => setSendModal(null)}>Cancel</Btn>
-              <Btn onClick={confirmSend} disabled={sending}>{sending ? 'Sending…' : 'Send Invoice'}</Btn>
+              <Btn onClick={confirmSend} disabled={sending}>{sending ? 'Sending…' : (sendModal.docType === 'quote' ? 'Send Quote' : 'Send Invoice')}</Btn>
             </div>
           </div>
         </Modal>

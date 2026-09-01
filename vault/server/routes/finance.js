@@ -457,6 +457,11 @@ router.get('/invoices', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
+              COALESCE(fc.email,
+                (SELECT cc.email FROM client_contacts cc
+                 WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+                 ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+              ) AS "clientEmail",
               EXISTS (
                 SELECT 1 FROM fin_bas_quarters q
                 WHERE q."userId" = i."userId"
