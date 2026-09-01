@@ -1799,6 +1799,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [pdfBusy, setPdfBusy]   = useState(false);
   const [docsBankId, setDocsBankId] = useState(null);
   const [showAdverse, setShowAdverse] = useState(false);
+  const [proformaTab, setProformaTab] = useState('overview');
   const proformaResultRef       = useRef(null);
 
   function buildInputPayload() {
@@ -1904,6 +1905,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       const init = {};
       (data.strict?.checks || []).forEach((c) => { if (c.status === 'fail') init[c.id] = true; });
       setExpanded(init);
+      setProformaTab('overview');
       setTimeout(() => {
         proformaResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 120);
@@ -2246,6 +2248,29 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
 
       {proforma && strict?.ok && (
         <div ref={proformaResultRef} className="space-y-5">
+          {/* Proforma section tabs */}
+          <div className="flex gap-1 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
+            {[{ id: 'overview', label: 'Overview' }, { id: 'broker', label: 'Broker Prep' }].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setProformaTab(t.id)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-opacity duration-200 hover:opacity-70"
+                style={{
+                  background: proformaTab === t.id ? 'var(--color-primary)' : 'transparent',
+                  color: proformaTab === t.id ? '#fff' : 'var(--color-muted)',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Broker Prep tab */}
+          {proformaTab === 'broker' && <BrokerPrepPanel getIcon={getIcon} />}
+
+          {/* Overview tab — all existing proforma content */}
+          <div className={proformaTab === 'overview' ? '' : 'hidden'}>
           {/* Strict verdict */}
           <div className="rounded-xl border p-4" style={{ borderColor: overallBord, background: overallBg }}>
             <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: overallColor }}>Lending checks — strict result</p>
@@ -2622,6 +2647,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
             {getIcon('download', { size: 13 })}
             {pdfBusy ? 'Generating…' : 'Download qualification proforma (PDF)'}
           </button>
+          </div>{/* end overview tab */}
         </div>
       )}
     </div>
