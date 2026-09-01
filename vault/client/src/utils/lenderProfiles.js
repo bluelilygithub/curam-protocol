@@ -7,9 +7,19 @@
  * to the lender or a licensed broker for current terms.
  */
 
+/**
+ * Last reviewed: August 2026. Product details change frequently — always direct users
+ * to the lender or a licensed broker for current terms.
+ *
+ * POLICY_SNAP_DATE: the year-month these policy notes were last validated.
+ * Displayed in the bank panel so brokers can judge data currency.
+ */
+export const POLICY_SNAP_DATE = '2026-08';
+
 export const LENDER_PROFILES = [
   {
     id: 'commbank',
+    policyLastVerified: '2026-08',
     name: 'Commonwealth Bank',
     shortName: 'CommBank',
     type: 'Major bank (Big 4)',
@@ -30,7 +40,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'westpac',
-    name: 'Westpac',
+    policyLastVerified: '2026-08',
     shortName: 'Westpac',
     type: 'Major bank (Big 4)',
     serviceModel: 'Branch + digital',
@@ -49,6 +59,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'anz',
+    policyLastVerified: '2026-08',
     name: 'ANZ',
     shortName: 'ANZ',
     type: 'Major bank (Big 4)',
@@ -68,6 +79,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'nab',
+    policyLastVerified: '2026-08',
     name: 'NAB',
     shortName: 'NAB',
     type: 'Major bank (Big 4)',
@@ -87,6 +99,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'ing',
+    policyLastVerified: '2026-08',
     name: 'ING',
     shortName: 'ING',
     type: 'Online bank',
@@ -109,6 +122,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'macquarie',
+    policyLastVerified: '2026-08',
     name: 'Macquarie Bank',
     shortName: 'Macquarie',
     type: 'Specialist bank',
@@ -131,6 +145,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'ubank',
+    policyLastVerified: '2026-08',
     name: 'UBank',
     shortName: 'UBank',
     type: 'Online bank (NAB subsidiary)',
@@ -154,6 +169,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'up',
+    policyLastVerified: '2026-08',
     name: 'Up Bank',
     shortName: 'Up',
     type: 'Neobank (Bendigo Bank backed)',
@@ -177,6 +193,7 @@ export const LENDER_PROFILES = [
   },
   {
     id: 'boq',
+    policyLastVerified: '2026-08',
     name: 'Bank of Queensland',
     shortName: 'BOQ',
     type: 'Regional bank',

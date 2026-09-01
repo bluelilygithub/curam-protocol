@@ -13,7 +13,7 @@ import {
 } from '../utils/numericInput';
 import { useMarketRateDefault, isInterestRateClarifyField, isRateTypeClarifyField, formatMarketRateInput, getInitialMarketRateInput, normalizeRateType } from '../hooks/useAverageMarketRate';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
-import { LENDER_PROFILES } from '../utils/lenderProfiles';
+import { LENDER_PROFILES, POLICY_SNAP_DATE } from '../utils/lenderProfiles';
 import {
   mergeInitialWithProfile,
   saveFileProfileFromPayload,
@@ -103,16 +103,20 @@ const SCENARIO_AGENT_GROUPS = [
         desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.',
         featured: true,
         purpose: 'Will a bank look at this file — and what would make it stronger?',
-        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available.',
+        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Two important limitations apply: the bank posture notes (HEM stance, overtime shading, rental treatment) are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator, so verify directly before submitting. Separately, all LVR and LMI figures use the contract purchase price; a valuation shortfall at the bank changes both, and that is not modelled here.',
         does: [
           'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
           'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
           'Risk-rated structuring levers with indicative capacity uplifts — never invents income or hides debts',
-          'Per-bank posture + indicative capacity panel and optional PDF executive summary',
+          'Per-bank posture + indicative capacity panel with policy snapshot date shown',
+          'Valuation sensitivity table showing LVR and LMI impact if the bank values below contract',
+          'Broker Prep tab: 65-item pre-application checklist for file readiness before submission',
         ],
         doesNot: [
           'Issue a loan approval, pre-approval, or credit decision',
-          'Replace a broker’s full credit assessment or bank policy override',
+          'Pull live servicing calculator data from each bank — posture notes are a dated policy snapshot',
+          'Model property valuation risk, postcode exclusions, or property type restrictions',
+          'Replace a broker's full credit assessment, lender submission guide, or compliance obligations',
         ],
         bestFor: 'When you want the featured “is this file bankable?” path before you commit to a purchase or refinance.',
       },
@@ -122,7 +126,7 @@ const SCENARIO_AGENT_GROUPS = [
         label: 'Lite serviceability check',
         desc: 'Serviceability, LVR, DTI, and genuine-savings snapshot.',
         purpose: 'A fast pass/fail-style snapshot of serviceability and key ratios.',
-        about: 'A lighter version of the proforma engine. Same core AU checks (serviceability, LVR, DTI, genuine savings), without the full levers matrix, bank capacity panel, or supplementary analysis.',
+        about: 'A lighter version of the proforma engine. Same core AU checks (serviceability, LVR, DTI, genuine savings), without the full levers matrix, bank capacity panel, or supplementary analysis. LVR and LMI figures use the declared purchase price — if the bank's valuation comes in lower, both change. No property type or postcode risk is modelled.',
         does: [
           'Quick serviceability at your target rate + APRA buffer',
           'LVR / DTI / genuine-savings style checks',
@@ -131,6 +135,7 @@ const SCENARIO_AGENT_GROUPS = [
         doesNot: [
           'Run the full broker lever / bank-capacity report',
           'Model stamp duty, CGT, or multi-event scenarios',
+          'Check property type restrictions, postcode risk, or valuation shortfall impact',
         ],
         bestFor: 'A quick “am I in the ballpark?” check before investing time in the full proforma.',
       },
@@ -2307,6 +2312,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           {(proforma.bankPanel?.banks || proforma.bankPosture?.banks)?.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How each bank may see this file</h3>
+              <PolicySnapshotBanner />
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {proforma.bankPanel?.capacity_note || proforma.bankPosture?.capacity_note}
               </p>
@@ -3030,6 +3036,107 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
         <BrokerPrepPanel getIcon={getIcon} />
       )}
     </>
+  );
+}
+
+// ── Policy staleness helper ───────────────────────────────────────────────────
+
+function policyMonthsAgo(snapDate) {
+  if (!snapDate) return 0;
+  const [y, m] = snapDate.split('-').map(Number);
+  const then = new Date(y, m - 1, 1);
+  const now = new Date();
+  return (now.getFullYear() - then.getFullYear()) * 12 + (now.getMonth() - then.getMonth());
+}
+
+function PolicySnapshotBanner({ snapDate }) {
+  const months = policyMonthsAgo(snapDate || POLICY_SNAP_DATE);
+  const label = (() => {
+    const [y, m] = (snapDate || POLICY_SNAP_DATE).split('-');
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-AU', { month: 'long', year: 'numeric' });
+  })();
+  const stale = months >= 3;
+  return (
+    <p className="text-[10px]" style={{ color: stale ? '#92400e' : 'var(--color-muted)' }}>
+      {stale
+        ? `⚠ Policy snapshot: ${label} (${months} months ago) — verify current policy directly with each lender before submitting.`
+        : `Policy snapshot: ${label}. Verify current policy with each lender before submitting.`}
+    </p>
+  );
+}
+
+// ── Valuation sensitivity ─────────────────────────────────────────────────────
+
+function lmiTierLabel(lvr) {
+  if (lvr <= 80) return { label: 'No LMI', color: '#15803d' };
+  if (lvr <= 85) return { label: 'LMI ~0.5–1%', color: '#92400e' };
+  if (lvr <= 90) return { label: 'LMI ~1–2%', color: '#b45309' };
+  if (lvr <= 95) return { label: 'LMI ~2.5–3.5%', color: '#c2410c' };
+  return { label: 'Likely declined', color: '#b91c1c' };
+}
+
+function ValuationSensitivity({ buyPrice, buyDeposit }) {
+  const price = Number(buyPrice || 0);
+  const deposit = Number(buyDeposit || 0);
+  if (!price || !deposit || deposit >= price) return null;
+  const loan = price - deposit;
+  const contractLvr = (loan / price) * 100;
+  if (contractLvr <= 60) return null; // sensitivity irrelevant at very low LVR
+
+  const points = [
+    { pct: 100, label: 'Contract price' },
+    { pct: 97, label: '3% below contract' },
+    { pct: 95, label: '5% below contract' },
+    { pct: 90, label: '10% below contract' },
+  ];
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Valuation sensitivity</p>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+          These calculations use the <strong>contract price</strong>. If the bank's valuation comes in lower, LVR changes and LMI may be retriggered — or the application may be declined. The rows below show what happens at each valuation shortfall.
+        </p>
+      </div>
+      <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+        {points.map(({ pct, label }) => {
+          const bankVal = Math.round(price * pct / 100);
+          const lvr = (loan / bankVal) * 100;
+          const { label: lmiLabel, color: lmiColor } = lmiTierLabel(lvr);
+          const lmiEst = lvr > 80 ? Math.round(loan * (lvr <= 85 ? 0.007 : lvr <= 90 ? 0.015 : lvr <= 95 ? 0.03 : 0)) : 0;
+          const isContract = pct === 100;
+          return (
+            <div
+              key={pct}
+              className="grid gap-2 px-4 py-2.5 text-xs"
+              style={{
+                gridTemplateColumns: '1fr auto auto auto',
+                background: isContract ? 'var(--color-bg)' : 'transparent',
+              }}
+            >
+              <span style={{ color: isContract ? 'var(--color-text)' : 'var(--color-muted)' }}>
+                {label}
+                {isContract && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>baseline</span>}
+              </span>
+              <span className="tabular-nums text-right" style={{ color: 'var(--color-muted)' }}>
+                ${bankVal.toLocaleString('en-AU')}
+              </span>
+              <span className="tabular-nums text-right font-medium" style={{ color: lvr > 90 ? '#b91c1c' : lvr > 80 ? '#92400e' : 'var(--color-text)' }}>
+                {lvr.toFixed(1)}% LVR
+              </span>
+              <span className="text-right font-medium" style={{ color: lmiColor }}>
+                {lmiLabel}{lmiEst > 0 ? ` (~$${lmiEst.toLocaleString('en-AU')})` : ''}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          LMI estimates are rough order-of-magnitude — actual premiums depend on the LMI provider (Genworth/QBE), lender, loan amount, and product. Loan amount stays fixed at ${loan.toLocaleString('en-AU')} in all rows; the LVR changes because the bank's valuation changes.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -4494,6 +4601,9 @@ export default function PropertyScenarioPage() {
                 )}
                 {scenarioType === 'buy' && (
                   <BuyInterpretation calcResult={calcResult} />
+                )}
+                {scenarioType === 'buy' && (
+                  <ValuationSensitivity buyPrice={buyPrice} buyDeposit={buyDeposit} />
                 )}
                 <ResultsView
                   demo={calcResult}
