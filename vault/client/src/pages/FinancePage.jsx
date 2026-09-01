@@ -24,6 +24,12 @@ function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
+function plusDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 // ── Shared UI ──────────────────────────────────────────────────────────────────
 
 function Btn({ onClick, disabled, variant = 'primary', children, className = '' }) {
@@ -663,7 +669,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [calcIdx, setCalcIdx]           = useState(null);
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: plusDays(todayStr(), 7), notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {

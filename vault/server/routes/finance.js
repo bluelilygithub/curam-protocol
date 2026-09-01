@@ -985,12 +985,17 @@ router.post('/invoices/:id/convert', async (req, res) => {
     );
 
     const number = await nextInvoiceNumber(userId, 'invoice');
-    const today  = new Date().toISOString().slice(0, 10);
+    const today   = new Date().toISOString().slice(0, 10);
+    const dueDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+    const quoteDate = quote.issueDate ? String(quote.issueDate).slice(0, 10) : today;
+    const convertedNote = `Converted from quote ${quote.number} dated ${quoteDate}.`;
+    const notes = quote.notes ? `${convertedNote}\n${quote.notes}` : convertedNote;
 
     const { rows: invRows } = await dbClient.query(
       `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
        VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,'invoice') RETURNING *`,
-      [userId, quote.clientId, quote.clientRef, number, today, quote.dueDate, quote.subtotal, quote.gst, quote.total, quote.notes]
+      [userId, quote.clientId, quote.clientRef, number, today, dueDate, quote.subtotal, quote.gst, quote.total, notes]
     );
     const invoice = invRows[0];
 
