@@ -381,6 +381,21 @@ function buildTimeline(b, calcResult) {
 
 // ── Bank panel ────────────────────────────────────────────────────────────────
 
+function buildSeIncomeDerivation(b, calcResult) {
+  const se = calcResult.strict?.summary?.se_income_details;
+  if (!se) return;
+  const fmtY = (n) => `$${Number(n).toLocaleString('en-AU')}`;
+  b.sectionTitle('Self-Employed Income Derivation');
+  b.note('Base income used in this report is derived from two years of assessable profit, not taken from a single stated figure.');
+  b.row('Year 1 assessable profit', fmtY(se.year1));
+  b.row('Year 2 assessable profit (most recent)', fmtY(se.year2));
+  b.row('Method', se.method === 'weighted' ? 'Weighted average (1/3 Y1 + 2/3 Y2) — trending up, accountant confirmation required' : 'Lower of two years (conservative default — most lenders)');
+  b.row('Derived base income used', fmtY(se.derivedBase));
+  if (se.isDeclining) {
+    b.warn(`Income declined ${Math.abs(se.divergencePct)}% between Year 1 and Year 2. Conservative lenders will use the lower year and may request a written explanation. Some apply further shading or decline if the trend isn't explained by a one-off event.`);
+  }
+}
+
 function fmtCapRangePdf(cap, marginPct = 0.03) {
   if (!cap || isNaN(Number(cap))) return null;
   const v = Number(cap);
@@ -626,6 +641,7 @@ async function buildPropertyScenarioPdfBuffer(calcResult, inputs, scenarioType, 
   if (show('overview') && scenarioType === 'sell') buildSellCgt(b, calcResult, inputs);
   if (show('overview')) buildSummaryTable(b, calcResult);
   if (show('overview')) buildTimeline(b, calcResult);
+  if (show('overview')) buildSeIncomeDerivation(b, calcResult);
   if (show('overview')) buildBankPanel(b, calcResult);
   if (show('overview') && calcResult.bankPanelAdverse) buildBankPanelAdverse(b, calcResult);
   if (show('lenders')) buildLenders(b, calcResult);

@@ -662,6 +662,9 @@ router.post('/calculators/qualification-proforma', async (req, res) => {
     overtimeBonusAnnual:        body.overtime_bonus_annual ? Number(body.overtime_bonus_annual) : 0,
     overtimeBonusRegularity:    body.overtime_bonus_regularity || 'irregular',
     selfEmployedAddbacksAnnual: body.self_employed_addbacks_annual ? Number(body.self_employed_addbacks_annual) : 0,
+    selfEmployedYear1Income:    body.self_employed_year1_income != null ? Number(body.self_employed_year1_income) : undefined,
+    selfEmployedYear2Income:    body.self_employed_year2_income != null ? Number(body.self_employed_year2_income) : undefined,
+    selfEmployedIncomeMethod:   body.self_employed_income_method || 'lower',
     genuineSavingsHeldMonths: body.genuine_savings_held_months != null && body.genuine_savings_held_months !== ''
       ? Number(body.genuine_savings_held_months) : undefined,
     depositGiftAmount: body.deposit_gift_amount ? Number(body.deposit_gift_amount) : 0,

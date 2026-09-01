@@ -310,7 +310,20 @@ function estimateBankCapacity(inputs = {}, bank = {}, strictSummary = {}) {
     };
   }
 
-  const baseGross = (Number(inputs.grossAnnualIncome) || 0) + (Number(inputs.partnerGrossIncome) || 0);
+  const baseGross = (() => {
+    const y1 = Number(inputs.selfEmployedYear1Income);
+    const y2 = Number(inputs.selfEmployedYear2Income);
+    const isSE = inputs.employmentType === 'self_employed';
+    if (isSE && y1 > 0 && y2 > 0) {
+      // Per-bank income method: flexible lenders accept weighted average when trending;
+      // conservative / rate-focused lenders always use the lower year.
+      const isFlexible = ['flexible', 'mainstream_flexible'].includes(bank.overall);
+      const useWeighted = inputs.selfEmployedIncomeMethod === 'weighted' && isFlexible && y2 >= y1;
+      const seBase = useWeighted ? roundMoney(y1 / 3 + y2 * 2 / 3) : Math.min(y1, y2);
+      return seBase + (Number(inputs.partnerGrossIncome) || 0);
+    }
+    return (Number(inputs.grossAnnualIncome) || 0) + (Number(inputs.partnerGrossIncome) || 0);
+  })();
   const overtime = Number(inputs.overtimeBonusAnnual) || 0;
   const regularity = inputs.overtimeBonusRegularity || 'irregular';
   const shade = overtimeShadeForBank(bank.overtimeCrediting || 'moderate', regularity);
@@ -342,7 +355,7 @@ function estimateBankCapacity(inputs = {}, bank = {}, strictSummary = {}) {
   }
   const cardCommit = roundMoney((Number(inputs.creditCardLimitsTotal) || 0) * 0.038);
   const hecsMonthly = inputs.hasHecs
-    ? roundMoney(hecsAnnualRepayment(Number(inputs.grossAnnualIncome) || 0) / 12)
+    ? roundMoney(hecsAnnualRepayment(baseGross - (Number(inputs.partnerGrossIncome) || 0)) / 12)
     : 0;
 
   const surplus = roundMoney((assessableGross / 12) + rentalMonthly - expenses - debtMonthly - cardCommit - hecsMonthly);

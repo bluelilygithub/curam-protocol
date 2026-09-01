@@ -106,6 +106,8 @@ const SCENARIO_AGENT_GROUPS = [
         about: "The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Five limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block; (4) adverse credit is self-reported — the adverse credit simulation toggle shows the fit/capacity impact of 1 default but cannot substitute for an actual credit file check; (5) per-bank assessment rate floors are curated estimates (most at 8.50%, Macquarie 8.65%, BOQ 8.55%) and will diverge from actual lender calculators when rates are low enough to make the floor binding.",
         does: [
           'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
+          'Self-employed two-year income assessment: enter Year 1 and Year 2 assessable profit separately — base income is derived as the lower of the two (or weighted average if trending up with accountant evidence); flexible lenders get a higher per-bank capacity when trending',
+          'Divergence warning when Year 2 profit is more than 15% below Year 1 — surfaces the risk before submitting to lenders',
           'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
           'Risk-rated structuring levers with indicative capacity uplifts — never invents income or hides debts',
           'Per-bank posture + indicative capacity shown as ±3% range (not precise dollar — curated model, not a lender quote)',
@@ -120,6 +122,8 @@ const SCENARIO_AGENT_GROUPS = [
           'Issue a loan approval, pre-approval, or credit decision',
           'Pull live servicing calculator data from each bank — posture notes are a dated policy snapshot',
           "Pull an actual credit file — the adverse simulation is a fixed scoring delta, not a full bureau-level model",
+          'Verify tax returns — the two-year income figures are self-reported; a broker must confirm against actual ATO documents before quoting capacity',
+          'Model co-borrower income, IO investment paths, or self-employed income under 1 year of trading history',
           'Use each bank\'s exact internal assessment floor (floors are curated estimates; the actual floor only binds when targetRate + 3% < floor, which is uncommon at current rates)',
           'Model property valuation risk, postcode exclusions, or property type restrictions',
           "Replace a broker's full credit assessment, lender submission guide, or compliance obligations",
@@ -1766,6 +1770,9 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [pOvertime, setPOvertime] = useState(() => seeded?.overtime_bonus_annual ? formatNumberForInput(seeded.overtime_bonus_annual) : '');
   const [pOvertimeRegularity, setPOvertimeRegularity] = useState(() => seeded?.overtime_bonus_regularity || 'irregular');
   const [pAddbacks, setPAddbacks] = useState(() => seeded?.self_employed_addbacks_annual ? formatNumberForInput(seeded.self_employed_addbacks_annual) : '');
+  const [pSeYear1, setPSeYear1]   = useState(() => seeded?.self_employed_year1_income != null ? formatNumberForInput(seeded.self_employed_year1_income) : '');
+  const [pSeYear2, setPSeYear2]   = useState(() => seeded?.self_employed_year2_income != null ? formatNumberForInput(seeded.self_employed_year2_income) : '');
+  const [pSeTrending, setPSeTrending] = useState(() => seeded?.self_employed_income_method === 'weighted');
   const [pAdverseCredit, setPAdverseCredit] = useState(() => (seeded?.has_adverse_credit === true || seeded?.has_adverse_credit === 'yes') ? 'yes' : 'no');
   const [pAdverseSeverity, setPAdverseSeverity] = useState(() => seeded?.adverse_credit_severity || 'default');
   const [pGenuineHeldMonths, setPGenuineHeldMonths] = useState(() => seeded?.genuine_savings_held_months != null ? String(seeded.genuine_savings_held_months) : '');
@@ -1824,6 +1831,9 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       overtime_bonus_annual:   pOvertime ? parseFormattedNumber(pOvertime) : 0,
       overtime_bonus_regularity: pOvertimeRegularity,
       self_employed_addbacks_annual: pAddbacks ? parseFormattedNumber(pAddbacks) : 0,
+      self_employed_year1_income:    pEmployment === 'self_employed' && pSeYear1 ? parseFormattedNumber(pSeYear1) : undefined,
+      self_employed_year2_income:    pEmployment === 'self_employed' && pSeYear2 ? parseFormattedNumber(pSeYear2) : undefined,
+      self_employed_income_method:   pEmployment === 'self_employed' ? (pSeTrending ? 'weighted' : 'lower') : undefined,
       genuine_savings_held_months: pGenuineHeldMonths !== '' ? parseFormattedNumber(pGenuineHeldMonths) : undefined,
       deposit_gift_amount:     pDepositGift ? parseFormattedNumber(pDepositGift) : 0,
       has_adverse_credit:      pAdverseCredit === 'yes',
@@ -1979,10 +1989,30 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Income &amp; household</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Total gross income before tax — salary and wages." /></span>
-              <FormattedNumberInput value={pIncome} onChange={setPIncome} placeholder="e.g. 95000" style={FIELD} />
-            </label>
+            {pEmployment !== 'self_employed' ? (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Gross annual income ($)<FieldTip text="Total gross income before tax — salary and wages." /></span>
+                <FormattedNumberInput value={pIncome} onChange={setPIncome} placeholder="e.g. 95000" style={FIELD} />
+              </label>
+            ) : (
+              <>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year 1 assessable profit ($)<FieldTip text="Net profit before tax (or taxable income) from the older of the two most recent ATO returns. Most lenders use the lower of the two years, or a weighted average only when income is verifiably trending up." /></span>
+                  <FormattedNumberInput value={pSeYear1} onChange={setPSeYear1} placeholder="e.g. 140000" style={FIELD} />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Year 2 assessable profit ($)<FieldTip text="Net profit before tax (or taxable income) from the most recent ATO return. This is usually the figure conservative lenders lead with." /></span>
+                  <FormattedNumberInput value={pSeYear2} onChange={setPSeYear2} placeholder="e.g. 155000" style={FIELD} />
+                </label>
+                <label className="block space-y-1 col-span-full sm:col-span-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Income trending up?<FieldTip text="If Year 2 is higher and you have an accountant letter confirming the trend, flexible lenders (Macquarie, BOQ, NAB) may use a weighted average (1/3 Year 1 + 2/3 Year 2) rather than the lower figure. Conservative and rate-focused lenders ignore the trend and use the lower year regardless." /></span>
+                  <select value={pSeTrending ? 'yes' : 'no'} onChange={(e) => setPSeTrending(e.target.value === 'yes')} style={FIELD}>
+                    <option value="no">No — use lower of two years (conservative default)</option>
+                    <option value="yes">Yes — trending up, accountant letter available</option>
+                  </select>
+                </label>
+              </>
+            )}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Partner income ($ — joint only)<FieldTip text="Leave blank for a sole applicant." /></span>
               <FormattedNumberInput value={pPartner} onChange={setPPartner} placeholder="leave blank if solo" style={FIELD} />
@@ -3244,7 +3274,7 @@ const BROKER_CHECKLIST = [
       { id: 'i2', text: 'Employment contract or letter on file confirming role, tenure, and that probation is passed' },
       { id: 'i3', text: 'ATO income statements or group certificates for last 2 financial years reviewed for consistency' },
       { id: 'i4', text: 'Overtime, bonus, or commission status confirmed — undeclared amounts affect capacity in both directions' },
-      { id: 'i5', text: 'If self-employed: 2 years of personal and business tax returns, BAS statements, and accountant declaration obtained' },
+      { id: 'i5', text: "If self-employed: Year 1 and Year 2 assessable profit entered in the proforma — base income was derived as the lower of the two (or weighted average if trending); verify both figures against actual ATO tax returns before quoting capacity to the client" },
       { id: 'i6', text: 'If self-employed: ABN confirmed active for 2+ years and business is actively trading' },
       { id: 'i7', text: 'If rental income: rental statements (12 months), current lease agreement, and vacancy shading rate noted' },
       { id: 'i8', text: 'If casual or contractor: evidence of ongoing engagement (rolling contracts, client invoices, or letter from agency)' },

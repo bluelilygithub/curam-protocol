@@ -240,6 +240,9 @@ function assessBuyerQualification(inputs = {}) {
     overtimeBonusAnnual = 0,
     overtimeBonusRegularity = 'irregular',
     selfEmployedAddbacksAnnual = 0,
+    selfEmployedYear1Income,
+    selfEmployedYear2Income,
+    selfEmployedIncomeMethod = 'lower',
     genuineSavingsHeldMonths,
     depositGiftAmount = 0,
     liabilities = null, // optional [{ type, label, monthlyRepayment }]
@@ -272,7 +275,38 @@ function assessBuyerQualification(inputs = {}) {
 
   const termMonths = Math.round(loanTermYears * 12);
   const loanRequested = roundMoney(propertyValue - depositAmount);
-  const baseGrossAnnual = grossAnnualIncome + (partnerGrossIncome || 0);
+
+  // ── Self-employed two-year income derivation ───────────────────────────────
+  // When Year 1 and Year 2 assessable profit are both provided, derive the base
+  // gross from them rather than accepting the stated figure at face value.
+  // Conservative default: lower of the two years (what most mainstream lenders use).
+  // Weighted method (1/3 Y1 + 2/3 Y2): available when broker confirms trending up
+  // with an accountant letter — flexible lenders may accept this.
+  let seIncomeDetails = null;
+  let resolvedGrossAnnual = grossAnnualIncome;
+
+  if (employmentType === 'self_employed' && selfEmployedYear1Income > 0 && selfEmployedYear2Income > 0) {
+    const y1 = Number(selfEmployedYear1Income);
+    const y2 = Number(selfEmployedYear2Income);
+    const useWeighted = selfEmployedIncomeMethod === 'weighted' && y2 >= y1;
+    const derivedBase = useWeighted
+      ? roundMoney(y1 / 3 + y2 * 2 / 3)
+      : Math.min(y1, y2);
+    const divergencePct = Math.round(((y2 - y1) / y1) * 100);
+    const isDeclining = y2 < y1 * 0.85;
+
+    resolvedGrossAnnual = derivedBase;
+    seIncomeDetails = {
+      year1: y1,
+      year2: y2,
+      method: useWeighted ? 'weighted' : 'lower',
+      derivedBase,
+      divergencePct,
+      isDeclining,
+    };
+  }
+
+  const baseGrossAnnual = resolvedGrossAnnual + (partnerGrossIncome || 0);
 
   // Conservative overtime/bonus shading into assessable income (strict path).
   // Irregular → 0% in strict (still surfaces as a lender-selection lever in the proforma).
@@ -301,6 +335,15 @@ function assessBuyerQualification(inputs = {}) {
   }
   if (addbacksAssessed > 0) {
     assumptions.push(`Self-employed add-backs $${addbacksAssessed.toLocaleString('en-AU')}/yr included in assessable income — requires accountant verification.`);
+  }
+  if (seIncomeDetails) {
+    const { year1, year2, method, derivedBase, isDeclining } = seIncomeDetails;
+    const fmtY = (n) => `$${n.toLocaleString('en-AU')}`;
+    if (method === 'weighted') {
+      assumptions.push(`Self-employed income averaged (weighted): Year 1 ${fmtY(year1)} + Year 2 ${fmtY(year2)} → weighted average ${fmtY(derivedBase)} (1/3 + 2/3). Flexible lenders may accept this method with accountant confirmation; conservative lenders will still use the lower year.`);
+    } else {
+      assumptions.push(`Self-employed income: lower of Year 1 (${fmtY(year1)}) and Year 2 (${fmtY(year2)}) = ${fmtY(derivedBase)}. Most lenders use the lower figure; only verified trending-up income justifies a weighted average.`);
+    }
   }
   caveats.push('This is an indicative qualification check — not a credit decision, not pre-approval. Lenders apply their own credit policies, conduct credit history checks, and use proprietary serviceability models. Results here can differ materially from a lender\'s actual assessment.');
 
@@ -355,10 +398,24 @@ function assessBuyerQualification(inputs = {}) {
   });
 
   // ─── 2. HECS/HELP impact ────────────────────────────────────────────────────
-  const hecsRepaymentAnnual = hasHecs ? hecsAnnualRepayment(grossAnnualIncome) : 0;
+  const hecsRepaymentAnnual = hasHecs ? hecsAnnualRepayment(resolvedGrossAnnual) : 0;
   const hecsRepaymentMonthly = roundMoney(hecsRepaymentAnnual / 12);
   if (hasHecs) {
-    assumptions.push(`HECS/HELP annual compulsory repayment estimated at $${hecsRepaymentAnnual.toLocaleString('en-AU')} based on income $${grossAnnualIncome.toLocaleString('en-AU')} (ATO 2024-25 schedule).`);
+    assumptions.push(`HECS/HELP annual compulsory repayment estimated at $${hecsRepaymentAnnual.toLocaleString('en-AU')} based on income $${resolvedGrossAnnual.toLocaleString('en-AU')} (ATO 2024-25 schedule).`);
+  }
+
+  // ─── 2b. Self-employed income divergence ────────────────────────────────────
+  if (seIncomeDetails?.isDeclining) {
+    const { year1, year2, derivedBase } = seIncomeDetails;
+    const fmtY = (n) => `$${n.toLocaleString('en-AU')}`;
+    checks.push({
+      id: 'se_income_divergence',
+      label: 'Self-employed income: declining trend',
+      status: 'warn',
+      headline: `Year 2 income ${fmtY(year2)} is more than 15% below Year 1 ${fmtY(year1)}`,
+      detail: `Conservative lenders (Big 4, ING, UBank) will use the lower year (${fmtY(derivedBase)}) and may request written explanation for the decline. Some lenders will apply further shading or decline outright if the trend isn't explained by a one-off event. Check before submitting to rate-focused lenders.`,
+      data: { year1, year2, derivedBase, divergencePct: seIncomeDetails.divergencePct },
+    });
   }
 
   // ─── 3. Serviceability ──────────────────────────────────────────────────────
@@ -1001,6 +1058,7 @@ function assessBuyerQualification(inputs = {}) {
     hecs_annual_repayment: hecsRepaymentAnnual,
     dti_ratio: dti,
     employment_type: employmentType,
+    se_income_details: seIncomeDetails || undefined,
     // Settlement cost summary
     stamp_duty_estimate: stampDutyPayable,
     lmi_estimate: lmiEstimate,
