@@ -920,11 +920,31 @@ router.post('/invoices/:id/send', async (req, res) => {
 
     const sendEmail = require('../utils/sendEmail');
     const adminEmail = cfg.fin_admin_email || null;
+
+    // Generate PDF and attach it so clients receive it directly in the email
+    let pdfAttachment;
+    try {
+      const { generateInvoicePdf } = require('../services/invoicePdf');
+      const pdfBuffer = await generateInvoicePdf(inv, items, {
+        name:    inv.clientName,
+        address: inv.clientAddress,
+        abn:     inv.clientAbn,
+      }, cfg);
+      pdfAttachment = {
+        filename:    `${inv.number}.pdf`,
+        content:     pdfBuffer,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      console.error('[finance] PDF generation for email attachment failed:', pdfErr.message);
+    }
+
     await sendEmail({
       to,
       cc: adminEmail || undefined,
       subject: `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
       html,
+      attachments: pdfAttachment ? [pdfAttachment] : undefined,
     });
 
     // Mark as sent and post the invoice journal (AR / Income / GST) if not already posted
@@ -1085,7 +1105,13 @@ router.post('/invoices/:id/convert', async (req, res) => {
 
     const number = await nextInvoiceNumber(userId, 'invoice');
     const today   = new Date().toISOString().slice(0, 10);
-    const dueDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+    // Use the user's configured payment terms (default 7 days)
+    const { rows: termRows } = await dbClient.query(
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='fin_payment_terms' LIMIT 1`, [userId]
+    );
+    const termDays = parseInt(termRows[0]?.value) || 7;
+    const dueDate  = new Date(Date.now() + termDays * 86400000).toISOString().slice(0, 10);
 
     const quoteDate = quote.issueDate ? String(quote.issueDate).slice(0, 10) : today;
     const convertedNote = `Converted from quote ${quote.number} dated ${quoteDate}.`;
@@ -1577,6 +1603,58 @@ router.delete('/wages/:id', async (req, res) => {
   }
 });
 
+// ── Recurring invoices & expenses ────────────────────────────────────────────
+
+router.get('/recurring', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM fin_recurring WHERE "userId"=$1 ORDER BY "nextDate" ASC, id ASC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/recurring', async (req, res) => {
+  try {
+    const { type, label, frequency, nextDate, template } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO fin_recurring ("userId", type, label, frequency, "nextDate", template)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, type, label||'', frequency, nextDate, JSON.stringify(template||{})]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/recurring/:id', async (req, res) => {
+  try {
+    const { label, frequency, nextDate, active, template } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE fin_recurring SET label=$1, frequency=$2, "nextDate"=$3, active=$4, template=$5, "updatedAt"=NOW()
+       WHERE id=$6 AND "userId"=$7 RETURNING *`,
+      [label||'', frequency, nextDate, active !== false, JSON.stringify(template||{}), req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/recurring/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM fin_recurring WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/recurring/run-now', async (req, res) => {
+  try {
+    const { runRecurring } = require('../cron/recurringCron');
+    await runRecurring();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Journal ───────────────────────────────────────────────────────────────────
 
 router.get('/journal', async (req, res) => {
@@ -2037,20 +2115,20 @@ router.get('/export/myob', async (req, res) => {
   }
 });
 
-// Excel (comprehensive transaction) export
+// Excel (comprehensive transaction) export — real .xlsx using the xlsx library
 router.get('/export/excel', async (req, res) => {
   try {
     const userId = req.user.id;
     const { from, to } = req.query;
+    const XLSX = require('xlsx');
 
-    // Build parameterised WHERE for each query independently
     const expParams = [userId];
     let expWhere = `e."userId"=$1`;
     if (from) { expParams.push(from); expWhere += ` AND e.date >= $${expParams.length}`; }
     if (to)   { expParams.push(to);   expWhere += ` AND e.date <= $${expParams.length}`; }
 
     const invParams = [userId];
-    let invWhere = `i."userId"=$1`;
+    let invWhere = `i."userId"=$1 AND i."docType"='invoice'`;
     if (from) { invParams.push(from); invWhere += ` AND i."issueDate" >= $${invParams.length}`; }
     if (to)   { invParams.push(to);   invWhere += ` AND i."issueDate" <= $${invParams.length}`; }
 
@@ -2062,96 +2140,76 @@ router.get('/export/excel', async (req, res) => {
     const [expenses, invoices, wages] = await Promise.all([
       pool.query(
         `SELECT e.date, e.description, e.supplier, e.amount, e.gst, e.category, e."ccSettled",
-                a.code AS "accountCode", a.name AS "accountName",
-                t.code AS "txCode"
+                a.code AS "accountCode", a.name AS "accountName", t.code AS "txCode"
          FROM fin_expenses e
          LEFT JOIN fin_accounts a ON a.id = e."paidViaId"
          LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
-         WHERE ${expWhere}
-         ORDER BY e.date ASC, e.id ASC`,
-        expParams
-      ),
+         WHERE ${expWhere} ORDER BY e.date ASC, e.id ASC`, expParams),
       pool.query(
         `SELECT i.number, i."issueDate", i."dueDate", i.status, i.subtotal, i.gst, i.total,
                 COALESCE(fc.name, cr.name) AS "clientName"
          FROM fin_invoices i
          LEFT JOIN fin_clients fc ON fc.id = i."clientId"
          LEFT JOIN clients cr ON cr.id = i."clientRef"
-         WHERE ${invWhere}
-         ORDER BY i."issueDate" ASC, i.id ASC`,
-        invParams
-      ),
+         WHERE ${invWhere} ORDER BY i."issueDate" ASC, i.id ASC`, invParams),
       pool.query(
         `SELECT date, employee, gross, tax, superannuation, net
-         FROM fin_wages
-         WHERE ${wageWhere}
-         ORDER BY date ASC, id ASC`,
-        wageParams
-      ),
+         FROM fin_wages WHERE ${wageWhere} ORDER BY date ASC, id ASC`, wageParams),
     ]);
 
-    const rows = [
-      csvRow('Date', 'Type', 'Reference', 'Description / Employee', 'Supplier / Client',
-             'Ex-GST Amount', 'GST', 'Total (inc GST)', 'Category', 'Payment Account', 'Tx Code', 'Notes'),
-    ];
+    const wb = XLSX.utils.book_new();
 
+    // Helper: convert a pg Date/string to a JS Date for xlsx date cells
+    const toDate = (d) => {
+      if (!d) return '';
+      const dt = d instanceof Date ? d : new Date(String(d).slice(0, 10) + 'T00:00:00');
+      return isNaN(dt) ? '' : dt;
+    };
+    const num = (v) => parseFloat(v) || 0;
+
+    // ── Sheet 1: Expenses ──────────────────────────────────────────────────
+    const expRows = [['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', 'Payment Account', 'Tx Code', 'CC Settled']];
     for (const e of expenses.rows) {
-      const total = (parseFloat(e.amount) || 0) + (parseFloat(e.gst) || 0);
-      rows.push(csvRow(
-        fmtDateAU(e.date),
-        'Expense',
-        '',
-        e.description,
-        e.supplier || '',
-        fmtNum(e.amount),
-        fmtNum(e.gst),
-        fmtNum(total),
+      expRows.push([
+        toDate(e.date), e.description, e.supplier || '',
+        num(e.amount), num(e.gst), num(e.amount) + num(e.gst),
         e.category || '',
         e.accountCode ? `${e.accountCode} — ${e.accountName}` : 'Bank / Cash',
-        e.txCode || '',
-        e.ccSettled ? 'CC Settled' : ''
-      ));
+        e.txCode || '', e.ccSettled ? 'Yes' : 'No',
+      ]);
     }
+    const wsExp = XLSX.utils.aoa_to_sheet(expRows);
+    wsExp['!cols'] = [{ wch: 12 }, { wch: 36 }, { wch: 24 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, wsExp, 'Expenses');
 
+    // ── Sheet 2: Invoices ──────────────────────────────────────────────────
+    const invRows = [['Date', 'Due Date', 'Invoice No.', 'Client', 'Subtotal', 'GST', 'Total', 'Status']];
     for (const i of invoices.rows) {
-      rows.push(csvRow(
-        fmtDateAU(i.issueDate),
-        'Invoice',
-        i.number,
-        '',
-        i.clientName || '',
-        fmtNum(i.subtotal),
-        fmtNum(i.gst),
-        fmtNum(i.total),
-        '',
-        '',
-        '',
-        i.status
-      ));
+      invRows.push([
+        toDate(i.issueDate), toDate(i.dueDate), i.number,
+        i.clientName || '', num(i.subtotal), num(i.gst), num(i.total),
+        i.status,
+      ]);
     }
+    const wsInv = XLSX.utils.aoa_to_sheet(invRows);
+    wsInv['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 28 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, wsInv, 'Invoices');
 
+    // ── Sheet 3: Wages ─────────────────────────────────────────────────────
+    const wageRows = [['Date', 'Employee', 'Gross', 'Tax Withheld', 'Superannuation', 'Net Pay']];
     for (const w of wages.rows) {
-      rows.push(csvRow(
-        fmtDateAU(w.date),
-        'Wage',
-        '',
-        w.employee,
-        '',
-        fmtNum(w.gross),
-        '0.00',
-        fmtNum(w.gross),
-        '',
-        '',
-        '',
-        `Tax: ${fmtNum(w.tax)} | Super: ${fmtNum(w.superannuation)} | Net: ${fmtNum(w.net)}`
-      ));
+      wageRows.push([toDate(w.date), w.employee, num(w.gross), num(w.tax), num(w.superannuation), num(w.net)]);
     }
+    const wsWage = XLSX.utils.aoa_to_sheet(wageRows);
+    wsWage['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsWage, 'Wages');
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="finance-export-${from2}-${to2}.csv"`);
-    res.send('\uFEFF' + rows.join('\r\n'));
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="finance-export-${from2}-${to2}.xlsx"`);
+    res.send(buffer);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

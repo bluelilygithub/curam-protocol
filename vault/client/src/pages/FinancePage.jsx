@@ -668,9 +668,18 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [converting, setConverting]     = useState(null);
   const [calcIdx, setCalcIdx]           = useState(null);
+  const [paymentTermsDays, setPaymentTermsDays] = useState(7);
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: plusDays(todayStr(), 7), notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
+  // Load payment terms from settings once on mount
+  useEffect(() => {
+    api.get('/api/finance/settings').then(r => r.json()).then(s => {
+      const days = parseInt(s.fin_payment_terms) || 7;
+      setPaymentTermsDays(days);
+    }).catch(() => {});
+  }, []);
+
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: plusDays(todayStr(), paymentTermsDays), notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
@@ -3500,10 +3509,206 @@ function PositionTab() {
   );
 }
 
+// ── RecurringTab ──────────────────────────────────────────────────────────────
+
+const FREQ_LABELS = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
+const BLANK_REC = () => ({ type: 'invoice', label: '', frequency: 'monthly', nextDate: todayStr(), active: true, template: { clientRef: '', description: '', items: [{ ...BLANK_ITEM }], notes: '', supplier: '', amount: '', gst: '', category: '' } });
+
+function RecurringTab() {
+  const [items, setItems]   = useState([]);
+  const [modal, setModal]   = useState(null); // 'new' | 'edit'
+  const [form, setForm]     = useState(BLANK_REC());
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() =>
+    api.get('/api/finance/recurring').then(r => r.json()).then(d => setItems(Array.isArray(d) ? d : [])).catch(() => {}),
+  []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => { setForm(BLANK_REC()); setModal('new'); };
+  const openEdit = (rec) => {
+    setForm({ ...rec, template: rec.template || {} });
+    setModal('edit');
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const isEdit = modal === 'edit';
+      const res = isEdit
+        ? await api.put(`/api/finance/recurring/${form.id}`, form)
+        : await api.post('/api/finance/recurring', form);
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Save failed'); }
+      await load();
+      setModal(null);
+      addToast(isEdit ? 'Recurring schedule updated.' : 'Recurring schedule created.', 'success');
+    } catch (e) { addToast(e.message, 'error'); }
+    setSaving(false);
+  };
+
+  const del = async (id) => {
+    await api.delete(`/api/finance/recurring/${id}`);
+    await load();
+    setConfirm(null);
+    addToast('Recurring schedule deleted.', 'success');
+  };
+
+  const toggle = async (rec) => {
+    await api.put(`/api/finance/recurring/${rec.id}`, { ...rec, active: !rec.active });
+    await load();
+  };
+
+  const setTpl = (key, val) => setForm(p => ({ ...p, template: { ...p.template, [key]: val } }));
+  const setTplItem = (idx, key, val) => setForm(p => {
+    const items = [...(p.template.items || [])];
+    items[idx] = { ...items[idx], [key]: val };
+    return { ...p, template: { ...p.template, items } };
+  });
+  const addTplItem = () => setForm(p => ({ ...p, template: { ...p.template, items: [...(p.template.items||[]), { ...BLANK_ITEM }] } }));
+  const removeTplItem = (idx) => setForm(p => { const items = (p.template.items||[]).filter((_,i)=>i!==idx); return { ...p, template: { ...p.template, items } }; });
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Recurring</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Schedules run automatically at midnight — drafts are created and ready to review before sending.</p>
+        </div>
+        <button onClick={openNew} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--color-primary)' }}>+ New Schedule</button>
+      </div>
+
+      {items.length === 0 && (
+        <div className="text-center py-16" style={{ color: 'var(--color-muted)' }}>
+          <p className="text-sm">No recurring schedules yet.</p>
+          <p className="text-xs mt-1">Create one to automatically generate invoices or expenses on a set frequency.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {items.map(rec => (
+          <div key={rec.id} className="rounded-xl border p-4 flex items-center gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', opacity: rec.active ? 1 : 0.55 }}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded" style={{ background: rec.type === 'invoice' ? '#dbeafe' : '#dcfce7', color: rec.type === 'invoice' ? '#1d4ed8' : '#15803d' }}>{rec.type}</span>
+                <span className="font-medium text-sm truncate" style={{ color: 'var(--color-text)' }}>{rec.label || '(unnamed)'}</span>
+              </div>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{FREQ_LABELS[rec.frequency]} · Next: {fmtDate(rec.nextDate)}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => toggle(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>{rec.active ? 'Pause' : 'Resume'}</button>
+              <button onClick={() => openEdit(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
+              <button onClick={() => setConfirm(rec.id)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: '#fecaca', color: '#dc2626' }}>Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Create / Edit modal */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="w-full max-w-xl rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ background: 'var(--color-surface)' }}>
+            <div className="p-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>{modal === 'edit' ? 'Edit' : 'New'} Recurring Schedule</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Type</label>
+                  <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="invoice">Invoice</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Frequency</label>
+                  <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    {Object.entries(FREQ_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Label</label>
+                  <Input value={form.label} onChange={v => setForm(p => ({ ...p, label: v }))} placeholder="e.g. Monthly hosting fee" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Next Run Date</label>
+                  <Input type="date" value={form.nextDate} onChange={v => setForm(p => ({ ...p, nextDate: v }))} />
+                </div>
+              </div>
+
+              {form.type === 'expense' && (
+                <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Expense Template</p>
+                  <Input value={form.template.description||''} onChange={v => setTpl('description', v)} placeholder="Description" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input value={form.template.supplier||''} onChange={v => setTpl('supplier', v)} placeholder="Supplier" />
+                    <Input value={form.template.category||''} onChange={v => setTpl('category', v)} placeholder="Category" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input type="number" value={form.template.amount||''} onChange={v => setTpl('amount', v)} placeholder="Amount (ex-GST)" />
+                    <Input type="number" value={form.template.gst||''} onChange={v => setTpl('gst', v)} placeholder="GST" />
+                  </div>
+                </div>
+              )}
+
+              {form.type === 'invoice' && (
+                <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Invoice Template</p>
+                  <Input value={form.template.notes||''} onChange={v => setTpl('notes', v)} placeholder="Notes (optional)" />
+                  <div className="space-y-2">
+                    {(form.template.items||[]).map((item, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+                        <div className="col-span-5"><Input value={item.description||''} onChange={v => setTplItem(idx,'description',v)} placeholder="Description" /></div>
+                        <div className="col-span-2"><Input type="number" value={item.qty||''} onChange={v => setTplItem(idx,'qty',v)} placeholder="Qty" /></div>
+                        <div className="col-span-3"><Input type="number" value={item.unitPrice||''} onChange={v => setTplItem(idx,'unitPrice',v)} placeholder="Unit Price" /></div>
+                        <div className="col-span-1">
+                          <select value={item.gstCode||'GST'} onChange={e => setTplItem(idx,'gstCode',e.target.value)} className="text-sm px-2 py-2 rounded-lg border w-full" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            <option value="GST">GST</option>
+                            <option value="NT">N-T</option>
+                          </select>
+                        </div>
+                        <div className="col-span-1 flex justify-end pt-1">
+                          {(form.template.items||[]).length > 1 && <button onClick={() => removeTplItem(idx)} className="text-xs" style={{ color: '#dc2626' }}>✕</button>}
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={addTplItem} className="text-xs" style={{ color: 'var(--color-primary)' }}>+ Add line</button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t flex justify-end gap-3" style={{ borderColor: 'var(--color-border)' }}>
+              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: 'var(--color-primary)' }}>{saving ? 'Saving…' : 'Save Schedule'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="rounded-2xl p-6 shadow-2xl max-w-sm w-full" style={{ background: 'var(--color-surface)' }}>
+            <p className="font-medium mb-4" style={{ color: 'var(--color-text)' }}>Delete this recurring schedule?</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setConfirm(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button onClick={() => del(confirm)} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: '#dc2626' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -3595,6 +3800,7 @@ export default function FinancePage() {
         {tab === 'Clients'   && <ClientsTab />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
+        {tab === 'Recurring' && <RecurringTab />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
         {tab === 'Interest'  && <InterestTab from={from} to={to} />}
         {tab === 'Journal'   && <JournalTab   from={from} to={to} />}

@@ -77,6 +77,44 @@ function buildEmailHtml({ bizName, overdueQuotes, overdueInvoices }) {
 </html>`;
 }
 
+function buildClientReminderHtml({ bizName, inv, days, docType }) {
+  const isQuote   = docType === 'quote';
+  const docLabel  = isQuote ? 'Quote' : 'Invoice';
+  const dueLabel  = isQuote ? 'valid until' : 'due';
+  const actionMsg = isQuote
+    ? `This quote expired ${days} day${days !== 1 ? 's' : ''} ago. Please let us know if you'd like to proceed or if you have any questions.`
+    : `This invoice is ${days} day${days !== 1 ? 's' : ''} overdue. Please arrange payment at your earliest convenience.`;
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#1f2937;padding:24px 32px;">
+      <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">${docLabel} ${inv.number}</h1>
+      ${bizName ? `<p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${bizName}</p>` : ''}
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#1f2937;">Hi ${inv.clientName || 'there'},</p>
+      <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">${actionMsg}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:12px 16px;background:#fef2f2;border-radius:6px;border:1px solid #fecaca;">
+            <p style="margin:0 0 2px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#dc2626;">${docLabel} ${dueLabel} ${fmtDate(inv.dueDate)}</p>
+            <p style="margin:0;font-size:18px;font-weight:700;color:#dc2626;">${fmtAud(inv.total)}</p>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0;font-size:13px;color:#6b7280;">If you have already attended to this, please disregard this message.</p>
+    </div>
+    <div style="padding:16px 32px;background:#f9fafb;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;">
+      ${bizName || ''}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 async function runFinanceReminders(onlyUserId = null) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -96,8 +134,13 @@ async function runFinanceReminders(onlyUserId = null) {
   for (const { userId, admin_email } of adminRows) {
   // Fix overdue-quotes query: only include sent quotes (not drafts that were never sent)
   const { rows: overdueQuotes } = await pool.query(`
-      SELECT i.number, i.total, i."dueDate",
-             COALESCE(fc.name, cr.name) AS "clientName"
+      SELECT i.number, i.total, i."dueDate", i.id,
+             COALESCE(fc.name, cr.name) AS "clientName",
+             COALESCE(fc.email,
+               (SELECT cc.email FROM client_contacts cc
+                WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+                ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+             ) AS "clientEmail"
       FROM fin_invoices i
       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
       LEFT JOIN clients cr     ON cr.id = i."clientRef"
@@ -111,8 +154,13 @@ async function runFinanceReminders(onlyUserId = null) {
 
     // Overdue invoices: sent but not paid, past due date
     const { rows: overdueInvoices } = await pool.query(`
-      SELECT i.number, i.total, i."dueDate",
-             COALESCE(fc.name, cr.name) AS "clientName"
+      SELECT i.number, i.total, i."dueDate", i.id,
+             COALESCE(fc.name, cr.name) AS "clientName",
+             COALESCE(fc.email,
+               (SELECT cc.email FROM client_contacts cc
+                WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+                ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+             ) AS "clientEmail"
       FROM fin_invoices i
       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
       LEFT JOIN clients cr     ON cr.id = i."clientRef"
@@ -133,6 +181,7 @@ async function runFinanceReminders(onlyUserId = null) {
     );
     const bizName = settingRows[0]?.value || '';
 
+    // 1. Admin summary email
     const totalItems  = overdueQuotes.length + overdueInvoices.length;
     const subject     = `Finance reminder: ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention${bizName ? ` — ${bizName}` : ''}`;
     const html        = buildEmailHtml({ bizName, overdueQuotes, overdueInvoices });
@@ -140,9 +189,37 @@ async function runFinanceReminders(onlyUserId = null) {
     try {
       await sendEmail({ to: admin_email, subject, html });
       anySent = true;
-      console.log(`[finance-reminders] Sent to ${admin_email}: ${overdueQuotes.length} quotes, ${overdueInvoices.length} invoices`);
+      console.log(`[finance-reminders] Admin summary sent to ${admin_email}: ${overdueQuotes.length} quotes, ${overdueInvoices.length} invoices`);
     } catch (err) {
-      console.error(`[finance-reminders] Failed for user ${userId}:`, err.message);
+      console.error(`[finance-reminders] Admin summary failed for user ${userId}:`, err.message);
+    }
+
+    // 2. Individual client reminder emails for overdue invoices
+    for (const inv of overdueInvoices) {
+      if (!inv.clientEmail) continue;
+      const days = daysOverdue(inv.dueDate);
+      const clientSubject = `Payment reminder: ${inv.number}${bizName ? ` from ${bizName}` : ''}`;
+      const clientHtml = buildClientReminderHtml({ bizName, inv, days, docType: 'invoice' });
+      try {
+        await sendEmail({ to: inv.clientEmail, subject: clientSubject, html: clientHtml });
+        console.log(`[finance-reminders] Client reminder sent to ${inv.clientEmail} for invoice ${inv.number}`);
+      } catch (err) {
+        console.error(`[finance-reminders] Client reminder failed for ${inv.number}:`, err.message);
+      }
+    }
+
+    // 3. Individual client reminder emails for expired quotes
+    for (const q of overdueQuotes) {
+      if (!q.clientEmail) continue;
+      const days = daysOverdue(q.dueDate);
+      const clientSubject = `Quote follow-up: ${q.number}${bizName ? ` from ${bizName}` : ''}`;
+      const clientHtml = buildClientReminderHtml({ bizName, inv: q, days, docType: 'quote' });
+      try {
+        await sendEmail({ to: q.clientEmail, subject: clientSubject, html: clientHtml });
+        console.log(`[finance-reminders] Client reminder sent to ${q.clientEmail} for quote ${q.number}`);
+      } catch (err) {
+        console.error(`[finance-reminders] Client reminder failed for ${q.number}:`, err.message);
+      }
     }
   }
   return { sent: anySent };

@@ -1774,6 +1774,22 @@ async function initSchema() {
       END LOOP;
     END $$
   `);
+  // ── Finance: recurring invoices & expenses ───────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_recurring (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type         TEXT NOT NULL CHECK(type IN ('invoice','expense')),
+      label        TEXT NOT NULL DEFAULT '',
+      frequency    TEXT NOT NULL CHECK(frequency IN ('weekly','fortnightly','monthly','quarterly','annually')),
+      "nextDate"   DATE NOT NULL,
+      active       BOOLEAN NOT NULL DEFAULT TRUE,
+      template     JSONB NOT NULL DEFAULT '{}',
+      "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   console.log('[db] Schema ready');
 }
 

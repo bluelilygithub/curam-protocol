@@ -78,9 +78,9 @@ function smtpConfig() {
 
 /**
  * Send an email via MailChannels (if key configured) or SMTP nodemailer.
- * @param {{ to: string, subject: string, html: string, from?: string, cc?: string }} opts
+ * @param {{ to: string, subject: string, html: string, from?: string, cc?: string, attachments?: Array<{filename: string, content: Buffer, contentType: string}> }} opts
  */
-async function sendEmail({ to, subject, html, from, cc }) {
+async function sendEmail({ to, subject, html, from, cc, attachments }) {
   if (runtimeConfig.disableEmail) {
     const reason = `Email disabled by DISABLE_EMAIL; skipped "${subject}" to ${to}`;
     console.log(`[runtime] ${reason}`);
@@ -98,6 +98,14 @@ async function sendEmail({ to, subject, html, from, cc }) {
       from: { email: defaultFromAddress(from) },
       subject,
       content: [{ type: 'text/html', value: html }],
+      ...(attachments && attachments.length ? {
+        attachments: attachments.map(a => ({
+          filename:    a.filename,
+          content:     a.content.toString('base64'),
+          type:        a.contentType || 'application/octet-stream',
+          disposition: 'attachment',
+        })),
+      } : {}),
     });
 
     return new Promise((resolve, reject) => {
@@ -134,7 +142,16 @@ async function sendEmail({ to, subject, html, from, cc }) {
   }
   const transporter = nodemailer.createTransport(smtp);
 
-  await transporter.sendMail({ from: defaultFromAddress(from), to, cc: cc || undefined, subject, html });
+  await transporter.sendMail({
+    from: defaultFromAddress(from),
+    to,
+    cc: cc || undefined,
+    subject,
+    html,
+    attachments: attachments && attachments.length
+      ? attachments.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType }))
+      : undefined,
+  });
   return { ok: true, provider: 'smtp' };
 }
 
