@@ -101,18 +101,22 @@ function CalcPopover({ onValue, onClose }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
+  function safeCalc(raw) {
+    const tokens = raw.replace(/\s+/g, '').match(/\d+\.?\d*|[+\-*/()]/g);
+    if (!tokens) return null;
+    let i = 0;
+    function expr()   { let v = term();  while (i < tokens.length && (tokens[i]==='+' || tokens[i]==='-')) { const op=tokens[i++]; v = op==='+' ? v+term() : v-term(); } return v; }
+    function term()   { let v = factor(); while (i < tokens.length && (tokens[i]==='*' || tokens[i]==='/')) { const op=tokens[i++]; const r=factor(); v = op==='*' ? v*r : v/r; } return v; }
+    function factor() { if (tokens[i]==='(') { i++; const v=expr(); i++; return v; } if (tokens[i]==='-') { i++; return -factor(); } return parseFloat(tokens[i++]); }
+    try { const v = expr(); return (i === tokens.length && isFinite(v) && v >= 0) ? v : null; } catch { return null; }
+  }
+
   const press = (v) => {
     if (v === 'C')  { setExpr(''); return; }
     if (v === '⌫')  { setExpr(p => p.slice(0, -1)); return; }
     if (v === '=') {
-      try {
-        // eslint-disable-next-line no-new-func
-        const result = Function('"use strict"; return (' + expr + ')')();
-        if (isFinite(result) && result >= 0) {
-          onValue(parseFloat(result.toFixed(2)).toString());
-          onClose();
-        }
-      } catch { /* invalid expression — do nothing */ }
+      const result = safeCalc(expr);
+      if (result !== null) { onValue(parseFloat(result.toFixed(2)).toString()); onClose(); }
       return;
     }
     setExpr(p => p + v);
@@ -142,11 +146,7 @@ function CalcPopover({ onValue, onClose }) {
             type="button"
             onMouseDown={e => { e.preventDefault(); press(b === '÷' ? '/' : b === '×' ? '*' : b); }}
             className="text-sm py-2 rounded-lg font-medium transition-opacity hover:opacity-70"
-            style={{
-              background: 'var(--color-bg)',
-              color: 'var(--color-text)',
-              border: '1px solid var(--color-border)',
-            }}
+            style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
           >{b}</button>
         ))}
         <button
@@ -661,15 +661,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [converting, setConverting]     = useState(null);
   const [calcIdx, setCalcIdx]           = useState(null);
-  const calcRef                         = useRef(null);
   const addToast = useToastStore(s => s.addToast);
-
-  useEffect(() => {
-    if (calcIdx === null) return;
-    const handler = (e) => { if (calcRef.current && !calcRef.current.contains(e.target)) setCalcIdx(null); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [calcIdx]);
 
   const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
   const [form, setForm] = useState(blankForm);
@@ -1027,7 +1019,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       className="text-sm px-3 py-2 rounded-lg border w-full"
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                     />
-                    <div className="relative" ref={calcIdx === idx ? calcRef : null}>
+                    <div className="relative">
                       <input
                         type="number"
                         value={item.unitPrice}
@@ -1039,7 +1031,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       <button
                         type="button"
                         tabIndex={-1}
-                        onMouseDown={e => { e.preventDefault(); setCalcIdx(calcIdx === idx ? null : idx); }}
+                        onClick={() => setCalcIdx(calcIdx === idx ? null : idx)}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 leading-none hover:opacity-100"
                         title="Calculator"
                         style={{ color: 'var(--color-primary)', opacity: calcIdx === idx ? 1 : 0.35, fontSize: 13 }}
