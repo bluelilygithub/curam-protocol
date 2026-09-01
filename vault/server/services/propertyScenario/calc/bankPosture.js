@@ -482,6 +482,7 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
 
   const rows = BANK_POSTURES.map((bank) => {
     const reasons = [];
+    const breakdown = []; // { factor, delta } — each scoring contribution, for display
     let score = 50;
     const capacity = estimateBankCapacity(inputs, bank, strictSummary);
     const bankCap = capacity?.indicative_capacity != null && !capacity.unsuitable
@@ -520,165 +521,163 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
 
     if (isCasualLike && monthsInRole != null) {
       if (monthsInRole >= bank.casualTenureMonths) {
-        score += 15;
+        score += 15; breakdown.push({ factor: 'Employment tenure', delta: +15 });
         reasons.push(`Tenure ${monthsInRole} mo meets this bank's typical ~${bank.casualTenureMonths} mo casual/contract window.`);
       } else if (monthsInRole >= 6 && bank.casualTenureMonths <= 6) {
-        score += 10;
+        score += 10; breakdown.push({ factor: 'Employment tenure', delta: +10 });
         reasons.push(`At ${monthsInRole} mo, this bank's ~${bank.casualTenureMonths} mo threshold may still be approachable with an employer letter.`);
       } else {
-        score -= 20;
+        score -= 20; breakdown.push({ factor: 'Employment tenure', delta: -20 });
         reasons.push(`Tenure ${monthsInRole} mo is below this bank's typical ~${bank.casualTenureMonths} mo casual/contract preference.`);
       }
     }
 
     if (isSelfEmployed) {
       if (bank.overall === 'flexible' || bank.overall === 'mainstream_flexible') {
-        score += 18;
+        score += 18; breakdown.push({ factor: 'Self-employed policy', delta: +18 });
         reasons.push('More pragmatic self-employed assessment than typical Big-4 standardised policy.');
       } else if (bank.overall === 'rate_focused') {
-        score -= 12;
+        score -= 12; breakdown.push({ factor: 'Self-employed policy', delta: -12 });
         reasons.push('Rate-focused digital lenders usually prefer clean PAYG over complex business income.');
       }
       if (addbacks > 0 && bank.overall === 'flexible') {
-        score += 5;
+        score += 5; breakdown.push({ factor: 'Add-backs accepted', delta: +5 });
         reasons.push('Accountant-verified add-backs are more commonly accepted here than at majors.');
       }
     }
 
     if (overtime > 0) {
       if (bank.overtimeCrediting === 'generous') {
-        score += 8;
+        score += 8; breakdown.push({ factor: 'Overtime crediting', delta: +8 });
         reasons.push(`Overtime/bonus crediting tends to be less conservative (~${capacity.overtime_shade_pct}% on your history).`);
       } else if (bank.overtimeCrediting === 'conservative') {
-        score -= 5;
+        score -= 5; breakdown.push({ factor: 'Overtime crediting', delta: -5 });
         reasons.push(`Expect conservative overtime/bonus shading (~${capacity.overtime_shade_pct}% on your history).`);
       }
     }
 
     if (dti > 6) {
-      if (bank.dtiAppetite === 'generous') score += 5;
+      if (bank.dtiAppetite === 'generous') { score += 5; breakdown.push({ factor: 'DTI appetite', delta: +5 }); }
       else if (bank.dtiAppetite === 'tight') {
-        score -= 15;
+        score -= 15; breakdown.push({ factor: 'DTI appetite', delta: -15 });
         reasons.push('DTI above 6× sits poorly with tighter appetite lenders.');
       } else {
-        score -= 8;
+        score -= 8; breakdown.push({ factor: 'DTI appetite', delta: -8 });
         reasons.push('DTI above 6× typically triggers extra scrutiny.');
       }
     } else if (dti > 5) {
       if (bank.dtiAppetite === 'tight') {
-        score -= 6;
+        score -= 6; breakdown.push({ factor: 'DTI appetite', delta: -6 });
         reasons.push('DTI above 5× is near the edge for tighter-appetite lenders.');
       }
     }
 
     if (lvr > 90) {
-      score -= 8;
+      score -= 8; breakdown.push({ factor: 'LVR', delta: -8 });
       reasons.push('High LVR (>90%) narrows the field at most lenders.');
     } else if (lvr > 85) {
-      score -= 4;
+      score -= 4; breakdown.push({ factor: 'LVR', delta: -4 });
       reasons.push('LVR above 85% typically means LMI and a narrower lender panel.');
     }
 
     if (isDensity) {
       const label = (propertyType || propCheck?.data?.property_type || 'high-density').replace(/_/g, ' ');
       if (bank.highDensityAppetite === 'flexible') {
-        score += 12;
+        score += 12; breakdown.push({ factor: 'Property type', delta: +12 });
         reasons.push(`More pragmatic on ${label} LVR — brokers often find a path above conservative 70–80% caps in supported postcodes.`);
       } else if (bank.highDensityAppetite === 'moderate') {
-        score += 2;
+        score += 2; breakdown.push({ factor: 'Property type', delta: +2 });
         reasons.push(`${label} is workable here in many postcodes, but expect LVR scrutiny around 80%.`);
       } else {
-        score -= 14;
+        score -= 14; breakdown.push({ factor: 'Property type', delta: -14 });
         reasons.push(`Tighter typical LVR caps on ${label} (often 70–80%) — less appetite without a strong postcode / development story.`);
       }
     }
 
     if (ruralLike) {
       if (bank.overall === 'flexible' || bank.id === 'boq') {
-        score += 8;
+        score += 8; breakdown.push({ factor: 'Rural / regional', delta: +8 });
         reasons.push('Regional / rural lending is more commonly accommodated here than at pure digital majors.');
       } else if (bank.overall === 'rate_focused') {
-        score -= 10;
+        score -= 10; breakdown.push({ factor: 'Rural / regional', delta: -10 });
         reasons.push('Acreage / rural files are usually outside rate-focused digital lender appetite.');
       } else {
-        score -= 6;
+        score -= 6; breakdown.push({ factor: 'Rural / regional', delta: -6 });
         reasons.push('Rural / acreage typically attracts lower max LVR at mainstream lenders.');
       }
     }
 
     if (cardLimits >= 10000) {
       if (bank.overall === 'rate_focused') {
-        score -= 4;
+        score -= 4; breakdown.push({ factor: 'Card limits', delta: -4 });
         reasons.push(`$${cardLimits.toLocaleString('en-AU')} in card limits is a material serviceability drag — digital lenders are less flexible on residual commitments.`);
       }
     }
 
     if (hasAdverse) {
       if (bank.overall === 'flexible') {
-        score -= 5;
+        score -= 5; breakdown.push({ factor: 'Credit history', delta: -5 });
         reasons.push('Adverse credit still hurts — flexible lenders may listen with a clear explanation and time-since-event.');
       } else {
-        score -= 15;
+        score -= 15; breakdown.push({ factor: 'Credit history', delta: -15 });
         reasons.push('Adverse credit is a material headwind under standardised policy.');
       }
     }
 
     if (!isPpor && bank.rentalShadingPct != null && bank.rentalShadingPct >= 80) {
-      score += 6;
+      score += 6; breakdown.push({ factor: 'Rental income shading', delta: +6 });
       reasons.push(`Investment rental shading often around ${bank.rentalShadingPct}% (less conservative).`);
     }
 
     // File strength from strict checks (capacity headroom, LVR, DTI).
-    // Without this, a clean PASS file with huge surplus stayed stuck at "fair"
-    // because clean-PAYG bonuses rarely pushed score past the strong threshold.
     if (overallPass) {
-      score += 10;
+      score += 10; breakdown.push({ factor: 'File strength (strict)', delta: +10 });
     } else {
-      score -= 8;
+      score -= 8; breakdown.push({ factor: 'File strength (strict)', delta: -8 });
     }
 
     if (strictUtil != null) {
       if (strictUtil <= 0.5) {
-        score += 16;
+        score += 16; breakdown.push({ factor: 'Capacity headroom', delta: +16 });
         reasons.push(`Requested loan uses ~${Math.round(strictUtil * 100)}% of strict capacity — wide headroom.`);
       } else if (strictUtil <= 0.7) {
-        score += 10;
+        score += 10; breakdown.push({ factor: 'Capacity headroom', delta: +10 });
         reasons.push(`Requested loan uses ~${Math.round(strictUtil * 100)}% of strict capacity — solid headroom.`);
       } else if (strictUtil <= 0.85) {
-        score += 4;
+        score += 4; breakdown.push({ factor: 'Capacity headroom', delta: +4 });
       } else if (strictUtil > 1) {
-        score -= 18;
+        score -= 18; breakdown.push({ factor: 'Capacity headroom', delta: -18 });
         reasons.push('Requested loan exceeds strict capacity — most lenders will struggle without levers.');
       }
     }
 
     if (dti > 0 && dti <= 4) {
-      score += 8;
+      score += 8; breakdown.push({ factor: 'DTI ratio', delta: +8 });
       reasons.push(`DTI of ${dti.toFixed(1)}x is well inside typical lender comfort (under 4x).`);
     } else if (dti > 0 && dti <= 5) {
-      score += 3;
+      score += 3; breakdown.push({ factor: 'DTI ratio', delta: +3 });
     }
 
     if (lvr > 0 && lvr <= 80) {
-      score += 6;
+      score += 6; breakdown.push({ factor: 'LVR', delta: +6 });
       reasons.push(`LVR of ${lvr.toFixed(1)}% is at or below 80% — no-LMI path at most lenders.`);
     } else if (lvr > 0 && lvr <= 85) {
-      score += 2;
+      score += 2; breakdown.push({ factor: 'LVR', delta: +2 });
     }
 
     // Per-bank capacity vs requested — spreads Fit when knobs move dollars
     if (bankCap != null && loanRequested > 0) {
       const bankUtil = loanRequested / bankCap;
       if (bankCap < loanRequested) {
-        score -= 25;
+        score -= 25; breakdown.push({ factor: 'Bank capacity vs loan', delta: -25 });
         reasons.push(`This bank's indicative capacity (~$${Math.round(bankCap).toLocaleString('en-AU')}) sits below the requested loan.`);
       } else if (bankUtil <= 0.45) {
-        score += 6;
+        score += 6; breakdown.push({ factor: 'Bank capacity vs loan', delta: +6 });
         reasons.push(`Comfortable vs this bank's capacity (~${Math.round(bankUtil * 100)}% utilised).`);
       } else if (bankUtil <= 0.6) {
-        score += 3;
+        score += 3; breakdown.push({ factor: 'Bank capacity vs loan', delta: +3 });
       } else if (bankUtil > 0.9) {
-        score -= 4;
+        score -= 4; breakdown.push({ factor: 'Bank capacity vs loan', delta: -4 });
         reasons.push("Requested loan sits near this bank's modelled capacity — thinner buffer.");
       }
     }
@@ -686,29 +685,29 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
     // Clean PAYG differentiators — otherwise every major looks the same
     if (cleanPayg) {
       if (isFhb && bank.fhbgParticipant) {
-        score += 8;
+        score += 8; breakdown.push({ factor: 'FHBG participation', delta: +8 });
         reasons.push('Participates in First Home Guarantee — relevant if you are using (or considering) a 5% no-LMI scheme.');
       } else if (isFhb && bank.fhbgParticipant === false) {
-        score -= 4;
+        score -= 4; breakdown.push({ factor: 'FHBG participation', delta: -4 });
         reasons.push('Not typically an FHBG participant — scheme path would need another lender.');
       }
       if (bank.professionPacks) {
-        score += 4;
+        score += 4; breakdown.push({ factor: 'Profession packs', delta: +4 });
         reasons.push('Offers profession packs (e.g. MedPlus) that can improve assessment for eligible occupations.');
       }
       if (bank.offsetOnFixed) {
-        score += 3;
+        score += 3; breakdown.push({ factor: 'Product features', delta: +3 });
         reasons.push('Typically offers offset on fixed-rate products — useful if you want rate certainty and offset.');
       } else if (bank.overall === 'rate_focused') {
-        score += 2;
+        score += 2; breakdown.push({ factor: 'Product features', delta: +2 });
         reasons.push('Rate-focused digital path suits a clean PAYG file if you prioritise headline rate over flexibility.');
       }
       if (bank.cashbackAppetite === 'active') {
-        score += 3;
+        score += 3; breakdown.push({ factor: 'Cashback appetite', delta: +3 });
         reasons.push('Often active on refinance cashbacks — worth pricing into a switch comparison.');
       }
       if (bank.typicalTurnaroundDays != null && bank.typicalTurnaroundDays <= 7) {
-        score += 2;
+        score += 2; breakdown.push({ factor: 'Turnaround speed', delta: +2 });
         reasons.push(`Typically faster digital turnaround (~${bank.typicalTurnaroundDays} days) on clean files.`);
       }
     }
@@ -747,6 +746,7 @@ function buildBankPostureFit(inputs = {}, strictSummary = {}, strictChecks = [])
       postureSummary: bank.postureSummary,
       fit,
       score,
+      score_breakdown: breakdown,
       fit_sensitivity: fitSensitivity,
       reasons,
       capacity,

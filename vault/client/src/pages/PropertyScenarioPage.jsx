@@ -103,12 +103,14 @@ const SCENARIO_AGENT_GROUPS = [
         desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.',
         featured: true,
         purpose: 'Will a bank look at this file — and what would make it stronger?',
-        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Two important limitations apply: the bank posture notes (HEM stance, overtime shading, rental treatment) are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator, so verify directly before submitting. Separately, all LVR and LMI figures use the contract purchase price; a valuation shortfall at the bank changes both, and that is not modelled here.',
+        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Three limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block.',
         does: [
           'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
           'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
           'Risk-rated structuring levers with indicative capacity uplifts — never invents income or hides debts',
-          'Per-bank posture + indicative capacity panel with policy snapshot date shown',
+          'Per-bank posture + indicative capacity shown as ±3% range (not precise dollar — curated model, not a lender quote)',
+          'Fit score with full factor breakdown: each scoring contribution shown in an expandable table per bank',
+          'Policy snapshot date surfaced per bank — amber warning when data ages past 3 months',
           'Valuation sensitivity table showing LVR and LMI impact if the bank values below contract',
           'Broker Prep tab: 65-item pre-application checklist for file readiness before submission',
         ],
@@ -2297,11 +2299,11 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{proforma.leversDelta.note}</p>
               <div className="flex flex-wrap gap-4 text-xs">
                 <span style={{ color: 'var(--color-text)' }}>
-                  Strict: <strong>${Number(proforma.leversDelta.base_capacity || 0).toLocaleString('en-AU')}</strong>
+                    Strict: <strong>{fmtCapRange(proforma.leversDelta.base_capacity) || `$${Number(proforma.leversDelta.base_capacity || 0).toLocaleString('en-AU')}`}</strong>
                 </span>
                 {proforma.leversDelta.stacked_uplift > 0 && (
                   <span style={{ color: '#15803d' }}>
-                    With levers (indicative): <strong>${Number(proforma.leversDelta.optimistic_capacity || 0).toLocaleString('en-AU')}</strong>
+                    With levers (indicative): <strong>{fmtCapRange(proforma.leversDelta.optimistic_capacity) || `$${Number(proforma.leversDelta.optimistic_capacity || 0).toLocaleString('en-AU')}`}</strong>
                   </span>
                 )}
               </div>
@@ -2353,7 +2355,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                           </p>
                           {cap != null && (
                             <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                              ~${Number(cap).toLocaleString('en-AU')}
+                              {fmtCapRange(cap) || `~$${Number(cap).toLocaleString('en-AU')}`}
                             </p>
                           )}
                           {b.capacity?.overtime_shade_pct != null && (
@@ -2368,6 +2370,24 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                           )}
                         </div>
                       </div>
+                      {/* Score breakdown */}
+                      {Array.isArray(b.score_breakdown) && b.score_breakdown.length > 0 && (
+                        <details className="mt-1">
+                          <summary className="text-[10px] cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
+                            Score breakdown (starts at 50 · {b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0) > 0 ? `+${b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0)}` : ''}{b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0) < 0 ? ` ${b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0)}` : ''} = {Math.round(b.score)})
+                          </summary>
+                          <div className="mt-1.5 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
+                            {b.score_breakdown.map((item, i) => (
+                              <div key={i} className="flex items-center justify-between px-2.5 py-1 border-b last:border-b-0 text-[10px]" style={{ borderColor: 'var(--color-border)' }}>
+                                <span style={{ color: 'var(--color-muted)' }}>{item.factor}</span>
+                                <span className="font-semibold tabular-nums" style={{ color: item.delta > 0 ? '#15803d' : item.delta < 0 ? '#b91c1c' : 'var(--color-muted)' }}>
+                                  {item.delta > 0 ? `+${item.delta}` : item.delta}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                       {b.fit_sensitivity?.note && (
                         <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.fit_sensitivity.note}</p>
                       )}
@@ -3039,6 +3059,21 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
   );
 }
 
+// ── Capacity range formatter ──────────────────────────────────────────────────
+// Rounds to nearest $5k and shows as ~$X.XXM – $X.XXM to reflect that
+// indicative capacity is a curated model estimate, not a lender quote.
+function fmtCapRange(cap, marginPct = 0.03) {
+  const n = Number(cap);
+  if (!n || !Number.isFinite(n)) return null;
+  const snap = (v) => Math.round(v / 5000) * 5000;
+  const lo = snap(n * (1 - marginPct));
+  const hi = snap(n * (1 + marginPct));
+  const fmt = (v) => v >= 1_000_000
+    ? `$${(v / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`
+    : `$${(v / 1000).toFixed(0)}k`;
+  return `~${fmt(lo)} – ${fmt(hi)}`;
+}
+
 // ── Policy staleness helper ───────────────────────────────────────────────────
 
 function policyMonthsAgo(snapDate) {
@@ -3232,7 +3267,9 @@ const BROKER_CHECKLIST = [
     title: 'Lender policy & structuring',
     icon: 'building',
     items: [
-      { id: 'po1', text: 'Lender credit policy cross-checked directly — posture notes in this tool are curated guidance, not live policy documents' },
+      { id: 'po1', text: 'Lender credit policy cross-checked directly — posture notes in this tool are a dated policy snapshot, not live policy documents; the snapshot date is shown above each bank panel' },
+      { id: 'po2', text: 'Fit score reviewed with the breakdown table — expand each bank\'s score to see which factors contributed (capacity headroom, DTI, LVR, tenure, etc.) rather than treating the number as opaque' },
+      { id: 'po3', text: 'Indicative capacity figures reviewed as ranges (±3%) — a figure like "$1.41M – $1.47M" reflects model estimation, not a lender quote; treat the midpoint as directional only' },
       { id: 'po2', text: 'Each shortlisted lender\'s current servicing calculator confirmed for HEM version, overtime shading, and rental income treatment' },
       { id: 'po3', text: 'If LVR >80%: LMI provider policy checked and LMI cost disclosed to client before submission' },
       { id: 'po4', text: 'If LVR >90%: applicable scheme eligibility (FHBG, RGS, FHLD) confirmed as current with quota available — schemes fill quickly' },
