@@ -91,6 +91,75 @@ function Input({ value, onChange, type = 'text', placeholder, className = '' }) 
   );
 }
 
+function CalcPopover({ onValue, onClose }) {
+  const ref = useRef(null);
+  const [expr, setExpr] = useState('');
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const press = (v) => {
+    if (v === 'C')  { setExpr(''); return; }
+    if (v === '⌫')  { setExpr(p => p.slice(0, -1)); return; }
+    if (v === '=') {
+      try {
+        // eslint-disable-next-line no-new-func
+        const result = Function('"use strict"; return (' + expr + ')')();
+        if (isFinite(result) && result >= 0) {
+          onValue(parseFloat(result.toFixed(2)).toString());
+          onClose();
+        }
+      } catch { /* invalid expression — do nothing */ }
+      return;
+    }
+    setExpr(p => p + v);
+  };
+
+  const ROWS = [
+    ['7','8','9','÷'],
+    ['4','5','6','×'],
+    ['1','2','3','-'],
+    ['C','0','.','⌫'],
+  ];
+
+  return (
+    <div
+      ref={ref}
+      className="absolute z-50 rounded-xl shadow-xl p-2"
+      style={{ top: 'calc(100% + 4px)', left: 0, width: 164, background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+    >
+      <div
+        className="text-right text-sm font-mono px-2 py-1.5 rounded-lg mb-2 truncate"
+        style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: 32 }}
+      >{expr || '0'}</div>
+      <div className="grid grid-cols-4 gap-1">
+        {ROWS.flat().map(b => (
+          <button
+            key={b}
+            type="button"
+            onMouseDown={e => { e.preventDefault(); press(b === '÷' ? '/' : b === '×' ? '*' : b); }}
+            className="text-sm py-2 rounded-lg font-medium transition-opacity hover:opacity-70"
+            style={{
+              background: 'var(--color-bg)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-border)',
+            }}
+          >{b}</button>
+        ))}
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); press('='); }}
+          className="col-span-4 text-sm py-2 rounded-lg font-semibold mt-0.5 transition-opacity hover:opacity-80"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >=</button>
+      </div>
+    </div>
+  );
+}
+
 function Textarea({ value, onChange, placeholder, rows = 3 }) {
   return (
     <textarea
@@ -591,7 +660,16 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [pdfLoading, setPdfLoading] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [converting, setConverting]     = useState(null);
+  const [calcIdx, setCalcIdx]           = useState(null);
+  const calcRef                         = useRef(null);
   const addToast = useToastStore(s => s.addToast);
+
+  useEffect(() => {
+    if (calcIdx === null) return;
+    const handler = (e) => { if (calcRef.current && !calcRef.current.contains(e.target)) setCalcIdx(null); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [calcIdx]);
 
   const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
   const [form, setForm] = useState(blankForm);
@@ -949,7 +1027,30 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       className="text-sm px-3 py-2 rounded-lg border w-full"
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                     />
-                    <Input value={item.unitPrice}   onChange={v => setItem(idx, 'unitPrice', v)}   type="number" placeholder="0.00" />
+                    <div className="relative" ref={calcIdx === idx ? calcRef : null}>
+                      <input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={e => setItem(idx, 'unitPrice', e.target.value)}
+                        placeholder="0.00"
+                        className="text-sm px-3 py-2 rounded-lg border w-full pr-7"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onMouseDown={e => { e.preventDefault(); setCalcIdx(calcIdx === idx ? null : idx); }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 leading-none hover:opacity-100"
+                        title="Calculator"
+                        style={{ color: 'var(--color-primary)', opacity: calcIdx === idx ? 1 : 0.35, fontSize: 13 }}
+                      >⊞</button>
+                      {calcIdx === idx && (
+                        <CalcPopover
+                          onValue={v => setItem(idx, 'unitPrice', v)}
+                          onClose={() => setCalcIdx(null)}
+                        />
+                      )}
+                    </div>
                     <div className="flex items-start pt-0">
                       <select
                         value={item.gstCode || 'GST'}
