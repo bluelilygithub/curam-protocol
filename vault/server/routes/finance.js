@@ -9,6 +9,19 @@ const fs      = require('fs');
 const UPLOAD_DIR   = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 const RECEIPT_DIR  = path.join(UPLOAD_DIR, 'receipts');
 
+// Load Curam logo once at startup for inline email embedding
+const LOGO_PATH = path.join(__dirname, '../assets/curam-ai-logo.png');
+const LOGO_DATA_URI = (() => {
+  try {
+    const data = fs.readFileSync(LOGO_PATH);
+    console.log(`[finance] Logo loaded OK — ${LOGO_PATH} (${data.length} bytes)`);
+    return `data:image/png;base64,${data.toString('base64')}`;
+  } catch (e) {
+    console.warn(`[finance] Logo not found at ${LOGO_PATH} — email will render without it`);
+    return null;
+  }
+})();
+
 const receiptUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -791,13 +804,7 @@ router.post('/invoices/:id/send', async (req, res) => {
     const cfg = {};
     for (const r of settings) cfg[r.key] = r.value;
 
-    // Load logo as base64 for inline embedding (email clients block external URLs)
-    const path = require('path');
-    const fs   = require('fs');
-    const logoPath = path.join(__dirname, '../assets/curam-ai-logo.png');
-    const logoDataUri = fs.existsSync(logoPath)
-      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
-      : null;
+    const logoDataUri = LOGO_DATA_URI;
 
     const fmtAud = (n) =>
       new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n || 0);
