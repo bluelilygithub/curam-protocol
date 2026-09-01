@@ -62,17 +62,19 @@ function calcItemGst(item) {
 }
 
 const DEFAULT_ACCOUNTS = [
-  { code: '1000', name: 'Bank / Cash',         type: 'asset'     },
-  { code: '1100', name: 'Accounts Receivable',  type: 'asset'     },
-  { code: '1200', name: 'GST Paid',             type: 'asset'     },
-  { code: '2000', name: 'Accounts Payable',     type: 'liability' },
-  { code: '2100', name: 'Credit Card',          type: 'liability' },
-  { code: '2200', name: 'GST Collected',        type: 'liability' },
-  { code: '3000', name: "Owner's Equity",       type: 'equity'    },
-  { code: '4000', name: 'Income',               type: 'income'    },
-  { code: '4100', name: 'Interest Income',      type: 'income'    },
-  { code: '5000', name: 'Expenses',             type: 'expense'   },
-  { code: '6000', name: 'Wages',                type: 'expense'   },
+  { code: '1000', name: 'Bank / Cash',           type: 'asset'     },
+  { code: '1100', name: 'Accounts Receivable',    type: 'asset'     },
+  { code: '1200', name: 'GST Paid',               type: 'asset'     },
+  { code: '2000', name: 'Accounts Payable',       type: 'liability' },
+  { code: '2100', name: 'Credit Card',            type: 'liability' },
+  { code: '2200', name: 'GST Collected',          type: 'liability' },
+  { code: '2300', name: 'Super Payable',          type: 'liability' },
+  { code: '3000', name: "Owner's Equity",         type: 'equity'    },
+  { code: '4000', name: 'Income',                 type: 'income'    },
+  { code: '4100', name: 'Interest Income',        type: 'income'    },
+  { code: '5000', name: 'Expenses',               type: 'expense'   },
+  { code: '6000', name: 'Wages',                  type: 'expense'   },
+  { code: '6100', name: 'Superannuation Expense', type: 'expense'   },
 ];
 
 async function ensureAccounts(userId) {
@@ -536,28 +538,7 @@ router.post('/invoices', async (req, res) => {
       );
     }
 
-    // Journal only for invoices, not quotes (quotes aren't accounting transactions yet)
-    if (docType === 'invoice') {
-      await ensureAccounts(userId);
-      const arId     = await accountByCode(userId, '1100');
-      const incId    = await accountByCode(userId, '4000');
-      const gstColId = await accountByCode(userId, '2200');
-      if (arId && incId && gstColId) {
-        await createJournalEntry(client, userId, {
-          date:        issueDate || new Date().toISOString().slice(0, 10),
-          description: `Invoice ${number}`,
-          reference:   number,
-          type:        'invoice',
-          sourceId:    invoice.id,
-          lines: [
-            { accountId: arId,     debit: total,    credit: 0 },
-            { accountId: incId,    debit: 0,        credit: subtotal },
-            { accountId: gstColId, debit: 0,        credit: gst },
-          ],
-        });
-      }
-    }
-
+    // Quotes and draft invoices are not accounting transactions yet — journals post on send
     await client.query('COMMIT');
     res.json(invoice);
   } catch (err) {
@@ -720,8 +701,8 @@ router.put('/invoices/:id', async (req, res) => {
     const bankId   = await accountByCode(userId, '1000');
     const invNum   = check[0].number;
 
-    // Recreate invoice journal entry (AR / Income / GST collected) — quotes have no journal
-    if (!isQuote) {
+    // Recreate invoice journal entry (AR / Income / GST collected) only when sent/paid — drafts have no journal
+    if (!isQuote && newStatus !== 'draft') {
       await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
       if (arId && incId && gstColId) {
         await createJournalEntry(client, userId, {
@@ -775,9 +756,14 @@ router.post('/invoices/:id/send', async (req, res) => {
 
     // Load invoice + items + client
     const { rows } = await pool.query(
-      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
-              COALESCE(fc.email, NULL) AS "clientEmail",
-              COALESCE(fc.address, NULL) AS "clientAddress",
+      `SELECT i.*,
+              COALESCE(fc.name, cr.name) AS "clientName",
+              COALESCE(fc.email,
+                (SELECT cc.email FROM client_contacts cc
+                 WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+                 ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+              ) AS "clientEmail",
+              COALESCE(fc.address, cr.address) AS "clientAddress",
               COALESCE(fc.abn, NULL) AS "clientAbn"
        FROM fin_invoices i
        LEFT JOIN fin_clients fc ON fc.id = i."clientId"
@@ -941,11 +927,44 @@ router.post('/invoices/:id/send', async (req, res) => {
       html,
     });
 
-    // Mark as sent
+    // Mark as sent and post the invoice journal (AR / Income / GST) if not already posted
     await pool.query(
       `UPDATE fin_invoices SET status='sent',"updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
       [invoiceId, userId]
     );
+
+    if (!isQuote) {
+      await ensureAccounts(userId);
+      const arId     = await accountByCode(userId, '1100');
+      const incId    = await accountByCode(userId, '4000');
+      const gstColId = await accountByCode(userId, '2200');
+      // Delete any stale draft journal then write the definitive one
+      const dbClient = await pool.connect();
+      try {
+        await dbClient.query('BEGIN');
+        await deleteJournalForSource(dbClient, userId, parseInt(invoiceId), 'invoice');
+        if (arId && incId && gstColId) {
+          await createJournalEntry(dbClient, userId, {
+            date:        String(inv.issueDate || new Date()).slice(0, 10),
+            description: `Invoice ${inv.number}`,
+            reference:   inv.number,
+            type:        'invoice',
+            sourceId:    parseInt(invoiceId),
+            lines: [
+              { accountId: arId,     debit: inv.total,    credit: 0 },
+              { accountId: incId,    debit: 0,            credit: inv.subtotal },
+              { accountId: gstColId, debit: 0,            credit: inv.gst },
+            ],
+          });
+        }
+        await dbClient.query('COMMIT');
+      } catch (journalErr) {
+        await dbClient.query('ROLLBACK');
+        console.error('[finance] Invoice journal on send failed:', journalErr.message);
+      } finally {
+        dbClient.release();
+      }
+    }
 
     res.json({ ok: true, sentTo: to });
   } catch (err) {
@@ -954,32 +973,48 @@ router.post('/invoices/:id/send', async (req, res) => {
 });
 
 router.patch('/invoices/:id/status', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
     const { status } = req.body;
-    const { rows } = await pool.query(
+    const { rows } = await dbClient.query(
       `UPDATE fin_invoices SET status=$1,"updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING *`,
-      [status, req.params.id, req.user.id]
+      [status, req.params.id, userId]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const inv = rows[0];
 
-router.patch('/invoices/:id/resend', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT status FROM fin_invoices WHERE id=$1 AND "userId"=$2`,
-      [req.params.id, req.user.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    if (rows[0].status === 'paid') return res.status(400).json({ error: 'Invoice already paid' });
-    // Delegate actual send to the send route logic — just re-use by forwarding internally
-    // Mark as sent (already sent, but reset if needed) — real send happens client-side via /send
-    res.json({ ok: true });
+    // When manually marking as sent, post the invoice journal if not already present
+    if (status === 'sent' && inv.docType !== 'quote') {
+      await ensureAccounts(userId);
+      const arId     = await accountByCode(userId, '1100');
+      const incId    = await accountByCode(userId, '4000');
+      const gstColId = await accountByCode(userId, '2200');
+      if (arId && incId && gstColId) {
+        await deleteJournalForSource(dbClient, userId, inv.id, 'invoice');
+        await createJournalEntry(dbClient, userId, {
+          date:        String(inv.issueDate || new Date()).slice(0, 10),
+          description: `Invoice ${inv.number}`,
+          reference:   inv.number,
+          type:        'invoice',
+          sourceId:    inv.id,
+          lines: [
+            { accountId: arId,     debit: inv.total,    credit: 0 },
+            { accountId: incId,    debit: 0,            credit: inv.subtotal },
+            { accountId: gstColId, debit: 0,            credit: inv.gst },
+          ],
+        });
+      }
+    }
+
+    await dbClient.query('COMMIT');
+    res.json(inv);
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
@@ -1107,11 +1142,22 @@ router.post('/invoices/:id/convert', async (req, res) => {
 });
 
 router.delete('/invoices/:id', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
-    await pool.query(`DELETE FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const id     = parseInt(req.params.id);
+    // Remove all journal entries linked to this invoice (AR/income and payment)
+    await deleteJournalForSource(dbClient, userId, id, 'invoice');
+    await deleteJournalForSource(dbClient, userId, id, 'payment');
+    await dbClient.query(`DELETE FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
@@ -1309,11 +1355,20 @@ router.put('/expenses/:id', async (req, res) => {
 });
 
 router.delete('/expenses/:id', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
-    await pool.query(`DELETE FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const id     = parseInt(req.params.id);
+    await deleteJournalForSource(dbClient, userId, id, 'expense');
+    await dbClient.query(`DELETE FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
@@ -1468,17 +1523,23 @@ router.post('/wages', async (req, res) => {
     );
     const wage = rows[0];
 
-    // Journal: DR Wages, CR Bank (net), CR Accounts Payable (tax withheld)
+    // Journal: DR Wages (gross), DR Super Expense, CR Bank (net), CR AP (tax), CR Super Payable
     await ensureAccounts(userId);
     const wagesId = await accountByCode(userId, '6000');
+    const superExpId = await accountByCode(userId, '6100');
     const bankId  = await accountByCode(userId, '1000');
     const apId    = await accountByCode(userId, '2000');
+    const superLiabId = await accountByCode(userId, '2300');
     if (wagesId && bankId) {
       const lines = [
         { accountId: wagesId, debit: grossAmt, credit: 0 },
         { accountId: bankId,  debit: 0,        credit: netAmt },
       ];
-      if (taxAmt > 0 && apId) lines.push({ accountId: apId, debit: 0, credit: taxAmt });
+      if (taxAmt > 0 && apId)        lines.push({ accountId: apId,        debit: 0, credit: taxAmt });
+      if (superAmt > 0 && superExpId && superLiabId) {
+        lines.push({ accountId: superExpId,  debit: superAmt, credit: 0 });
+        lines.push({ accountId: superLiabId, debit: 0,        credit: superAmt });
+      }
       await createJournalEntry(dbClient, userId, {
         date:        wage.date,
         description: `Wages: ${employee}`,
@@ -1499,11 +1560,20 @@ router.post('/wages', async (req, res) => {
 });
 
 router.delete('/wages/:id', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
-    await pool.query(`DELETE FROM fin_wages WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const id     = parseInt(req.params.id);
+    await deleteJournalForSource(dbClient, userId, id, 'wage');
+    await dbClient.query(`DELETE FROM fin_wages WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 

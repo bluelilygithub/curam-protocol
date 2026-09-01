@@ -94,8 +94,8 @@ async function runFinanceReminders(onlyUserId = null) {
   let anySent = false;
 
   for (const { userId, admin_email } of adminRows) {
-    // Overdue quotes: draft or sent, past their valid-until date
-    const { rows: overdueQuotes } = await pool.query(`
+  // Fix overdue-quotes query: only include sent quotes (not drafts that were never sent)
+  const { rows: overdueQuotes } = await pool.query(`
       SELECT i.number, i.total, i."dueDate",
              COALESCE(fc.name, cr.name) AS "clientName"
       FROM fin_invoices i
@@ -103,7 +103,7 @@ async function runFinanceReminders(onlyUserId = null) {
       LEFT JOIN clients cr     ON cr.id = i."clientRef"
       WHERE i."userId" = $1
         AND i."docType" = 'quote'
-        AND i.status IN ('draft', 'sent')
+        AND i.status = 'sent'
         AND i."dueDate" IS NOT NULL
         AND i."dueDate"::date < $2::date
       ORDER BY i."dueDate" ASC
@@ -152,11 +152,35 @@ let task = null;
 
 function startFinanceRemindersCron() {
   if (task) return;
-  // Run daily at 08:00 server time
-  task = cron.schedule('0 8 * * *', () => {
-    runFinanceReminders().catch(err => console.error('[finance-reminders] cron error:', err.message));
+  // Run at the top of every hour; inside, check each user's configured reminder hour
+  // (fin_reminder_hour setting, default 8) and only fire when it matches
+  task = cron.schedule('0 * * * *', async () => {
+    const currentHour = new Date().getHours(); // server local hour
+    try {
+      // Find users whose configured reminder hour matches now (or who haven't set one and it's 8am)
+      const { rows: adminRows } = await pool.query(`
+        SELECT s."userId", s.value AS admin_email,
+               COALESCE(
+                 (SELECT CAST(value AS INTEGER) FROM settings
+                  WHERE "userId" = s."userId" AND key = 'fin_reminder_hour' LIMIT 1),
+                 8
+               ) AS reminder_hour
+        FROM settings s
+        WHERE s.key = 'fin_admin_email' AND s.value IS NOT NULL AND s.value <> ''
+      `);
+      const matchingUserIds = adminRows
+        .filter(r => parseInt(r.reminder_hour) === currentHour)
+        .map(r => r.userId);
+      for (const userId of matchingUserIds) {
+        runFinanceReminders(userId).catch(err =>
+          console.error(`[finance-reminders] Error for user ${userId}:`, err.message)
+        );
+      }
+    } catch (err) {
+      console.error('[finance-reminders] Cron scheduling error:', err.message);
+    }
   });
-  console.log('[finance-reminders] Cron scheduled — daily at 08:00');
+  console.log('[finance-reminders] Cron scheduled — runs hourly, fires per-user at configured hour (default 08:00)');
 }
 
 module.exports = { startFinanceRemindersCron, runFinanceReminders };
