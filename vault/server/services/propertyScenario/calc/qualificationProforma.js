@@ -323,6 +323,14 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
     : null;
   const bankPanel = buildMergedBankPanel(bankPosture, lenderFit);
 
+  // Adverse credit simulation — run scoring a second time with hasAdverseCredit forced on.
+  // Only generated when the actual file does NOT already declare adverse credit, so the
+  // broker can see the "what if a default surfaces" scenario without re-submitting.
+  const bankPostureAdverse = inputs.hasAdverseCredit
+    ? null
+    : buildBankPostureFit({ ...inputs, hasAdverseCredit: true }, strict.summary || {}, strict.checks || []);
+  const bankPanelAdverse = bankPostureAdverse ? buildMergedBankPanel(bankPostureAdverse, lenderFit) : null;
+
   return {
     ok: true,
     strict,
@@ -332,6 +340,8 @@ function buildQualificationProforma(inputs = {}, allNormalized = null) {
     lenderFit,
     bankPosture,
     bankPanel,
+    bankPostureAdverse,
+    bankPanelAdverse,
     supplement,
     meta: {
       caveat: 'Levers describe legitimate presentation, timing, documentation, and lender-selection choices only — none of them involve changing a true fact about income, debts, or employment. The "excluded" list exists to show where that line sits. Bank posture and per-bank capacity use curated policy knobs through the same surplus engine — indicative only, not credit decisions. The supplement adds rate stress, product-fit guidance, and post-settlement cashflow notes.',

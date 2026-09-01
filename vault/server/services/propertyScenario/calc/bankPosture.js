@@ -60,6 +60,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'standard',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
     hemStance: 'standard',
@@ -86,6 +87,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'standard',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'moderate',
     rentalShadingPct: 70,
     hemStance: 'standard',
@@ -111,6 +113,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'standard',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
     hemStance: 'conservative',
@@ -136,6 +139,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'standard',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
     hemStance: 'standard',
@@ -161,6 +165,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'tight',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
     hemStance: 'conservative',
@@ -186,6 +191,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 6,
     selfEmployedYears: 1,
     dtiAppetite: 'generous',
+    assessmentFloorRate: 8.65,
     overtimeCrediting: 'generous',
     rentalShadingPct: 80,
     hemStance: 'pragmatic',
@@ -212,6 +218,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'tight',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'conservative',
     rentalShadingPct: 70,
     hemStance: 'conservative',
@@ -237,6 +244,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 12,
     selfEmployedYears: 2,
     dtiAppetite: 'standard',
+    assessmentFloorRate: 8.50,
     overtimeCrediting: 'moderate',
     rentalShadingPct: null,
     hemStance: 'standard',
@@ -262,6 +270,7 @@ const BANK_POSTURES = [
     casualTenureMonths: 6,
     selfEmployedYears: 2,
     dtiAppetite: 'generous',
+    assessmentFloorRate: 8.55,
     overtimeCrediting: 'moderate',
     rentalShadingPct: 75,
     hemStance: 'pragmatic',
@@ -338,7 +347,7 @@ function estimateBankCapacity(inputs = {}, bank = {}, strictSummary = {}) {
 
   const surplus = roundMoney((assessableGross / 12) + rentalMonthly - expenses - debtMonthly - cardCommit - hecsMonthly);
   const targetRate = Number(inputs.targetRatePct) || Number(strictSummary.target_rate_pct) || 5.5;
-  const assessmentRate = Math.max(targetRate + 3.0, APRA_FLOOR_RATE_PCT);
+  const assessmentRate = Math.max(targetRate + 3.0, bank.assessmentFloorRate || APRA_FLOOR_RATE_PCT);
   const termMonths = Math.round((Number(inputs.loanTermYears) || 30) * 12);
   const capacity = surplus > 0
     ? (maxLoanFromMonthlyRepayment(surplus, assessmentRate, termMonths) || 0)

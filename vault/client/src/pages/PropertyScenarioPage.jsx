@@ -103,13 +103,15 @@ const SCENARIO_AGENT_GROUPS = [
         desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.',
         featured: true,
         purpose: 'Will a bank look at this file — and what would make it stronger?',
-        about: "The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Three limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block.",
+        about: "The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Five limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block; (4) adverse credit is self-reported — the adverse credit simulation toggle shows the fit/capacity impact of 1 default but cannot substitute for an actual credit file check; (5) per-bank assessment rate floors are curated estimates (most at 8.50%, Macquarie 8.65%, BOQ 8.55%) and will diverge from actual lender calculators when rates are low enough to make the floor binding.",
         does: [
           'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
           'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
           'Risk-rated structuring levers with indicative capacity uplifts — never invents income or hides debts',
           'Per-bank posture + indicative capacity shown as ±3% range (not precise dollar — curated model, not a lender quote)',
           'Fit score with full factor breakdown: each scoring contribution shown in an expandable table per bank',
+          'Adverse credit simulation toggle: flip to "1 adverse event" to see fit score and capacity shift per bank before running credit checks',
+          'Per-bank assessment rate floor displayed alongside capacity — most at 8.50%; Macquarie 8.65%, BOQ 8.55%',
           'Policy snapshot date surfaced per bank — amber warning when data ages past 3 months',
           'Valuation sensitivity table showing LVR and LMI impact if the bank values below contract',
           'Broker Prep tab: 65-item pre-application checklist for file readiness before submission',
@@ -117,6 +119,8 @@ const SCENARIO_AGENT_GROUPS = [
         doesNot: [
           'Issue a loan approval, pre-approval, or credit decision',
           'Pull live servicing calculator data from each bank — posture notes are a dated policy snapshot',
+          "Pull an actual credit file — the adverse simulation is a fixed scoring delta, not a full bureau-level model",
+          'Use each bank\'s exact internal assessment floor (floors are curated estimates; the actual floor only binds when targetRate + 3% < floor, which is uncommon at current rates)',
           'Model property valuation risk, postcode exclusions, or property type restrictions',
           "Replace a broker's full credit assessment, lender submission guide, or compliance obligations",
         ],
@@ -1787,6 +1791,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [expanded, setExpanded] = useState({});
   const [pdfBusy, setPdfBusy]   = useState(false);
   const [docsBankId, setDocsBankId] = useState(null);
+  const [showAdverse, setShowAdverse] = useState(false);
   const proformaResultRef       = useRef(null);
 
   function buildInputPayload() {
@@ -2311,120 +2316,172 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           )}
 
           {/* Merged bank panel — posture + capacity + live rate */}
-          {(proforma.bankPanel?.banks || proforma.bankPosture?.banks)?.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How each bank may see this file</h3>
-              <PolicySnapshotBanner />
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                {proforma.bankPanel?.capacity_note || proforma.bankPosture?.capacity_note}
-              </p>
-              {(proforma.bankPanel?.fit_vs_overall_note || proforma.bankPosture?.fit_vs_overall_note) && (
+          {(proforma.bankPanel?.banks || proforma.bankPosture?.banks)?.length > 0 && (() => {
+            // Switch between normal and adverse-simulation views
+            const hasAdverseInput = !!(proforma.inputs?.hasAdverseCredit);
+            const adverseAvailable = !hasAdverseInput && !!(proforma.bankPanelAdverse || proforma.bankPostureAdverse);
+            const activePanel  = (showAdverse && adverseAvailable)
+              ? (proforma.bankPanelAdverse || proforma.bankPostureAdverse)
+              : (proforma.bankPanel || proforma.bankPosture);
+            const normalPanel  = proforma.bankPanel || proforma.bankPosture;
+            // Build a quick lookup: bankId → normal score + fit
+            const normalByBank = Object.fromEntries(
+              (normalPanel?.banks || []).map((b) => [b.id, { score: b.score, fit: b.fit, cap: b.capacity?.indicative_capacity }])
+            );
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How each bank may see this file</h3>
+                  {adverseAvailable && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdverse((v) => !v)}
+                      className="text-[10px] font-medium px-2 py-0.5 rounded transition-opacity duration-150 hover:opacity-80 border"
+                      style={{
+                        borderColor: showAdverse ? '#b91c1c' : 'var(--color-border)',
+                        color: showAdverse ? '#b91c1c' : 'var(--color-muted)',
+                        background: showAdverse ? 'rgba(185,28,28,0.06)' : 'transparent',
+                      }}
+                    >
+                      {showAdverse ? 'Adverse simulation ON' : 'Simulate: 1 adverse event'}
+                    </button>
+                  )}
+                </div>
+                {showAdverse && adverseAvailable && (
+                  <p className="text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(185,28,28,0.06)', color: '#b91c1c' }}>
+                    Showing the impact of assuming 1 default or adverse event in the last 2 years. Fit scores and capacity shift accordingly — use this to advise clients before credit checks run.
+                  </p>
+                )}
+                <PolicySnapshotBanner />
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                  {proforma.bankPanel?.fit_vs_overall_note || proforma.bankPosture?.fit_vs_overall_note}
+                  {activePanel?.capacity_note}
                 </p>
-              )}
-              {(proforma.bankPanel?.fit_legend || proforma.bankPosture?.fit_legend)?.length > 0 && (
+                {activePanel?.fit_vs_overall_note && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {activePanel.fit_vs_overall_note}
+                  </p>
+                )}
+                {activePanel?.fit_legend?.length > 0 && (
+                  <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    Fit tiers: {activePanel.fit_legend.map((t) => `${String(t.tier).toUpperCase()} (${t.score_min}+)`).join(' · ')}. Numeric score shown per bank. Stronger Fit is not an approval.
+                  </p>
+                )}
+                {activePanel?.overtime_shade_note && (
+                  <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    {activePanel.overtime_shade_note}
+                  </p>
+                )}
                 <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                  Fit tiers: {(proforma.bankPanel?.fit_legend || proforma.bankPosture.fit_legend).map((t) => (
-                    `${String(t.tier).toUpperCase()} (${t.score_min}+)`
-                  )).join(' · ')}. Numeric score shown per bank. Stronger Fit is not an approval.
+                  {activePanel?.note}
                 </p>
-              )}
-              {(proforma.bankPanel?.overtime_shade_note || proforma.bankPosture?.overtime_shade_note) && (
-                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                  {proforma.bankPanel?.overtime_shade_note || proforma.bankPosture?.overtime_shade_note}
-                </p>
-              )}
-              <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                {proforma.bankPanel?.note || proforma.bankPosture?.note}
-              </p>
-              <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                {(proforma.bankPanel?.banks || proforma.bankPosture.banks).map((b) => {
-                  const fitColor = b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c';
-                  const cap = b.capacity?.indicative_capacity;
-                  return (
-                    <div key={b.id} className="px-4 py-3 space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{b.name}</p>
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
-                        </div>
-                        <div className="shrink-0 text-right space-y-0.5">
-                          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: fitColor }}>
-                            {b.fit}{b.score != null ? ` · ${Math.round(b.score)}` : ''}
-                          </p>
-                          {cap != null && (
-                            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                              {fmtCapRange(cap) || `~$${Number(cap).toLocaleString('en-AU')}`}
-                            </p>
-                          )}
-                          {b.capacity?.overtime_shade_pct != null && (
-                            <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-                              OT shade {b.capacity.overtime_shade_pct}%
-                            </p>
-                          )}
-                          {b.live_rate != null && (
-                            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                              Live {Number(b.live_rate).toFixed(2)}%{b.live_product ? ` · ${b.live_product}` : ''}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {/* Score breakdown */}
-                      {Array.isArray(b.score_breakdown) && b.score_breakdown.length > 0 && (
-                        <details className="mt-1">
-                          <summary className="text-[10px] cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
-                            Score breakdown (starts at 50 · {b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0) > 0 ? `+${b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0)}` : ''}{b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0) < 0 ? ` ${b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0)}` : ''} = {Math.round(b.score)})
-                          </summary>
-                          <div className="mt-1.5 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
-                            {b.score_breakdown.map((item, i) => (
-                              <div key={i} className="flex items-center justify-between px-2.5 py-1 border-b last:border-b-0 text-[10px]" style={{ borderColor: 'var(--color-border)' }}>
-                                <span style={{ color: 'var(--color-muted)' }}>{item.factor}</span>
-                                <span className="font-semibold tabular-nums" style={{ color: item.delta > 0 ? '#15803d' : item.delta < 0 ? '#b91c1c' : 'var(--color-muted)' }}>
-                                  {item.delta > 0 ? `+${item.delta}` : item.delta}
-                                </span>
-                              </div>
-                            ))}
+                <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  {(activePanel?.banks || []).map((b) => {
+                    const fitColor = b.fit === 'strong' ? '#15803d' : b.fit === 'fair' ? '#92400e' : b.fit === 'weak' ? '#c2410c' : '#b91c1c';
+                    const cap = b.capacity?.indicative_capacity;
+                    const norm = normalByBank[b.id];
+                    const scoreDelta = (showAdverse && adverseAvailable && norm?.score != null && b.score != null)
+                      ? Math.round(b.score - norm.score) : null;
+                    const capDelta = (showAdverse && adverseAvailable && norm?.cap != null && cap != null)
+                      ? Math.round(cap - norm.cap) : null;
+                    return (
+                      <div key={b.id} className="px-4 py-3 space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{b.name}</p>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{b.postureSummary}</p>
                           </div>
-                        </details>
-                      )}
-                      {b.fit_sensitivity?.note && (
-                        <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.fit_sensitivity.note}</p>
-                      )}
-                      {b.capacity?.narrative && (
-                        <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-primary)' }}>{b.capacity.narrative}</p>
-                      )}
-                      {(b.reasons || []).filter((r) => r !== b.capacity?.narrative).slice(0, 2).map((reason, ri) => (
-                        <p key={ri} className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>· {reason}</p>
-                      ))}
-                      <div className="flex flex-wrap gap-3 pt-0.5">
-                        {b.fhbgParticipant && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>FHBG</span>}
-                        {b.offsetOnFixed && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Offset on fixed</span>}
-                        {b.typicalTurnaroundDays != null && (
-                          <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>~{b.typicalTurnaroundDays}d turnaround</span>
+                          <div className="shrink-0 text-right space-y-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: fitColor }}>
+                              {b.fit}{b.score != null ? ` · ${Math.round(b.score)}` : ''}
+                              {scoreDelta != null && (
+                                <span className="ml-1 font-normal normal-case tracking-normal text-[10px]" style={{ color: '#b91c1c' }}>
+                                  ({scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta} vs normal)
+                                </span>
+                              )}
+                            </p>
+                            {cap != null && (
+                              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                                {fmtCapRange(cap) || `~$${Number(cap).toLocaleString('en-AU')}`}
+                                {capDelta != null && capDelta !== 0 && (
+                                  <span className="ml-1 text-[10px] font-normal" style={{ color: '#b91c1c' }}>
+                                    ({capDelta > 0 ? '+' : ''}{capDelta > 0 || capDelta < 0 ? (capDelta / 1000).toFixed(0) + 'k' : ''})
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                            {b.capacity?.overtime_shade_pct != null && (
+                              <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                                OT shade {b.capacity.overtime_shade_pct}%
+                              </p>
+                            )}
+                            {b.capacity?.assessment_rate_pct != null && (
+                              <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                                Floor {Number(b.capacity.assessment_rate_pct).toFixed(2)}%
+                              </p>
+                            )}
+                            {b.live_rate != null && (
+                              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                                Live {Number(b.live_rate).toFixed(2)}%{b.live_product ? ` · ${b.live_product}` : ''}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {/* Score breakdown */}
+                        {Array.isArray(b.score_breakdown) && b.score_breakdown.length > 0 && (
+                          <details className="mt-1">
+                            <summary className="text-[10px] cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
+                              Score breakdown (starts at 50 · {b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0) > 0 ? `+${b.score_breakdown.filter(x => x.delta > 0).reduce((s, x) => s + x.delta, 0)}` : ''}{b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0) < 0 ? ` ${b.score_breakdown.filter(x => x.delta < 0).reduce((s, x) => s + x.delta, 0)}` : ''} = {Math.round(b.score)})
+                            </summary>
+                            <div className="mt-1.5 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
+                              {b.score_breakdown.map((item, i) => (
+                                <div key={i} className="flex items-center justify-between px-2.5 py-1 border-b last:border-b-0 text-[10px]" style={{ borderColor: 'var(--color-border)' }}>
+                                  <span style={{ color: 'var(--color-muted)' }}>{item.factor}</span>
+                                  <span className="font-semibold tabular-nums" style={{ color: item.delta > 0 ? '#15803d' : item.delta < 0 ? '#b91c1c' : 'var(--color-muted)' }}>
+                                    {item.delta > 0 ? `+${item.delta}` : item.delta}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
                         )}
-                        {(b.documents || []).length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setDocsBankId((prev) => (prev === b.id ? null : b.id))}
-                            className="text-[10px] font-medium transition-opacity duration-200 hover:opacity-70"
-                            style={{ color: 'var(--color-primary)' }}
-                          >
-                            {docsBankId === b.id ? 'Hide documents' : 'Documents they\'d typically ask for'}
-                          </button>
+                        {b.fit_sensitivity?.note && (
+                          <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>{b.fit_sensitivity.note}</p>
+                        )}
+                        {b.capacity?.narrative && (
+                          <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--color-primary)' }}>{b.capacity.narrative}</p>
+                        )}
+                        {(b.reasons || []).filter((r) => r !== b.capacity?.narrative).slice(0, 2).map((reason, ri) => (
+                          <p key={ri} className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>· {reason}</p>
+                        ))}
+                        <div className="flex flex-wrap gap-3 pt-0.5">
+                          {b.fhbgParticipant && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>FHBG</span>}
+                          {b.offsetOnFixed && <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Offset on fixed</span>}
+                          {b.typicalTurnaroundDays != null && (
+                            <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>~{b.typicalTurnaroundDays}d turnaround</span>
+                          )}
+                          {(b.documents || []).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setDocsBankId((prev) => (prev === b.id ? null : b.id))}
+                              className="text-[10px] font-medium transition-opacity duration-200 hover:opacity-70"
+                              style={{ color: 'var(--color-primary)' }}
+                            >
+                              {docsBankId === b.id ? 'Hide documents' : "Documents they'd typically ask for"}
+                            </button>
+                          )}
+                        </div>
+                        {docsBankId === b.id && (
+                          <ul className="text-xs space-y-0.5 pl-3 list-disc" style={{ color: 'var(--color-muted)' }}>
+                            {(b.documents || []).map((d, i) => <li key={i}>{d}</li>)}
+                          </ul>
                         )}
                       </div>
-                      {docsBankId === b.id && (
-                        <ul className="text-xs space-y-0.5 pl-3 list-disc" style={{ color: 'var(--color-muted)' }}>
-                          {(b.documents || []).map((d, i) => <li key={i}>{d}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           {proforma.live_lender_error && (
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Live rates unavailable right now: {proforma.live_lender_error}</p>
           )}
@@ -3202,7 +3259,7 @@ const BROKER_CHECKLIST = [
       { id: 'l2', text: 'All credit card and BNPL limits confirmed complete and current — even $0-balance cards count toward DTI' },
       { id: 'l3', text: 'HECS/HELP balance and current repayment rate confirmed (affects assessment rate at most lenders)' },
       { id: 'l4', text: 'All personal loans, vehicle finance, and buy-now-pay-later facilities disclosed and documented' },
-      { id: 'l5', text: 'Any defaults, missed payments, or credit enquiries in last 6–12 months identified — adverse credit not modelled here' },
+      { id: 'l5', text: 'Credit file obtained and reviewed before submission — use the adverse credit simulation toggle in the bank panel to see fit score and capacity shifts if a default is present; this tool models the scoring impact but cannot replace an actual bureau check' },
       { id: 'l6', text: 'Defaults, judgments, or bankruptcy history screened — these require specific lenders or specialist credit paths' },
       { id: 'l7', text: 'Contingent liabilities disclosed: any loans the client has guaranteed for another party' },
       { id: 'l8', text: 'Any recent large credit increases or new facilities taken out in last 3 months noted' },
@@ -3270,6 +3327,8 @@ const BROKER_CHECKLIST = [
       { id: 'po1', text: 'Lender credit policy cross-checked directly — posture notes in this tool are a dated policy snapshot, not live policy documents; the snapshot date is shown above each bank panel' },
       { id: 'po2', text: 'Fit score reviewed with the breakdown table — expand each bank\'s score to see which factors contributed (capacity headroom, DTI, LVR, tenure, etc.) rather than treating the number as opaque' },
       { id: 'po3', text: 'Indicative capacity figures reviewed as ranges (±3%) — a figure like "$1.41M – $1.47M" reflects model estimation, not a lender quote; treat the midpoint as directional only' },
+      { id: 'po3a', text: 'Assessment rate floor confirmed per lender — most use 8.50% (APRA floor); Macquarie ~8.65%, BOQ ~8.55%; the floor shown in this tool is a curated estimate and only binds when targetRate + 3% falls below it' },
+      { id: 'po3b', text: 'Adverse credit simulation run (toggle in bank panel) before submitting any file with potential credit issues — shows fit/capacity delta per bank for 1 adverse event without running a hard enquiry' },
       { id: 'po2', text: 'Each shortlisted lender\'s current servicing calculator confirmed for HEM version, overtime shading, and rental income treatment' },
       { id: 'po3', text: 'If LVR >80%: LMI provider policy checked and LMI cost disclosed to client before submission' },
       { id: 'po4', text: 'If LVR >90%: applicable scheme eligibility (FHBG, RGS, FHLD) confirmed as current with quota available — schemes fill quickly' },

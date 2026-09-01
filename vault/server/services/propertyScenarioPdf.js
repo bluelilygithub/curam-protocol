@@ -379,9 +379,96 @@ function buildTimeline(b, calcResult) {
   );
 }
 
+// ── Bank panel ────────────────────────────────────────────────────────────────
+
+function fmtCapRangePdf(cap, marginPct = 0.03) {
+  if (!cap || isNaN(Number(cap))) return null;
+  const v = Number(cap);
+  const lo = Math.round(v * (1 - marginPct) / 5000) * 5000;
+  const hi = Math.round(v * (1 + marginPct) / 5000) * 5000;
+  const fmt = (n) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1000).toFixed(0)}k`;
+  return `~${fmt(lo)} – ${fmt(hi)}`;
+}
+
+function buildBankPanel(b, calcResult) {
+  const panel = calcResult.bankPanel || calcResult.bankPosture;
+  const banks = panel?.banks;
+  if (!banks?.length) return;
+
+  b.sectionTitle('How Each Bank May See This File');
+  if (panel.capacity_note) b.note(panel.capacity_note);
+  if (panel.fit_vs_overall_note) b.note(panel.fit_vs_overall_note);
+
+  for (const bank of banks) {
+    b.gap(4);
+    const fitLabel = bank.fit ? String(bank.fit).toUpperCase() : '–';
+    const scoreStr = bank.score != null ? ` · ${Math.round(bank.score)}` : '';
+    const cap = bank.capacity?.indicative_capacity;
+    const capStr = cap != null ? (fmtCapRangePdf(cap) || fmtMoney(cap)) : '–';
+    const floorStr = bank.capacity?.assessment_rate_pct != null
+      ? `assessed at ${Number(bank.capacity.assessment_rate_pct).toFixed(2)}%` : '';
+
+    b.text(`${bank.name}  ${fitLabel}${scoreStr}`, { size: 9.5, bold: true, color: C.text });
+    b.row('Indicative capacity', `${capStr}${floorStr ? `  (${floorStr})` : ''}`);
+    if (bank.postureSummary) b.row('Posture', bank.postureSummary);
+    if (bank.capacity?.narrative) b.row('Capacity note', bank.capacity.narrative);
+
+    if (Array.isArray(bank.score_breakdown) && bank.score_breakdown.length > 0) {
+      const pos = bank.score_breakdown.filter((x) => x.delta > 0).reduce((s, x) => s + x.delta, 0);
+      const neg = bank.score_breakdown.filter((x) => x.delta < 0).reduce((s, x) => s + x.delta, 0);
+      b.row('Score breakdown', `Start 50${pos > 0 ? ` +${pos}` : ''}${neg < 0 ? ` ${neg}` : ''} = ${Math.round(bank.score)}`);
+      b.table(
+        ['Factor', 'Delta'],
+        bank.score_breakdown.map((x) => [x.factor, x.delta > 0 ? `+${x.delta}` : String(x.delta)]),
+        { colWidths: [350, 80] },
+      );
+    }
+    const reasons = (bank.reasons || []).filter((r) => r !== bank.capacity?.narrative).slice(0, 3);
+    for (const r of reasons) b.note(`· ${r}`);
+  }
+
+  b.note('Assessment rate floor per bank: most at 8.50% (APRA); Macquarie ~8.65%, BOQ ~8.55% (curated estimates). Floor is only binding when targetRate + 3% < floor.');
+  if (panel.note) b.note(panel.note);
+}
+
+function buildBankPanelAdverse(b, calcResult) {
+  const panel = calcResult.bankPanelAdverse || calcResult.bankPostureAdverse;
+  const normalPanel = calcResult.bankPanel || calcResult.bankPosture;
+  if (!panel?.banks?.length) return;
+
+  const normalByBank = Object.fromEntries(
+    (normalPanel?.banks || []).map((bk) => [bk.id, bk])
+  );
+
+  b.sectionTitle('Adverse Credit Simulation');
+  b.note('Shows the impact of assuming 1 default or adverse event in the last 2 years. Compare to the bank panel above. This is a scoring model delta — not a bureau-level credit assessment.');
+
+  const tableRows = panel.banks.map((bk) => {
+    const norm = normalByBank[bk.id];
+    const scoreDelta = (norm?.score != null && bk.score != null) ? Math.round(bk.score - norm.score) : null;
+    const capNorm = norm?.capacity?.indicative_capacity;
+    const capAdv  = bk.capacity?.indicative_capacity;
+    const capDeltaStr = (capNorm != null && capAdv != null)
+      ? `${capAdv >= capNorm ? '+' : ''}${Math.round((capAdv - capNorm) / 1000)}k`
+      : '–';
+    return [
+      bk.name,
+      norm ? `${String(norm.fit || '').toUpperCase()} · ${Math.round(norm.score || 0)}` : '–',
+      `${String(bk.fit || '').toUpperCase()} · ${Math.round(bk.score || 0)}`,
+      scoreDelta != null ? (scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta)) : '–',
+      capDeltaStr,
+    ];
+  });
+
+  b.table(
+    ['Bank', 'Normal fit · score', 'Adverse fit · score', 'Δ score', 'Δ capacity'],
+    tableRows,
+    { colWidths: [110, 115, 115, 65, 65] },
+  );
+}
+
 function buildLenders(b, calcResult) {
   const rows = calcResult.lenders?.rows || [];
-  if (!rows.length) return;
   b.sectionTitle('Lender Comparison - All CDR Products');
   b.note(calcResult.lenders?.data_note || 'Live CDR Product Reference Data. Rates are lowest available owner-occupied P&I per lender.');
   b.table(
@@ -539,6 +626,8 @@ async function buildPropertyScenarioPdfBuffer(calcResult, inputs, scenarioType, 
   if (show('overview') && scenarioType === 'sell') buildSellCgt(b, calcResult, inputs);
   if (show('overview')) buildSummaryTable(b, calcResult);
   if (show('overview')) buildTimeline(b, calcResult);
+  if (show('overview')) buildBankPanel(b, calcResult);
+  if (show('overview') && calcResult.bankPanelAdverse) buildBankPanelAdverse(b, calcResult);
   if (show('lenders')) buildLenders(b, calcResult);
   if (show('calculators')) buildCalculators(b, calcResult);
   if (show('followups')) buildFollowUps(b, calcResult, followUpAnswers);
