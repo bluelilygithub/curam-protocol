@@ -2924,7 +2924,7 @@ function SettingsTab() {
             <Field label="Admin CC email">
               <Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" />
             </Field>
-            <Field label="Daily reminder time">
+            <Field label="Monday reminder time" hint="Overdue reminders send once per week, Monday morning at this time">
               <Sel value={f('fin_reminder_hour') || '8'} onChange={set('fin_reminder_hour')}>
                 {Array.from({length: 24}, (_,i) => (
                   <option key={i} value={String(i)}>{String(i).padStart(2,'0')}:00</option>

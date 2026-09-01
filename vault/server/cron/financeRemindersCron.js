@@ -229,9 +229,9 @@ let task = null;
 
 function startFinanceRemindersCron() {
   if (task) return;
-  // Run at the top of every hour; inside, check each user's configured reminder hour
+  // Run at the top of every hour on Mondays; inside, check each user's configured reminder hour
   // (fin_reminder_hour setting, default 8) and only fire when it matches
-  task = cron.schedule('0 * * * *', async () => {
+  task = cron.schedule('0 * * * 1', async () => {
     const currentHour = new Date().getHours(); // server local hour
     try {
       // Find users whose configured reminder hour matches now (or who haven't set one and it's 8am)
@@ -257,7 +257,7 @@ function startFinanceRemindersCron() {
       console.error('[finance-reminders] Cron scheduling error:', err.message);
     }
   });
-  console.log('[finance-reminders] Cron scheduled — runs hourly, fires per-user at configured hour (default 08:00)');
+  console.log('[finance-reminders] Cron scheduled — runs hourly on Mondays, fires per-user at configured hour (default 08:00)');
 }
 
 module.exports = { startFinanceRemindersCron, runFinanceReminders };
