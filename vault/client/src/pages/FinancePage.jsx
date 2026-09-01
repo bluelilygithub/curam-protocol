@@ -909,7 +909,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
               <Field label="Issue Date">
                 <Input type="date" value={form.issueDate} onChange={v => setForm(p => ({...p, issueDate: v}))} />
               </Field>
-              <Field label="Due Date">
+              <Field label={form.docType === 'quote' ? 'Valid Until Date' : 'Due Date'}>
                 <Input type="date" value={form.dueDate} onChange={v => setForm(p => ({...p, dueDate: v}))} />
               </Field>
               {modal !== 'new' && modal?.status === 'paid' && (
@@ -950,11 +950,11 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                     />
                     <Input value={item.unitPrice}   onChange={v => setItem(idx, 'unitPrice', v)}   type="number" placeholder="0.00" />
-                    <div className="flex items-center justify-center pt-2">
+                    <div className="flex items-start pt-0">
                       <select
                         value={item.gstCode || 'GST'}
                         onChange={e => setItem(idx, 'gstCode', e.target.value)}
-                        className="text-xs px-1.5 py-1.5 rounded border w-full"
+                        className="text-sm px-3 py-2 rounded-lg border w-full"
                         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                       >
                         <option value="GST">GST 10%</option>
