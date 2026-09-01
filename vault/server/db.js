@@ -1670,6 +1670,15 @@ async function initSchema() {
       ON gsc_snapshots ("userId", "createdAt" DESC)
   `);
 
+  // ── Finance: quotes + N-T tax code ───────────────────────────────────────
+  await pool.query(`ALTER TABLE fin_invoices ADD COLUMN IF NOT EXISTS "docType" TEXT NOT NULL DEFAULT 'invoice'`);
+  await pool.query(`ALTER TABLE fin_invoice_items ADD COLUMN IF NOT EXISTS "gstCode" TEXT NOT NULL DEFAULT 'GST'`);
+  // Back-fill: items where gst=0 but amount>0 were intentionally non-taxable
+  await pool.query(`UPDATE fin_invoice_items SET "gstCode"='NT' WHERE "gstCode"='GST' AND gst=0 AND amount>0`);
+  // Extend status constraint to cover quote lifecycle values
+  await pool.query(`ALTER TABLE fin_invoices DROP CONSTRAINT IF EXISTS fin_invoices_status_check`);
+  await pool.query(`ALTER TABLE fin_invoices ADD CONSTRAINT fin_invoices_status_check CHECK(status IN ('draft','sent','paid','void','accepted','declined'))`);
+
   console.log('[db] Schema ready');
 }
 

@@ -30,6 +30,8 @@ function fmtDate(d) {
 function buildDocument(deps, invoice, items, client, cfg) {
   const { Document, Page, Text, View, StyleSheet, Image } = deps;
 
+  const isQuote = invoice.docType === 'quote';
+
   const styles = StyleSheet.create({
     page:             { fontSize: 10, fontFamily: 'Helvetica', color: DARK, paddingHorizontal: 42, paddingTop: 40, paddingBottom: 36 },
     // Header
@@ -60,6 +62,7 @@ function buildDocument(deps, invoice, items, client, cfg) {
     colAmt:           { width: '20%', alignItems: 'flex-end' },
     cellText:         { fontSize: 9, color: DARK },
     cellSub:          { fontSize: 7.5, color: GREY, fontFamily: 'Helvetica-Oblique', marginTop: 2 },
+    cellNt:           { fontSize: 7.5, color: GREY, fontFamily: 'Helvetica-Bold', marginTop: 2 },
     waivedText:       { fontSize: 9, color: GREY },
     // Totals
     totalsArea:       { alignItems: 'flex-end', marginTop: 14, marginBottom: 18 },
@@ -90,10 +93,14 @@ function buildDocument(deps, invoice, items, client, cfg) {
   );
 
   // Header right
+  const dueDateLabel = isQuote ? 'Valid Until' : 'Due Date';
+  const docLabel     = isQuote ? 'QUOTE' : 'TAX INVOICE';
+  const refLabel     = isQuote ? 'Quote' : 'Invoice';
+
   const headerRight = React.createElement(View, { style: styles.headerRight },
-    React.createElement(Text, { style: styles.taxInvoiceLabel }, 'TAX INVOICE'),
+    React.createElement(Text, { style: styles.taxInvoiceLabel }, docLabel),
     React.createElement(View, { style: styles.metaRow },
-      React.createElement(Text, { style: styles.metaLabel }, 'Invoice'),
+      React.createElement(Text, { style: styles.metaLabel }, refLabel),
       React.createElement(Text, { style: styles.metaValue }, invoice.number),
     ),
     React.createElement(View, { style: styles.metaRow },
@@ -101,14 +108,15 @@ function buildDocument(deps, invoice, items, client, cfg) {
       React.createElement(Text, { style: styles.metaValue }, fmtDate(invoice.issueDate)),
     ),
     invoice.dueDate && React.createElement(View, { style: styles.metaRow },
-      React.createElement(Text, { style: styles.metaLabel }, 'Due Date'),
+      React.createElement(Text, { style: styles.metaLabel }, dueDateLabel),
       React.createElement(Text, { style: styles.metaValue }, fmtDate(invoice.dueDate)),
     ),
   );
 
-  // Bill To
+  // Bill To / Quote For
+  const addrLabel = isQuote ? 'QUOTE FOR' : 'BILL TO';
   const billTo = React.createElement(View, { style: styles.billToSection },
-    React.createElement(Text, { style: styles.billToLabel }, 'BILL TO'),
+    React.createElement(Text, { style: styles.billToLabel }, addrLabel),
     client && React.createElement(Text, { style: styles.billToName }, client.name),
     client?.contactName && React.createElement(Text, { style: styles.billToDetail }, `Attn: ${client.contactName}`),
     client?.email   && React.createElement(Text, { style: styles.billToDetail }, `Email: ${client.email}`),
@@ -133,6 +141,7 @@ function buildDocument(deps, invoice, items, client, cfg) {
   const itemRows = items.map((item, idx) => {
     const isWaived = parseFloat(item.amount) === 0;
     const showQty  = parseFloat(item.qty) !== 1;
+    const isNt     = (item.gstCode || (parseFloat(item.gst) > 0 ? 'GST' : 'NT')) === 'NT';
     return React.createElement(View, {
       key: String(idx),
       style: [styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}],
@@ -148,11 +157,13 @@ function buildDocument(deps, invoice, items, client, cfg) {
         isWaived
           ? React.createElement(Text, { style: styles.waivedText }, 'Waived')
           : React.createElement(Text, { style: styles.cellText }, fmtAud(item.amount)),
+        isNt && !isWaived && React.createElement(Text, { style: styles.cellNt }, 'N-T'),
       ),
     );
   });
 
   // Totals
+  const totalLabel = isQuote ? 'Total Value' : 'Total Due';
   const totals = React.createElement(View, { style: styles.totalsArea },
     React.createElement(View, { style: styles.totalsRow },
       React.createElement(Text, { style: styles.totalsLabel }, 'Subtotal (ex-GST)'),
@@ -164,32 +175,36 @@ function buildDocument(deps, invoice, items, client, cfg) {
     ),
     React.createElement(View, { style: styles.totalDivider }),
     React.createElement(View, { style: styles.totalRow },
-      React.createElement(Text, { style: styles.totalLabel }, 'Total Due'),
+      React.createElement(Text, { style: styles.totalLabel }, totalLabel),
       React.createElement(Text, { style: styles.totalValue }, fmtAud(invoice.total)),
     ),
   );
 
-  // Footer payment details text
-  const paymentLines = [
+  // Footer — omit payment instructions for quotes
+  const paymentLines = !isQuote ? [
     cfg.fin_bank_name      && `Bank: ${cfg.fin_bank_name}`,
     cfg.fin_account_name   && `Account Name: ${cfg.fin_account_name}`,
     cfg.fin_bsb            && `BSB: ${cfg.fin_bsb}`,
     cfg.fin_account_number && `Account Number: ${cfg.fin_account_number}`,
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean).join('\n') : null;
+
+  const footerChildren = [
+    React.createElement(View, { key: 'terms', style: styles.footerCol },
+      React.createElement(Text, { style: styles.footerHeading }, 'Notes'),
+      React.createElement(Text, { style: styles.footerText }, invoice.notes || '—'),
+    ),
+  ];
+  if (paymentLines) {
+    footerChildren.push(React.createElement(View, { key: 'sep', style: styles.footerSep }));
+    footerChildren.push(React.createElement(View, { key: 'pay', style: styles.footerCol },
+      React.createElement(Text, { style: styles.footerHeading }, 'Payment Instructions'),
+      React.createElement(Text, { style: styles.footerText }, paymentLines),
+    ));
+  }
 
   const footer = React.createElement(View, null,
     React.createElement(View, { style: styles.footerDivider }),
-    React.createElement(View, { style: styles.footerRow },
-      React.createElement(View, { style: styles.footerCol },
-        React.createElement(Text, { style: styles.footerHeading }, 'Terms & Notes'),
-        React.createElement(Text, { style: styles.footerText }, invoice.notes || '—'),
-      ),
-      React.createElement(View, { style: styles.footerSep }),
-      React.createElement(View, { style: styles.footerCol },
-        React.createElement(Text, { style: styles.footerHeading }, 'Payment Instructions'),
-        React.createElement(Text, { style: styles.footerText }, paymentLines || '—'),
-      ),
-    ),
+    React.createElement(View, { style: styles.footerRow }, ...footerChildren),
   );
 
   return React.createElement(Document, null,

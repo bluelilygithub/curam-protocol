@@ -31,9 +31,9 @@ const { pool } = require('../db');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function nextInvoiceNumber(userId) {
-  const year = new Date().getFullYear();
-  const prefix = `INV-${year}`;
+async function nextInvoiceNumber(userId, docType = 'invoice') {
+  const year   = new Date().getFullYear();
+  const prefix = docType === 'quote' ? `Q-${year}-` : `INV-${year}`;
   const { rows } = await pool.query(
     `SELECT number FROM fin_invoices WHERE "userId"=$1 AND number LIKE $2 ORDER BY id DESC LIMIT 1`,
     [userId, `${prefix}%`]
@@ -41,6 +41,11 @@ async function nextInvoiceNumber(userId) {
   if (!rows.length) return `${prefix}001`;
   const seq = parseInt(rows[0].number.slice(prefix.length), 10) || 0;
   return `${prefix}${String(seq + 1).padStart(3, '0')}`;
+}
+
+function calcItemGst(item) {
+  const code = item.gstCode || (item.gstApplies === false ? 'NT' : 'GST');
+  return code === 'GST';
 }
 
 const DEFAULT_ACCOUNTS = [
@@ -476,18 +481,20 @@ router.post('/invoices', async (req, res) => {
   try {
     await client.query('BEGIN');
     const userId = req.user.id;
-    const { clientId, clientRef, issueDate, dueDate, notes, items = [] } = req.body;
+    const { clientId, clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
 
     let subtotal = 0, gst = 0;
     for (const item of items) {
-      const qty = parseFloat(item.qty) || 0;
-      const up  = parseFloat(item.unitPrice) || 0;
-      const amt = parseFloat((qty * up).toFixed(2));
-      const itemGst = item.gstApplies ? parseFloat((amt * 0.1).toFixed(2)) : 0;
-      item._qty    = qty;
-      item._up     = up;
-      item._amount = amt;
-      item._gst    = itemGst;
+      const qty     = parseFloat(item.qty) || 0;
+      const up      = parseFloat(item.unitPrice) || 0;
+      const amt     = parseFloat((qty * up).toFixed(2));
+      const taxable = calcItemGst(item);
+      const itemGst = taxable ? parseFloat((amt * 0.1).toFixed(2)) : 0;
+      item._qty     = qty;
+      item._up      = up;
+      item._amount  = amt;
+      item._gst     = itemGst;
+      item._gstCode = taxable ? 'GST' : (item.gstCode || 'NT');
       subtotal += amt;
       gst      += itemGst;
     }
@@ -495,41 +502,42 @@ router.post('/invoices', async (req, res) => {
     gst      = parseFloat(gst.toFixed(2));
     const total = parseFloat((subtotal + gst).toFixed(2));
 
-    const number = await nextInvoiceNumber(userId);
+    const number = await nextInvoiceNumber(userId, docType);
     const { rows } = await client.query(
-      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes)
-       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [userId, clientId||null, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null]
+      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
+       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [userId, clientId||null, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null, docType]
     );
     const invoice = rows[0];
 
     for (const item of items) {
       await client.query(
-        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [invoice.id, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null]
+        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId", "gstCode")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [invoice.id, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null, item._gstCode]
       );
     }
 
-    // Journal: DR Accounts Receivable, CR Income, CR GST Collected
-    await ensureAccounts(userId);
-    const arId     = await accountByCode(userId, '1100');
-    const incId    = await accountByCode(userId, '4000');
-    const gstColId = await accountByCode(userId, '2200');
-    if (arId && incId && gstColId) {
-      const lines = [
-        { accountId: arId,     debit: total,    credit: 0 },
-        { accountId: incId,    debit: 0,        credit: subtotal },
-        { accountId: gstColId, debit: 0,        credit: gst },
-      ];
-      await createJournalEntry(client, userId, {
-        date:        issueDate || new Date().toISOString().slice(0, 10),
-        description: `Invoice ${number}`,
-        reference:   number,
-        type:        'invoice',
-        sourceId:    invoice.id,
-        lines,
-      });
+    // Journal only for invoices, not quotes (quotes aren't accounting transactions yet)
+    if (docType === 'invoice') {
+      await ensureAccounts(userId);
+      const arId     = await accountByCode(userId, '1100');
+      const incId    = await accountByCode(userId, '4000');
+      const gstColId = await accountByCode(userId, '2200');
+      if (arId && incId && gstColId) {
+        await createJournalEntry(client, userId, {
+          date:        issueDate || new Date().toISOString().slice(0, 10),
+          description: `Invoice ${number}`,
+          reference:   number,
+          type:        'invoice',
+          sourceId:    invoice.id,
+          lines: [
+            { accountId: arId,     debit: total,    credit: 0 },
+            { accountId: incId,    debit: 0,        credit: subtotal },
+            { accountId: gstColId, debit: 0,        credit: gst },
+          ],
+        });
+      }
     }
 
     await client.query('COMMIT');
@@ -628,7 +636,7 @@ router.put('/invoices/:id', async (req, res) => {
     const { clientId, clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
 
     const { rows: check } = await client.query(
-      `SELECT id, number, status, "paidAt" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
+      `SELECT id, number, status, "paidAt", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
     );
     if (!check[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
 
@@ -648,14 +656,16 @@ router.put('/invoices/:id', async (req, res) => {
 
     let subtotal = 0, gst = 0;
     for (const item of items) {
-      const qty = parseFloat(item.qty) || 0;
-      const up  = parseFloat(item.unitPrice) || 0;
-      const amt = parseFloat((qty * up).toFixed(2));
-      const itemGst = item.gstApplies ? parseFloat((amt * 0.1).toFixed(2)) : 0;
-      item._qty    = qty;
-      item._up     = up;
-      item._amount = amt;
-      item._gst    = itemGst;
+      const qty     = parseFloat(item.qty) || 0;
+      const up      = parseFloat(item.unitPrice) || 0;
+      const amt     = parseFloat((qty * up).toFixed(2));
+      const taxable = calcItemGst(item);
+      const itemGst = taxable ? parseFloat((amt * 0.1).toFixed(2)) : 0;
+      item._qty     = qty;
+      item._up      = up;
+      item._amount  = amt;
+      item._gst     = itemGst;
+      item._gstCode = taxable ? 'GST' : (item.gstCode || 'NT');
       subtotal += amt;
       gst      += itemGst;
     }
@@ -678,12 +688,13 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query(`DELETE FROM fin_invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
     for (const item of items) {
       await client.query(
-        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [invoiceId, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null]
+        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId", "gstCode")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [invoiceId, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null, item._gstCode]
       );
     }
 
+    const isQuote = check[0].docType === 'quote';
     await ensureAccounts(userId);
     const arId     = await accountByCode(userId, '1100');
     const incId    = await accountByCode(userId, '4000');
@@ -691,37 +702,39 @@ router.put('/invoices/:id', async (req, res) => {
     const bankId   = await accountByCode(userId, '1000');
     const invNum   = check[0].number;
 
-    // Recreate invoice journal entry (AR / Income / GST collected)
-    await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
-    if (arId && incId && gstColId) {
-      await createJournalEntry(client, userId, {
-        date:        issueDate || new Date().toISOString().slice(0, 10),
-        description: `Invoice ${invNum}`,
-        reference:   invNum,
-        type:        'invoice',
-        sourceId:    parseInt(invoiceId),
-        lines: [
-          { accountId: arId,     debit: total,    credit: 0 },
-          { accountId: incId,    debit: 0,        credit: subtotal },
-          { accountId: gstColId, debit: 0,        credit: gst },
-        ],
-      });
-    }
+    // Recreate invoice journal entry (AR / Income / GST collected) — quotes have no journal
+    if (!isQuote) {
+      await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
+      if (arId && incId && gstColId) {
+        await createJournalEntry(client, userId, {
+          date:        issueDate || new Date().toISOString().slice(0, 10),
+          description: `Invoice ${invNum}`,
+          reference:   invNum,
+          type:        'invoice',
+          sourceId:    parseInt(invoiceId),
+          lines: [
+            { accountId: arId,     debit: total,    credit: 0 },
+            { accountId: incId,    debit: 0,        credit: subtotal },
+            { accountId: gstColId, debit: 0,        credit: gst },
+          ],
+        });
+      }
 
-    // For paid invoices, also recreate the payment journal entry (Bank / AR)
-    if (isPaid && bankId && arId) {
-      await deleteJournalForSource(client, userId, parseInt(invoiceId), 'payment');
-      await createJournalEntry(client, userId, {
-        date:        newPaidAt,
-        description: `Payment received — ${invNum}`,
-        reference:   invNum,
-        type:        'payment',
-        sourceId:    parseInt(invoiceId),
-        lines: [
-          { accountId: bankId, debit: total,  credit: 0 },
-          { accountId: arId,   debit: 0,      credit: total },
-        ],
-      });
+      // For paid invoices, also recreate the payment journal entry (Bank / AR)
+      if (isPaid && bankId && arId) {
+        await deleteJournalForSource(client, userId, parseInt(invoiceId), 'payment');
+        await createJournalEntry(client, userId, {
+          date:        newPaidAt,
+          description: `Payment received — ${invNum}`,
+          reference:   invNum,
+          type:        'payment',
+          sourceId:    parseInt(invoiceId),
+          lines: [
+            { accountId: bankId, debit: total,  credit: 0 },
+            { accountId: arId,   debit: 0,      credit: total },
+          ],
+        });
+      }
     }
 
     await client.query('COMMIT');
@@ -944,6 +957,78 @@ router.post('/invoices/:id/mark-paid', async (req, res) => {
 
     await dbClient.query('COMMIT');
     res.json(invoice);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.post('/invoices/:id/convert', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId    = req.user.id;
+    const quoteId   = req.params.id;
+
+    const { rows: qRows } = await dbClient.query(
+      `SELECT * FROM fin_invoices WHERE id=$1 AND "userId"=$2 AND "docType"='quote'`,
+      [quoteId, userId]
+    );
+    if (!qRows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Quote not found' }); }
+    const quote = qRows[0];
+    if (quote.status === 'accepted') { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Quote already converted' }); }
+
+    const { rows: qItems } = await dbClient.query(
+      `SELECT * FROM fin_invoice_items WHERE "invoiceId"=$1 ORDER BY id`, [quoteId]
+    );
+
+    const number = await nextInvoiceNumber(userId, 'invoice');
+    const today  = new Date().toISOString().slice(0, 10);
+
+    const { rows: invRows } = await dbClient.query(
+      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
+       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,'invoice') RETURNING *`,
+      [userId, quote.clientId, quote.clientRef, number, today, quote.dueDate, quote.subtotal, quote.gst, quote.total, quote.notes]
+    );
+    const invoice = invRows[0];
+
+    for (const item of qItems) {
+      await dbClient.query(
+        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId", "gstCode")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [invoice.id, item.description, item.qty, item.unitPrice, item.gst, item.amount, item.txCodeId, item.gstCode || 'GST']
+      );
+    }
+
+    // Create journal entry for the new invoice
+    await ensureAccounts(userId);
+    const arId     = await accountByCode(userId, '1100');
+    const incId    = await accountByCode(userId, '4000');
+    const gstColId = await accountByCode(userId, '2200');
+    if (arId && incId && gstColId) {
+      await createJournalEntry(dbClient, userId, {
+        date:        today,
+        description: `Invoice ${number} (from quote ${quote.number})`,
+        reference:   number,
+        type:        'invoice',
+        sourceId:    invoice.id,
+        lines: [
+          { accountId: arId,     debit: invoice.total,    credit: 0 },
+          { accountId: incId,    debit: 0,                credit: invoice.subtotal },
+          { accountId: gstColId, debit: 0,                credit: invoice.gst },
+        ],
+      });
+    }
+
+    // Mark the quote as accepted
+    await dbClient.query(
+      `UPDATE fin_invoices SET status='accepted', "updatedAt"=NOW() WHERE id=$1`, [quoteId]
+    );
+
+    await dbClient.query('COMMIT');
+    res.json({ quote: { ...quote, status: 'accepted' }, invoice });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });

@@ -127,11 +127,13 @@ function displayStatus(inv) {
 
 function StatusBadge({ status }) {
   const map = {
-    draft:   { bg: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' },
-    sent:    { bg: '#dbeafe', color: '#1e40af' },
-    paid:    { bg: '#d1fae5', color: '#065f46' },
-    void:    { bg: '#fee2e2', color: '#991b1b' },
-    overdue: { bg: '#fee2e2', color: '#991b1b' },
+    draft:    { bg: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' },
+    sent:     { bg: '#dbeafe', color: '#1e40af' },
+    paid:     { bg: '#d1fae5', color: '#065f46' },
+    void:     { bg: '#fee2e2', color: '#991b1b' },
+    overdue:  { bg: '#fee2e2', color: '#991b1b' },
+    accepted: { bg: '#d1fae5', color: '#065f46' },
+    declined: { bg: '#fee2e2', color: '#991b1b' },
   };
   const s = map[status] || map.draft;
   return (
@@ -558,14 +560,15 @@ function ClientsTab() {
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
-const BLANK_ITEM = { description: '', qty: '1', unitPrice: '', gstApplies: true, txCodeId: null };
+const BLANK_ITEM = { description: '', qty: '1', unitPrice: '', gstCode: 'GST', txCodeId: null };
 
 function calcTotals(items) {
   let subtotal = 0, gst = 0;
   for (const item of items) {
     const amt = (parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0);
     subtotal += amt;
-    if (item.gstApplies) gst += amt * 0.1;
+    const code = item.gstCode || (item.gstApplies === false ? 'NT' : 'GST');
+    if (code === 'GST') gst += amt * 0.1;
   }
   return { subtotal: subtotal.toFixed(2), gst: gst.toFixed(2), total: (subtotal + gst).toFixed(2) };
 }
@@ -586,9 +589,11 @@ function InvoicesTab({ from, to }) {
   const [paidModal, setPaidModal] = useState(null); // { inv, date }
   const [pdfLoading, setPdfLoading] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType]     = useState('invoices');
+  const [converting, setConverting]     = useState(null);
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }] });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType: 'invoice' });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
@@ -607,7 +612,7 @@ function InvoicesTab({ from, to }) {
 
   const incomeCodeMap = Object.fromEntries(incomeCodes.map(c => [c.id, c]));
 
-  const openNew = () => { setForm(blankForm()); setError(''); setModal('new'); };
+  const openNew = (docType = 'invoice') => { setForm({ ...blankForm(), docType }); setError(''); setModal('new'); };
 
   const openEdit = async (inv) => {
     if (inv.isLocked) return;
@@ -618,8 +623,9 @@ function InvoicesTab({ from, to }) {
       dueDate:   data.dueDate  ? String(data.dueDate).slice(0,10)  : '',
       notes:     data.notes || '',
       paidAt:    data.paidAt  ? String(data.paidAt).slice(0,10)   : '',
+      docType:   data.docType || 'invoice',
       items:     data.items.length
-        ? data.items.map(i => ({ description: i.description, qty: String(i.qty), unitPrice: String(i.unitPrice), gstApplies: parseFloat(i.gst) > 0, txCodeId: i.txCodeId || null }))
+        ? data.items.map(i => ({ description: i.description, qty: String(i.qty), unitPrice: String(i.unitPrice), gstCode: i.gstCode || (parseFloat(i.gst) > 0 ? 'GST' : 'NT'), txCodeId: i.txCodeId || null }))
         : [{ ...BLANK_ITEM }],
     });
     setError('');
@@ -643,22 +649,23 @@ function InvoicesTab({ from, to }) {
       const clientId  = src === 'fin' ? parseInt(rawId, 10) : null;
       const clientRef = src === 'crm' ? parseInt(rawId, 10) : null;
       const payload = { ...form, clientRef, clientId, paidAt: form.paidAt || null };
+      const label = form.docType === 'quote' ? 'Quote' : 'Invoice';
       if (modal === 'new') {
         const res = await api.post('/api/finance/invoices', payload);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to create invoice');
+          throw new Error(body.error || `Failed to create ${label.toLowerCase()}`);
         }
       } else {
         const res = await api.put(`/api/finance/invoices/${modal.id}`, { ...payload, status: modal.status });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to update invoice');
+          throw new Error(body.error || `Failed to update ${label.toLowerCase()}`);
         }
       }
       await load();
       setModal(null);
-      addToast(modal === 'new' ? 'Invoice created' : 'Invoice updated');
+      addToast(modal === 'new' ? `${label} created` : `${label} updated`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -742,15 +749,54 @@ function InvoicesTab({ from, to }) {
     }
   };
 
+  const convertQuote = async (inv) => {
+    setConverting(inv.id);
+    try {
+      const res  = await api.post(`/api/finance/invoices/${inv.id}/convert`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Conversion failed');
+      await load();
+      addToast(`Quote ${inv.number} converted → ${body.invoice.number}`);
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setConverting(null);
+    }
+  };
+
   return (
     <div data-tour="finance-invoices" className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Invoices</h2>
-        <Btn onClick={openNew}>+ New Invoice</Btn>
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>
+          {filterType === 'quotes' ? 'Quotes' : 'Invoices'}
+        </h2>
+        <div className="flex gap-2">
+          <Btn variant="secondary" onClick={() => openNew('quote')}>+ New Quote</Btn>
+          <Btn onClick={() => openNew('invoice')}>+ New Invoice</Btn>
+        </div>
+      </div>
+
+      {/* Doc type toggle */}
+      <div className="flex gap-1 mb-2">
+        {['invoices', 'quotes'].map(t => (
+          <button
+            key={t}
+            onClick={() => { setFilterType(t); setFilterStatus('all'); }}
+            className="text-xs px-3 py-1 rounded-md capitalize font-medium transition-colors"
+            style={{
+              background: filterType === t ? 'var(--color-text)' : 'var(--color-surface)',
+              color:      filterType === t ? 'var(--color-bg)'   : 'var(--color-muted)',
+              border:     '1px solid var(--color-border)',
+            }}
+          >{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+        ))}
       </div>
 
       <div className="flex gap-1 mb-3 flex-wrap">
-        {['all','draft','sent','overdue','paid'].map(s => (
+        {(filterType === 'quotes'
+          ? ['all','draft','sent','accepted','declined']
+          : ['all','draft','sent','overdue','paid']
+        ).map(s => (
           <button
             key={s}
             onClick={() => setFilterStatus(s)}
@@ -765,7 +811,9 @@ function InvoicesTab({ from, to }) {
       </div>
 
       {(() => {
+        const isQuoteView = filterType === 'quotes';
         const filtered = invoices.filter(inv => {
+          if (isQuoteView ? inv.docType !== 'quote' : inv.docType === 'quote') return false;
           if (filterStatus !== 'all' && displayStatus(inv) !== filterStatus) return false;
           const d = String(inv.issueDate).slice(0, 10);
           if (from && d < from) return false;
@@ -773,13 +821,13 @@ function InvoicesTab({ from, to }) {
           return true;
         });
         return filtered.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No invoices match this filter.</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No {isQuoteView ? 'quotes' : 'invoices'} match this filter.</p>
         ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Number', 'Client', 'Issued', 'Due', 'Paid', 'Total', 'Status', ''].map(h => (
+                {['Number', 'Client', 'Issued', 'Due', isQuoteView ? 'Accepted' : 'Paid', 'Total', 'Status', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -800,27 +848,59 @@ function InvoicesTab({ from, to }) {
                   <td className="py-2 px-2"><StatusBadge status={displayStatus(inv)} /></td>
                   <td className="py-2 px-2">
                     <div className="flex gap-1 flex-wrap">
-                      {inv.status === 'draft' && (
-                        <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Send</button>
+                      {isQuoteView ? (
+                        <>
+                          {(inv.status === 'draft' || inv.status === 'sent') && (
+                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>
+                              {inv.status === 'draft' ? 'Send' : 'Resend'}
+                            </button>
+                          )}
+                          {!inv.isLocked && inv.status !== 'accepted' && (
+                            <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
+                          )}
+                          {inv.status !== 'accepted' && inv.status !== 'declined' && (
+                            <button
+                              onClick={() => convertQuote(inv)}
+                              disabled={converting === inv.id}
+                              className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                              style={{ color: '#065f46', borderColor: '#a7f3d0' }}
+                            >{converting === inv.id ? '…' : 'Convert →'}</button>
+                          )}
+                          {inv.status !== 'accepted' && (
+                            <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
+                          )}
+                          <button
+                            onClick={() => downloadPdf(inv)}
+                            disabled={pdfLoading === inv.id}
+                            className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                            style={{ color: '#6b7280', borderColor: '#d1d5db' }}
+                          >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                        </>
+                      ) : (
+                        <>
+                          {inv.status === 'draft' && (
+                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Send</button>
+                          )}
+                          {inv.status === 'sent' && (
+                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Resend</button>
+                          )}
+                          {!inv.isLocked && (
+                            <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
+                          )}
+                          {inv.status !== 'paid' && inv.status !== 'void' && (
+                            <button onClick={() => markPaid(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#065f46', borderColor: '#a7f3d0' }}>Paid</button>
+                          )}
+                          {inv.status !== 'paid' && (
+                            <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
+                          )}
+                          <button
+                            onClick={() => downloadPdf(inv)}
+                            disabled={pdfLoading === inv.id}
+                            className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                            style={{ color: '#6b7280', borderColor: '#d1d5db' }}
+                          >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                        </>
                       )}
-                      {inv.status === 'sent' && (
-                        <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Resend</button>
-                      )}
-                      {!inv.isLocked && (
-                        <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
-                      )}
-                      {inv.status !== 'paid' && inv.status !== 'void' && (
-                        <button onClick={() => markPaid(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#065f46', borderColor: '#a7f3d0' }}>Paid</button>
-                      )}
-                      {inv.status !== 'paid' && (
-                        <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
-                      )}
-                      <button
-                        onClick={() => downloadPdf(inv)}
-                        disabled={pdfLoading === inv.id}
-                        className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
-                        style={{ color: '#6b7280', borderColor: '#d1d5db' }}
-                      >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
                     </div>
                   </td>
                 </tr>
@@ -833,7 +913,11 @@ function InvoicesTab({ from, to }) {
 
       {/* Invoice builder modal */}
       {modal && (
-        <Modal title={modal === 'new' ? 'New Invoice' : `Edit ${modal.number}`} onClose={() => setModal(null)} wide>
+        <Modal
+          title={modal === 'new'
+            ? (form.docType === 'quote' ? 'New Quote' : 'New Invoice')
+            : `Edit ${modal.number}`}
+          onClose={() => setModal(null)} wide>
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Client">
@@ -868,12 +952,12 @@ function InvoicesTab({ from, to }) {
                   style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                 >+ Add item</button>
               </div>
-              <div className="text-xs mb-1 grid gap-1" style={{ gridTemplateColumns: '1fr 60px 90px 60px 24px', color: 'var(--color-muted)' }}>
-                <span>Description</span><span>Qty</span><span>Unit Price</span><span className="text-center">GST</span><span />
+              <div className="text-xs mb-1 grid gap-1" style={{ gridTemplateColumns: '1fr 60px 90px 80px 24px', color: 'var(--color-muted)' }}>
+                <span>Description</span><span>Qty</span><span>Unit Price</span><span className="text-center">Tax</span><span />
               </div>
               <div className="flex flex-col gap-2">
                 {form.items.map((item, idx) => (
-                  <div key={idx} className="grid gap-1 items-start" style={{ gridTemplateColumns: '1fr 60px 90px 60px 24px' }}>
+                  <div key={idx} className="grid gap-1 items-start" style={{ gridTemplateColumns: '1fr 60px 90px 80px 24px' }}>
                     <div className="flex flex-col gap-1">
                       <Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} />
                       <TxCodeSelect value={item.txCodeId} onChange={v => setItem(idx, 'txCodeId', v)} type="income" placeholder="— income code —" />
@@ -886,14 +970,16 @@ function InvoicesTab({ from, to }) {
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                     />
                     <Input value={item.unitPrice}   onChange={v => setItem(idx, 'unitPrice', v)}   type="number" placeholder="0.00" />
-                    <div className="flex items-center justify-center gap-1 pt-2">
-                      <input
-                        type="checkbox"
-                        id={`gst-${idx}`}
-                        checked={item.gstApplies}
-                        onChange={e => setItem(idx, 'gstApplies', e.target.checked)}
-                      />
-                      <label htmlFor={`gst-${idx}`} className="text-xs" style={{ color: 'var(--color-muted)' }}>10%</label>
+                    <div className="flex items-center justify-center pt-2">
+                      <select
+                        value={item.gstCode || 'GST'}
+                        onChange={e => setItem(idx, 'gstCode', e.target.value)}
+                        className="text-xs px-1.5 py-1.5 rounded border w-full"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      >
+                        <option value="GST">GST 10%</option>
+                        <option value="NT">N-T</option>
+                      </select>
                     </div>
                     <button onClick={() => removeItem(idx)} className="text-xs rounded hover:opacity-60 text-center pt-2" style={{ color: '#ef4444' }}>✕</button>
                   </div>
@@ -920,7 +1006,9 @@ function InvoicesTab({ from, to }) {
             <ErrMsg msg={error} />
             <div className="flex gap-2 justify-end">
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Invoice'}</Btn>
+              <Btn onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : (form.docType === 'quote' ? 'Save Quote' : 'Save Invoice')}
+              </Btn>
             </div>
           </div>
         </Modal>
@@ -1013,7 +1101,11 @@ function InvoicesTab({ from, to }) {
                     </td>
                     <td className="py-1.5 text-right">{item.qty}</td>
                     <td className="py-1.5 text-right">{fmt(item.unitPrice)}</td>
-                    <td className="py-1.5 text-right">{fmt(item.gst)}</td>
+                    <td className="py-1.5 text-right">
+                      {(item.gstCode || (parseFloat(item.gst) > 0 ? 'GST' : 'NT')) === 'NT'
+                        ? <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>N-T</span>
+                        : fmt(item.gst)}
+                    </td>
                     <td className="py-1.5 text-right">{fmt(item.amount)}</td>
                   </tr>
                 ))}
