@@ -1679,6 +1679,101 @@ async function initSchema() {
   await pool.query(`ALTER TABLE fin_invoices DROP CONSTRAINT IF EXISTS fin_invoices_status_check`);
   await pool.query(`ALTER TABLE fin_invoices ADD CONSTRAINT fin_invoices_status_check CHECK(status IN ('draft','sent','paid','void','accepted','declined'))`);
 
+  // ── Finance: Super Payable + Superannuation Expense accounts ─────────────
+  // Ensure these accounts exist for all users who already have a chart of accounts
+  await pool.query(`
+    INSERT INTO fin_accounts ("userId", code, name, type, "isSystem")
+    SELECT DISTINCT "userId", '2300', 'Super Payable', 'liability', true
+    FROM fin_accounts
+    ON CONFLICT ("userId", code) DO NOTHING
+  `);
+  await pool.query(`
+    INSERT INTO fin_accounts ("userId", code, name, type, "isSystem")
+    SELECT DISTINCT "userId", '6100', 'Superannuation Expense', 'expense', true
+    FROM fin_accounts
+    ON CONFLICT ("userId", code) DO NOTHING
+  `);
+
+  // ── Finance: data integrity migrations ───────────────────────────────────
+
+  // 1. Remove orphan journal entries whose source row no longer exists.
+  //    These were left behind by delete routes that didn't clean up journals.
+  await pool.query(`
+    DELETE FROM fin_journal_entries
+    WHERE type = 'invoice'
+      AND "sourceId" NOT IN (SELECT id FROM fin_invoices)
+  `);
+  await pool.query(`
+    DELETE FROM fin_journal_entries
+    WHERE type = 'payment'
+      AND "sourceId" NOT IN (SELECT id FROM fin_invoices)
+  `);
+  await pool.query(`
+    DELETE FROM fin_journal_entries
+    WHERE type = 'expense'
+      AND "sourceId" NOT IN (SELECT id FROM fin_expenses)
+  `);
+  await pool.query(`
+    DELETE FROM fin_journal_entries
+    WHERE type = 'wage'
+      AND "sourceId" NOT IN (SELECT id FROM fin_wages)
+  `);
+
+  // 2. Remove invoice journals for invoices still in draft status.
+  //    Journals now only post when an invoice is sent.
+  await pool.query(`
+    DELETE FROM fin_journal_entries
+    WHERE type = 'invoice'
+      AND "sourceId" IN (
+        SELECT id FROM fin_invoices WHERE status = 'draft'
+      )
+  `);
+
+  // 3. Back-fill missing super journal lines for existing wage entries.
+  //    For each wage with superannuation > 0 that has a journal entry but
+  //    no Super Expense line, add the missing DR Super Expense / CR Super Payable lines.
+  await pool.query(`
+    DO $$
+    DECLARE
+      w   RECORD;
+      e   RECORD;
+      exp_id INTEGER;
+      liab_id INTEGER;
+    BEGIN
+      FOR w IN
+        SELECT fw.id, fw."userId", fw.superannuation, fw.date
+        FROM fin_wages fw
+        WHERE fw.superannuation > 0
+      LOOP
+        -- Find the journal entry for this wage
+        SELECT je.id INTO e
+        FROM fin_journal_entries je
+        WHERE je."userId" = w."userId"
+          AND je."sourceId" = w.id
+          AND je.type = 'wage'
+        LIMIT 1;
+
+        IF e.id IS NULL THEN CONTINUE; END IF;
+
+        -- Only add lines if Super Expense line is missing
+        IF EXISTS (
+          SELECT 1 FROM fin_journal_lines jl
+          JOIN fin_accounts fa ON fa.id = jl."accountId"
+          WHERE jl."entryId" = e.id AND fa.code = '6100'
+        ) THEN CONTINUE; END IF;
+
+        -- Get the Super Expense and Super Payable account IDs for this user
+        SELECT id INTO exp_id  FROM fin_accounts WHERE "userId" = w."userId" AND code = '6100' LIMIT 1;
+        SELECT id INTO liab_id FROM fin_accounts WHERE "userId" = w."userId" AND code = '2300' LIMIT 1;
+
+        IF exp_id IS NULL OR liab_id IS NULL THEN CONTINUE; END IF;
+
+        INSERT INTO fin_journal_lines ("entryId", "accountId", debit, credit)
+        VALUES (e.id, exp_id,  w.superannuation, 0),
+               (e.id, liab_id, 0, w.superannuation);
+      END LOOP;
+    END $$
+  `);
   console.log('[db] Schema ready');
 }
 
