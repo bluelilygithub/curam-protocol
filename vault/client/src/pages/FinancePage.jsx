@@ -2835,17 +2835,19 @@ function BASTab() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
-function SettingsTab() {
+function SettingsTab({ onHistoryReset }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
     fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '',
     fin_reminder_hour: '8',
   });
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
-  const [testSending, setTestSending] = useState(false);
-  const [testMsg, setTestMsg]     = useState('');
+  const [saving, setSaving]               = useState(false);
+  const [saved, setSaved]                 = useState(false);
+  const [testSending, setTestSending]     = useState(false);
+  const [testMsg, setTestMsg]             = useState('');
+  const [resetConfirm, setResetConfirm]   = useState(false);
+  const [resetting, setResetting]         = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
@@ -2881,6 +2883,21 @@ function SettingsTab() {
       setTestMsg(`Error: ${e.message}`);
     } finally {
       setTestSending(false);
+    }
+  };
+
+  const doResetHistory = async () => {
+    setResetting(true);
+    try {
+      const res = await api.delete('/api/finance/export/history');
+      if (!res.ok) throw new Error('Reset failed');
+      onHistoryReset?.();
+      addToast('Export history cleared — all date ranges are now unrestricted.', 'success');
+    } catch (e) {
+      addToast(e.message || 'Reset failed', 'error');
+    } finally {
+      setResetting(false);
+      setResetConfirm(false);
     }
   };
 
@@ -2949,12 +2966,221 @@ function SettingsTab() {
         <div className="pt-2">
           <Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn>
         </div>
+
+        {/* Export history reset */}
+        <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Export History</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+            Each export records a cutoff date to prevent duplicate journal imports into MYOB, Xero, or Excel. If you need to re-export a corrected period, reset the history here — this is a deliberate override and should only be used after confirming with your accountant.
+          </p>
+          {!resetConfirm ? (
+            <Btn variant="secondary" onClick={() => setResetConfirm(true)}>
+              Reset export history
+            </Btn>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                <p className="font-semibold mb-1" style={{ color: '#ef4444' }}>Confirm reset</p>
+                <p style={{ color: 'var(--color-text)' }}>
+                  This will remove all export cutoffs for MYOB, Xero, and Excel. Your next exports will have no date restrictions, which risks duplicate imports if you re-export an already-imported period.
+                </p>
+                <p className="mt-2" style={{ color: 'var(--color-text)' }}>
+                  Only proceed if you have confirmed with your accountant that re-importing is safe.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setResetConfirm(false)}
+                  className="px-4 py-2 text-sm rounded-lg border"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={doResetHistory}
+                  disabled={resetting}
+                  className="px-4 py-2 text-sm rounded-lg font-medium"
+                  style={{ background: '#ef4444', color: '#fff', opacity: resetting ? 0.6 : 1 }}
+                >
+                  {resetting ? 'Resetting…' : 'Yes, reset history'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Suppliers ─────────────────────────────────────────────────────────────────
+// ── Export Modal ──────────────────────────────────────────────────────────────
+function ExportModal({ type, history, onClose, onSuccess }) {
+  const typeHistory = history[type] || null;
+  const minFrom = typeHistory?.lastTo ? plusDays(typeHistory.lastTo, 1) : null;
+  const defaultFrom = minFrom || `${new Date().getFullYear()}-01-01`;
+
+  const [from, setFrom]       = useState(defaultFrom);
+  const [to, setTo]           = useState(todayStr());
+  const [stage, setStage]     = useState('setup'); // 'setup' | 'confirm'
+  const [loading, setLoading] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : 'Excel';
+  const cutoffBlocked = minFrom && from < minFrom;
+
+  const fmtAU = (dateStr) => {
+    if (!dateStr) return '—';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ from, to });
+      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : 'excel';
+      const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = type === 'myob'
+        ? `myob-journal-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
+        : type === 'xero'
+        ? `xero-journals-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
+        : `finance-export-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onSuccess(type, to);
+      onClose();
+    } catch (e) {
+      addToast(e.message || 'Export failed', 'error');
+      setStage('setup');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (stage === 'confirm') {
+    return (
+      <Modal title={`Confirm ${typeName} Export`} onClose={() => setStage('setup')}>
+        <div className="flex flex-col gap-4">
+          <div className="rounded-lg p-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <p className="text-sm font-semibold mb-1" style={{ color: '#ef4444' }}>Important — read before proceeding</p>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              You are about to export {typeName} journals from <strong>{fmtAU(from)}</strong> to <strong>{fmtAU(to)}</strong>.
+            </p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-text)' }}>
+              Once confirmed, <strong>future exports will be locked from {fmtAU(plusDays(to, 1))} onward</strong> to prevent duplicate journal imports. You will not be able to export any period ending before {fmtAU(to)} without an explicit history reset in Settings.
+            </p>
+          </div>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            If you need to re-export a corrected period after this, use "Reset export history" in Finance Settings.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setStage('setup')}
+              className="px-4 py-2 text-sm rounded-lg border"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            >
+              Back
+            </button>
+            <button
+              onClick={handleExport}
+              disabled={loading}
+              className="px-4 py-2 text-sm rounded-lg font-medium"
+              style={{ background: '#ef4444', color: '#fff', opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? 'Exporting…' : `Yes, export ${typeName}`}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`Export ${typeName}`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        {/* Last export status */}
+        {typeHistory ? (
+          <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>Last export: </span>
+            <span style={{ color: 'var(--color-muted)' }}>
+              up to <strong>{fmtAU(typeHistory.lastTo)}</strong> — exported {new Date(typeHistory.exportedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          </div>
+        ) : (
+          <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <span style={{ color: 'var(--color-muted)' }}>No previous export — no date restrictions apply.</span>
+          </div>
+        )}
+
+        {/* Cutoff warning */}
+        {minFrom && (
+          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)' }}>
+            <p className="font-medium mb-1" style={{ color: '#a16207' }}>Date range locked</p>
+            <p style={{ color: 'var(--color-text)' }}>
+              To prevent duplicate imports, the start date cannot be set earlier than <strong>{fmtAU(minFrom)}</strong> (the day after your last export cutoff).
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Field label="From date">
+            <input
+              type="date"
+              value={from}
+              min={minFrom || undefined}
+              onChange={e => setFrom(e.target.value)}
+              className="text-sm px-3 py-2 rounded-lg border w-full"
+              style={{ background: 'var(--color-surface)', borderColor: cutoffBlocked ? '#ef4444' : 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+            />
+          </Field>
+          <Field label="To date">
+            <input
+              type="date"
+              value={to}
+              onChange={e => setTo(e.target.value)}
+              className="text-sm px-3 py-2 rounded-lg border w-full"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+            />
+          </Field>
+        </div>
+
+        {cutoffBlocked && (
+          <p className="text-xs" style={{ color: '#ef4444' }}>
+            Start date cannot be before {fmtAU(minFrom)} — this period was already exported.
+          </p>
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => setStage('confirm')}
+            disabled={!from || !to || !!cutoffBlocked}
+            className="px-4 py-2 text-sm rounded-lg font-medium"
+            style={{ background: 'var(--color-primary)', color: '#fff', opacity: (!from || !to || !!cutoffBlocked) ? 0.5 : 1 }}
+          >
+            Review & Export
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
 
 const BLANK_SUPPLIER = { name: '', email: '', phone: '', abn: '', website: '', notes: '' };
 
@@ -3716,40 +3942,23 @@ export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
   const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
   const [exporting, setExporting] = useState(null);
+  const [exportModal, setExportModal]   = useState(null); // { type: 'myob'|'xero'|'excel' } | null
+  const [exportHistory, setExportHistory] = useState({});
   const addToast = useToastStore(s => s.addToast);
+
+  useEffect(() => {
+    api.get('/api/finance/settings')
+      .then(r => r.json())
+      .then(data => {
+        try {
+          if (data.fin_export_history) setExportHistory(JSON.parse(data.fin_export_history));
+        } catch {}
+      })
+      .catch(() => {});
+  }, []);
 
   const showDatePicker = !NO_DATE_FILTER_TABS.has(tab);
   const { from, to } = dateRange;
-
-  const doExport = async (type) => {
-    setExporting(type);
-    try {
-      const params = new URLSearchParams({ from, to });
-      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : 'excel';
-      const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Export failed');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const fromStr = from.replace(/-/g, '');
-      const toStr   = to.replace(/-/g, '');
-      a.href = url;
-      a.download = type === 'myob'
-        ? `myob-journal-${fromStr}-${toStr}.csv`
-        : type === 'xero'
-        ? `xero-journals-${fromStr}-${toStr}.csv`
-        : `finance-export-${fromStr}-${toStr}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      addToast(e.message || 'Export failed', 'error');
-    } finally {
-      setExporting(null);
-    }
-  };
 
   return (
     <div className="flex flex-col h-full">
@@ -3762,15 +3971,9 @@ export default function FinancePage() {
               <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
             </div>
             <div className="flex items-center gap-2">
-              <Btn variant="secondary" onClick={() => doExport('myob')} disabled={!!exporting}>
-                {exporting === 'myob' ? 'Exporting…' : 'Export MYOB'}
-              </Btn>
-              <Btn variant="secondary" onClick={() => doExport('xero')} disabled={!!exporting}>
-                {exporting === 'xero' ? 'Exporting…' : 'Export Xero'}
-              </Btn>
-              <Btn variant="secondary" onClick={() => doExport('excel')} disabled={!!exporting}>
-                {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
-              </Btn>
+              <Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn>
+              <Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn>
+              <Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn>
             </div>
           </div>
           <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
@@ -3816,8 +4019,20 @@ export default function FinancePage() {
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
-        {tab === 'Settings'  && <SettingsTab />}
+        {tab === 'Settings'  && <SettingsTab onHistoryReset={() => setExportHistory({})} />}
       </div>
+
+      {exportModal && (
+        <ExportModal
+          type={exportModal.type}
+          history={exportHistory}
+          onClose={() => setExportModal(null)}
+          onSuccess={(type, lastTo) => setExportHistory(prev => ({
+            ...prev,
+            [type]: { lastTo, exportedAt: new Date().toISOString() },
+          }))}
+        />
+      )}
     </div>
   );
 }

@@ -155,7 +155,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -2053,11 +2053,66 @@ function fmtNum(n) {
   return (parseFloat(n) || 0).toFixed(2);
 }
 
+// ── Export history helpers ─────────────────────────────────────────────────────
+function addOneDayStr(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+async function readExportHistory(userId) {
+  const { rows } = await pool.query(
+    `SELECT value FROM settings WHERE "userId"=$1 AND key='fin_export_history' LIMIT 1`,
+    [userId]
+  );
+  try { return rows[0] ? JSON.parse(rows[0].value) : {}; }
+  catch { return {}; }
+}
+
+async function writeExportHistory(userId, history) {
+  await pool.query(
+    `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_export_history',$2)
+     ON CONFLICT ("userId", key) DO UPDATE SET value=$2`,
+    [userId, JSON.stringify(history)]
+  );
+}
+
+function validateExportCutoff(history, typeKey, from) {
+  const typeHistory = history[typeKey] || null;
+  if (!typeHistory?.lastTo || !from) return null;
+  const minFrom = addOneDayStr(typeHistory.lastTo);
+  if (from < minFrom) {
+    return {
+      error: `This date range overlaps a previous ${typeKey.toUpperCase()} export (data up to ${typeHistory.lastTo} was already exported). The earliest allowed start date is ${minFrom}.`,
+      cutoff: minFrom,
+      lastTo: typeHistory.lastTo,
+    };
+  }
+  return null;
+}
+
+// Reset export history (allows any future export range — deliberate override)
+router.delete('/export/history', async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM settings WHERE "userId"=$1 AND key='fin_export_history'`,
+      [req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // MYOB General Journal format
 router.get('/export/myob', async (req, res) => {
   try {
     const userId = req.user.id;
     const { from, to } = req.query;
+
+    const history  = await readExportHistory(userId);
+    const cutoffErr = validateExportCutoff(history, 'myob', from);
+    if (cutoffErr) return res.status(409).json(cutoffErr);
 
     let where = `e."userId"=$1`;
     const params = [userId];
@@ -2086,11 +2141,9 @@ router.get('/export/myob', async (req, res) => {
 
     const lines = ['Date,Memo,Tax Code,Account Number,Debit Amount,Credit Amount'];
     for (const entry of rows) {
-      // Entry has GST if any line posts to a GST-named account
       const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
       for (const line of entry.lines) {
         const isGstAccount = line.name && line.name.toUpperCase().includes('GST');
-        // GST account lines always get GST; expense/income lines get GST when the entry had GST applied
         const taxCode = (isGstAccount || (hasGst && (line.atype === 'expense' || line.atype === 'income')))
           ? 'GST'
           : 'N-T';
@@ -2104,6 +2157,10 @@ router.get('/export/myob', async (req, res) => {
         ));
       }
     }
+
+    const today = new Date().toISOString().slice(0, 10);
+    history.myob = { lastTo: to || today, exportedAt: new Date().toISOString() };
+    await writeExportHistory(userId, history).catch(e => console.error('[export/myob] history write failed:', e.message));
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
@@ -2123,6 +2180,10 @@ router.get('/export/xero', async (req, res) => {
   try {
     const userId = req.user.id;
     const { from, to } = req.query;
+
+    const history   = await readExportHistory(userId);
+    const cutoffErr = validateExportCutoff(history, 'xero', from);
+    if (cutoffErr) return res.status(409).json(cutoffErr);
 
     let where = `e."userId"=$1`;
     const params = [userId];
@@ -2149,8 +2210,6 @@ router.get('/export/xero', async (req, res) => {
       params
     );
 
-    // Xero tax type: income lines on GST-bearing entries get OUTPUT,
-    // expense lines get INPUT, all other accounts get BASEXCLUDED
     function xeroTaxType(line, entryHasGst) {
       if (!entryHasGst) return 'BASEXCLUDED';
       if (line.atype === 'income')  return 'OUTPUT';
@@ -2163,8 +2222,8 @@ router.get('/export/xero', async (req, res) => {
       const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
       const dateStr = fmtDateAU(entry.date);
       for (const line of entry.lines) {
-        const taxType   = xeroTaxType(line, hasGst);
-        const lineAmt   = parseFloat(line.debit || 0) - parseFloat(line.credit || 0);
+        const taxType = xeroTaxType(line, hasGst);
+        const lineAmt = parseFloat(line.debit || 0) - parseFloat(line.credit || 0);
         csvLines.push(csvRow(
           entry.description,
           dateStr,
@@ -2175,6 +2234,10 @@ router.get('/export/xero', async (req, res) => {
         ));
       }
     }
+
+    const today = new Date().toISOString().slice(0, 10);
+    history.xero = { lastTo: to || today, exportedAt: new Date().toISOString() };
+    await writeExportHistory(userId, history).catch(e => console.error('[export/xero] history write failed:', e.message));
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
@@ -2192,6 +2255,10 @@ router.get('/export/excel', async (req, res) => {
     const userId = req.user.id;
     const { from, to } = req.query;
     const XLSX = require('xlsx');
+
+    const history   = await readExportHistory(userId);
+    const cutoffErr = validateExportCutoff(history, 'excel', from);
+    if (cutoffErr) return res.status(409).json(cutoffErr);
 
     const expParams = [userId];
     let expWhere = `e."userId"=$1`;
@@ -2274,6 +2341,10 @@ router.get('/export/excel', async (req, res) => {
     const wsWage = XLSX.utils.aoa_to_sheet(wageRows);
     wsWage['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, wsWage, 'Wages');
+
+    const today = new Date().toISOString().slice(0, 10);
+    history.excel = { lastTo: to || today, exportedAt: new Date().toISOString() };
+    await writeExportHistory(userId, history).catch(e => console.error('[export/excel] history write failed:', e.message));
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
