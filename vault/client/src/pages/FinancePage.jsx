@@ -3725,7 +3725,7 @@ export default function FinancePage() {
     setExporting(type);
     try {
       const params = new URLSearchParams({ from, to });
-      const endpoint = type === 'myob' ? 'myob' : 'excel';
+      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : 'excel';
       const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -3739,7 +3739,9 @@ export default function FinancePage() {
       a.href = url;
       a.download = type === 'myob'
         ? `myob-journal-${fromStr}-${toStr}.csv`
-        : `finance-export-${fromStr}-${toStr}.csv`;
+        : type === 'xero'
+        ? `xero-journals-${fromStr}-${toStr}.csv`
+        : `finance-export-${fromStr}-${toStr}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -3760,10 +3762,13 @@ export default function FinancePage() {
               <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
             </div>
             <div className="flex items-center gap-2">
-              <Btn variant="secondary" onClick={() => doExport('myob')} disabled={exporting === 'myob'}>
+              <Btn variant="secondary" onClick={() => doExport('myob')} disabled={!!exporting}>
                 {exporting === 'myob' ? 'Exporting…' : 'Export MYOB'}
               </Btn>
-              <Btn variant="secondary" onClick={() => doExport('excel')} disabled={exporting === 'excel'}>
+              <Btn variant="secondary" onClick={() => doExport('xero')} disabled={!!exporting}>
+                {exporting === 'xero' ? 'Exporting…' : 'Export Xero'}
+              </Btn>
+              <Btn variant="secondary" onClick={() => doExport('excel')} disabled={!!exporting}>
                 {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
               </Btn>
             </div>

@@ -213,7 +213,7 @@ export function startFinanceTour(navigate) {
   tour.addStep({
     id: 'finance-exports',
     title: 'Exports & Reminders',
-    text: "Export to <strong>MYOB</strong> (general journal CSV) or <strong>Excel</strong> (real .xlsx with three sheets: Expenses, Invoices, Wages) for your accountant. Every Monday morning, Vault sends you an overdue-items summary <em>and</em> individual reminder emails directly to each overdue client. Configure the send time and admin email in <strong>Settings</strong>.",
+    text: "Export to <strong>MYOB</strong> (general journal CSV), <strong>Xero</strong> (manual journal CSV — import via Xero's Manual Journals screen), or <strong>Excel</strong> (real .xlsx with three sheets: Expenses, Invoices, Wages) for your accountant. Every Monday morning, Vault sends you an overdue-items summary <em>and</em> individual reminder emails directly to each overdue client. Configure the send time and admin email in <strong>Settings</strong>.",
     beforeShowPromise() {
       return new Promise((resolve) => {
         navigate('/finance');

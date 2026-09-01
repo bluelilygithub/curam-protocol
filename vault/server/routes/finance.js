@@ -2115,6 +2115,77 @@ router.get('/export/myob', async (req, res) => {
   }
 });
 
+// Xero Manual Journal CSV export
+// Format: *Narration,*Date,*AccountCode,*Description,*TaxType,*LineAmount
+// LineAmount: positive = debit, negative = credit
+// TaxType mapping: income → OUTPUT, expense → INPUT, everything else → BASEXCLUDED
+router.get('/export/xero', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+
+    let where = `e."userId"=$1`;
+    const params = [userId];
+    if (from) { params.push(from); where += ` AND e.date >= $${params.length}`; }
+    if (to)   { params.push(to);   where += ` AND e.date <= $${params.length}`; }
+
+    const { rows } = await pool.query(
+      `SELECT e.date, e.description, e.type,
+        json_agg(
+          json_build_object(
+            'code',   a.code,
+            'name',   a.name,
+            'atype',  a.type,
+            'debit',  l.debit,
+            'credit', l.credit
+          ) ORDER BY l.id
+        ) AS lines
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       JOIN fin_accounts a ON a.id = l."accountId"
+       WHERE ${where}
+       GROUP BY e.id
+       ORDER BY e.date ASC, e.id ASC`,
+      params
+    );
+
+    // Xero tax type: income lines on GST-bearing entries get OUTPUT,
+    // expense lines get INPUT, all other accounts get BASEXCLUDED
+    function xeroTaxType(line, entryHasGst) {
+      if (!entryHasGst) return 'BASEXCLUDED';
+      if (line.atype === 'income')  return 'OUTPUT';
+      if (line.atype === 'expense') return 'INPUT';
+      return 'BASEXCLUDED';
+    }
+
+    const csvLines = ['*Narration,*Date,*AccountCode,*Description,*TaxType,*LineAmount'];
+    for (const entry of rows) {
+      const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
+      const dateStr = fmtDateAU(entry.date);
+      for (const line of entry.lines) {
+        const taxType   = xeroTaxType(line, hasGst);
+        const lineAmt   = parseFloat(line.debit || 0) - parseFloat(line.credit || 0);
+        csvLines.push(csvRow(
+          entry.description,
+          dateStr,
+          line.code,
+          line.name,
+          taxType,
+          fmtNum(lineAmt)
+        ));
+      }
+    }
+
+    const from2 = from ? from.replace(/-/g, '') : 'all';
+    const to2   = to   ? to.replace(/-/g, '')   : 'all';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="xero-journals-${from2}-${to2}.csv"`);
+    res.send('\uFEFF' + csvLines.join('\r\n'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Excel (comprehensive transaction) export — real .xlsx using the xlsx library
 router.get('/export/excel', async (req, res) => {
   try {
