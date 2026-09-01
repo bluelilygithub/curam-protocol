@@ -103,7 +103,7 @@ const SCENARIO_AGENT_GROUPS = [
         desc: 'Full file review: strict AU checks, structuring levers, per-bank indicative capacity, and live rates when available.',
         featured: true,
         purpose: 'Will a bank look at this file — and what would make it stronger?',
-        about: 'The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Three limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block.',
+        about: "The full broker-style review. It runs strict Australian lending checks on what you declared, then surfaces legitimate presentation levers, per-bank indicative capacity, and live CDR product fit when available. Three limitations apply: (1) bank posture notes are drawn from a curated policy snapshot dated in the report — not a live pull from each bank's servicing calculator; (2) indicative capacity figures are shown as rounded ranges (±3%) rather than precise dollars, because the underlying model is curated-knob estimation, not a lender quote; (3) LVR and LMI figures use the contract purchase price — a valuation shortfall changes both, and that is modelled separately in the Valuation Sensitivity block.",
         does: [
           'Serviceability (including overtime/bonus shading and self-employed add-backs where evidenced)',
           'LVR, DTI, genuine savings, employment tenure, and grant/concession checks',
@@ -118,7 +118,7 @@ const SCENARIO_AGENT_GROUPS = [
           'Issue a loan approval, pre-approval, or credit decision',
           'Pull live servicing calculator data from each bank — posture notes are a dated policy snapshot',
           'Model property valuation risk, postcode exclusions, or property type restrictions',
-          'Replace a broker's full credit assessment, lender submission guide, or compliance obligations',
+          "Replace a broker's full credit assessment, lender submission guide, or compliance obligations",
         ],
         bestFor: 'When you want the featured “is this file bankable?” path before you commit to a purchase or refinance.',
       },
@@ -128,7 +128,7 @@ const SCENARIO_AGENT_GROUPS = [
         label: 'Lite serviceability check',
         desc: 'Serviceability, LVR, DTI, and genuine-savings snapshot.',
         purpose: 'A fast pass/fail-style snapshot of serviceability and key ratios.',
-        about: 'A lighter version of the proforma engine. Same core AU checks (serviceability, LVR, DTI, genuine savings), without the full levers matrix, bank capacity panel, or supplementary analysis. LVR and LMI figures use the declared purchase price — if the bank's valuation comes in lower, both change. No property type or postcode risk is modelled.',
+        about: "A lighter version of the proforma engine. Same core AU checks (serviceability, LVR, DTI, genuine savings), without the full levers matrix, bank capacity panel, or supplementary analysis. LVR and LMI figures use the declared purchase price — if the bank's valuation comes in lower, both change. No property type or postcode risk is modelled.",
         does: [
           'Quick serviceability at your target rate + APRA buffer',
           'LVR / DTI / genuine-savings style checks',
