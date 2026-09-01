@@ -573,7 +573,8 @@ function calcTotals(items) {
   return { subtotal: subtotal.toFixed(2), gst: gst.toFixed(2), total: (subtotal + gst).toFixed(2) };
 }
 
-function InvoicesTab({ from, to }) {
+function InvoicesTab({ from, to, docType = 'invoice' }) {
+  const isQuoteTab = docType === 'quote';
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [incomeCodes, setIncomeCodes] = useState([]);
@@ -589,11 +590,10 @@ function InvoicesTab({ from, to }) {
   const [paidModal, setPaidModal] = useState(null); // { inv, date }
   const [pdfLoading, setPdfLoading] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterType, setFilterType]     = useState('invoices');
   const [converting, setConverting]     = useState(null);
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType: 'invoice' });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
@@ -612,7 +612,7 @@ function InvoicesTab({ from, to }) {
 
   const incomeCodeMap = Object.fromEntries(incomeCodes.map(c => [c.id, c]));
 
-  const openNew = (docType = 'invoice') => { setForm({ ...blankForm(), docType }); setError(''); setModal('new'); };
+  const openNew = () => { setForm({ ...blankForm() }); setError(''); setModal('new'); };
 
   const openEdit = async (inv) => {
     if (inv.isLocked) return;
@@ -768,32 +768,13 @@ function InvoicesTab({ from, to }) {
     <div data-tour="finance-invoices" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>
-          {filterType === 'quotes' ? 'Quotes' : 'Invoices'}
+          {isQuoteTab ? 'Quotes' : 'Invoices'}
         </h2>
-        <div className="flex gap-2">
-          <Btn variant="secondary" onClick={() => openNew('quote')}>+ New Quote</Btn>
-          <Btn onClick={() => openNew('invoice')}>+ New Invoice</Btn>
-        </div>
-      </div>
-
-      {/* Doc type toggle */}
-      <div className="flex gap-1 mb-2">
-        {['invoices', 'quotes'].map(t => (
-          <button
-            key={t}
-            onClick={() => { setFilterType(t); setFilterStatus('all'); }}
-            className="text-xs px-3 py-1 rounded-md capitalize font-medium transition-colors"
-            style={{
-              background: filterType === t ? 'var(--color-text)' : 'var(--color-surface)',
-              color:      filterType === t ? 'var(--color-bg)'   : 'var(--color-muted)',
-              border:     '1px solid var(--color-border)',
-            }}
-          >{t.charAt(0).toUpperCase() + t.slice(1)}</button>
-        ))}
+        <Btn onClick={openNew}>{isQuoteTab ? '+ New Quote' : '+ New Invoice'}</Btn>
       </div>
 
       <div className="flex gap-1 mb-3 flex-wrap">
-        {(filterType === 'quotes'
+        {(isQuoteTab
           ? ['all','draft','sent','accepted','declined']
           : ['all','draft','sent','overdue','paid']
         ).map(s => (
@@ -811,9 +792,8 @@ function InvoicesTab({ from, to }) {
       </div>
 
       {(() => {
-        const isQuoteView = filterType === 'quotes';
         const filtered = invoices.filter(inv => {
-          if (isQuoteView ? inv.docType !== 'quote' : inv.docType === 'quote') return false;
+          if (isQuoteTab ? inv.docType !== 'quote' : inv.docType === 'quote') return false;
           if (filterStatus !== 'all' && displayStatus(inv) !== filterStatus) return false;
           const d = String(inv.issueDate).slice(0, 10);
           if (from && d < from) return false;
@@ -821,13 +801,13 @@ function InvoicesTab({ from, to }) {
           return true;
         });
         return filtered.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No {isQuoteView ? 'quotes' : 'invoices'} match this filter.</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No {isQuoteTab ? 'quotes' : 'invoices'} match this filter.</p>
         ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Number', 'Client', 'Issued', 'Due', isQuoteView ? 'Accepted' : 'Paid', 'Total', 'Status', ''].map(h => (
+                {['Number', 'Client', 'Issued', 'Due', isQuoteTab ? 'Accepted' : 'Paid', 'Total', 'Status', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -848,7 +828,7 @@ function InvoicesTab({ from, to }) {
                   <td className="py-2 px-2"><StatusBadge status={displayStatus(inv)} /></td>
                   <td className="py-2 px-2">
                     <div className="flex gap-1 flex-wrap">
-                      {isQuoteView ? (
+                      {isQuoteTab ? (
                         <>
                           {(inv.status === 'draft' || inv.status === 'sent') && (
                             <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>
@@ -3367,7 +3347,7 @@ function PositionTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
 const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings']);
 
 export default function FinancePage() {
@@ -3455,7 +3435,8 @@ export default function FinancePage() {
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
         {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
-        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} />}
+        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" />}
+        {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" />}
         {tab === 'Clients'   && <ClientsTab />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
