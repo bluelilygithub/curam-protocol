@@ -3079,9 +3079,92 @@ router.post('/batch-text', async (req, res) => {
 });
 
 // ── Print Ready ──────────────────────────────────────────────────────────────
+
+// Convert each RGB pixel to CMYK using the standard device-independent formula.
+// Returns a Buffer of interleaved CMYK bytes (4 bytes per pixel).
+function rgbToCmykBuffer(rgbData, pixelCount) {
+  const out = Buffer.allocUnsafe(pixelCount * 4);
+  for (let i = 0; i < pixelCount; i++) {
+    const r = rgbData[i * 3] / 255;
+    const g = rgbData[i * 3 + 1] / 255;
+    const b = rgbData[i * 3 + 2] / 255;
+    const k = 1 - Math.max(r, g, b);
+    if (k >= 1) {
+      out[i * 4] = 0; out[i * 4 + 1] = 0; out[i * 4 + 2] = 0; out[i * 4 + 3] = 255;
+    } else {
+      const d = 1 - k;
+      out[i * 4]     = Math.round(((1 - r - k) / d) * 255); // C
+      out[i * 4 + 1] = Math.round(((1 - g - k) / d) * 255); // M
+      out[i * 4 + 2] = Math.round(((1 - b - k) / d) * 255); // Y
+      out[i * 4 + 3] = Math.round(k * 255);                  // K
+    }
+  }
+  return out;
+}
+
+// Build a minimal uncompressed CMYK TIFF (PhotometricInterpretation=5).
+// Accepted by all professional prepress and RIP software.
+function buildCmykTiff(cmykData, width, height, dpi) {
+  const N = 13; // IFD entry count
+  const HEADER = 8;
+  const IFD_SZ = 2 + N * 12 + 4;
+  const EXTRA = HEADER + IFD_SZ; // extra data: BPS (8 bytes), XRES (8), YRES (8)
+  const BPS_OFF  = EXTRA;
+  const XRES_OFF = EXTRA + 8;
+  const YRES_OFF = EXTRA + 16;
+  const DATA_OFF = EXTRA + 24;
+
+  const buf = Buffer.alloc(DATA_OFF + cmykData.length, 0);
+
+  // TIFF LE header
+  buf.write('II', 0, 'ascii');
+  buf.writeUInt16LE(42, 2);
+  buf.writeUInt32LE(HEADER, 4);
+
+  let p = HEADER;
+  buf.writeUInt16LE(N, p); p += 2;
+
+  // type codes
+  const SHORT = 3, LONG = 4, RATIONAL = 5;
+  const ifd = (tag, type, count, val) => {
+    buf.writeUInt16LE(tag,   p);
+    buf.writeUInt16LE(type,  p + 2);
+    buf.writeUInt32LE(count, p + 4);
+    buf.writeUInt32LE(val,   p + 8);
+    p += 12;
+  };
+
+  // IFD entries — must be in ascending tag order
+  ifd(256, LONG,     1, width);           // ImageWidth
+  ifd(257, LONG,     1, height);          // ImageLength
+  ifd(258, SHORT,    4, BPS_OFF);         // BitsPerSample [8,8,8,8] — offset
+  ifd(259, SHORT,    1, 1);               // Compression: none
+  ifd(262, SHORT,    1, 5);               // PhotometricInterpretation: CMYK
+  ifd(273, LONG,     1, DATA_OFF);        // StripOffsets
+  ifd(277, SHORT,    1, 4);               // SamplesPerPixel
+  ifd(278, LONG,     1, height);          // RowsPerStrip (one strip)
+  ifd(279, LONG,     1, cmykData.length); // StripByteCounts
+  ifd(282, RATIONAL, 1, XRES_OFF);        // XResolution — offset
+  ifd(283, RATIONAL, 1, YRES_OFF);        // YResolution — offset
+  ifd(284, SHORT,    1, 1);               // PlanarConfiguration: chunky
+  ifd(296, SHORT,    1, 2);               // ResolutionUnit: inch
+  buf.writeUInt32LE(0, p);                // next IFD offset = 0
+
+  // BitsPerSample: 8 per channel × 4 channels
+  for (let i = 0; i < 4; i++) buf.writeUInt16LE(8, BPS_OFF + i * 2);
+
+  // XResolution and YResolution as RATIONAL (numerator / denominator)
+  buf.writeUInt32LE(dpi, XRES_OFF);     buf.writeUInt32LE(1, XRES_OFF + 4);
+  buf.writeUInt32LE(dpi, YRES_OFF);     buf.writeUInt32LE(1, YRES_OFF + 4);
+
+  cmykData.copy(buf, DATA_OFF);
+  return buf;
+}
+
 // Converts any raster image into a print-ready file: sets the target DPI in
 // metadata, optionally flattens alpha transparency, optionally adds bleed
-// padding, and outputs as TIFF (LZW), PDF, or PNG.
+// padding, and outputs as TIFF/sRGB (LZW), TIFF/CMYK (uncompressed),
+// PDF, or PNG.
 router.post('/print-ready', async (req, res) => {
   try {
     const imageDataUrl = String(req.body?.imageDataUrl || '');
@@ -3091,7 +3174,8 @@ router.post('/print-ready', async (req, res) => {
     }
 
     const dpi = Math.min(1200, Math.max(72, Number(req.body?.dpi) || 300));
-    const format = ['tiff', 'pdf', 'png'].includes(String(req.body?.format || '').toLowerCase())
+    const VALID_FORMATS = ['tiff', 'tiff-cmyk', 'pdf', 'png'];
+    const format = VALID_FORMATS.includes(String(req.body?.format || '').toLowerCase())
       ? String(req.body.format).toLowerCase()
       : 'tiff';
     const background = String(req.body?.background || 'white').toLowerCase() === 'transparent'
@@ -3102,18 +3186,14 @@ router.post('/print-ready', async (req, res) => {
     const meta = await sharp(buffer).metadata();
     const hasAlpha = (meta.channels === 4 || meta.hasAlpha);
 
-    // Start the sharp pipeline
+    // Build the sharp pipeline (flatten + bleed apply to all output formats)
     let pipeline = sharp(buffer);
 
-    // Flatten transparency → white background when requested (or when outputting
-    // TIFF/PDF, which technically support alpha but most RIPs don't expect it)
     if (background === 'white' && hasAlpha) {
       pipeline = pipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
     }
 
-    // Add bleed padding (white or transparent depending on background setting)
     if (bleedMm > 0) {
-      // Convert mm → pixels at the target DPI
       const bleedPx = Math.round((bleedMm / 25.4) * dpi);
       const bleedColor = background === 'white'
         ? { r: 255, g: 255, b: 255, alpha: 1 }
@@ -3124,32 +3204,52 @@ router.post('/print-ready', async (req, res) => {
       });
     }
 
-    // Embed DPI in output metadata
     pipeline = pipeline.withMetadata({ density: dpi });
 
     let outputBuffer;
     let mimeType;
     let ext;
+    let colorSpace = 'sRGB';
+    let pxW, pxH;
 
-    if (format === 'tiff') {
-      outputBuffer = await pipeline.tiff({ compression: 'lzw', xres: dpi / 25.4, yres: dpi / 25.4 }).toBuffer();
+    if (format === 'tiff-cmyk') {
+      // Get raw RGB pixels from the processed pipeline, then convert to CMYK
+      // and write a standards-compliant CMYK TIFF manually (sharp can't do CMYK)
+      const { data: rgbData, info } = await pipeline
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      pxW = info.width;
+      pxH = info.height;
+      const cmykData = rgbToCmykBuffer(rgbData, pxW * pxH);
+      outputBuffer = buildCmykTiff(cmykData, pxW, pxH, dpi);
       mimeType = 'image/tiff';
       ext = 'tiff';
+      colorSpace = 'CMYK';
+    } else if (format === 'tiff') {
+      outputBuffer = await pipeline
+        .tiff({ compression: 'lzw', xres: dpi / 25.4, yres: dpi / 25.4 })
+        .toBuffer();
+      mimeType = 'image/tiff';
+      ext = 'tiff';
+      const m = await sharp(outputBuffer).metadata();
+      pxW = m.width; pxH = m.height;
     } else if (format === 'png') {
       outputBuffer = await pipeline.png({ compressionLevel: 9 }).toBuffer();
       mimeType = 'image/png';
       ext = 'png';
+      const m = await sharp(outputBuffer).metadata();
+      pxW = m.width; pxH = m.height;
     } else {
-      // PDF: embed image at the correct physical size using pdf-lib
-      // First render to PNG (best lossless intermediate for PDF embedding)
+      // PDF via pdf-lib
       const pngBuf = await pipeline.png().toBuffer();
-      const finalMeta = await sharp(pngBuf).metadata();
+      const m = await sharp(pngBuf).metadata();
+      pxW = m.width; pxH = m.height;
       const { PDFDocument } = require('pdf-lib');
       const pdfDoc = await PDFDocument.create();
       const embedded = await pdfDoc.embedPng(pngBuf);
-      // Physical dimensions in points (1 inch = 72 points)
-      const widthPt = (finalMeta.width / dpi) * 72;
-      const heightPt = (finalMeta.height / dpi) * 72;
+      const widthPt  = (pxW / dpi) * 72;
+      const heightPt = (pxH / dpi) * 72;
       const page = pdfDoc.addPage([widthPt, heightPt]);
       page.drawImage(embedded, { x: 0, y: 0, width: widthPt, height: heightPt });
       outputBuffer = Buffer.from(await pdfDoc.save());
@@ -3157,39 +3257,35 @@ router.post('/print-ready', async (req, res) => {
       ext = 'pdf';
     }
 
-    // Calculate physical print size for the UI
-    const finalMeta = format === 'pdf'
-      ? await sharp(buffer).metadata()
-      : await sharp(outputBuffer).metadata();
-    const pxW = finalMeta.width || meta.width || 0;
-    const pxH = finalMeta.height || meta.height || 0;
-    const printWidthIn = pxW / dpi;
+    // Fall back to source dimensions if pipeline didn't set them
+    if (!pxW) pxW = meta.width || 0;
+    if (!pxH) pxH = meta.height || 0;
+
+    const printWidthIn  = pxW / dpi;
     const printHeightIn = pxH / dpi;
-    const printWidthMm = Math.round(printWidthIn * 25.4);
+    const printWidthMm  = Math.round(printWidthIn  * 25.4);
     const printHeightMm = Math.round(printHeightIn * 25.4);
 
-    // Quality assessment
-    const effectiveDpi = dpi;
     let qualityNote = '';
-    if (pxW < dpi * 1 || pxH < dpi * 1) {
+    if (pxW < dpi || pxH < dpi) {
       qualityNote = 'warning: image is smaller than 1×1 inch at this DPI — output may appear pixelated when printed';
     } else if (pxW < dpi * 2 || pxH < dpi * 2) {
       qualityNote = 'note: image is suitable for small print sizes only';
     }
 
-    const dataUrl = `data:${mimeType};base64,${outputBuffer.toString('base64')}`;
     res.json({
       ok: true,
-      imageDataUrl: dataUrl,
+      imageDataUrl: `data:${mimeType};base64,${outputBuffer.toString('base64')}`,
       ext,
       format,
-      dpi: effectiveDpi,
+      colorSpace,
+      dpi,
       bytes: outputBuffer.length,
       pixelWidth: pxW,
       pixelHeight: pxH,
       printWidthMm,
       printHeightMm,
-      printWidthIn: Math.round(printWidthIn * 100) / 100,
+      printWidthIn:  Math.round(printWidthIn  * 100) / 100,
       printHeightIn: Math.round(printHeightIn * 100) / 100,
       hasAlpha: hasAlpha && background === 'transparent',
       bleedMm,

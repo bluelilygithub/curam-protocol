@@ -1744,9 +1744,10 @@ export default function GraphicsPage() {
   const downloadPrintReady = () => {
     if (!prResult?.imageDataUrl) return;
     const base = (prSource?.name || 'image').replace(/\.[^.]+$/, '');
+    const cs = prResult.colorSpace === 'CMYK' ? '-cmyk' : '';
     const a = document.createElement('a');
     a.href = prResult.imageDataUrl;
-    a.download = `${base}-print-ready-${prResult.dpi}dpi.${prResult.ext}`;
+    a.download = `${base}-print-ready-${prResult.dpi}dpi${cs}.${prResult.ext}`;
     a.click();
   };
 
@@ -6360,7 +6361,8 @@ export default function GraphicsPage() {
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Output format</label>
                 <select value={prFormat} onChange={e => setPrFormat(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                  <option value="tiff">TIFF (recommended)</option>
+                  <option value="tiff">TIFF/sRGB (recommended)</option>
+                  <option value="tiff-cmyk">TIFF/CMYK (offset print)</option>
                   <option value="pdf">PDF</option>
                   <option value="png">PNG</option>
                 </select>
@@ -6414,7 +6416,7 @@ export default function GraphicsPage() {
                   </div>
                   <div className="px-3 py-2 rounded-xl text-center" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                     <div className="font-semibold" style={{ color: 'var(--color-text)' }}>{prResult.ext?.toUpperCase()}</div>
-                    <div style={{ color: 'var(--color-muted)' }}>Format</div>
+                    <div style={{ color: 'var(--color-muted)' }}>{prResult.colorSpace || 'sRGB'}</div>
                   </div>
                   <div className="col-span-2 px-3 py-2 rounded-xl text-center" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                     <div className="font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -6438,7 +6440,10 @@ export default function GraphicsPage() {
                 )}
                 <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                   <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Tips for your printer</p>
-                  <p>• Colour space is sRGB — ask your printer if they need a CMYK conversion.</p>
+                  {prResult.colorSpace === 'CMYK'
+                    ? <p>• Colour space is CMYK — this file is ready for offset and digital print workflows.</p>
+                    : <p>• Colour space is sRGB — ask your printer if they need a CMYK conversion.</p>
+                  }
                   <p>• TIFF and PDF are the most widely accepted print file formats.</p>
                   {prResult.bleedMm === 0 && <p>• Add {prFormat === 'pdf' ? '3–5' : '3'} mm bleed if your artwork goes edge-to-edge.</p>}
                 </div>
@@ -6457,7 +6462,7 @@ export default function GraphicsPage() {
           )}
         </div>
         <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
-          Runs locally — nothing is uploaded. CMYK conversion is not performed; if your print provider requires CMYK ask them for an ICC profile or use a dedicated prepress tool.
+          Runs locally — nothing is uploaded. TIFF/CMYK uses a mathematical RGB→CMYK conversion; for colour-critical offset work an ICC profile-based conversion in Photoshop or Acrobat will be more accurate.
         </p>
       </section>
       )}
