@@ -747,4 +747,38 @@ router.post('/advice/ask', async (req, res) => {
   }
 });
 
+// ── PDF download ──────────────────────────────────────────────────────────────
+router.post('/pdf', async (req, res) => {
+  try {
+    const { buildPropertyScenarioPdfBuffer } = require('../services/propertyScenarioPdf');
+    const {
+      calcResult,
+      inputs,
+      scenarioType,
+      tabFilter = 'all',
+      followUpAnswers = {},
+    } = req.body || {};
+
+    if (!calcResult || !scenarioType) {
+      return res.status(400).json({ ok: false, error: 'calcResult and scenarioType are required' });
+    }
+
+    const pdfBytes = await buildPropertyScenarioPdfBuffer(
+      calcResult, inputs || {}, scenarioType, tabFilter, followUpAnswers,
+    );
+
+    const label = tabFilter === 'all' ? 'full' : tabFilter;
+    const ts = new Date().toISOString().slice(0, 10);
+    const filename = `property-scenario-${scenarioType}-${label}-${ts}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    return res.end(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error('[property-scenario] /pdf', err);
+    return res.status(500).json({ ok: false, error: err.message || 'PDF generation failed' });
+  }
+});
+
 module.exports = router;

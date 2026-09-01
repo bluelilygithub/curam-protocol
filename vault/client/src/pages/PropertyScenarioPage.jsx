@@ -25,12 +25,29 @@ import {
 } from '../utils/propertyScenarioFileProfile';
 
 /** Default Australian state for property / mortgage form selects. */
-const DEFAULT_STATE = 'QLD';// Lazy-loaded to avoid blocking Vite build if @react-pdf/renderer has compat issues
+const DEFAULT_STATE = 'QLD';
+
+// ── PDF downloads — all generated server-side via pdf-lib ─────────────────────
 async function downloadPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers) {
-  const { downloadPropertyScenarioPdf } = await import('../utils/propertyScenarioPdf');
-  return downloadPropertyScenarioPdf(calcResult, inputs, scenarioType, tabFilter, followUpAnswers);
+  const res = await api.post('/api/property-scenario/pdf', {
+    calcResult, inputs, scenarioType, tabFilter: tabFilter || 'all', followUpAnswers: followUpAnswers || {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `PDF generation failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const label = (tabFilter === 'all' || !tabFilter) ? 'full' : tabFilter;
+  const ts = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `property-scenario-${scenarioType}-${label}-${ts}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
+// Qualification and proforma PDFs remain client-side (separate document types)
 async function downloadQualifyPdf(result, inputs, eligibleLenders) {
   const { downloadQualificationPdf } = await import('../utils/propertyScenarioPdf');
   return downloadQualificationPdf(result, inputs, eligibleLenders);
