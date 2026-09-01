@@ -140,7 +140,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -155,7 +155,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
+    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
       await pool.query(
@@ -757,7 +757,8 @@ router.post('/invoices/:id/send', async (req, res) => {
   try {
     const userId    = req.user.id;
     const invoiceId = req.params.id;
-    const overrideTo = req.body.to || null; // caller may supply an email if client has none
+    const overrideTo = req.body.to || null;
+    const message    = (req.body.message || '').trim();
 
     // Load invoice + items + client
     const { rows } = await pool.query(
@@ -782,7 +783,7 @@ router.post('/invoices/:id/send', async (req, res) => {
     if (!to) return res.status(400).json({ error: 'No email address — supply one in the request body' });
 
     // Load finance settings
-    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_bsb','fin_account_number'];
+    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_bsb','fin_account_number','fin_admin_email'];
     const { rows: settings } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [userId, settingKeys]
@@ -812,26 +813,39 @@ router.post('/invoices/:id/send', async (req, res) => {
         ${cfg.fin_account_number ? `<p style="margin:0;font-size:13px;color:#374151;">Account: ${cfg.fin_account_number}</p>` : ''}
       </div>` : '';
 
+    const isQuote    = inv.docType === 'quote';
+    const docLabel   = isQuote ? 'Quote' : 'Invoice';
+    const addrLabel  = isQuote ? 'Quote For' : 'Bill To';
+    const totalLabel = isQuote ? 'Total Value' : 'Total Due';
+
+    const escHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+
+    const messageBlock = message ? `
+      <div style="padding:16px 20px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;margin-bottom:24px;">
+        <p style="margin:0;font-size:14px;color:#1e40af;white-space:pre-wrap;">${escHtml(message)}</p>
+      </div>` : '';
+
     const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
   <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#1f2937;padding:28px 32px;">
-      <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">${inv.number}</h1>
+      <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">${docLabel}: ${inv.number}</h1>
       <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${cfg.fin_biz_name || ''}${cfg.fin_abn ? ` &nbsp;·&nbsp; ABN ${cfg.fin_abn}` : ''}</p>
     </div>
     <div style="padding:28px 32px;">
+      ${messageBlock}
       <div style="display:flex;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:16px;">
         <div>
-          <p style="margin:0 0 4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Bill To</p>
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">${addrLabel}</p>
           <p style="margin:0;font-size:15px;font-weight:600;color:#1f2937;">${inv.clientName || ''}</p>
           ${inv.clientAddress ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">${inv.clientAddress}</p>` : ''}
           ${inv.clientAbn     ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">ABN ${inv.clientAbn}</p>` : ''}
         </div>
         <div style="text-align:right;">
           <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">Issued: <strong style="color:#1f2937;">${fmtDate(inv.issueDate)}</strong></p>
-          ${inv.dueDate ? `<p style="margin:0;font-size:13px;color:#6b7280;">Due: <strong style="color:#1f2937;">${fmtDate(inv.dueDate)}</strong></p>` : ''}
+          ${inv.dueDate ? `<p style="margin:0;font-size:13px;color:#6b7280;">${isQuote ? 'Valid Until' : 'Due'}: <strong style="color:#1f2937;">${fmtDate(inv.dueDate)}</strong></p>` : ''}
         </div>
       </div>
 
@@ -859,7 +873,7 @@ router.post('/invoices/:id/send', async (req, res) => {
             <td style="padding:4px 8px;font-size:13px;text-align:right;color:#1f2937;">${fmtAud(inv.gst)}</td>
           </tr>
           <tr style="border-top:2px solid #1f2937;">
-            <td style="padding:8px 8px 4px;font-size:15px;font-weight:700;color:#1f2937;">Total</td>
+            <td style="padding:8px 8px 4px;font-size:15px;font-weight:700;color:#1f2937;">${totalLabel}</td>
             <td style="padding:8px 8px 4px;font-size:15px;font-weight:700;text-align:right;color:#1f2937;">${fmtAud(inv.total)}</td>
           </tr>
         </table>
@@ -876,9 +890,11 @@ router.post('/invoices/:id/send', async (req, res) => {
 </html>`;
 
     const sendEmail = require('../utils/sendEmail');
+    const adminEmail = cfg.fin_admin_email || null;
     await sendEmail({
       to,
-      subject: `Invoice ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
+      cc: adminEmail || undefined,
+      subject: `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
       html,
     });
 

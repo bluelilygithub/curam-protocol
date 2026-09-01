@@ -655,9 +655,10 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [incomeCodes, setIncomeCodes] = useState([]);
   const [modal, setModal] = useState(null);
   const [viewInvoice, setViewInvoice] = useState(null);
-  const [sendModal, setSendModal] = useState(null); // invoice to send
-  const [sendTo, setSendTo] = useState('');
-  const [sending, setSending] = useState(false);
+  const [sendModal, setSendModal] = useState(null);
+  const [sendTo, setSendTo]       = useState('');
+  const [sendMessage, setSendMessage] = useState('');
+  const [sending, setSending]     = useState(false);
   const [sendError, setSendError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -768,6 +769,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
   const openSend = (inv) => {
     setSendTo(inv.clientEmail || '');
+    setSendMessage('');
     setSendError('');
     setSendModal(inv);
   };
@@ -777,7 +779,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
     setSending(true);
     setSendError('');
     try {
-      const result = await api.post(`/api/finance/invoices/${sendModal.id}/send`, { to: sendTo.trim() }).then(r => r.json());
+      const result = await api.post(`/api/finance/invoices/${sendModal.id}/send`, { to: sendTo.trim(), message: sendMessage.trim() }).then(r => r.json());
       if (result.error) throw new Error(result.error);
       await load();
       setSendModal(null);
@@ -1106,6 +1108,14 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                 value={sendTo}
                 onChange={setSendTo}
                 placeholder="client@example.com"
+              />
+            </Field>
+            <Field label="Message (optional)">
+              <Textarea
+                value={sendMessage}
+                onChange={setSendMessage}
+                placeholder="Add a personal note to include at the top of the email…"
+                rows={4}
               />
             </Field>
             <ErrMsg msg={sendError} />
@@ -2819,7 +2829,7 @@ function SettingsTab() {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
-    fin_gst_registered: 'true', fin_payment_terms: '14',
+    fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '',
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
@@ -2877,6 +2887,13 @@ function SettingsTab() {
             />
             <label htmlFor="gst-reg" className="text-sm" style={{ color: 'var(--color-text)' }}>Registered for GST</label>
           </div>
+        </div>
+
+        <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Email</p>
+          <Field label="Admin CC email" description="A copy of every sent invoice and quote is CC'd to this address.">
+            <Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" />
+          </Field>
         </div>
 
         <div className="pt-2">

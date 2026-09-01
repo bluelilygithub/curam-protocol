@@ -78,9 +78,9 @@ function smtpConfig() {
 
 /**
  * Send an email via MailChannels (if key configured) or SMTP nodemailer.
- * @param {{ to: string, subject: string, html: string, from?: string }} opts
+ * @param {{ to: string, subject: string, html: string, from?: string, cc?: string }} opts
  */
-async function sendEmail({ to, subject, html, from }) {
+async function sendEmail({ to, subject, html, from, cc }) {
   if (runtimeConfig.disableEmail) {
     const reason = `Email disabled by DISABLE_EMAIL; skipped "${subject}" to ${to}`;
     console.log(`[runtime] ${reason}`);
@@ -90,8 +90,11 @@ async function sendEmail({ to, subject, html, from }) {
   const mailChannelKey = await getMailChannelKey();
 
   if (mailChannelKey) {
+    const personalization = { to: [{ email: to }] };
+    if (cc) personalization.cc = [{ email: cc }];
+
     const payload = JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
+      personalizations: [personalization],
       from: { email: defaultFromAddress(from) },
       subject,
       content: [{ type: 'text/html', value: html }],
@@ -131,7 +134,7 @@ async function sendEmail({ to, subject, html, from }) {
   }
   const transporter = nodemailer.createTransport(smtp);
 
-  await transporter.sendMail({ from: defaultFromAddress(from), to, subject, html });
+  await transporter.sendMail({ from: defaultFromAddress(from), to, cc: cc || undefined, subject, html });
   return { ok: true, provider: 'smtp' };
 }
 
