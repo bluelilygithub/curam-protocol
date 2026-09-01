@@ -83,6 +83,7 @@ const TABS = [
   { id: 'lenders', label: 'Lenders' },
   { id: 'calculators', label: 'Calculators' },
   { id: 'advice', label: 'Follow-ups' },
+  { id: 'broker', label: 'Broker Prep' },
 ];
 
 const MODES = [
@@ -3024,7 +3025,285 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
           )}
         </Section>
       )}
+
+      {!loading && demo && tab === 'broker' && (
+        <BrokerPrepPanel getIcon={getIcon} />
+      )}
     </>
+  );
+}
+
+// ── Broker Prep Checklist ─────────────────────────────────────────────────────
+
+const BROKER_CHECKLIST = [
+  {
+    id: 'income',
+    title: 'Income verification',
+    icon: 'briefcase',
+    items: [
+      { id: 'i1', text: 'Recent payslips (2–3) obtained and confirm they match the declared income figure' },
+      { id: 'i2', text: 'Employment contract or letter on file confirming role, tenure, and that probation is passed' },
+      { id: 'i3', text: 'ATO income statements or group certificates for last 2 financial years reviewed for consistency' },
+      { id: 'i4', text: 'Overtime, bonus, or commission status confirmed — undeclared amounts affect capacity in both directions' },
+      { id: 'i5', text: 'If self-employed: 2 years of personal and business tax returns, BAS statements, and accountant declaration obtained' },
+      { id: 'i6', text: 'If self-employed: ABN confirmed active for 2+ years and business is actively trading' },
+      { id: 'i7', text: 'If rental income: rental statements (12 months), current lease agreement, and vacancy shading rate noted' },
+      { id: 'i8', text: 'If casual or contractor: evidence of ongoing engagement (rolling contracts, client invoices, or letter from agency)' },
+    ],
+  },
+  {
+    id: 'liabilities',
+    title: 'Liabilities & credit',
+    icon: 'credit-card',
+    items: [
+      { id: 'l1', text: 'Credit file pulled via Equifax or Illion — not relying on client self-report' },
+      { id: 'l2', text: 'All credit card and BNPL limits confirmed complete and current — even $0-balance cards count toward DTI' },
+      { id: 'l3', text: 'HECS/HELP balance and current repayment rate confirmed (affects assessment rate at most lenders)' },
+      { id: 'l4', text: 'All personal loans, vehicle finance, and buy-now-pay-later facilities disclosed and documented' },
+      { id: 'l5', text: 'Any defaults, missed payments, or credit enquiries in last 6–12 months identified — adverse credit not modelled here' },
+      { id: 'l6', text: 'Defaults, judgments, or bankruptcy history screened — these require specific lenders or specialist credit paths' },
+      { id: 'l7', text: 'Contingent liabilities disclosed: any loans the client has guaranteed for another party' },
+      { id: 'l8', text: 'Any recent large credit increases or new facilities taken out in last 3 months noted' },
+    ],
+  },
+  {
+    id: 'deposit',
+    title: 'Deposit & genuine savings',
+    icon: 'landmark',
+    items: [
+      { id: 'd1', text: 'Bank statements showing full deposit held for 4+ months — genuine savings requirement for most lenders' },
+      { id: 'd2', text: 'Source of funds confirmed: genuine savings vs gift vs FHSS vs inheritance — different banks apply different rules' },
+      { id: 'd3', text: 'If any portion is gifted: signed gift letter on file; confirm donor is not borrowing the gift funds themselves' },
+      { id: 'd4', text: 'Stamp duty funds confirmed as separate from deposit — not double-counted in the deposit figure' },
+      { id: 'd5', text: 'If using First Home Super Saver Scheme: ATO determination letter obtained before exchange' },
+      { id: 'd6', text: 'If guarantor structure: guarantor financials obtained, independent legal advice arranged, and guarantor credit check completed' },
+      { id: 'd7', text: 'If deposit is partially from sale proceeds: bridging finance or sale settlement timing confirmed' },
+    ],
+  },
+  {
+    id: 'property',
+    title: 'Property details',
+    icon: 'home',
+    items: [
+      { id: 'p1', text: 'Signed contract of sale obtained — purchase price matches the figure used in calculations' },
+      { id: 'p2', text: 'Property type and postcode checked against each shortlisted bank\'s lending policy — high-density, postcode, and serviced-apartment exclusions vary significantly between lenders' },
+      { id: 'p3', text: 'Valuation risk noted: if bank valuation comes in under contract price, LVR changes and LMI or serviceability may be retriggered' },
+      { id: 'p4', text: 'Title type confirmed: Torrens, strata, or company title — company title is excluded by many lenders' },
+      { id: 'p5', text: 'Building and pest inspection completed for existing dwellings; report reviewed for material defects' },
+      { id: 'p6', text: 'If rural or acreage: land size checked against lender zoning and hectare limits' },
+      { id: 'p7', text: 'If new build or off-the-plan: sunset clause, practical completion timeline, and delayed settlement risk noted; valuations typically done at completion' },
+      { id: 'p8', text: 'If investment: rental yield and vacancy assumptions cross-checked against local market data' },
+    ],
+  },
+  {
+    id: 'expenses',
+    title: 'Expenses & HEM',
+    icon: 'receipt',
+    items: [
+      { id: 'e1', text: 'Declared living expenses verified against 3 months of transaction statements — not just self-reported' },
+      { id: 'e2', text: 'Expenses reflect real current spending: lenders compare declared vs HEM and use whichever is higher' },
+      { id: 'e3', text: 'Childcare, school fees, and regular subscriptions captured and declared' },
+      { id: 'e4', text: 'Recent large one-off transactions identified and annotated so they don\'t inflate recurring liability assessment' },
+      { id: 'e5', text: 'Regular gambling transactions reviewed — some lenders will decline on frequency, not just amount, regardless of profitability' },
+      { id: 'e6', text: 'If lifestyle is expected to change materially (e.g. child on the way): future expense position noted in file notes' },
+    ],
+  },
+  {
+    id: 'rates',
+    title: 'Rates & products',
+    icon: 'percent',
+    items: [
+      { id: 'r1', text: 'CDR-sourced rates are point-in-time — current advertised rates confirmed directly with each lender before quoting client' },
+      { id: 'r2', text: 'Specific product and features (offset, redraw, split-loan option) confirmed as still available and on sale' },
+      { id: 'r3', text: 'If recommending a fixed rate: IRD break-cost risk explained to client in writing before they commit' },
+      { id: 'r4', text: 'Comparison rate disclosed to client as required under NCCP and applicable credit legislation' },
+      { id: 'r5', text: 'If rate lock available and client wants it for fixed rate: process and cost confirmed with lender' },
+    ],
+  },
+  {
+    id: 'policy',
+    title: 'Lender policy & structuring',
+    icon: 'building',
+    items: [
+      { id: 'po1', text: 'Lender credit policy cross-checked directly — posture notes in this tool are curated guidance, not live policy documents' },
+      { id: 'po2', text: 'Each shortlisted lender\'s current servicing calculator confirmed for HEM version, overtime shading, and rental income treatment' },
+      { id: 'po3', text: 'If LVR >80%: LMI provider policy checked and LMI cost disclosed to client before submission' },
+      { id: 'po4', text: 'If LVR >90%: applicable scheme eligibility (FHBG, RGS, FHLD) confirmed as current with quota available — schemes fill quickly' },
+      { id: 'po5', text: 'Aggregator accreditation confirmed — broker is accredited with each lender being submitted to' },
+      { id: 'po6', text: 'If commercial use, short-term rental, or mixed-use component: lender\'s residential vs commercial policy boundary confirmed' },
+      { id: 'po7', text: 'If applicant is a non-resident or on a temporary visa: residency lending policy checked per lender' },
+    ],
+  },
+  {
+    id: 'compliance',
+    title: 'Compliance & broker obligations',
+    icon: 'shield-check',
+    items: [
+      { id: 'c1', text: 'Best interests duty assessment documented and stored on file — not just a mental note' },
+      { id: 'c2', text: 'Needs analysis and fact-find form completed and signed by client' },
+      { id: 'c3', text: 'Preliminary credit assessment documented where required under your ACL conditions' },
+      { id: 'c4', text: 'Credit guide or product disclosure statement provided to client before recommendation' },
+      { id: 'c5', text: 'Conflict of interest disclosed: trail commission structure, ownership of aggregator, or any referral fee arrangement' },
+      { id: 'c6', text: 'Privacy consent collected — including consent for credit reporting body access and lender submission' },
+      { id: 'c7', text: 'Fee disclosure statement provided if charging a broker fee' },
+      { id: 'c8', text: 'AML/KYC: 100-point ID check completed and certified copies stored on file' },
+      { id: 'c9', text: 'If client is a trust or company: full trustee/director structure documented and verified against ASIC/ABR' },
+    ],
+  },
+  {
+    id: 'settlement',
+    title: 'Settlement readiness',
+    icon: 'calendar-check',
+    items: [
+      { id: 's1', text: 'Conveyancer or solicitor engaged and informed of finance condition date' },
+      { id: 's2', text: 'Finance condition date confirmed — sufficient time allowed if a valuation is required (typically 5–10 business days)' },
+      { id: 's3', text: 'Building (and landlord if investment) insurance arranged; some lenders require evidence of cover before settlement' },
+      { id: 's4', text: 'FHOG application submitted where applicable — some states require lodgement separate from the lender application' },
+      { id: 's5', text: 'If refinancing: discharge authority obtained from current lender and payout figure confirmed' },
+      { id: 's6', text: 'Client briefed on settlement day: adjustments (rates, strata, land tax), bank cheque requirements, and key handover process' },
+      { id: 's7', text: 'Post-settlement: confirm with client that rate reviews, offset linking, and redraw setup have been completed with lender' },
+    ],
+  },
+];
+
+function BrokerPrepPanel({ getIcon }) {
+  const totalItems = BROKER_CHECKLIST.reduce((sum, g) => sum + g.items.length, 0);
+  const [checked, setChecked] = React.useState({});
+  const [expanded, setExpanded] = React.useState(
+    () => Object.fromEntries(BROKER_CHECKLIST.map((g) => [g.id, true])),
+  );
+
+  const checkedCount = Object.values(checked).filter(Boolean).length;
+  const pct = Math.round((checkedCount / totalItems) * 100);
+
+  function toggle(id) {
+    setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function toggleGroup(id) {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function checkAll(groupId) {
+    const group = BROKER_CHECKLIST.find((g) => g.id === groupId);
+    if (!group) return;
+    const allChecked = group.items.every((i) => checked[i.id]);
+    setChecked((prev) => {
+      const next = { ...prev };
+      for (const item of group.items) next[item.id] = !allChecked;
+      return next;
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pre-application checklist</p>
+            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              For mortgage broker use. This list assumes your fact-finding is complete and you are preparing to submit a loan application. Tick each item as you verify it — the checklist resets when you leave this tab.
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{pct}%</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{checkedCount} / {totalItems}</p>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div className="mt-3 rounded-full overflow-hidden h-1.5" style={{ background: 'var(--color-border)' }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${pct}%`, background: pct === 100 ? '#16a34a' : 'var(--color-primary)' }}
+          />
+        </div>
+        {pct === 100 && (
+          <p className="text-xs mt-2 font-medium" style={{ color: '#16a34a' }}>
+            {getIcon('check-circle', { size: 13, style: { display: 'inline', marginRight: 4, verticalAlign: 'middle' } })}
+            All items verified — file appears ready for submission review.
+          </p>
+        )}
+      </div>
+
+      {/* Disclaimer */}
+      <div className="rounded-xl border px-4 py-3 text-xs leading-relaxed" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#92400e' }}>
+        <span className="font-semibold">Educational purposes only.</span> This checklist is a structured aide-memoire, not a compliance framework, not a credit assessment, and not a substitute for your ACL obligations, aggregator procedures, or lender-specific submission guides. Items marked are self-reported — nothing here is independently verified.
+      </div>
+
+      {/* Groups */}
+      {BROKER_CHECKLIST.map((group) => {
+        const groupChecked = group.items.filter((i) => checked[i.id]).length;
+        const groupDone = groupChecked === group.items.length;
+        const isOpen = expanded[group.id];
+        return (
+          <div key={group.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.id)}
+              className="w-full flex items-center justify-between px-4 py-3 transition-opacity duration-150 hover:opacity-70 text-left"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span style={{ color: groupDone ? '#16a34a' : 'var(--color-primary)' }}>
+                  {getIcon(groupDone ? 'check-circle' : group.icon, { size: 16 })}
+                </span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{group.title}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                  {groupChecked}/{group.items.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {!groupDone && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); checkAll(group.id); }}
+                    className="text-xs transition-opacity duration-150 hover:opacity-60"
+                    style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    {group.items.every((i) => checked[i.id]) ? 'Uncheck all' : 'Check all'}
+                  </button>
+                )}
+                <span style={{ color: 'var(--color-muted)' }}>
+                  {getIcon(isOpen ? 'chevron-up' : 'chevron-down', { size: 15 })}
+                </span>
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="border-t divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {group.items.map((item) => (
+                  <label
+                    key={item.id}
+                    className="flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors duration-100"
+                    style={{ background: checked[item.id] ? 'var(--color-bg)' : 'transparent' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!checked[item.id]}
+                      onChange={() => toggle(item.id)}
+                      className="mt-0.5 shrink-0 rounded"
+                      style={{ accentColor: 'var(--color-primary)', width: 15, height: 15 }}
+                    />
+                    <span
+                      className="text-xs leading-relaxed"
+                      style={{ color: checked[item.id] ? 'var(--color-muted)' : 'var(--color-text)',
+                               textDecoration: checked[item.id] ? 'line-through' : 'none' }}
+                    >
+                      {item.text}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <p className="text-xs pb-4" style={{ color: 'var(--color-muted)' }}>
+        Always cross-reference your aggregator's own submission checklist and the lender's credit policy directly before lodging. Items and language here reflect general AU mortgage broker practice as at 2025–26 and may not reflect recent regulatory or lender policy changes.
+      </p>
+    </div>
   );
 }
 
