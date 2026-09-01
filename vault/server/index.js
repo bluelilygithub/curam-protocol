@@ -158,6 +158,7 @@ app.use((err, req, res, next) => {
 // Start cron jobs
 const { startNewsDigestCron } = require('./cron/newsDigestCron');
 const { startSharesCron } = require('./cron/sharesCron');
+const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -183,6 +184,7 @@ async function start() {
   } else {
     startNewsDigestCron();
     startSharesCron();
+    startFinanceRemindersCron();
   }
 
   // API key presence checks — visible in Railway logs

@@ -2830,9 +2830,13 @@ function SettingsTab() {
     fin_biz_name: '', fin_abn: '', fin_address: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
     fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '',
+    fin_reminder_hour: '8',
   });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testMsg, setTestMsg]     = useState('');
+  const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
     api.get('/api/finance/settings')
@@ -2852,6 +2856,22 @@ function SettingsTab() {
       setTimeout(() => setSaved(false), 2000);
     } catch {}
     finally { setSaving(false); }
+  };
+
+  const sendTestReminder = async () => {
+    if (!f('fin_admin_email')) { addToast('Set an admin email address first', 'error'); return; }
+    setTestSending(true);
+    setTestMsg('');
+    try {
+      const res  = await api.post('/api/finance/reminders/test');
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed');
+      setTestMsg(body.sent ? `Reminder sent to ${f('fin_admin_email')}` : 'No overdue items found — no email sent');
+    } catch (e) {
+      setTestMsg(`Error: ${e.message}`);
+    } finally {
+      setTestSending(false);
+    }
   };
 
   return (
@@ -2890,10 +2910,29 @@ function SettingsTab() {
         </div>
 
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Email</p>
-          <Field label="Admin CC email" description="A copy of every sent invoice and quote is CC'd to this address.">
-            <Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" />
-          </Field>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Email & Reminders</p>
+          <div className="flex flex-col gap-3">
+            <Field label="Admin CC email">
+              <Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" />
+            </Field>
+            <Field label="Daily reminder time">
+              <Sel value={f('fin_reminder_hour') || '8'} onChange={set('fin_reminder_hour')}>
+                {Array.from({length: 24}, (_,i) => (
+                  <option key={i} value={String(i)}>{String(i).padStart(2,'0')}:00</option>
+                ))}
+              </Sel>
+            </Field>
+            <div className="flex items-center gap-3">
+              <Btn variant="secondary" onClick={sendTestReminder} disabled={testSending}>
+                {testSending ? 'Sending…' : 'Send test reminder now'}
+              </Btn>
+              {testMsg && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{testMsg}</span>}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              A daily email is sent to the admin address listing all unanswered quotes and unpaid invoices past their due date.
+              A copy of every sent invoice and quote is also CC'd to that address.
+            </p>
+          </div>
         </div>
 
         <div className="pt-2">

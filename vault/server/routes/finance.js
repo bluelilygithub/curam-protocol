@@ -140,7 +140,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -155,7 +155,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email'];
+    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
       await pool.query(
@@ -1067,6 +1067,18 @@ router.delete('/invoices/:id', async (req, res) => {
   try {
     await pool.query(`DELETE FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Finance reminders (manual trigger) ───────────────────────────────────────
+
+router.post('/reminders/test', async (req, res) => {
+  try {
+    const { runFinanceReminders } = require('../cron/financeRemindersCron');
+    const result = await runFinanceReminders(req.user.id);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
