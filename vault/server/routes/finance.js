@@ -791,14 +791,35 @@ router.post('/invoices/:id/send', async (req, res) => {
     const cfg = {};
     for (const r of settings) cfg[r.key] = r.value;
 
+    // Load logo as base64 for inline embedding (email clients block external URLs)
+    const path = require('path');
+    const fs   = require('fs');
+    const logoPath = path.join(__dirname, '../assets/curam-ai-logo.png');
+    const logoDataUri = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : null;
+
     const fmtAud = (n) =>
       new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n || 0);
-    const fmtDate = (d) =>
-      d ? new Date(String(d).slice(0,10) + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+    const escHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+
+    // Fix: pg returns date columns as JS Date objects — use UTC methods to avoid TZ shift
+    const fmtDate = (d) => {
+      if (!d) return '—';
+      const dt = d instanceof Date ? d : new Date(d);
+      if (isNaN(dt.getTime())) return '—';
+      // Use UTC date parts to avoid DST/timezone shifting the day
+      const utcStr = new Date(dt.getTime() + dt.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 10);
+      return new Date(utcStr + 'T00:00:00').toLocaleDateString('en-AU', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      });
+    };
 
     const itemRows = items.map(item => `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;">${item.description}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;white-space:pre-wrap;">${escHtml(item.description || '')}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right;color:#1f2937;">${item.qty}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right;color:#1f2937;">${fmtAud(item.unitPrice)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right;color:#1f2937;">${fmtAud(item.gst)}</td>
@@ -818,8 +839,6 @@ router.post('/invoices/:id/send', async (req, res) => {
     const addrLabel  = isQuote ? 'Quote For' : 'Bill To';
     const totalLabel = isQuote ? 'Total Value' : 'Total Due';
 
-    const escHtml = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-
     const messageBlock = message ? `
       <div style="padding:16px 20px;background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;margin-bottom:24px;">
         <p style="margin:0;font-size:14px;color:#1e40af;white-space:pre-wrap;">${escHtml(message)}</p>
@@ -830,9 +849,12 @@ router.post('/invoices/:id/send', async (req, res) => {
 <head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
   <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-    <div style="background:#1f2937;padding:28px 32px;">
-      <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">${docLabel}: ${inv.number}</h1>
-      <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${cfg.fin_biz_name || ''}${cfg.fin_abn ? ` &nbsp;·&nbsp; ABN ${cfg.fin_abn}` : ''}</p>
+    <div style="background:#1f2937;padding:24px 32px;display:flex;align-items:center;gap:16px;">
+      ${logoDataUri ? `<img src="${logoDataUri}" alt="" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;">` : ''}
+      <div>
+        <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">${docLabel}: ${inv.number}</h1>
+        ${cfg.fin_biz_name ? `<p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${cfg.fin_biz_name}</p>` : ''}
+      </div>
     </div>
     <div style="padding:28px 32px;">
       ${messageBlock}
