@@ -3,4 +3,4 @@
 librosa==0.10.2
 soundfile==0.12.1
 numpy==1.26.4
-yt-dlp==2024.5.27
+yt-dlp

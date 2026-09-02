@@ -19,7 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Python audio pipeline — pure Python, no compiler or GPU libs required
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt \
+    && yt-dlp -U || true
 
 WORKDIR /app
 
