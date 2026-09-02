@@ -474,7 +474,8 @@ function TranslationsTab({ glossaries }) {
                   </Field>
                 </div>
                 <div className="flex-1 min-w-40">
-                  <Field label="Glossary (optional)">
+                  <Field label="Glossary (optional)"
+                    hint="Use a glossary to fix terminology (e.g. trade names, tax codes) and prevent brand names from being translated.">
                     <Sel value={glossaryId} onChange={setGlossaryId}>
                       <option value="">None</option>
                       {glossaries.map(g => (
@@ -828,6 +829,7 @@ export default function TranslatePage() {
       {/* Disclaimer */}
       <div className="px-6 py-2 text-xs" style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
         AI-generated translations are for reference only and are not legally certified. Always verify important documents with a qualified human translator.
+        Table layouts may be reformatted as plain text — use a <strong>glossary</strong> to lock domain-specific terms (e.g. product names, tax codes, brand terms).
       </div>
 
       {/* Content */}

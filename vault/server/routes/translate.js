@@ -231,6 +231,35 @@ router.post('/jobs', upload.single('pdf'), async (req, res) => {
 });
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
+
+// Decode HTML entities returned by Google Translate (format:'html' mode)
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, '\u00A0')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+    .replace(/&[a-z]+;/gi, '');
+}
+
+// Language-specific typographic corrections
+function applyTypography(text, lang) {
+  let t = decodeHtmlEntities(text);
+
+  if (lang === 'fr' || lang === 'fr-CA') {
+    // Convert straight double-quotes around phrases to guillemets
+    t = t.replace(/"([^"]{1,200})"/g, '\u00AB\u00A0$1\u00A0\u00BB');
+    // Ensure non-breaking space before :  ;  !  ?  (French typographic rule)
+    t = t.replace(/\s*([;:!?])/g, '\u00A0$1');
+    // Normalise currency spacing: number then space then currency symbol
+    t = t.replace(/(\d)\s*\$\s*/g, '$1\u00A0$\u00A0');
+  }
+
+  return t;
+}
 async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glossaryId, scannedImages) {
   const pdfParse = require('pdf-parse');
 
@@ -415,18 +444,42 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
   let chunksDone = 0;
   let totalChunks = 0;
 
-  // Flatten into chunks of max 20 paragraphs / 4500 chars
+  // Google Translate v2 hard limit per q item is ~5000 chars.
+  // Split any paragraph that exceeds 4500 chars at sentence boundaries.
+  function splitLongParagraph(text, limit = 4500) {
+    if (text.length <= limit) return [text];
+    const pieces = [];
+    // Split at sentence-ending punctuation followed by a space
+    const sentences = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
+    let current = '';
+    for (const s of sentences) {
+      if (current.length + s.length > limit && current.length > 0) {
+        pieces.push(current.trim());
+        current = s;
+      } else {
+        current += s;
+      }
+    }
+    if (current.trim()) pieces.push(current.trim());
+    return pieces.length ? pieces : [text.slice(0, limit)];
+  }
+
+  // Flatten into chunks of max 20 paragraphs / 4500 chars total,
+  // with each individual paragraph pre-split if needed.
   const chunks = [];
   for (const pageNum of allPages) {
     const paras = paragraphsByPage[pageNum];
     let currentChunk = { pages: [], paras: [], chars: 0 };
-    for (const para of paras) {
-      if (currentChunk.paras.length >= 20 || currentChunk.chars + para.length > 4500) {
-        if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { pages: [], paras: [], chars: 0 }; }
+    for (const rawPara of paras) {
+      const subParas = splitLongParagraph(rawPara);
+      for (const para of subParas) {
+        if (currentChunk.paras.length >= 20 || currentChunk.chars + para.length > 4500) {
+          if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { pages: [], paras: [], chars: 0 }; }
+        }
+        currentChunk.paras.push({ pageNum, text: para });
+        currentChunk.pages.push(pageNum);
+        currentChunk.chars += para.length;
       }
-      currentChunk.paras.push({ pageNum, text: para });
-      currentChunk.pages.push(pageNum);
-      currentChunk.chars += para.length;
     }
     if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { pages: [], paras: [], chars: 0 }; }
   }
@@ -451,13 +504,13 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
       translations.forEach((t, i) => {
         const { pageNum } = chunk.paras[i];
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
-        translatedByPage[pageNum].push(applyGlossaryOut(t.translatedText));
+        translatedByPage[pageNum].push(applyGlossaryOut(applyTypography(t.translatedText, targetLanguage)));
       });
     } catch (err) {
       // On failure, use original text as fallback
       chunk.paras.forEach(({ pageNum, text }) => {
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
-        translatedByPage[pageNum].push(`[Translation error] ${text}`);
+        translatedByPage[pageNum].push(applyGlossaryOut(applyTypography(`[Translation error] ${text}`, targetLanguage)));
       });
     }
 
