@@ -182,6 +182,59 @@ function YouTubePlayer({ videoId, onReady, playerRef }) {
   );
 }
 
+// ── HTML5 audio player (upload / offline path) ────────────────────────────────
+function HtmlAudioPlayer({ songId, onReady, playerRef }) {
+  const audioRef = useRef(null);
+  const [src, setSrc] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let objectUrl = null;
+    let cancelled = false;
+    setErr(null);
+    setSrc(null);
+    (async () => {
+      try {
+        const res = await api.get(`/api/guitar/songs/${songId}/audio`);
+        if (!res.ok) throw new Error('Audio not available');
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch (e) {
+        if (!cancelled) setErr(e.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      playerRef.current = null;
+    };
+  }, [songId]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !src) return;
+    const shim = {
+      getCurrentTime: () => el.currentTime || 0,
+      seekTo: (t) => { el.currentTime = t; },
+    };
+    playerRef.current = shim;
+    onReady?.(shim);
+  }, [src]);
+
+  if (err) {
+    return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No playable audio for this song.</p>;
+  }
+  if (!src) {
+    return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading audio…</p>;
+  }
+  return (
+    <audio ref={audioRef} src={src} controls className="w-full"
+      style={{ borderRadius: 8, background: 'var(--color-surface)' }} />
+  );
+}
+
 // ── Chord correction modal ────────────────────────────────────────────────────
 function CorrectionModal({ event, onSave, onClose }) {
   const [root, setRoot]     = useState(event.chordRoot);
@@ -206,7 +259,7 @@ function CorrectionModal({ event, onSave, onClose }) {
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
         onClick={e => e.stopPropagation()}>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-          Correct chord at {event.timestampSec.toFixed(1)}s
+          Correct chord at {Number(event.timestampSec).toFixed(1)}s
         </h3>
         <div className="flex gap-2">
           <select value={root} onChange={e => setRoot(e.target.value)}
@@ -302,11 +355,19 @@ export default function GuitarPage() {
   const pollRef    = useRef(null);
   const addToast   = useToastStore(s => s.addToast);
 
-  // YouTube cookie state (stored in user settings)
-  const [ytCookieStatus, setYtCookieStatus] = useState(null); // { configured: bool }
+  // YouTube cookie state (optional advanced — Chrome or Firefox)
+  const [ytCookieStatus, setYtCookieStatus] = useState(null);
   const [ytCookieInput, setYtCookieInput]   = useState('');
   const [ytCookieSaving, setYtCookieSaving] = useState(false);
-  const [showCookieHelp, setShowCookieHelp] = useState(false);
+  const [addMode, setAddMode]               = useState('youtube'); // youtube | upload | manual
+  const [uploadFile, setUploadFile]         = useState(null);
+  const [uploadTitle, setUploadTitle]       = useState('');
+  const [uploadArtist, setUploadArtist]     = useState('');
+  const [uploadYtUrl, setUploadYtUrl]       = useState('');
+  const [manualTitle, setManualTitle]       = useState('');
+  const [manualArtist, setManualArtist]     = useState('');
+  const [manualYtUrl, setManualYtUrl]       = useState('');
+  const [addingChord, setAddingChord]       = useState(false);
 
   const loadYtCookieStatus = useCallback(() => {
     api.get('/api/guitar/yt-cookie-status').then(r => r.json()).then(d => setYtCookieStatus(d)).catch(() => {});
@@ -314,8 +375,8 @@ export default function GuitarPage() {
 
   useEffect(() => { loadYtCookieStatus(); }, [loadYtCookieStatus]);
 
-  const saveYtCookie = async () => {
-    const val = ytCookieInput.trim();
+  const saveYtCookie = async (value) => {
+    const val = (value !== undefined ? value : ytCookieInput).trim();
     setYtCookieSaving(true);
     try {
       const res = await api.post('/api/settings', { key: 'guitar_yt_cookies', value: val || null });
@@ -346,6 +407,48 @@ export default function GuitarPage() {
       setUrlInput('');
       loadSongs();
       addToast('Processing started — chord detection takes 1–3 minutes', 'success');
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setSubmitting(false); }
+  };
+
+  const submitUpload = async () => {
+    if (!uploadFile || submitting) return;
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append('audio', uploadFile);
+      if (uploadTitle.trim()) fd.append('title', uploadTitle.trim());
+      if (uploadArtist.trim()) fd.append('artist', uploadArtist.trim());
+      if (uploadYtUrl.trim()) fd.append('youtubeUrl', uploadYtUrl.trim());
+      const res = await api.postForm('/api/guitar/songs/upload', fd);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUploadFile(null);
+      setUploadTitle('');
+      setUploadArtist('');
+      setUploadYtUrl('');
+      loadSongs();
+      addToast('Upload received — detecting chords…', 'success');
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setSubmitting(false); }
+  };
+
+  const submitManual = async () => {
+    if (!manualTitle.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await api.post('/api/guitar/songs/manual', {
+        title: manualTitle.trim(),
+        artist: manualArtist.trim() || null,
+        youtubeUrl: manualYtUrl.trim() || null,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setManualTitle('');
+      setManualArtist('');
+      setManualYtUrl('');
+      loadSongs();
+      addToast('Blank chart created — open it from the list and add chords', 'success');
     } catch (e) { addToast(e.message, 'error'); }
     finally { setSubmitting(false); }
   };
@@ -468,6 +571,25 @@ export default function GuitarPage() {
     setCorrecting(null);
   };
 
+  const addChordAtPlayhead = async () => {
+    if (!activeSong || addingChord) return;
+    setAddingChord(true);
+    try {
+      let t = currentTimeSec;
+      try { t = playerRef.current?.getCurrentTime?.() ?? t; } catch {}
+      const res = await api.post(`/api/guitar/songs/${activeSong.id}/chords`, {
+        timestampSec: Math.max(0, Number(t.toFixed(2))),
+        chordRoot: 'C',
+        chordQuality: '',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setChords(prev => [...prev, data].sort((a, b) => parseFloat(a.timestampSec) - parseFloat(b.timestampSec)));
+      setCorrecting({ ...data, songId: activeSong.id });
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setAddingChord(false); }
+  };
+
   // ── Practice loop ──────────────────────────────────────────────────────────
   const saveLoop = async () => {
     if (!activeSong || !loopName.trim()) { addToast('Enter a loop name', 'error'); return; }
@@ -552,92 +674,157 @@ export default function GuitarPage() {
         {/* ── Library tab ──────────────────────────────────────────────── */}
         {tab === 'Library' && (
           <div className="p-6 max-w-3xl flex flex-col gap-6">
-            {/* URL submission */}
+            {/* Add song — three modes */}
             <div>
               <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Add a song</h2>
-              <div className="flex gap-2">
-                <input value={urlInput} onChange={e => setUrlInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && submitUrl()}
-                  placeholder="Paste a YouTube URL…"
-                  className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                <button onClick={submitUrl} disabled={submitting || !urlInput.trim()}
-                  className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
-                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                  {submitting ? 'Adding…' : 'Detect chords'}
-                </button>
+              <div className="flex gap-1 mb-3">
+                {[
+                  { id: 'youtube', label: 'YouTube URL' },
+                  { id: 'upload',  label: 'Upload audio' },
+                  { id: 'manual',  label: 'Manual chart' },
+                ].map(m => (
+                  <button key={m.id} onClick={() => setAddMode(m.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg border"
+                    style={{
+                      borderColor: addMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: addMode === m.id ? 'var(--color-primary)' : 'var(--color-muted)',
+                      background: addMode === m.id ? 'rgba(37,99,235,0.06)' : 'transparent',
+                      fontWeight: addMode === m.id ? 600 : 400,
+                    }}>{m.label}</button>
+                ))}
               </div>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Audio is downloaded and processed locally. Detection takes 1–3 minutes per song.
-              </p>
-            </div>
 
-            {/* YouTube cookie manager */}
-            <div className="rounded-xl border p-4"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              <div className="flex items-center justify-between gap-2 mb-2">
+              {addMode === 'youtube' && (
                 <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    YouTube authentication
-                    {ytCookieStatus?.configured && (
-                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-medium"
-                        style={{ color: '#16a34a', background: 'rgba(22,163,74,0.1)' }}>Configured</span>
-                    )}
+                  <div className="flex gap-2">
+                    <input value={urlInput} onChange={e => setUrlInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitUrl()}
+                      placeholder="Paste a YouTube URL…"
+                      className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    <button onClick={submitUrl} disabled={submitting || !urlInput.trim()}
+                      className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                      {submitting ? 'Adding…' : 'Detect chords'}
+                    </button>
+                  </div>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                    Best for most guitar videos. If a video is age-restricted, use Upload audio instead.
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    Required only for age-restricted videos. Most guitar content works without this.
-                  </p>
-                </div>
-                <button onClick={() => setShowCookieHelp(v => !v)}
-                  className="text-xs px-2 py-1 rounded border flex-shrink-0"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                  {showCookieHelp ? 'Hide' : 'How to set up'}
-                </button>
-              </div>
-
-              {showCookieHelp && (
-                <div className="mb-3 p-3 rounded-lg text-xs" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', lineHeight: '1.6' }}>
-                  <p className="font-medium mb-1" style={{ color: 'var(--color-text)' }}>Setup (Firefox only — Chrome encrypts cookies since 2024):</p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Install the <strong>cookies.txt</strong> Firefox extension</li>
-                    <li>Log in to <strong>youtube.com</strong> in Firefox</li>
-                    <li>Click the extension on youtube.com → export <strong>cookies.txt</strong></li>
-                    <li>In a terminal: <code className="px-1 rounded" style={{ background: 'rgba(0,0,0,0.1)' }}>base64 -i ~/Downloads/cookies.txt | tr -d '\n'</code></li>
-                    <li>Paste the output into the field below and click Save</li>
-                  </ol>
-                  <p className="mt-2">Cookies expire roughly every 2 weeks and will need to be refreshed. Use a throwaway Google account, not your primary one.</p>
                 </div>
               )}
 
-              <div className="flex gap-2 items-start">
-                <textarea value={ytCookieInput} onChange={e => setYtCookieInput(e.target.value)}
-                  rows={2}
-                  placeholder={ytCookieStatus?.configured ? 'Paste new base64 cookies.txt to replace…' : 'Paste base64-encoded cookies.txt here…'}
-                  className="flex-1 text-xs px-3 py-2 rounded-lg border font-mono resize-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)',
-                           color: 'var(--color-text)', outline: 'none' }} />
-                <div className="flex flex-col gap-1.5 flex-shrink-0">
-                  <button onClick={saveYtCookie} disabled={ytCookieSaving || !ytCookieInput.trim()}
-                    className="text-xs px-3 py-1.5 rounded font-medium disabled:opacity-40"
+              {addMode === 'upload' && (
+                <div className="flex flex-col gap-2">
+                  <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                    onChange={e => {
+                      const f = e.target.files?.[0] || null;
+                      setUploadFile(f);
+                      if (f && !uploadTitle) setUploadTitle(f.name.replace(/\.[^.]+$/, ''));
+                    }}
+                    className="text-sm" />
+                  <div className="flex gap-2">
+                    <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
+                      placeholder="Title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    <input value={uploadArtist} onChange={e => setUploadArtist(e.target.value)}
+                      placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  </div>
+                  <input value={uploadYtUrl} onChange={e => setUploadYtUrl(e.target.value)}
+                    placeholder="Optional YouTube URL for video sync while practising"
+                    className="text-sm px-3 py-2 rounded-lg border"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  <button onClick={submitUpload} disabled={submitting || !uploadFile}
+                    className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
                     style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                    {ytCookieSaving ? 'Saving…' : 'Save'}
+                    {submitting ? 'Uploading…' : 'Upload & detect'}
                   </button>
-                  {ytCookieStatus?.configured && (
-                    <button onClick={() => { setYtCookieInput(''); saveYtCookie(); }}
-                      className="text-xs px-3 py-1.5 rounded border"
-                      style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
-                      Clear
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Reliable path for age-restricted or offline tracks. Max 25 MB (mp3, wav, m4a…).
+                  </p>
+                </div>
+              )}
+
+              {addMode === 'manual' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input value={manualTitle} onChange={e => setManualTitle(e.target.value)}
+                      placeholder="Song title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    <input value={manualArtist} onChange={e => setManualArtist(e.target.value)}
+                      placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  </div>
+                  <input value={manualYtUrl} onChange={e => setManualYtUrl(e.target.value)}
+                    placeholder="Optional YouTube URL for playback"
+                    className="text-sm px-3 py-2 rounded-lg border"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  <button onClick={submitManual} disabled={submitting || !manualTitle.trim()}
+                    className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    Create blank chart
+                  </button>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Skip detection — enter chords yourself while practising.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Optional advanced: cookies (Chrome or Firefox) */}
+            <details className="rounded-xl border p-4"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                Advanced: YouTube cookies
+                {ytCookieStatus?.configured && (
+                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ color: '#16a34a', background: 'rgba(22,163,74,0.1)' }}>Configured</span>
+                )}
+              </summary>
+              <div className="mt-3 text-xs" style={{ color: 'var(--color-muted)', lineHeight: 1.6 }}>
+                <p className="mb-2">
+                  Optional. Prefer <strong>Upload audio</strong> for restricted videos. Cookies help YouTube URL downloads only.
+                  Works from <strong>Chrome or Firefox</strong> via a cookie-export extension (export happens inside the browser).
+                </p>
+                <ol className="list-decimal list-inside space-y-1 mb-3">
+                  <li>Install <strong>Get cookies.txt LOCALLY</strong> (Chrome) or <strong>cookies.txt</strong> (Firefox)</li>
+                  <li>Log in to youtube.com, export cookies.txt for youtube.com</li>
+                  <li>Run: <code className="px-1 rounded" style={{ background: 'rgba(0,0,0,0.08)' }}>base64 -i ~/Downloads/cookies.txt | tr -d '\n'</code></li>
+                  <li>Paste below and Save. Prefer a throwaway Google account — cookies expire ~every 2 weeks.</li>
+                </ol>
+                <div className="flex gap-2 items-start">
+                  <textarea value={ytCookieInput} onChange={e => setYtCookieInput(e.target.value)}
+                    rows={2}
+                    placeholder={ytCookieStatus?.configured ? 'Paste new base64 cookies to replace…' : 'Paste base64-encoded cookies.txt…'}
+                    className="flex-1 text-xs px-3 py-2 rounded-lg border font-mono resize-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)',
+                             color: 'var(--color-text)', outline: 'none' }} />
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <button onClick={() => saveYtCookie()} disabled={ytCookieSaving || !ytCookieInput.trim()}
+                      className="text-xs px-3 py-1.5 rounded font-medium disabled:opacity-40"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                      {ytCookieSaving ? 'Saving…' : 'Save'}
                     </button>
-                  )}
+                    {ytCookieStatus?.configured && (
+                      <button onClick={() => saveYtCookie('')}
+                        className="text-xs px-3 py-1.5 rounded border"
+                        style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </details>
 
             {/* Song list */}
             {loading ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>
             ) : songs.length === 0 ? (
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No songs yet — paste a YouTube URL above.</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                No songs yet — add a YouTube URL, upload audio, or create a manual chart.
+              </p>
             ) : (
               <div className="flex flex-col gap-2">
                 {songs.map(song => (
@@ -650,6 +837,9 @@ export default function GuitarPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {song.title || 'Processing…'}
+                        <span className="ml-2 text-xs font-normal" style={{ color: 'var(--color-muted)' }}>
+                          {song.sourceType === 'upload' ? 'upload' : song.sourceType === 'manual' ? 'manual' : 'youtube'}
+                        </span>
                       </p>
                       <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
                         {song.artist || ''}
@@ -728,29 +918,48 @@ export default function GuitarPage() {
                 <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px' }}>
                   {/* Left: player + chord chart */}
                   <div className="flex flex-col gap-4">
-                    {/* YouTube player */}
-                    {videoIdOf(activeSong.youtubeUrl) && (
+                    {/* Prefer YouTube when linked; otherwise stream stored upload audio */}
+                    {videoIdOf(activeSong.youtubeUrl) ? (
                       <YouTubePlayer
                         videoId={videoIdOf(activeSong.youtubeUrl)}
                         playerRef={playerRef}
                         onReady={onPlayerReady}
                       />
+                    ) : activeSong.hasAudio ? (
+                      <HtmlAudioPlayer
+                        songId={activeSong.id}
+                        playerRef={playerRef}
+                        onReady={onPlayerReady}
+                      />
+                    ) : (
+                      <p className="text-xs rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                        No playback source — chart-only mode. Use “Add chord at playhead” with the time scrubber, or attach a YouTube URL when creating the song.
+                      </p>
                     )}
 
                     {/* Chord chart */}
                     <div ref={chartRef} className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                         <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
                           Chord Chart {loadingChords && <span style={{ color: 'var(--color-muted)' }}>· Loading…</span>}
                         </span>
-                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          Click any chord to correct · Hover for diagram
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={addChordAtPlayhead} disabled={addingChord}
+                            className="text-xs px-2 py-1 rounded border"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            {addingChord ? 'Adding…' : 'Add chord at playhead'}
+                          </button>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            Click to correct · Hover for diagram
+                          </span>
+                        </div>
                       </div>
 
                       {chords.length === 0 && !loadingChords && (
-                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No chords detected.</p>
+                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                          No chords yet — wait for detection, or add them manually.
+                        </p>
                       )}
 
                       <div className="flex flex-wrap gap-1.5">

@@ -1856,7 +1856,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS guitar_songs (
       id              SERIAL PRIMARY KEY,
       "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      "youtubeUrl"    TEXT NOT NULL,
+      "youtubeUrl"    TEXT,
       title           TEXT,
       artist          TEXT,
       duration        NUMERIC(8,2),
@@ -1867,9 +1867,39 @@ async function initSchema() {
       status          TEXT NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending','processing','done','failed')),
       "errorMessage"  TEXT,
+      "sourceType"    TEXT NOT NULL DEFAULT 'youtube'
+                        CHECK ("sourceType" IN ('youtube','upload','manual')),
+      "audioMime"     TEXT,
+      "audioData"     BYTEA,
       "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
       "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
     )
+  `);
+
+  // Guitar agent migrations — upload path + nullable YouTube URL
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_songs ALTER COLUMN "youtubeUrl" DROP NOT NULL;
+    EXCEPTION WHEN others THEN NULL;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_songs ADD COLUMN IF NOT EXISTS "sourceType" TEXT NOT NULL DEFAULT 'youtube';
+    EXCEPTION WHEN others THEN NULL;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_songs ADD COLUMN IF NOT EXISTS "audioMime" TEXT;
+    EXCEPTION WHEN others THEN NULL;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_songs ADD COLUMN IF NOT EXISTS "audioData" BYTEA;
+    EXCEPTION WHEN others THEN NULL;
+    END $$
   `);
 
   await pool.query(`
