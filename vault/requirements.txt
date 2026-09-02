@@ -1,8 +1,5 @@
-# Guitar Learning Agent — audio pipeline dependencies
-# CPU-only torch installed via --extra-index-url in Dockerfile
-torch==2.3.1+cpu
-torchaudio==2.3.1+cpu
-autochord==0.1.4
+# Guitar Learning Agent — audio pipeline
+# Pure-Python stack: no C extensions, no compiler required, no GPU libraries
 librosa==0.10.2
 soundfile==0.12.1
 numpy==1.26.4

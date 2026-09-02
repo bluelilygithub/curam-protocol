@@ -17,13 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
-# Python audio pipeline
-# numpy must be installed first — vamp's legacy setup.py imports it during metadata build
+# Python audio pipeline — pure Python, no compiler or GPU libs required
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir --break-system-packages numpy==1.26.4
-RUN pip3 install --no-cache-dir --break-system-packages \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 WORKDIR /app
 

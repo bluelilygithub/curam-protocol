@@ -1,31 +1,19 @@
 #!/usr/bin/env python3
 """
 Guitar Learning Agent — audio pipeline.
-Called by Node.js: python3 guitar_pipeline.py <youtube_url> <output_dir> [song_id]
+Called by Node.js: python3 guitar_pipeline.py <youtube_url> <output_dir>
 
 Outputs a JSON file at <output_dir>/result.json on success,
 or <output_dir>/error.json on failure.
 
 Pipeline:
   1. yt-dlp  → download audio (wav)
-  2. librosa → beat tracking, BPM, chroma / key estimation
-  3. autochord → chord recognition per frame
-  4. Post-process → snap to beats, build chord events
-  5. Suggest capo based on key
+  2. librosa → beat tracking, BPM, key estimation via Krumhansl-Schmuckler
+  3. Chroma template matching → chord per beat (major / minor templates)
+  4. Capo suggestion based on detected key
 
-JSON output schema:
-{
-  "title": str,
-  "artist": str,
-  "duration": float,
-  "bpm": int,
-  "key_detected": str,        # e.g. "G major"
-  "capo_suggested": int,      # fret number, 0 = no capo
-  "chord_events": [
-    { "timestamp_sec": float, "chord_root": str, "chord_quality": str,
-      "confidence_score": float, "section_name": null }
-  ]
-}
+Detection approach: best-effort first draft — the UI supports fast manual
+correction of any chord event.
 """
 
 import sys
@@ -40,7 +28,6 @@ import re
 def run_pipeline(youtube_url: str, output_dir: str) -> dict:
     import librosa
     import numpy as np
-    import autochord
 
     os.makedirs(output_dir, exist_ok=True)
     audio_path = os.path.join(output_dir, "audio.wav")
@@ -120,70 +107,53 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
                 best_score = score
                 best_key = f"{root} {mode}"
 
-    # ── 4. Chord detection via autochord ─────────────────────────────────────
-    print(f"[pipeline] Running chord detection (this may take a minute)…", flush=True)
-    raw_chords = autochord.recognize(audio_path)
-    # raw_chords: list of (start_sec, end_sec, chord_label)
+    # ── 3. Chord detection via chroma template matching ───────────────────────
+    print(f"[pipeline] Detecting chords via chroma template matching…", flush=True)
 
-    if not raw_chords:
-        raise RuntimeError("autochord returned no chords — file may not contain guitar audio")
+    ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B']
+    # Major [root, M3, P5], minor [root, m3, P5]
+    MAJ_TEMPLATE = np.array([1,0,0,0,1,0,0,1,0,0,0,0], dtype=float)
+    MIN_TEMPLATE = np.array([1,0,0,1,0,0,0,1,0,0,0,0], dtype=float)
 
-    # ── 5. Post-process: parse chord labels, snap to beats ────────────────────
-    def parse_chord(label: str):
-        """Return (root, quality) from autochord label like 'G:min', 'C:maj', 'N'."""
-        if label in ("N", "X", "", None):
-            return None, None
-        label = label.strip()
-        # Format: ROOT:QUALITY or just ROOT
-        if ":" in label:
-            parts = label.split(":", 1)
-            root_raw, qual_raw = parts[0], parts[1]
-        else:
-            root_raw, qual_raw = label, "maj"
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=512)
+    frame_times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr, hop_length=512)
 
-        # Normalise root: C# Db etc.
-        root_map = {"Cb":"B","Db":"C#","Eb":"Eb","Fb":"E","Gb":"F#","Ab":"Ab","Bb":"Bb"}
-        root = root_map.get(root_raw, root_raw)
-
-        # Normalise quality
-        qual_map = {
-            "maj": "", "min": "m", "7": "7", "maj7": "maj7", "min7": "m7",
-            "dim": "dim", "aug": "aug", "sus2": "sus2", "sus4": "sus4",
-            "hdim7": "m7b5", "dim7": "dim7", "minmaj7": "mM7",
-        }
-        quality = qual_map.get(qual_raw.lower(), qual_raw)
-        return root, quality
-
-    def nearest_beat(ts, beat_times):
-        """Snap a timestamp to the nearest beat."""
-        if not beat_times:
-            return ts
-        bt = min(beat_times, key=lambda b: abs(b - ts))
-        return bt if abs(bt - ts) < 0.5 else ts
-
+    # Build per-beat chroma (average frames within each beat window)
     chord_events = []
-    seen_ts = set()
-    for (start_sec, end_sec, label) in raw_chords:
-        root, quality = parse_chord(label)
-        if root is None:
-            continue
-        # Confidence: autochord doesn't expose per-chord confidence;
-        # use duration as a proxy (longer = more confident)
-        chord_dur = float(end_sec) - float(start_sec)
-        confidence = min(1.0, chord_dur / 2.0)
+    prev_label = None
 
-        snapped = round(nearest_beat(float(start_sec), beat_times), 3)
-        if snapped in seen_ts:
+    for i, beat_time in enumerate(beat_times):
+        next_beat = beat_times[i + 1] if i + 1 < len(beat_times) else beat_time + 0.5
+        mask = (frame_times >= beat_time) & (frame_times < next_beat)
+        if not mask.any():
             continue
-        seen_ts.add(snapped)
+        beat_chroma = chroma[:, mask].mean(axis=1)
+        norm = beat_chroma.max() + 1e-8
+        beat_chroma = beat_chroma / norm
+
+        best_score, best_root, best_quality = -1.0, 'C', ''
+        for semitone, root in enumerate(ROOTS):
+            for quality, template in [('', MAJ_TEMPLATE), ('m', MIN_TEMPLATE)]:
+                rotated = np.roll(template, semitone)
+                score = float(np.dot(beat_chroma, rotated) / (np.linalg.norm(rotated) + 1e-8))
+                if score > best_score:
+                    best_score, best_root, best_quality = score, root, quality
+
+        label = best_root + best_quality
+        if label == prev_label:
+            continue  # skip consecutive duplicates
+        prev_label = label
 
         chord_events.append({
-            "timestamp_sec":   snapped,
-            "chord_root":      root,
-            "chord_quality":   quality,
-            "confidence_score": round(confidence, 3),
-            "section_name":    None,
+            "timestamp_sec":    round(float(beat_time), 3),
+            "chord_root":       best_root,
+            "chord_quality":    best_quality,
+            "confidence_score": round(best_score, 3),
+            "section_name":     None,
         })
+
+    if not chord_events:
+        raise RuntimeError("No chords detected — check that the audio contains pitched content")
 
     chord_events.sort(key=lambda e: e["timestamp_sec"])
 
