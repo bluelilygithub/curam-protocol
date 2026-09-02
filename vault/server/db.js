@@ -1818,6 +1818,7 @@ async function initSchema() {
       "glossaryId"        INTEGER REFERENCES translate_glossaries(id) ON DELETE SET NULL,
       "sourceTextJson"    JSONB,
       "translatedTextJson" TEXT,
+      "charCount"         INTEGER DEFAULT 0,
       "originalPdf"       BYTEA,
       "translatedPdf"     BYTEA,
       "errorMessage"      TEXT,
@@ -1843,6 +1844,11 @@ async function initSchema() {
         ALTER TABLE translate_jobs ALTER COLUMN "translatedTextJson" TYPE TEXT USING "translatedTextJson"::text;
       END IF;
     END $$
+  `);
+
+  // Add charCount column if missing
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "charCount" INTEGER DEFAULT 0
   `);
 
   console.log('[db] Schema ready');

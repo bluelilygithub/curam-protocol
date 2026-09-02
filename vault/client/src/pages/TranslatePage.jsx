@@ -526,7 +526,7 @@ function TranslationsTab({ glossaries }) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                  {['File', 'Languages', 'Pages', 'Date', 'Status', ''].map(h => (
+                  {['File', 'Languages', 'Pages', 'Cost', 'Date', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-3 py-2 text-xs font-medium"
                       style={{ color: 'var(--color-muted)' }}>{h}</th>
                   ))}
@@ -556,6 +556,15 @@ function TranslationsTab({ glossaries }) {
                             ({job.scannedPageCount} OCR)
                           </span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {job.charCount > 0 ? (
+                          <span title={`${job.charCount.toLocaleString()} characters @ $20/1M`}>
+                            {job.charCount < 1000
+                              ? `< $0.01`
+                              : `$${(job.charCount * 20 / 1_000_000).toFixed(4)}`}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                         {new Date(job.createdAt).toLocaleDateString('en-AU')}

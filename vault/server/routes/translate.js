@@ -122,7 +122,7 @@ router.get('/jobs', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, filename, status, stage, progress, "sourceLanguage", "targetLanguage",
               "pageCount", "scannedPageCount", "avgOcrConfidence", "glossaryId",
-              "errorMessage", "fileSizeBytes", "createdAt", "completedAt"
+              "errorMessage", "fileSizeBytes", "charCount", "createdAt", "completedAt"
        FROM translate_jobs WHERE "userId"=$1 ORDER BY "createdAt" DESC`,
       [req.user.id]
     );
@@ -443,6 +443,7 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
   const allPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b);
   let chunksDone = 0;
   let totalChunks = 0;
+  let totalCharCount = 0;
 
   // Google Translate v2 hard limit per q item is ~5000 chars.
   // Split any paragraph that exceeds 4500 chars at sentence boundaries.
@@ -487,6 +488,7 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
 
   for (const chunk of chunks) {
     const qs = chunk.paras.map(p => applyGlossaryIn(p.text));
+    const chunkChars = qs.reduce((s, q) => s + q.length, 0);
     try {
       const body = {
         q: qs,
@@ -515,6 +517,7 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
     }
 
     chunksDone++;
+    totalCharCount += chunkChars;
     const pct = 55 + Math.round((chunksDone / totalChunks) * 30);
     await setJobStatus(jobId, { stage: `Translating: chunk ${chunksDone} of ${totalChunks}`, progress: pct });
   }
@@ -524,6 +527,7 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
     status: 'generating',
     stage: 'Generating bilingual PDF…',
     progress: 87,
+    charCount: totalCharCount,
     translatedTextJson: JSON.stringify({
       sourceByPage: paragraphsByPage,
       translatedByPage,
