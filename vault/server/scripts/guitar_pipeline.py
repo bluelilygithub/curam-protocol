@@ -78,16 +78,27 @@ def download_youtube(youtube_url: str, output_dir: str, audio_path: str) -> tupl
     if dl_result.returncode != 0:
         stderr = (dl_result.stderr or "") + (dl_result.stdout or "")
         sl = stderr.lower()
-        if "age" in sl or "sign in" in sl or "confirm your age" in sl:
+        # Keep the tail: yt-dlp prints the actionable ERROR line last.
+        detail = stderr.strip()[-400:]
+
+        # Order matters — bot detection also mentions "sign in", so test it first.
+        if "not a bot" in sl or "failed to extract any player response" in sl:
             raise ValueError(
-                "Age-restricted video — YouTube won't allow server-side download. "
-                "Download the audio yourself at cobalt.tools then use Upload audio."
+                "YouTube blocked this server as a bot (common on cloud hosting IPs). "
+                "Not an age restriction. Use Upload audio, or set YOUTUBE_COOKIES. "
+                f"[{detail}]"
             )
-        if "private" in sl or "unavailable" in sl:
-            raise ValueError("Video is private or unavailable — try uploading the audio file instead")
-        if "live" in sl:
-            raise ValueError("Live streams cannot be processed — submit a recorded video or upload audio")
-        raise RuntimeError(f"yt-dlp failed (exit {dl_result.returncode}): {stderr[:400]}")
+        if ("confirm your age" in sl or "age-restricted" in sl
+                or "age restricted" in sl or "inappropriate for some users" in sl):
+            raise ValueError(
+                "Age-restricted video — download the audio at cobalt.tools, then Upload audio. "
+                f"[{detail}]"
+            )
+        if "private video" in sl or "video unavailable" in sl or "removed by the uploader" in sl:
+            raise ValueError(f"Video is private or unavailable. [{detail}]")
+        if "is live" in sl or "live event will begin" in sl:
+            raise ValueError(f"Live streams cannot be processed. [{detail}]")
+        raise RuntimeError(f"yt-dlp failed (exit {dl_result.returncode}): {detail}")
 
     if not os.path.exists(audio_path):
         for f in os.listdir(output_dir):
