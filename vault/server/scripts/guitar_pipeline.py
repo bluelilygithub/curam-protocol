@@ -80,9 +80,8 @@ def download_youtube(youtube_url: str, output_dir: str, audio_path: str) -> tupl
         sl = stderr.lower()
         if "age" in sl or "sign in" in sl or "confirm your age" in sl:
             raise ValueError(
-                "Age-restricted or sign-in-required video. Upload the audio file "
-                "instead (Library → Upload audio), or optionally paste browser "
-                "cookies in Advanced settings."
+                "Age-restricted video — YouTube won't allow server-side download. "
+                "Download the audio yourself at cobalt.tools then use Upload audio."
             )
         if "private" in sl or "unavailable" in sl:
             raise ValueError("Video is private or unavailable — try uploading the audio file instead")

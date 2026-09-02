@@ -355,10 +355,6 @@ export default function GuitarPage() {
   const pollRef    = useRef(null);
   const addToast   = useToastStore(s => s.addToast);
 
-  // YouTube cookie state (optional advanced — Chrome or Firefox)
-  const [ytCookieStatus, setYtCookieStatus] = useState(null);
-  const [ytCookieInput, setYtCookieInput]   = useState('');
-  const [ytCookieSaving, setYtCookieSaving] = useState(false);
   const [addMode, setAddMode]               = useState('youtube'); // youtube | upload | manual
   const [uploadFile, setUploadFile]         = useState(null);
   const [uploadTitle, setUploadTitle]       = useState('');
@@ -368,25 +364,6 @@ export default function GuitarPage() {
   const [manualArtist, setManualArtist]     = useState('');
   const [manualYtUrl, setManualYtUrl]       = useState('');
   const [addingChord, setAddingChord]       = useState(false);
-
-  const loadYtCookieStatus = useCallback(() => {
-    api.get('/api/guitar/yt-cookie-status').then(r => r.json()).then(d => setYtCookieStatus(d)).catch(() => {});
-  }, []);
-
-  useEffect(() => { loadYtCookieStatus(); }, [loadYtCookieStatus]);
-
-  const saveYtCookie = async (value) => {
-    const val = (value !== undefined ? value : ytCookieInput).trim();
-    setYtCookieSaving(true);
-    try {
-      const res = await api.post('/api/settings', { key: 'guitar_yt_cookies', value: val || null });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
-      setYtCookieStatus({ configured: !!val });
-      setYtCookieInput('');
-      addToast(val ? 'YouTube cookies saved' : 'YouTube cookies cleared', 'success');
-    } catch (e) { addToast(e.message, 'error'); }
-    finally { setYtCookieSaving(false); }
-  };
 
   const loadSongs = useCallback(() => {
     setLoading(true);
@@ -772,52 +749,6 @@ export default function GuitarPage() {
               )}
             </div>
 
-            {/* Optional advanced: cookies (Chrome or Firefox) */}
-            <details className="rounded-xl border p-4"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>
-                Advanced: YouTube cookies
-                {ytCookieStatus?.configured && (
-                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={{ color: '#16a34a', background: 'rgba(22,163,74,0.1)' }}>Configured</span>
-                )}
-              </summary>
-              <div className="mt-3 text-xs" style={{ color: 'var(--color-muted)', lineHeight: 1.6 }}>
-                <p className="mb-2">
-                  Optional. Prefer <strong>Upload audio</strong> for restricted videos. Cookies help YouTube URL downloads only.
-                  Works from <strong>Chrome or Firefox</strong> via a cookie-export extension (export happens inside the browser).
-                </p>
-                <ol className="list-decimal list-inside space-y-1 mb-3">
-                  <li>Install <strong>Get cookies.txt LOCALLY</strong> (Chrome) or <strong>cookies.txt</strong> (Firefox)</li>
-                  <li>Log in to youtube.com, export cookies.txt for youtube.com</li>
-                  <li>Run: <code className="px-1 rounded" style={{ background: 'rgba(0,0,0,0.08)' }}>base64 -i ~/Downloads/cookies.txt | tr -d '\n'</code></li>
-                  <li>Paste below and Save. Prefer a throwaway Google account — cookies expire ~every 2 weeks.</li>
-                </ol>
-                <div className="flex gap-2 items-start">
-                  <textarea value={ytCookieInput} onChange={e => setYtCookieInput(e.target.value)}
-                    rows={2}
-                    placeholder={ytCookieStatus?.configured ? 'Paste new base64 cookies to replace…' : 'Paste base64-encoded cookies.txt…'}
-                    className="flex-1 text-xs px-3 py-2 rounded-lg border font-mono resize-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)',
-                             color: 'var(--color-text)', outline: 'none' }} />
-                  <div className="flex flex-col gap-1.5 flex-shrink-0">
-                    <button onClick={() => saveYtCookie()} disabled={ytCookieSaving || !ytCookieInput.trim()}
-                      className="text-xs px-3 py-1.5 rounded font-medium disabled:opacity-40"
-                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                      {ytCookieSaving ? 'Saving…' : 'Save'}
-                    </button>
-                    {ytCookieStatus?.configured && (
-                      <button onClick={() => saveYtCookie('')}
-                        className="text-xs px-3 py-1.5 rounded border"
-                        style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </details>
-
             {/* Song list */}
             {loading ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>
@@ -848,7 +779,18 @@ export default function GuitarPage() {
                         {song.duration ? ` · ${fmtTime(song.duration)}` : ''}
                       </p>
                       {song.status === 'failed' && song.errorMessage && (
-                        <p className="text-xs mt-0.5" style={{ color: '#dc2626' }}>{song.errorMessage}</p>
+                        <p className="text-xs mt-0.5" style={{ color: '#dc2626' }}>
+                          {song.errorMessage}
+                          {song.errorMessage.includes('cobalt.tools') && song.youtubeUrl && (
+                            <> — <a
+                              href={`https://cobalt.tools/?url=${encodeURIComponent(song.youtubeUrl)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="underline"
+                              onClick={e => e.stopPropagation()}>
+                              Download at cobalt.tools
+                            </a>, then Upload audio</>
+                          )}
+                        </p>
                       )}
                     </div>
                     <StatusBadge status={song.status} />
