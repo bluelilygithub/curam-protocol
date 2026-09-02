@@ -33,40 +33,66 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
     audio_path = os.path.join(output_dir, "audio.wav")
 
     # ── 1. Download audio via yt-dlp ─────────────────────────────────────────
-    meta_path = os.path.join(output_dir, "meta.json")
+    import base64
 
-    # tv_embedded player client bypasses YouTube's age gate on most videos
-    # without requiring login cookies.
-    extractor_args = "youtube:player_client=tv_embedded,web"
-    yt_api_key = os.environ.get("YOUTUBE_API_KEY", "")
-    if yt_api_key:
-        extractor_args += f";youtube:api_key={yt_api_key}"
+    # Multiple player clients tried in order; android_vr does not enforce
+    # YouTube's age gate in current yt-dlp builds.
+    extractor_args = "youtube:player_client=tv_embedded,android_vr,web"
 
-    dl_result = subprocess.run(
-        [
-            "yt-dlp",
-            "--no-playlist",
-            "--extract-audio",
-            "--audio-format", "wav",
-            "--audio-quality", "0",
-            "--extractor-args", extractor_args,
-            "--write-info-json",
-            "--no-post-overwrites",
-            "-o", os.path.join(output_dir, "audio.%(ext)s"),
-            "--print-to-file", "after_move:filepath", os.path.join(output_dir, "filepath.txt"),
-            youtube_url,
-        ],
-        capture_output=True, text=True, timeout=300
-    )
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--extract-audio",
+        "--audio-format", "wav",
+        "--audio-quality", "0",
+        "--extractor-args", extractor_args,
+        "--socket-timeout", "30",
+        "--write-info-json",
+        "--no-post-overwrites",
+        "-o", os.path.join(output_dir, "audio.%(ext)s"),
+        "--print-to-file", "after_move:filepath", os.path.join(output_dir, "filepath.txt"),
+    ]
+
+    # If YOUTUBE_COOKIES is set (base64-encoded Netscape cookies.txt exported
+    # from a logged-in browser), decode it to a temp file and pass to yt-dlp.
+    # This is the most reliable way to handle age-restricted content.
+    cookie_tmp_path = None
+    cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if cookies_b64:
+        try:
+            cookie_bytes = base64.b64decode(cookies_b64)
+            import tempfile
+            fd, cookie_tmp_path = tempfile.mkstemp(suffix=".txt", prefix="yt_cookies_")
+            with os.fdopen(fd, "wb") as cf:
+                cf.write(cookie_bytes)
+            cmd.extend(["--cookies", cookie_tmp_path])
+            print("[pipeline] Using YOUTUBE_COOKIES for authentication", flush=True)
+        except Exception as ce:
+            print(f"[pipeline] Warning: could not decode YOUTUBE_COOKIES: {ce}", flush=True)
+
+    cmd.append(youtube_url)
+
+    try:
+        dl_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    finally:
+        if cookie_tmp_path and os.path.exists(cookie_tmp_path):
+            os.unlink(cookie_tmp_path)
+
     if dl_result.returncode != 0:
-        stderr = dl_result.stderr or ""
-        if "age" in stderr.lower() or "sign in" in stderr.lower():
-            raise ValueError("Age-restricted video — cannot be processed even with tv_embedded client")
-        if "private" in stderr.lower() or "unavailable" in stderr.lower():
+        stderr = (dl_result.stderr or "") + (dl_result.stdout or "")
+        sl = stderr.lower()
+        if "age" in sl or "sign in" in sl or "confirm your age" in sl:
+            raise ValueError(
+                "Age-restricted video. To process age-restricted videos, set the "
+                "YOUTUBE_COOKIES Railway environment variable to a base64-encoded "
+                "Netscape cookies.txt exported from a logged-in YouTube browser "
+                "session (use the 'Get cookies.txt LOCALLY' Chrome extension)."
+            )
+        if "private" in sl or "unavailable" in sl:
             raise ValueError("Video is private or unavailable")
-        if "live" in stderr.lower():
+        if "live" in sl:
             raise ValueError("Live streams cannot be processed — submit a recorded video")
-        raise RuntimeError(f"yt-dlp failed: {stderr[:300]}")
+        raise RuntimeError(f"yt-dlp failed (exit {dl_result.returncode}): {stderr[:400]}")
 
     # Find the actual output wav file
     if not os.path.exists(audio_path):
