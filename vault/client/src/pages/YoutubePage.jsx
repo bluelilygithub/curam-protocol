@@ -44,6 +44,14 @@ function looksLikeNLP(text) {
   return keywords.test(text);
 }
 
+function youtubeUrl(videoId) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+function downloadUrl(videoId) {
+  return `https://cobalt.tools/#${encodeURIComponent(youtubeUrl(videoId))}`;
+}
+
 // ── Filter options ────────────────────────────────────────────────────────────
 
 const PUBLISHED_AFTER_OPTIONS = [
@@ -146,15 +154,30 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
           <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)' }}>
             {[views, ago].filter(Boolean).join(' · ')}
           </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFav(video); }}
-            title={isFav ? 'Remove from favourites' : 'Save to favourites'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: isFav ? '#ef4444' : 'var(--color-muted)' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <a
+              href={downloadUrl(video.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Download via cobalt.tools"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--color-primary)', fontSize: '0.68rem', fontWeight: 600, textDecoration: 'none' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/>
+              </svg>
+              Download
+            </a>
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFav(video); }}
+              title={isFav ? 'Remove from favourites' : 'Save to favourites'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: isFav ? '#ef4444' : 'var(--color-muted)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -196,6 +219,15 @@ function FavCard({ fav, onPlay, onRemove }) {
           {fav.channel}{views ? ` · ${views}` : ''}
         </p>
       </div>
+      <a
+        href={downloadUrl(videoId)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Download via cobalt.tools"
+        style={{ ...btnBase, padding: '0.3rem 0.65rem', fontSize: '0.7rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-primary)', textDecoration: 'none', flexShrink: 0 }}
+      >
+        Download
+      </a>
       <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }} title="Remove">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -236,7 +268,10 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
             <button onClick={() => onToggleFav(video)} title={isFav ? 'Remove from favourites' : 'Save to favourites'} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFav ? '#fee2e2' : 'var(--color-bg)', border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`, color: isFav ? '#ef4444' : 'var(--color-muted)' }}>
               {isFav ? '♥ Saved' : '♡ Save'}
             </button>
-            <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+            <a href={downloadUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-primary)', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              Download
+            </a>
+            <a href={youtubeUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
               Open on YouTube
             </a>
             <button onClick={onClose} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
@@ -455,7 +490,7 @@ export default function YoutubePage() {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>YouTube</h1>
         </div>
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-          Search YouTube videos, save favourites, and replay past searches.
+          Search YouTube videos, download where permitted, save favourites, and replay past searches.
         </p>
       </div>
 
