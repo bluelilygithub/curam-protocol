@@ -1922,6 +1922,16 @@ async function initSchema() {
     )
   `);
 
+  // OAuth token storage for yt-dlp YouTube authentication (per user)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_yt_oauth (
+      "userId"      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      "tokenJson"   TEXT NOT NULL,
+      "connectedAt" TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

@@ -302,6 +302,50 @@ export default function GuitarPage() {
   const pollRef    = useRef(null);
   const addToast   = useToastStore(s => s.addToast);
 
+  // YouTube OAuth state
+  const [ytAuth, setYtAuth]           = useState(null);   // { connected, connectedAt }
+  const [ytConnecting, setYtConnecting] = useState(false);
+  const [ytDeviceUrl, setYtDeviceUrl] = useState(null);
+
+  const loadYtAuth = useCallback(() => {
+    api.get('/api/guitar/auth/status').then(r => r.json()).then(d => setYtAuth(d)).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadYtAuth(); }, [loadYtAuth]);
+
+  const startYtConnect = async () => {
+    setYtConnecting(true);
+    setYtDeviceUrl(null);
+    try {
+      const res  = await api.post('/api/guitar/auth/start', {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start auth');
+      setYtDeviceUrl(data.deviceUrl);
+      // Poll for completion every 3 s for up to 3 min
+      const start = Date.now();
+      const poll = setInterval(async () => {
+        if (Date.now() - start > 180000) { clearInterval(poll); setYtConnecting(false); return; }
+        const s = await api.get('/api/guitar/auth/status').then(r => r.json()).catch(() => null);
+        if (s?.connected) {
+          clearInterval(poll);
+          setYtAuth(s);
+          setYtDeviceUrl(null);
+          setYtConnecting(false);
+          addToast({ type: 'success', message: 'YouTube account connected' });
+        }
+      }, 3000);
+    } catch (e) {
+      addToast({ type: 'error', message: e.message });
+      setYtConnecting(false);
+    }
+  };
+
+  const disconnectYt = async () => {
+    await api.delete('/api/guitar/auth').catch(() => {});
+    setYtAuth({ connected: false });
+    addToast({ type: 'info', message: 'YouTube account disconnected' });
+  };
+
   const loadSongs = useCallback(() => {
     setLoading(true);
     api.get('/api/guitar/songs').then(r => r.json()).then(d => {
@@ -545,6 +589,51 @@ export default function GuitarPage() {
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                 Audio is downloaded and processed locally. Detection takes 1–3 minutes per song.
               </p>
+            </div>
+
+            {/* YouTube account connection */}
+            <div className="rounded-xl border p-4"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    YouTube account
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {ytAuth?.connected
+                      ? `Connected — age-restricted videos will process automatically`
+                      : 'Connect to allow age-restricted videos to be processed'}
+                  </p>
+                </div>
+                {ytAuth?.connected ? (
+                  <button onClick={disconnectYt}
+                    className="text-xs px-3 py-1.5 rounded border"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                    Disconnect
+                  </button>
+                ) : (
+                  <button onClick={startYtConnect} disabled={ytConnecting}
+                    className="text-xs px-3 py-1.5 rounded font-medium"
+                    style={{ background: 'var(--color-primary)', color: '#fff',
+                             opacity: ytConnecting ? 0.6 : 1 }}>
+                    {ytConnecting ? 'Connecting…' : 'Connect YouTube'}
+                  </button>
+                )}
+              </div>
+              {ytDeviceUrl && (
+                <div className="mt-3 p-3 rounded-lg" style={{ background: 'var(--color-bg)' }}>
+                  <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+                    Open this link in your browser and sign in with your Google account:
+                  </p>
+                  <a href={ytDeviceUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs break-all underline" style={{ color: 'var(--color-primary)' }}>
+                    {ytDeviceUrl}
+                  </a>
+                  <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                    Waiting for authorisation… this panel will update automatically.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Song list */}

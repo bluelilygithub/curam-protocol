@@ -18,9 +18,11 @@ correction of any chord event.
 
 import sys
 import os
+import base64
 import json
 import subprocess
 import tempfile
+import shutil
 import traceback
 import re
 
@@ -33,7 +35,6 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
     audio_path = os.path.join(output_dir, "audio.wav")
 
     # ── 1. Download audio via yt-dlp ─────────────────────────────────────────
-    import base64
 
     # Multiple player clients tried in order; android_vr does not enforce
     # YouTube's age gate in current yt-dlp builds.
@@ -53,40 +54,64 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
         "--print-to-file", "after_move:filepath", os.path.join(output_dir, "filepath.txt"),
     ]
 
-    # If YOUTUBE_COOKIES is set (base64-encoded Netscape cookies.txt exported
-    # from a logged-in browser), decode it to a temp file and pass to yt-dlp.
-    # This is the most reliable way to handle age-restricted content.
-    cookie_tmp_path = None
+    # ── Authentication: preference order ─────────────────────────────────────
+    # 1. yt-dlp OAuth2 token stored in DB (passed as YTDLP_OAUTH_TOKEN env var)
+    # 2. YOUTUBE_COOKIES env var (base64 Netscape cookies.txt)
+    # 3. No auth (works for most non-age-restricted content)
+
+    token_dir    = None
+    cookie_tmp   = None
+
+    oauth_json = os.environ.get("YTDLP_OAUTH_TOKEN", "").strip()
     cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "").strip()
-    if cookies_b64:
+
+    if oauth_json:
+        try:
+            # Write the token where yt-dlp expects to find it
+            token_dir  = tempfile.mkdtemp(prefix="ytdlp_home_")
+            cache_dir  = os.path.join(token_dir, ".cache", "yt-dlp")
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(os.path.join(cache_dir, "youtube.token.json"), "w") as f:
+                f.write(oauth_json)
+            # Tell yt-dlp to use OAuth2 and point HOME at our temp dir
+            cmd.extend(["--username", "oauth2", "--password", ""])
+            # Override HOME so yt-dlp finds the token file
+            os.environ["HOME"] = token_dir
+            print("[pipeline] Using stored OAuth2 token for authentication", flush=True)
+        except Exception as e:
+            print(f"[pipeline] Warning: could not set up OAuth2 token: {e}", flush=True)
+            token_dir = None
+
+    elif cookies_b64:
         try:
             cookie_bytes = base64.b64decode(cookies_b64)
-            import tempfile
-            fd, cookie_tmp_path = tempfile.mkstemp(suffix=".txt", prefix="yt_cookies_")
+            fd, cookie_tmp = tempfile.mkstemp(suffix=".txt", prefix="yt_cookies_")
             with os.fdopen(fd, "wb") as cf:
                 cf.write(cookie_bytes)
-            cmd.extend(["--cookies", cookie_tmp_path])
+            cmd.extend(["--cookies", cookie_tmp])
             print("[pipeline] Using YOUTUBE_COOKIES for authentication", flush=True)
         except Exception as ce:
             print(f"[pipeline] Warning: could not decode YOUTUBE_COOKIES: {ce}", flush=True)
+            cookie_tmp = None
 
     cmd.append(youtube_url)
 
     try:
         dl_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     finally:
-        if cookie_tmp_path and os.path.exists(cookie_tmp_path):
-            os.unlink(cookie_tmp_path)
+        if cookie_tmp and os.path.exists(cookie_tmp):
+            os.unlink(cookie_tmp)
+        if token_dir and os.path.isdir(token_dir):
+            shutil.rmtree(token_dir, ignore_errors=True)
 
     if dl_result.returncode != 0:
         stderr = (dl_result.stderr or "") + (dl_result.stdout or "")
         sl = stderr.lower()
         if "age" in sl or "sign in" in sl or "confirm your age" in sl:
             raise ValueError(
-                "Age-restricted video. To process age-restricted videos, set the "
-                "YOUTUBE_COOKIES Railway environment variable to a base64-encoded "
-                "Netscape cookies.txt exported from a logged-in YouTube browser "
-                "session (use the 'Get cookies.txt LOCALLY' Chrome extension)."
+                "Age-restricted video. Use the 'Connect YouTube' button in Guitar "
+                "settings to authenticate your YouTube account once — this will "
+                "allow all age-restricted videos to be processed automatically."
             )
         if "private" in sl or "unavailable" in sl:
             raise ValueError("Video is private or unavailable")
