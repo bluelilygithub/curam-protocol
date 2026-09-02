@@ -29,6 +29,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   seo: true,
   html: true,
   searchConsole: true,
+  translate: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -72,6 +73,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'productScout', label: 'Amazon Search' },
       { key: 'propertyScenario', label: 'Property scenario' },
       { key: 'documentRedaction', label: 'Document redaction' },
+      { key: 'translate', label: 'Translate' },
     ],
   },
 ];

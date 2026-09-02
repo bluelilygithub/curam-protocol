@@ -39,6 +39,7 @@ import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
 import PropertyScenarioPage from './pages/PropertyScenarioPage';
 import DocumentRedactionPage from './pages/DocumentRedactionPage';
+import TranslatePage from './pages/TranslatePage';
 import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
@@ -165,6 +166,7 @@ function App() {
               <Route path="/property-scenario" element={<PropertyScenarioPage />} />
               <Route path="/document-redaction" element={<DocumentRedactionPage />} />
               <Route path="/document-redaction/:jobId" element={<DocumentRedactionPage />} />
+              <Route path="/translate" element={<TranslatePage />} />
               <Route path="/google-ads" element={<SeoPage />} />
               <Route path="/google-ads/:id" element={<SeoPage />} />
               <Route path="/seo" element={<SeoAuditPage />} />

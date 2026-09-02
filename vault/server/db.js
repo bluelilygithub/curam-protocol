@@ -1790,6 +1790,48 @@ async function initSchema() {
     )
   `);
 
+  // ── Translate agent ───────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_glossaries (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      terms        JSONB NOT NULL DEFAULT '[]',
+      "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_jobs (
+      id                  SERIAL PRIMARY KEY,
+      "userId"            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filename            TEXT NOT NULL,
+      status              TEXT NOT NULL DEFAULT 'pending',
+      stage               TEXT,
+      progress            INTEGER DEFAULT 0,
+      "sourceLanguage"    TEXT,
+      "targetLanguage"    TEXT NOT NULL,
+      "pageCount"         INTEGER,
+      "scannedPageCount"  INTEGER DEFAULT 0,
+      "avgOcrConfidence"  FLOAT,
+      "glossaryId"        INTEGER REFERENCES translate_glossaries(id) ON DELETE SET NULL,
+      "sourceTextJson"    JSONB,
+      "translatedTextJson" JSONB,
+      "originalPdf"       BYTEA,
+      "translatedPdf"     BYTEA,
+      "errorMessage"      TEXT,
+      "fileSizeBytes"     INTEGER,
+      "createdAt"         TIMESTAMPTZ DEFAULT NOW(),
+      "completedAt"       TIMESTAMPTZ
+    )
+  `);
+
+  // 90-day retention cleanup
+  await pool.query(`
+    DELETE FROM translate_jobs WHERE "createdAt" < NOW() - INTERVAL '90 days'
+  `);
+
   console.log('[db] Schema ready');
 }
 
