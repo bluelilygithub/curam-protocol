@@ -105,12 +105,33 @@ function parseChordName(raw) {
 }
 
 function stripUGMarkup(str) {
-  return str.replace(/\[\/?(ch|tab|verse|chorus|bridge|intro|outro|pre|post)[^\]]*\]/gi, '').trim();
+  return str
+    .replace(/\[ch\][^\[]*\[\/ch\]/gi, '') // remove chord tags AND their names
+    .replace(/\[\/?tab\]/gi, '')
+    .replace(/\[\/?(?:verse|chorus|bridge|intro|outro|pre[- ]?chorus|instrumental|solo)[^\]]*\]/gi, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
 }
 
+function isSectionHeader(line) {
+  return /^\[[^\]\/][^\]]*\]$/.test(line) && !/\[ch\]/i.test(line);
+}
+
+function isCapoAnnotation(text) {
+  return /^capo\b/i.test(text.trim());
+}
+
+/**
+ * Parse UG wiki_tab content into chord events with associated lyrics.
+ * UG wraps most lyric+chord blocks in [tab]…[/tab] — keep the content, strip the tags.
+ */
 function parseUGContent(content) {
-  const stripped = content.replace(/\[tab\][\s\S]*?\[\/tab\]/gi, '');
-  const lines = stripped.split(/\r?\n/);
+  // Keep [tab] body content; only remove the tags themselves.
+  const cleaned = String(content || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\[\/?tab\]/gi, '');
+
+  const lines = cleaned.split('\n');
   const events = [];
   let section = null;
   let tSec = 0;
@@ -118,31 +139,44 @@ function parseUGContent(content) {
   let lineIdx = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].trim();
+    const raw = lines[i];
+    const t = raw.trim();
     if (!t) continue;
 
-    // Section header e.g. [Verse 1], [Chorus]
-    if (/^\[[^\]\/][^\]]*\]$/.test(t) && !/\[ch\]/i.test(t)) {
-      section = t.replace(/^\[|\]$/g, '');
+    if (isSectionHeader(t)) {
+      const name = t.replace(/^\[|\]$/g, '').trim();
+      // Capo notes are metadata, not song sections
+      if (isCapoAnnotation(name)) continue;
+      section = name;
       continue;
     }
+
+    // Skip bare capo instruction lines without chords
+    if (isCapoAnnotation(t) && !/\[ch\]/i.test(t)) continue;
 
     const chordTags = [...t.matchAll(/\[ch\]([^\[]+)\[\/ch\]/gi)];
     if (!chordTags.length) continue;
 
-    // Look ahead for a lyric line (next non-empty line that has no chord tags)
-    let lyric = null;
-    for (let j = i + 1; j < lines.length; j++) {
-      const next = lines[j].trim();
-      if (!next) continue;
-      if (/^\[[^\]\/][^\]]*\]$/.test(next) && !/\[ch\]/i.test(next)) break; // new section
-      if (/\[ch\]/i.test(next)) break; // another chord line
-      lyric = stripUGMarkup(next) || null;
-      break;
+    // Lyric on the same line (inline chords) OR the next non-empty non-chord line
+    let lyric = stripUGMarkup(t) || null;
+    if (!lyric || lyric.length < 2) {
+      lyric = null;
+      for (let j = i + 1; j < lines.length; j++) {
+        const next = lines[j].trim();
+        if (!next) continue;
+        if (isSectionHeader(next)) break;
+        if (/\[ch\]/i.test(next)) break;
+        if (isCapoAnnotation(next)) continue;
+        const cleanedLyric = stripUGMarkup(next);
+        if (cleanedLyric) lyric = cleanedLyric;
+        break;
+      }
     }
 
     for (const m of chordTags) {
       const parsed = parseChordName(m[1]);
+      // Skip garbage like "N.C." with no root
+      if (!/^[A-G]/.test(parsed.root)) continue;
       events.push({
         timestampSec: parseFloat(tSec.toFixed(3)),
         chordRoot:    parsed.root,
@@ -157,6 +191,15 @@ function parseUGContent(content) {
     lineIdx++;
   }
   return events;
+}
+
+function extractUGCapo(tabView) {
+  const meta = tabView?.meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const c = meta.capo;
+  if (c == null || c === '' || c === 0 || c === '0') return null;
+  const n = parseInt(c, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -316,6 +359,7 @@ router.post('/songs/ug', async (req, res) => {
 
     const title  = tabMeta.song_name   || 'Unknown Title';
     const artist = tabMeta.artist_name || null;
+    const capo   = extractUGCapo(tabView);
 
     const chordEvents = parseUGContent(content);
     if (!chordEvents.length) {
@@ -323,9 +367,9 @@ router.post('/songs/ug', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO guitar_songs ("userId",title,artist,"sourceType",status)
-       VALUES ($1,$2,$3,'ultimate-guitar','done') RETURNING id`,
-      [req.user.id, title, artist]
+      `INSERT INTO guitar_songs ("userId",title,artist,"sourceType","capoSuggested",status)
+       VALUES ($1,$2,$3,'ultimate-guitar',$4,'done') RETURNING id`,
+      [req.user.id, title, artist, capo]
     );
     const songId = rows[0].id;
 

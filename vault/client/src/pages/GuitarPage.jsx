@@ -1,22 +1,185 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 
 // ── Music theory constants ────────────────────────────────────────────────────
 const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const NOTE_TO_SEMI = { C:0,'C#':1,Db:1,D:2,Eb:3,'D#':3,E:4,F:5,'F#':6,Gb:6,G:7,Ab:8,'G#':8,A:9,Bb:10,'A#':10,B:11 };
 const QUALITY_LABELS = { '': '', 'm': 'm', '7': '7', 'maj7': 'maj7', 'm7': 'm7',
   'dim': 'dim', 'aug': '+', 'sus2': 'sus2', 'sus4': 'sus4', 'dim7': 'dim7', 'm7b5': 'ø' };
 
+function normalizeRoot(root) {
+  if (!root) return 'C';
+  const r = root.trim();
+  // Prefer sharp/flat names we use in ROOTS
+  const map = { 'Db':'C#', 'D#':'Eb', 'Gb':'F#', 'G#':'Ab', 'A#':'Bb' };
+  return map[r] || r;
+}
+
 function transposeRoot(root, semitones) {
-  const idx = ROOTS.indexOf(root);
+  const n = normalizeRoot(root);
+  const idx = ROOTS.indexOf(n);
   if (idx === -1) return root;
   return ROOTS[((idx + semitones) % 12 + 12) % 12];
 }
-function displayChord(root, quality, transposeOffset, capo) {
-  const shift = transposeOffset - capo;
-  const displayRoot = transposeRoot(root, shift);
+
+/** Chart display: transpose only. Capo is a fingering instruction — it must not rewrite chord names. */
+function displayChord(root, quality, transposeOffset = 0) {
+  const displayRoot = transposeRoot(root, transposeOffset);
   const q = QUALITY_LABELS[quality] ?? quality;
   return displayRoot + q;
+}
+
+function chordLabel(root, quality) {
+  return normalizeRoot(root) + (quality || '');
+}
+
+/**
+ * Generate playable open + barre voicings along the neck (UG-style).
+ * fretPositions: [lowE, A, D, G, B, highE]  -1=mute, 0=open, N=fret
+ */
+function generateVoicings(root, quality = '') {
+  const r = NOTE_TO_SEMI[normalizeRoot(root)];
+  if (r == null) return [];
+  const q = quality || '';
+  const shapes = [];
+
+  // Open shapes keyed by chord name (concert pitch)
+  const OPEN = {
+    C:  { fret: [-1,3,2,0,1,0], finger: [0,3,2,0,1,0] },
+    D:  { fret: [-1,-1,0,2,3,2], finger: [0,0,0,1,3,2] },
+    E:  { fret: [0,2,2,1,0,0], finger: [0,2,3,1,0,0] },
+    G:  { fret: [3,2,0,0,0,3], finger: [2,1,0,0,0,3] },
+    A:  { fret: [-1,0,2,2,2,0], finger: [0,0,1,2,3,0] },
+    Am: { fret: [-1,0,2,2,1,0], finger: [0,0,2,3,1,0] },
+    Dm: { fret: [-1,-1,0,2,3,1], finger: [0,0,0,2,3,1] },
+    Em: { fret: [0,2,2,0,0,0], finger: [0,1,2,0,0,0] },
+    F:  { fret: [1,3,3,2,1,1], finger: [1,3,4,2,1,1] },
+    B:  { fret: [-1,2,4,4,4,2], finger: [0,1,2,3,4,1] },
+    Bm: { fret: [-1,2,4,4,3,2], finger: [0,1,3,4,2,1] },
+    E7: { fret: [0,2,0,1,0,0], finger: [0,2,0,1,0,0] },
+    A7: { fret: [-1,0,2,0,2,0], finger: [0,0,1,0,2,0] },
+    D7: { fret: [-1,-1,0,2,1,2], finger: [0,0,0,2,1,3] },
+    G7: { fret: [3,2,0,0,0,1], finger: [3,2,0,0,0,1] },
+    C7: { fret: [-1,3,2,3,1,0], finger: [0,2,1,3,4,0] },
+  };
+
+  const name = chordLabel(root, q);
+  if (OPEN[name]) {
+    shapes.push({
+      id: `${name}-open`,
+      voicingType: 'open',
+      label: 'Open',
+      fretPositions: OPEN[name].fret,
+      fingerPositions: OPEN[name].finger,
+      baseFret: 1,
+    });
+  }
+
+  // E-shape movable barre (root on low E). F major at fret 1 → rootFret = r - 5 (E=4) wait
+  // At fret n, low-E string notes (n % 12). Open E = 4. So root at fret ((r - 4 + 12) % 12) or +12.
+  const eRootFret = ((r - 4) + 12) % 12;
+  const eFrets = eRootFret === 0 ? [12] : [eRootFret];
+  if (eRootFret !== 0) eFrets.push(eRootFret + 12);
+  else eFrets.push(12);
+
+  for (const n of eFrets) {
+    if (n < 1 || n > 12) continue;
+    let frets, fingers, type;
+    if (q === '' || q === 'maj') {
+      frets = [n, n+2, n+2, n+1, n, n];
+      fingers = [1, 3, 4, 2, 1, 1];
+      type = 'E-shape barre';
+    } else if (q === 'm') {
+      frets = [n, n+2, n+2, n, n, n];
+      fingers = [1, 3, 4, 1, 1, 1];
+      type = 'Em-shape barre';
+    } else if (q === '7') {
+      frets = [n, n+2, n, n+1, n, n];
+      fingers = [1, 3, 1, 2, 1, 1];
+      type = 'E7-shape barre';
+    } else if (q === 'm7') {
+      frets = [n, n+2, n, n, n, n];
+      fingers = [1, 3, 1, 1, 1, 1];
+      type = 'Em7-shape barre';
+    } else if (q === 'maj7') {
+      frets = [n, n+2, n+2, n+1, n, n+2];
+      fingers = [1, 3, 4, 2, 1, 4];
+      type = 'Emaj7 barre';
+    } else if (q === 'sus4') {
+      frets = [n, n+2, n+2, n+2, n, n];
+      fingers = [1, 2, 3, 4, 1, 1];
+      type = 'Esus4 barre';
+    } else if (q === 'sus2') {
+      frets = [n, n+2, n+2, n, n, n]; // approx Em shape for sus2 isn't ideal; use add9-ish
+      fingers = [1, 3, 4, 1, 1, 1];
+      type = 'Esus2-ish';
+    } else {
+      // Fallback: major barre
+      frets = [n, n+2, n+2, n+1, n, n];
+      fingers = [1, 3, 4, 2, 1, 1];
+      type = 'E-shape';
+    }
+    shapes.push({
+      id: `${name}-e-${n}`,
+      voicingType: type,
+      label: `Fret ${n}`,
+      fretPositions: frets,
+      fingerPositions: fingers,
+      baseFret: n,
+    });
+  }
+
+  // A-shape movable barre (root on A string). Open A = 9.
+  const aRootFret = ((r - 9) + 12) % 12;
+  const aFrets = aRootFret === 0 ? [12] : [aRootFret];
+  if (aRootFret > 0 && aRootFret + 12 <= 12) aFrets.push(aRootFret + 12);
+  else if (aRootFret === 0) { /* only 12 */ }
+  else if (aRootFret + 12 <= 14) aFrets.push(Math.min(aRootFret + 12, 12));
+
+  for (const n of aFrets) {
+    if (n < 1 || n > 12) continue;
+    // Skip if we already have an identical open shape at this fret for well-known opens
+    let frets, fingers, type;
+    if (q === '' || q === 'maj') {
+      frets = [-1, n, n+2, n+2, n+2, n];
+      fingers = [0, 1, 2, 3, 4, 1];
+      type = 'A-shape barre';
+    } else if (q === 'm') {
+      frets = [-1, n, n+2, n+2, n+1, n];
+      fingers = [0, 1, 3, 4, 2, 1];
+      type = 'Am-shape barre';
+    } else if (q === '7') {
+      frets = [-1, n, n+2, n, n+2, n];
+      fingers = [0, 1, 3, 1, 4, 1];
+      type = 'A7-shape barre';
+    } else if (q === 'm7') {
+      frets = [-1, n, n+2, n, n+1, n];
+      fingers = [0, 1, 3, 1, 2, 1];
+      type = 'Am7-shape barre';
+    } else {
+      frets = [-1, n, n+2, n+2, n+2, n];
+      fingers = [0, 1, 2, 3, 4, 1];
+      type = 'A-shape';
+    }
+    shapes.push({
+      id: `${name}-a-${n}`,
+      voicingType: type,
+      label: `Fret ${n}`,
+      fretPositions: frets,
+      fingerPositions: fingers,
+      baseFret: n,
+    });
+  }
+
+  // Deduplicate by fret pattern string
+  const seen = new Set();
+  return shapes.filter(s => {
+    const key = s.fretPositions.join(',');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // ── Chord shape SVG diagram ───────────────────────────────────────────────────
@@ -25,41 +188,46 @@ function ChordDiagram({ shape }) {
   const frets = shape.fretPositions;
   const fingers = shape.fingerPositions || [];
   const base = shape.baseFret || 1;
-  const W = 80, H = 90, padL = 18, padT = 16;
+  const W = 80, H = 100, padL = 18, padT = 18;
   const strings = 6, fretCount = 4;
   const colW = (W - padL - 6) / (strings - 1);
-  const rowH = (H - padT - 8) / fretCount;
+  const rowH = (H - padT - 14) / fretCount;
 
   const xOf = (s) => padL + s * colW;
   const yOf = (f) => padT + (f - 0.5) * rowH;
 
+  // When baseFret > 1, frets are absolute — convert to relative for drawing
+  const rel = (absFret) => {
+    if (absFret <= 0) return absFret;
+    return absFret - base + 1;
+  };
+
   return (
     <svg width={W} height={H} style={{ display: 'block' }}>
-      {base > 1 && <text x={4} y={padT + rowH * 0.5} fontSize="8" fill="#6b7280">{base}fr</text>}
-      {/* Fret lines */}
+      {base > 1 && (
+        <text x={2} y={padT + rowH * 0.35} fontSize="9" fill="#6b7280" fontWeight="700">{base}fr</text>
+      )}
       {Array.from({ length: fretCount + 1 }).map((_, f) => (
         <line key={f} x1={xOf(0)} x2={xOf(strings - 1)}
           y1={padT + f * rowH} y2={padT + f * rowH}
           stroke={f === 0 && base === 1 ? '#1f2937' : '#d1d5db'}
           strokeWidth={f === 0 && base === 1 ? 3 : 1} />
       ))}
-      {/* String lines */}
       {Array.from({ length: strings }).map((_, s) => (
         <line key={s} x1={xOf(s)} x2={xOf(s)} y1={padT} y2={padT + fretCount * rowH}
           stroke="#9ca3af" strokeWidth={1} />
       ))}
-      {/* Fret markers */}
       {frets.map((f, s) => {
-        if (f === -1) return <text key={s} x={xOf(strings - 1 - s)} y={padT - 5} textAnchor="middle" fontSize="9" fill="#dc2626">×</text>;
-        if (f === 0)  return <circle key={s} cx={xOf(strings - 1 - s)} cy={padT - 5} r={3.5} fill="none" stroke="#6b7280" strokeWidth={1} />;
-        const relF = f - base + 1;
+        const x = xOf(strings - 1 - s);
+        if (f === -1) return <text key={s} x={x} y={padT - 6} textAnchor="middle" fontSize="10" fill="#dc2626">×</text>;
+        if (f === 0)  return <circle key={s} cx={x} cy={padT - 6} r={3.5} fill="none" stroke="#6b7280" strokeWidth={1.5} />;
+        const rf = rel(f);
+        if (rf < 1 || rf > fretCount) return null;
         return (
           <g key={s}>
-            <circle cx={xOf(strings - 1 - s)} cy={yOf(relF)} r={6}
-              fill="var(--color-primary)" />
+            <circle cx={x} cy={yOf(rf)} r={7} fill="var(--color-primary)" />
             {fingers[s] > 0 && (
-              <text x={xOf(strings - 1 - s)} y={yOf(relF) + 3.5} textAnchor="middle"
-                fontSize="7" fill="#fff">{fingers[s]}</text>
+              <text x={x} y={yOf(rf) + 3.5} textAnchor="middle" fontSize="8" fill="#fff" fontWeight="700">{fingers[s]}</text>
             )}
           </g>
         );
@@ -68,69 +236,61 @@ function ChordDiagram({ shape }) {
   );
 }
 
-// ── SVG Fretboard (6 strings, 12 frets, highlights notes of chord/key) ────────
-function Fretboard({ chordRoot, chordQuality, keyRoot }) {
-  const TUNING = ['E2','A2','D3','G3','B3','E4'];
-  const NOTE_TO_SEMI = { C:0,'C#':1,Db:1,D:2,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11 };
-  const openNotes = TUNING.map(n => {
-    const root = n.replace(/\d/, '');
-    return NOTE_TO_SEMI[root] ?? 0;
-  });
+/** UG-style voicing browser: open + barre shapes along the neck */
+function VoicingBrowser({ chordRoot, chordQuality, transposeOffset = 0 }) {
+  const displayRoot = transposeRoot(chordRoot, transposeOffset);
+  const voicings = useMemo(
+    () => generateVoicings(displayRoot, chordQuality || ''),
+    [displayRoot, chordQuality]
+  );
+  const [idx, setIdx] = useState(0);
 
-  // Which semitones belong to this chord?
-  const rootSemi  = NOTE_TO_SEMI[chordRoot] ?? 0;
-  const qualIntervals = {
-    '': [0,4,7], 'm': [0,3,7], '7': [0,4,7,10], 'maj7': [0,4,7,11],
-    'm7': [0,3,7,10], 'dim': [0,3,6], 'aug': [0,4,8], 'sus2': [0,2,7], 'sus4': [0,5,7],
-  };
-  const intervals = qualIntervals[chordQuality] ?? [0,4,7];
-  const chordSemis = new Set(intervals.map(i => (rootSemi + i) % 12));
+  useEffect(() => { setIdx(0); }, [displayRoot, chordQuality]);
 
-  const FRETS = 12, STRINGS = 6;
-  const W = 320, H = 110;
-  const padL = 24, padR = 8, padT = 14, padB = 14;
-  const fretW = (W - padL - padR) / FRETS;
-  const strH  = (H - padT - padB) / (STRINGS - 1);
+  if (!voicings.length) {
+    return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No shapes for this chord.</p>;
+  }
 
-  const xOf = (fret) => padL + fret * fretW;
-  const yOf = (str) => padT + str * strH;
+  const shape = voicings[Math.min(idx, voicings.length - 1)];
+  const label = displayChord(chordRoot, chordQuality || '', transposeOffset);
 
   return (
-    <svg width={W} height={H} style={{ display: 'block', width: '100%', maxWidth: W }}>
-      {/* Fret lines */}
-      {Array.from({ length: FRETS + 1 }).map((_, f) => (
-        <line key={f} x1={xOf(f)} x2={xOf(f)} y1={padT} y2={H - padB}
-          stroke={f === 0 ? '#374151' : '#e5e7eb'} strokeWidth={f === 0 ? 3 : 1} />
-      ))}
-      {/* String lines */}
-      {Array.from({ length: STRINGS }).map((_, s) => (
-        <line key={s} x1={xOf(0)} x2={xOf(FRETS)} y1={yOf(s)} y2={yOf(s)}
-          stroke="#9ca3af" strokeWidth={STRINGS - s} />
-      ))}
-      {/* Fret markers (3,5,7,9,12) */}
-      {[3,5,7,9].map(f => (
-        <circle key={f} cx={xOf(f) - fretW / 2} cy={H / 2} r={3} fill="#e5e7eb" />
-      ))}
-      {/* Note dots */}
-      {Array.from({ length: STRINGS }).map((_, s) =>
-        Array.from({ length: FRETS + 1 }).map((_, f) => {
-          const semi = (openNotes[STRINGS - 1 - s] + f) % 12;
-          if (!chordSemis.has(semi)) return null;
-          const isRoot = semi === rootSemi;
-          return (
-            <circle key={`${s}-${f}`} cx={f === 0 ? xOf(0) : xOf(f) - fretW / 2}
-              cy={yOf(s)} r={5}
-              fill={isRoot ? 'var(--color-primary)' : 'rgba(99,102,241,0.35)'}
-              stroke={isRoot ? 'var(--color-primary)' : 'none'} />
-          );
-        })
-      )}
-      {/* String labels */}
-      {TUNING.map((n, s) => (
-        <text key={s} x={6} y={yOf(STRINGS - 1 - s) + 3.5} fontSize="7" fill="#9ca3af"
-          textAnchor="middle">{n.replace(/\d/, '')}</text>
-      ))}
-    </svg>
+    <div>
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-sm font-bold font-mono" style={{ color: 'var(--color-text)' }}>{label}</span>
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          {idx + 1} / {voicings.length}
+        </span>
+      </div>
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <button type="button" disabled={idx <= 0} onClick={() => setIdx(i => i - 1)}
+          className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>‹</button>
+        <div className="flex flex-col items-center">
+          <ChordDiagram shape={shape} />
+          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+            {shape.voicingType}{shape.baseFret > 1 ? ` · ${shape.label}` : ''}
+          </span>
+        </div>
+        <button type="button" disabled={idx >= voicings.length - 1} onClick={() => setIdx(i => i + 1)}
+          className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>›</button>
+      </div>
+      <div className="flex flex-wrap gap-1 justify-center">
+        {voicings.map((v, i) => (
+          <button key={v.id} type="button" onClick={() => setIdx(i)}
+            className="text-xs px-1.5 py-0.5 rounded border"
+            style={{
+              borderColor: i === idx ? 'var(--color-primary)' : 'var(--color-border)',
+              background: i === idx ? 'rgba(37,99,235,0.1)' : 'transparent',
+              color: i === idx ? 'var(--color-primary)' : 'var(--color-muted)',
+              fontWeight: i === idx ? 600 : 400,
+            }}>
+            {v.baseFret === 1 && v.voicingType === 'open' ? 'open' : `fr${v.baseFret}`}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -482,7 +642,7 @@ export default function GuitarPage() {
   const openSong = async (song) => {
     setActiveSong(song);
     setTranspose(song.transposeOffset ?? 0);
-    setCapoFret(song.capoOverride ?? song.capoSuggested ?? 0);
+    setCapoFret(song.capoOverride ?? 0); // Capo does not rewrite chart chord names
     setTab('Player');
     setLoadingChords(true);
     setChords([]);
@@ -490,6 +650,7 @@ export default function GuitarPage() {
     setFretboardChord(null);
     setCurrentTimeSec(0);
     setActiveChordIdx(-1);
+    setAutoScroll(false);
     try {
       const [cRes, lRes] = await Promise.all([
         api.get(`/api/guitar/songs/${song.id}/chords`),
@@ -866,6 +1027,7 @@ export default function GuitarPage() {
                       {activeSong.artist}
                       {activeSong.keyDetected ? ` · Key: ${activeSong.keyDetected}` : ''}
                       {activeSong.bpm ? ` · ${activeSong.bpm} BPM` : ''}
+                      {activeSong.capoSuggested > 0 ? ` · Capo ${activeSong.capoSuggested} (per tab)` : ''}
                     </p>
                   </div>
                   {/* Transpose */}
@@ -879,7 +1041,7 @@ export default function GuitarPage() {
                       className="w-6 h-6 rounded border flex items-center justify-center font-mono"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>+</button>
                   </div>
-                  {/* Capo */}
+                  {/* Capo — fingering note only; does not rename chords on the chart */}
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                     <span>Capo</span>
                     <select value={capoFret} onChange={e => changeCapo(parseInt(e.target.value))}
@@ -887,15 +1049,17 @@ export default function GuitarPage() {
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
                       {Array.from({ length: 8 }).map((_, i) => (
                         <option key={i} value={i}>{i === 0 ? 'None' : `Fret ${i}`}
-                          {i === activeSong.capoSuggested && i > 0 ? ' (suggested)' : ''}</option>
+                          {i === activeSong.capoSuggested && i > 0 ? ' (tab)' : ''}</option>
                       ))}
                     </select>
                   </div>
-                  {/* Auto-scroll */}
-                  <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                    <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
-                    Auto-scroll
-                  </label>
+                  {/* Auto-scroll only useful with playback */}
+                  {(activeSong.hasAudio || videoIdOf(activeSong.youtubeUrl)) && (
+                    <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                      <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+                      Auto-scroll
+                    </label>
+                  )}
                 </div>
 
                 <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px' }}>
@@ -952,7 +1116,9 @@ export default function GuitarPage() {
                         let curSec = null;
                         let curLine = null;
                         chords.forEach((ev, flatIdx) => {
-                          const sName = ev.sectionName ?? null;
+                          const sName = (ev.sectionName && !/^capo\b/i.test(ev.sectionName))
+                            ? ev.sectionName
+                            : null;
                           const lIdx  = ev.lineIdx ?? flatIdx;
                           if (!curSec || curSec.name !== sName) {
                             curSec = { name: sName, lines: [] };
@@ -979,7 +1145,7 @@ export default function GuitarPage() {
                               <div key={li} style={{ marginBottom: '0.75rem' }}>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 2 }}>
                                   {line.evs.map(({ ev, flatIdx }) => {
-                                    const label    = displayChord(ev.chordRoot, ev.chordQuality || '', transpose, capoFret);
+                                    const label    = displayChord(ev.chordRoot, ev.chordQuality || '', transpose);
                                     const isActive = flatIdx === activeChordIdx;
                                     return (
                                       <div key={ev.id} data-chord-idx={flatIdx} className="relative group">
@@ -1002,7 +1168,7 @@ export default function GuitarPage() {
                                         </button>
                                         <div className="absolute z-30 hidden group-hover:block"
                                           style={{ bottom: '100%', left: '50%', transform: 'translateX(-50%)', paddingBottom: 4 }}>
-                                          <QuickDiagram chordName={ev.chordRoot + (ev.chordQuality || '')} />
+                                          <QuickDiagram root={ev.chordRoot} quality={ev.chordQuality || ''} transpose={transpose} />
                                         </div>
                                       </div>
                                     );
@@ -1023,15 +1189,19 @@ export default function GuitarPage() {
 
                   {/* Right: fretboard + loops */}
                   <div className="flex flex-col gap-4">
-                    {/* Fretboard */}
+                    {/* Chord voicings (UG-style) */}
                     <div className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                       <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
-                        Fretboard {fretboardChord && `— ${displayChord(fretboardChord.root, fretboardChord.quality, transpose, capoFret)}`}
+                        Chord shapes
                       </p>
                       {fretboardChord
-                        ? <Fretboard chordRoot={transposeRoot(fretboardChord.root, transpose - capoFret)} chordQuality={fretboardChord.quality} />
-                        : <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Click any chord to show fingering here.</p>
+                        ? <VoicingBrowser
+                            chordRoot={fretboardChord.root}
+                            chordQuality={fretboardChord.quality}
+                            transposeOffset={transpose}
+                          />
+                        : <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Click any chord to browse shapes along the neck.</p>
                       }
                     </div>
 
@@ -1099,19 +1269,22 @@ export default function GuitarPage() {
   );
 }
 
-// Quick diagram shown on chord hover (fetches lazily)
-function QuickDiagram({ chordName }) {
-  const [shapes, setShapes] = useState(null);
-  useEffect(() => {
-    api.get(`/api/guitar/chord-shapes/${encodeURIComponent(chordName)}`)
-      .then(r => r.json()).then(d => setShapes(d)).catch(() => setShapes([]));
-  }, [chordName]);
-
-  if (!shapes || !shapes[0]) return null;
+// Quick diagram on chord hover — generated shapes, works for C#m etc.
+function QuickDiagram({ root, quality, transpose = 0 }) {
+  const shapes = useMemo(
+    () => generateVoicings(transposeRoot(root, transpose), quality || ''),
+    [root, quality, transpose]
+  );
+  if (!shapes[0]) return null;
   return (
     <div className="rounded-lg shadow-xl p-2"
       style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
       <ChordDiagram shape={shapes[0]} />
+      {shapes.length > 1 && (
+        <p className="text-center mt-1" style={{ fontSize: 9, color: 'var(--color-muted)' }}>
+          +{shapes.length - 1} more — click chord
+        </p>
+      )}
     </div>
   );
 }
