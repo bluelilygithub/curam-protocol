@@ -4,6 +4,8 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const os      = require('os');
+const https   = require('https');
+const http    = require('http');
 const multer  = require('multer');
 const { spawn } = require('child_process');
 const { pool }  = require('../db');
@@ -30,6 +32,109 @@ const SONG_LIST_COLS = `
   s."createdAt", s."updatedAt"
 `;
 
+// ── Ultimate Guitar fetch & parse ─────────────────────────────────────────────
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+
+async function fetchUGPage(url, hops = 0) {
+  if (hops > 5) throw new Error('Too many redirects fetching Ultimate Guitar page');
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === 'https:' ? https : http;
+    const req = client.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-cache',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      timeout: 20000,
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        const loc = res.headers.location;
+        const next = loc.startsWith('http') ? loc : `${parsed.protocol}//${parsed.hostname}${loc}`;
+        res.resume();
+        return fetchUGPage(next, hops + 1).then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`Ultimate Guitar returned HTTP ${res.statusCode} — try a different tab URL`));
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timed out fetching Ultimate Guitar page')); });
+    req.end();
+  });
+}
+
+function extractUGStore(html) {
+  const patterns = [
+    /class="js-store"[^>]+data-content="([^"]+)"/,
+    /class="js-store"[^>]+data-content='([^']+)'/,
+    /data-content="([^"]+)"[^>]+class="js-store"/,
+  ];
+  for (const pat of patterns) {
+    const m = html.match(pat);
+    if (!m) continue;
+    try { return JSON.parse(decodeURIComponent(decodeHtmlEntities(m[1]))); } catch {}
+    try { return JSON.parse(decodeHtmlEntities(m[1])); } catch {}
+  }
+  if (html.includes('cf-browser-verification') || html.includes('cf_chl_')) {
+    throw new Error('Ultimate Guitar is protected by Cloudflare — open the tab in your browser, copy the URL from the address bar, and try again');
+  }
+  throw new Error('Could not read tab data from this page — make sure it is a public Chords tab, not a Pro tab or Guitar Pro file');
+}
+
+function parseChordName(raw) {
+  const m = raw.trim().match(/^([A-G][#b]?)(.*)?$/);
+  if (!m) return { root: raw.trim(), quality: '' };
+  return { root: m[1], quality: (m[2] || '').trim() };
+}
+
+function parseUGContent(content) {
+  const stripped = content.replace(/\[tab\][\s\S]*?\[\/tab\]/gi, '');
+  const lines = stripped.split(/\r?\n/);
+  const events = [];
+  let section = null;
+  let tSec = 0;
+  const STEP = 2.5;
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (/^\[[^\]\/][^\]]*\]$/.test(t) && !/^\[ch\]/i.test(t)) {
+      section = t.replace(/^\[|\]$/g, '');
+      continue;
+    }
+    const chordTags = [...t.matchAll(/\[ch\]([^\[]+)\[\/ch\]/gi)];
+    for (const m of chordTags) {
+      const parsed = parseChordName(m[1]);
+      events.push({
+        timestampSec: parseFloat(tSec.toFixed(3)),
+        chordRoot: parsed.root,
+        chordQuality: parsed.quality,
+        sectionName: section,
+        confidenceScore: 1.0,
+      });
+      tSec += STEP;
+    }
+  }
+  return events;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function setSongStatus(id, fields) {
   const keys   = Object.keys(fields);
@@ -41,17 +146,6 @@ async function setSongStatus(id, fields) {
   );
 }
 
-async function loadYtCookies(userId) {
-  let ytCookiesB64 = process.env.YOUTUBE_COOKIES || '';
-  try {
-    const { rows } = await pool.query(
-      `SELECT value FROM settings WHERE "userId"=$1 AND key='guitar_yt_cookies'`,
-      [userId]
-    );
-    if (rows[0]?.value) ytCookiesB64 = rows[0].value;
-  } catch (_) {}
-  return ytCookiesB64;
-}
 
 /**
  * @param {number} songId
@@ -62,7 +156,6 @@ async function runPipeline(songId, userId, opts = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `guitar-${songId}-`));
   await setSongStatus(songId, { status: 'processing', errorMessage: null });
 
-  const ytCookiesB64 = await loadYtCookies(userId);
   const youtubeUrl = opts.youtubeUrl || '-';
   const args = [PIPELINE_SCRIPT, youtubeUrl, tmpDir];
   if (opts.audioPath) args.push(opts.audioPath);
@@ -72,10 +165,8 @@ async function runPipeline(songId, userId, opts = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
-        YOUTUBE_COOKIES: ytCookiesB64,
-        GUITAR_TITLE:    opts.title || '',
-        GUITAR_ARTIST:   opts.artist || '',
+        GUITAR_TITLE:  opts.title || '',
+        GUITAR_ARTIST: opts.artist || '',
       },
     });
 
@@ -172,28 +263,58 @@ router.get('/songs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// YouTube URL submit
-router.post('/songs', async (req, res) => {
+// Ultimate Guitar import
+router.post('/songs/ug', async (req, res) => {
   try {
-    const { youtubeUrl } = req.body;
-    if (!youtubeUrl?.trim()) return res.status(400).json({ error: 'youtubeUrl required' });
+    const { ugUrl } = req.body;
+    if (!ugUrl?.trim()) return res.status(400).json({ error: 'ugUrl required' });
+    const urlClean = ugUrl.trim();
+    if (!/ultimate-guitar\.com/i.test(urlClean)) {
+      return res.status(400).json({ error: 'Must be an Ultimate Guitar URL (tabs.ultimate-guitar.com/…)' });
+    }
 
-    const urlClean = youtubeUrl.trim();
-    if (!/youtu\.?be/.test(urlClean)) return res.status(400).json({ error: 'Must be a YouTube URL' });
+    const html = await fetchUGPage(urlClean);
+    const store = extractUGStore(html);
+
+    const pageData = store?.store?.page?.data;
+    if (!pageData) throw new Error('Unexpected page structure from Ultimate Guitar');
+
+    const tabMeta  = pageData.tab || {};
+    const tabView  = pageData.tab_view || {};
+    const content  = tabView?.wiki_tab?.content || tabView?.applicature_tab?.content || '';
+
+    if (!content) {
+      throw new Error(
+        'No chord content found — this may be a Pro tab or Guitar Pro file. ' +
+        'Find a free Chords tab on Ultimate Guitar instead.'
+      );
+    }
+
+    const title  = tabMeta.song_name   || 'Unknown Title';
+    const artist = tabMeta.artist_name || null;
+
+    const chordEvents = parseUGContent(content);
+    if (!chordEvents.length) {
+      throw new Error('No chords found on this tab — look for a tab labelled "Chords" on the UG page');
+    }
 
     const { rows } = await pool.query(
-      `INSERT INTO guitar_songs ("userId","youtubeUrl","sourceType",status)
-       VALUES ($1,$2,'youtube','pending') RETURNING id`,
-      [req.user.id, urlClean]
+      `INSERT INTO guitar_songs ("userId",title,artist,"sourceType",status)
+       VALUES ($1,$2,$3,'ultimate-guitar','done') RETURNING id`,
+      [req.user.id, title, artist]
     );
     const songId = rows[0].id;
 
-    runPipeline(songId, req.user.id, { youtubeUrl: urlClean }).catch(err => {
-      console.error('[guitar] Pipeline error:', err.message);
-      setSongStatus(songId, { status: 'failed', errorMessage: err.message });
-    });
+    for (const ev of chordEvents) {
+      await pool.query(
+        `INSERT INTO guitar_chord_events
+           ("songId","timestampSec","chordRoot","chordQuality","confidenceScore","sectionName")
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [songId, ev.timestampSec, ev.chordRoot, ev.chordQuality, ev.confidenceScore, ev.sectionName]
+      );
+    }
 
-    res.status(202).json({ songId });
+    res.status(201).json({ songId, title, artist, chordCount: chordEvents.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -453,14 +574,5 @@ router.delete('/loops/:loopId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/yt-cookie-status', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT value FROM settings WHERE "userId"=$1 AND key='guitar_yt_cookies'`,
-      [req.user.id]
-    );
-    res.json({ configured: rows.length > 0 && !!rows[0]?.value });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 module.exports = router;

@@ -1867,8 +1867,8 @@ async function initSchema() {
       status          TEXT NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending','processing','done','failed')),
       "errorMessage"  TEXT,
-      "sourceType"    TEXT NOT NULL DEFAULT 'youtube'
-                        CHECK ("sourceType" IN ('youtube','upload','manual')),
+      "sourceType"    TEXT NOT NULL DEFAULT 'ultimate-guitar'
+                        CHECK ("sourceType" IN ('youtube','upload','manual','ultimate-guitar')),
       "audioMime"     TEXT,
       "audioData"     BYTEA,
       "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
@@ -1898,6 +1898,26 @@ async function initSchema() {
   await pool.query(`
     DO $$ BEGIN
       ALTER TABLE guitar_songs ADD COLUMN IF NOT EXISTS "audioData" BYTEA;
+    EXCEPTION WHEN others THEN NULL;
+    END $$
+  `);
+
+  // Expand sourceType CHECK to include 'ultimate-guitar'
+  await pool.query(`
+    DO $$
+    DECLARE v TEXT;
+    BEGIN
+      SELECT constraint_name INTO v
+      FROM information_schema.table_constraints
+      WHERE table_name='guitar_songs' AND constraint_type='CHECK'
+        AND constraint_name ILIKE '%sourcetype%';
+      IF v IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE guitar_songs DROP CONSTRAINT %I', v);
+      END IF;
+      ALTER TABLE guitar_songs DROP CONSTRAINT IF EXISTS guitar_songs_source_type_chk;
+      ALTER TABLE guitar_songs
+        ADD CONSTRAINT guitar_songs_source_type_chk
+        CHECK ("sourceType" IN ('youtube','upload','manual','ultimate-guitar'));
     EXCEPTION WHEN others THEN NULL;
     END $$
   `);

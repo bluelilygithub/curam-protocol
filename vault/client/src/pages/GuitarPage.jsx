@@ -355,7 +355,8 @@ export default function GuitarPage() {
   const pollRef    = useRef(null);
   const addToast   = useToastStore(s => s.addToast);
 
-  const [addMode, setAddMode]               = useState('youtube'); // youtube | upload | manual
+  const [addMode, setAddMode]               = useState('ug'); // ug | upload | manual
+  const [ugUrl, setUgUrl]                   = useState('');
   const [uploadFile, setUploadFile]         = useState(null);
   const [uploadTitle, setUploadTitle]       = useState('');
   const [uploadArtist, setUploadArtist]     = useState('');
@@ -374,16 +375,16 @@ export default function GuitarPage() {
 
   useEffect(() => { loadSongs(); }, [loadSongs]);
 
-  const submitUrl = async () => {
-    if (!urlInput.trim() || submitting) return;
+  const submitUg = async () => {
+    if (!ugUrl.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const res  = await api.post('/api/guitar/songs', { youtubeUrl: urlInput.trim() });
+      const res  = await api.post('/api/guitar/songs/ug', { ugUrl: ugUrl.trim() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setUrlInput('');
+      setUgUrl('');
       loadSongs();
-      addToast('Processing started — chord detection takes 1–3 minutes', 'success');
+      addToast(`Imported "${data.title}" — ${data.chordCount} chords ready`, 'success');
     } catch (e) { addToast(e.message, 'error'); }
     finally { setSubmitting(false); }
   };
@@ -656,9 +657,9 @@ export default function GuitarPage() {
               <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Add a song</h2>
               <div className="flex gap-1 mb-3">
                 {[
-                  { id: 'youtube', label: 'YouTube URL' },
-                  { id: 'upload',  label: 'Upload audio' },
-                  { id: 'manual',  label: 'Manual chart' },
+                  { id: 'ug',     label: 'Ultimate Guitar' },
+                  { id: 'upload', label: 'Upload audio' },
+                  { id: 'manual', label: 'Manual chart' },
                 ].map(m => (
                   <button key={m.id} onClick={() => setAddMode(m.id)}
                     className="text-xs px-3 py-1.5 rounded-lg border"
@@ -671,22 +672,23 @@ export default function GuitarPage() {
                 ))}
               </div>
 
-              {addMode === 'youtube' && (
+              {addMode === 'ug' && (
                 <div>
                   <div className="flex gap-2">
-                    <input value={urlInput} onChange={e => setUrlInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && submitUrl()}
-                      placeholder="Paste a YouTube URL…"
+                    <input value={ugUrl} onChange={e => setUgUrl(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitUg()}
+                      placeholder="Paste an Ultimate Guitar Chords tab URL…"
                       className="flex-1 text-sm px-3 py-2 rounded-lg border"
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                    <button onClick={submitUrl} disabled={submitting || !urlInput.trim()}
+                    <button onClick={submitUg} disabled={submitting || !ugUrl.trim()}
                       className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
                       style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                      {submitting ? 'Adding…' : 'Detect chords'}
+                      {submitting ? 'Importing…' : 'Import chords'}
                     </button>
                   </div>
                   <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                    Best for most guitar videos. If a video is age-restricted, use Upload audio instead.
+                    Go to <a href="https://www.ultimate-guitar.com" target="_blank" rel="noopener noreferrer" className="underline">ultimate-guitar.com</a>, search for your song, open a free <strong>Chords</strong> tab, and paste its URL here.
+                    Pro tabs and Guitar Pro files are not supported.
                   </p>
                 </div>
               )}
@@ -769,7 +771,7 @@ export default function GuitarPage() {
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {song.title || 'Processing…'}
                         <span className="ml-2 text-xs font-normal" style={{ color: 'var(--color-muted)' }}>
-                          {song.sourceType === 'upload' ? 'upload' : song.sourceType === 'manual' ? 'manual' : 'youtube'}
+                          {{ upload: 'upload', manual: 'manual', 'ultimate-guitar': 'UG', youtube: 'youtube' }[song.sourceType] ?? song.sourceType}
                         </span>
                       </p>
                       <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
@@ -875,7 +877,7 @@ export default function GuitarPage() {
                       />
                     ) : (
                       <p className="text-xs rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                        No playback source — chart-only mode. Use “Add chord at playhead” with the time scrubber, or attach a YouTube URL when creating the song.
+                        Chart-only mode — no audio attached. Scroll through chords while you play, or add this song via Upload audio to enable playback sync.
                       </p>
                     )}
 
