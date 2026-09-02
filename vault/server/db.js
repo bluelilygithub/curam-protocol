@@ -1922,6 +1922,18 @@ async function initSchema() {
     END $$
   `);
 
+  // lyricText + lineIdx for UG chord/lyric chart display
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_chord_events ADD COLUMN IF NOT EXISTS "lyricText" TEXT;
+    EXCEPTION WHEN others THEN NULL; END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE guitar_chord_events ADD COLUMN IF NOT EXISTS "lineIdx" INTEGER;
+    EXCEPTION WHEN others THEN NULL; END $$
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS guitar_chord_events (
       id                SERIAL PRIMARY KEY,
@@ -1931,7 +1943,9 @@ async function initSchema() {
       "chordQuality"    TEXT NOT NULL DEFAULT '',
       "confidenceScore" NUMERIC(4,3),
       "isUserCorrected" BOOLEAN DEFAULT FALSE,
-      "sectionName"     TEXT
+      "sectionName"     TEXT,
+      "lyricText"       TEXT,
+      "lineIdx"         INTEGER
     )
   `);
 

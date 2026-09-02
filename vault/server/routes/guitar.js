@@ -104,6 +104,10 @@ function parseChordName(raw) {
   return { root: m[1], quality: (m[2] || '').trim() };
 }
 
+function stripUGMarkup(str) {
+  return str.replace(/\[\/?(ch|tab|verse|chorus|bridge|intro|outro|pre|post)[^\]]*\]/gi, '').trim();
+}
+
 function parseUGContent(content) {
   const stripped = content.replace(/\[tab\][\s\S]*?\[\/tab\]/gi, '');
   const lines = stripped.split(/\r?\n/);
@@ -111,26 +115,46 @@ function parseUGContent(content) {
   let section = null;
   let tSec = 0;
   const STEP = 2.5;
+  let lineIdx = 0;
 
-  for (const line of lines) {
-    const t = line.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
     if (!t) continue;
-    if (/^\[[^\]\/][^\]]*\]$/.test(t) && !/^\[ch\]/i.test(t)) {
+
+    // Section header e.g. [Verse 1], [Chorus]
+    if (/^\[[^\]\/][^\]]*\]$/.test(t) && !/\[ch\]/i.test(t)) {
       section = t.replace(/^\[|\]$/g, '');
       continue;
     }
+
     const chordTags = [...t.matchAll(/\[ch\]([^\[]+)\[\/ch\]/gi)];
+    if (!chordTags.length) continue;
+
+    // Look ahead for a lyric line (next non-empty line that has no chord tags)
+    let lyric = null;
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j].trim();
+      if (!next) continue;
+      if (/^\[[^\]\/][^\]]*\]$/.test(next) && !/\[ch\]/i.test(next)) break; // new section
+      if (/\[ch\]/i.test(next)) break; // another chord line
+      lyric = stripUGMarkup(next) || null;
+      break;
+    }
+
     for (const m of chordTags) {
       const parsed = parseChordName(m[1]);
       events.push({
         timestampSec: parseFloat(tSec.toFixed(3)),
-        chordRoot: parsed.root,
+        chordRoot:    parsed.root,
         chordQuality: parsed.quality,
-        sectionName: section,
+        sectionName:  section,
         confidenceScore: 1.0,
+        lyricText: lyric,
+        lineIdx,
       });
       tSec += STEP;
     }
+    lineIdx++;
   }
   return events;
 }
@@ -308,9 +332,9 @@ router.post('/songs/ug', async (req, res) => {
     for (const ev of chordEvents) {
       await pool.query(
         `INSERT INTO guitar_chord_events
-           ("songId","timestampSec","chordRoot","chordQuality","confidenceScore","sectionName")
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [songId, ev.timestampSec, ev.chordRoot, ev.chordQuality, ev.confidenceScore, ev.sectionName]
+           ("songId","timestampSec","chordRoot","chordQuality","confidenceScore","sectionName","lyricText","lineIdx")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [songId, ev.timestampSec, ev.chordRoot, ev.chordQuality, ev.confidenceScore, ev.sectionName, ev.lyricText ?? null, ev.lineIdx ?? null]
       );
     }
 

@@ -347,13 +347,52 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopName, setLoopName]   = useState('');
   const [fretboardChord, setFretboardChord] = useState(null);
-  const playerRef  = useRef(null);
-  const chartRef   = useRef(null);
-  const rafRef     = useRef(null);
-  const localTimer = useRef(null); // performance.now() at last YT sync
-  const localBase  = useRef(0);    // YT time at last sync
-  const pollRef    = useRef(null);
-  const addToast   = useToastStore(s => s.addToast);
+  const playerRef   = useRef(null);
+  const chartRef    = useRef(null);
+  const rafRef      = useRef(null);
+  const localTimer  = useRef(null);
+  const localBase   = useRef(0);
+  const pollRef     = useRef(null);
+  const audioCtxRef = useRef(null);
+  const addToast    = useToastStore(s => s.addToast);
+
+  const playChordAudio = useCallback((root, quality) => {
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+      const NOTE_SEMI = { C:0,'C#':1,Db:1,D:2,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11 };
+      const INTERVALS = {
+        '': [0,4,7], m: [0,3,7], '7': [0,4,7,10], maj7: [0,4,7,11],
+        m7: [0,3,7,10], dim: [0,3,6], aug: [0,4,8], sus2: [0,2,7], sus4: [0,5,7],
+        dim7: [0,3,6,9], m7b5: [0,3,6,10],
+      };
+      const rootSemi = NOTE_SEMI[root] ?? 0;
+      const intervals = INTERVALS[quality] ?? [0,4,7];
+      // Base at E2 (82.41 Hz) — guitar low-E open string
+      const baseFreq = 82.41 * Math.pow(2, rootSemi / 12);
+      const now = ctx.currentTime;
+      intervals.forEach((iv, i) => {
+        [0, 1].forEach(oct => {
+          const freq = baseFreq * Math.pow(2, (iv + oct * 12) / 12);
+          const osc  = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+          const t0 = now + i * 0.03;
+          gain.gain.setValueAtTime(0, t0);
+          gain.gain.linearRampToValueAtTime(0.06, t0 + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + 2);
+        });
+      });
+    } catch (_) {}
+  }, []);
 
   const [addMode, setAddMode]               = useState('ug'); // ug | upload | manual
   const [ugUrl, setUgUrl]                   = useState('');
@@ -895,51 +934,90 @@ export default function GuitarPage() {
                             {addingChord ? 'Adding…' : 'Add chord at playhead'}
                           </button>
                           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                            Click to correct · Hover for diagram
+                            Click to hear · double-click to edit · hover for diagram
                           </span>
                         </div>
                       </div>
 
                       {chords.length === 0 && !loadingChords && (
                         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          No chords yet — wait for detection, or add them manually.
+                          No chords yet.
                         </p>
                       )}
 
-                      <div className="flex flex-wrap gap-1.5">
-                        {chords.map((ev, idx) => {
-                          const label = displayChord(ev.chordRoot, ev.chordQuality || '', transpose, capoFret);
-                          const isActive = idx === activeChordIdx;
-                          const isLow    = !ev.isUserCorrected && ev.confidenceScore < 0.4;
-                          return (
-                            <div key={ev.id} data-chord-idx={idx} className="relative group">
-                              <button
-                                onClick={() => setCorrecting({ ...ev, songId: activeSong.id })}
-                                className="flex flex-col items-center px-2 py-1 rounded-lg text-xs transition-all"
-                                style={{
-                                  background: isActive ? 'var(--color-primary)' : 'var(--color-bg)',
-                                  color: isActive ? '#fff' : isLow ? '#d97706' : 'var(--color-text)',
-                                  border: `1px solid ${isActive ? 'var(--color-primary)' : isLow ? '#d97706' : 'var(--color-border)'}`,
-                                  fontWeight: isActive ? 700 : 400,
-                                  minWidth: 40,
-                                }}>
-                                <span className="font-mono">{label}</span>
-                                <span style={{ color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--color-muted)', fontSize: 9 }}>
-                                  {fmtTime(parseFloat(ev.timestampSec))}
-                                </span>
-                                {ev.isUserCorrected && (
-                                  <span title="Manually corrected" style={{ fontSize: 8, color: isActive ? 'rgba(255,255,255,0.8)' : '#16a34a' }}>✓</span>
+                      {/* Song-sheet layout: grouped by section and lyric line */}
+                      {(() => {
+                        // Build sections → lines structure
+                        const sections = [];
+                        let curSec = null;
+                        let curLine = null;
+                        chords.forEach((ev, flatIdx) => {
+                          const sName = ev.sectionName ?? null;
+                          const lIdx  = ev.lineIdx ?? flatIdx;
+                          if (!curSec || curSec.name !== sName) {
+                            curSec = { name: sName, lines: [] };
+                            sections.push(curSec);
+                            curLine = null;
+                          }
+                          if (!curLine || curLine.key !== lIdx) {
+                            curLine = { key: lIdx, lyric: ev.lyricText ?? null, evs: [] };
+                            curSec.lines.push(curLine);
+                          }
+                          if (ev.lyricText && !curLine.lyric) curLine.lyric = ev.lyricText;
+                          curLine.evs.push({ ev, flatIdx });
+                        });
+
+                        return sections.map((sec, si) => (
+                          <div key={si} style={{ marginBottom: '1rem' }}>
+                            {sec.name && (
+                              <p style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '0.1em', color: 'var(--color-primary)', marginBottom: 6, opacity: 0.85 }}>
+                                {sec.name}
+                              </p>
+                            )}
+                            {sec.lines.map((line, li) => (
+                              <div key={li} style={{ marginBottom: '0.75rem' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 2 }}>
+                                  {line.evs.map(({ ev, flatIdx }) => {
+                                    const label    = displayChord(ev.chordRoot, ev.chordQuality || '', transpose, capoFret);
+                                    const isActive = flatIdx === activeChordIdx;
+                                    return (
+                                      <div key={ev.id} data-chord-idx={flatIdx} className="relative group">
+                                        <button
+                                          onClick={() => {
+                                            setFretboardChord({ root: ev.chordRoot, quality: ev.chordQuality || '' });
+                                            playChordAudio(ev.chordRoot, ev.chordQuality || '');
+                                          }}
+                                          onDoubleClick={() => setCorrecting({ ...ev, songId: activeSong.id })}
+                                          title={`${label} — click to hear & show fretboard · double-click to edit`}
+                                          style={{
+                                            fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 700,
+                                            padding: '2px 8px', borderRadius: 6, cursor: 'pointer',
+                                            background: isActive ? 'var(--color-primary)' : 'var(--color-bg)',
+                                            color: isActive ? '#fff' : 'var(--color-primary)',
+                                            border: `1.5px solid ${isActive ? 'var(--color-primary)' : 'var(--color-primary)'}`,
+                                            opacity: isActive ? 1 : 0.85,
+                                          }}>
+                                          {label}
+                                        </button>
+                                        <div className="absolute z-30 hidden group-hover:block"
+                                          style={{ bottom: '100%', left: '50%', transform: 'translateX(-50%)', paddingBottom: 4 }}>
+                                          <QuickDiagram chordName={ev.chordRoot + (ev.chordQuality || '')} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {line.lyric && (
+                                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text)', margin: 0, lineHeight: 1.5, paddingLeft: 2 }}>
+                                    {line.lyric}
+                                  </p>
                                 )}
-                              </button>
-                              {/* Diagram on hover */}
-                              <div className="absolute z-30 hidden group-hover:block"
-                                style={{ bottom: '100%', left: '50%', transform: 'translateX(-50%)', paddingBottom: 4 }}>
-                                <QuickDiagram chordName={ev.chordRoot + (ev.chordQuality || '')} />
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            ))}
+                          </div>
+                        ));
+                      })()}
                     </div>
                   </div>
 
@@ -953,7 +1031,7 @@ export default function GuitarPage() {
                       </p>
                       {fretboardChord
                         ? <Fretboard chordRoot={transposeRoot(fretboardChord.root, transpose - capoFret)} chordQuality={fretboardChord.quality} />
-                        : <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Play the song to see the active chord.</p>
+                        : <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Click any chord to show fingering here.</p>
                       }
                     </div>
 
@@ -961,6 +1039,12 @@ export default function GuitarPage() {
                     <div className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                       <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Practice Loops</p>
+                      {!activeSong?.hasAudio && !activeSong?.youtubeUrl ? (
+                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                          Practice loops need an audio source. Upload an mp3 for this song via Upload audio to enable loops.
+                        </p>
+                      ) : (
+                      <>
                       <div className="flex gap-1 mb-2">
                         <input value={loopName} onChange={e => setLoopName(e.target.value)}
                           placeholder="Loop name…"
@@ -996,6 +1080,8 @@ export default function GuitarPage() {
                           </div>
                         ))
                       }
+                      </>
+                      )}
                     </div>
                   </div>
                 </div>
