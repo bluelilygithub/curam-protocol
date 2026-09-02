@@ -37,7 +37,7 @@ export const APP_NAV_GROUPS = [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'translate', label: 'Translate', path: '/translate', icon: 'languages', featureKey: 'translate' },
-      { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'music',     featureKey: 'guitar'    },
+      { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'guitar',    featureKey: 'guitar'    },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
       { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
