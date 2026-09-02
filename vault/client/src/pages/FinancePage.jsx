@@ -2835,6 +2835,175 @@ function BASTab() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+// ── Export History Panel (nuclear option) ────────────────────────────────────
+const EXPORT_FORMATS = [
+  { key: 'myob',   label: 'MYOB' },
+  { key: 'xero',   label: 'Xero' },
+  { key: 'excel',  label: 'Excel' },
+  { key: 'sheets', label: 'Google Sheets' },
+];
+
+function ExportHistoryPanel({ onChanged }) {
+  const [history, setHistory]     = useState({});
+  const [loading, setLoading]     = useState(true);
+  const [editing, setEditing]     = useState(null);   // key being edited
+  const [editDate, setEditDate]   = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = () => {
+    setLoading(true);
+    api.get('/api/finance/settings')
+      .then(r => r.json())
+      .then(data => {
+        try { setHistory(data.fin_export_history ? JSON.parse(data.fin_export_history) : {}); }
+        catch { setHistory({}); }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fmtAU = (s) => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const saveOverride = async (key, lastTo) => {
+    setSaving(true);
+    try {
+      const res = await api.put('/api/finance/export/history', { type: key, lastTo: lastTo || null });
+      if (!res.ok) throw new Error('Save failed');
+      const body = await res.json();
+      setHistory(body.history || {});
+      onChanged?.(body.history || {});
+      addToast(`${EXPORT_FORMATS.find(f => f.key === key)?.label} cutoff updated.`, 'success');
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setSaving(false);
+      setEditing(null);
+    }
+  };
+
+  const clearAll = async () => {
+    setClearingAll(true);
+    try {
+      const res = await api.put('/api/finance/export/history', { type: 'all', lastTo: null });
+      if (!res.ok) throw new Error('Clear failed');
+      setHistory({});
+      onChanged?.({});
+      addToast('All export cutoffs cleared.', 'success');
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setClearingAll(false);
+      setConfirmAll(false);
+    }
+  };
+
+  if (loading) return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {EXPORT_FORMATS.map(({ key, label }) => {
+        const h = history[key];
+        const isEditing = editing === key;
+        return (
+          <div key={key} className="rounded-lg p-3 text-sm border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
+                {h ? (
+                  <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    locked from <strong>{fmtAU(h.lastTo)}</strong>
+                    {h.manualOverride && <span className="ml-1 italic">(manual override)</span>}
+                  </span>
+                ) : (
+                  <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>no cutoff — unrestricted</span>
+                )}
+              </div>
+              {!isEditing && (
+                <button
+                  onClick={() => { setEditing(key); setEditDate(h?.lastTo || ''); }}
+                  className="text-xs px-2 py-1 rounded border"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+                >
+                  Override
+                </button>
+              )}
+            </div>
+
+            {isEditing && (
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="rounded p-2 text-xs" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--color-text)' }}>
+                  Set a new cutoff date for {label}. Future exports must start <strong>after</strong> this date. Leave blank to remove the restriction entirely.
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={e => setEditDate(e.target.value)}
+                    className="text-sm px-2 py-1 rounded border"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                  />
+                  <button
+                    onClick={() => saveOverride(key, editDate)}
+                    disabled={saving}
+                    className="text-xs px-3 py-1 rounded font-medium"
+                    style={{ background: '#ef4444', color: '#fff', opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Saving…' : 'Apply'}
+                  </button>
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="text-xs px-2 py-1 rounded border"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Clear all */}
+      <div className="pt-1">
+        {!confirmAll ? (
+          <button
+            onClick={() => setConfirmAll(true)}
+            className="text-xs px-3 py-1.5 rounded border font-medium"
+            style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#ef4444', background: 'rgba(239,68,68,0.06)' }}
+          >
+            Clear all cutoffs
+          </button>
+        ) : (
+          <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <p className="text-sm font-semibold" style={{ color: '#ef4444' }}>Clear all export cutoffs?</p>
+            <p className="text-xs" style={{ color: 'var(--color-text)' }}>
+              This removes the date lock for every format. Your next exports will have no restrictions — any period can be re-exported, which risks duplicate imports. Only proceed after confirming with your accountant.
+            </p>
+            <div className="flex gap-2 mt-1">
+              <button onClick={() => setConfirmAll(false)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
+                Cancel
+              </button>
+              <button onClick={clearAll} disabled={clearingAll} className="text-xs px-3 py-1.5 rounded font-medium" style={{ background: '#ef4444', color: '#fff', opacity: clearingAll ? 0.6 : 1 }}>
+                {clearingAll ? 'Clearing…' : 'Yes, clear all'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SettingsTab({ onHistoryReset }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '',
@@ -2846,8 +3015,6 @@ function SettingsTab({ onHistoryReset }) {
   const [saved, setSaved]                 = useState(false);
   const [testSending, setTestSending]     = useState(false);
   const [testMsg, setTestMsg]             = useState('');
-  const [resetConfirm, setResetConfirm]   = useState(false);
-  const [resetting, setResetting]         = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
@@ -2883,21 +3050,6 @@ function SettingsTab({ onHistoryReset }) {
       setTestMsg(`Error: ${e.message}`);
     } finally {
       setTestSending(false);
-    }
-  };
-
-  const doResetHistory = async () => {
-    setResetting(true);
-    try {
-      const res = await api.delete('/api/finance/export/history');
-      if (!res.ok) throw new Error('Reset failed');
-      onHistoryReset?.();
-      addToast('Export history cleared — all date ranges are now unrestricted.', 'success');
-    } catch (e) {
-      addToast(e.message || 'Reset failed', 'error');
-    } finally {
-      setResetting(false);
-      setResetConfirm(false);
     }
   };
 
@@ -2967,46 +3119,14 @@ function SettingsTab({ onHistoryReset }) {
           <Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn>
         </div>
 
-        {/* Export history reset */}
+        {/* Export history — nuclear option */}
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Export History</p>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>Export History</p>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-            Each export records a cutoff date to prevent duplicate journal imports into MYOB, Xero, Excel, or Google Sheets. If you need to re-export a corrected period, reset the history here — this is a deliberate override and should only be used after confirming with your accountant.
+            Each export locks a cutoff date to prevent duplicate imports into MYOB, Xero, Excel, or Google Sheets.
+            Use the controls below to override a specific format's cutoff, or clear all at once. Only do this after confirming with your accountant.
           </p>
-          {!resetConfirm ? (
-            <Btn variant="secondary" onClick={() => setResetConfirm(true)}>
-              Reset export history
-            </Btn>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <p className="font-semibold mb-1" style={{ color: '#ef4444' }}>Confirm reset</p>
-                <p style={{ color: 'var(--color-text)' }}>
-                  This will remove all export cutoffs for MYOB, Xero, Excel, and Google Sheets. Your next exports will have no date restrictions, which risks duplicate imports if you re-export an already-imported period.
-                </p>
-                <p className="mt-2" style={{ color: 'var(--color-text)' }}>
-                  Only proceed if you have confirmed with your accountant that re-importing is safe.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setResetConfirm(false)}
-                  className="px-4 py-2 text-sm rounded-lg border"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={doResetHistory}
-                  disabled={resetting}
-                  className="px-4 py-2 text-sm rounded-lg font-medium"
-                  style={{ background: '#ef4444', color: '#fff', opacity: resetting ? 0.6 : 1 }}
-                >
-                  {resetting ? 'Resetting…' : 'Yes, reset history'}
-                </button>
-              </div>
-            </div>
-          )}
+          <ExportHistoryPanel onChanged={onHistoryReset} />
         </div>
       </div>
     </div>
@@ -4031,7 +4151,7 @@ export default function FinancePage() {
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
-        {tab === 'Settings'  && <SettingsTab onHistoryReset={() => setExportHistory({})} />}
+        {tab === 'Settings'  && <SettingsTab onHistoryReset={(h) => setExportHistory(h || {})} />}
       </div>
 
       {exportModal && (

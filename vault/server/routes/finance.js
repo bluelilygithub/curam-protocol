@@ -2104,6 +2104,35 @@ router.delete('/export/history', async (req, res) => {
   }
 });
 
+// Nuclear option — set a specific cutoff date for one or all export formats
+router.put('/export/history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type, lastTo } = req.body; // type: 'myob'|'xero'|'excel'|'sheets'|'all', lastTo: 'YYYY-MM-DD'|null
+    const VALID_TYPES = ['myob', 'xero', 'excel', 'sheets'];
+
+    const history = await readExportHistory(userId);
+
+    if (type === 'all') {
+      // Clear every format
+      for (const t of VALID_TYPES) delete history[t];
+    } else if (VALID_TYPES.includes(type)) {
+      if (lastTo) {
+        history[type] = { lastTo, exportedAt: new Date().toISOString(), manualOverride: true };
+      } else {
+        delete history[type];
+      }
+    } else {
+      return res.status(400).json({ error: 'Invalid export type' });
+    }
+
+    await writeExportHistory(userId, history);
+    res.json({ ok: true, history });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // MYOB General Journal format
 router.get('/export/myob', async (req, res) => {
   try {
@@ -2367,23 +2396,27 @@ router.get('/export/sheets', async (req, res) => {
     const cutoffErr = validateExportCutoff(history, 'sheets', from);
     if (cutoffErr) return res.status(409).json(cutoffErr);
 
-    const p = [userId];
-    const dateFilter = (col) => {
-      let w = '';
-      if (from) { p.push(from); w += ` AND ${col} >= $${p.length}`; }
-      if (to)   { p.push(to);   w += ` AND ${col} <= $${p.length}`; }
-      return w;
+    // Each query needs its own independent params array to avoid cross-contamination
+    const makeParams = () => {
+      const p = [userId];
+      let where = `"userId"=$1`;
+      if (from) { p.push(from); where += ` AND %COL% >= $${p.length}`; }
+      if (to)   { p.push(to);   where += ` AND %COL% <= $${p.length}`; }
+      return { p, where };
     };
 
-    // Fetch all transaction types
+    const exp  = makeParams();
+    const inv  = makeParams();
+    const wage = makeParams();
+
     const [expRows, invRows, wageRows] = await Promise.all([
       pool.query(
         `SELECT e.date, e.description, e.supplier AS party, e.amount, e.gst,
                 e.amount + e.gst AS total, e.category AS notes, 'Expense' AS type
          FROM fin_expenses e
-         WHERE e."userId"=$1${dateFilter('e.date')}
+         WHERE ${exp.where.replace(/%COL%/g, 'e.date').replace('"userId"', 'e."userId"')}
          ORDER BY e.date ASC, e.id ASC`,
-        [...p]
+        exp.p
       ),
       pool.query(
         `SELECT i."issueDate" AS date,
@@ -2394,9 +2427,9 @@ router.get('/export/sheets', async (req, res) => {
          FROM fin_invoices i
          LEFT JOIN fin_clients fc ON fc.id = i."clientId"
          LEFT JOIN clients cr ON cr.id = i."clientRef"
-         WHERE i."userId"=$1${dateFilter('i."issueDate"')}
+         WHERE ${inv.where.replace(/%COL%/g, 'i."issueDate"').replace('"userId"', 'i."userId"')}
          ORDER BY i."issueDate" ASC, i.id ASC`,
-        [...p]
+        inv.p
       ),
       pool.query(
         `SELECT date, employee AS party, 'Wages — ' || employee AS description,
@@ -2404,9 +2437,9 @@ router.get('/export/sheets', async (req, res) => {
                 'Tax: ' || tax || '  Super: ' || superannuation AS notes,
                 'Wage' AS type
          FROM fin_wages
-         WHERE "userId"=$1${dateFilter('date')}
+         WHERE ${wage.where.replace(/%COL%/g, 'date')}
          ORDER BY date ASC, id ASC`,
-        [...p]
+        wage.p
       ),
     ]);
 
