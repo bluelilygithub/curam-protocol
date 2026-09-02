@@ -40,6 +40,7 @@ import ProductScoutPage from './pages/ProductScoutPage';
 import PropertyScenarioPage from './pages/PropertyScenarioPage';
 import DocumentRedactionPage from './pages/DocumentRedactionPage';
 import TranslatePage from './pages/TranslatePage';
+import GuitarPage from './pages/GuitarPage';
 import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
@@ -167,6 +168,7 @@ function App() {
               <Route path="/document-redaction" element={<DocumentRedactionPage />} />
               <Route path="/document-redaction/:jobId" element={<DocumentRedactionPage />} />
               <Route path="/translate" element={<TranslatePage />} />
+              <Route path="/guitar"    element={<GuitarPage />} />
               <Route path="/google-ads" element={<SeoPage />} />
               <Route path="/google-ads/:id" element={<SeoPage />} />
               <Route path="/seo" element={<SeoAuditPage />} />

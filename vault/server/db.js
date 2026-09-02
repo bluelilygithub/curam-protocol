@@ -1851,6 +1851,107 @@ async function initSchema() {
     ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "charCount" INTEGER DEFAULT 0
   `);
 
+  // ── Guitar Learning Agent ─────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_songs (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "youtubeUrl"    TEXT NOT NULL,
+      title           TEXT,
+      artist          TEXT,
+      duration        NUMERIC(8,2),
+      "keyDetected"   TEXT,
+      "capoSuggested" INTEGER DEFAULT 0,
+      tuning          TEXT DEFAULT 'E Standard',
+      bpm             INTEGER,
+      status          TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','processing','done','failed')),
+      "errorMessage"  TEXT,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_chord_events (
+      id                SERIAL PRIMARY KEY,
+      "songId"          INTEGER NOT NULL REFERENCES guitar_songs(id) ON DELETE CASCADE,
+      "timestampSec"    NUMERIC(8,3) NOT NULL,
+      "chordRoot"       TEXT NOT NULL,
+      "chordQuality"    TEXT NOT NULL DEFAULT '',
+      "confidenceScore" NUMERIC(4,3),
+      "isUserCorrected" BOOLEAN DEFAULT FALSE,
+      "sectionName"     TEXT
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_chord_shapes (
+      id                SERIAL PRIMARY KEY,
+      "chordName"       TEXT NOT NULL,
+      "voicingType"     TEXT DEFAULT 'open',
+      "fretPositions"   JSONB NOT NULL,
+      "fingerPositions" JSONB,
+      "baseFret"        INTEGER DEFAULT 1
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_user_songs (
+      id                  SERIAL PRIMARY KEY,
+      "userId"            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "songId"            INTEGER NOT NULL REFERENCES guitar_songs(id) ON DELETE CASCADE,
+      notes               TEXT,
+      "lastPracticedAt"   TIMESTAMPTZ,
+      "isFavorite"        BOOLEAN DEFAULT FALSE,
+      "transposeOffset"   INTEGER DEFAULT 0,
+      "capoOverride"      INTEGER,
+      "createdAt"         TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("userId", "songId")
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_user_song_loops (
+      id              SERIAL PRIMARY KEY,
+      "userSongId"    INTEGER NOT NULL REFERENCES guitar_user_songs(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      "startTimeSec"  NUMERIC(8,2) NOT NULL,
+      "endTimeSec"    NUMERIC(8,2) NOT NULL,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Seed basic open-chord shapes if table is empty
+  const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
+  if (parseInt(shapeCount.rows[0].count) === 0) {
+    const openShapes = [
+      { chordName: 'E',  voicingType: 'open', fretPositions: [0,2,2,1,0,0], fingerPositions: [0,2,3,1,0,0], baseFret: 1 },
+      { chordName: 'Em', voicingType: 'open', fretPositions: [0,2,2,0,0,0], fingerPositions: [0,2,3,0,0,0], baseFret: 1 },
+      { chordName: 'A',  voicingType: 'open', fretPositions: [-1,0,2,2,2,0], fingerPositions: [0,0,1,2,3,0], baseFret: 1 },
+      { chordName: 'Am', voicingType: 'open', fretPositions: [-1,0,2,2,1,0], fingerPositions: [0,0,2,3,1,0], baseFret: 1 },
+      { chordName: 'D',  voicingType: 'open', fretPositions: [-1,-1,0,2,3,2], fingerPositions: [0,0,0,1,3,2], baseFret: 1 },
+      { chordName: 'Dm', voicingType: 'open', fretPositions: [-1,-1,0,2,3,1], fingerPositions: [0,0,0,2,3,1], baseFret: 1 },
+      { chordName: 'G',  voicingType: 'open', fretPositions: [3,2,0,0,0,3],  fingerPositions: [3,2,0,0,0,4], baseFret: 1 },
+      { chordName: 'C',  voicingType: 'open', fretPositions: [-1,3,2,0,1,0], fingerPositions: [0,3,2,0,1,0], baseFret: 1 },
+      { chordName: 'F',  voicingType: 'barre', fretPositions: [1,1,2,3,3,1], fingerPositions: [1,1,2,3,4,1], baseFret: 1 },
+      { chordName: 'B',  voicingType: 'barre', fretPositions: [-1,2,4,4,4,2], fingerPositions: [0,1,3,4,4,2], baseFret: 2 },
+      { chordName: 'Bm', voicingType: 'barre', fretPositions: [-1,2,4,4,3,2], fingerPositions: [0,1,3,4,2,1], baseFret: 2 },
+      { chordName: 'G7', voicingType: 'open', fretPositions: [3,2,0,0,0,1],  fingerPositions: [3,2,0,0,0,1], baseFret: 1 },
+      { chordName: 'C7', voicingType: 'open', fretPositions: [-1,3,2,3,1,0], fingerPositions: [0,3,2,4,1,0], baseFret: 1 },
+      { chordName: 'D7', voicingType: 'open', fretPositions: [-1,-1,0,2,1,2], fingerPositions: [0,0,0,2,1,3], baseFret: 1 },
+      { chordName: 'E7', voicingType: 'open', fretPositions: [0,2,0,1,0,0],  fingerPositions: [0,2,0,1,0,0], baseFret: 1 },
+      { chordName: 'A7', voicingType: 'open', fretPositions: [-1,0,2,0,2,0], fingerPositions: [0,0,2,0,3,0], baseFret: 1 },
+    ];
+    for (const s of openShapes) {
+      await pool.query(
+        `INSERT INTO guitar_chord_shapes ("chordName","voicingType","fretPositions","fingerPositions","baseFret")
+         VALUES ($1,$2,$3,$4,$5)`,
+        [s.chordName, s.voicingType, JSON.stringify(s.fretPositions), JSON.stringify(s.fingerPositions), s.baseFret]
+      );
+    }
+  }
+
   console.log('[db] Schema ready');
 }
 

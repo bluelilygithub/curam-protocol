@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install LibreOffice and fonts for Office→PDF conversion
+# System deps — LibreOffice, ffmpeg, Python3 for guitar audio pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libreoffice \
@@ -10,8 +10,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-dejavu-core \
     fontconfig \
+    python3 \
+    python3-pip \
+    python3-venv \
+    libsndfile1 \
     && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
+
+# Python audio pipeline (CPU-only torch to keep image lean)
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt
 
 WORKDIR /app
 

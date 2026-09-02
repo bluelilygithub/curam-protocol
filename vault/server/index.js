@@ -140,6 +140,7 @@ app.use('/api/seo', requireFeature('seo'), require('./routes/seoAudit'));
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate', requireFeature('translate'), require('./routes/translate'));
+app.use('/api/guitar',    requireFeature('guitar'),    require('./routes/guitar'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

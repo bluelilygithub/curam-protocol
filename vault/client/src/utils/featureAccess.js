@@ -30,6 +30,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   html: true,
   searchConsole: true,
   translate: true,
+  guitar: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -74,6 +75,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'propertyScenario', label: 'Property scenario' },
       { key: 'documentRedaction', label: 'Document redaction' },
       { key: 'translate', label: 'Translate' },
+      { key: 'guitar', label: 'Guitar Learning' },
     ],
   },
 ];
