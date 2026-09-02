@@ -2357,7 +2357,94 @@ router.get('/export/excel', async (req, res) => {
   }
 });
 
-// ── Interest Income ───────────────────────────────────────────────────────────
+// Google Sheets — combined single-sheet CSV, all transactions in date order
+router.get('/export/sheets', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+
+    const history   = await readExportHistory(userId);
+    const cutoffErr = validateExportCutoff(history, 'sheets', from);
+    if (cutoffErr) return res.status(409).json(cutoffErr);
+
+    const p = [userId];
+    const dateFilter = (col) => {
+      let w = '';
+      if (from) { p.push(from); w += ` AND ${col} >= $${p.length}`; }
+      if (to)   { p.push(to);   w += ` AND ${col} <= $${p.length}`; }
+      return w;
+    };
+
+    // Fetch all transaction types
+    const [expRows, invRows, wageRows] = await Promise.all([
+      pool.query(
+        `SELECT e.date, e.description, e.supplier AS party, e.amount, e.gst,
+                e.amount + e.gst AS total, e.category AS notes, 'Expense' AS type
+         FROM fin_expenses e
+         WHERE e."userId"=$1${dateFilter('e.date')}
+         ORDER BY e.date ASC, e.id ASC`,
+        [...p]
+      ),
+      pool.query(
+        `SELECT i."issueDate" AS date,
+                COALESCE(fc.name, cr.name) AS party,
+                i.number AS description, i.subtotal AS amount, i.gst,
+                i.total, i.notes,
+                CASE WHEN i."docType"='quote' THEN 'Quote' ELSE 'Invoice' END AS type
+         FROM fin_invoices i
+         LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+         LEFT JOIN clients cr ON cr.id = i."clientRef"
+         WHERE i."userId"=$1${dateFilter('i."issueDate"')}
+         ORDER BY i."issueDate" ASC, i.id ASC`,
+        [...p]
+      ),
+      pool.query(
+        `SELECT date, employee AS party, 'Wages — ' || employee AS description,
+                gross AS amount, 0 AS gst, net AS total,
+                'Tax: ' || tax || '  Super: ' || superannuation AS notes,
+                'Wage' AS type
+         FROM fin_wages
+         WHERE "userId"=$1${dateFilter('date')}
+         ORDER BY date ASC, id ASC`,
+        [...p]
+      ),
+    ]);
+
+    const allRows = [
+      ...expRows.rows,
+      ...invRows.rows,
+      ...wageRows.rows,
+    ].sort((a, b) => String(a.date).slice(0,10).localeCompare(String(b.date).slice(0,10)));
+
+    const lines = ['Date,Type,Description,Party,Amount (ex GST),GST,Total,Notes'];
+    for (const r of allRows) {
+      lines.push(csvRow(
+        fmtDateAU(r.date),
+        r.type,
+        r.description || '',
+        r.party || '',
+        fmtNum(r.amount),
+        fmtNum(r.gst),
+        fmtNum(r.total),
+        r.notes || ''
+      ));
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    history.sheets = { lastTo: to || today, exportedAt: new Date().toISOString() };
+    await writeExportHistory(userId, history).catch(e => console.error('[export/sheets] history write failed:', e.message));
+
+    const from2 = from ? from.replace(/-/g, '') : 'all';
+    const to2   = to   ? to.replace(/-/g, '')   : 'all';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="finance-sheets-${from2}-${to2}.csv"`);
+    res.send('\uFEFF' + lines.join('\r\n'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 router.get('/interest', async (req, res) => {
   try {

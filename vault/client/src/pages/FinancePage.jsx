@@ -2971,7 +2971,7 @@ function SettingsTab({ onHistoryReset }) {
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Export History</p>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-            Each export records a cutoff date to prevent duplicate journal imports into MYOB, Xero, or Excel. If you need to re-export a corrected period, reset the history here — this is a deliberate override and should only be used after confirming with your accountant.
+            Each export records a cutoff date to prevent duplicate journal imports into MYOB, Xero, Excel, or Google Sheets. If you need to re-export a corrected period, reset the history here — this is a deliberate override and should only be used after confirming with your accountant.
           </p>
           {!resetConfirm ? (
             <Btn variant="secondary" onClick={() => setResetConfirm(true)}>
@@ -2982,7 +2982,7 @@ function SettingsTab({ onHistoryReset }) {
               <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
                 <p className="font-semibold mb-1" style={{ color: '#ef4444' }}>Confirm reset</p>
                 <p style={{ color: 'var(--color-text)' }}>
-                  This will remove all export cutoffs for MYOB, Xero, and Excel. Your next exports will have no date restrictions, which risks duplicate imports if you re-export an already-imported period.
+                  This will remove all export cutoffs for MYOB, Xero, Excel, and Google Sheets. Your next exports will have no date restrictions, which risks duplicate imports if you re-export an already-imported period.
                 </p>
                 <p className="mt-2" style={{ color: 'var(--color-text)' }}>
                   Only proceed if you have confirmed with your accountant that re-importing is safe.
@@ -3025,7 +3025,7 @@ function ExportModal({ type, history, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
-  const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : 'Excel';
+  const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : type === 'sheets' ? 'Google Sheets' : 'Excel';
   const cutoffBlocked = minFrom && from < minFrom;
 
   const fmtAU = (dateStr) => {
@@ -3038,7 +3038,7 @@ function ExportModal({ type, history, onClose, onSuccess }) {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from, to });
-      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : 'excel';
+      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : type === 'sheets' ? 'sheets' : 'excel';
       const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -3052,6 +3052,8 @@ function ExportModal({ type, history, onClose, onSuccess }) {
         ? `myob-journal-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
         : type === 'xero'
         ? `xero-journals-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
+        : type === 'sheets'
+        ? `finance-sheets-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
         : `finance-export-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
@@ -3117,6 +3119,15 @@ function ExportModal({ type, history, onClose, onSuccess }) {
         ) : (
           <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <span style={{ color: 'var(--color-muted)' }}>No previous export — no date restrictions apply.</span>
+          </div>
+        )}
+
+        {type === 'sheets' && (
+          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(66,133,244,0.08)', border: '1px solid rgba(66,133,244,0.3)' }}>
+            <p className="font-medium mb-1" style={{ color: '#4285f4' }}>Google Sheets format</p>
+            <p style={{ color: 'var(--color-text)' }}>
+              Downloads a single CSV file combining all invoices, expenses, and wages in date order. Import it into Google Sheets via <strong>File → Import</strong>, then select "Replace spreadsheet" or "Insert new sheet".
+            </p>
           </div>
         )}
 
@@ -3974,6 +3985,7 @@ export default function FinancePage() {
               <Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn>
               <Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn>
               <Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn>
+              <Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn>
             </div>
           </div>
           <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
