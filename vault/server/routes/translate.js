@@ -171,6 +171,15 @@ router.delete('/jobs/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Client reports PDF generation failure ─────────────────────────────────────
+router.post('/jobs/:id/fail', async (req, res) => {
+  try {
+    const message = req.body?.error || (req.file ? 'Client-side generation error' : 'Unknown error');
+    await setJobStatus(parseInt(req.params.id), { status: 'failed', errorMessage: message });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Complete job (client posts generated PDF) ─────────────────────────────────
 router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, res) => {
   try {

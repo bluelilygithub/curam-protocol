@@ -1817,7 +1817,7 @@ async function initSchema() {
       "avgOcrConfidence"  FLOAT,
       "glossaryId"        INTEGER REFERENCES translate_glossaries(id) ON DELETE SET NULL,
       "sourceTextJson"    JSONB,
-      "translatedTextJson" JSONB,
+      "translatedTextJson" TEXT,
       "originalPdf"       BYTEA,
       "translatedPdf"     BYTEA,
       "errorMessage"      TEXT,
@@ -1830,6 +1830,19 @@ async function initSchema() {
   // 90-day retention cleanup
   await pool.query(`
     DELETE FROM translate_jobs WHERE "createdAt" < NOW() - INTERVAL '90 days'
+  `);
+
+  // Migrate translatedTextJson from JSONB → TEXT if it was created with the old schema
+  await pool.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='translate_jobs' AND column_name='translatedTextJson'
+          AND data_type='jsonb'
+      ) THEN
+        ALTER TABLE translate_jobs ALTER COLUMN "translatedTextJson" TYPE TEXT USING "translatedTextJson"::text;
+      END IF;
+    END $$
   `);
 
   console.log('[db] Schema ready');

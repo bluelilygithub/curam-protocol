@@ -337,7 +337,13 @@ function TranslationsTab({ glossaries }) {
   const generateAndUploadPdf = async (jobData) => {
     setGeneratingPdf(true);
     try {
-      const payload = JSON.parse(jobData.translatedTextJson);
+      // JSONB columns come back from pg already parsed; handle both string and object
+      const payload = typeof jobData.translatedTextJson === 'string'
+        ? JSON.parse(jobData.translatedTextJson)
+        : jobData.translatedTextJson;
+
+      if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
+
       await registerFonts(jobData.targetLanguage);
       const doc = buildBilingualPdf({
         ...payload,
@@ -354,7 +360,10 @@ function TranslationsTab({ glossaries }) {
       addToast('Translation complete — ready to download', 'success');
     } catch (e) {
       addToast('PDF generation failed: ' + e.message, 'error');
-      api.put(`/api/translate/jobs/${jobData.id}`, { status: 'failed', errorMessage: e.message });
+      // Mark failed on server via the dedicated status endpoint
+      api.postForm(`/api/translate/jobs/${jobData.id}/fail`, (() => {
+        const fd = new FormData(); fd.append('error', e.message); return fd;
+      })()).catch(() => {});
     } finally {
       setGeneratingPdf(false);
       setActiveJobId(null);
