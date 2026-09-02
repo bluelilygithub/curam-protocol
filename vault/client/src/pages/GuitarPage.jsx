@@ -302,48 +302,29 @@ export default function GuitarPage() {
   const pollRef    = useRef(null);
   const addToast   = useToastStore(s => s.addToast);
 
-  // YouTube OAuth state
-  const [ytAuth, setYtAuth]           = useState(null);   // { connected, connectedAt }
-  const [ytConnecting, setYtConnecting] = useState(false);
-  const [ytDeviceUrl, setYtDeviceUrl] = useState(null);
+  // YouTube cookie state (stored in user settings)
+  const [ytCookieStatus, setYtCookieStatus] = useState(null); // { configured: bool }
+  const [ytCookieInput, setYtCookieInput]   = useState('');
+  const [ytCookieSaving, setYtCookieSaving] = useState(false);
+  const [showCookieHelp, setShowCookieHelp] = useState(false);
 
-  const loadYtAuth = useCallback(() => {
-    api.get('/api/guitar/auth/status').then(r => r.json()).then(d => setYtAuth(d)).catch(() => {});
+  const loadYtCookieStatus = useCallback(() => {
+    api.get('/api/guitar/yt-cookie-status').then(r => r.json()).then(d => setYtCookieStatus(d)).catch(() => {});
   }, []);
 
-  useEffect(() => { loadYtAuth(); }, [loadYtAuth]);
+  useEffect(() => { loadYtCookieStatus(); }, [loadYtCookieStatus]);
 
-  const startYtConnect = async () => {
-    setYtConnecting(true);
-    setYtDeviceUrl(null);
+  const saveYtCookie = async () => {
+    const val = ytCookieInput.trim();
+    setYtCookieSaving(true);
     try {
-      const res  = await api.post('/api/guitar/auth/start', {});
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start auth');
-      setYtDeviceUrl(data.deviceUrl);
-      // Poll for completion every 3 s for up to 3 min
-      const start = Date.now();
-      const poll = setInterval(async () => {
-        if (Date.now() - start > 180000) { clearInterval(poll); setYtConnecting(false); return; }
-        const s = await api.get('/api/guitar/auth/status').then(r => r.json()).catch(() => null);
-        if (s?.connected) {
-          clearInterval(poll);
-          setYtAuth(s);
-          setYtDeviceUrl(null);
-          setYtConnecting(false);
-          addToast('YouTube account connected', 'success');
-        }
-      }, 3000);
-    } catch (e) {
-      addToast(e.message, 'error');
-      setYtConnecting(false);
-    }
-  };
-
-  const disconnectYt = async () => {
-    await api.delete('/api/guitar/auth').catch(() => {});
-    setYtAuth({ connected: false });
-    addToast('YouTube account disconnected', 'info');
+      const res = await api.post('/api/settings', { key: 'guitar_yt_cookies', value: val || null });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      setYtCookieStatus({ configured: !!val });
+      setYtCookieInput('');
+      addToast(val ? 'YouTube cookies saved' : 'YouTube cookies cleared', 'success');
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setYtCookieSaving(false); }
   };
 
   const loadSongs = useCallback(() => {
@@ -591,49 +572,65 @@ export default function GuitarPage() {
               </p>
             </div>
 
-            {/* YouTube account connection */}
+            {/* YouTube cookie manager */}
             <div className="rounded-xl border p-4"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center justify-between gap-2 mb-2">
                 <div>
                   <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    YouTube account
+                    YouTube authentication
+                    {ytCookieStatus?.configured && (
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ color: '#16a34a', background: 'rgba(22,163,74,0.1)' }}>Configured</span>
+                    )}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {ytAuth?.connected
-                      ? `Connected — age-restricted videos will process automatically`
-                      : 'Connect to allow age-restricted videos to be processed'}
+                    Required only for age-restricted videos. Most guitar content works without this.
                   </p>
                 </div>
-                {ytAuth?.connected ? (
-                  <button onClick={disconnectYt}
-                    className="text-xs px-3 py-1.5 rounded border"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                    Disconnect
-                  </button>
-                ) : (
-                  <button onClick={startYtConnect} disabled={ytConnecting}
-                    className="text-xs px-3 py-1.5 rounded font-medium"
-                    style={{ background: 'var(--color-primary)', color: '#fff',
-                             opacity: ytConnecting ? 0.6 : 1 }}>
-                    {ytConnecting ? 'Connecting…' : 'Connect YouTube'}
-                  </button>
-                )}
+                <button onClick={() => setShowCookieHelp(v => !v)}
+                  className="text-xs px-2 py-1 rounded border flex-shrink-0"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  {showCookieHelp ? 'Hide' : 'How to set up'}
+                </button>
               </div>
-              {ytDeviceUrl && (
-                <div className="mt-3 p-3 rounded-lg" style={{ background: 'var(--color-bg)' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                    Open this link in your browser and sign in with your Google account:
-                  </p>
-                  <a href={ytDeviceUrl} target="_blank" rel="noopener noreferrer"
-                    className="text-xs break-all underline" style={{ color: 'var(--color-primary)' }}>
-                    {ytDeviceUrl}
-                  </a>
-                  <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                    Waiting for authorisation… this panel will update automatically.
-                  </p>
+
+              {showCookieHelp && (
+                <div className="mb-3 p-3 rounded-lg text-xs" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', lineHeight: '1.6' }}>
+                  <p className="font-medium mb-1" style={{ color: 'var(--color-text)' }}>Setup (Firefox only — Chrome encrypts cookies since 2024):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Install the <strong>cookies.txt</strong> Firefox extension</li>
+                    <li>Log in to <strong>youtube.com</strong> in Firefox</li>
+                    <li>Click the extension on youtube.com → export <strong>cookies.txt</strong></li>
+                    <li>In a terminal: <code className="px-1 rounded" style={{ background: 'rgba(0,0,0,0.1)' }}>base64 -i ~/Downloads/cookies.txt | tr -d '\n'</code></li>
+                    <li>Paste the output into the field below and click Save</li>
+                  </ol>
+                  <p className="mt-2">Cookies expire roughly every 2 weeks and will need to be refreshed. Use a throwaway Google account, not your primary one.</p>
                 </div>
               )}
+
+              <div className="flex gap-2 items-start">
+                <textarea value={ytCookieInput} onChange={e => setYtCookieInput(e.target.value)}
+                  rows={2}
+                  placeholder={ytCookieStatus?.configured ? 'Paste new base64 cookies.txt to replace…' : 'Paste base64-encoded cookies.txt here…'}
+                  className="flex-1 text-xs px-3 py-2 rounded-lg border font-mono resize-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)',
+                           color: 'var(--color-text)', outline: 'none' }} />
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <button onClick={saveYtCookie} disabled={ytCookieSaving || !ytCookieInput.trim()}
+                    className="text-xs px-3 py-1.5 rounded font-medium disabled:opacity-40"
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    {ytCookieSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  {ytCookieStatus?.configured && (
+                    <button onClick={() => { setYtCookieInput(''); saveYtCookie(); }}
+                      className="text-xs px-3 py-1.5 rounded border"
+                      style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Song list */}

@@ -25,13 +25,14 @@ async function runPipeline(songId, youtubeUrl, userId) {
 
   await setSongStatus(songId, { status: 'processing' });
 
-  // Load stored yt-dlp OAuth token for this user (if any)
-  let oauthTokenJson = null;
+  // Load stored YouTube cookies for this user (if any)
+  let ytCookiesB64 = process.env.YOUTUBE_COOKIES || '';
   try {
     const { rows } = await pool.query(
-      'SELECT "tokenJson" FROM guitar_yt_oauth WHERE "userId"=$1', [userId]
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='guitar_yt_cookies'`,
+      [userId]
     );
-    if (rows[0]?.tokenJson) oauthTokenJson = rows[0].tokenJson;
+    if (rows[0]?.value) ytCookiesB64 = rows[0].value;
   } catch (_) {}
 
   return new Promise((resolve) => {
@@ -39,8 +40,9 @@ async function runPipeline(songId, youtubeUrl, userId) {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        YOUTUBE_API_KEY:    process.env.YOUTUBE_API_KEY || '',
-        YTDLP_OAUTH_TOKEN:  oauthTokenJson || '',
+        YOUTUBE_API_KEY:   process.env.YOUTUBE_API_KEY || '',
+        YOUTUBE_COOKIES:   ytCookiesB64,
+        YTDLP_OAUTH_TOKEN: '',  // OAuth removed — no longer supported by YouTube
       },
     });
 
@@ -272,126 +274,15 @@ router.delete('/loops/:loopId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── YouTube OAuth2 (yt-dlp device flow) ──────────────────────────────────────
-//
-// How it works:
-//   1. POST /auth/start  → spawns yt-dlp --username oauth2, captures the
-//      device-code URL from its stdout, returns it to the client.
-//      yt-dlp stays blocked waiting for the user to approve in their browser.
-//   2. Frontend shows the URL. User opens it and grants access.
-//   3. yt-dlp writes its token to a temp HOME dir and exits.
-//   4. Server reads that token file, stores it (encrypted) in guitar_yt_oauth,
-//      and resolves the pending SSE / poll.
-//   5. GET /auth/status   → returns { connected: bool, connectedAt }
-//   6. DELETE /auth       → removes the stored token
-
-// In-memory holder for an in-progress device-flow per user
-const pendingOAuth = new Map(); // userId → { proc, tokenDir, resolve }
-
-router.post('/auth/start', async (req, res) => {
-  const userId = req.user.id;
-
-  // Kill any existing pending flow for this user
-  if (pendingOAuth.has(userId)) {
-    try { pendingOAuth.get(userId).proc.kill(); } catch (_) {}
-    pendingOAuth.delete(userId);
-  }
-
-  // Temp HOME so yt-dlp writes its token to a known, isolated location
-  const tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), `ytdlp-oauth-${userId}-`));
-  const cacheDir  = path.join(tokenDir, '.cache', 'yt-dlp');
-  fs.mkdirSync(cacheDir, { recursive: true });
-
-  let deviceUrl = null;
-
-  const proc = spawn(
-    'yt-dlp',
-    ['--username', 'oauth2', '--password', '', '--skip-download',
-     'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
-    {
-      env: { ...process.env, HOME: tokenDir },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  );
-
-  let stdout = '';
-  proc.stdout.on('data', d => { stdout += d.toString(); });
-  proc.stderr.on('data', d => { stdout += d.toString(); }); // yt-dlp logs to stderr too
-
-  // yt-dlp prints something like:
-  //   "Please open https://www.google.com/device and enter code: XXXX-XXXX"
-  const urlCheckInterval = setInterval(() => {
-    const m = stdout.match(/https:\/\/www\.google\.com\/device[^\s]*/i)
-           || stdout.match(/(https:\/\/[^\s]+google[^\s]+device[^\s]*)/i);
-    if (m && !deviceUrl) {
-      deviceUrl = m[0].replace(/\s+$/, '');
-      // Return the URL to the client immediately
-      if (!res.headersSent) {
-        res.json({ ok: true, deviceUrl });
-      }
-    }
-  }, 500);
-
-  proc.on('close', async (code) => {
-    clearInterval(urlCheckInterval);
-
-    if (!res.headersSent) {
-      // yt-dlp exited before we found a device URL
-      res.status(500).json({ error: 'Failed to start OAuth flow — check yt-dlp is installed' });
-    }
-
-    pendingOAuth.delete(userId);
-
-    // Try to read the token file yt-dlp wrote
-    try {
-      const tokenFile = path.join(cacheDir, 'youtube.token.json');
-      if (code === 0 && fs.existsSync(tokenFile)) {
-        const tokenJson = fs.readFileSync(tokenFile, 'utf8');
-        await pool.query(
-          `INSERT INTO guitar_yt_oauth ("userId","tokenJson","connectedAt","updatedAt")
-           VALUES ($1,$2,NOW(),NOW())
-           ON CONFLICT ("userId") DO UPDATE SET "tokenJson"=$2, "updatedAt"=NOW()`,
-          [userId, tokenJson]
-        );
-        console.log(`[guitar:auth] OAuth token saved for user ${userId}`);
-      }
-    } catch (e) {
-      console.error('[guitar:auth] token save error:', e.message);
-    } finally {
-      fs.rmSync(tokenDir, { recursive: true, force: true });
-    }
-  });
-
-  pendingOAuth.set(userId, { proc, tokenDir });
-
-  // Timeout: if we don't find a URL in 20 s, give up
-  setTimeout(() => {
-    if (!res.headersSent) {
-      proc.kill();
-      res.status(504).json({ error: 'Timeout waiting for YouTube device code' });
-    }
-  }, 20000);
-});
-
-router.get('/auth/status', async (req, res) => {
+// ── Cookie status endpoint ────────────────────────────────────────────────────
+// Returns whether a YouTube cookie has been configured in app settings.
+router.get('/yt-cookie-status', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT "connectedAt" FROM guitar_yt_oauth WHERE "userId"=$1',
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='guitar_yt_cookies'`,
       [req.user.id]
     );
-    res.json({ connected: rows.length > 0, connectedAt: rows[0]?.connectedAt || null });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.delete('/auth', async (req, res) => {
-  try {
-    // Kill any in-progress flow
-    if (pendingOAuth.has(req.user.id)) {
-      try { pendingOAuth.get(req.user.id).proc.kill(); } catch (_) {}
-      pendingOAuth.delete(req.user.id);
-    }
-    await pool.query('DELETE FROM guitar_yt_oauth WHERE "userId"=$1', [req.user.id]);
-    res.json({ ok: true });
+    res.json({ configured: rows.length > 0 && !!rows[0]?.value });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -22,7 +22,6 @@ import base64
 import json
 import subprocess
 import tempfile
-import shutil
 import traceback
 import re
 
@@ -54,42 +53,21 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
         "--print-to-file", "after_move:filepath", os.path.join(output_dir, "filepath.txt"),
     ]
 
-    # ── Authentication: preference order ─────────────────────────────────────
-    # 1. yt-dlp OAuth2 token stored in DB (passed as YTDLP_OAUTH_TOKEN env var)
-    # 2. YOUTUBE_COOKIES env var (base64 Netscape cookies.txt)
-    # 3. No auth (works for most non-age-restricted content)
+    # ── Authentication ────────────────────────────────────────────────────────
+    # Prefer YOUTUBE_COOKIES (base64 Netscape cookies.txt from a logged-in
+    # browser) when set — either from the DB-backed app setting or the env var.
+    # Fall back to unauthenticated multi-client for non-restricted content.
 
-    token_dir    = None
-    cookie_tmp   = None
-
-    oauth_json = os.environ.get("YTDLP_OAUTH_TOKEN", "").strip()
+    cookie_tmp = None
     cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "").strip()
 
-    if oauth_json:
+    if cookies_b64:
         try:
-            # Write the token where yt-dlp expects to find it
-            token_dir  = tempfile.mkdtemp(prefix="ytdlp_home_")
-            cache_dir  = os.path.join(token_dir, ".cache", "yt-dlp")
-            os.makedirs(cache_dir, exist_ok=True)
-            with open(os.path.join(cache_dir, "youtube.token.json"), "w") as f:
-                f.write(oauth_json)
-            # Tell yt-dlp to use OAuth2 and point HOME at our temp dir
-            cmd.extend(["--username", "oauth2", "--password", ""])
-            # Override HOME so yt-dlp finds the token file
-            os.environ["HOME"] = token_dir
-            print("[pipeline] Using stored OAuth2 token for authentication", flush=True)
-        except Exception as e:
-            print(f"[pipeline] Warning: could not set up OAuth2 token: {e}", flush=True)
-            token_dir = None
-
-    elif cookies_b64:
-        try:
-            cookie_bytes = base64.b64decode(cookies_b64)
             fd, cookie_tmp = tempfile.mkstemp(suffix=".txt", prefix="yt_cookies_")
             with os.fdopen(fd, "wb") as cf:
-                cf.write(cookie_bytes)
+                cf.write(base64.b64decode(cookies_b64))
             cmd.extend(["--cookies", cookie_tmp])
-            print("[pipeline] Using YOUTUBE_COOKIES for authentication", flush=True)
+            print("[pipeline] Using stored YouTube cookies for authentication", flush=True)
         except Exception as ce:
             print(f"[pipeline] Warning: could not decode YOUTUBE_COOKIES: {ce}", flush=True)
             cookie_tmp = None
@@ -101,8 +79,6 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
     finally:
         if cookie_tmp and os.path.exists(cookie_tmp):
             os.unlink(cookie_tmp)
-        if token_dir and os.path.isdir(token_dir):
-            shutil.rmtree(token_dir, ignore_errors=True)
 
     if dl_result.returncode != 0:
         stderr = (dl_result.stderr or "") + (dl_result.stdout or "")
