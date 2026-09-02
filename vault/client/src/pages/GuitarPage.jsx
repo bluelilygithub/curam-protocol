@@ -331,11 +331,11 @@ export default function GuitarPage() {
           setYtAuth(s);
           setYtDeviceUrl(null);
           setYtConnecting(false);
-          addToast({ type: 'success', message: 'YouTube account connected' });
+          addToast('YouTube account connected', 'success');
         }
       }, 3000);
     } catch (e) {
-      addToast({ type: 'error', message: e.message });
+      addToast(e.message, 'error');
       setYtConnecting(false);
     }
   };
@@ -343,7 +343,7 @@ export default function GuitarPage() {
   const disconnectYt = async () => {
     await api.delete('/api/guitar/auth').catch(() => {});
     setYtAuth({ connected: false });
-    addToast({ type: 'info', message: 'YouTube account disconnected' });
+    addToast('YouTube account disconnected', 'info');
   };
 
   const loadSongs = useCallback(() => {
