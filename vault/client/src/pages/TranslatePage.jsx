@@ -296,7 +296,7 @@ function TranslationsTab({ glossaries }) {
       if (glossaryId) fd.append('glossaryId', glossaryId);
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages));
 
-      const res  = await api.post('/api/translate/jobs', fd);
+      const res  = await api.postForm('/api/translate/jobs', fd);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Submission failed');
 
@@ -347,7 +347,7 @@ function TranslationsTab({ glossaries }) {
       const blob = await pdf(doc).toBlob();
       const fd = new FormData();
       fd.append('translatedPdf', blob, 'translated.pdf');
-      const res = await api.post(`/api/translate/jobs/${jobData.id}/complete`, fd);
+      const res = await api.postForm(`/api/translate/jobs/${jobData.id}/complete`, fd);
       if (!res.ok) throw new Error('Failed to save PDF');
       setActiveJob(prev => ({ ...prev, status: 'done', progress: 100 }));
       loadJobs();
