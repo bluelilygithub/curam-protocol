@@ -28,6 +28,10 @@ async function runPipeline(songId, youtubeUrl) {
   return new Promise((resolve) => {
     const py = spawn('python3', [PIPELINE_SCRIPT, youtubeUrl, tmpDir], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
+      },
     });
 
     py.stdout.on('data', d => console.log(`[guitar:${songId}]`, d.toString().trim()));

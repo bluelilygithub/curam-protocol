@@ -34,6 +34,14 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
 
     # ── 1. Download audio via yt-dlp ─────────────────────────────────────────
     meta_path = os.path.join(output_dir, "meta.json")
+
+    # tv_embedded player client bypasses YouTube's age gate on most videos
+    # without requiring login cookies.
+    extractor_args = "youtube:player_client=tv_embedded,web"
+    yt_api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    if yt_api_key:
+        extractor_args += f";youtube:api_key={yt_api_key}"
+
     dl_result = subprocess.run(
         [
             "yt-dlp",
@@ -41,6 +49,7 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
             "--extract-audio",
             "--audio-format", "wav",
             "--audio-quality", "0",
+            "--extractor-args", extractor_args,
             "--write-info-json",
             "--no-post-overwrites",
             "-o", os.path.join(output_dir, "audio.%(ext)s"),
@@ -52,7 +61,7 @@ def run_pipeline(youtube_url: str, output_dir: str) -> dict:
     if dl_result.returncode != 0:
         stderr = dl_result.stderr or ""
         if "age" in stderr.lower() or "sign in" in stderr.lower():
-            raise ValueError("Age-restricted video — cannot process without authentication")
+            raise ValueError("Age-restricted video — cannot be processed even with tv_embedded client")
         if "private" in stderr.lower() or "unavailable" in stderr.lower():
             raise ValueError("Video is private or unavailable")
         if "live" in stderr.lower():
