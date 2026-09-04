@@ -8,6 +8,12 @@
 const { callModel } = require('./callModel');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { logUsage } = require('../utils/logUsage');
+const {
+  runDeterministicCompletenessCheck,
+  mergeGarbledRows,
+  verifyQaCategoryClaims,
+  hardSanityGate,
+} = require('./translateQaChecks');
 
 const LANG_NAMES = {
   en: 'English', fr: 'French', 'fr-CA': 'Canadian French', es: 'Spanish',
@@ -200,62 +206,124 @@ No commentary.`;
 }
 
 /**
- * Second-pass QA review. Returns structured summary for human review.
+ * Second-pass QA review.
+ * 1) Deterministic completeness on EVERY pair (cannot skip) → garbled rows
+ * 2) LLM compares source⟶target side-by-side in batches for subjective issues
+ * 3) Merge + claim verification spot-check on "None flagged" categories
  */
 async function reviewTranslation({
   modelId, userId, sourceLanguage, targetLanguage, pairs, glossaryTerms, intakeAnswers = {},
 }) {
+  const allPairs = Array.isArray(pairs) ? pairs : [];
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
+
+  // ── 1. Deterministic completeness FIRST (all segments) ────────────────────
+  const det = runDeterministicCompletenessCheck(allPairs, { sourceLanguage, targetLanguage });
+
   const system = `You are a translation QA reviewer for business / compliance documents.
-Read source and target pairs. Flag real problems only.
+You will receive numbered SOURCE ⟶ TARGET pairs. Compare them line by line.
+Completeness (empty / identical-to-source / placeholder markers) is already checked deterministically —
+focus on subjective issues only. Still list any incomplete rows you notice under garbledOrIncompleteRows.
+
 Return ONLY valid JSON:
 {
   "uncertainTerms": [ { "source": "...", "renderedAs": "...", "issue": "..." } ],
   "restructuredSentences": [ { "source": "...", "target": "...", "why": "..." } ],
   "polarityOrSentenceTypeIssues": [ { "source": "...", "target": "...", "issue": "..." } ],
-  "garbledOrIncompleteRows": [ { "excerpt": "...", "issue": "..." } ],
+  "garbledOrIncompleteRows": [ { "index": 0, "excerpt": "...", "issue": "..." } ],
   "audienceFlags": [ { "target": "...", "issue": "why an auditor/stakeholder might be confused or alarmed" } ],
   "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "..." } ],
   "overallNotes": "2-4 sentences"
 }
 Be concise. Empty arrays are fine. No markdown fences.
+Use the pair index (0-based global index shown) when flagging rows.
 ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional audience was specified; list dialectalChoices when non-standard forms were used.\n` : ''}`;
 
-  const sample = pairs.slice(0, 40);
-  const prompt = [
-    `Source language: ${sourceLanguage || 'auto'}`,
-    `Target language: ${langName(targetLanguage)}`,
-    '',
-    policy || '',
-    '',
-    'Glossary that should have been followed:',
-    buildGlossaryBlock(glossaryTerms),
-    '',
-    'Pairs (source ⟶ target):',
-    sample.map((p, i) => `${i + 1}. SRC: ${p.source}\n   TGT: ${p.target}`).join('\n\n'),
-  ].filter(Boolean).join('\n');
+  // ── 2. LLM review of ALL pairs in batches (side-by-side) ───────────────────
+  const BATCH = 35;
+  const llmAcc = {
+    uncertainTerms: [],
+    restructuredSentences: [],
+    polarityOrSentenceTypeIssues: [],
+    garbledOrIncompleteRows: [],
+    audienceFlags: [],
+    dialectalChoices: [],
+    overallNotes: [],
+  };
 
-  const res = await callModel(modelId, prompt, { maxTokens: 3000, system, returnUsage: true });
-  if (userId) {
-    logUsage({
-      userId, model: modelId,
-      inputTokens: res.inputTokens, outputTokens: res.outputTokens,
-      feature: 'translate_review',
-    }).catch(() => {});
+  for (let offset = 0; offset < allPairs.length; offset += BATCH) {
+    const batch = allPairs.slice(offset, offset + BATCH);
+    const prompt = [
+      `Source language: ${sourceLanguage || 'auto'}`,
+      `Target language: ${langName(targetLanguage)}`,
+      `Batch: pairs ${offset}–${offset + batch.length - 1} of ${allPairs.length} (compare each SRC against TGT)`,
+      '',
+      policy || '',
+      '',
+      'Glossary that should have been followed:',
+      buildGlossaryBlock(glossaryTerms),
+      '',
+      'Deterministic completeness already flagged these pair indexes (do not drop them; you may add more):',
+      det.garbledOrIncompleteRows.length
+        ? det.garbledOrIncompleteRows.map((r) => `- #${r.index}: ${r.issue}`).join('\n')
+        : '(none yet)',
+      '',
+      'Pairs — compare source against target line by line:',
+      batch.map((p, i) => {
+        const idx = offset + i;
+        return `#${idx}\nSRC: ${p.source}\nTGT: ${p.target}`;
+      }).join('\n\n'),
+    ].filter(Boolean).join('\n');
+
+    try {
+      const res = await callModel(modelId, prompt, { maxTokens: 3500, system, returnUsage: true });
+      if (userId) {
+        logUsage({
+          userId, model: modelId,
+          inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+          feature: 'translate_review',
+        }).catch(() => {});
+      }
+      const parsed = parseModelJson(res.text) || {};
+      for (const key of [
+        'uncertainTerms', 'restructuredSentences', 'polarityOrSentenceTypeIssues',
+        'garbledOrIncompleteRows', 'audienceFlags', 'dialectalChoices',
+      ]) {
+        if (Array.isArray(parsed[key])) llmAcc[key].push(...parsed[key]);
+      }
+      if (parsed.overallNotes) llmAcc.overallNotes.push(String(parsed.overallNotes));
+    } catch (err) {
+      console.error('[translate] review batch failed:', err.message);
+      llmAcc.overallNotes.push(`Review batch starting at ${offset} failed: ${err.message}`);
+    }
   }
 
-  const parsed = parseModelJson(res.text) || {};
-  return {
-    uncertainTerms: parsed.uncertainTerms || [],
-    restructuredSentences: parsed.restructuredSentences || [],
-    polarityOrSentenceTypeIssues: parsed.polarityOrSentenceTypeIssues || [],
-    garbledOrIncompleteRows: parsed.garbledOrIncompleteRows || [],
-    audienceFlags: parsed.audienceFlags || [],
-    dialectalChoices: parsed.dialectalChoices || [],
-    overallNotes: parsed.overallNotes || '',
-    reviewedPairCount: sample.length,
-    totalPairCount: pairs.length,
+  // ── 3. Merge: deterministic garbled always wins / prepends ─────────────────
+  let summary = {
+    uncertainTerms: llmAcc.uncertainTerms,
+    restructuredSentences: llmAcc.restructuredSentences,
+    polarityOrSentenceTypeIssues: llmAcc.polarityOrSentenceTypeIssues,
+    garbledOrIncompleteRows: mergeGarbledRows(
+      det.garbledOrIncompleteRows,
+      llmAcc.garbledOrIncompleteRows
+    ),
+    audienceFlags: llmAcc.audienceFlags,
+    dialectalChoices: llmAcc.dialectalChoices,
+    overallNotes: llmAcc.overallNotes.filter(Boolean).join(' '),
+    reviewedPairCount: allPairs.length,
+    totalPairCount: allPairs.length,
+    completenessCheck: {
+      ran: true,
+      beforeSubjectiveReview: true,
+      ...det.stats,
+      autoFlagged: det.garbledOrIncompleteRows.length,
+    },
   };
+
+  // ── 4. Verify empty-category claims against sample of actual pairs ─────────
+  summary = verifyQaCategoryClaims(summary, allPairs, { sampleSize: 8 });
+
+  return summary;
 }
 
 /** Apply forced glossary substitutions on already-translated text (belt and braces). */
@@ -277,4 +345,6 @@ module.exports = {
   reviewTranslation,
   applyGlossarySubstitutions,
   langName,
+  hardSanityGate,
+  runDeterministicCompletenessCheck,
 };

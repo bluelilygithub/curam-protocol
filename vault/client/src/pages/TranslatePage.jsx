@@ -183,20 +183,50 @@ function QaPanel({ qa, onClose }) {
     ['Garbled / incomplete rows', qa.garbledOrIncompleteRows],
     ['Audience flags', qa.audienceFlags],
   ];
+  const cc = qa.completenessCheck;
+  const cv = qa.claimVerification;
+  const showBody = qa.hardFail || !qa.skipped || (qa.garbledOrIncompleteRows?.length > 0);
+
   return (
     <Modal title="Translation QA summary" onClose={onClose} wide>
       <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
-        {qa.skipped ? (
-          <p style={{ color: 'var(--color-muted)' }}>Review pass was skipped for this job.</p>
-        ) : (
+        {qa.hardFail && (
+          <p className="text-xs px-2 py-2 rounded border"
+            style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
+            Hard QA gate failed{qa.hardFailCode ? ` (${qa.hardFailCode})` : ''}:{' '}
+            {qa.overallNotes || 'Translation did not pass completeness checks.'}
+          </p>
+        )}
+
+        {qa.skipped && !qa.hardFail && (
+          <p style={{ color: 'var(--color-muted)' }}>
+            Subjective review pass was skipped for this job.
+            {cc?.ran ? ' Deterministic completeness still ran on every segment.' : ''}
+          </p>
+        )}
+
+        {showBody && (
           <>
+            {cc?.ran && (
+              <p className="text-xs px-2 py-1.5 rounded border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                Completeness (deterministic, before subjective checks):{' '}
+                {cc.autoFlagged ?? 0} auto-flagged of {cc.total ?? '—'}
+                {cc.identicalCount != null ? ` · identical-to-source: ${cc.identicalCount}` : ''}
+                {cc.placeholderCount != null ? ` · placeholders: ${cc.placeholderCount}` : ''}
+                {cc.emptyCount != null ? ` · empty: ${cc.emptyCount}` : ''}
+                {qa.reviewedPairCount != null
+                  ? ` · pairs compared: ${qa.reviewedPairCount}/${qa.totalPairCount ?? qa.reviewedPairCount}`
+                  : ''}
+              </p>
+            )}
             {qa.maoriPolicy && (
               <p className="text-xs px-2 py-1.5 rounded border"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                 Māori policy: {qa.maoriPolicy}
               </p>
             )}
-            {qa.overallNotes && (
+            {qa.overallNotes && !qa.hardFail && (
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{qa.overallNotes}</p>
             )}
             {qa.guidance && (
@@ -206,30 +236,51 @@ function QaPanel({ qa, onClose }) {
               Translate: {qa.translateModel || '—'} · Review: {qa.reviewModel || '—'}
               {qa.glossaryTermCount != null ? ` · Glossary terms: ${qa.glossaryTermCount}` : ''}
             </p>
-            {sections.map(([title, items]) => (
-              <div key={title}>
-                <p className="text-xs font-semibold mb-1">{title} ({Array.isArray(items) ? items.length : 0})</p>
-                {!items?.length ? (
-                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged</p>
-                ) : (
-                  <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
-                    {items.slice(0, 20).map((it, i) => (
-                      <li key={i}>
-                        {it.used && it.standardForm
-                          ? `Used “${it.used}” (standard: “${it.standardForm}”)${it.context ? ` — ${it.context}` : ''}`
-                          : (
-                            <>
-                              {it.source || it.excerpt || it.target || JSON.stringify(it)}
-                              {it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}
-                              {it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : ''}
-                            </>
-                          )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
+            {sections.map(([title, items]) => {
+              const empty = !items?.length;
+              const isGarbled = title.startsWith('Garbled');
+              return (
+                <div key={title}>
+                  <p className="text-xs font-semibold mb-1">{title} ({Array.isArray(items) ? items.length : 0})</p>
+                  {empty ? (
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      None flagged
+                      {!isGarbled && cv?.note ? (
+                        <span style={{ opacity: 0.85 }}> — treat as unverified claim until spot-checked</span>
+                      ) : null}
+                    </p>
+                  ) : (
+                    <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
+                      {items.slice(0, 30).map((it, i) => (
+                        <li key={i}>
+                          {typeof it.index === 'number' ? `#${it.index} ` : ''}
+                          {it.used && it.standardForm
+                            ? `Used “${it.used}” (standard: “${it.standardForm}”)${it.context ? ` — ${it.context}` : ''}`
+                            : (
+                              <>
+                                {it.source || it.excerpt || it.target || JSON.stringify(it)}
+                                {it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}
+                                {it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : ''}
+                                {it.check ? ` [${it.check}]` : ''}
+                              </>
+                            )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+            {cv?.note && (
+              <p className="text-xs px-2 py-1.5 rounded border"
+                style={{
+                  borderColor: cv.corrections ? '#fde68a' : 'var(--color-border)',
+                  background: cv.corrections ? '#fffbeb' : 'transparent',
+                  color: 'var(--color-muted)',
+                }}>
+                Claim verification: {cv.note}
+              </p>
+            )}
             <p className="text-xs pt-2" style={{ color: 'var(--color-muted)', opacity: 0.85 }}>
               Language-body recommendations (e.g. Te Taura Whiri) are updated over time — verify critical te reo Māori output against current guidance.
             </p>

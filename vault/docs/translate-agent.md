@@ -4,7 +4,7 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 
 **Frontend:** `vault/client/src/pages/TranslatePage.jsx`  
 **Backend:** `vault/server/routes/translate.js`  
-**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js`  
+**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js`  
 **Tables:** `translate_jobs`, `translate_glossaries`  
 **Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier)
 
@@ -32,10 +32,21 @@ Output is always a **bilingual PDF** (source section + translation section per p
 2. **Extract** — `translateExtract.extractForTranslate` → `paragraphsByPage` (+ OCR for sparse PDF pages).
 3. **Glossary prep** — Vault translate model proposes / merges terms from intake + text skim + saved glossary.
 4. **Translate** — chunked paragraph batches via `callModel` + glossary substitutions.
-5. **Review (optional)** — second model returns structured QA (uncertain terms, polarity, restructures, audience flags, dialectal choices).
-6. **Client PDF** — `@react-pdf/renderer` bilingual PDF uploaded to complete the job.
+5. **Hard sanity gate (deterministic)** — `translateQaChecks.hardSanityGate` on every source⟶target pair. If too many segments are identical to source (>30%), contain placeholders (≥2 or >5%), or are empty (>10%), the job **fails** with an error and a QA summary — no bilingual PDF.
+6. **Review (optional)** — deterministic completeness runs first on **all** pairs (auto “Garbled / incomplete rows”); then the review model compares every pair side-by-side in batches for subjective issues; claim verification spot-checks a sample of “None flagged” segments.
+7. **Client PDF** — `@react-pdf/renderer` bilingual PDF uploaded to complete the job.
 
 Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed`.
+
+### Completeness rules (per segment)
+
+Before any subjective LLM check, each target must be:
+
+- **(a)** non-empty  
+- **(b)** different from the source (after normalize), except non-linguistic cells / same-language jobs  
+- **(c)** free of placeholders such as `[Translation incomplete]`, `[unable to translate]`, `TBD`, `TODO`, etc.
+
+Failures are automatic **Garbled / incomplete rows** entries (`check: deterministic_completeness`). Category counts are treated as claims: the tool spot-checks unflagged segments and may correct the garbled list before display.
 
 ---
 

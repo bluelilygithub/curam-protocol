@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-04 (translate-qa-hardening)
+
+### Translate — deterministic completeness + hard QA gate
+- Every source⟶target pair is checked for empty / identical-to-source / placeholder markers **before** subjective review; failures auto-fill **Garbled / incomplete rows**.
+- Review model receives **all** pairs side-by-side in batches (not a 40-pair sample-only self-assessment).
+- Hard string gate fails the job if >30% of segments match the source, or placeholders / empties exceed thresholds — no green “complete” QA with zero flags.
+- Claim verification spot-checks unflagged segments before the QA panel treats empty categories as clean.
+
+---
+
 ## 2026-09-04 (translate-maori-office)
 
 ### Translate — te reo Māori policy + Word/Excel uploads

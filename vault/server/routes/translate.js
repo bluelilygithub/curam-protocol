@@ -9,7 +9,10 @@ const {
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
+  hardSanityGate,
+  runDeterministicCompletenessCheck,
 } = require('../services/translateLlmService');
+const { verifyQaCategoryClaims, mergeGarbledRows } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 
 const router = express.Router();
@@ -554,7 +557,11 @@ async function processTranslateJob(
     });
   }
 
-  // ── 6. Review pass ──────────────────────────────────────────────────────────
+  // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
+  // Runs for every job. Fail before "complete" QA / PDF if translation looks like passthrough.
+  const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage });
+
+  // ── 7. Review pass ──────────────────────────────────────────────────────────
   let qaSummary = {
     skipped: !enableReview,
     uncertainTerms: glossaryPrep.uncertainTerms || [],
@@ -568,7 +575,47 @@ async function processTranslateJob(
         ? `Regional adaptation for: ${intakeAnswers.regionalAudience}`
         : 'Standard te reo Māori (Te Taura Whiri)')
       : null,
+    completenessCheck: {
+      ran: true,
+      beforeSubjectiveReview: true,
+      ...gate.stats,
+      autoFlagged: (gate.garbledOrIncompleteRows || []).length,
+    },
+    garbledOrIncompleteRows: gate.garbledOrIncompleteRows || [],
   };
+
+  if (!gate.ok) {
+    qaSummary = {
+      ...qaSummary,
+      skipped: true,
+      hardFail: true,
+      hardFailCode: gate.code,
+      overallNotes: gate.message,
+      garbledOrIncompleteRows: gate.garbledOrIncompleteRows || [],
+    };
+    qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
+    await setJobStatus(jobId, {
+      status: 'failed',
+      stage: 'Hard QA gate failed',
+      progress: 0,
+      charCount: totalCharCount,
+      errorMessage: gate.message,
+      qaSummaryJson: JSON.stringify(qaSummary),
+      translatedTextJson: JSON.stringify({
+        sourceByPage: paragraphsByPage,
+        translatedByPage,
+        pageCount,
+        pageLabels: pageLabels || {},
+        sourceFormat,
+        scannedPages,
+        avgOcrConfidence,
+        qaSummary,
+        glossaryTerms,
+        hardFail: true,
+      }),
+    });
+    return;
+  }
 
   if (enableReview && reviewPairs.length) {
     await setJobStatus(jobId, {
@@ -596,14 +643,37 @@ async function processTranslateJob(
         dialectalChoices: (review.dialectalChoices?.length
           ? review.dialectalChoices
           : glossaryPrep.dialectalChoices) || [],
+        // Deterministic rows already merged inside reviewTranslation; keep union as belt-and-braces
+        garbledOrIncompleteRows: mergeGarbledRows(
+          gate.garbledOrIncompleteRows,
+          review.garbledOrIncompleteRows
+        ),
       };
     } catch (err) {
       console.error('[translate] review failed:', err.message);
       qaSummary.reviewError = err.message;
+      // Still keep deterministic garbled rows and verify claims
+      qaSummary.garbledOrIncompleteRows = mergeGarbledRows(
+        gate.garbledOrIncompleteRows,
+        qaSummary.garbledOrIncompleteRows
+      );
+      qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
     }
+  } else {
+    // Review skipped — still attach deterministic completeness + claim spot-check
+    const det = runDeterministicCompletenessCheck(reviewPairs, { sourceLanguage, targetLanguage });
+    qaSummary.garbledOrIncompleteRows = det.garbledOrIncompleteRows;
+    qaSummary.completenessCheck = {
+      ran: true,
+      beforeSubjectiveReview: true,
+      reviewSkipped: true,
+      ...det.stats,
+      autoFlagged: det.garbledOrIncompleteRows.length,
+    };
+    qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
   }
 
-  // ── 7. Hand off to client PDF generation ────────────────────────────────────
+  // ── 8. Hand off to client PDF generation ────────────────────────────────────
   await setJobStatus(jobId, {
     status: 'generating',
     stage: 'Generating bilingual PDF…',
