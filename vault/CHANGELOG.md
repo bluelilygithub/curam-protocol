@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-04 (translate-maori-office)
+
+### Translate — te reo Māori policy + Word/Excel uploads
+- **te reo Māori (`mi`)** defaults to standard te reo (Te Taura Whiri / national media style). Optional *Iwi / rohe audience* adapts vocabulary and flags dialectal choices in QA. See `docs/translate-agent.md`.
+- Uploads accept **PDF**, **Word (.docx)**, and **Excel (.xlsx/.xls)** via `translateExtract.js`. Spreadsheet text cells are translated per sheet; output remains a bilingual PDF.
+- Agent doc: `vault/docs/translate-agent.md`.
+
+---
+
 ## 2026-08-25 (search-console-agent)
 
 ### Search — Google Search Console agent
