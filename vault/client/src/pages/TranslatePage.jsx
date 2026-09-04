@@ -185,7 +185,7 @@ function QaPanel({ qa, onClose }) {
   ];
   const cc = qa.completenessCheck;
   const cv = qa.claimVerification;
-  const showBody = qa.hardFail || !qa.skipped || (qa.garbledOrIncompleteRows?.length > 0);
+  const showBody = qa.hardFail || qa.softFail || !qa.skipped || (qa.garbledOrIncompleteRows?.length > 0);
 
   return (
     <Modal title="Translation QA summary" onClose={onClose} wide>
@@ -198,7 +198,25 @@ function QaPanel({ qa, onClose }) {
           </p>
         )}
 
-        {qa.skipped && !qa.hardFail && (
+        {qa.softFail && !qa.hardFail && (
+          <p className="text-xs px-2 py-2 rounded border"
+            style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#92400e' }}>
+            Completed with warnings{qa.softFailCode ? ` (${qa.softFailCode})` : ''}:{' '}
+            {qa.overallNotes || 'Some segments still need review (see Garbled / incomplete rows).'}
+          </p>
+        )}
+
+        {qa.repairStats && (qa.repairStats.attempted > 0) && (
+          <p className="text-xs px-2 py-1.5 rounded border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+            Repair pass: attempted {qa.repairStats.attempted}
+            {qa.repairStats.llmRepaired != null ? ` · LLM fixed ${qa.repairStats.llmRepaired}` : ''}
+            {qa.repairStats.googleRepaired != null ? ` · Google fixed ${qa.repairStats.googleRepaired}` : ''}
+            {qa.repairStats.stillFailing != null ? ` · still failing ${qa.repairStats.stillFailing}` : ''}
+          </p>
+        )}
+
+        {qa.skipped && !qa.hardFail && !qa.softFail && (
           <p style={{ color: 'var(--color-muted)' }}>
             Subjective review pass was skipped for this job.
             {cc?.ran ? ' Deterministic completeness still ran on every segment.' : ''}

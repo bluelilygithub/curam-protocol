@@ -24,10 +24,15 @@ const PLACEHOLDER_PATTERNS = [
 
 /** Fail job if this fraction of segments are byte-identical to source (after normalize). */
 const IDENTICAL_FAIL_RATIO = 0.30;
-/** Fail job if this fraction of segments contain a known placeholder marker. */
-const PLACEHOLDER_FAIL_RATIO = 0.05;
-/** Absolute floor: this many placeholders also fails (even on small docs). */
-const PLACEHOLDER_FAIL_ABS = 2;
+/**
+ * Soft warning if placeholders exceed this but stay below catastrophic.
+ * Hard-fail only when ratio exceeds PLACEHOLDER_HARD_FAIL_RATIO (mass failure).
+ */
+const PLACEHOLDER_SOFT_RATIO = 0.05;
+const PLACEHOLDER_SOFT_ABS = 2;
+/** Catastrophic — fail the job (e.g. flash model returned incomplete for most chunks). */
+const PLACEHOLDER_HARD_FAIL_RATIO = 0.25;
+const PLACEHOLDER_HARD_FAIL_ABS_RATIO = 0.25; // same; keep name clear in messages
 
 function normalizeForCompare(text) {
   return String(text || '')
@@ -43,6 +48,10 @@ function looksNonLinguistic(text) {
   // Pure numbers / codes / sheet refs — identical target is often correct
   if (/^[\d\s.,%$€£¥/+#:;@_-]+$/.test(t)) return true;
   if (/^\[[A-Z]+\d+\]\s*[\d\s.,%$€£¥/+_-]*$/i.test(t)) return true;
+  // Redaction tokens / placeholders kept verbatim on purpose
+  if (/^\[?\s*REDACTED\s*\]?$/i.test(t)) return true;
+  if (/^\[REDACTED(?::[^\]]+)?\]$/i.test(t)) return true;
+  if (/^(?:xxx+|…|\.\.\.)$/i.test(t)) return true;
   return false;
 }
 
@@ -132,14 +141,16 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
 }
 
 /**
- * Hard gate outside the model. Fail the job rather than a silent green QA.
- * @returns {{ ok: true } | { ok: false, code: string, message: string, stats: object }}
+ * Hard / soft gate outside the model.
+ * - Catastrophic incomplete/passthrough → ok:false (fail job)
+ * - Moderate placeholders after repair → ok:true, softFail:true (complete with QA flags)
  */
 function hardSanityGate(pairs, opts = {}) {
   const {
     identicalFailRatio = IDENTICAL_FAIL_RATIO,
-    placeholderFailRatio = PLACEHOLDER_FAIL_RATIO,
-    placeholderFailAbs = PLACEHOLDER_FAIL_ABS,
+    placeholderSoftRatio = PLACEHOLDER_SOFT_RATIO,
+    placeholderSoftAbs = PLACEHOLDER_SOFT_ABS,
+    placeholderHardFailRatio = PLACEHOLDER_HARD_FAIL_RATIO,
     sourceLanguage,
     targetLanguage,
   } = opts;
@@ -173,23 +184,22 @@ function hardSanityGate(pairs, opts = {}) {
     };
   }
 
-  if (stats.placeholderCount >= placeholderFailAbs
-    || stats.placeholderRatio > placeholderFailRatio
-  ) {
+  const incompleteHeavy = (pairs || []).filter((p) =>
+    /\[\s*translation\s+(incomplete|error)\s*\]/i.test(String(p?.target || ''))
+  ).length;
+
+  if (stats.placeholderRatio > placeholderHardFailRatio) {
     const pct = Math.round(stats.placeholderRatio * 100);
-    const incompleteHeavy = (pairs || []).filter((p) =>
-      /\[\s*translation\s+incomplete\s*\]/i.test(String(p?.target || ''))
-    ).length;
-    const hint = incompleteHeavy >= Math.max(2, stats.placeholderCount * 0.5)
-      ? ' Most failures are “[Translation incomplete]” — the LLM batch likely returned truncated/invalid JSON. Retry, use a stronger translate model, or switch the engine to Google Translate for speed.'
-      : '';
     return {
       ok: false,
       code: 'placeholders_present',
       message:
         `${stats.placeholderCount} segment(s) contain placeholder / incomplete markers `
-        + `(${pct}% of segments). Job failed — fix translation and retry.`
-        + hint,
+        + `(${pct}% of segments — above ${Math.round(placeholderHardFailRatio * 100)}% hard-fail threshold). `
+        + 'Job failed — fix translation and retry.'
+        + (incompleteHeavy >= 2
+          ? ' Most failures are “[Translation incomplete]” — try Google Translate or a stronger model.'
+          : ''),
       stats,
       garbledOrIncompleteRows,
     };
@@ -202,6 +212,24 @@ function hardSanityGate(pairs, opts = {}) {
       message:
         `${stats.emptyCount} empty translation segment(s) (${Math.round((stats.emptyCount / stats.total) * 100)}%). `
         + 'Job failed — incomplete translation.',
+      stats,
+      garbledOrIncompleteRows,
+    };
+  }
+
+  // Soft fail: some placeholders remain but doc is mostly usable — allow PDF + flag in QA
+  if (
+    stats.placeholderCount >= placeholderSoftAbs
+    || stats.placeholderRatio > placeholderSoftRatio
+  ) {
+    const pct = Math.round(stats.placeholderRatio * 100);
+    return {
+      ok: true,
+      softFail: true,
+      softFailCode: 'placeholders_present',
+      message:
+        `${stats.placeholderCount} segment(s) still have placeholder / incomplete markers (${pct}%). `
+        + 'Job completed with warnings — review Garbled / incomplete rows before sharing.',
       stats,
       garbledOrIncompleteRows,
     };
@@ -301,8 +329,10 @@ function verifyQaCategoryClaims(qaSummary, pairs, { sampleSize = 8 } = {}) {
 module.exports = {
   PLACEHOLDER_PATTERNS,
   IDENTICAL_FAIL_RATIO,
-  PLACEHOLDER_FAIL_RATIO,
-  PLACEHOLDER_FAIL_ABS,
+  PLACEHOLDER_SOFT_RATIO,
+  PLACEHOLDER_SOFT_ABS,
+  PLACEHOLDER_HARD_FAIL_RATIO,
+  PLACEHOLDER_HARD_FAIL_ABS_RATIO,
   normalizeForCompare,
   checkSegmentCompleteness,
   runDeterministicCompletenessCheck,

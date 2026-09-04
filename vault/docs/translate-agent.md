@@ -69,7 +69,7 @@ Before any subjective LLM check, each target must be:
 - **(b)** different from the source (after normalize), except non-linguistic cells / same-language jobs  
 - **(c)** free of placeholders such as `[Translation incomplete]`, `[unable to translate]`, `TBD`, `TODO`, etc.
 
-Failures are automatic **Garbled / incomplete rows** entries (`check: deterministic_completeness`). Category counts are treated as claims: the tool spot-checks unflagged segments and may correct the garbled list before display.
+Hard-fail only when **>25%** of segments still have placeholders (mass failure). Moderate rates complete with a soft warning and Garbled rows listed. `[REDACTED]` identical-to-source is allowed. Incomplete segments get a **repair pass** (LLM retry → Google fallback when configured) before the gate.
 
 ---
 

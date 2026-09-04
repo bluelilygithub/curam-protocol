@@ -11,6 +11,7 @@ const {
   applyGlossarySubstitutions,
   hardSanityGate,
   runDeterministicCompletenessCheck,
+  repairIncompletePairs,
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
@@ -623,8 +624,9 @@ async function processTranslateJob(
       translations.forEach((t, i) => {
         const { pageNum, text } = chunk.paras[i];
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
+        const idxInPage = translatedByPage[pageNum].length;
         translatedByPage[pageNum].push(t);
-        reviewPairs.push({ source: text, target: t });
+        reviewPairs.push({ source: text, target: t, pageNum, idxInPage });
       });
 
       chunksDone++;
@@ -710,10 +712,54 @@ async function processTranslateJob(
         const { pageNum, text } = result.paras[i];
         const t = applyGlossarySubstitutions(rawT, glossaryTerms);
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
+        const idxInPage = translatedByPage[pageNum].length;
         translatedByPage[pageNum].push(t);
-        reviewPairs.push({ source: text, target: t });
+        reviewPairs.push({ source: text, target: t, pageNum, idxInPage });
       });
     }
+  }
+
+  // ── 5b. Repair incomplete segments (LLM retry → Google fallback) ────────────
+  const incompleteBefore = reviewPairs.filter((p) =>
+    /\[\s*translation\s+(incomplete|error)\s*\]/i.test(String(p.target || '')) || !String(p.target || '').trim()
+  ).length;
+
+  let repairStats = null;
+  if (incompleteBefore > 0) {
+    await setJobStatus(jobId, {
+      stage: `Repairing ${incompleteBefore} incomplete segment(s)…`,
+      progress: 78,
+    });
+    const runningGlossary = {};
+    for (const t of glossaryTerms) {
+      if (t.source && t.target && !t.doNotTranslate) runningGlossary[t.source] = t.target;
+    }
+    repairStats = await repairIncompletePairs({
+      pairs: reviewPairs,
+      modelId: engine === 'llm' ? translateModelId : null,
+      userId,
+      sourceLanguage,
+      targetLanguage,
+      glossaryTerms,
+      guidance: glossaryPrep.guidance,
+      runningGlossary,
+      intakeAnswers,
+      allowGoogleFallback: true,
+      concurrency: 3,
+      onProgress: ({ done, total }) => {
+        setJobStatus(jobId, {
+          stage: `Repairing incomplete: ${done + 1} of ${total}`,
+          progress: 78 + Math.round(((done + 1) / Math.max(total, 1)) * 4),
+        }).catch(() => {});
+      },
+    });
+    // Sync repaired targets back into translatedByPage
+    for (const pair of reviewPairs) {
+      if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
+        translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
+      }
+    }
+    console.log('[translate] repair stats', repairStats);
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
@@ -730,6 +776,7 @@ async function processTranslateJob(
     glossaryTermCount: glossaryTerms.length,
     translateModel: engine === 'llm' ? translateModelId : 'google-translate-v2',
     reviewModel: enableReview ? reviewModelId : null,
+    repairStats,
     maoriPolicy: String(targetLanguage || '').toLowerCase() === 'mi'
       ? (intakeAnswers?.regionalAudience
         ? `Regional adaptation for: ${intakeAnswers.regionalAudience}`
@@ -779,6 +826,11 @@ async function processTranslateJob(
     return;
   }
 
+  if (gate.softFail) {
+    qaSummary.softFail = true;
+    qaSummary.softFailCode = gate.softFailCode;
+    qaSummary.overallNotes = [gate.message, qaSummary.overallNotes].filter(Boolean).join(' ');
+  }
   if (enableReview && reviewPairs.length) {
     // Subjective LLM review needs a review model (even for Google translate jobs)
     if (!reviewModelId) {

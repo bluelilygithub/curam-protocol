@@ -531,11 +531,128 @@ function applyGlossarySubstitutions(text, terms) {
   return t;
 }
 
+function isIncompleteTarget(target) {
+  return /\[\s*translation\s+(incomplete|error)\s*\]/i.test(String(target || ''))
+    || !String(target || '').trim();
+}
+
+/**
+ * Repair failed LLM segments: one more single-paragraph LLM try, then Google if configured.
+ * Mutates pairs in place (updates .target). Returns stats.
+ */
+async function repairIncompletePairs({
+  pairs,
+  modelId,
+  userId,
+  sourceLanguage,
+  targetLanguage,
+  glossaryTerms,
+  guidance,
+  runningGlossary,
+  intakeAnswers,
+  allowGoogleFallback = true,
+  concurrency = 3,
+  onProgress,
+}) {
+  const indexes = [];
+  (pairs || []).forEach((p, i) => {
+    if (isIncompleteTarget(p?.target)) indexes.push(i);
+  });
+  if (!indexes.length) {
+    return { attempted: 0, llmRepaired: 0, googleRepaired: 0, stillFailing: 0 };
+  }
+
+  const {
+    isGoogleTranslateConfigured,
+    translateTexts: googleTranslateTexts,
+    wrapDoNotTranslate,
+    stripDoNotTranslateSpans,
+  } = require('./googleTranslateService');
+
+  let llmRepaired = 0;
+  let googleRepaired = 0;
+  let next = 0;
+
+  async function worker() {
+    while (true) {
+      const slot = next;
+      next += 1;
+      if (slot >= indexes.length) return;
+      const i = indexes[slot];
+      const pair = pairs[i];
+      if (typeof onProgress === 'function') {
+        onProgress({ done: slot, total: indexes.length });
+      }
+
+      // 1) LLM single-paragraph retry
+      if (modelId) {
+        try {
+          const [t] = await translateParagraphBatch({
+            modelId,
+            userId,
+            paragraphs: [pair.source],
+            sourceLanguage,
+            targetLanguage,
+            glossaryTerms,
+            guidance,
+            runningGlossary,
+            intakeAnswers,
+          });
+          const cleaned = applyGlossarySubstitutions(t, glossaryTerms);
+          if (cleaned && !isIncompleteTarget(cleaned)) {
+            pair.target = cleaned;
+            llmRepaired += 1;
+            continue;
+          }
+        } catch (err) {
+          console.warn('[translate] repair LLM failed:', err.message);
+        }
+      }
+
+      // 2) Google fallback for this segment
+      if (allowGoogleFallback && isGoogleTranslateConfigured()) {
+        try {
+          const wrapped = wrapDoNotTranslate(pair.source, glossaryTerms);
+          const [gt] = await googleTranslateTexts({
+            texts: [wrapped],
+            targetLanguage,
+            sourceLanguage,
+          });
+          const cleaned = applyGlossarySubstitutions(
+            stripDoNotTranslateSpans(gt),
+            glossaryTerms
+          );
+          if (cleaned && cleaned.trim()) {
+            pair.target = cleaned;
+            googleRepaired += 1;
+            continue;
+          }
+        } catch (err) {
+          console.warn('[translate] repair Google failed:', err.message);
+        }
+      }
+    }
+  }
+
+  const n = Math.max(1, Math.min(concurrency, indexes.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+
+  const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target)).length;
+  return {
+    attempted: indexes.length,
+    llmRepaired,
+    googleRepaired,
+    stillFailing,
+  };
+}
+
 module.exports = {
   proposeGlossary,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
+  repairIncompletePairs,
+  isIncompleteTarget,
   langName,
   hardSanityGate,
   runDeterministicCompletenessCheck,
