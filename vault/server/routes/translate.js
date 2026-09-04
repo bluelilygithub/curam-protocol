@@ -10,6 +10,7 @@ const {
   reviewTranslation,
   applyGlossarySubstitutions,
 } = require('../services/translateLlmService');
+const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 
 const router = express.Router();
 
@@ -35,10 +36,22 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') return cb(null, true);
-    cb(new Error('Only PDF files are accepted'));
+    if (isAllowedUpload(file.originalname, file.mimetype)) return cb(null, true);
+    cb(new Error('Only PDF, Word (.docx), or Excel (.xlsx/.xls) files are accepted'));
   },
 });
+
+/** Accept either `file` (preferred) or legacy `pdf` field name. */
+function sourceUpload(req, res, next) {
+  upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'pdf', maxCount: 1 },
+  ])(req, res, (err) => {
+    if (err) return next(err);
+    req.file = req.files?.file?.[0] || req.files?.pdf?.[0] || null;
+    next();
+  });
+}
 
 async function setJobStatus(jobId, fields) {
   const keys   = Object.keys(fields);
@@ -163,9 +176,9 @@ router.get('/jobs/:id/download', async (req, res) => {
       [req.params.id, req.user.id]
     );
     if (!rows[0]?.translatedPdf) return res.status(404).json({ error: 'Not ready' });
-    const safeName = rows[0].filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const base = rows[0].filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_') || 'document';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="translated-${safeName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.pdf"`);
     res.send(rows[0].translatedPdf);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -202,8 +215,13 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
 });
 
 // ── Submit job ────────────────────────────────────────────────────────────────
-router.post('/jobs', upload.single('pdf'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'PDF file required' });
+router.post('/jobs', sourceUpload, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+
+  const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
+  if (!sourceFormat) {
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+  }
 
   const models = await resolveTranslateModels({ userId: req.user.id });
   if (!models.ok || !models.translate?.modelId) {
@@ -235,11 +253,13 @@ router.post('/jobs', upload.single('pdf'), async (req, res) => {
   let scannedImages = {};
   try { scannedImages = req.body.scannedPageImages ? JSON.parse(req.body.scannedPageImages) : {}; } catch {}
 
-  const pdfParse = require('pdf-parse');
-  try { await pdfParse(req.file.buffer, { max: 1 }); }
-  catch (e) {
-    if (e.message?.toLowerCase().includes('password')) {
-      return res.status(400).json({ error: 'Password-protected PDFs cannot be processed' });
+  if (sourceFormat === 'pdf') {
+    const pdfParse = require('pdf-parse');
+    try { await pdfParse(req.file.buffer, { max: 1 }); }
+    catch (e) {
+      if (e.message?.toLowerCase().includes('password')) {
+        return res.status(400).json({ error: 'Password-protected PDFs cannot be processed' });
+      }
     }
   }
 
@@ -262,10 +282,11 @@ router.post('/jobs', upload.single('pdf'), async (req, res) => {
   const jobId = rows[0].id;
 
   processTranslateJob(jobId, req.file.buffer, req.user.id, targetLanguage,
-    glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview)
+    glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview,
+    { filename: req.file.originalname, mimetype: req.file.mimetype, sourceFormat })
     .catch(err => markJobFailed(jobId, err.message));
 
-  res.status(202).json({ jobId });
+  res.status(202).json({ jobId, sourceFormat });
 });
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -287,52 +308,48 @@ function splitLongParagraph(text, limit = 3500) {
 }
 
 async function processTranslateJob(
-  jobId, pdfBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview
+  jobId, fileBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview,
+  fileMeta = {}
 ) {
-  const pdfParse = require('pdf-parse');
   const models = await resolveTranslateModels({ userId });
   if (!models.ok || !models.translate?.modelId) {
     throw new Error(models.errors?.[0] || 'Translate model not configured');
   }
   const translateModelId = models.translate.modelId;
   const reviewModelId = models.review?.modelId || translateModelId;
+  const sourceFormat = fileMeta.sourceFormat
+    || detectSourceFormat(fileMeta.filename, fileMeta.mimetype)
+    || 'pdf';
 
-  // ── 1. Extract text per page ────────────────────────────────────────────────
+  // ── 1. Extract text ─────────────────────────────────────────────────────────
   await setJobStatus(jobId, { status: 'extracting', stage: 'Extracting text…', progress: 5 });
 
-  const pageTexts = {};
-  let pageCount = 0;
+  let extracted;
+  try {
+    extracted = await extractForTranslate({
+      buffer: fileBuffer,
+      filename: fileMeta.filename || 'upload.pdf',
+      mimetype: fileMeta.mimetype,
+    });
+  } catch (err) {
+    throw new Error(err.message || 'Failed to extract text from file');
+  }
 
-  await pdfParse(pdfBuffer, {
-    pagerender: (pageData) => {
-      return pageData.getTextContent().then(tc => {
-        const pageNum = pageData.pageNumber;
-        pageCount = Math.max(pageCount, pageNum);
-        const items = tc.items.map(item => ({
-          text: item.str,
-          x: Math.round(item.transform[4]),
-          y: Math.round(item.transform[5]),
-          w: Math.round(item.width),
-          h: Math.round(item.height || 12),
-        }));
-        pageTexts[pageNum] = items;
-        return '';
-      });
-    },
-  });
+  let { pageCount, paragraphsByPage, pageLabels } = extracted;
+  const pageTexts = extracted.pageTexts || {};
 
   const scannedPages = [];
-  for (const [page, items] of Object.entries(pageTexts)) {
-    const totalChars = items.reduce((s, i) => s + i.text.length, 0);
-    if (totalChars < 20) scannedPages.push(parseInt(page, 10));
-  }
-  for (const page of Object.keys(scannedImages)) {
-    if (!scannedPages.includes(parseInt(page, 10))) scannedPages.push(parseInt(page, 10));
+  if (sourceFormat === 'pdf') {
+    for (const page of extracted.scannedCandidatePages || []) scannedPages.push(page);
+    for (const page of Object.keys(scannedImages)) {
+      const n = parseInt(page, 10);
+      if (!scannedPages.includes(n)) scannedPages.push(n);
+    }
   }
 
   await setJobStatus(jobId, { pageCount, scannedPageCount: scannedPages.length });
 
-  // ── 2. OCR scanned pages ────────────────────────────────────────────────────
+  // ── 2. OCR scanned pages (PDF only) ─────────────────────────────────────────
   let avgOcrConfidence = null;
   if (scannedPages.length > 0) {
     await setJobStatus(jobId, { status: 'ocr', stage: `OCR: 0 of ${scannedPages.length} pages`, progress: 10 });
@@ -354,6 +371,14 @@ async function processTranslateJob(
       for (const r of results) {
         if (!r) continue;
         confidences.push(r.confidence);
+        // Rebuild paragraphs for OCR page from raw text
+        const paras = String(r.text || '')
+          .split(/\n{2,}/)
+          .map((p) => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
+          .filter((p) => p.length > 1);
+        paragraphsByPage[r.pageNum] = paras.length
+          ? paras
+          : (r.text.trim() ? [r.text.trim()] : []);
         pageTexts[r.pageNum] = [{ text: r.text, x: 0, y: 0, w: 500, h: 12, ocrConfidence: r.confidence }];
       }
       const done = Math.min(i + batchSize, scannedPages.length);
@@ -366,42 +391,30 @@ async function processTranslateJob(
     }
   }
 
-  // ── 3. Reconstruct paragraphs ───────────────────────────────────────────────
-  await setJobStatus(jobId, { stage: 'Reconstructing paragraphs…', progress: 38 });
-  const paragraphsByPage = {};
-  for (const [pageStr, items] of Object.entries(pageTexts)) {
-    const pageNum = parseInt(pageStr, 10);
-    const sorted = [...items].sort((a, b) => (b.y - a.y) || (a.x - b.x));
-    const lines = [];
-    for (const item of sorted) {
-      if (!item.text.trim()) continue;
-      const existing = lines.find(l => Math.abs(l.y - item.y) <= 4);
-      if (existing) { existing.parts.push(item.text); }
-      else { lines.push({ y: item.y, h: item.h || 12, parts: [item.text] }); }
-    }
-    const paragraphs = [];
-    let current = [];
-    let prevY = null;
-    let prevH = 12;
-    for (const line of lines) {
-      const lineText = line.parts.join(' ').trim();
-      if (!lineText) continue;
-      if (prevY !== null && Math.abs(prevY - line.y) > prevH * 1.5) {
-        if (current.length) { paragraphs.push(current.join(' ')); current = []; }
-      }
-      current.push(lineText);
-      prevY = line.y;
-      prevH = line.h;
-    }
-    if (current.length) paragraphs.push(current.join(' '));
-    paragraphsByPage[pageNum] = paragraphs.filter(p => p.length > 1);
+  // PDF path already built paragraphs in extract; non-PDF likewise.
+  // Ensure every page has an entry.
+  if (sourceFormat === 'pdf' && Object.keys(paragraphsByPage).length === 0 && Object.keys(pageTexts).length) {
+    // Fallback: should not normally happen — extract already builds paragraphs
   }
+
+  await setJobStatus(jobId, {
+    stage: sourceFormat === 'pdf'
+      ? 'Reconstructing paragraphs…'
+      : sourceFormat === 'docx'
+        ? 'Preparing Word document text…'
+        : 'Preparing spreadsheet cells…',
+    progress: 38,
+  });
 
   const sourceSkim = Object.keys(paragraphsByPage)
     .map(Number).sort((a, b) => a - b)
     .flatMap(p => paragraphsByPage[p])
     .join('\n')
     .slice(0, 8000);
+
+  if (!sourceSkim.trim()) {
+    throw new Error('No extractable text found in this file');
+  }
 
   // ── 4. Load saved glossary + LLM propose ────────────────────────────────────
   await setJobStatus(jobId, {
@@ -453,11 +466,19 @@ async function processTranslateJob(
   const sourceLanguage = glossaryPrep.sourceLanguage || 'auto';
   const glossaryTerms = glossaryPrep.terms || mergedExisting;
 
+  if ((sourceFormat === 'xlsx' || sourceFormat === 'xls') && glossaryPrep.guidance != null) {
+    glossaryPrep.guidance = [
+      glossaryPrep.guidance,
+      'Spreadsheet cells are prefixed with [A1]-style refs — keep that prefix unchanged; translate only the cell text after it.',
+    ].filter(Boolean).join('\n');
+  }
+
   await setJobStatus(jobId, {
     sourceLanguage,
     proposedGlossaryJson: JSON.stringify({
       terms: glossaryTerms,
       uncertainTerms: glossaryPrep.uncertainTerms || [],
+      dialectalChoices: glossaryPrep.dialectalChoices || [],
       guidance: glossaryPrep.guidance || '',
     }),
   });
@@ -509,6 +530,7 @@ async function processTranslateJob(
         glossaryTerms,
         guidance: glossaryPrep.guidance,
         runningGlossary,
+        intakeAnswers,
       });
     } catch (err) {
       console.error('[translate] chunk failed:', err.message);
@@ -536,10 +558,16 @@ async function processTranslateJob(
   let qaSummary = {
     skipped: !enableReview,
     uncertainTerms: glossaryPrep.uncertainTerms || [],
+    dialectalChoices: glossaryPrep.dialectalChoices || [],
     guidance: glossaryPrep.guidance || '',
     glossaryTermCount: glossaryTerms.length,
     translateModel: translateModelId,
     reviewModel: reviewModelId,
+    maoriPolicy: String(targetLanguage || '').toLowerCase() === 'mi'
+      ? (intakeAnswers?.regionalAudience
+        ? `Regional adaptation for: ${intakeAnswers.regionalAudience}`
+        : 'Standard te reo Māori (Te Taura Whiri)')
+      : null,
   };
 
   if (enableReview && reviewPairs.length) {
@@ -556,15 +584,18 @@ async function processTranslateJob(
         targetLanguage,
         pairs: reviewPairs,
         glossaryTerms,
+        intakeAnswers,
       });
       qaSummary = {
         ...qaSummary,
         skipped: false,
         ...review,
-        // Keep glossary-prep uncertain terms if review didn't list any
         uncertainTerms: (review.uncertainTerms?.length
           ? review.uncertainTerms
           : glossaryPrep.uncertainTerms) || [],
+        dialectalChoices: (review.dialectalChoices?.length
+          ? review.dialectalChoices
+          : glossaryPrep.dialectalChoices) || [],
       };
     } catch (err) {
       console.error('[translate] review failed:', err.message);
@@ -583,6 +614,8 @@ async function processTranslateJob(
       sourceByPage: paragraphsByPage,
       translatedByPage,
       pageCount,
+      pageLabels: pageLabels || {},
+      sourceFormat,
       scannedPages,
       avgOcrConfidence,
       qaSummary,

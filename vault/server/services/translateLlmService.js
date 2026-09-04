@@ -12,12 +12,50 @@ const { logUsage } = require('../utils/logUsage');
 const LANG_NAMES = {
   en: 'English', fr: 'French', 'fr-CA': 'Canadian French', es: 'Spanish',
   de: 'German', it: 'Italian', pt: 'Portuguese', nl: 'Dutch',
-  zh: 'Chinese (Simplified)', ja: 'Japanese', ko: 'Korean',
-  ar: 'Arabic', hi: 'Hindi', ru: 'Russian',
+  zh: 'Chinese (Simplified)', 'zh-CN': 'Chinese (Simplified)', ja: 'Japanese', ko: 'Korean',
+  ar: 'Arabic', hi: 'Hindi', ru: 'Russian', pl: 'Polish', sv: 'Swedish',
+  mi: 'te reo Māori',
 };
 
 function langName(code) {
   return LANG_NAMES[code] || code;
+}
+
+function isMaoriTarget(code) {
+  const c = String(code || '').toLowerCase();
+  return c === 'mi' || c === 'mao' || c === 'mri';
+}
+
+/**
+ * Standard te reo guidance (Te Taura Whiri default; dialect only when user specifies).
+ * Caveat for humans: verify against current Te Taura Whiri guidance for production-critical work.
+ */
+function maoriLanguagePolicy(intakeAnswers = {}) {
+  const regional = String(intakeAnswers.regionalAudience || intakeAnswers.iwiOrRohe || '').trim();
+  if (!regional) {
+    return [
+      'TE REO MĀORI POLICY (default):',
+      '- Use standard / general te reo Māori as codified by Te Taura Whiri i te Reo Māori',
+      '  (the form used in national media such as Te Hiku Media and Waatea News).',
+      '- Do NOT default to a specific iwi dialect unless the user specifies a regional audience.',
+      '- Prefer macrons (tohutō) correctly; keep established loanwords and proper names stable.',
+      '- If a lexical choice is dialectally contested, prefer the standard form and note uncertainty.',
+    ].join('\n');
+  }
+  return [
+    'TE REO MĀORI POLICY (regional adaptation requested):',
+    `- Default baseline is still Te Taura Whiri standard te reo Māori.`,
+    `- User-specified audience / iwi / rohe: "${regional}".`,
+    '- Adapt vocabulary where that audience expects dialectal variants.',
+    '- In guidance and QA, explicitly FLAG each dialectal choice vs the standard form',
+    '  (what you used, and the standard alternative if different).',
+    '- Prefer macrons (tohutō) correctly; keep proper names stable.',
+  ].join('\n');
+}
+
+function languagePolicyBlock(targetLanguage, intakeAnswers = {}) {
+  if (isMaoriTarget(targetLanguage)) return maoriLanguagePolicy(intakeAnswers);
+  return '';
 }
 
 function buildGlossaryBlock(terms) {
@@ -40,17 +78,21 @@ Return ONLY valid JSON:
   "sourceLanguage": "xx",
   "terms": [ { "source": "...", "target": "...", "doNotTranslate": false, "note": "..." } ],
   "uncertainTerms": [ { "source": "...", "proposedTarget": "...", "reason": "..." } ],
+  "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "iwi/rohe or why adapted" } ],
   "guidance": "1-3 sentences of translator instructions from the intake answers"
 }
 Rules:
 - Prefer established industry renderings over literal dictionary translations.
 - Mark brand names, product codes, and "do not translate" items with doNotTranslate:true and empty target.
 - Merge and respect any existing glossary terms provided (do not contradict them).
-- Keep the list focused (typically 5–40 terms). No markdown fences.`;
+- Keep the list focused (typically 5–40 terms). No markdown fences.
+- dialectalChoices: only when te reo Māori with a specified regional audience; otherwise [].`;
 
+  const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const prompt = [
     `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
     '',
+    policy ? `${policy}\n` : '',
     'Intake answers from the user:',
     JSON.stringify(intakeAnswers || {}, null, 2),
     '',
@@ -59,7 +101,7 @@ Rules:
     '',
     'Source document skim (beginning of extract):',
     String(sourceSkim || '').slice(0, 6000),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   const res = await callModel(modelId, prompt, { maxTokens: 2500, system, returnUsage: true });
   if (userId) {
@@ -87,6 +129,7 @@ Rules:
     sourceLanguage: parsed.sourceLanguage || 'auto',
     terms: [...bySource.values()],
     uncertainTerms: Array.isArray(parsed.uncertainTerms) ? parsed.uncertainTerms : [],
+    dialectalChoices: Array.isArray(parsed.dialectalChoices) ? parsed.dialectalChoices : [],
     guidance: parsed.guidance || '',
   };
 }
@@ -96,11 +139,14 @@ Rules:
  */
 async function translateParagraphBatch({
   modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary,
+  intakeAnswers = {},
 }) {
+  const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
 Preserve sentence type (statement vs question), polarity (affirmative vs negative), and meaning.
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
+${policy ? `\n${policy}\n` : ''}
 Return ONLY valid JSON: { "translations": ["...", "..."] } with the same number of items, same order.
 No commentary.`;
 
@@ -157,8 +203,9 @@ No commentary.`;
  * Second-pass QA review. Returns structured summary for human review.
  */
 async function reviewTranslation({
-  modelId, userId, sourceLanguage, targetLanguage, pairs, glossaryTerms,
+  modelId, userId, sourceLanguage, targetLanguage, pairs, glossaryTerms, intakeAnswers = {},
 }) {
+  const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const system = `You are a translation QA reviewer for business / compliance documents.
 Read source and target pairs. Flag real problems only.
 Return ONLY valid JSON:
@@ -168,22 +215,25 @@ Return ONLY valid JSON:
   "polarityOrSentenceTypeIssues": [ { "source": "...", "target": "...", "issue": "..." } ],
   "garbledOrIncompleteRows": [ { "excerpt": "...", "issue": "..." } ],
   "audienceFlags": [ { "target": "...", "issue": "why an auditor/stakeholder might be confused or alarmed" } ],
+  "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "..." } ],
   "overallNotes": "2-4 sentences"
 }
-Be concise. Empty arrays are fine. No markdown fences.`;
+Be concise. Empty arrays are fine. No markdown fences.
+${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional audience was specified; list dialectalChoices when non-standard forms were used.\n` : ''}`;
 
-  // Cap pairs to keep prompt bounded
   const sample = pairs.slice(0, 40);
   const prompt = [
     `Source language: ${sourceLanguage || 'auto'}`,
     `Target language: ${langName(targetLanguage)}`,
+    '',
+    policy || '',
     '',
     'Glossary that should have been followed:',
     buildGlossaryBlock(glossaryTerms),
     '',
     'Pairs (source ⟶ target):',
     sample.map((p, i) => `${i + 1}. SRC: ${p.source}\n   TGT: ${p.target}`).join('\n\n'),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   const res = await callModel(modelId, prompt, { maxTokens: 3000, system, returnUsage: true });
   if (userId) {
@@ -201,6 +251,7 @@ Be concise. Empty arrays are fine. No markdown fences.`;
     polarityOrSentenceTypeIssues: parsed.polarityOrSentenceTypeIssues || [],
     garbledOrIncompleteRows: parsed.garbledOrIncompleteRows || [],
     audienceFlags: parsed.audienceFlags || [],
+    dialectalChoices: parsed.dialectalChoices || [],
     overallNotes: parsed.overallNotes || '',
     reviewedPairCount: sample.length,
     totalPairCount: pairs.length,

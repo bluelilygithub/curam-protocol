@@ -18,6 +18,7 @@ async function getPdfJs() {
 // ── Language options ──────────────────────────────────────────────────────────
 const LANGUAGES = [
   { code: 'en', label: 'English' },
+  { code: 'mi', label: 'te reo Māori' },
   { code: 'fr', label: 'French' },
   { code: 'de', label: 'German' },
   { code: 'es', label: 'Spanish' },
@@ -39,6 +40,25 @@ const FONT_BY_LANG = {
   'ar':    '/fonts/NotoSansArabic.ttf',
   'ko':    '/fonts/NotoSansJP.ttf', // fallback
 };
+
+const ACCEPT_UPLOAD =
+  '.pdf,.docx,.xlsx,.xls,application/pdf,'
+  + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
+  + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
+  + 'application/vnd.ms-excel';
+
+function detectUploadKind(file) {
+  if (!file) return null;
+  const name = (file.name || '').toLowerCase();
+  const type = (file.type || '').toLowerCase();
+  if (name.endsWith('.pdf') || type === 'application/pdf') return 'pdf';
+  if (name.endsWith('.docx')
+    || type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (name.endsWith('.xlsx')
+    || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
+  if (name.endsWith('.xls') || type === 'application/vnd.ms-excel') return 'xls';
+  return null;
+}
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 function Btn({ onClick, disabled, variant = 'primary', children, className = '' }) {
@@ -157,6 +177,7 @@ function QaPanel({ qa, onClose }) {
   if (!qa) return null;
   const sections = [
     ['Uncertain terms', qa.uncertainTerms],
+    ['Dialectal choices (vs standard)', qa.dialectalChoices],
     ['Polarity / sentence-type issues', qa.polarityOrSentenceTypeIssues],
     ['Restructured sentences', qa.restructuredSentences],
     ['Garbled / incomplete rows', qa.garbledOrIncompleteRows],
@@ -169,6 +190,12 @@ function QaPanel({ qa, onClose }) {
           <p style={{ color: 'var(--color-muted)' }}>Review pass was skipped for this job.</p>
         ) : (
           <>
+            {qa.maoriPolicy && (
+              <p className="text-xs px-2 py-1.5 rounded border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                Māori policy: {qa.maoriPolicy}
+              </p>
+            )}
             {qa.overallNotes && (
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{qa.overallNotes}</p>
             )}
@@ -188,15 +215,24 @@ function QaPanel({ qa, onClose }) {
                   <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
                     {items.slice(0, 20).map((it, i) => (
                       <li key={i}>
-                        {it.source || it.excerpt || it.target || JSON.stringify(it)}
-                        {it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}
-                        {it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : ''}
+                        {it.used && it.standardForm
+                          ? `Used “${it.used}” (standard: “${it.standardForm}”)${it.context ? ` — ${it.context}` : ''}`
+                          : (
+                            <>
+                              {it.source || it.excerpt || it.target || JSON.stringify(it)}
+                              {it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}
+                              {it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : ''}
+                            </>
+                          )}
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
             ))}
+            <p className="text-xs pt-2" style={{ color: 'var(--color-muted)', opacity: 0.85 }}>
+              Language-body recommendations (e.g. Te Taura Whiri) are updated over time — verify critical te reo Māori output against current guidance.
+            </p>
           </>
         )}
       </div>
@@ -214,7 +250,7 @@ async function registerFonts(targetLanguage) {
 }
 
 function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedPages = [],
-    avgOcrConfidence, sourceLanguage, targetLanguage }) {
+    avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
   const useNoto = !!FONT_BY_LANG[targetLanguage];
 
@@ -237,18 +273,22 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     ? (LANGUAGES.find(l => l.code === sourceLanguage)?.label || sourceLanguage)
     : 'Original';
 
+  const sectionLabel = (pg) => pageLabels[pg] || pageLabels[String(pg)]
+    || (sourceFormat === 'xlsx' || sourceFormat === 'xls' ? `Sheet ${pg}` : `Page ${pg}`);
+
   const pages = [];
   for (let pg = 1; pg <= pageCount; pg++) {
-    const srcParas  = sourceByPage[pg]  || [];
-    const trnParas  = translatedByPage[pg] || [];
+    const srcParas  = sourceByPage[pg]  || sourceByPage[String(pg)] || [];
+    const trnParas  = translatedByPage[pg] || translatedByPage[String(pg)] || [];
     const lowConf   = isLowConf(pg);
+    const label     = sectionLabel(pg);
 
     // Source page
     pages.push(
       <Page key={`src-${pg}`} size="A4" style={styles.page}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.sourceHeader}>ORIGINAL · Page {pg}</Text>
+            <Text style={styles.sourceHeader}>ORIGINAL · {label}</Text>
           </View>
           <Text style={styles.langBadge}>{srcLabel}</Text>
         </View>
@@ -267,7 +307,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
       <Page key={`trn-${pg}`} size="A4" style={styles.page}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.transHeader}>TRANSLATION · Page {pg}</Text>
+            <Text style={styles.transHeader}>TRANSLATION · {label}</Text>
           </View>
           <Text style={styles.langBadge}>{langLabel}</Text>
         </View>
@@ -298,6 +338,7 @@ function TranslationsTab({ glossaries }) {
   const [tone, setTone] = useState('natural');
   const [mustKeepTerms, setMustKeepTerms] = useState('');
   const [intakeNotes, setIntakeNotes] = useState('');
+  const [regionalAudience, setRegionalAudience] = useState('');
   const [enableReview, setEnableReview] = useState(true);
   const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
@@ -318,39 +359,69 @@ function TranslationsTab({ glossaries }) {
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
 
-  // Preflight: extract page info client-side using pdfjs
+  // Preflight: PDF → page/OCR scan; Word/Excel → lightweight metadata only
   const runPreflight = async (selectedFile) => {
     setPreflighting(true);
     setPreflight(null);
+    const kind = detectUploadKind(selectedFile);
     try {
-      const pdfjs = await getPdfJs();
-      const buf = await selectedFile.arrayBuffer();
-      const doc = await pdfjs.getDocument({ data: buf }).promise;
-      const pageCount = doc.numPages;
-      let scannedCount = 0;
-      const scannedImages = {};
+      if (kind === 'pdf') {
+        const pdfjs = await getPdfJs();
+        const buf = await selectedFile.arrayBuffer();
+        const doc = await pdfjs.getDocument({ data: buf }).promise;
+        const pageCount = doc.numPages;
+        let scannedCount = 0;
+        const scannedImages = {};
 
-      for (let pg = 1; pg <= pageCount; pg++) {
-        const page = await doc.getPage(pg);
-        const tc = await page.getTextContent();
-        const chars = tc.items.reduce((s, i) => s + (i.str || '').length, 0);
+        for (let pg = 1; pg <= pageCount; pg++) {
+          const page = await doc.getPage(pg);
+          const tc = await page.getTextContent();
+          const chars = tc.items.reduce((s, i) => s + (i.str || '').length, 0);
 
-        if (chars < 20) {
-          scannedCount++;
-          // Render page to canvas → base64 PNG
-          const viewport = page.getViewport({ scale: 1.5 });
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          scannedImages[pg] = canvas.toDataURL('image/png');
+          if (chars < 20) {
+            scannedCount++;
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            scannedImages[pg] = canvas.toDataURL('image/png');
+          }
         }
+
+        setPreflight({ kind: 'pdf', pageCount, scannedCount, scannedImages, unitLabel: 'pages' });
+        return;
       }
 
-      setPreflight({ pageCount, scannedCount, scannedImages });
+      if (kind === 'docx') {
+        setPreflight({
+          kind: 'docx',
+          pageCount: 1,
+          scannedCount: 0,
+          scannedImages: {},
+          unitLabel: 'document',
+          summary: 'Word document — text will be extracted on the server',
+        });
+        return;
+      }
+
+      if (kind === 'xlsx' || kind === 'xls') {
+        setPreflight({
+          kind,
+          pageCount: null,
+          scannedCount: 0,
+          scannedImages: {},
+          unitLabel: 'sheets',
+          summary: 'Spreadsheet — text cells will be translated (numbers skipped)',
+        });
+        return;
+      }
+
+      addToast('Unsupported file type', 'error');
+      setFile(null);
     } catch (e) {
-      addToast('Could not read PDF: ' + (e.message || 'Unknown error'), 'error');
+      addToast('Could not read file: ' + (e.message || 'Unknown error'), 'error');
       setFile(null);
     } finally {
       setPreflighting(false);
@@ -358,7 +429,12 @@ function TranslationsTab({ glossaries }) {
   };
 
   const handleFileSelect = (f) => {
-    if (!f || f.type !== 'application/pdf') { addToast('Please select a PDF file', 'error'); return; }
+    if (!f) return;
+    const kind = detectUploadKind(f);
+    if (!kind) {
+      addToast('Please select a PDF, Word (.docx), or Excel (.xlsx) file', 'error');
+      return;
+    }
     if (f.size > 15 * 1024 * 1024) { addToast('File exceeds 15 MB limit', 'error'); return; }
     setFile(f);
     runPreflight(f);
@@ -376,10 +452,10 @@ function TranslationsTab({ glossaries }) {
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append('pdf', file);
+      fd.append('file', file);
       fd.append('targetLanguage', targetLang);
       if (glossaryId) fd.append('glossaryId', glossaryId);
-      fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages));
+      fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
       fd.append('intakeAnswers', JSON.stringify({
         domain,
@@ -387,6 +463,7 @@ function TranslationsTab({ glossaries }) {
         tone,
         mustKeepTerms,
         notes: intakeNotes,
+        regionalAudience: targetLang === 'mi' ? regionalAudience.trim() : '',
       }));
 
       const res  = await api.postForm('/api/translate/jobs', fd);
@@ -481,7 +558,7 @@ function TranslationsTab({ glossaries }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `translated-${job.filename}`;
+      a.download = `translated-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) { addToast(e.message, 'error'); }
@@ -508,16 +585,16 @@ function TranslationsTab({ glossaries }) {
             background:  dragOver ? 'rgba(var(--color-primary-rgb, 99,102,241),0.04)' : 'var(--color-surface)',
           }}
         >
-          <input ref={fileRef} type="file" accept="application/pdf" className="hidden"
+          <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden"
             onChange={e => handleFileSelect(e.target.files[0])} />
           {!file ? (
             <>
               <div className="text-3xl mb-2">🌐</div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                Drop a PDF here or click to browse
+                Drop a PDF, Word, or Excel file here — or click to browse
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Max 15 MB · PDF only · native and scanned documents supported
+                Max 15 MB · PDF · .docx · .xlsx · scanned PDFs supported via OCR
               </p>
             </>
           ) : (
@@ -526,6 +603,7 @@ function TranslationsTab({ glossaries }) {
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</p>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {(file.size / 1024 / 1024).toFixed(1)} MB
+                {detectUploadKind(file) ? ` · ${detectUploadKind(file).toUpperCase()}` : ''}
               </p>
               <button onClick={e => { e.stopPropagation(); setFile(null); setPreflight(null); }}
                 className="text-xs" style={{ color: 'var(--color-muted)' }}>Remove</button>
@@ -538,20 +616,27 @@ function TranslationsTab({ glossaries }) {
       {file && (
         <div className="flex flex-col gap-3">
           {preflighting ? (
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Analysing PDF…</p>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+              {file && detectUploadKind(file) === 'pdf' ? 'Analysing PDF…' : 'Preparing file…'}
+            </p>
           ) : preflight && (
             <>
               <div className="flex gap-4 text-sm flex-wrap">
-                <span style={{ color: 'var(--color-muted)' }}>
-                  <strong style={{ color: 'var(--color-text)' }}>{preflight.pageCount}</strong> pages
-                </span>
+                {preflight.summary ? (
+                  <span style={{ color: 'var(--color-muted)' }}>{preflight.summary}</span>
+                ) : (
+                  <span style={{ color: 'var(--color-muted)' }}>
+                    <strong style={{ color: 'var(--color-text)' }}>{preflight.pageCount}</strong>{' '}
+                    {preflight.unitLabel || 'pages'}
+                  </span>
+                )}
                 {preflight.scannedCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-xs"
                     style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed' }}>
                     {preflight.scannedCount} scanned page{preflight.scannedCount !== 1 ? 's' : ''} — OCR will be applied
                   </span>
                 )}
-                {preflight.pageCount > 50 && preflight.scannedCount > 0 && (
+                {preflight.kind === 'pdf' && preflight.pageCount > 50 && preflight.scannedCount > 0 && (
                   <span className="text-xs" style={{ color: '#d97706' }}>
                     ⚠ Large scanned document — may take several minutes
                   </span>
@@ -560,8 +645,11 @@ function TranslationsTab({ glossaries }) {
 
               <div className="flex gap-3 flex-wrap">
                 <div className="flex-1 min-w-40">
-                  <Field label="Translate to">
-                    <Sel value={targetLang} onChange={setTargetLang}>
+                  <Field label="Translate to"
+                    hint={targetLang === 'mi'
+                      ? 'Defaults to standard te reo Māori (Te Taura Whiri), not a specific iwi dialect.'
+                      : undefined}>
+                    <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
                       {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                     </Sel>
                   </Field>
@@ -578,6 +666,14 @@ function TranslationsTab({ glossaries }) {
                   </Field>
                 </div>
               </div>
+
+              {targetLang === 'mi' && (
+                <Field label="Iwi / rohe audience (optional)"
+                  hint="Leave blank for standard te reo Māori. Specify only if vocabulary should be adapted for a particular audience (e.g. Ngāi Tahu). Dialectal choices will be flagged in QA.">
+                  <Input value={regionalAudience} onChange={setRegionalAudience}
+                    placeholder="e.g. Ngāi Tahu audience, Tāmaki Makaurau" />
+                </Field>
+              )}
 
               <div className="rounded-xl border p-4 flex flex-col gap-3"
                 style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
