@@ -69,7 +69,9 @@ Before any subjective LLM check, each target must be:
 - **(b)** different from the source (after normalize), except non-linguistic cells / same-language jobs  
 - **(c)** free of placeholders such as `[Translation incomplete]`, `[unable to translate]`, `TBD`, `TODO`, etc.
 
-Hard-fail only when **>25%** of segments still have placeholders (mass failure). Moderate rates complete with a soft warning and Garbled rows listed. `[REDACTED]` identical-to-source is allowed. Incomplete segments get a **repair pass** (LLM retry → Google fallback when configured) before the gate.
+Hard-fail only when **>25%** of segments still have placeholders (mass failure). Moderate rates complete with a soft warning and Garbled rows listed. `[REDACTED]` must pass through unchanged (locked DNT + post-process). Deterministic checks also flag **bracketed process meta** in any language (e.g. `[texto no disponible para traducir]`), not only English `[Translation incomplete]`. Incomplete segments get a **repair pass** (LLM retry → optional Google fallback) before the gate.
+
+**Non-determinism:** LLM runs of the same document can differ. Treat one clean run as a sample, not proof the instructions “worked.” Prefer stronger models for finals; turn review off for drafts (review does not fix polarity/meta reliably).
 
 ---
 

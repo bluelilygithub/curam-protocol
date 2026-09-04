@@ -13,7 +13,7 @@ const {
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
 } = require('../services/translateLlmService');
-const { verifyQaCategoryClaims, mergeGarbledRows } = require('../services/translateQaChecks');
+const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 const {
   isGoogleTranslateConfigured,
@@ -510,7 +510,15 @@ async function processTranslateJob(
     .filter(Boolean)
     .map(source => ({ source, target: '', doNotTranslate: true, note: 'User must-keep' }));
 
-  const mergedExisting = [...existingTerms, ...mustKeep];
+  const mergedExisting = (() => {
+    const bySource = new Map();
+    for (const t of [...lockedDoNotTranslateTerms(), ...existingTerms, ...mustKeep]) {
+      if (!t?.source) continue;
+      const key = String(t.source).toLowerCase();
+      if (!bySource.has(key)) bySource.set(key, t);
+    }
+    return [...bySource.values()];
+  })();
 
   let glossaryPrep;
   let sourceLanguage = 'auto';
@@ -615,8 +623,9 @@ async function processTranslateJob(
           sourceLanguage,
         });
         translations = translations.map((t) => stripDoNotTranslateSpans(t));
-        translations = translations.map((t) => applyGlossarySubstitutions(t, glossaryTerms));
-      } catch (err) {
+        translations = translations.map((t, i) =>
+          enforceRedactionPassThrough(chunk.paras[i].text, applyGlossarySubstitutions(t, glossaryTerms))
+        );      } catch (err) {
         console.error('[translate] Google chunk failed:', err.message);
         translations = chunk.paras.map(p => `[Translation error] ${p.text}`);
       }
@@ -710,7 +719,10 @@ async function processTranslateJob(
     for (const result of chunkResults) {
       result.translations.forEach((rawT, i) => {
         const { pageNum, text } = result.paras[i];
-        const t = applyGlossarySubstitutions(rawT, glossaryTerms);
+        const t = enforceRedactionPassThrough(
+          text,
+          applyGlossarySubstitutions(rawT, glossaryTerms)
+        );
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
         const idxInPage = translatedByPage[pageNum].length;
         translatedByPage[pageNum].push(t);

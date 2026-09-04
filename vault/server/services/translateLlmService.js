@@ -13,6 +13,9 @@ const {
   mergeGarbledRows,
   verifyQaCategoryClaims,
   hardSanityGate,
+  enforceRedactionPassThrough,
+  lockedDoNotTranslateTerms,
+  findPlaceholder,
 } = require('./translateQaChecks');
 
 const LANG_NAMES = {
@@ -64,6 +67,26 @@ function languagePolicyBlock(targetLanguage, intakeAnswers = {}) {
   return '';
 }
 
+function mergeGlossaryTerms(...lists) {
+  const bySource = new Map();
+  for (const list of lists) {
+    for (const t of list || []) {
+      if (!t?.source) continue;
+      const key = String(t.source).toLowerCase();
+      if (!bySource.has(key)) bySource.set(key, t);
+    }
+  }
+  return [...bySource.values()];
+}
+
+const TRANSLATOR_HARD_RULES = `
+HARD RULES (non-negotiable):
+- Preserve polarity and relational wording. Do NOT flip "measured against / assessed against / mapped against / compliant with" into "not compliant" / "non-conforme" unless the source explicitly states non-compliance.
+- Preserve identifiers exactly (e.g. Q-15, R3, R-01, P-16) — do not renumber or change letter prefixes.
+- Copy [REDACTED] (and [REDACTED:…]) EXACTLY — never translate, explain, expand, or replace with meta-text such as "[texto no disponible…]", "[unable to translate]", etc.
+- Never insert commentary about the translation process into the output.
+`.trim();
+
 function buildGlossaryBlock(terms) {
   if (!Array.isArray(terms) || !terms.length) return '(none)';
   return terms.map((t) => {
@@ -71,6 +94,11 @@ function buildGlossaryBlock(terms) {
     return `- "${t.source}" → "${t.target || ''}"`;
   }).join('\n');
 }
+
+function finalizeTranslation(source, target) {
+  return enforceRedactionPassThrough(source, String(target || '').trim());
+}
+
 
 /**
  * Propose / merge glossary from intake answers + source skim + optional saved glossary.
@@ -90,6 +118,7 @@ Return ONLY valid JSON:
 Rules:
 - Prefer established industry renderings over literal dictionary translations.
 - Mark brand names, product codes, and "do not translate" items with doNotTranslate:true and empty target.
+- Always keep [REDACTED] as doNotTranslate (never invent a target-language substitute).
 - Merge and respect any existing glossary terms provided (do not contradict them).
 - Keep the list focused (typically 5–40 terms). No markdown fences.
 - dialectalChoices: only when te reo Māori with a specified regional audience; otherwise [].`;
@@ -120,20 +149,9 @@ Rules:
 
   const parsed = parseModelJson(res.text) || {};
   const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
-  // Merge existing terms first (they win on source key)
-  const bySource = new Map();
-  for (const t of existingTerms || []) {
-    if (t?.source) bySource.set(String(t.source).toLowerCase(), t);
-  }
-  for (const t of terms) {
-    if (!t?.source) continue;
-    const key = String(t.source).toLowerCase();
-    if (!bySource.has(key)) bySource.set(key, t);
-  }
-
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
-    terms: [...bySource.values()],
+    terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(), existingTerms || [], terms),
     uncertainTerms: Array.isArray(parsed.uncertainTerms) ? parsed.uncertainTerms : [],
     dialectalChoices: Array.isArray(parsed.dialectalChoices) ? parsed.dialectalChoices : [],
     guidance: parsed.guidance || '',
@@ -218,11 +236,14 @@ async function translateParagraphBatch({
     })];
   }
 
+  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(), glossaryTerms);
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
+
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
 Preserve sentence type (statement vs question), polarity (affirmative vs negative), and meaning.
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
+${TRANSLATOR_HARD_RULES}
 ${policy ? `\n${policy}\n` : ''}
 Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
 No markdown fences. No commentary.`;
@@ -236,7 +257,7 @@ No markdown fences. No commentary.`;
     guidance || '(none)',
     '',
     'Glossary:',
-    buildGlossaryBlock(glossaryTerms),
+    buildGlossaryBlock(glossaryTermsMerged),
     '',
     'Running terminology already used (reuse exact renderings):',
     runningGlossary && Object.keys(runningGlossary).length
@@ -276,7 +297,7 @@ No markdown fences. No commentary.`;
   let translations = extractTranslationsArray(rawText, paragraphs.length);
 
   if (translations && translations.length === paragraphs.length) {
-    return translations.map((t) => String(t || '').trim());
+    return translations.map((t, i) => finalizeTranslation(paragraphs[i], t));
   }
 
   // Partial recovery: keep good prefix, retry the rest
@@ -296,7 +317,10 @@ No markdown fences. No commentary.`;
       timeoutMs,
       onProgress,
     });
-    return [...translations.map((t) => String(t || '').trim()), ...rest];
+    return [
+      ...translations.map((t, i) => finalizeTranslation(paragraphs[i], t)),
+      ...rest,
+    ];
   }
 
   console.warn('[translate] batch parse failed — splitting', {
@@ -343,17 +367,19 @@ async function translateOneParagraph({
   const system = `You are a professional document translator.
 Translate the paragraph into ${langName(targetLanguage)}.
 Preserve meaning, polarity, and sentence type. Obey the glossary.
+${TRANSLATOR_HARD_RULES}
 ${policy ? `\n${policy}\n` : ''}
 Return ONLY valid JSON: { "translation": "..." }
 No markdown fences.`;
 
+  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(), glossaryTerms);
   const prompt = [
     `Source language: ${sourceLanguage || 'auto'}`,
     `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
     '',
     'Guidance:', guidance || '(none)',
     '',
-    'Glossary:', buildGlossaryBlock(glossaryTerms),
+    'Glossary:', buildGlossaryBlock(glossaryTermsMerged),
     '',
     'Running terms:',
     runningGlossary && Object.keys(runningGlossary).length
@@ -378,15 +404,17 @@ No markdown fences.`;
     }
     const parsed = parseModelJson(res.text);
     if (parsed?.translation && String(parsed.translation).trim()) {
-      return String(parsed.translation).trim();
+      return finalizeTranslation(paragraph, parsed.translation);
     }
     const arr = extractTranslationsArray(res.text, 1);
-    if (arr?.[0]?.trim()) return String(arr[0]).trim();
+    if (arr?.[0]?.trim()) return finalizeTranslation(paragraph, arr[0]);
     const cleaned = String(res.text || '')
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    if (cleaned && !cleaned.startsWith('{') && cleaned.length > 0) return cleaned;
+    if (cleaned && !cleaned.startsWith('{') && cleaned.length > 0) {
+      return finalizeTranslation(paragraph, cleaned);
+    }
     console.warn('[translate] single paragraph empty/unparsed', {
       textLen: String(res.text || '').length,
       preview: String(res.text || '').slice(0, 120),
@@ -416,6 +444,9 @@ async function reviewTranslation({
 You will receive numbered SOURCE ⟶ TARGET pairs. Compare them line by line.
 Completeness (empty / identical-to-source / placeholder markers) is already checked deterministically —
 focus on subjective issues only. Still list any incomplete rows you notice under garbledOrIncompleteRows.
+Flag polarity flips (e.g. source "measured/assessed against" rendered as "not compliant" / "no conforme") under polarityOrSentenceTypeIssues.
+Flag identifier drift (Q-15 → P-16) under uncertainTerms or garbledOrIncompleteRows.
+Flag target-language process meta (e.g. "[texto no disponible para traducir]") under garbledOrIncompleteRows.
 
 Return ONLY valid JSON:
 {
@@ -598,8 +629,11 @@ async function repairIncompletePairs({
             runningGlossary,
             intakeAnswers,
           });
-          const cleaned = applyGlossarySubstitutions(t, glossaryTerms);
-          if (cleaned && !isIncompleteTarget(cleaned)) {
+          const cleaned = finalizeTranslation(
+            pair.source,
+            applyGlossarySubstitutions(t, glossaryTerms)
+          );
+          if (cleaned && !isIncompleteTarget(cleaned) && !findPlaceholder(cleaned)) {
             pair.target = cleaned;
             llmRepaired += 1;
             continue;
@@ -618,11 +652,11 @@ async function repairIncompletePairs({
             targetLanguage,
             sourceLanguage,
           });
-          const cleaned = applyGlossarySubstitutions(
-            stripDoNotTranslateSpans(gt),
-            glossaryTerms
+          const cleaned = enforceRedactionPassThrough(
+            pair.source,
+            applyGlossarySubstitutions(stripDoNotTranslateSpans(gt), glossaryTerms)
           );
-          if (cleaned && cleaned.trim()) {
+          if (cleaned && cleaned.trim() && !findPlaceholder(cleaned)) {
             pair.target = cleaned;
             googleRepaired += 1;
             continue;
