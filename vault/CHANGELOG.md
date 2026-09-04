@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-04 (translate-engine-layout)
+
+### Translate — LLM or Google + PDF layout choice
+- Per-job **engine**: Vault LLM or Google Translate (`GOOGLE_TRANSLATE_API_KEY`).
+- Per-job **PDF layout**: side-by-side, translation-only, or bilingual pages (original then translation).
+
+---
+
 ## 2026-09-04 (translate-qa-hardening)
 
 ### Translate — deterministic completeness + hard QA gate

@@ -301,9 +301,13 @@ async function registerFonts(targetLanguage) {
 }
 
 function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedPages = [],
-    avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf' }) {
+    avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf',
+    pdfLayout = 'side-by-side' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
   const useNoto = !!FONT_BY_LANG[targetLanguage];
+  const layout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(pdfLayout)
+    ? pdfLayout
+    : 'side-by-side';
 
   const styles = StyleSheet.create({
     page:     { padding: 40, fontFamily: useNoto ? 'NotoTarget' : 'Helvetica' },
@@ -313,10 +317,16 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     warning:  { backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4,
                 padding: 6, marginBottom: 10, fontSize: 8, color: '#92400e' },
     para:     { fontSize: 10, color: '#1f2937', marginBottom: 6, lineHeight: 1.6 },
+    paraSm:   { fontSize: 9, color: '#1f2937', marginBottom: 5, lineHeight: 1.5 },
     footer:   { position: 'absolute', bottom: 20, left: 40, right: 40, fontSize: 7,
                 color: '#9ca3af', textAlign: 'center', borderTop: '1px solid #e5e7eb', paddingTop: 4 },
     sourceHeader: { fontSize: 9, fontWeight: 'bold', color: '#374151' },
     transHeader:  { fontSize: 9, fontWeight: 'bold', color: '#1d4ed8' },
+    columns:  { flexDirection: 'row', gap: 12, flexGrow: 1 },
+    col:      { width: '48%', paddingRight: 6 },
+    colRight: { width: '48%', paddingLeft: 6, borderLeft: '1px solid #e5e7eb' },
+    colTitle: { fontSize: 8, fontWeight: 'bold', marginBottom: 8, color: '#6b7280' },
+    colTitleTrans: { fontSize: 8, fontWeight: 'bold', marginBottom: 8, color: '#1d4ed8' },
   });
 
   const langLabel = LANGUAGES.find(l => l.code === targetLanguage)?.label || targetLanguage;
@@ -334,7 +344,54 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     const lowConf   = isLowConf(pg);
     const label     = sectionLabel(pg);
 
-    // Source page
+    if (layout === 'translation-only') {
+      pages.push(
+        <Page key={`trn-${pg}`} size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <Text style={styles.transHeader}>TRANSLATION · {label}</Text>
+            <Text style={styles.langBadge}>{langLabel}</Text>
+          </View>
+          {lowConf && (
+            <View style={styles.warning}>
+              <Text>⚠ Source page had low OCR confidence — translation may be inaccurate</Text>
+            </View>
+          )}
+          {trnParas.map((p, i) => <Text key={i} style={styles.para}>{p}</Text>)}
+          <Text style={styles.footer}>AI-generated translation · for reference only · not legally certified</Text>
+        </Page>
+      );
+      continue;
+    }
+
+    if (layout === 'side-by-side') {
+      pages.push(
+        <Page key={`sbs-${pg}`} size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <Text style={styles.sourceHeader}>SIDE BY SIDE · {label}</Text>
+            <Text style={styles.langBadge}>{srcLabel} → {langLabel}</Text>
+          </View>
+          {lowConf && (
+            <View style={styles.warning}>
+              <Text>⚠ Low OCR confidence on this page — review carefully</Text>
+            </View>
+          )}
+          <View style={styles.columns}>
+            <View style={styles.col}>
+              <Text style={styles.colTitle}>ORIGINAL</Text>
+              {srcParas.map((p, i) => <Text key={i} style={styles.paraSm}>{p}</Text>)}
+            </View>
+            <View style={styles.colRight}>
+              <Text style={styles.colTitleTrans}>TRANSLATION</Text>
+              {trnParas.map((p, i) => <Text key={i} style={styles.paraSm}>{p}</Text>)}
+            </View>
+          </View>
+          <Text style={styles.footer}>AI-generated translation · for reference only · not legally certified</Text>
+        </Page>
+      );
+      continue;
+    }
+
+    // bilingual-pages: original page then translation page
     pages.push(
       <Page key={`src-${pg}`} size="A4" style={styles.page}>
         <View style={styles.header}>
@@ -353,7 +410,6 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
       </Page>
     );
 
-    // Translated page
     pages.push(
       <Page key={`trn-${pg}`} size="A4" style={styles.page}>
         <View style={styles.header}>
@@ -391,6 +447,9 @@ function TranslationsTab({ glossaries }) {
   const [intakeNotes, setIntakeNotes] = useState('');
   const [regionalAudience, setRegionalAudience] = useState('');
   const [enableReview, setEnableReview] = useState(true);
+  const [engine, setEngine] = useState('llm'); // llm | google
+  const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
+  const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
   const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
@@ -409,6 +468,18 @@ function TranslationsTab({ glossaries }) {
   }, []);
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
+
+  useEffect(() => {
+    api.get('/api/translate/config').then(r => r.json()).then((d) => {
+      const llmOk = d.engines?.llm?.available !== false && (d.engines?.llm?.available || d.configured);
+      const googleOk = Boolean(d.engines?.google?.available);
+      setEngineAvailability({ llm: Boolean(d.engines?.llm?.available ?? llmOk), google: googleOk });
+      if (!d.engines?.llm?.available && googleOk) {
+        setEngine('google');
+        setEnableReview(false);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Preflight: PDF → page/OCR scan; Word/Excel → lightweight metadata only
   const runPreflight = async (selectedFile) => {
@@ -499,17 +570,27 @@ function TranslationsTab({ glossaries }) {
 
   const handleSubmit = async () => {
     if (!file || !preflight || submitting) return;
-    if (!domain) { addToast('Please choose a document domain', 'error'); return; }
+    if (engine === 'llm' && !domain) { addToast('Please choose a document domain', 'error'); return; }
+    if (engine === 'google' && !engineAvailability.google) {
+      addToast('Google Translate is not configured on the server', 'error');
+      return;
+    }
+    if (engine === 'llm' && !engineAvailability.llm) {
+      addToast('Vault LLM translate model is not configured', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('targetLanguage', targetLang);
+      fd.append('engine', engine);
+      fd.append('pdfLayout', pdfLayout);
       if (glossaryId) fd.append('glossaryId', glossaryId);
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
       fd.append('intakeAnswers', JSON.stringify({
-        domain,
+        domain: domain || 'general',
         audience,
         tone,
         mustKeepTerms,
@@ -707,12 +788,46 @@ function TranslationsTab({ glossaries }) {
                 </div>
                 <div className="flex-1 min-w-40">
                   <Field label="Saved glossary (optional)"
-                    hint="Merged with terms the model proposes from your answers.">
+                    hint={engine === 'llm'
+                      ? 'Merged with terms the model proposes from your answers.'
+                      : 'Applied as do-not-translate / substitutions for Google Translate.'}>
                     <Sel value={glossaryId} onChange={setGlossaryId}>
                       <option value="">None</option>
                       {glossaries.map(g => (
                         <option key={g.id} value={g.id}>{g.name} ({g.termCount} terms)</option>
                       ))}
+                    </Sel>
+                  </Field>
+                </div>
+              </div>
+
+              <div className="flex gap-3 flex-wrap">
+                <div className="flex-1 min-w-40">
+                  <Field label="Translation engine"
+                    hint={engine === 'google'
+                      ? 'Faster machine translation. Best for drafts and common languages.'
+                      : 'Vault LLM — slower, better for domain tone, glossaries, and te reo Māori policy.'}>
+                    <Sel value={engine} onChange={(v) => {
+                      setEngine(v);
+                      if (v === 'google') setEnableReview(false);
+                      else setEnableReview(true);
+                    }}>
+                      <option value="llm" disabled={!engineAvailability.llm}>
+                        Vault LLM{!engineAvailability.llm ? ' (not configured)' : ''}
+                      </option>
+                      <option value="google" disabled={!engineAvailability.google}>
+                        Google Translate{!engineAvailability.google ? ' (not configured)' : ''}
+                      </option>
+                    </Sel>
+                  </Field>
+                </div>
+                <div className="flex-1 min-w-40">
+                  <Field label="PDF layout"
+                    hint="How the download PDF presents source and translation.">
+                    <Sel value={pdfLayout} onChange={setPdfLayout}>
+                      <option value="side-by-side">Side by side (same page)</option>
+                      <option value="translation-only">Separate translated document</option>
+                      <option value="bilingual-pages">Bilingual pages (original then translation)</option>
                     </Sel>
                   </Field>
                 </div>
@@ -726,6 +841,7 @@ function TranslationsTab({ glossaries }) {
                 </Field>
               )}
 
+              {engine === 'llm' ? (
               <div className="rounded-xl border p-4 flex flex-col gap-3"
                 style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -769,10 +885,28 @@ function TranslationsTab({ glossaries }) {
                   Run second-model QA review after translation (recommended)
                 </label>
               </div>
+              ) : (
+              <div className="rounded-xl border p-4 flex flex-col gap-3"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Google Translate options
+                </p>
+                <Field label="Must-keep terms (comma-separated)"
+                  hint="Protected from translation via Google’s do-not-translate markup.">
+                  <Input value={mustKeepTerms} onChange={setMustKeepTerms}
+                    placeholder="e.g. Curam, Masterspec, ABN" />
+                </Field>
+                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                  <input type="checkbox" checked={enableReview} onChange={e => setEnableReview(e.target.checked)} />
+                  Run LLM QA review after Google Translate (slower; needs a Vault review model)
+                </label>
+              </div>
+              )}
 
               <div>
-                <Btn onClick={handleSubmit} disabled={submitting || preflighting || !domain}>
-                  {submitting ? 'Submitting…' : 'Start Translation'}
+                <Btn onClick={handleSubmit}
+                  disabled={submitting || preflighting || (engine === 'llm' && !domain)}>
+                  {submitting ? 'Submitting…' : `Start Translation (${engine === 'google' ? 'Google' : 'LLM'})`}
                 </Btn>
               </div>
             </>
@@ -1091,9 +1225,13 @@ export default function TranslatePage() {
     api.get('/api/translate/config').then(r => r.json()).then(d => {
       setConfigured(d.configured !== false);
       if (!d.configured) {
-        setConfigMsg(d.errors?.[0] || 'Assign a translate model in Settings → Translate agent (or configure vault models).');
+        setConfigMsg(d.errors?.[0]
+          || 'Configure a Vault LLM translate model and/or GOOGLE_TRANSLATE_API_KEY.');
       } else {
-        setConfigMsg(d.translateModel ? `Using ${d.translateModel}` : '');
+        const parts = [];
+        if (d.engines?.llm?.available) parts.push(`LLM: ${d.engines.llm.translateModel || 'ready'}`);
+        if (d.engines?.google?.available) parts.push('Google Translate: ready');
+        setConfigMsg(parts.join(' · ') || (d.translateModel ? `Using ${d.translateModel}` : ''));
       }
     }).catch(() => {});
     api.get('/api/translate/glossaries').then(r => r.json()).then(setGlossaries).catch(() => {});

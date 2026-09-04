@@ -14,6 +14,13 @@ const {
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
+const {
+  isGoogleTranslateConfigured,
+  detectLanguage: googleDetectLanguage,
+  translateTexts: googleTranslateTexts,
+  wrapDoNotTranslate,
+  stripDoNotTranslateSpans,
+} = require('../services/googleTranslateService');
 
 const router = express.Router();
 
@@ -71,12 +78,27 @@ async function markJobFailed(jobId, message) {
 router.get('/config', async (req, res) => {
   try {
     const models = await resolveTranslateModels({ userId: req.user.id });
+    const googleOk = isGoogleTranslateConfigured();
+    const llmOk = Boolean(models.ok && models.translate?.modelId);
     res.json({
-      configured: models.ok,
-      engine: 'vault-llm',
+      configured: llmOk || googleOk,
+      engines: {
+        llm: {
+          available: llmOk,
+          translateModel: models.translate?.modelId || null,
+          reviewModel: models.review?.modelId || null,
+          errors: models.errors || [],
+        },
+        google: {
+          available: googleOk,
+          errors: googleOk ? [] : ['GOOGLE_TRANSLATE_API_KEY not set'],
+        },
+      },
+      // Back-compat
+      engine: llmOk ? 'vault-llm' : (googleOk ? 'google' : null),
       translateModel: models.translate?.modelId || null,
       reviewModel: models.review?.modelId || null,
-      errors: models.errors || [],
+      errors: llmOk || googleOk ? [] : (models.errors || ['No translation engine configured']),
     });
   } catch (err) {
     res.status(500).json({ error: err.message, configured: false });
@@ -226,11 +248,22 @@ router.post('/jobs', sourceUpload, async (req, res) => {
     return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
   }
 
-  const models = await resolveTranslateModels({ userId: req.user.id });
-  if (!models.ok || !models.translate?.modelId) {
-    return res.status(503).json({
-      error: models.errors?.[0] || 'Translate model not configured — set it in Settings → Translate agent',
-    });
+  const engine = String(req.body.engine || 'llm').toLowerCase() === 'google' ? 'google' : 'llm';
+  const pdfLayout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(req.body.pdfLayout)
+    ? req.body.pdfLayout
+    : 'side-by-side';
+
+  if (engine === 'google') {
+    if (!isGoogleTranslateConfigured()) {
+      return res.status(503).json({ error: 'Google Translate API key not configured (GOOGLE_TRANSLATE_API_KEY)' });
+    }
+  } else {
+    const models = await resolveTranslateModels({ userId: req.user.id });
+    if (!models.ok || !models.translate?.modelId) {
+      return res.status(503).json({
+        error: models.errors?.[0] || 'Translate model not configured — set it in Settings → Translate agent',
+      });
+    }
   }
 
   const { targetLanguage, glossaryId } = req.body;
@@ -247,11 +280,15 @@ router.post('/jobs', sourceUpload, async (req, res) => {
     return res.status(400).json({ error: 'Invalid intakeAnswers JSON' });
   }
 
-  if (!intakeAnswers.domain) {
+  if (engine === 'llm' && !intakeAnswers.domain) {
     return res.status(400).json({ error: 'Please answer the intake questions (domain is required)' });
   }
+  if (!intakeAnswers.domain) intakeAnswers.domain = 'general';
 
-  const enableReview = String(req.body.enableReview ?? 'true') !== 'false';
+  // Google path: QA review is optional but off by default for speed
+  const enableReview = engine === 'llm'
+    ? String(req.body.enableReview ?? 'true') !== 'false'
+    : String(req.body.enableReview ?? 'false') === 'true';
 
   let scannedImages = {};
   try { scannedImages = req.body.scannedPageImages ? JSON.parse(req.body.scannedPageImages) : {}; } catch {}
@@ -265,6 +302,9 @@ router.post('/jobs', sourceUpload, async (req, res) => {
       }
     }
   }
+
+  intakeAnswers.engine = engine;
+  intakeAnswers.pdfLayout = pdfLayout;
 
   const { rows } = await pool.query(
     `INSERT INTO translate_jobs
@@ -286,10 +326,10 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 
   processTranslateJob(jobId, req.file.buffer, req.user.id, targetLanguage,
     glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview,
-    { filename: req.file.originalname, mimetype: req.file.mimetype, sourceFormat })
+    { filename: req.file.originalname, mimetype: req.file.mimetype, sourceFormat, engine, pdfLayout })
     .catch(err => markJobFailed(jobId, err.message));
 
-  res.status(202).json({ jobId, sourceFormat });
+  res.status(202).json({ jobId, sourceFormat, engine, pdfLayout });
 });
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -314,15 +354,24 @@ async function processTranslateJob(
   jobId, fileBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview,
   fileMeta = {}
 ) {
-  const models = await resolveTranslateModels({ userId });
-  if (!models.ok || !models.translate?.modelId) {
-    throw new Error(models.errors?.[0] || 'Translate model not configured');
-  }
-  const translateModelId = models.translate.modelId;
-  const reviewModelId = models.review?.modelId || translateModelId;
+  const engine = fileMeta.engine === 'google' ? 'google' : 'llm';
+  const pdfLayout = fileMeta.pdfLayout || intakeAnswers?.pdfLayout || 'side-by-side';
   const sourceFormat = fileMeta.sourceFormat
     || detectSourceFormat(fileMeta.filename, fileMeta.mimetype)
     || 'pdf';
+
+  let translateModelId = null;
+  let reviewModelId = null;
+  if (engine === 'llm') {
+    const models = await resolveTranslateModels({ userId });
+    if (!models.ok || !models.translate?.modelId) {
+      throw new Error(models.errors?.[0] || 'Translate model not configured');
+    }
+    translateModelId = models.translate.modelId;
+    reviewModelId = models.review?.modelId || translateModelId;
+  } else if (!isGoogleTranslateConfigured()) {
+    throw new Error('GOOGLE_TRANSLATE_API_KEY not configured');
+  }
 
   // ── 1. Extract text ─────────────────────────────────────────────────────────
   await setJobStatus(jobId, { status: 'extracting', stage: 'Extracting text…', progress: 5 });
@@ -419,10 +468,10 @@ async function processTranslateJob(
     throw new Error('No extractable text found in this file');
   }
 
-  // ── 4. Load saved glossary + LLM propose ────────────────────────────────────
+  // ── 4. Glossary + translate (engine-specific) ───────────────────────────────
   await setJobStatus(jobId, {
     status: 'preparing',
-    stage: 'Building glossary from your answers…',
+    stage: engine === 'google' ? 'Preparing glossary…' : 'Building glossary from your answers…',
     progress: 42,
   });
 
@@ -437,7 +486,6 @@ async function processTranslateJob(
     } catch {}
   }
 
-  // Honour must-keep terms from intake as DNT
   const mustKeep = String(intakeAnswers?.mustKeepTerms || '')
     .split(/[,;\n]+/)
     .map(s => s.trim())
@@ -447,27 +495,46 @@ async function processTranslateJob(
   const mergedExisting = [...existingTerms, ...mustKeep];
 
   let glossaryPrep;
-  try {
-    glossaryPrep = await proposeGlossary({
-      modelId: translateModelId,
-      userId,
-      intakeAnswers,
-      sourceSkim,
-      targetLanguage,
-      existingTerms: mergedExisting,
-    });
-  } catch (err) {
-    console.error('[translate] glossary prep failed:', err.message);
+  let sourceLanguage = 'auto';
+  let glossaryTerms = mergedExisting;
+
+  if (engine === 'llm') {
+    try {
+      glossaryPrep = await proposeGlossary({
+        modelId: translateModelId,
+        userId,
+        intakeAnswers,
+        sourceSkim,
+        targetLanguage,
+        existingTerms: mergedExisting,
+      });
+    } catch (err) {
+      console.error('[translate] glossary prep failed:', err.message);
+      glossaryPrep = {
+        sourceLanguage: 'auto',
+        terms: mergedExisting,
+        uncertainTerms: [],
+        guidance: intakeAnswers?.notes || '',
+      };
+    }
+    sourceLanguage = glossaryPrep.sourceLanguage || 'auto';
+    glossaryTerms = glossaryPrep.terms || mergedExisting;
+  } else {
+    // Google: detect language + use saved/must-keep glossary only (no LLM prep)
+    try {
+      sourceLanguage = await googleDetectLanguage(sourceSkim);
+    } catch (err) {
+      console.warn('[translate] Google detect failed:', err.message);
+      sourceLanguage = 'auto';
+    }
     glossaryPrep = {
-      sourceLanguage: 'auto',
+      sourceLanguage,
       terms: mergedExisting,
       uncertainTerms: [],
+      dialectalChoices: [],
       guidance: intakeAnswers?.notes || '',
     };
   }
-
-  const sourceLanguage = glossaryPrep.sourceLanguage || 'auto';
-  const glossaryTerms = glossaryPrep.terms || mergedExisting;
 
   if ((sourceFormat === 'xlsx' || sourceFormat === 'xls') && glossaryPrep.guidance != null) {
     glossaryPrep.guidance = [
@@ -483,93 +550,151 @@ async function processTranslateJob(
       uncertainTerms: glossaryPrep.uncertainTerms || [],
       dialectalChoices: glossaryPrep.dialectalChoices || [],
       guidance: glossaryPrep.guidance || '',
+      engine,
+      pdfLayout,
     }),
   });
 
-  // ── 5. Translate with Vault LLM ─────────────────────────────────────────────
-  await setJobStatus(jobId, { status: 'translating', stage: 'Translating with Vault LLM…', progress: 48 });
+  // ── 5. Translate ────────────────────────────────────────────────────────────
+  await setJobStatus(jobId, {
+    status: 'translating',
+    stage: engine === 'google' ? 'Translating with Google Translate…' : 'Translating with Vault LLM…',
+    progress: 48,
+  });
 
   const translatedByPage = {};
   const allPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b);
-  const runningGlossary = {};
-  for (const t of glossaryTerms) {
-    if (t.source && t.target && !t.doNotTranslate) {
-      runningGlossary[t.source] = t.target;
-    }
-  }
-
-  // Chunk: max ~6 paragraphs / ~3500 chars for LLM context quality
-  const chunks = [];
-  for (const pageNum of allPages) {
-    const paras = paragraphsByPage[pageNum];
-    let currentChunk = { paras: [], chars: 0 };
-    for (const rawPara of paras) {
-      for (const para of splitLongParagraph(rawPara)) {
-        if (currentChunk.paras.length >= 6 || currentChunk.chars + para.length > 3500) {
-          if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
-        }
-        currentChunk.paras.push({ pageNum, text: para });
-        currentChunk.chars += para.length;
-      }
-    }
-    if (currentChunk.paras.length) chunks.push(currentChunk);
-  }
-
+  const reviewPairs = [];
   let chunksDone = 0;
   let totalCharCount = 0;
-  const reviewPairs = [];
 
-  for (const chunk of chunks) {
-    const texts = chunk.paras.map(p => p.text);
-    totalCharCount += texts.reduce((s, t) => s + t.length, 0);
-    let translations;
-    try {
-      translations = await translateParagraphBatch({
-        modelId: translateModelId,
-        userId,
-        paragraphs: texts,
-        sourceLanguage,
-        targetLanguage,
-        glossaryTerms,
-        guidance: glossaryPrep.guidance,
-        runningGlossary,
-        intakeAnswers,
-      });
-    } catch (err) {
-      console.error('[translate] chunk failed:', err.message);
-      translations = texts.map(t => `[Translation error] ${t}`);
+  if (engine === 'google') {
+    // Larger chunks — Google is fast and accepts up to ~20 qs / ~4500 chars
+    const chunks = [];
+    for (const pageNum of allPages) {
+      const paras = paragraphsByPage[pageNum];
+      let currentChunk = { paras: [], chars: 0 };
+      for (const rawPara of paras) {
+        for (const para of splitLongParagraph(rawPara, 4500)) {
+          if (currentChunk.paras.length >= 20 || currentChunk.chars + para.length > 4500) {
+            if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
+          }
+          currentChunk.paras.push({ pageNum, text: para });
+          currentChunk.chars += para.length;
+        }
+      }
+      if (currentChunk.paras.length) chunks.push(currentChunk);
     }
 
-    translations.forEach((rawT, i) => {
-      const { pageNum, text } = chunk.paras[i];
-      const t = applyGlossarySubstitutions(rawT, glossaryTerms);
-      if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
-      translatedByPage[pageNum].push(t);
-      reviewPairs.push({ source: text, target: t });
-    });
+    for (const chunk of chunks) {
+      const texts = chunk.paras.map(p => wrapDoNotTranslate(p.text, glossaryTerms));
+      totalCharCount += texts.reduce((s, t) => s + t.length, 0);
+      let translations;
+      try {
+        translations = await googleTranslateTexts({
+          texts,
+          targetLanguage,
+          sourceLanguage,
+        });
+        translations = translations.map((t) => stripDoNotTranslateSpans(t));
+        translations = translations.map((t) => applyGlossarySubstitutions(t, glossaryTerms));
+      } catch (err) {
+        console.error('[translate] Google chunk failed:', err.message);
+        translations = chunk.paras.map(p => `[Translation error] ${p.text}`);
+      }
 
-    chunksDone++;
-    const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
-    await setJobStatus(jobId, {
-      stage: `Translating: chunk ${chunksDone} of ${chunks.length}`,
-      progress: pct,
-      charCount: totalCharCount,
-    });
+      translations.forEach((t, i) => {
+        const { pageNum, text } = chunk.paras[i];
+        if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
+        translatedByPage[pageNum].push(t);
+        reviewPairs.push({ source: text, target: t });
+      });
+
+      chunksDone++;
+      const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
+      await setJobStatus(jobId, {
+        stage: `Translating: chunk ${chunksDone} of ${chunks.length}`,
+        progress: pct,
+        charCount: totalCharCount,
+      });
+    }
+  } else {
+    const runningGlossary = {};
+    for (const t of glossaryTerms) {
+      if (t.source && t.target && !t.doNotTranslate) {
+        runningGlossary[t.source] = t.target;
+      }
+    }
+
+    const chunks = [];
+    for (const pageNum of allPages) {
+      const paras = paragraphsByPage[pageNum];
+      let currentChunk = { paras: [], chars: 0 };
+      for (const rawPara of paras) {
+        for (const para of splitLongParagraph(rawPara)) {
+          if (currentChunk.paras.length >= 6 || currentChunk.chars + para.length > 3500) {
+            if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
+          }
+          currentChunk.paras.push({ pageNum, text: para });
+          currentChunk.chars += para.length;
+        }
+      }
+      if (currentChunk.paras.length) chunks.push(currentChunk);
+    }
+
+    for (const chunk of chunks) {
+      const texts = chunk.paras.map(p => p.text);
+      totalCharCount += texts.reduce((s, t) => s + t.length, 0);
+      let translations;
+      try {
+        translations = await translateParagraphBatch({
+          modelId: translateModelId,
+          userId,
+          paragraphs: texts,
+          sourceLanguage,
+          targetLanguage,
+          glossaryTerms,
+          guidance: glossaryPrep.guidance,
+          runningGlossary,
+          intakeAnswers,
+        });
+      } catch (err) {
+        console.error('[translate] chunk failed:', err.message);
+        translations = texts.map(t => `[Translation error] ${t}`);
+      }
+
+      translations.forEach((rawT, i) => {
+        const { pageNum, text } = chunk.paras[i];
+        const t = applyGlossarySubstitutions(rawT, glossaryTerms);
+        if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
+        translatedByPage[pageNum].push(t);
+        reviewPairs.push({ source: text, target: t });
+      });
+
+      chunksDone++;
+      const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
+      await setJobStatus(jobId, {
+        stage: `Translating: chunk ${chunksDone} of ${chunks.length}`,
+        progress: pct,
+        charCount: totalCharCount,
+      });
+    }
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
-  // Runs for every job. Fail before "complete" QA / PDF if translation looks like passthrough.
   const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage });
 
   // ── 7. Review pass ──────────────────────────────────────────────────────────
   let qaSummary = {
     skipped: !enableReview,
+    engine,
+    pdfLayout,
     uncertainTerms: glossaryPrep.uncertainTerms || [],
     dialectalChoices: glossaryPrep.dialectalChoices || [],
     guidance: glossaryPrep.guidance || '',
     glossaryTermCount: glossaryTerms.length,
-    translateModel: translateModelId,
-    reviewModel: reviewModelId,
+    translateModel: engine === 'llm' ? translateModelId : 'google-translate-v2',
+    reviewModel: enableReview ? reviewModelId : null,
     maoriPolicy: String(targetLanguage || '').toLowerCase() === 'mi'
       ? (intakeAnswers?.regionalAudience
         ? `Regional adaptation for: ${intakeAnswers.regionalAudience}`
@@ -607,6 +732,8 @@ async function processTranslateJob(
         pageCount,
         pageLabels: pageLabels || {},
         sourceFormat,
+        engine,
+        pdfLayout,
         scannedPages,
         avgOcrConfidence,
         qaSummary,
@@ -618,49 +745,61 @@ async function processTranslateJob(
   }
 
   if (enableReview && reviewPairs.length) {
-    await setJobStatus(jobId, {
-      status: 'reviewing',
-      stage: 'Review pass (QA)…',
-      progress: 82,
-    });
-    try {
-      const review = await reviewTranslation({
-        modelId: reviewModelId,
-        userId,
-        sourceLanguage,
-        targetLanguage,
-        pairs: reviewPairs,
-        glossaryTerms,
-        intakeAnswers,
-      });
-      qaSummary = {
-        ...qaSummary,
-        skipped: false,
-        ...review,
-        uncertainTerms: (review.uncertainTerms?.length
-          ? review.uncertainTerms
-          : glossaryPrep.uncertainTerms) || [],
-        dialectalChoices: (review.dialectalChoices?.length
-          ? review.dialectalChoices
-          : glossaryPrep.dialectalChoices) || [],
-        // Deterministic rows already merged inside reviewTranslation; keep union as belt-and-braces
-        garbledOrIncompleteRows: mergeGarbledRows(
-          gate.garbledOrIncompleteRows,
-          review.garbledOrIncompleteRows
-        ),
-      };
-    } catch (err) {
-      console.error('[translate] review failed:', err.message);
-      qaSummary.reviewError = err.message;
-      // Still keep deterministic garbled rows and verify claims
-      qaSummary.garbledOrIncompleteRows = mergeGarbledRows(
-        gate.garbledOrIncompleteRows,
-        qaSummary.garbledOrIncompleteRows
-      );
+    // Subjective LLM review needs a review model (even for Google translate jobs)
+    if (!reviewModelId) {
+      try {
+        const models = await resolveTranslateModels({ userId });
+        reviewModelId = models.review?.modelId || models.translate?.modelId || null;
+      } catch {}
+    }
+    if (!reviewModelId) {
+      qaSummary.skipped = true;
+      qaSummary.reviewError = 'No review model configured — skipped subjective QA';
       qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
+    } else {
+      await setJobStatus(jobId, {
+        status: 'reviewing',
+        stage: 'Review pass (QA)…',
+        progress: 82,
+      });
+      try {
+        const review = await reviewTranslation({
+          modelId: reviewModelId,
+          userId,
+          sourceLanguage,
+          targetLanguage,
+          pairs: reviewPairs,
+          glossaryTerms,
+          intakeAnswers,
+        });
+        qaSummary = {
+          ...qaSummary,
+          skipped: false,
+          ...review,
+          engine,
+          pdfLayout,
+          uncertainTerms: (review.uncertainTerms?.length
+            ? review.uncertainTerms
+            : glossaryPrep.uncertainTerms) || [],
+          dialectalChoices: (review.dialectalChoices?.length
+            ? review.dialectalChoices
+            : glossaryPrep.dialectalChoices) || [],
+          garbledOrIncompleteRows: mergeGarbledRows(
+            gate.garbledOrIncompleteRows,
+            review.garbledOrIncompleteRows
+          ),
+        };
+      } catch (err) {
+        console.error('[translate] review failed:', err.message);
+        qaSummary.reviewError = err.message;
+        qaSummary.garbledOrIncompleteRows = mergeGarbledRows(
+          gate.garbledOrIncompleteRows,
+          qaSummary.garbledOrIncompleteRows
+        );
+        qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
+      }
     }
   } else {
-    // Review skipped — still attach deterministic completeness + claim spot-check
     const det = runDeterministicCompletenessCheck(reviewPairs, { sourceLanguage, targetLanguage });
     qaSummary.garbledOrIncompleteRows = det.garbledOrIncompleteRows;
     qaSummary.completenessCheck = {
@@ -676,7 +815,11 @@ async function processTranslateJob(
   // ── 8. Hand off to client PDF generation ────────────────────────────────────
   await setJobStatus(jobId, {
     status: 'generating',
-    stage: 'Generating bilingual PDF…',
+    stage: pdfLayout === 'translation-only'
+      ? 'Generating translated PDF…'
+      : pdfLayout === 'side-by-side'
+        ? 'Generating side-by-side PDF…'
+        : 'Generating bilingual PDF…',
     progress: 90,
     charCount: totalCharCount,
     qaSummaryJson: JSON.stringify(qaSummary),
@@ -686,6 +829,8 @@ async function processTranslateJob(
       pageCount,
       pageLabels: pageLabels || {},
       sourceFormat,
+      engine,
+      pdfLayout,
       scannedPages,
       avgOcrConfidence,
       qaSummary,

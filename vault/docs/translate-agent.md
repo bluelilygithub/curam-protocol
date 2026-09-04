@@ -4,11 +4,32 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 
 **Frontend:** `vault/client/src/pages/TranslatePage.jsx`  
 **Backend:** `vault/server/routes/translate.js`  
-**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js`  
+**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js`  
 **Tables:** `translate_jobs`, `translate_glossaries`  
 **Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier)
 
 Feature flag / app: **Translate** (languages).
+
+---
+
+## Engines
+
+Choose per job:
+
+| Engine | When to use | Needs |
+|---|---|---|
+| **Vault LLM** | Domain tone, glossaries, te reo Māori policy, QA review | Translate model in Settings |
+| **Google Translate** | Fast drafts / common languages (~seconds not minutes) | `GOOGLE_TRANSLATE_API_KEY` |
+
+Google skips LLM glossary prep; uses language detect + saved/must-keep glossary. Optional LLM QA review can still be enabled after Google.
+
+## PDF layouts
+
+| Layout | Output |
+|---|---|
+| **Side by side** | Original and translation in two columns on the same page |
+| **Separate translated document** | Translation pages only |
+| **Bilingual pages** | Full original page, then full translation page (legacy) |
 
 ---
 
@@ -22,7 +43,7 @@ Feature flag / app: **Translate** (languages).
 
 Max size: **15 MB**. Google Docs / Sheets: export as `.docx` / `.xlsx` then upload (no Drive OAuth).
 
-Output is always a **bilingual PDF** (source section + translation section per page/sheet), regardless of upload type. Download filename: `translated-{basename}.pdf`.
+Download filename: `translated-{basename}.pdf` (layout chosen per job).
 
 ---
 
