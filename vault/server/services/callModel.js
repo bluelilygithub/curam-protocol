@@ -33,9 +33,30 @@ function summarizeAnthropicContent(content) {
   }));
 }
 
-async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false } = {}) {
+async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0 } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
 
+  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage });
+
+  if (!timeoutMs || timeoutMs <= 0) return run();
+
+  let timer;
+  try {
+    return await Promise.race([
+      run(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Model call timed out after ${Math.round(timeoutMs / 1000)}s (${modelId})`)),
+          timeoutMs
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false } = {}) {
   const promptLen = String(userPrompt || '').length;
 
   if (modelId.startsWith('ollama:')) {

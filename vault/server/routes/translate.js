@@ -350,6 +350,23 @@ function splitLongParagraph(text, limit = 3500) {
   return pieces.length ? pieces : [text.slice(0, limit)];
 }
 
+/** Run async work over items with limited concurrency; preserves result order. */
+async function mapPool(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function run() {
+    while (true) {
+      const i = next;
+      next += 1;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(Array.from({ length: n }, () => run()));
+  return results;
+}
+
 async function processTranslateJob(
   jobId, fileBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview,
   fileMeta = {}
@@ -626,14 +643,14 @@ async function processTranslateJob(
       }
     }
 
-    // Chunk: max ~4 paragraphs / ~2800 chars — smaller batches reduce DeepSeek/Gemini JSON truncation
+    // Chunk: ~5 paragraphs / ~3200 chars. Parallel pool makes wall-clock closer to Google.
     const chunks = [];
     for (const pageNum of allPages) {
       const paras = paragraphsByPage[pageNum];
       let currentChunk = { paras: [], chars: 0 };
       for (const rawPara of paras) {
-        for (const para of splitLongParagraph(rawPara, 2800)) {
-          if (currentChunk.paras.length >= 4 || currentChunk.chars + para.length > 2800) {
+        for (const para of splitLongParagraph(rawPara, 3200)) {
+          if (currentChunk.paras.length >= 5 || currentChunk.chars + para.length > 3200) {
             if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
           }
           currentChunk.paras.push({ pageNum, text: para });
@@ -643,9 +660,15 @@ async function processTranslateJob(
       if (currentChunk.paras.length) chunks.push(currentChunk);
     }
 
-    for (const chunk of chunks) {
+    const LLM_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.TRANSLATE_LLM_CONCURRENCY) || 4));
+    let inFlight = 0;
+    const chunkResults = await mapPool(chunks, LLM_CONCURRENCY, async (chunk, chunkIndex) => {
+      inFlight += 1;
       const texts = chunk.paras.map(p => p.text);
-      totalCharCount += texts.reduce((s, t) => s + t.length, 0);
+      await setJobStatus(jobId, {
+        stage: `Translating: ${chunksDone} of ${chunks.length} done · ${inFlight} in flight (×${LLM_CONCURRENCY})`,
+        progress: 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32),
+      });
       let translations;
       try {
         translations = await translateParagraphBatch({
@@ -658,26 +681,37 @@ async function processTranslateJob(
           guidance: glossaryPrep.guidance,
           runningGlossary,
           intakeAnswers,
+          onProgress: ({ phase, n }) => {
+            setJobStatus(jobId, {
+              stage: `Translating chunk ${chunkIndex + 1}/${chunks.length}: ${phase || 'working'} (${n || texts.length} paras)`,
+            }).catch(() => {});
+          },
         });
       } catch (err) {
         console.error('[translate] chunk failed:', err.message);
         translations = texts.map(t => `[Translation error] ${t}`);
       }
+      inFlight -= 1;
+      chunksDone += 1;
+      const chars = texts.reduce((s, t) => s + t.length, 0);
+      totalCharCount += chars;
+      const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
+      await setJobStatus(jobId, {
+        stage: `Translating: ${chunksDone} of ${chunks.length} done`,
+        progress: pct,
+        charCount: totalCharCount,
+      });
+      return { chunkIndex, paras: chunk.paras, translations };
+    });
 
-      translations.forEach((rawT, i) => {
-        const { pageNum, text } = chunk.paras[i];
+    // Apply in chunk order so page paragraph order stays stable
+    for (const result of chunkResults) {
+      result.translations.forEach((rawT, i) => {
+        const { pageNum, text } = result.paras[i];
         const t = applyGlossarySubstitutions(rawT, glossaryTerms);
         if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
         translatedByPage[pageNum].push(t);
         reviewPairs.push({ source: text, target: t });
-      });
-
-      chunksDone++;
-      const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
-      await setJobStatus(jobId, {
-        stage: `Translating: chunk ${chunksDone} of ${chunks.length}`,
-        progress: pct,
-        charCount: totalCharCount,
       });
     }
   }

@@ -192,6 +192,8 @@ function translationMaxTokens(paragraphs) {
   return Math.min(16000, Math.max(4096, Math.ceil(inputChars * 3.5) + 1200));
 }
 
+const TRANSLATE_CALL_TIMEOUT_MS = 45000;
+
 /**
  * Translate a batch of paragraphs. Returns array of strings same length as input.
  * On parse/length failure: split and retry, then single-paragraph calls — avoid marking
@@ -201,6 +203,8 @@ async function translateParagraphBatch({
   modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary,
   intakeAnswers = {},
   _depth = 0,
+  timeoutMs = TRANSLATE_CALL_TIMEOUT_MS,
+  onProgress,
 }) {
   if (!paragraphs?.length) return [];
 
@@ -210,6 +214,7 @@ async function translateParagraphBatch({
       modelId, userId,
       paragraph: paragraphs[0],
       sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary, intakeAnswers,
+      timeoutMs,
     })];
   }
 
@@ -249,12 +254,13 @@ No markdown fences. No commentary.`;
       maxTokens,
       system,
       returnUsage: true,
+      timeoutMs,
     });
   } catch (err) {
     console.error('[translate] batch call failed:', err.message, { n: paragraphs.length, maxTokens });
     return splitAndRetryTranslate({
       modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance,
-      runningGlossary, intakeAnswers, _depth, reason: err.message,
+      runningGlossary, intakeAnswers, _depth, reason: err.message, timeoutMs, onProgress,
     });
   }
 
@@ -287,6 +293,8 @@ No markdown fences. No commentary.`;
       paragraphs: paragraphs.slice(translations.length),
       sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary, intakeAnswers,
       _depth: _depth + 1,
+      timeoutMs,
+      onProgress,
     });
     return [...translations.map((t) => String(t || '').trim()), ...rest];
   }
@@ -301,12 +309,12 @@ No markdown fences. No commentary.`;
 
   return splitAndRetryTranslate({
     modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance,
-    runningGlossary, intakeAnswers, _depth, reason: 'parse_mismatch',
+    runningGlossary, intakeAnswers, _depth, reason: 'parse_mismatch', timeoutMs, onProgress,
   });
 }
 
 async function splitAndRetryTranslate(opts) {
-  const { paragraphs, _depth = 0, reason } = opts;
+  const { paragraphs, _depth = 0, reason, timeoutMs, onProgress } = opts;
   if (paragraphs.length <= 1) {
     return [await translateOneParagraph({ ...opts, paragraph: paragraphs[0] })];
   }
@@ -314,15 +322,22 @@ async function splitAndRetryTranslate(opts) {
     console.error('[translate] giving up after splits:', reason, { n: paragraphs.length });
     return paragraphs.map((p) => `[Translation incomplete] ${p}`);
   }
+  if (typeof onProgress === 'function') {
+    onProgress({ phase: 'split-retry', depth: _depth, n: paragraphs.length, reason });
+  }
   const mid = Math.ceil(paragraphs.length / 2);
-  const left = await translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(0, mid), _depth: _depth + 1 });
-  const right = await translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(mid), _depth: _depth + 1 });
+  // Parallel halves — cut wall-clock time when a batch fails
+  const [left, right] = await Promise.all([
+    translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(0, mid), _depth: _depth + 1 }),
+    translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(mid), _depth: _depth + 1 }),
+  ]);
   return [...left, ...right];
 }
 
 async function translateOneParagraph({
   modelId, userId, paragraph, sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary,
   intakeAnswers = {},
+  timeoutMs = TRANSLATE_CALL_TIMEOUT_MS,
 }) {
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const system = `You are a professional document translator.
@@ -351,7 +366,9 @@ No markdown fences.`;
 
   const maxTokens = translationMaxTokens([paragraph]);
   try {
-    const res = await callModel(modelId, prompt, { maxTokens, system, returnUsage: true });
+    const res = await callModel(modelId, prompt, {
+      maxTokens, system, returnUsage: true, timeoutMs,
+    });
     if (userId) {
       logUsage({
         userId, model: modelId,
@@ -363,7 +380,6 @@ No markdown fences.`;
     if (parsed?.translation && String(parsed.translation).trim()) {
       return String(parsed.translation).trim();
     }
-    // Bare string / first recovered quoted string
     const arr = extractTranslationsArray(res.text, 1);
     if (arr?.[0]?.trim()) return String(arr[0]).trim();
     const cleaned = String(res.text || '')

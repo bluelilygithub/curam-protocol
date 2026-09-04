@@ -23,6 +23,8 @@ Choose per job:
 
 Google skips LLM glossary prep; uses language detect + saved/must-keep glossary. Optional LLM QA review can still be enabled after Google.
 
+LLM translate runs **up to 4 chunks in parallel** (`TRANSLATE_LLM_CONCURRENCY`, default 4) with a **45s per-call timeout**, so a stuck model call fails over to split/retry instead of hanging the job. Still slower than Google on large docs — use Google when speed matters.
+
 ## PDF layouts
 
 | Layout | Output |
