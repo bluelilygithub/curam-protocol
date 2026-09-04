@@ -626,13 +626,14 @@ async function processTranslateJob(
       }
     }
 
+    // Chunk: max ~4 paragraphs / ~2800 chars — smaller batches reduce DeepSeek/Gemini JSON truncation
     const chunks = [];
     for (const pageNum of allPages) {
       const paras = paragraphsByPage[pageNum];
       let currentChunk = { paras: [], chars: 0 };
       for (const rawPara of paras) {
-        for (const para of splitLongParagraph(rawPara)) {
-          if (currentChunk.paras.length >= 6 || currentChunk.chars + para.length > 3500) {
+        for (const para of splitLongParagraph(rawPara, 2800)) {
+          if (currentChunk.paras.length >= 4 || currentChunk.chars + para.length > 2800) {
             if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
           }
           currentChunk.paras.push({ pageNum, text: para });

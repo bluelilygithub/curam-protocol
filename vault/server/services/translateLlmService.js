@@ -141,24 +141,91 @@ Rules:
 }
 
 /**
+ * Pull a translations[] array out of model text — full JSON, fenced, or truncated.
+ */
+function extractTranslationsArray(text, expectedLen) {
+  const parsed = parseModelJson(text);
+  if (Array.isArray(parsed?.translations)) return parsed.translations;
+  if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) return parsed;
+
+  const raw = String(text || '');
+  // Recover complete JSON string literals from a (possibly truncated) translations array
+  const keyIdx = raw.search(/"translations"\s*:\s*\[/i);
+  const slice = keyIdx >= 0 ? raw.slice(keyIdx) : raw;
+  const strings = [];
+  const re = /"(?:\\.|[^"\\])*"/g;
+  let m;
+  let started = keyIdx < 0; // if no key, still try scanning quoted strings after [
+  const arrStart = slice.indexOf('[');
+  const scanFrom = arrStart >= 0 ? slice.slice(arrStart + 1) : slice;
+  if (keyIdx >= 0 || arrStart >= 0) started = true;
+  if (started) {
+    while ((m = re.exec(scanFrom)) !== null) {
+      // Skip the key name "translations" if captured
+      if (m[0] === '"translations"') continue;
+      try {
+        strings.push(JSON.parse(m[0]));
+      } catch {
+        /* skip bad token */
+      }
+      if (expectedLen && strings.length >= expectedLen) break;
+    }
+  }
+
+  if (strings.length === expectedLen) return strings;
+  if (strings.length > 0 && strings.length < expectedLen) return strings; // partial — caller may retry rest
+
+  // Numbered lines: [1] ... / 1. ...
+  const lines = raw
+    .split(/\n+/)
+    .map((l) => l.replace(/^\s*(?:\[\d+\]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+    .filter((l) => !l.startsWith('{') && !l.startsWith('}') && l !== '[' && l !== ']');
+  if (lines.length === expectedLen) return lines;
+
+  return null;
+}
+
+function translationMaxTokens(paragraphs) {
+  const inputChars = paragraphs.join('').length;
+  // Spanish/Māori often expand; JSON wrapper adds overhead. Old formula (800+len) truncated often.
+  return Math.min(16000, Math.max(4096, Math.ceil(inputChars * 3.5) + 1200));
+}
+
+/**
  * Translate a batch of paragraphs. Returns array of strings same length as input.
+ * On parse/length failure: split and retry, then single-paragraph calls — avoid marking
+ * a whole chunk [Translation incomplete] when only the batch JSON failed.
  */
 async function translateParagraphBatch({
   modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary,
   intakeAnswers = {},
+  _depth = 0,
 }) {
+  if (!paragraphs?.length) return [];
+
+  // Single paragraph — simplest path
+  if (paragraphs.length === 1) {
+    return [await translateOneParagraph({
+      modelId, userId,
+      paragraph: paragraphs[0],
+      sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary, intakeAnswers,
+    })];
+  }
+
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
 Preserve sentence type (statement vs question), polarity (affirmative vs negative), and meaning.
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
 ${policy ? `\n${policy}\n` : ''}
-Return ONLY valid JSON: { "translations": ["...", "..."] } with the same number of items, same order.
-No commentary.`;
+Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
+No markdown fences. No commentary.`;
 
   const prompt = [
     `Source language: ${sourceLanguage || 'auto'}`,
     `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
+    `Required translations array length: ${paragraphs.length}`,
     '',
     'Translator guidance:',
     guidance || '(none)',
@@ -175,11 +242,22 @@ No commentary.`;
     paragraphs.map((p, i) => `[${i + 1}] ${p}`).join('\n\n'),
   ].join('\n');
 
-  const res = await callModel(modelId, prompt, {
-    maxTokens: Math.min(8000, 800 + paragraphs.join('').length),
-    system,
-    returnUsage: true,
-  });
+  const maxTokens = translationMaxTokens(paragraphs);
+  let res;
+  try {
+    res = await callModel(modelId, prompt, {
+      maxTokens,
+      system,
+      returnUsage: true,
+    });
+  } catch (err) {
+    console.error('[translate] batch call failed:', err.message, { n: paragraphs.length, maxTokens });
+    return splitAndRetryTranslate({
+      modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance,
+      runningGlossary, intakeAnswers, _depth, reason: err.message,
+    });
+  }
+
   if (userId) {
     logUsage({
       userId, model: modelId,
@@ -188,21 +266,119 @@ No commentary.`;
     }).catch(() => {});
   }
 
-  const parsed = parseModelJson(res.text);
-  let translations = Array.isArray(parsed?.translations) ? parsed.translations : null;
+  const rawText = String(res.text || '');
+  let translations = extractTranslationsArray(rawText, paragraphs.length);
 
-  // Fallback: try line-split if model ignored JSON
-  if (!translations || translations.length !== paragraphs.length) {
-    const lines = String(res.text || '').split(/\n+/).map((l) => l.replace(/^\s*\[\d+\]\s*/, '').trim()).filter(Boolean);
-    if (lines.length === paragraphs.length) translations = lines;
+  if (translations && translations.length === paragraphs.length) {
+    return translations.map((t) => String(t || '').trim());
   }
 
-  if (!translations || translations.length !== paragraphs.length) {
-    // Last resort: return originals marked
-    translations = paragraphs.map((p) => `[Translation incomplete] ${p}`);
+  // Partial recovery: keep good prefix, retry the rest
+  if (translations && translations.length > 0 && translations.length < paragraphs.length) {
+    console.warn('[translate] partial batch recovery', {
+      got: translations.length,
+      expected: paragraphs.length,
+      textLen: rawText.length,
+      maxTokens,
+      finish: res.diagnostics?.finishReason,
+    });
+    const rest = await translateParagraphBatch({
+      modelId, userId,
+      paragraphs: paragraphs.slice(translations.length),
+      sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary, intakeAnswers,
+      _depth: _depth + 1,
+    });
+    return [...translations.map((t) => String(t || '').trim()), ...rest];
   }
 
-  return translations.map((t) => String(t || '').trim());
+  console.warn('[translate] batch parse failed — splitting', {
+    expected: paragraphs.length,
+    textLen: rawText.length,
+    maxTokens,
+    preview: rawText.slice(0, 180).replace(/\s+/g, ' '),
+    finish: res.diagnostics?.finishReason,
+  });
+
+  return splitAndRetryTranslate({
+    modelId, userId, paragraphs, sourceLanguage, targetLanguage, glossaryTerms, guidance,
+    runningGlossary, intakeAnswers, _depth, reason: 'parse_mismatch',
+  });
+}
+
+async function splitAndRetryTranslate(opts) {
+  const { paragraphs, _depth = 0, reason } = opts;
+  if (paragraphs.length <= 1) {
+    return [await translateOneParagraph({ ...opts, paragraph: paragraphs[0] })];
+  }
+  if (_depth > 6) {
+    console.error('[translate] giving up after splits:', reason, { n: paragraphs.length });
+    return paragraphs.map((p) => `[Translation incomplete] ${p}`);
+  }
+  const mid = Math.ceil(paragraphs.length / 2);
+  const left = await translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(0, mid), _depth: _depth + 1 });
+  const right = await translateParagraphBatch({ ...opts, paragraphs: paragraphs.slice(mid), _depth: _depth + 1 });
+  return [...left, ...right];
+}
+
+async function translateOneParagraph({
+  modelId, userId, paragraph, sourceLanguage, targetLanguage, glossaryTerms, guidance, runningGlossary,
+  intakeAnswers = {},
+}) {
+  const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
+  const system = `You are a professional document translator.
+Translate the paragraph into ${langName(targetLanguage)}.
+Preserve meaning, polarity, and sentence type. Obey the glossary.
+${policy ? `\n${policy}\n` : ''}
+Return ONLY valid JSON: { "translation": "..." }
+No markdown fences.`;
+
+  const prompt = [
+    `Source language: ${sourceLanguage || 'auto'}`,
+    `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
+    '',
+    'Guidance:', guidance || '(none)',
+    '',
+    'Glossary:', buildGlossaryBlock(glossaryTerms),
+    '',
+    'Running terms:',
+    runningGlossary && Object.keys(runningGlossary).length
+      ? Object.entries(runningGlossary).map(([s, t]) => `- "${s}" → "${t}"`).join('\n')
+      : '(none)',
+    '',
+    'Paragraph:',
+    paragraph,
+  ].join('\n');
+
+  const maxTokens = translationMaxTokens([paragraph]);
+  try {
+    const res = await callModel(modelId, prompt, { maxTokens, system, returnUsage: true });
+    if (userId) {
+      logUsage({
+        userId, model: modelId,
+        inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+        feature: 'translate_one',
+      }).catch(() => {});
+    }
+    const parsed = parseModelJson(res.text);
+    if (parsed?.translation && String(parsed.translation).trim()) {
+      return String(parsed.translation).trim();
+    }
+    // Bare string / first recovered quoted string
+    const arr = extractTranslationsArray(res.text, 1);
+    if (arr?.[0]?.trim()) return String(arr[0]).trim();
+    const cleaned = String(res.text || '')
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    if (cleaned && !cleaned.startsWith('{') && cleaned.length > 0) return cleaned;
+    console.warn('[translate] single paragraph empty/unparsed', {
+      textLen: String(res.text || '').length,
+      preview: String(res.text || '').slice(0, 120),
+    });
+  } catch (err) {
+    console.error('[translate] single paragraph failed:', err.message);
+  }
+  return `[Translation incomplete] ${paragraph}`;
 }
 
 /**

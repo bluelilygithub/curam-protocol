@@ -173,17 +173,23 @@ function hardSanityGate(pairs, opts = {}) {
     };
   }
 
-  if (
-    stats.placeholderCount >= placeholderFailAbs
+  if (stats.placeholderCount >= placeholderFailAbs
     || stats.placeholderRatio > placeholderFailRatio
   ) {
     const pct = Math.round(stats.placeholderRatio * 100);
+    const incompleteHeavy = (pairs || []).filter((p) =>
+      /\[\s*translation\s+incomplete\s*\]/i.test(String(p?.target || ''))
+    ).length;
+    const hint = incompleteHeavy >= Math.max(2, stats.placeholderCount * 0.5)
+      ? ' Most failures are “[Translation incomplete]” — the LLM batch likely returned truncated/invalid JSON. Retry, use a stronger translate model, or switch the engine to Google Translate for speed.'
+      : '';
     return {
       ok: false,
       code: 'placeholders_present',
       message:
         `${stats.placeholderCount} segment(s) contain placeholder / incomplete markers `
-        + `(${pct}% of segments). Job failed — fix translation and retry.`,
+        + `(${pct}% of segments). Job failed — fix translation and retry.`
+        + hint,
       stats,
       garbledOrIncompleteRows,
     };
