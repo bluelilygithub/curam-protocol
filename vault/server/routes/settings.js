@@ -11,6 +11,7 @@ const {
   assertFrontierSlotAllowed,
   getDocumentRedactionAgentCardConfig,
 } = require('../services/documentRedactionModelResolver');
+const { getTranslateAgentCardConfig } = require('../services/translateModelResolver');
 const { resolveEmbeddingConfig, getGeminiEmbeddingOptions } = require('../services/embeddingResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
@@ -66,9 +67,11 @@ router.get('/effective-models', async (req, res) => {
   try {
     const config = await getVaultModelsConfigForUser(req.user.id);
     const documentRedactionAgent = await getDocumentRedactionAgentCardConfig(req.user.id);
+    const translateAgent = await getTranslateAgentCardConfig(req.user.id);
     res.json({
       ...config,
       documentRedactionAgent,
+      translateAgent,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,6 +82,16 @@ router.get('/effective-models', async (req, res) => {
 router.get('/document-redaction-agent', async (req, res) => {
   try {
     const card = await getDocumentRedactionAgentCardConfig(req.user.id);
+    res.json(card);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/translate-agent — translate + review model slots
+router.get('/translate-agent', async (req, res) => {
+  try {
+    const card = await getTranslateAgentCardConfig(req.user.id);
     res.json(card);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

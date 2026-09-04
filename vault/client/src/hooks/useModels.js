@@ -12,6 +12,9 @@ export function useModels() {
   const [documentRedactionLocalModel, setDocumentRedactionLocalModel] = useState('');
   const [documentRedactionFrontierModel, setDocumentRedactionFrontierModel] = useState('');
   const [documentRedactionCard, setDocumentRedactionCard] = useState(null);
+  const [translateModel, setTranslateModel] = useState('');
+  const [translateReviewModel, setTranslateReviewModel] = useState('');
+  const [translateAgentCard, setTranslateAgentCard] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,6 +34,11 @@ export function useModels() {
           setDocumentRedactionLocalModel(data.documentRedactionAgent.local?.modelId || '');
           setDocumentRedactionFrontierModel(data.documentRedactionAgent.frontier?.modelId || '');
         }
+        if (data.translateAgent) {
+          setTranslateAgentCard(data.translateAgent);
+          setTranslateModel(data.translateAgent.translate?.modelId || '');
+          setTranslateReviewModel(data.translateAgent.review?.modelId || '');
+        }
         if (data.defaultModel) {
           setDefaultModel(data.defaultModel);
         } else if (data.models?.[0]?.id) {
@@ -49,6 +57,8 @@ export function useModels() {
         if (settings.document_redaction_frontier_model) {
           setDocumentRedactionFrontierModel(settings.document_redaction_frontier_model);
         }
+        if (settings.translate_model) setTranslateModel(settings.translate_model);
+        if (settings.translate_review_model) setTranslateReviewModel(settings.translate_review_model);
       }
       if (embeddingRes.ok) {
         const emb = await embeddingRes.json();
@@ -75,6 +85,7 @@ export function useModels() {
     if (effectiveRes.ok) {
       const effective = await effectiveRes.json();
       if (effective.documentRedactionAgent) setDocumentRedactionCard(effective.documentRedactionAgent);
+      if (effective.translateAgent) setTranslateAgentCard(effective.translateAgent);
     }
     return { ok: true };
   }, []);
@@ -127,6 +138,22 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  const saveTranslateModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'translate_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save translate model');
+    setTranslateModel(modelId);
+    return { ok: true };
+  }, []);
+
+  const saveTranslateReviewModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'translate_review_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save translate review model');
+    setTranslateReviewModel(modelId);
+    return { ok: true };
+  }, []);
+
   return {
     models,
     setModels,
@@ -147,5 +174,10 @@ export function useModels() {
     documentRedactionCard,
     saveDocumentRedactionLocalModel,
     saveDocumentRedactionFrontierModel,
+    translateModel,
+    translateReviewModel,
+    translateAgentCard,
+    saveTranslateModel,
+    saveTranslateReviewModel,
   };
 }

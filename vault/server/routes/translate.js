@@ -1,15 +1,17 @@
+'use strict';
+
 const express = require('express');
 const multer  = require('multer');
-const fetch   = require('node-fetch');
 const { pool } = require('../db');
+const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../services/translateModelResolver');
+const {
+  proposeGlossary,
+  translateParagraphBatch,
+  reviewTranslation,
+  applyGlossarySubstitutions,
+} = require('../services/translateLlmService');
 
 const router = express.Router();
-
-// ── Google Translate API key check ────────────────────────────────────────────
-const TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || '';
-if (!TRANSLATE_API_KEY) {
-  console.warn('[translate] GOOGLE_TRANSLATE_API_KEY not set — translate agent will not function');
-}
 
 // ── Tesseract worker pool (initialised once at module load) ───────────────────
 let scheduler = null;
@@ -23,14 +25,12 @@ async function getScheduler() {
     Array.from({ length: 4 }, () => createWorker(OCR_LANGS))
   );
   workers.forEach(w => scheduler.addWorker(w));
-  console.log('[translate] Tesseract worker pool ready (4 workers, langs: eng+fra+deu+spa+ita+por+chi_sim+jpn)');
+  console.log('[translate] Tesseract worker pool ready (4 workers)');
   return scheduler;
 }
 
-// Initialise pool eagerly at startup (non-blocking)
 getScheduler().catch(err => console.error('[translate] Tesseract init failed:', err.message));
 
-// ── Multer — 15 MB PDF only ───────────────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
@@ -40,7 +40,6 @@ const upload = multer({
   },
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 async function setJobStatus(jobId, fields) {
   const keys   = Object.keys(fields);
   const values = Object.values(fields);
@@ -52,9 +51,20 @@ async function markJobFailed(jobId, message) {
   await setJobStatus(jobId, { status: 'failed', errorMessage: message, progress: 0 });
 }
 
-// ── Config endpoint ────────────────────────────────────────────────────────────
-router.get('/config', (req, res) => {
-  res.json({ configured: !!TRANSLATE_API_KEY });
+// ── Config ────────────────────────────────────────────────────────────────────
+router.get('/config', async (req, res) => {
+  try {
+    const models = await resolveTranslateModels({ userId: req.user.id });
+    res.json({
+      configured: models.ok,
+      engine: 'vault-llm',
+      translateModel: models.translate?.modelId || null,
+      reviewModel: models.review?.modelId || null,
+      errors: models.errors || [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, configured: false });
+  }
 });
 
 // ── Glossary CRUD ─────────────────────────────────────────────────────────────
@@ -116,13 +126,14 @@ router.delete('/glossaries/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Job list ───────────────────────────────────────────────────────────────────
+// ── Jobs ──────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, filename, status, stage, progress, "sourceLanguage", "targetLanguage",
               "pageCount", "scannedPageCount", "avgOcrConfidence", "glossaryId",
-              "errorMessage", "fileSizeBytes", "charCount", "createdAt", "completedAt"
+              "errorMessage", "fileSizeBytes", "charCount", "qaSummaryJson",
+              "createdAt", "completedAt"
        FROM translate_jobs WHERE "userId"=$1 ORDER BY "createdAt" DESC`,
       [req.user.id]
     );
@@ -130,12 +141,12 @@ router.get('/jobs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Job status (lightweight poll) ─────────────────────────────────────────────
 router.get('/jobs/:id/status', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, status, stage, progress, "sourceLanguage", "targetLanguage",
               "pageCount", "scannedPageCount", "avgOcrConfidence", "translatedTextJson",
+              "qaSummaryJson", "proposedGlossaryJson", "intakeAnswers",
               "errorMessage", "completedAt"
        FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
       [req.params.id, req.user.id]
@@ -145,7 +156,6 @@ router.get('/jobs/:id/status', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Download translated PDF ───────────────────────────────────────────────────
 router.get('/jobs/:id/download', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -160,7 +170,6 @@ router.get('/jobs/:id/download', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Delete job ────────────────────────────────────────────────────────────────
 router.delete('/jobs/:id', async (req, res) => {
   try {
     await pool.query(
@@ -171,7 +180,6 @@ router.delete('/jobs/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Client reports PDF generation failure ─────────────────────────────────────
 router.post('/jobs/:id/fail', async (req, res) => {
   try {
     const message = req.body?.error || (req.file ? 'Client-side generation error' : 'Unknown error');
@@ -180,7 +188,6 @@ router.post('/jobs/:id/fail', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Complete job (client posts generated PDF) ─────────────────────────────────
 router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'PDF required' });
@@ -197,16 +204,37 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
 // ── Submit job ────────────────────────────────────────────────────────────────
 router.post('/jobs', upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'PDF file required' });
-  if (!TRANSLATE_API_KEY) return res.status(503).json({ error: 'Google Translate API key not configured' });
 
-  const { targetLanguage, glossaryId, scannedPageImages } = req.body;
+  const models = await resolveTranslateModels({ userId: req.user.id });
+  if (!models.ok || !models.translate?.modelId) {
+    return res.status(503).json({
+      error: models.errors?.[0] || 'Translate model not configured — set it in Settings → Translate agent',
+    });
+  }
+
+  const { targetLanguage, glossaryId } = req.body;
   if (!targetLanguage) return res.status(400).json({ error: 'targetLanguage required' });
 
-  // Parse scanned page images sent by client
-  let scannedImages = {};
-  try { scannedImages = scannedPageImages ? JSON.parse(scannedPageImages) : {}; } catch {}
+  let intakeAnswers = {};
+  try {
+    intakeAnswers = req.body.intakeAnswers
+      ? (typeof req.body.intakeAnswers === 'string'
+        ? JSON.parse(req.body.intakeAnswers)
+        : req.body.intakeAnswers)
+      : {};
+  } catch {
+    return res.status(400).json({ error: 'Invalid intakeAnswers JSON' });
+  }
 
-  // Reject password-protected PDFs
+  if (!intakeAnswers.domain) {
+    return res.status(400).json({ error: 'Please answer the intake questions (domain is required)' });
+  }
+
+  const enableReview = String(req.body.enableReview ?? 'true') !== 'false';
+
+  let scannedImages = {};
+  try { scannedImages = req.body.scannedPageImages ? JSON.parse(req.body.scannedPageImages) : {}; } catch {}
+
   const pdfParse = require('pdf-parse');
   try { await pdfParse(req.file.buffer, { max: 1 }); }
   catch (e) {
@@ -216,52 +244,58 @@ router.post('/jobs', upload.single('pdf'), async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO translate_jobs ("userId", filename, status, "targetLanguage", "fileSizeBytes", "originalPdf")
-     VALUES ($1,$2,'pending',$3,$4,$5) RETURNING id`,
-    [req.user.id, req.file.originalname, targetLanguage, req.file.size, req.file.buffer]
+    `INSERT INTO translate_jobs
+       ("userId", filename, status, "targetLanguage", "fileSizeBytes", "originalPdf",
+        "glossaryId", "intakeAnswers", "enableReview")
+     VALUES ($1,$2,'pending',$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [
+      req.user.id,
+      req.file.originalname,
+      targetLanguage,
+      req.file.size,
+      req.file.buffer,
+      glossaryId ? parseInt(glossaryId, 10) : null,
+      JSON.stringify(intakeAnswers),
+      enableReview,
+    ]
   );
   const jobId = rows[0].id;
 
-  // Fire pipeline asynchronously — do not await
   processTranslateJob(jobId, req.file.buffer, req.user.id, targetLanguage,
-    glossaryId ? parseInt(glossaryId) : null, scannedImages)
+    glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview)
     .catch(err => markJobFailed(jobId, err.message));
 
   res.status(202).json({ jobId });
 });
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
-
-// Decode HTML entities returned by Google Translate (format:'html' mode)
-function decodeHtmlEntities(str) {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, '\u00A0')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
-    .replace(/&[a-z]+;/gi, '');
-}
-
-// Language-specific typographic corrections
-function applyTypography(text, lang) {
-  let t = decodeHtmlEntities(text);
-
-  if (lang === 'fr' || lang === 'fr-CA') {
-    // Convert straight double-quotes around phrases to guillemets
-    t = t.replace(/"([^"]{1,200})"/g, '\u00AB\u00A0$1\u00A0\u00BB');
-    // Ensure non-breaking space before :  ;  !  ?  (French typographic rule)
-    t = t.replace(/\s*([;:!?])/g, '\u00A0$1');
-    // Normalise currency spacing: number then space then currency symbol
-    t = t.replace(/(\d)\s*\$\s*/g, '$1\u00A0$\u00A0');
+function splitLongParagraph(text, limit = 3500) {
+  if (text.length <= limit) return [text];
+  const pieces = [];
+  const sentences = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
+  let current = '';
+  for (const s of sentences) {
+    if (current.length + s.length > limit && current.length > 0) {
+      pieces.push(current.trim());
+      current = s;
+    } else {
+      current += s;
+    }
   }
-
-  return t;
+  if (current.trim()) pieces.push(current.trim());
+  return pieces.length ? pieces : [text.slice(0, limit)];
 }
-async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glossaryId, scannedImages) {
+
+async function processTranslateJob(
+  jobId, pdfBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview
+) {
   const pdfParse = require('pdf-parse');
+  const models = await resolveTranslateModels({ userId });
+  if (!models.ok || !models.translate?.modelId) {
+    throw new Error(models.errors?.[0] || 'Translate model not configured');
+  }
+  const translateModelId = models.translate.modelId;
+  const reviewModelId = models.review?.modelId || translateModelId;
 
   // ── 1. Extract text per page ────────────────────────────────────────────────
   await setJobStatus(jobId, { status: 'extracting', stage: 'Extracting text…', progress: 5 });
@@ -269,7 +303,6 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
   const pageTexts = {};
   let pageCount = 0;
 
-  // Use pdf-parse's pagerender callback to collect per-page text
   await pdfParse(pdfBuffer, {
     pagerender: (pageData) => {
       return pageData.getTextContent().then(tc => {
@@ -288,21 +321,16 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
     },
   });
 
-  // Detect scanned pages (fewer than 20 chars of native text)
   const scannedPages = [];
   for (const [page, items] of Object.entries(pageTexts)) {
     const totalChars = items.reduce((s, i) => s + i.text.length, 0);
-    if (totalChars < 20) scannedPages.push(parseInt(page));
+    if (totalChars < 20) scannedPages.push(parseInt(page, 10));
   }
-  // Also include any pages the client flagged
   for (const page of Object.keys(scannedImages)) {
-    if (!scannedPages.includes(parseInt(page))) scannedPages.push(parseInt(page));
+    if (!scannedPages.includes(parseInt(page, 10))) scannedPages.push(parseInt(page, 10));
   }
 
-  await setJobStatus(jobId, {
-    pageCount,
-    scannedPageCount: scannedPages.length,
-  });
+  await setJobStatus(jobId, { pageCount, scannedPageCount: scannedPages.length });
 
   // ── 2. OCR scanned pages ────────────────────────────────────────────────────
   let avgOcrConfidence = null;
@@ -310,7 +338,6 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
     await setJobStatus(jobId, { status: 'ocr', stage: `OCR: 0 of ${scannedPages.length} pages`, progress: 10 });
     const sched = await getScheduler();
     const confidences = [];
-
     const batchSize = 4;
     for (let i = 0; i < scannedPages.length; i += batchSize) {
       const batch = scannedPages.slice(i, i + batchSize);
@@ -318,60 +345,33 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
         batch.map(async (pageNum) => {
           const imageData = scannedImages[String(pageNum)];
           if (!imageData) return null;
-          // Strip data URL prefix if present
           const base64 = imageData.replace(/^data:image\/[a-z]+;base64,/, '');
           const buf = Buffer.from(base64, 'base64');
           const result = await sched.addJob('recognize', buf);
           return { pageNum, text: result.data.text, confidence: result.data.confidence };
         })
       );
-
       for (const r of results) {
         if (!r) continue;
         confidences.push(r.confidence);
-        // Replace the scanned page's text items with OCR result
         pageTexts[r.pageNum] = [{ text: r.text, x: 0, y: 0, w: 500, h: 12, ocrConfidence: r.confidence }];
       }
-
       const done = Math.min(i + batchSize, scannedPages.length);
-      const pct  = 10 + Math.round((done / scannedPages.length) * 40);
+      const pct  = 10 + Math.round((done / scannedPages.length) * 25);
       await setJobStatus(jobId, { stage: `OCR: ${done} of ${scannedPages.length} pages`, progress: pct });
     }
-
     if (confidences.length) {
       avgOcrConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length / 100;
       await setJobStatus(jobId, { avgOcrConfidence });
     }
   }
 
-  // ── 3. Detect source language ───────────────────────────────────────────────
-  await setJobStatus(jobId, { stage: 'Detecting language…', progress: 52 });
-  const sampleText = Object.values(pageTexts)
-    .flatMap(items => items.map(i => i.text))
-    .join(' ')
-    .slice(0, 500);
-
-  let sourceLanguage = 'auto';
-  try {
-    const detectRes = await fetch(
-      `https://translation.googleapis.com/language/translate/v2/detect?key=${TRANSLATE_API_KEY}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ q: sampleText }) }
-    );
-    const detectData = await detectRes.json();
-    sourceLanguage = detectData.data?.detections?.[0]?.[0]?.language || 'auto';
-  } catch {}
-  await setJobStatus(jobId, { sourceLanguage });
-
-  // ── 4. Reconstruct paragraphs per page ──────────────────────────────────────
-  await setJobStatus(jobId, { stage: 'Reconstructing paragraphs…', progress: 55 });
+  // ── 3. Reconstruct paragraphs ───────────────────────────────────────────────
+  await setJobStatus(jobId, { stage: 'Reconstructing paragraphs…', progress: 38 });
   const paragraphsByPage = {};
   for (const [pageStr, items] of Object.entries(pageTexts)) {
-    const pageNum = parseInt(pageStr);
-    // Sort items top-to-bottom, left-to-right
+    const pageNum = parseInt(pageStr, 10);
     const sorted = [...items].sort((a, b) => (b.y - a.y) || (a.x - b.x));
-
-    // Group into lines by Y proximity (±4px)
     const lines = [];
     for (const item of sorted) {
       if (!item.text.trim()) continue;
@@ -379,8 +379,6 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
       if (existing) { existing.parts.push(item.text); }
       else { lines.push({ y: item.y, h: item.h || 12, parts: [item.text] }); }
     }
-
-    // Group lines into paragraphs (gap > 1.5× line height = new paragraph)
     const paragraphs = [];
     let current = [];
     let prevY = null;
@@ -399,145 +397,198 @@ async function processTranslateJob(jobId, pdfBuffer, userId, targetLanguage, glo
     paragraphsByPage[pageNum] = paragraphs.filter(p => p.length > 1);
   }
 
-  // ── 5. Load glossary ────────────────────────────────────────────────────────
-  let glossaryTerms = [];
+  const sourceSkim = Object.keys(paragraphsByPage)
+    .map(Number).sort((a, b) => a - b)
+    .flatMap(p => paragraphsByPage[p])
+    .join('\n')
+    .slice(0, 8000);
+
+  // ── 4. Load saved glossary + LLM propose ────────────────────────────────────
+  await setJobStatus(jobId, {
+    status: 'preparing',
+    stage: 'Building glossary from your answers…',
+    progress: 42,
+  });
+
+  let existingTerms = [];
   if (glossaryId) {
     try {
       const { rows } = await pool.query(
         `SELECT terms FROM translate_glossaries WHERE id=$1 AND "userId"=$2`,
         [glossaryId, userId]
       );
-      glossaryTerms = rows[0]?.terms || [];
+      existingTerms = rows[0]?.terms || [];
     } catch {}
   }
 
-  const doNotTranslate = glossaryTerms.filter(t => t.doNotTranslate).map(t => t.source);
-  const substitutions  = glossaryTerms.filter(t => !t.doNotTranslate && t.target);
+  // Honour must-keep terms from intake as DNT
+  const mustKeep = String(intakeAnswers?.mustKeepTerms || '')
+    .split(/[,;\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(source => ({ source, target: '', doNotTranslate: true, note: 'User must-keep' }));
 
-  function applyGlossaryIn(text) {
-    let t = text;
-    for (const term of doNotTranslate) {
-      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      t = t.replace(new RegExp(escaped, 'gi'), `<span translate="no">${term}</span>`);
-    }
-    return t;
+  const mergedExisting = [...existingTerms, ...mustKeep];
+
+  let glossaryPrep;
+  try {
+    glossaryPrep = await proposeGlossary({
+      modelId: translateModelId,
+      userId,
+      intakeAnswers,
+      sourceSkim,
+      targetLanguage,
+      existingTerms: mergedExisting,
+    });
+  } catch (err) {
+    console.error('[translate] glossary prep failed:', err.message);
+    glossaryPrep = {
+      sourceLanguage: 'auto',
+      terms: mergedExisting,
+      uncertainTerms: [],
+      guidance: intakeAnswers?.notes || '',
+    };
   }
 
-  function applyGlossaryOut(text) {
-    let t = text;
-    // Strip any leftover <span translate="no"> tags
-    t = t.replace(/<span translate="no">(.*?)<\/span>/gi, '$1');
-    // Apply target substitutions
-    for (const sub of substitutions) {
-      if (!sub.source || !sub.target) continue;
-      const escaped = sub.source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      t = t.replace(new RegExp(escaped, 'gi'), sub.target);
-    }
-    return t;
-  }
+  const sourceLanguage = glossaryPrep.sourceLanguage || 'auto';
+  const glossaryTerms = glossaryPrep.terms || mergedExisting;
 
-  // ── 6. Translate in chunks ──────────────────────────────────────────────────
-  await setJobStatus(jobId, { status: 'translating', stage: 'Translating…', progress: 55 });
+  await setJobStatus(jobId, {
+    sourceLanguage,
+    proposedGlossaryJson: JSON.stringify({
+      terms: glossaryTerms,
+      uncertainTerms: glossaryPrep.uncertainTerms || [],
+      guidance: glossaryPrep.guidance || '',
+    }),
+  });
+
+  // ── 5. Translate with Vault LLM ─────────────────────────────────────────────
+  await setJobStatus(jobId, { status: 'translating', stage: 'Translating with Vault LLM…', progress: 48 });
 
   const translatedByPage = {};
   const allPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b);
-  let chunksDone = 0;
-  let totalChunks = 0;
-  let totalCharCount = 0;
-
-  // Google Translate v2 hard limit per q item is ~5000 chars.
-  // Split any paragraph that exceeds 4500 chars at sentence boundaries.
-  function splitLongParagraph(text, limit = 4500) {
-    if (text.length <= limit) return [text];
-    const pieces = [];
-    // Split at sentence-ending punctuation followed by a space
-    const sentences = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
-    let current = '';
-    for (const s of sentences) {
-      if (current.length + s.length > limit && current.length > 0) {
-        pieces.push(current.trim());
-        current = s;
-      } else {
-        current += s;
-      }
+  const runningGlossary = {};
+  for (const t of glossaryTerms) {
+    if (t.source && t.target && !t.doNotTranslate) {
+      runningGlossary[t.source] = t.target;
     }
-    if (current.trim()) pieces.push(current.trim());
-    return pieces.length ? pieces : [text.slice(0, limit)];
   }
 
-  // Flatten into chunks of max 20 paragraphs / 4500 chars total,
-  // with each individual paragraph pre-split if needed.
+  // Chunk: max ~6 paragraphs / ~3500 chars for LLM context quality
   const chunks = [];
   for (const pageNum of allPages) {
     const paras = paragraphsByPage[pageNum];
-    let currentChunk = { pages: [], paras: [], chars: 0 };
+    let currentChunk = { paras: [], chars: 0 };
     for (const rawPara of paras) {
-      const subParas = splitLongParagraph(rawPara);
-      for (const para of subParas) {
-        if (currentChunk.paras.length >= 20 || currentChunk.chars + para.length > 4500) {
-          if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { pages: [], paras: [], chars: 0 }; }
+      for (const para of splitLongParagraph(rawPara)) {
+        if (currentChunk.paras.length >= 6 || currentChunk.chars + para.length > 3500) {
+          if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
         }
         currentChunk.paras.push({ pageNum, text: para });
-        currentChunk.pages.push(pageNum);
         currentChunk.chars += para.length;
       }
     }
-    if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { pages: [], paras: [], chars: 0 }; }
+    if (currentChunk.paras.length) chunks.push(currentChunk);
   }
-  totalChunks = chunks.length;
+
+  let chunksDone = 0;
+  let totalCharCount = 0;
+  const reviewPairs = [];
 
   for (const chunk of chunks) {
-    const qs = chunk.paras.map(p => applyGlossaryIn(p.text));
-    const chunkChars = qs.reduce((s, q) => s + q.length, 0);
+    const texts = chunk.paras.map(p => p.text);
+    totalCharCount += texts.reduce((s, t) => s + t.length, 0);
+    let translations;
     try {
-      const body = {
-        q: qs,
-        target: targetLanguage,
-        format: 'html',
-        ...(sourceLanguage !== 'auto' ? { source: sourceLanguage } : {}),
-      };
-      const tRes = await fetch(
-        `https://translation.googleapis.com/language/translate/v2?key=${TRANSLATE_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-      );
-      const tData = await tRes.json();
-      const translations = tData.data?.translations || [];
-
-      translations.forEach((t, i) => {
-        const { pageNum } = chunk.paras[i];
-        if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
-        translatedByPage[pageNum].push(applyGlossaryOut(applyTypography(t.translatedText, targetLanguage)));
+      translations = await translateParagraphBatch({
+        modelId: translateModelId,
+        userId,
+        paragraphs: texts,
+        sourceLanguage,
+        targetLanguage,
+        glossaryTerms,
+        guidance: glossaryPrep.guidance,
+        runningGlossary,
       });
     } catch (err) {
-      // On failure, use original text as fallback
-      chunk.paras.forEach(({ pageNum, text }) => {
-        if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
-        translatedByPage[pageNum].push(applyGlossaryOut(applyTypography(`[Translation error] ${text}`, targetLanguage)));
-      });
+      console.error('[translate] chunk failed:', err.message);
+      translations = texts.map(t => `[Translation error] ${t}`);
     }
 
+    translations.forEach((rawT, i) => {
+      const { pageNum, text } = chunk.paras[i];
+      const t = applyGlossarySubstitutions(rawT, glossaryTerms);
+      if (!translatedByPage[pageNum]) translatedByPage[pageNum] = [];
+      translatedByPage[pageNum].push(t);
+      reviewPairs.push({ source: text, target: t });
+    });
+
     chunksDone++;
-    totalCharCount += chunkChars;
-    const pct = 55 + Math.round((chunksDone / totalChunks) * 30);
-    await setJobStatus(jobId, { stage: `Translating: chunk ${chunksDone} of ${totalChunks}`, progress: pct });
+    const pct = 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32);
+    await setJobStatus(jobId, {
+      stage: `Translating: chunk ${chunksDone} of ${chunks.length}`,
+      progress: pct,
+      charCount: totalCharCount,
+    });
   }
 
-  // ── 7. Store translated text and signal client to generate PDF ───────────────
+  // ── 6. Review pass ──────────────────────────────────────────────────────────
+  let qaSummary = {
+    skipped: !enableReview,
+    uncertainTerms: glossaryPrep.uncertainTerms || [],
+    guidance: glossaryPrep.guidance || '',
+    glossaryTermCount: glossaryTerms.length,
+    translateModel: translateModelId,
+    reviewModel: reviewModelId,
+  };
+
+  if (enableReview && reviewPairs.length) {
+    await setJobStatus(jobId, {
+      status: 'reviewing',
+      stage: 'Review pass (QA)…',
+      progress: 82,
+    });
+    try {
+      const review = await reviewTranslation({
+        modelId: reviewModelId,
+        userId,
+        sourceLanguage,
+        targetLanguage,
+        pairs: reviewPairs,
+        glossaryTerms,
+      });
+      qaSummary = {
+        ...qaSummary,
+        skipped: false,
+        ...review,
+        // Keep glossary-prep uncertain terms if review didn't list any
+        uncertainTerms: (review.uncertainTerms?.length
+          ? review.uncertainTerms
+          : glossaryPrep.uncertainTerms) || [],
+      };
+    } catch (err) {
+      console.error('[translate] review failed:', err.message);
+      qaSummary.reviewError = err.message;
+    }
+  }
+
+  // ── 7. Hand off to client PDF generation ────────────────────────────────────
   await setJobStatus(jobId, {
     status: 'generating',
     stage: 'Generating bilingual PDF…',
-    progress: 87,
+    progress: 90,
     charCount: totalCharCount,
+    qaSummaryJson: JSON.stringify(qaSummary),
     translatedTextJson: JSON.stringify({
       sourceByPage: paragraphsByPage,
       translatedByPage,
       pageCount,
       scannedPages,
       avgOcrConfidence,
+      qaSummary,
+      glossaryTerms,
     }),
   });
-  // Client will now poll, detect 'generating' + translatedTextJson,
-  // build the PDF client-side, and POST it back via /jobs/:id/complete
 }
 
 module.exports = router;

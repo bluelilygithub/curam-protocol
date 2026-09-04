@@ -1850,6 +1850,18 @@ async function initSchema() {
   await pool.query(`
     ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "charCount" INTEGER DEFAULT 0
   `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "intakeAnswers" JSONB
+  `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "proposedGlossaryJson" TEXT
+  `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "qaSummaryJson" TEXT
+  `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "enableReview" BOOLEAN DEFAULT TRUE
+  `);
 
   // ── Guitar Learning Agent ─────────────────────────────────────────────────────
   await pool.query(`

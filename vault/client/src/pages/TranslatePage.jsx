@@ -115,7 +115,9 @@ function StatusBadge({ status }) {
     pending:    { label: 'Pending',     color: 'var(--color-muted)', bg: 'rgba(0,0,0,0.06)' },
     extracting: { label: 'Extracting',  color: '#2563eb', bg: 'rgba(37,99,235,0.1)' },
     ocr:        { label: 'OCR',         color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+    preparing:  { label: 'Glossary',    color: '#9333ea', bg: 'rgba(147,51,234,0.1)' },
     translating:{ label: 'Translating', color: '#0891b2', bg: 'rgba(8,145,178,0.1)' },
+    reviewing:  { label: 'Reviewing',   color: '#c2410c', bg: 'rgba(194,65,12,0.1)' },
     generating: { label: 'Generating',  color: '#d97706', bg: 'rgba(217,119,6,0.1)'  },
     done:       { label: 'Done',        color: '#16a34a', bg: 'rgba(22,163,74,0.1)'  },
     failed:     { label: 'Failed',      color: '#dc2626', bg: 'rgba(220,38,38,0.1)'  },
@@ -124,6 +126,81 @@ function StatusBadge({ status }) {
   return (
     <span className="text-xs px-2 py-0.5 rounded-full font-medium"
       style={{ color: s.color, background: s.bg }}>{s.label}</span>
+  );
+}
+
+const DOMAIN_OPTIONS = [
+  { value: 'ai_compliance', label: 'AI / compliance / IT governance' },
+  { value: 'legal', label: 'Legal / contracts' },
+  { value: 'finance', label: 'Finance / accounting' },
+  { value: 'medical', label: 'Medical / clinical' },
+  { value: 'general', label: 'General business' },
+  { value: 'other', label: 'Other' },
+];
+
+const AUDIENCE_OPTIONS = [
+  { value: 'auditor', label: 'Auditor / regulator' },
+  { value: 'insurer', label: 'Insurer' },
+  { value: 'client', label: 'External client' },
+  { value: 'internal', label: 'Internal team' },
+  { value: 'other', label: 'Other' },
+];
+
+function parseQa(job) {
+  if (!job?.qaSummaryJson) return null;
+  try {
+    return typeof job.qaSummaryJson === 'string' ? JSON.parse(job.qaSummaryJson) : job.qaSummaryJson;
+  } catch { return null; }
+}
+
+function QaPanel({ qa, onClose }) {
+  if (!qa) return null;
+  const sections = [
+    ['Uncertain terms', qa.uncertainTerms],
+    ['Polarity / sentence-type issues', qa.polarityOrSentenceTypeIssues],
+    ['Restructured sentences', qa.restructuredSentences],
+    ['Garbled / incomplete rows', qa.garbledOrIncompleteRows],
+    ['Audience flags', qa.audienceFlags],
+  ];
+  return (
+    <Modal title="Translation QA summary" onClose={onClose} wide>
+      <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
+        {qa.skipped ? (
+          <p style={{ color: 'var(--color-muted)' }}>Review pass was skipped for this job.</p>
+        ) : (
+          <>
+            {qa.overallNotes && (
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{qa.overallNotes}</p>
+            )}
+            {qa.guidance && (
+              <p className="text-xs"><strong>Guidance used:</strong> {qa.guidance}</p>
+            )}
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Translate: {qa.translateModel || '—'} · Review: {qa.reviewModel || '—'}
+              {qa.glossaryTermCount != null ? ` · Glossary terms: ${qa.glossaryTermCount}` : ''}
+            </p>
+            {sections.map(([title, items]) => (
+              <div key={title}>
+                <p className="text-xs font-semibold mb-1">{title} ({Array.isArray(items) ? items.length : 0})</p>
+                {!items?.length ? (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged</p>
+                ) : (
+                  <ul className="text-xs space-y-1 pl-4 list-disc" style={{ color: 'var(--color-muted)' }}>
+                    {items.slice(0, 20).map((it, i) => (
+                      <li key={i}>
+                        {it.source || it.excerpt || it.target || JSON.stringify(it)}
+                        {it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}
+                        {it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -216,6 +293,13 @@ function TranslationsTab({ glossaries }) {
   const [dragOver, setDragOver]     = useState(false);
   const [targetLang, setTargetLang] = useState('fr');
   const [glossaryId, setGlossaryId] = useState('');
+  const [domain, setDomain] = useState('general');
+  const [audience, setAudience] = useState('client');
+  const [tone, setTone] = useState('natural');
+  const [mustKeepTerms, setMustKeepTerms] = useState('');
+  const [intakeNotes, setIntakeNotes] = useState('');
+  const [enableReview, setEnableReview] = useState(true);
+  const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -288,6 +372,7 @@ function TranslationsTab({ glossaries }) {
 
   const handleSubmit = async () => {
     if (!file || !preflight || submitting) return;
+    if (!domain) { addToast('Please choose a document domain', 'error'); return; }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -295,6 +380,14 @@ function TranslationsTab({ glossaries }) {
       fd.append('targetLanguage', targetLang);
       if (glossaryId) fd.append('glossaryId', glossaryId);
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages));
+      fd.append('enableReview', enableReview ? 'true' : 'false');
+      fd.append('intakeAnswers', JSON.stringify({
+        domain,
+        audience,
+        tone,
+        mustKeepTerms,
+        notes: intakeNotes,
+      }));
 
       const res  = await api.postForm('/api/translate/jobs', fd);
       const body = await res.json();
@@ -474,8 +567,8 @@ function TranslationsTab({ glossaries }) {
                   </Field>
                 </div>
                 <div className="flex-1 min-w-40">
-                  <Field label="Glossary (optional)"
-                    hint="Use a glossary to fix terminology (e.g. trade names, tax codes) and prevent brand names from being translated.">
+                  <Field label="Saved glossary (optional)"
+                    hint="Merged with terms the model proposes from your answers.">
                     <Sel value={glossaryId} onChange={setGlossaryId}>
                       <option value="">None</option>
                       {glossaries.map(g => (
@@ -486,8 +579,52 @@ function TranslationsTab({ glossaries }) {
                 </div>
               </div>
 
+              <div className="rounded-xl border p-4 flex flex-col gap-3"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Before translating — help the model
+                </p>
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                  <Field label="Document domain">
+                    <Sel value={domain} onChange={setDomain}>
+                      {DOMAIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Sel>
+                  </Field>
+                  <Field label="Intended reader">
+                    <Sel value={audience} onChange={setAudience}>
+                      {AUDIENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Sel>
+                  </Field>
+                  <Field label="Tone">
+                    <Sel value={tone} onChange={setTone}>
+                      <option value="natural">Natural / fluent</option>
+                      <option value="literal">Literal / close to source</option>
+                    </Sel>
+                  </Field>
+                </div>
+                <Field label="Must-keep terms (comma-separated)"
+                  hint="Brand names, product codes, acronyms that must not be translated.">
+                  <Input value={mustKeepTerms} onChange={setMustKeepTerms}
+                    placeholder="e.g. Curam, Masterspec, ABN" />
+                </Field>
+                <Field label="Notes for the translator (optional)">
+                  <textarea
+                    value={intakeNotes}
+                    onChange={e => setIntakeNotes(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Prefer TPS not TVA for NZ GST; keep English section headings"
+                    className="text-sm px-3 py-2 rounded-lg border w-full resize-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                  />
+                </Field>
+                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                  <input type="checkbox" checked={enableReview} onChange={e => setEnableReview(e.target.checked)} />
+                  Run second-model QA review after translation (recommended)
+                </label>
+              </div>
+
               <div>
-                <Btn onClick={handleSubmit} disabled={submitting || preflighting}>
+                <Btn onClick={handleSubmit} disabled={submitting || preflighting || !domain}>
                   {submitting ? 'Submitting…' : 'Start Translation'}
                 </Btn>
               </div>
@@ -526,7 +663,7 @@ function TranslationsTab({ glossaries }) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                  {['File', 'Languages', 'Pages', 'Cost', 'Date', 'Status', ''].map(h => (
+                  {['File', 'Languages', 'Pages', 'Chars', 'Date', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-3 py-2 text-xs font-medium"
                       style={{ color: 'var(--color-muted)' }}>{h}</th>
                   ))}
@@ -558,13 +695,7 @@ function TranslationsTab({ glossaries }) {
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {job.charCount > 0 ? (
-                          <span title={`${job.charCount.toLocaleString()} characters @ $20/1M`}>
-                            {job.charCount < 1000
-                              ? `< $0.01`
-                              : `$${(job.charCount * 20 / 1_000_000).toFixed(4)}`}
-                          </span>
-                        ) : '—'}
+                        {job.charCount > 0 ? job.charCount.toLocaleString() : '—'}
                       </td>
                       <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                         {new Date(job.createdAt).toLocaleDateString('en-AU')}
@@ -584,6 +715,13 @@ function TranslationsTab({ glossaries }) {
                               Download
                             </button>
                           )}
+                          {(job.status === 'done' || job.qaSummaryJson) && (
+                            <button onClick={() => setQaJob(job)}
+                              className="text-xs px-2 py-1 rounded border"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                              QA
+                            </button>
+                          )}
                           <button onClick={() => deleteJob(job.id)} disabled={deletingId === job.id}
                             className="text-xs px-2 py-1 rounded border"
                             style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
@@ -599,6 +737,10 @@ function TranslationsTab({ glossaries }) {
           </div>
         )}
       </div>
+
+      {qaJob && (
+        <QaPanel qa={parseQa(qaJob)} onClose={() => setQaJob(null)} />
+      )}
     </div>
   );
 }
@@ -795,10 +937,18 @@ const TABS = ['Translations', 'Glossaries'];
 export default function TranslatePage() {
   const [tab, setTab]               = useState('Translations');
   const [configured, setConfigured] = useState(true);
+  const [configMsg, setConfigMsg]   = useState('');
   const [glossaries, setGlossaries] = useState([]);
 
   useEffect(() => {
-    api.get('/api/translate/config').then(r => r.json()).then(d => setConfigured(d.configured)).catch(() => {});
+    api.get('/api/translate/config').then(r => r.json()).then(d => {
+      setConfigured(d.configured !== false);
+      if (!d.configured) {
+        setConfigMsg(d.errors?.[0] || 'Assign a translate model in Settings → Translate agent (or configure vault models).');
+      } else {
+        setConfigMsg(d.translateModel ? `Using ${d.translateModel}` : '');
+      }
+    }).catch(() => {});
     api.get('/api/translate/glossaries').then(r => r.json()).then(setGlossaries).catch(() => {});
   }, []);
 
@@ -826,22 +976,18 @@ export default function TranslatePage() {
         </div>
       </div>
 
-      {/* Not configured banner */}
       {!configured && (
         <div className="px-6 py-3 text-sm"
           style={{ background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid rgba(239,68,68,0.2)', color: '#dc2626' }}>
-          ⚠ <strong>GOOGLE_TRANSLATE_API_KEY</strong> is not set in Railway environment variables.
-          The translate agent will not function until this is configured.
+          ⚠ {configMsg || 'Translate model not configured.'}
         </div>
       )}
 
-      {/* Disclaimer */}
       <div className="px-6 py-2 text-xs" style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-        AI-generated translations are for reference only and are not legally certified. Always verify important documents with a qualified human translator.
-        Table layouts may be reformatted as plain text — use a <strong>glossary</strong> to lock domain-specific terms (e.g. product names, tax codes, brand terms).
+        Vault LLM translation with intake questions, glossary prep, optional second-model QA review, and bilingual PDF.
+        AI output is for reference only — not legally certified. Use Settings → <strong>Translate agent</strong> to pick translate/review models.
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'Translations' && <TranslationsTab glossaries={glossaries} />}
         {tab === 'Glossaries'   && <GlossariesTab glossaries={glossaries} setGlossaries={setGlossaries} />}

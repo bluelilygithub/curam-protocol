@@ -117,6 +117,10 @@ function SettingsPage() {
     documentRedactionFrontierModel,
     saveDocumentRedactionLocalModel,
     saveDocumentRedactionFrontierModel,
+    translateModel,
+    translateReviewModel,
+    saveTranslateModel,
+    saveTranslateReviewModel,
     reload: reloadModels,
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
@@ -1601,6 +1605,60 @@ function SettingsPage() {
           {docRedactionSlotError && (
             <p className="text-xs" style={{ color: '#b45309' }}>{docRedactionSlotError}</p>
           )}
+        </div>
+
+        {/* Translate agent — translate + review model slots */}
+        <div className="mb-4 p-4 rounded-xl border space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Translate agent
+            </label>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              <strong style={{ color: 'var(--color-text)' }}>Translate</strong> does glossary prep and the document translation.
+              <strong style={{ color: 'var(--color-text)' }}> Review</strong> runs the QA pass (polarity, terminology, auditor flags).
+              Leave blank to use your vault default model and a different secondary tier when available.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Translate model
+            </label>
+            <select
+              value={translateModel}
+              onChange={async (e) => {
+                try { await saveTranslateModel(e.target.value); }
+                catch (err) { /* toast handled elsewhere if needed */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Use vault default / standard tier</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Review model
+            </label>
+            <select
+              value={translateReviewModel}
+              onChange={async (e) => {
+                try { await saveTranslateReviewModel(e.target.value); }
+                catch (err) { /* ignore */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Use vault secondary (or same as translate)</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Theme builder design model */}
