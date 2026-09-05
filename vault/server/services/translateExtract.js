@@ -37,8 +37,12 @@ function isAllowedUpload(filename, mimetype) {
 
 // Terminal punctuation (incl. closing quotes/brackets after it) that marks a real sentence/para end.
 const TERMINAL_RE = /[.!?:;""''\)\]]\s*$/;
-// Word broken across a line wrap with a hyphen (e.g. "re-" / "appli-").
-const HYPHEN_BREAK_RE = /[A-Za-zÀ-ÿĀ-ž]-$/;
+// Word broken across a line wrap with a hyphen (e.g. "re-" / "appli-"). Typeset PDF text can use
+// any of several hyphen-like characters for this, not just ASCII '-': U+2010 HYPHEN, U+2011
+// NON-BREAKING HYPHEN, U+00AD SOFT HYPHEN, U+2012 FIGURE DASH — pdf-parse passes through
+// whatever codepoint the font/PDF producer embedded, so matching only ASCII '-' silently missed
+// real mid-word breaks.
+const HYPHEN_BREAK_RE = /[A-Za-zÀ-ÿĀ-ž][-­‐‑‒]$/;
 // A short run of Title-Case words with no internal punctuation/quotes/slashes — a form-field
 // label ("Make", "Application Date"), not prose. Capitalisation is NOT a reliable "new sentence"
 // signal otherwise: French capitalises defined terms, and quoted mid-sentence words are capitalised

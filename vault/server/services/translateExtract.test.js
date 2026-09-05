@@ -78,6 +78,19 @@ test('rejoins a mid-word hyphen break without a space', () => {
   assert.deepStrictEqual(out, ['This requires reapplication within 90 days.']);
 });
 
+test('rejoins a mid-word break using typeset hyphen variants, not just ASCII "-"', () => {
+  // pdf-parse passes through whatever hyphen-like codepoint the PDF producer embedded —
+  // a real regression seen in production used U+2010 HYPHEN here, not ASCII '-'.
+  assert.deepStrictEqual(
+    stitchFragments(['must not be re‐', 'sprayed without inspection.']),
+    ['must not be resprayed without inspection.']
+  );
+  assert.deepStrictEqual(
+    stitchFragments(['must not be re­', 'sprayed without inspection.']),
+    ['must not be resprayed without inspection.']
+  );
+});
+
 test('keeps standalone short form-field labels separate', () => {
   const out = stitchFragments(['Make', 'Model', 'Application Date']);
   assert.deepStrictEqual(out, ['Make', 'Model', 'Application Date']);

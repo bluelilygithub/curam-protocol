@@ -157,6 +157,12 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
     if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
     const choice = data.choices?.[0];
     const text = normalizeMessageContent(choice?.message?.content);
+    // Reasoning-capable models (e.g. deepseek-reasoner-style) can spend the entire max_tokens
+    // budget on a hidden reasoning_content field and never reach the visible answer — that shows
+    // up as textLen:0 + finishReason:'length' regardless of how large max_tokens is. Captured
+    // here as pure diagnostics (no behavior change) to confirm/rule this out from server logs
+    // instead of guessing at it — see [callModel] empty deepseek response log line.
+    const reasoningContent = choice?.message?.reasoning_content;
     const diagnostics = {
       provider: 'deepseek',
       modelId,
@@ -166,6 +172,9 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
       finishReason: choice?.finish_reason || null,
       contentType: typeof choice?.message?.content,
       maxTokens,
+      reasoningContentLen: typeof reasoningContent === 'string' ? reasoningContent.length : null,
+      completionTokens: data.usage?.completion_tokens ?? null,
+      reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens ?? null,
     };
     if (!text) console.warn('[callModel] empty deepseek response', diagnostics);
     if (!returnUsage) return text;
