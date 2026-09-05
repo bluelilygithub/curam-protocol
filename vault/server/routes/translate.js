@@ -666,15 +666,18 @@ async function processTranslateJob(
       }
     }
 
-    // Chunk: ~10 paragraphs / ~6000 chars. Bigger batches = fewer round trips.
+    // Chunk: ~20 paragraphs / ~8000 chars. Bigger batches = fewer round trips.
     // Parallel pool makes wall-clock closer to Google.
+    // Paragraphs are pre-stitched at extraction (see translateExtract.stitchFragments) so a
+    // "paragraph" here is a real sentence/field, not a layout-broken line fragment — safe to
+    // batch more of them per call without reintroducing segment-boundary grammar breaks.
     const chunks = [];
     for (const pageNum of allPages) {
       const paras = paragraphsByPage[pageNum];
       let currentChunk = { paras: [], chars: 0 };
       for (const rawPara of paras) {
-        for (const para of splitLongParagraph(rawPara, 6000)) {
-          if (currentChunk.paras.length >= 10 || currentChunk.chars + para.length > 6000) {
+        for (const para of splitLongParagraph(rawPara, 8000)) {
+          if (currentChunk.paras.length >= 20 || currentChunk.chars + para.length > 8000) {
             if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
           }
           currentChunk.paras.push({ pageNum, text: para });

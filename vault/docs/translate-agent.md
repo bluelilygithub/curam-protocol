@@ -23,7 +23,7 @@ Choose per job:
 
 Google skips LLM glossary prep; uses language detect + saved/must-keep glossary. Optional LLM QA review can still be enabled after Google.
 
-LLM translate chunks ~10 paragraphs / ~6000 chars per call and runs **up to 8 chunks in parallel** (`TRANSLATE_LLM_CONCURRENCY`, default 6) with a **45s per-call timeout**, so a stuck model call fails over to split/retry instead of hanging the job. QA review batches (35 pairs each) also run in parallel (`TRANSLATE_REVIEW_CONCURRENCY`, default 4). Still slower than Google on large docs — use Google when speed matters.
+LLM translate chunks ~20 paragraphs / ~8000 chars per call and runs **up to 8 chunks in parallel** (`TRANSLATE_LLM_CONCURRENCY`, default 6) with a **45s per-call timeout**, so a stuck model call fails over to split/retry instead of hanging the job. QA review batches (35 pairs each) also run in parallel (`TRANSLATE_REVIEW_CONCURRENCY`, default 4). Still slower than Google on large docs — use Google when speed matters.
 
 ## PDF layouts
 
@@ -52,7 +52,7 @@ Download filename: `translated-{basename}.pdf` (layout chosen per job).
 ## Pipeline
 
 1. **Upload + intake** — domain (required), audience, tone, must-keep terms, notes; optional saved glossary; optional review pass.
-2. **Extract** — `translateExtract.extractForTranslate` → `paragraphsByPage` (+ OCR for sparse PDF pages).
+2. **Extract** — `translateExtract.extractForTranslate` → `paragraphsByPage` (+ OCR for sparse PDF pages). PDF line-extraction groups text by y-position, which can chop a sentence mid-way on documents with uneven line leading (headers, table-like layouts). `translateExtract.stitchFragments` runs immediately after: a fragment with no terminal punctuation (`.!?:;"”)]`) is merged into the next one unless that next fragment looks like a fresh sentence/field start. This keeps "paragraphs" close to real sentences before chunking — fewer, cleaner segments, and no more mid-sentence grammar breaks at chunk/segment boundaries. Not applied to `.docx` (already splits on real blank-line breaks) or spreadsheets (cell values, `[A1]`-tagged — stitching would merge unrelated cells).
 3. **Glossary prep** — Vault translate model proposes / merges terms from intake + text skim + saved glossary.
 4. **Translate** — chunked paragraph batches via `callModel` + glossary substitutions. Paragraphs that look like leaked code/template debris (e.g. a serialized object dump, an unresolved internal token) are detected (`translateQaChecks.isCodeLikeArtifact`) and copied through verbatim instead of being sent to the translator.
 5. **Hard sanity gate (deterministic)** — `translateQaChecks.hardSanityGate` on every source⟶target pair. If too many segments are identical to source (>30%), contain placeholders (≥2 or >5%), or are empty (>10%), the job **fails** with an error and a QA summary — no bilingual PDF.

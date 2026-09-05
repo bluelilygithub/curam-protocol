@@ -35,6 +35,38 @@ function isAllowedUpload(filename, mimetype) {
   return Boolean(detectSourceFormat(filename, mimetype));
 }
 
+// Terminal punctuation (incl. closing quotes/brackets after it) that marks a real sentence/para end.
+const TERMINAL_RE = /[.!?:;""''\)\]]\s*$/;
+// Fragment that plausibly starts a *new* sentence/field (capital letter, digit/bullet, opening quote).
+const NEW_START_RE = /^[""'"(\[]?[A-Z0-9À-ÿĀ-ž•\-–]/;
+
+/**
+ * Merge PDF/line-extraction fragments that were split mid-sentence by layout noise
+ * (uneven leading, table cells, wrapped lines) rather than by real paragraph breaks.
+ * A fragment is merged into the next one when it does NOT end in terminal punctuation
+ * AND the next fragment does NOT look like the start of a new sentence/field.
+ * Conservative: never merges across a fragment that already ends a sentence.
+ */
+function stitchFragments(paragraphs) {
+  const list = Array.isArray(paragraphs) ? paragraphs : [];
+  const out = [];
+  for (const raw of list) {
+    const p = String(raw || '').trim();
+    if (!p) continue;
+    const prev = out[out.length - 1];
+    if (
+      prev !== undefined
+      && !TERMINAL_RE.test(prev)
+      && !NEW_START_RE.test(p)
+    ) {
+      out[out.length - 1] = `${prev} ${p}`;
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 function splitParagraphs(text) {
   return String(text || '')
     .replace(/\r\n/g, '\n')
@@ -94,7 +126,7 @@ async function extractFromPdf(buffer) {
       prevH = line.h;
     }
     if (current.length) paragraphs.push(current.join(' '));
-    paragraphsByPage[pageNum] = paragraphs.filter((p) => p.length > 1);
+    paragraphsByPage[pageNum] = stitchFragments(paragraphs.filter((p) => p.length > 1));
   }
 
   return {
@@ -203,4 +235,5 @@ module.exports = {
   isAllowedUpload,
   extractForTranslate,
   splitParagraphs,
+  stitchFragments,
 };
