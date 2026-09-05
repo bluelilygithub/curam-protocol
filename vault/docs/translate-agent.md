@@ -45,6 +45,8 @@ LLM translate chunks ~20 paragraphs / ~8000 chars per call and runs **up to 8 ch
 
 Max size: **15 MB**. Google Docs / Sheets: export as `.docx` / `.xlsx` then upload (no Drive OAuth).
 
+**Known limitation — multi-column / sidebar-tab PDF layouts.** `translateExtract.extractFromPdf` reconstructs paragraphs by sorting text items by y-position then x-position, which assumes a single reading column. Confirmed on a real multi-column manual (product manual with a repeating 4-tab vertical sidebar and 3-column warning-box grids): unrelated columns sharing a y-range get interleaved into one garbled "paragraph" *before translation ever runs*. The model then produces fluent-sounding French from garbled English input — the corruption is invisible without comparing against the real source, and it produced at least one safety-relevant mistranslation (`Healthy Dehumidification Mode` → `mode déshydratation`, i.e. "dehydration") from reordered fragments. Not fixed — deferred as out of scope while the demo targets standard single-column A4 documents (reports, contracts). A real fix needs column-boundary detection (clustering x-position, not just y) plus stripping repeating margin/sidebar text, and must be verified against both layouts before shipping since it changes how every PDF is read.
+
 Download filename: `translated-{basename}.pdf` (layout chosen per job).
 
 ---
