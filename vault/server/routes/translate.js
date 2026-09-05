@@ -80,10 +80,15 @@ async function markJobFailed(jobId, message) {
 router.get('/config', async (req, res) => {
   try {
     const models = await resolveTranslateModels({ userId: req.user.id });
+    const { getVaultModelsConfigForUser } = require('../services/modelResolver');
+    const { models: catalog } = await getVaultModelsConfigForUser(req.user.id);
     const googleOk = isGoogleTranslateConfigured();
     const llmOk = Boolean(models.ok && models.translate?.modelId);
     res.json({
       configured: llmOk || googleOk,
+      // Full connected-model catalog — lets the UI offer a per-job override instead of
+      // always using the Settings-configured default.
+      catalog: (catalog || []).map(m => ({ id: m.id, name: m.name || m.id, emoji: m.emoji || null, provider: m.provider || null })),
       engines: {
         llm: {
           available: llmOk,
@@ -255,12 +260,20 @@ router.post('/jobs', sourceUpload, async (req, res) => {
     ? req.body.pdfLayout
     : 'side-by-side';
 
+  // Optional per-job override — lets a user pick a different model for just this job
+  // without touching their Settings default. Validated against their connected catalog
+  // inside resolveTranslateModels; an invalid/unknown id is silently ignored there.
+  const overrides = {
+    translateModelId: req.body.translateModelId ? String(req.body.translateModelId).trim() : null,
+    reviewModelId: req.body.reviewModelId ? String(req.body.reviewModelId).trim() : null,
+  };
+
   if (engine === 'google') {
     if (!isGoogleTranslateConfigured()) {
       return res.status(503).json({ error: 'Google Translate API key not configured (GOOGLE_TRANSLATE_API_KEY)' });
     }
   } else {
-    const models = await resolveTranslateModels({ userId: req.user.id });
+    const models = await resolveTranslateModels({ userId: req.user.id, overrides });
     if (!models.ok || !models.translate?.modelId) {
       return res.status(503).json({
         error: models.errors?.[0] || 'Translate model not configured — set it in Settings → Translate agent',
@@ -307,6 +320,8 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 
   intakeAnswers.engine = engine;
   intakeAnswers.pdfLayout = pdfLayout;
+  if (overrides.translateModelId) intakeAnswers.translateModelId = overrides.translateModelId;
+  if (overrides.reviewModelId) intakeAnswers.reviewModelId = overrides.reviewModelId;
 
   const { rows } = await pool.query(
     `INSERT INTO translate_jobs
@@ -382,7 +397,11 @@ async function processTranslateJob(
   let translateModelId = null;
   let reviewModelId = null;
   if (engine === 'llm') {
-    const models = await resolveTranslateModels({ userId });
+    const overrides = {
+      translateModelId: intakeAnswers?.translateModelId || null,
+      reviewModelId: intakeAnswers?.reviewModelId || null,
+    };
+    const models = await resolveTranslateModels({ userId, overrides });
     if (!models.ok || !models.translate?.modelId) {
       throw new Error(models.errors?.[0] || 'Translate model not configured');
     }
@@ -895,7 +914,10 @@ async function processTranslateJob(
     // Subjective LLM review needs a review model (even for Google translate jobs)
     if (!reviewModelId) {
       try {
-        const models = await resolveTranslateModels({ userId });
+        const models = await resolveTranslateModels({
+          userId,
+          overrides: { reviewModelId: intakeAnswers?.reviewModelId || null },
+        });
         reviewModelId = models.review?.modelId || models.translate?.modelId || null;
       } catch {}
     }

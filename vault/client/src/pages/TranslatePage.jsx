@@ -468,6 +468,11 @@ function TranslationsTab({ glossaries }) {
   const [engine, setEngine] = useState('llm'); // llm | google
   const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
+  const [modelCatalog, setModelCatalog] = useState([]);
+  const [defaultTranslateModel, setDefaultTranslateModel] = useState('');
+  const [defaultReviewModel, setDefaultReviewModel] = useState('');
+  const [translateModelOverride, setTranslateModelOverride] = useState(''); // '' = use Settings default
+  const [reviewModelOverride, setReviewModelOverride] = useState('');
   const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
@@ -492,6 +497,9 @@ function TranslationsTab({ glossaries }) {
       const llmOk = d.engines?.llm?.available !== false && (d.engines?.llm?.available || d.configured);
       const googleOk = Boolean(d.engines?.google?.available);
       setEngineAvailability({ llm: Boolean(d.engines?.llm?.available ?? llmOk), google: googleOk });
+      setModelCatalog(Array.isArray(d.catalog) ? d.catalog : []);
+      setDefaultTranslateModel(d.engines?.llm?.translateModel || '');
+      setDefaultReviewModel(d.engines?.llm?.reviewModel || '');
       if (!d.engines?.llm?.available && googleOk) {
         setEngine('google');
         setEnableReview(false);
@@ -607,6 +615,8 @@ function TranslationsTab({ glossaries }) {
       if (glossaryId) fd.append('glossaryId', glossaryId);
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
+      if (engine === 'llm' && translateModelOverride) fd.append('translateModelId', translateModelOverride);
+      if (engine === 'llm' && reviewModelOverride) fd.append('reviewModelId', reviewModelOverride);
       fd.append('intakeAnswers', JSON.stringify({
         domain: domain || 'general',
         audience,
@@ -902,6 +912,30 @@ function TranslationsTab({ glossaries }) {
                   <input type="checkbox" checked={enableReview} onChange={e => setEnableReview(e.target.checked)} />
                   Run second-model QA review after translation (recommended)
                 </label>
+                {modelCatalog.length > 0 && (
+                  <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                    <Field label="Translate model (this job only)"
+                      hint={`Default: ${defaultTranslateModel || 'not set'}. Overrides Settings for this job only.`}>
+                      <Sel value={translateModelOverride} onChange={setTranslateModelOverride}>
+                        <option value="">Use default ({defaultTranslateModel || 'not set'})</option>
+                        {modelCatalog.map(m => (
+                          <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name}</option>
+                        ))}
+                      </Sel>
+                    </Field>
+                    {enableReview && (
+                      <Field label="Review model (this job only)"
+                        hint={`Default: ${defaultReviewModel || 'not set'}. Overrides Settings for this job only.`}>
+                        <Sel value={reviewModelOverride} onChange={setReviewModelOverride}>
+                          <option value="">Use default ({defaultReviewModel || 'not set'})</option>
+                          {modelCatalog.map(m => (
+                            <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name}</option>
+                          ))}
+                        </Sel>
+                      </Field>
+                    )}
+                  </div>
+                )}
               </div>
               ) : (
               <div className="rounded-xl border p-4 flex flex-col gap-3"

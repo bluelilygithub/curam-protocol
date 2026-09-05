@@ -33,7 +33,10 @@ app.use(helmet({
       'script-src': ["'self'", "'wasm-unsafe-eval'", 'blob:'],
       'img-src':    ["'self'", 'data:', 'blob:', 'https://i.ytimg.com'],
       'media-src':  ["'self'", 'blob:', 'data:'],
-      'connect-src':["'self'", 'blob:'],
+      // 'data:' is required for pdfjs-dist (Translate agent's client-side PDF preflight),
+      // which loads its WASM module via a data: URI fetch, not a blob: URL. Without it the
+      // browser blocks the fetch and the PDF preflight silently fails (nothing gets uploaded).
+      'connect-src':["'self'", 'blob:', 'data:'],
       'frame-src':  ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'child-src':  ["'self'", 'blob:', 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'worker-src': ["'self'", 'blob:'],

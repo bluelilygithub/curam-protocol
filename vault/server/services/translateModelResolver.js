@@ -85,7 +85,7 @@ function pickSecondaryFromTiers(tiers, primaryModel) {
 }
 
 /**
- * @param {{ userId: number|string }} ctx
+ * @param {{ userId: number|string, overrides?: { translateModelId?: string, reviewModelId?: string } }} ctx
  * @returns {{ agentId, ok, translate, review, errors, enableReviewDefault }}
  */
 async function resolveTranslateModels(ctx = {}) {
@@ -103,19 +103,38 @@ async function resolveTranslateModels(ctx = {}) {
   const errors = [];
   const { models } = await getVaultModelsConfigForUser(userId);
   const tiers = await getModelsForUser(userId);
+  const overrides = ctx.overrides || {};
 
   const translateSlot = await resolveSlotSetting(userId, SLOT_KEYS.translate);
   const reviewSlot = await resolveSlotSetting(userId, SLOT_KEYS.review);
 
-  let translateId = translateSlot.modelId;
-  let translateSource = translateSlot.source || 'setting';
+  // Per-job override wins when supplied and it's actually in this user's connected catalog —
+  // never trust a raw client-supplied model id otherwise (falls through to the normal chain).
+  let translateId = null;
+  let translateSource = null;
+  if (overrides.translateModelId && catalogEntryById(models, overrides.translateModelId)) {
+    translateId = overrides.translateModelId;
+    translateSource = 'override';
+  }
+  if (!translateId) {
+    translateId = translateSlot.modelId;
+    translateSource = translateSlot.source || 'setting';
+  }
   if (!translateId) {
     translateId = pickTextModel(tiers, 'standard');
     translateSource = 'vault_default';
   }
 
-  let reviewId = reviewSlot.modelId;
-  let reviewSource = reviewSlot.source || 'setting';
+  let reviewId = null;
+  let reviewSource = null;
+  if (overrides.reviewModelId && catalogEntryById(models, overrides.reviewModelId)) {
+    reviewId = overrides.reviewModelId;
+    reviewSource = 'override';
+  }
+  if (!reviewId) {
+    reviewId = reviewSlot.modelId;
+    reviewSource = reviewSlot.source || 'setting';
+  }
   if (!reviewId) {
     reviewId = pickSecondaryFromTiers(tiers, translateId);
     reviewSource = 'vault_secondary';
@@ -146,7 +165,7 @@ async function resolveTranslateModels(ctx = {}) {
       provider: translateEntry.provider || null,
       name: translateEntry.name || null,
       source: translateSource,
-      fromAdminFallback: !!translateSlot.fromAdmin,
+      fromAdminFallback: translateSource !== 'override' && !!translateSlot.fromAdmin,
     } : null,
     review: reviewId ? {
       slot: 'review',
@@ -154,7 +173,7 @@ async function resolveTranslateModels(ctx = {}) {
       provider: (catalogEntryById(models, reviewId) || translateEntry)?.provider || null,
       name: (catalogEntryById(models, reviewId) || translateEntry)?.name || null,
       source: reviewSource,
-      fromAdminFallback: !!reviewSlot.fromAdmin,
+      fromAdminFallback: reviewSource !== 'override' && !!reviewSlot.fromAdmin,
     } : null,
     errors,
   };
