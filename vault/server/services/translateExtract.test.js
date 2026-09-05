@@ -46,14 +46,41 @@ test('does not merge when prior fragment ends in terminal punctuation', () => {
   assert.strictEqual(out.length, 2);
 });
 
-test('does not merge when next fragment starts a clear new sentence (capitalised)', () => {
+test('merges even when next fragment is capitalised (capitalisation alone is not a sentence-start signal)', () => {
   const out = stitchFragments([
     'Nominated Vehicle means the vehicle listed above',
     'Warranty Schedule sets out the applicable terms.',
   ]);
-  // First has no terminal punctuation but next starts capitalised — still merges per rule
-  // (capitalisation alone isn't a safe signal against genuine wraps); verify basic no-crash + shape.
-  assert.ok(Array.isArray(out));
+  assert.deepStrictEqual(out, [
+    'Nominated Vehicle means the vehicle listed above Warranty Schedule sets out the applicable terms.',
+  ]);
+});
+
+test('merges a quoted defined term split mid-sentence despite capitalisation', () => {
+  const out = stitchFragments(['("the', 'Product")']);
+  assert.deepStrictEqual(out, ['("the Product")']);
+});
+
+test('merges a slash-broken compound term across the split', () => {
+  const out = stitchFragments(['loss of use of your Nominated /', 'Vehicle will void this warranty.']);
+  assert.deepStrictEqual(out, [
+    'loss of use of your Nominated / Vehicle will void this warranty.',
+  ]);
+});
+
+test('merges a dangling lowercase clause into the next capitalised noun phrase', () => {
+  const out = stitchFragments(['afin que le', "L'évaluateur confirme le résultat."]);
+  assert.deepStrictEqual(out, ["afin que le L'évaluateur confirme le résultat."]);
+});
+
+test('rejoins a mid-word hyphen break without a space', () => {
+  const out = stitchFragments(['This requires re-', 'application within 90 days.']);
+  assert.deepStrictEqual(out, ['This requires reapplication within 90 days.']);
+});
+
+test('keeps standalone short form-field labels separate', () => {
+  const out = stitchFragments(['Make', 'Model', 'Application Date']);
+  assert.deepStrictEqual(out, ['Make', 'Model', 'Application Date']);
 });
 
 test('merges multi-fragment run-on across several lines', () => {

@@ -37,15 +37,25 @@ function isAllowedUpload(filename, mimetype) {
 
 // Terminal punctuation (incl. closing quotes/brackets after it) that marks a real sentence/para end.
 const TERMINAL_RE = /[.!?:;""''\)\]]\s*$/;
-// Fragment that plausibly starts a *new* sentence/field (capital letter, digit/bullet, opening quote).
-const NEW_START_RE = /^[""'"(\[]?[A-Z0-9À-ÿĀ-ž•\-–]/;
+// Word broken across a line wrap with a hyphen (e.g. "re-" / "appli-").
+const HYPHEN_BREAK_RE = /[A-Za-zÀ-ÿĀ-ž]-$/;
+// A short run of Title-Case words with no internal punctuation/quotes/slashes — a form-field
+// label ("Make", "Application Date"), not prose. Capitalisation is NOT a reliable "new sentence"
+// signal otherwise: French capitalises defined terms, and quoted mid-sentence words are capitalised
+// too (both were wrongly blocking merges before).
+function isLabelLike(s) {
+  const t = String(s || '').trim();
+  if (!t || /["'()[\]/]/.test(t)) return false;
+  const words = t.split(/\s+/);
+  return words.length <= 3 && words.every((w) => /^[A-ZÀ-Ž][a-zà-ž'-]*$/.test(w));
+}
 
 /**
  * Merge PDF/line-extraction fragments that were split mid-sentence by layout noise
- * (uneven leading, table cells, wrapped lines) rather than by real paragraph breaks.
- * A fragment is merged into the next one when it does NOT end in terminal punctuation
- * AND the next fragment does NOT look like the start of a new sentence/field.
- * Conservative: never merges across a fragment that already ends a sentence.
+ * (uneven leading, wrapped lines, mid-word hyphenation) rather than by real paragraph breaks.
+ * A fragment merges into the next one unless it already ends a sentence, or both it and the
+ * next fragment look like standalone short field labels (kept separate so form headers like
+ * "Make" / "Model" don't get run together).
  */
 function stitchFragments(paragraphs) {
   const list = Array.isArray(paragraphs) ? paragraphs : [];
@@ -54,10 +64,13 @@ function stitchFragments(paragraphs) {
     const p = String(raw || '').trim();
     if (!p) continue;
     const prev = out[out.length - 1];
-    if (
+    if (prev !== undefined && HYPHEN_BREAK_RE.test(prev)) {
+      // Word split mid-hyphenation across a line wrap — rejoin without space, drop the hyphen.
+      out[out.length - 1] = `${prev.slice(0, -1)}${p}`;
+    } else if (
       prev !== undefined
       && !TERMINAL_RE.test(prev)
-      && !NEW_START_RE.test(p)
+      && !(isLabelLike(prev) && isLabelLike(p))
     ) {
       out[out.length - 1] = `${prev} ${p}`;
     } else {
