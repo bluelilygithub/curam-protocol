@@ -7,7 +7,7 @@ const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../serv
 const {
   proposeGlossary,
   lockRepeatedTerms,
-  enforceGlossaryConsistency,
+  reportGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
@@ -824,45 +824,21 @@ async function processTranslateJob(
     console.log('[translate] repair stats', repairStats);
   }
 
-  // ── 5c. Glossary consistency backstop ────────────────────────────────────────
+  // ── 5c. Glossary drift report ────────────────────────────────────────────────
   // Chunks translate in parallel with no shared state, so a forced term (user-declared or
-  // auto-locked above) can still land differently per chunk. Re-translate just the segments
-  // that drifted from their canonical rendering.
+  // auto-locked above) can still land differently per chunk. Pure string comparison, no LLM
+  // calls — flags drift into the QA summary instead of spending a retranslate call per segment
+  // (tried previously; added real latency and didn't reliably fix anything anyway).
+  let glossaryDriftTerms = [];
   if (engine === 'llm') {
-    const runningGlossary = {};
-    for (const t of glossaryTerms) {
-      if (t.source && t.target && !t.doNotTranslate) runningGlossary[t.source] = t.target;
-    }
-    let consistencyStats = null;
-    try {
-      consistencyStats = await enforceGlossaryConsistency({
-        pairs: reviewPairs,
-        glossaryTerms,
-        modelId: translateModelId,
-        userId,
-        sourceLanguage,
-        targetLanguage,
-        guidance: glossaryPrep.guidance,
-        runningGlossary,
-        intakeAnswers,
-        concurrency: 3,
-        onProgress: ({ done, total }) => {
-          setJobStatus(jobId, {
-            stage: `Checking glossary consistency: ${done + 1} of ${total}`,
-            progress: 82,
-          }).catch(() => {});
-        },
-      });
-    } catch (err) {
-      console.warn('[translate] enforceGlossaryConsistency failed:', err.message);
-    }
-    if (consistencyStats?.drifted) {
-      for (const pair of reviewPairs) {
-        if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
-          translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
-        }
-      }
-      console.log('[translate] glossary consistency stats', consistencyStats);
+    const drift = reportGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
+    if (drift.terms.length) {
+      glossaryDriftTerms = drift.terms.map((t) => ({
+        source: t.source,
+        renderedAs: '(varies)',
+        issue: `Glossary term drift: ${t.count} occurrence(s) did not match the locked rendering "${t.target}" (rows ${t.examples.join(', ')}${t.count > t.examples.length ? ', …' : ''}).`,
+      }));
+      console.log('[translate] glossary drift report', drift);
     }
   }
 
@@ -874,7 +850,7 @@ async function processTranslateJob(
     skipped: !enableReview,
     engine,
     pdfLayout,
-    uncertainTerms: glossaryPrep.uncertainTerms || [],
+    uncertainTerms: [...(glossaryPrep.uncertainTerms || []), ...glossaryDriftTerms],
     dialectalChoices: glossaryPrep.dialectalChoices || [],
     guidance: glossaryPrep.guidance || '',
     glossaryTermCount: glossaryTerms.length,
@@ -969,9 +945,10 @@ async function processTranslateJob(
           ...review,
           engine,
           pdfLayout,
-          uncertainTerms: (review.uncertainTerms?.length
-            ? review.uncertainTerms
-            : glossaryPrep.uncertainTerms) || [],
+          uncertainTerms: [
+            ...((review.uncertainTerms?.length ? review.uncertainTerms : glossaryPrep.uncertainTerms) || []),
+            ...glossaryDriftTerms,
+          ],
           dialectalChoices: (review.dialectalChoices?.length
             ? review.dialectalChoices
             : glossaryPrep.dialectalChoices) || [],

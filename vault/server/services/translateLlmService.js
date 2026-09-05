@@ -213,68 +213,37 @@ Rules:
 }
 
 /**
- * Post-translate consistency backstop for forced glossary terms (user-declared + auto-locked
- * via lockRepeatedTerms). Chunks translate in parallel with no shared state between them, so a
- * term can still land differently in chunk A vs chunk B even when both were told the same
- * canonical rendering. This scans every pair whose SOURCE contains a forced term and, when the
- * TARGET doesn't contain that term's canonical rendering, re-translates just that segment with
- * an explicit "you MUST render X as Y" instruction. Mutates pairs in place. Returns stats.
+ * Post-translate drift REPORT for forced glossary terms (user-declared + auto-locked via
+ * lockRepeatedTerms). Chunks translate in parallel with no shared state between them, so even a
+ * term every chunk was told the same canonical rendering for can still land differently in
+ * chunk A vs chunk B. Rather than spend an LLM call re-translating each drifted segment (tried
+ * previously — added real wall-clock time and did not reliably fix anything, since the model can
+ * pick a different wrong synonym on retry too), this is pure string comparison: scan every pair
+ * whose SOURCE contains a forced term, flag it when the TARGET doesn't contain that term's
+ * canonical rendering, and return the findings for the QA summary. Zero LLM calls, zero added
+ * latency. Does not mutate pairs — surfacing the drift beats silently guessing at a fix.
  */
-async function enforceGlossaryConsistency({
-  pairs, glossaryTerms, modelId, userId, sourceLanguage, targetLanguage, guidance, runningGlossary,
-  intakeAnswers, concurrency = 3, onProgress,
-}) {
+function reportGlossaryDrift({ pairs, glossaryTerms }) {
   const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
-  if (!forced.length || !pairs?.length) return { checked: 0, drifted: 0, fixed: 0 };
+  if (!forced.length || !pairs?.length) return { checked: 0, terms: [] };
 
-  const drifted = [];
+  const byTerm = new Map(); // term.source -> { source, target, count, examples: [pairIndex,...] }
   pairs.forEach((pair, i) => {
     const src = String(pair?.source || '');
     const tgt = String(pair?.target || '');
     if (!src || !tgt) return;
-    const violated = forced.filter((t) => {
+    for (const t of forced) {
       const re = new RegExp(`\\b${String(t.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      return re.test(src) && !tgt.toLowerCase().includes(String(t.target).toLowerCase());
-    });
-    if (violated.length) drifted.push({ i, violated });
+      if (!re.test(src) || tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue;
+      const key = t.source;
+      const entry = byTerm.get(key) || { source: t.source, target: t.target, count: 0, examples: [] };
+      entry.count += 1;
+      if (entry.examples.length < 5) entry.examples.push(i);
+      byTerm.set(key, entry);
+    }
   });
 
-  if (!drifted.length) return { checked: pairs.length, drifted: 0, fixed: 0 };
-
-  let fixed = 0;
-  let next = 0;
-  async function worker() {
-    while (true) {
-      const slot = next;
-      next += 1;
-      if (slot >= drifted.length) return;
-      const { i, violated } = drifted[slot];
-      const pair = pairs[i];
-      if (typeof onProgress === 'function') onProgress({ done: slot, total: drifted.length });
-      const forcedGuidance = [
-        guidance || '',
-        'MANDATORY term rendering — use exactly, no variation:',
-        violated.map((t) => `- "${t.source}" MUST be rendered as "${t.target}"`).join('\n'),
-      ].filter(Boolean).join('\n');
-      try {
-        const retried = await translateOneParagraph({
-          modelId, userId, paragraph: pair.source, sourceLanguage, targetLanguage,
-          glossaryTerms, guidance: forcedGuidance, runningGlossary, intakeAnswers,
-        });
-        const cleaned = finalizeTranslation(pair.source, applyGlossarySubstitutions(retried, glossaryTerms));
-        if (cleaned && !isIncompleteTarget(cleaned)) {
-          pair.target = cleaned;
-          fixed += 1;
-        }
-      } catch (err) {
-        console.warn('[translate] enforceGlossaryConsistency retry failed:', err.message);
-      }
-    }
-  }
-  const n = Math.max(1, Math.min(concurrency, drifted.length));
-  await Promise.all(Array.from({ length: n }, () => worker()));
-
-  return { checked: pairs.length, drifted: drifted.length, fixed };
+  return { checked: pairs.length, terms: [...byTerm.values()] };
 }
 
 /**
@@ -820,7 +789,7 @@ async function repairIncompletePairs({
 module.exports = {
   proposeGlossary,
   lockRepeatedTerms,
-  enforceGlossaryConsistency,
+  reportGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,

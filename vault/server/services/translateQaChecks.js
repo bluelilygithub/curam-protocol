@@ -196,6 +196,9 @@ function lockedDoNotTranslateTerms() {
 // 1-4 Title-Case words, letters only (incl. accented) — candidate defined term / proper noun.
 const CAPITALIZED_RUN_RE = /\b[A-ZÀ-Ž][a-zà-ž]*(?:\s+[A-ZÀ-Ž][a-zà-ž]*){0,3}\b/g;
 const SENTENCE_END_RE = /[.!?]\s*$/;
+// Definition-clause markers ("Warranty Schedule means...", "Period refers to...") — a phrase
+// immediately followed by one of these is a defined term by definition, no repetition needed.
+const DEFINITION_MARKER_RE = /^\s*(?:means|refers to|is defined as|has the meaning)\b/i;
 
 /**
  * Scan source paragraphs for repeated capitalized terms/phrases that read as defined terms
@@ -203,19 +206,28 @@ const SENTENCE_END_RE = /[.!?]\s*$/;
  * the kind of term an LLM translates inconsistently across chunks because it's an ordinary
  * word/phrase rather than an obvious brand name, so nothing nominates it for the glossary.
  *
- * Heuristic: a phrase counts only when it appears mid-sentence (not right after a paragraph
- * start or sentence-ending punctuation) at least twice — sentence-initial capitalization is
- * just English/French sentence-case, not a signal of a defined term. Phrases already covered
- * by existingTerms (case-insensitive) are skipped. Returns up to `limit` candidates, most
- * frequent first, each with one example sentence for context.
+ * Three independent signals qualify a phrase (any one is enough):
+ * - Mid-sentence recurrence: appears at least twice NOT at a paragraph/sentence start —
+ *   sentence-initial capitalization alone is just normal sentence-case, not a defined-term signal.
+ * - Standalone recurrence: the phrase IS the entire paragraph (a field label like "Make" /
+ *   "Model"), seen at least twice.
+ * - Definition marker: immediately followed by "means" / "refers to" / "is defined as" /
+ *   "has the meaning" — this alone proves it's a defined term even on a single occurrence,
+ *   which is what catches a term that's only ever introduced once per definition clause
+ *   ("Warranty Schedule means the document attached...") and never referenced inline elsewhere.
+ *
+ * Phrases already covered by existingTerms (case-insensitive) are skipped. Returns up to
+ * `limit` candidates, most frequent first, each with one example sentence for context.
  */
 function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { limit = 15, minCount = 3 } = {}) {
   const known = new Set((existingTerms || []).map((t) => String(t?.source || '').toLowerCase()).filter(Boolean));
-  const counts = new Map(); // phrase -> { count, midSentenceCount, example }
+  // phrase -> { count, midSentenceCount, standaloneCount, hasDefinitionMarker, example }
+  const counts = new Map();
 
   const allParagraphs = Object.values(paragraphsByPage || {}).flat();
   for (const para of allParagraphs) {
     const text = String(para || '');
+    const trimmed = text.trim();
     let m;
     CAPITALIZED_RUN_RE.lastIndex = 0;
     while ((m = CAPITALIZED_RUN_RE.exec(text)) !== null) {
@@ -224,16 +236,23 @@ function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { li
       if (known.has(key)) continue;
       if (phrase.split(/\s+/).length > 4) continue;
       const before = text.slice(0, m.index);
+      const after = text.slice(m.index + m[0].length);
       const isSentenceInitial = before.length === 0 || SENTENCE_END_RE.test(before) || /^\s*$/.test(before.slice(-3));
-      const entry = counts.get(key) || { phrase, count: 0, midSentenceCount: 0, example: text };
+      const isStandaloneParagraph = trimmed.replace(/[.,;:]$/, '') === phrase;
+      const entry = counts.get(key) || {
+        phrase, count: 0, midSentenceCount: 0, standaloneCount: 0, hasDefinitionMarker: false, example: text,
+      };
       entry.count += 1;
       if (!isSentenceInitial) entry.midSentenceCount += 1;
+      if (isStandaloneParagraph) entry.standaloneCount += 1;
+      if (DEFINITION_MARKER_RE.test(after)) entry.hasDefinitionMarker = true;
       counts.set(key, entry);
     }
   }
 
   return [...counts.values()]
-    .filter((e) => e.count >= minCount && e.midSentenceCount >= 2)
+    .filter((e) => e.count >= minCount
+      && (e.midSentenceCount >= 2 || e.standaloneCount >= 2 || e.hasDefinitionMarker))
     .sort((a, b) => b.count - a.count)
     .slice(0, limit)
     .map((e) => ({ term: e.phrase, count: e.count, example: e.example.slice(0, 300) }));

@@ -54,6 +54,30 @@ test('detects a recurring single capitalised word used as a defined term', () =>
   assert.ok(terms.includes('Period'), `expected Period in ${JSON.stringify(terms)}`);
 });
 
+test('detects a term only ever introduced via a definition-clause marker (paragraph-initial every time)', () => {
+  // This is the exact pattern that evaded detection before the definition-marker signal was
+  // added: the term is always at the start of its own defining paragraph, never mid-sentence.
+  const paras = {
+    1: [
+      'Warranty Schedule means the document attached as Schedule 3 to this warranty.',
+      'Some unrelated clause about registration requirements.',
+      'Another unrelated clause about the claims process.',
+    ],
+  };
+  const out = detectRepeatedTermCandidates(paras, [], { minCount: 1 });
+  const terms = out.map((c) => c.term);
+  assert.ok(terms.includes('Warranty Schedule'), `expected Warranty Schedule in ${JSON.stringify(terms)}`);
+});
+
+test('detects a standalone recurring field-label paragraph even with zero mid-sentence occurrences', () => {
+  const paras = {
+    1: ['Application Term', 'Some other unrelated paragraph.', 'Application Term', 'Application Term'],
+  };
+  const out = detectRepeatedTermCandidates(paras, []);
+  const terms = out.map((c) => c.term);
+  assert.ok(terms.includes('Application Term'), `expected Application Term in ${JSON.stringify(terms)}`);
+});
+
 test('does not flag ordinary sentence-initial capitalisation', () => {
   const paras = {
     1: [
