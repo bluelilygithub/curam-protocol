@@ -6,7 +6,6 @@ const { pool } = require('../db');
 const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../services/translateModelResolver');
 const {
   proposeGlossary,
-  lockRepeatedTerms,
   reportGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
@@ -15,7 +14,7 @@ const {
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
 } = require('../services/translateLlmService');
-const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact } = require('../services/translateQaChecks');
+const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 const {
   isGoogleTranslateConfigured,
@@ -527,6 +526,11 @@ async function processTranslateJob(
   let glossaryTerms = mergedExisting;
 
   if (engine === 'llm') {
+    // Recurring defined-term candidates (Warranty Schedule, Nominated Vehicle, Period, Make…) —
+    // a pure string scan, no LLM cost — passed into proposeGlossary so it can assign each a
+    // canonical rendering in the SAME call instead of a separate round-trip (removes one full
+    // serial LLM barrier from every job before translation starts).
+    const recurringCandidates = detectRepeatedTermCandidates(paragraphsByPage, mergedExisting);
     try {
       glossaryPrep = await proposeGlossary({
         modelId: translateModelId,
@@ -535,6 +539,7 @@ async function processTranslateJob(
         sourceSkim,
         targetLanguage,
         existingTerms: mergedExisting,
+        recurringCandidates,
       });
     } catch (err) {
       console.error('[translate] glossary prep failed:', err.message);
@@ -562,31 +567,6 @@ async function processTranslateJob(
       dialectalChoices: [],
       guidance: intakeAnswers?.notes || '',
     };
-  }
-
-  // Auto-lock recurring defined terms (Warranty Schedule, Nominated Vehicle, Period, Make…)
-  // that the glossary-skim call won't nominate on its own — see lockRepeatedTerms doc comment.
-  if (engine === 'llm') {
-    try {
-      const lockedTerms = await lockRepeatedTerms({
-        modelId: translateModelId,
-        userId,
-        paragraphsByPage,
-        existingTerms: glossaryTerms,
-        targetLanguage,
-        guidance: glossaryPrep.guidance,
-      });
-      if (lockedTerms.length) {
-        const bySource = new Map();
-        for (const t of [...glossaryTerms, ...lockedTerms]) {
-          const key = String(t.source).toLowerCase();
-          if (!bySource.has(key)) bySource.set(key, t);
-        }
-        glossaryTerms = [...bySource.values()];
-      }
-    } catch (err) {
-      console.warn('[translate] lockRepeatedTerms failed:', err.message);
-    }
   }
 
   if ((sourceFormat === 'xlsx' || sourceFormat === 'xls') && glossaryPrep.guidance != null) {

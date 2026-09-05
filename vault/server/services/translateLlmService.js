@@ -15,7 +15,6 @@ const {
   hardSanityGate,
   enforceRedactionPassThrough,
   lockedDoNotTranslateTerms,
-  detectRepeatedTermCandidates,
   findPlaceholder,
 } = require('./translateQaChecks');
 
@@ -104,15 +103,26 @@ function finalizeTranslation(source, target) {
 
 /**
  * Propose / merge glossary from intake answers + source skim + optional saved glossary.
+ * Also assigns canonical renderings to `recurringCandidates` (from
+ * translateQaChecks.detectRepeatedTermCandidates — a pure string scan, computed by the caller
+ * before this call, no LLM cost) in the SAME call: these are ordinary (non-brand) words/phrases
+ * that read as defined terms because they recur mid-sentence, as a standalone label, or right
+ * before a definition marker (Warranty Schedule, Nominated Vehicle, Period, Make) — too ordinary
+ * for a glossary skim to nominate on its own, but exactly what drifts across chunks when nothing
+ * pins them down. This used to be a separate `lockRepeatedTerms` call, run strictly after this
+ * one — merged into one call to remove a full serial round-trip from every job before
+ * translation starts (see docs/translate-agent.md pipeline notes).
  */
 async function proposeGlossary({
   modelId, userId, intakeAnswers = {}, sourceSkim, targetLanguage, existingTerms = [],
+  recurringCandidates = [],
 }) {
   const system = `You prepare translation glossaries for professional documents.
 Return ONLY valid JSON:
 {
   "sourceLanguage": "xx",
   "terms": [ { "source": "...", "target": "...", "doNotTranslate": false, "note": "..." } ],
+  "lockedTerms": [ { "source": "...", "target": "...", "doNotTranslate": false } ],
   "uncertainTerms": [ { "source": "...", "proposedTarget": "...", "reason": "..." } ],
   "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "iwi/rohe or why adapted" } ],
   "guidance": "1-3 sentences of translator instructions from the intake answers"
@@ -122,8 +132,13 @@ Rules:
 - Mark brand names, product codes, and "do not translate" items with doNotTranslate:true and empty target.
 - Always keep [REDACTED] as doNotTranslate (never invent a target-language substitute).
 - Merge and respect any existing glossary terms provided (do not contradict them).
-- Keep the list focused (typically 5–40 terms). No markdown fences.
-- dialectalChoices: only when te reo Māori with a specified regional audience; otherwise [].`;
+- Keep the "terms" list focused (typically 5–40 terms). No markdown fences.
+- dialectalChoices: only when te reo Māori with a specified regional audience; otherwise [].
+- "lockedTerms": assign ONE canonical rendering to each entry under "Recurring candidate terms"
+  below, so a document translator uses the same rendering everywhere instead of drifting
+  term-by-term. Treat each as a defined term or fixed field label, not a one-off word. One entry
+  per candidate, same source spelling. If it's a brand/product name that should stay untranslated,
+  set doNotTranslate:true and target:"". Omit "lockedTerms" (or return []) if no candidates were given.`;
 
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
   const prompt = [
@@ -136,11 +151,16 @@ Rules:
     'Existing glossary terms (must honour):',
     JSON.stringify(existingTerms || [], null, 2),
     '',
+    recurringCandidates.length ? 'Recurring candidate terms (assign each a canonical rendering under "lockedTerms", with one example sentence each):' : '',
+    recurringCandidates.length
+      ? recurringCandidates.map((c) => `- "${c.term}" (seen ${c.count}×) — e.g. "${c.example}"`).join('\n')
+      : '',
+    '',
     'Source document skim (beginning of extract):',
     String(sourceSkim || '').slice(0, 6000),
   ].filter(Boolean).join('\n');
 
-  const res = await callModel(modelId, prompt, { maxTokens: 2500, system, returnUsage: true });
+  const res = await callModel(modelId, prompt, { maxTokens: 3000, system, returnUsage: true });
   if (userId) {
     logUsage({
       userId, model: modelId,
@@ -151,9 +171,11 @@ Rules:
 
   const parsed = parseModelJson(res.text) || {};
   const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
+  const lockedTerms = (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
+    .filter((t) => t?.source && (t.doNotTranslate || t.target));
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
-    terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(), existingTerms || [], terms),
+    terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(), existingTerms || [], terms, lockedTerms),
     uncertainTerms: Array.isArray(parsed.uncertainTerms) ? parsed.uncertainTerms : [],
     dialectalChoices: Array.isArray(parsed.dialectalChoices) ? parsed.dialectalChoices : [],
     guidance: parsed.guidance || '',
@@ -161,60 +183,8 @@ Rules:
 }
 
 /**
- * Detect ordinary (non-brand) words/phrases that read as defined terms because they recur
- * mid-sentence with a capital (Warranty Schedule, Nominated Vehicle, Period, Make) and lock
- * each to one canonical target rendering BEFORE translation starts. These are exactly the
- * terms that drift across chunks: they're too ordinary for the glossary-skim LLM call to
- * nominate on its own, but the recurrence pattern makes them detectable deterministically.
- * Returns glossary-shaped terms ({ source, target }) to merge into the working glossary —
- * merged in, they (a) get named explicitly in every chunk's prompt, and (b) get force-applied
- * post-translate via applyGlossarySubstitutions as a backstop.
- */
-async function lockRepeatedTerms({
-  modelId, userId, paragraphsByPage, existingTerms = [], targetLanguage, guidance,
-}) {
-  const candidates = detectRepeatedTermCandidates(paragraphsByPage, existingTerms);
-  if (!candidates.length) return [];
-
-  const system = `You assign ONE canonical ${langName(targetLanguage)} rendering to each recurring term below,
-so a document translator can use the same rendering everywhere instead of drifting term-by-term.
-Each term recurs across a legal/business document — treat it as a defined term or fixed field label, not a one-off word.
-Return ONLY valid JSON:
-{ "terms": [ { "source": "...", "target": "...", "doNotTranslate": false } ] }
-Rules:
-- One entry per input term, same source spelling.
-- If the term is a brand/product name that should stay untranslated, set doNotTranslate:true and target:"".
-- No markdown fences, no commentary.`;
-
-  const prompt = [
-    `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
-    guidance ? `Translator guidance: ${guidance}` : '',
-    '',
-    'Recurring terms (with one example sentence each):',
-    candidates.map((c) => `- "${c.term}" (seen ${c.count}×) — e.g. "${c.example}"`).join('\n'),
-  ].filter(Boolean).join('\n');
-
-  try {
-    const res = await callModel(modelId, prompt, { maxTokens: 1500, system, returnUsage: true });
-    if (userId) {
-      logUsage({
-        userId, model: modelId,
-        inputTokens: res.inputTokens, outputTokens: res.outputTokens,
-        feature: 'translate_term_lock',
-      }).catch(() => {});
-    }
-    const parsed = parseModelJson(res.text) || {};
-    const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
-    return terms.filter((t) => t?.source && (t.doNotTranslate || t.target));
-  } catch (err) {
-    console.warn('[translate] lockRepeatedTerms failed:', err.message);
-    return [];
-  }
-}
-
-/**
- * Post-translate drift REPORT for forced glossary terms (user-declared + auto-locked via
- * lockRepeatedTerms). Chunks translate in parallel with no shared state between them, so even a
+ * Post-translate drift REPORT for forced glossary terms (user-declared + auto-locked via the
+ * "lockedTerms" step in proposeGlossary). Chunks translate in parallel with no shared state, so even a
  * term every chunk was told the same canonical rendering for can still land differently in
  * chunk A vs chunk B. Rather than spend an LLM call re-translating each drifted segment (tried
  * previously — added real wall-clock time and did not reliably fix anything, since the model can
@@ -788,7 +758,6 @@ async function repairIncompletePairs({
 
 module.exports = {
   proposeGlossary,
-  lockRepeatedTerms,
   reportGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
