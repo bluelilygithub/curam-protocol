@@ -457,6 +457,9 @@ function TranslationsTab({ glossaries }) {
   const [file, setFile]             = useState(null);
   const [dragOver, setDragOver]     = useState(false);
   const [targetLang, setTargetLang] = useState('fr');
+  const [extraLangs, setExtraLangs] = useState([]); // additional target languages — fan-out into one job per language
+  const [estimate, setEstimate] = useState(null);
+  const [estimating, setEstimating] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
   const [domain, setDomain] = useState('general');
   const [audience, setAudience] = useState('client');
@@ -481,9 +484,12 @@ function TranslationsTab({ glossaries }) {
   const [activeJob, setActiveJob]   = useState(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [batchPendingIds, setBatchPendingIds] = useState([]);
   const fileRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
   const pollRef = useRef(null);
+  const batchPollRef = useRef(null);
+  const batchHandledRef = useRef(new Set());
 
   const loadJobs = useCallback(() => {
     api.get('/api/translate/jobs').then(r => r.json()).then(setJobs).catch(() => {})
@@ -607,9 +613,13 @@ function TranslationsTab({ glossaries }) {
     }
     setSubmitting(true);
     try {
+      const allLangs = [targetLang, ...extraLangs.filter((l) => l !== targetLang)];
+      const isBatch = allLangs.length > 1;
+
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('targetLanguage', targetLang);
+      if (isBatch) fd.append('targetLanguages', JSON.stringify(allLangs));
+      else fd.append('targetLanguage', targetLang);
       fd.append('engine', engine);
       fd.append('pdfLayout', pdfLayout);
       if (glossaryId) fd.append('glossaryId', glossaryId);
@@ -626,12 +636,17 @@ function TranslationsTab({ glossaries }) {
         regionalAudience: targetLang === 'mi' ? regionalAudience.trim() : '',
       }));
 
-      const res  = await api.postForm('/api/translate/jobs', fd);
+      const res  = await api.postForm(isBatch ? '/api/translate/jobs/batch' : '/api/translate/jobs', fd);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Submission failed');
 
-      setActiveJobId(body.jobId);
-      setFile(null); setPreflight(null);
+      if (isBatch) {
+        setBatchPendingIds(body.jobIds || []);
+        addToast(`Batch started — translating into ${allLangs.length} languages`, 'success');
+      } else {
+        setActiveJobId(body.jobId);
+      }
+      setFile(null); setPreflight(null); setEstimate(null);
       loadJobs();
     } catch (e) {
       addToast(e.message, 'error');
@@ -663,6 +678,55 @@ function TranslationsTab({ glossaries }) {
     }, 2000);
     return () => clearInterval(pollRef.current);
   }, [activeJobId, generatingPdf]);
+
+  // Poll a multi-language batch — each job builds its own PDF client-side once it reaches
+  // 'generating', same as the single-job flow above, just fanned out over several job ids.
+  useEffect(() => {
+    if (!batchPendingIds.length) return;
+    clearInterval(batchPollRef.current);
+    batchPollRef.current = setInterval(async () => {
+      const remaining = [];
+      for (const id of batchPendingIds) {
+        try {
+          const res = await api.get(`/api/translate/jobs/${id}/status`);
+          const data = await res.json();
+          if (data.status === 'generating' && data.translatedTextJson && !batchHandledRef.current.has(id)) {
+            batchHandledRef.current.add(id);
+            generateAndUploadPdf(data);
+          }
+          if (data.status !== 'done' && data.status !== 'failed') remaining.push(id);
+        } catch { remaining.push(id); }
+      }
+      setBatchPendingIds(remaining);
+      if (!remaining.length) {
+        clearInterval(batchPollRef.current);
+        loadJobs();
+        addToast('Batch translation finished', 'success');
+      }
+    }, 3000);
+    return () => clearInterval(batchPollRef.current);
+  }, [batchPendingIds]);
+
+  const runEstimate = async () => {
+    if (!file) return;
+    setEstimating(true);
+    setEstimate(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('targetLanguage', targetLang);
+      const allLangs = [targetLang, ...extraLangs.filter((l) => l !== targetLang)];
+      if (allLangs.length > 1) fd.append('targetLanguages', JSON.stringify(allLangs));
+      const res = await api.postForm('/api/translate/estimate', fd);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Estimate failed');
+      setEstimate(data);
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setEstimating(false);
+    }
+  };
 
   const generateAndUploadPdf = async (jobData) => {
     setGeneratingPdf(true);
@@ -719,6 +783,21 @@ function TranslationsTab({ glossaries }) {
       const a = document.createElement('a');
       a.href = url;
       a.download = `translated-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const downloadNativeJob = async (job) => {
+    try {
+      const res = await api.get(`/api/translate/jobs/${job.id}/download-native`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const ext = /\.xlsx?$/i.test(job.filename || '') ? 'xlsx' : 'docx';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `translated-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) { addToast(e.message, 'error'); }
@@ -813,6 +892,33 @@ function TranslationsTab({ glossaries }) {
                       {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                     </Sel>
                   </Field>
+                  <div className="mt-2">
+                    <details>
+                      <summary className="text-xs cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
+                        Also translate into more languages{extraLangs.length ? ` (+${extraLangs.length})` : ''}
+                      </summary>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {LANGUAGES.filter(l => l.code !== targetLang).map(l => {
+                          const checked = extraLangs.includes(l.code);
+                          return (
+                            <label key={l.code}
+                              className="text-xs px-2 py-1 rounded-full border cursor-pointer select-none"
+                              style={{
+                                borderColor: 'var(--color-border)',
+                                background: checked ? 'var(--color-primary)' : 'transparent',
+                                color: checked ? '#fff' : 'var(--color-text)',
+                              }}>
+                              <input type="checkbox" className="hidden" checked={checked}
+                                onChange={() => setExtraLangs(prev => checked
+                                  ? prev.filter(c => c !== l.code)
+                                  : (prev.length >= 7 ? prev : [...prev, l.code]))} />
+                              {l.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  </div>
                 </div>
                 <div className="flex-1 min-w-40">
                   <Field label="Saved glossary (optional)"
@@ -960,9 +1066,26 @@ function TranslationsTab({ glossaries }) {
               )}
 
               <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={runEstimate}
+                    disabled={estimating || preflighting || !file}
+                    className="text-xs px-3 py-2 rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-50"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                    {estimating ? 'Estimating…' : 'Get estimate'}
+                  </button>
+                  {estimate && (
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {estimate.charCount.toLocaleString()} chars
+                      {estimate.languageCount > 1 ? ` × ${estimate.languageCount} languages` : ''}
+                      {estimate.estCostUsd != null ? ` · ~US$${estimate.estCostUsd.toFixed(4)} (${estimate.modelId})` : ''}
+                    </span>
+                  )}
+                </div>
                 <Btn onClick={handleSubmit}
                   disabled={submitting || preflighting || (engine === 'llm' && !domain)}>
-                  {submitting ? 'Submitting…' : `Start Translation (${engine === 'google' ? 'Google' : 'LLM'})`}
+                  {submitting ? 'Submitting…' : `Start Translation${extraLangs.length ? ` (${extraLangs.length + 1} languages)` : ''} (${engine === 'google' ? 'Google' : 'LLM'})`}
                 </Btn>
               </div>
             </>
@@ -1019,6 +1142,11 @@ function TranslationsTab({ glossaries }) {
                         {job.avgOcrConfidence != null && job.avgOcrConfidence < 0.7 && (
                           <span className="text-xs" style={{ color: '#d97706' }} title="Low OCR confidence">⚠</span>
                         )}
+                        {job.batchId && (
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }} title="Part of a multi-language batch">
+                            Batch
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                         {srcLabel} → {tgtLabel}
@@ -1049,7 +1177,15 @@ function TranslationsTab({ glossaries }) {
                             <button onClick={() => downloadJob(job)}
                               className="text-xs px-2 py-1 rounded border"
                               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                              Download
+                              Download PDF
+                            </button>
+                          )}
+                          {job.hasNativeOutput && (
+                            <button onClick={() => downloadNativeJob(job)}
+                              className="text-xs px-2 py-1 rounded border"
+                              title="Editable Word/Excel file with the source file's own formatting"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              Download {/\.xlsx?$/i.test(job.filename || '') ? 'Excel' : 'Word'}
                             </button>
                           )}
                           {(job.status === 'done' || job.qaSummaryJson) && (

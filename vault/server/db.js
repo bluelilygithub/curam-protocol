@@ -1865,6 +1865,48 @@ async function initSchema() {
   await pool.query(`
     ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "enableReview" BOOLEAN DEFAULT TRUE
   `);
+  // Multi-language fan-out: jobs submitted together from one upload share a batchId.
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "batchId" TEXT
+  `);
+  // Native (editable) output for .docx/.xlsx sources — separate from the always-available
+  // bilingual/side-by-side PDF, which still uses "translatedPdf".
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "translatedFile" BYTEA
+  `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "translatedFileMime" TEXT
+  `);
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "translatedFileName" TEXT
+  `);
+  // Upfront cost/character estimate shown before a job is submitted (informational only).
+  await pool.query(`
+    ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "estimateJson" TEXT
+  `);
+
+  // ── Translation memory (exact-match segment reuse + TMX export) ─────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_memory (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "sourceLang"  TEXT NOT NULL,
+      "targetLang"  TEXT NOT NULL,
+      "sourceHash"  TEXT NOT NULL,
+      "sourceText"  TEXT NOT NULL,
+      "targetText"  TEXT NOT NULL,
+      domain        TEXT,
+      "hitCount"    INTEGER NOT NULL DEFAULT 0,
+      "createdAt"   TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Indexed on a fixed-length hash, not the raw paragraph text — a long segment can exceed
+  // Postgres's btree index row-size limit if indexed directly.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_memory_unique
+      ON translate_memory ("userId", "sourceLang", "targetLang", "sourceHash")
+  `);
 
   // ── Guitar Learning Agent ─────────────────────────────────────────────────────
   await pool.query(`

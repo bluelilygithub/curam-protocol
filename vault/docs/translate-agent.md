@@ -4,8 +4,8 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 
 **Frontend:** `vault/client/src/pages/TranslatePage.jsx`  
 **Backend:** `vault/server/routes/translate.js`  
-**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js`  
-**Tables:** `translate_jobs`, `translate_glossaries`  
+**Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js` · `translateMemory.js` · `translateNativeOutput.js`  
+**Tables:** `translate_jobs`, `translate_glossaries`, `translate_memory`  
 **Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier)
 
 Feature flag / app: **Translate** (languages).
@@ -99,15 +99,49 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/translate/config` | Models configured? |
+| `POST` | `/api/translate/estimate` | Extract-only (no translation) — returns `charCount`, `pageCount`, rough `estCostUsd` before submitting |
 | `GET` | `/api/translate/jobs` | List jobs |
 | `GET` | `/api/translate/jobs/:id/status` | Poll status + `translatedTextJson` when generating |
 | `POST` | `/api/translate/jobs` | Multipart: `file` (or legacy `pdf`), `targetLanguage`, `intakeAnswers`, optional `glossaryId`, `scannedPageImages`, `enableReview` |
+| `POST` | `/api/translate/jobs/batch` | Same as above but `targetLanguages` (JSON array, 2-8 codes) instead of `targetLanguage` — one job per language sharing a `batchId`, extraction/OCR done once and reused |
 | `POST` | `/api/translate/jobs/:id/complete` | Upload generated `translatedPdf` |
 | `POST` | `/api/translate/jobs/:id/fail` | Mark failed from client |
 | `GET` | `/api/translate/jobs/:id/download` | Download bilingual PDF |
+| `GET` | `/api/translate/jobs/:id/download-native` | Download native `.docx`/`.xlsx` output, when available (see **Native output** below) |
 | `DELETE` | `/api/translate/jobs/:id` | Delete job |
 
 Glossaries: CRUD under `/api/translate/glossaries`.
+
+Translation memory: `GET /api/translate/memory/stats` (segment counts + reuse counts per language pair), `GET /api/translate/memory/export.tmx` (TMX 1.4 export, optional `?sourceLang=&targetLang=` filter).
+
+---
+
+## Native (editable) output
+
+Every job still produces the bilingual/side-by-side PDF as before. When the source was `.xlsx`/`.xls` or `.docx`, the pipeline also attempts to build a native output file in the *same* format, so the download isn't PDF-only:
+
+- **Xlsx** (`translateNativeOutput.buildNativeXlsx`) — deterministic. `translateExtract` prefixes every cell paragraph with its exact ref (`[A1] text`), so the translated text is written straight back into that cell of the original workbook (styles/formulas on untouched cells are preserved; a translated cell's formula, if any, is dropped since it no longer applies).
+- **Docx** (`translateNativeOutput.buildNativeDocx`) — best-effort. The original `document.xml` is split into `<w:p>` blocks and matched **by position** to our extracted paragraphs. If the counts don't line up (unusual structure — nested tables, text boxes — that mammoth's flattened text extraction counts differently than the raw XML), the function returns `null` and the job simply has no native output; the PDF is still generated normally.
+
+Stored in `translate_jobs."translatedFile"` / `"translatedFileMime"` / `"translatedFileName"`; `hasNativeOutput` is exposed on the job list/status endpoints. Never blocks job completion — build failures are logged and swallowed.
+
+---
+
+## Translation memory (exact match)
+
+`translateMemory.js` — after each job, every (source paragraph, translated paragraph) pair is upserted into `translate_memory`, keyed by `(userId, sourceLang, targetLang)` with an MD5 hash of the normalized source text (paragraphs can exceed Postgres's btree index row-size limit, so the raw text itself isn't indexed). Before translating, every paragraph is checked against this memory; an exact match is reused verbatim instead of being sent to the model, and its `hitCount` is bumped. No fuzzy matching — deliberately simple, but it guarantees identical wording for repeated boilerplate (standard clauses, repeated product blurbs) across jobs and skips the LLM call entirely for those segments. `qaSummary.tmReuseCount` reports how many segments were reused in a given job. Export via `GET /api/translate/memory/export.tmx` for use in another CAT tool.
+
+---
+
+## Multi-language fan-out
+
+`POST /api/translate/jobs/batch` accepts `targetLanguages` (2-8 language codes) instead of a single `targetLanguage`. One `translate_jobs` row is created per language, all sharing a `batchId`. Extraction and OCR (the parts of the pipeline that don't depend on target language) run once against the first job in the batch and the result is reused for every language — `processTranslateJob`'s `sharedExtraction` parameter — so a scanned PDF doesn't get OCR'd N times. Each language then runs its own glossary/translate/QA/output stages independently and in parallel (pool of 3). The client UI exposes this as "Also translate into more languages" checkboxes next to the single target-language selector.
+
+---
+
+## Upfront estimate
+
+`POST /api/translate/estimate` runs extraction only (no LLM calls) and returns `charCount`, `pageCount`, and a rough `estCostUsd` from `costCalculator.calculateCost()` using a ~4 chars/token heuristic for both input and output. Multiplied by language count when `targetLanguages` is passed. Informational only — actual usage varies with glossary size and whether the review pass runs.
 
 ---
 

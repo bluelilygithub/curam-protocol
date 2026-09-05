@@ -23,6 +23,10 @@ const {
   wrapDoNotTranslate,
   stripDoNotTranslateSpans,
 } = require('../services/googleTranslateService');
+const translateMemory = require('../services/translateMemory');
+const { buildNativeXlsx, buildNativeDocx } = require('../services/translateNativeOutput');
+const { calculateCost } = require('../services/costCalculator');
+const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
@@ -112,6 +116,60 @@ router.get('/config', async (req, res) => {
   }
 });
 
+// ── Upfront estimate ──────────────────────────────────────────────────────────
+// Extracts text only (no translation) so the user can see roughly what a job will cost/how big
+// it is before submitting. Informational only — actual cost can vary with glossary/review passes.
+router.post('/estimate', sourceUpload, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File required' });
+  try {
+    const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
+    if (!sourceFormat) return res.status(400).json({ error: 'Unsupported file type' });
+
+    const extracted = await extractForTranslate({
+      buffer: req.file.buffer,
+      filename: req.file.originalname,
+      mimetype: req.file.mimetype,
+    });
+    const charCount = Object.values(extracted.paragraphsByPage || {})
+      .flat()
+      .reduce((sum, p) => sum + String(p).length, 0);
+
+    const targetLanguages = req.body.targetLanguages
+      ? (() => { try { return JSON.parse(req.body.targetLanguages); } catch { return [req.body.targetLanguages]; } })()
+      : [req.body.targetLanguage].filter(Boolean);
+    const languageCount = Math.max(1, targetLanguages.length);
+
+    // Rough token estimate: ~4 chars/token in, output roughly matches input length.
+    const estTokensIn = Math.ceil(charCount / 4);
+    const estTokensOut = estTokensIn;
+
+    let estCostUsd = null;
+    let modelId = null;
+    try {
+      const models = await resolveTranslateModels({ userId: req.user.id });
+      modelId = models.translate?.modelId || null;
+      if (modelId) {
+        const perLanguage = calculateCost(modelId, estTokensIn, estTokensOut);
+        if (perLanguage != null) estCostUsd = Number(perLanguage) * languageCount;
+      }
+    } catch {}
+
+    res.json({
+      sourceFormat,
+      pageCount: extracted.pageCount,
+      charCount,
+      languageCount,
+      estTokensIn: estTokensIn * languageCount,
+      estTokensOut: estTokensOut * languageCount,
+      estCostUsd,
+      modelId,
+      note: 'Rough estimate from character count — actual usage varies with glossary size and review pass.',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Glossary CRUD ─────────────────────────────────────────────────────────────
 router.get('/glossaries', async (req, res) => {
   try {
@@ -171,13 +229,34 @@ router.delete('/glossaries/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Translation memory ──────────────────────────────────────────────────────────
+router.get('/memory/stats', async (req, res) => {
+  try {
+    res.json(await translateMemory.stats({ userId: req.user.id }));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/memory/export.tmx', async (req, res) => {
+  try {
+    const tmx = await translateMemory.exportTmx({
+      userId: req.user.id,
+      sourceLang: req.query.sourceLang || null,
+      targetLang: req.query.targetLang || null,
+    });
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Content-Disposition', 'attachment; filename="translation-memory.tmx"');
+    res.send(tmx);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Jobs ──────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, filename, status, stage, progress, "sourceLanguage", "targetLanguage",
-              "pageCount", "scannedPageCount", "avgOcrConfidence", "glossaryId",
+              "pageCount", "scannedPageCount", "avgOcrConfidence", "glossaryId", "batchId",
               "errorMessage", "fileSizeBytes", "charCount", "qaSummaryJson",
+              ("translatedFile" IS NOT NULL) AS "hasNativeOutput",
               "createdAt", "completedAt"
        FROM translate_jobs WHERE "userId"=$1 ORDER BY "createdAt" DESC`,
       [req.user.id]
@@ -189,9 +268,10 @@ router.get('/jobs', async (req, res) => {
 router.get('/jobs/:id/status', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, status, stage, progress, "sourceLanguage", "targetLanguage",
+      `SELECT id, status, stage, progress, "sourceLanguage", "targetLanguage", "batchId",
               "pageCount", "scannedPageCount", "avgOcrConfidence", "translatedTextJson",
               "qaSummaryJson", "proposedGlossaryJson", "intakeAnswers",
+              ("translatedFile" IS NOT NULL) AS "hasNativeOutput", "translatedFileName",
               "errorMessage", "completedAt"
        FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
       [req.params.id, req.user.id]
@@ -212,6 +292,20 @@ router.get('/jobs/:id/download', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.pdf"`);
     res.send(rows[0].translatedPdf);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/jobs/:id/download-native', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT filename, "translatedFile", "translatedFileMime", "translatedFileName"
+       FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]?.translatedFile) return res.status(404).json({ error: 'Native output not available for this job' });
+    res.setHeader('Content-Type', rows[0].translatedFileMime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${rows[0].translatedFileName || 'translated-document'}"`);
+    res.send(rows[0].translatedFile);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -349,6 +443,132 @@ router.post('/jobs', sourceUpload, async (req, res) => {
   res.status(202).json({ jobId, sourceFormat, engine, pdfLayout });
 });
 
+// ── Submit batch job (multi-language fan-out) ──────────────────────────────────
+// Same intake as a single job, but `targetLanguages` is a JSON array. Extraction (+ OCR) runs
+// once and is shared across every language instead of repeating it per job.
+router.post('/jobs/batch', sourceUpload, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+
+  const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
+  if (!sourceFormat) {
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+  }
+
+  let targetLanguages;
+  try {
+    targetLanguages = JSON.parse(req.body.targetLanguages || '[]');
+  } catch {
+    return res.status(400).json({ error: 'Invalid targetLanguages JSON' });
+  }
+  targetLanguages = [...new Set((targetLanguages || []).map((l) => String(l).trim()).filter(Boolean))];
+  if (targetLanguages.length < 2) {
+    return res.status(400).json({ error: 'targetLanguages needs at least 2 languages — use POST /jobs for a single language' });
+  }
+  if (targetLanguages.length > 8) {
+    return res.status(400).json({ error: 'Maximum 8 languages per batch' });
+  }
+
+  const engine = String(req.body.engine || 'llm').toLowerCase() === 'google' ? 'google' : 'llm';
+  const pdfLayout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(req.body.pdfLayout)
+    ? req.body.pdfLayout
+    : 'side-by-side';
+  const overrides = {
+    translateModelId: req.body.translateModelId ? String(req.body.translateModelId).trim() : null,
+    reviewModelId: req.body.reviewModelId ? String(req.body.reviewModelId).trim() : null,
+  };
+
+  if (engine === 'google') {
+    if (!isGoogleTranslateConfigured()) {
+      return res.status(503).json({ error: 'Google Translate API key not configured (GOOGLE_TRANSLATE_API_KEY)' });
+    }
+  } else {
+    const models = await resolveTranslateModels({ userId: req.user.id, overrides });
+    if (!models.ok || !models.translate?.modelId) {
+      return res.status(503).json({
+        error: models.errors?.[0] || 'Translate model not configured — set it in Settings → Translate agent',
+      });
+    }
+  }
+
+  const { glossaryId } = req.body;
+  let intakeAnswers = {};
+  try {
+    intakeAnswers = req.body.intakeAnswers
+      ? (typeof req.body.intakeAnswers === 'string' ? JSON.parse(req.body.intakeAnswers) : req.body.intakeAnswers)
+      : {};
+  } catch {
+    return res.status(400).json({ error: 'Invalid intakeAnswers JSON' });
+  }
+  if (engine === 'llm' && !intakeAnswers.domain) {
+    return res.status(400).json({ error: 'Please answer the intake questions (domain is required)' });
+  }
+  if (!intakeAnswers.domain) intakeAnswers.domain = 'general';
+
+  const enableReview = engine === 'llm'
+    ? String(req.body.enableReview ?? 'true') !== 'false'
+    : String(req.body.enableReview ?? 'false') === 'true';
+
+  let scannedImages = {};
+  try { scannedImages = req.body.scannedPageImages ? JSON.parse(req.body.scannedPageImages) : {}; } catch {}
+
+  if (sourceFormat === 'pdf') {
+    const pdfParse = require('pdf-parse');
+    try { await pdfParse(req.file.buffer, { max: 1 }); }
+    catch (e) {
+      if (e.message?.toLowerCase().includes('password')) {
+        return res.status(400).json({ error: 'Password-protected PDFs cannot be processed' });
+      }
+    }
+  }
+
+  intakeAnswers.engine = engine;
+  intakeAnswers.pdfLayout = pdfLayout;
+  if (overrides.translateModelId) intakeAnswers.translateModelId = overrides.translateModelId;
+  if (overrides.reviewModelId) intakeAnswers.reviewModelId = overrides.reviewModelId;
+
+  const batchId = uuidv4();
+  const jobIds = [];
+  for (const lang of targetLanguages) {
+    const { rows } = await pool.query(
+      `INSERT INTO translate_jobs
+         ("userId", filename, status, "targetLanguage", "fileSizeBytes", "originalPdf",
+          "glossaryId", "intakeAnswers", "enableReview", "batchId")
+       VALUES ($1,$2,'pending',$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [
+        req.user.id, req.file.originalname, lang, req.file.size, req.file.buffer,
+        glossaryId ? parseInt(glossaryId, 10) : null, JSON.stringify(intakeAnswers), enableReview, batchId,
+      ]
+    );
+    jobIds.push(rows[0].id);
+  }
+
+  const fileMeta = { filename: req.file.originalname, mimetype: req.file.mimetype, sourceFormat, engine, pdfLayout };
+
+  // Extract once (attributed to the first job for progress display), then translate every
+  // language against the shared result. Runs in the background — response returns immediately.
+  (async () => {
+    let sharedExtraction;
+    try {
+      sharedExtraction = await extractAndOcr(jobIds[0], req.file.buffer, fileMeta, scannedImages, sourceFormat);
+    } catch (err) {
+      await Promise.all(jobIds.map((id) => markJobFailed(id, err.message)));
+      return;
+    }
+    await mapPool(targetLanguages, 3, async (lang, i) => {
+      const jobId = jobIds[i];
+      try {
+        await processTranslateJob(jobId, req.file.buffer, req.user.id, lang,
+          glossaryId ? parseInt(glossaryId, 10) : null, scannedImages, intakeAnswers, enableReview,
+          fileMeta, sharedExtraction);
+      } catch (err) {
+        await markJobFailed(jobId, err.message);
+      }
+    });
+  })().catch((err) => console.error('[translate] batch failed:', err.message));
+
+  res.status(202).json({ batchId, jobIds, targetLanguages, sourceFormat, engine, pdfLayout });
+});
+
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 function splitLongParagraph(text, limit = 3500) {
   if (text.length <= limit) return [text];
@@ -384,34 +604,10 @@ async function mapPool(items, concurrency, worker) {
   return results;
 }
 
-async function processTranslateJob(
-  jobId, fileBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview,
-  fileMeta = {}
-) {
-  const engine = fileMeta.engine === 'google' ? 'google' : 'llm';
-  const pdfLayout = fileMeta.pdfLayout || intakeAnswers?.pdfLayout || 'side-by-side';
-  const sourceFormat = fileMeta.sourceFormat
-    || detectSourceFormat(fileMeta.filename, fileMeta.mimetype)
-    || 'pdf';
-
-  let translateModelId = null;
-  let reviewModelId = null;
-  if (engine === 'llm') {
-    const overrides = {
-      translateModelId: intakeAnswers?.translateModelId || null,
-      reviewModelId: intakeAnswers?.reviewModelId || null,
-    };
-    const models = await resolveTranslateModels({ userId, overrides });
-    if (!models.ok || !models.translate?.modelId) {
-      throw new Error(models.errors?.[0] || 'Translate model not configured');
-    }
-    translateModelId = models.translate.modelId;
-    reviewModelId = models.review?.modelId || translateModelId;
-  } else if (!isGoogleTranslateConfigured()) {
-    throw new Error('GOOGLE_TRANSLATE_API_KEY not configured');
-  }
-
-  // ── 1. Extract text ─────────────────────────────────────────────────────────
+/** Extraction + OCR — the part of the pipeline that doesn't depend on target language.
+ *  Factored out so a multi-language fan-out batch can run it once and reuse the result for
+ *  every target language instead of re-extracting (and re-OCR'ing) per language. */
+async function extractAndOcr(jobId, fileBuffer, fileMeta, scannedImages, sourceFormat) {
   await setJobStatus(jobId, { status: 'extracting', stage: 'Extracting text…', progress: 5 });
 
   let extracted;
@@ -439,7 +635,6 @@ async function processTranslateJob(
 
   await setJobStatus(jobId, { pageCount, scannedPageCount: scannedPages.length });
 
-  // ── 2. OCR scanned pages (PDF only) ─────────────────────────────────────────
   let avgOcrConfidence = null;
   if (scannedPages.length > 0) {
     await setJobStatus(jobId, { status: 'ocr', stage: `OCR: 0 of ${scannedPages.length} pages`, progress: 10 });
@@ -481,10 +676,43 @@ async function processTranslateJob(
     }
   }
 
-  // PDF path already built paragraphs in extract; non-PDF likewise.
-  // Ensure every page has an entry.
-  if (sourceFormat === 'pdf' && Object.keys(paragraphsByPage).length === 0 && Object.keys(pageTexts).length) {
-    // Fallback: should not normally happen — extract already builds paragraphs
+  return { pageCount, paragraphsByPage, pageLabels, pageTexts, scannedPages, avgOcrConfidence };
+}
+
+async function processTranslateJob(
+  jobId, fileBuffer, userId, targetLanguage, glossaryId, scannedImages, intakeAnswers, enableReview,
+  fileMeta = {}, sharedExtraction = null
+) {
+  const engine = fileMeta.engine === 'google' ? 'google' : 'llm';
+  const pdfLayout = fileMeta.pdfLayout || intakeAnswers?.pdfLayout || 'side-by-side';
+  const sourceFormat = fileMeta.sourceFormat
+    || detectSourceFormat(fileMeta.filename, fileMeta.mimetype)
+    || 'pdf';
+
+  let translateModelId = null;
+  let reviewModelId = null;
+  if (engine === 'llm') {
+    const overrides = {
+      translateModelId: intakeAnswers?.translateModelId || null,
+      reviewModelId: intakeAnswers?.reviewModelId || null,
+    };
+    const models = await resolveTranslateModels({ userId, overrides });
+    if (!models.ok || !models.translate?.modelId) {
+      throw new Error(models.errors?.[0] || 'Translate model not configured');
+    }
+    translateModelId = models.translate.modelId;
+    reviewModelId = models.review?.modelId || translateModelId;
+  } else if (!isGoogleTranslateConfigured()) {
+    throw new Error('GOOGLE_TRANSLATE_API_KEY not configured');
+  }
+
+  // ── 1-2. Extract text + OCR scanned pages (skipped when a batch already did this) ──────────
+  const {
+    pageCount, paragraphsByPage, pageLabels, pageTexts, scannedPages, avgOcrConfidence,
+  } = sharedExtraction || await extractAndOcr(jobId, fileBuffer, fileMeta, scannedImages, sourceFormat);
+
+  if (sharedExtraction) {
+    await setJobStatus(jobId, { pageCount, scannedPageCount: scannedPages.length, avgOcrConfidence });
   }
 
   await setJobStatus(jobId, {
@@ -607,6 +835,21 @@ async function processTranslateJob(
     }),
   });
 
+  // ── 4b. Translation memory lookup (exact match only) ────────────────────────
+  // Paragraphs already translated for this user/language pair are reused verbatim instead of
+  // being re-sent to the model — saves cost on repeat boilerplate and keeps wording identical
+  // across jobs. Google-engine jobs still benefit (memory is keyed by language pair, not engine).
+  let tmHits = new Map();
+  try {
+    const allPagesForTm = Object.keys(paragraphsByPage).map(Number);
+    const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p]);
+    tmHits = await translateMemory.lookupExact({
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, texts: allTexts,
+    });
+  } catch (err) {
+    console.warn('[translate] TM lookup failed:', err.message);
+  }
+
   // ── 5. Translate ────────────────────────────────────────────────────────────
   await setJobStatus(jobId, {
     status: 'translating',
@@ -619,6 +862,7 @@ async function processTranslateJob(
   const reviewPairs = [];
   let chunksDone = 0;
   let totalCharCount = 0;
+  let tmReuseCount = 0;
 
   if (engine === 'google') {
     // Larger chunks — Google is fast and accepts up to ~20 qs / ~4500 chars
@@ -642,10 +886,13 @@ async function processTranslateJob(
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = chunk.paras.map(p => isCodeLikeArtifact(p.text));
-      const translateIdxs = chunk.paras.map((_, i) => i).filter(i => !artifactFlags[i]);
+      const tmFlags = chunk.paras.map(p => tmHits.has(translateMemory.normalize(p.text)));
+      const translateIdxs = chunk.paras.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
       const texts = translateIdxs.map(i => wrapDoNotTranslate(chunk.paras[i].text, glossaryTerms));
       totalCharCount += texts.reduce((s, t) => s + t.length, 0);
-      let translations = chunk.paras.map((p) => p.text); // default: passthrough for artifacts
+      tmReuseCount += tmFlags.filter(Boolean).length;
+      // default: TM reuse where matched, else passthrough (artifacts)
+      let translations = chunk.paras.map((p, i) => tmFlags[i] ? tmHits.get(translateMemory.normalize(p.text)) : p.text);
       if (texts.length) {
         try {
           let translated = await googleTranslateTexts({
@@ -721,12 +968,15 @@ async function processTranslateJob(
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = texts.map(t => isCodeLikeArtifact(t));
-      const translateIdxs = texts.map((_, i) => i).filter(i => !artifactFlags[i]);
+      const tmFlags = texts.map(t => tmHits.has(translateMemory.normalize(t)));
+      const translateIdxs = texts.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
+      tmReuseCount += tmFlags.filter(Boolean).length;
       await setJobStatus(jobId, {
         stage: `Translating: ${chunksDone} of ${chunks.length} done · ${inFlight} in flight (×${LLM_CONCURRENCY})`,
         progress: 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32),
       });
-      let translations = [...texts]; // default: passthrough for artifacts
+      // default: TM reuse where matched, else passthrough (artifacts)
+      let translations = texts.map((t, i) => tmFlags[i] ? tmHits.get(translateMemory.normalize(t)) : t);
       if (translateIdxs.length) {
         try {
           const translated = await translateParagraphBatch({
@@ -853,6 +1103,7 @@ async function processTranslateJob(
     dialectalChoices: glossaryPrep.dialectalChoices || [],
     guidance: glossaryPrep.guidance || '',
     glossaryTermCount: glossaryTerms.length,
+    tmReuseCount,
     translateModel: engine === 'llm' ? translateModelId : 'google-translate-v2',
     reviewModel: enableReview ? reviewModelId : null,
     repairStats,
@@ -980,6 +1231,47 @@ async function processTranslateJob(
       autoFlagged: det.garbledOrIncompleteRows.length,
     };
     qaSummary = verifyQaCategoryClaims(qaSummary, reviewPairs, { sampleSize: 8 });
+  }
+
+  // ── 7b. Translation memory: save this job's pairs, bump reuse counts ────────
+  try {
+    await translateMemory.savePairs({
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+      domain: intakeAnswers?.domain || null, pairs: reviewPairs,
+    });
+    if (tmReuseCount > 0) {
+      await translateMemory.bumpHitCounts({
+        userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+        sources: [...tmHits.keys()],
+      });
+    }
+  } catch (err) {
+    console.warn('[translate] TM save failed:', err.message);
+  }
+
+  // ── 7c. Native (editable) output for .docx/.xlsx sources ────────────────────
+  // Best-effort, alongside the always-available PDF below — never blocks the job on failure.
+  let nativeOutput = null;
+  try {
+    if (sourceFormat === 'xlsx' || sourceFormat === 'xls') {
+      const buf = buildNativeXlsx({ originalBuffer: fileBuffer, paragraphsByPage, translatedByPage, pageLabels });
+      if (buf) nativeOutput = { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' };
+    } else if (sourceFormat === 'docx') {
+      const sourceParagraphs = paragraphsByPage[1] || [];
+      const translatedParagraphs = translatedByPage[1] || [];
+      const buf = await buildNativeDocx({ originalBuffer: fileBuffer, paragraphs: sourceParagraphs, translations: translatedParagraphs });
+      if (buf) nativeOutput = { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx' };
+    }
+  } catch (err) {
+    console.warn('[translate] native output build failed:', err.message);
+  }
+  if (nativeOutput) {
+    const base = (fileMeta.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    await setJobStatus(jobId, {
+      translatedFile: nativeOutput.buffer,
+      translatedFileMime: nativeOutput.mime,
+      translatedFileName: `translated-${base}.${nativeOutput.ext}`,
+    });
   }
 
   // ── 8. Hand off to client PDF generation ────────────────────────────────────
