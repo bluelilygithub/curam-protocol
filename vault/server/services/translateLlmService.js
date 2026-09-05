@@ -15,6 +15,7 @@ const {
   hardSanityGate,
   enforceRedactionPassThrough,
   lockedDoNotTranslateTerms,
+  detectRepeatedTermCandidates,
   findPlaceholder,
 } = require('./translateQaChecks');
 
@@ -105,7 +106,7 @@ function finalizeTranslation(source, target) {
  * Propose / merge glossary from intake answers + source skim + optional saved glossary.
  */
 async function proposeGlossary({
-  modelId, userId, sourceAnswers, sourceSkim, targetLanguage, existingTerms = [],
+  modelId, userId, intakeAnswers = {}, sourceSkim, targetLanguage, existingTerms = [],
 }) {
   const system = `You prepare translation glossaries for professional documents.
 Return ONLY valid JSON:
@@ -157,6 +158,123 @@ Rules:
     dialectalChoices: Array.isArray(parsed.dialectalChoices) ? parsed.dialectalChoices : [],
     guidance: parsed.guidance || '',
   };
+}
+
+/**
+ * Detect ordinary (non-brand) words/phrases that read as defined terms because they recur
+ * mid-sentence with a capital (Warranty Schedule, Nominated Vehicle, Period, Make) and lock
+ * each to one canonical target rendering BEFORE translation starts. These are exactly the
+ * terms that drift across chunks: they're too ordinary for the glossary-skim LLM call to
+ * nominate on its own, but the recurrence pattern makes them detectable deterministically.
+ * Returns glossary-shaped terms ({ source, target }) to merge into the working glossary —
+ * merged in, they (a) get named explicitly in every chunk's prompt, and (b) get force-applied
+ * post-translate via applyGlossarySubstitutions as a backstop.
+ */
+async function lockRepeatedTerms({
+  modelId, userId, paragraphsByPage, existingTerms = [], targetLanguage, guidance,
+}) {
+  const candidates = detectRepeatedTermCandidates(paragraphsByPage, existingTerms);
+  if (!candidates.length) return [];
+
+  const system = `You assign ONE canonical ${langName(targetLanguage)} rendering to each recurring term below,
+so a document translator can use the same rendering everywhere instead of drifting term-by-term.
+Each term recurs across a legal/business document — treat it as a defined term or fixed field label, not a one-off word.
+Return ONLY valid JSON:
+{ "terms": [ { "source": "...", "target": "...", "doNotTranslate": false } ] }
+Rules:
+- One entry per input term, same source spelling.
+- If the term is a brand/product name that should stay untranslated, set doNotTranslate:true and target:"".
+- No markdown fences, no commentary.`;
+
+  const prompt = [
+    `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
+    guidance ? `Translator guidance: ${guidance}` : '',
+    '',
+    'Recurring terms (with one example sentence each):',
+    candidates.map((c) => `- "${c.term}" (seen ${c.count}×) — e.g. "${c.example}"`).join('\n'),
+  ].filter(Boolean).join('\n');
+
+  try {
+    const res = await callModel(modelId, prompt, { maxTokens: 1500, system, returnUsage: true });
+    if (userId) {
+      logUsage({
+        userId, model: modelId,
+        inputTokens: res.inputTokens, outputTokens: res.outputTokens,
+        feature: 'translate_term_lock',
+      }).catch(() => {});
+    }
+    const parsed = parseModelJson(res.text) || {};
+    const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
+    return terms.filter((t) => t?.source && (t.doNotTranslate || t.target));
+  } catch (err) {
+    console.warn('[translate] lockRepeatedTerms failed:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Post-translate consistency backstop for forced glossary terms (user-declared + auto-locked
+ * via lockRepeatedTerms). Chunks translate in parallel with no shared state between them, so a
+ * term can still land differently in chunk A vs chunk B even when both were told the same
+ * canonical rendering. This scans every pair whose SOURCE contains a forced term and, when the
+ * TARGET doesn't contain that term's canonical rendering, re-translates just that segment with
+ * an explicit "you MUST render X as Y" instruction. Mutates pairs in place. Returns stats.
+ */
+async function enforceGlossaryConsistency({
+  pairs, glossaryTerms, modelId, userId, sourceLanguage, targetLanguage, guidance, runningGlossary,
+  intakeAnswers, concurrency = 3, onProgress,
+}) {
+  const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
+  if (!forced.length || !pairs?.length) return { checked: 0, drifted: 0, fixed: 0 };
+
+  const drifted = [];
+  pairs.forEach((pair, i) => {
+    const src = String(pair?.source || '');
+    const tgt = String(pair?.target || '');
+    if (!src || !tgt) return;
+    const violated = forced.filter((t) => {
+      const re = new RegExp(`\\b${String(t.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return re.test(src) && !tgt.toLowerCase().includes(String(t.target).toLowerCase());
+    });
+    if (violated.length) drifted.push({ i, violated });
+  });
+
+  if (!drifted.length) return { checked: pairs.length, drifted: 0, fixed: 0 };
+
+  let fixed = 0;
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const slot = next;
+      next += 1;
+      if (slot >= drifted.length) return;
+      const { i, violated } = drifted[slot];
+      const pair = pairs[i];
+      if (typeof onProgress === 'function') onProgress({ done: slot, total: drifted.length });
+      const forcedGuidance = [
+        guidance || '',
+        'MANDATORY term rendering — use exactly, no variation:',
+        violated.map((t) => `- "${t.source}" MUST be rendered as "${t.target}"`).join('\n'),
+      ].filter(Boolean).join('\n');
+      try {
+        const retried = await translateOneParagraph({
+          modelId, userId, paragraph: pair.source, sourceLanguage, targetLanguage,
+          glossaryTerms, guidance: forcedGuidance, runningGlossary, intakeAnswers,
+        });
+        const cleaned = finalizeTranslation(pair.source, applyGlossarySubstitutions(retried, glossaryTerms));
+        if (cleaned && !isIncompleteTarget(cleaned)) {
+          pair.target = cleaned;
+          fixed += 1;
+        }
+      } catch (err) {
+        console.warn('[translate] enforceGlossaryConsistency retry failed:', err.message);
+      }
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, drifted.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+
+  return { checked: pairs.length, drifted: drifted.length, fixed };
 }
 
 /**
@@ -701,6 +819,8 @@ async function repairIncompletePairs({
 
 module.exports = {
   proposeGlossary,
+  lockRepeatedTerms,
+  enforceGlossaryConsistency,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,

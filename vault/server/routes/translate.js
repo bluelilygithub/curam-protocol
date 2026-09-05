@@ -6,6 +6,8 @@ const { pool } = require('../db');
 const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../services/translateModelResolver');
 const {
   proposeGlossary,
+  lockRepeatedTerms,
+  enforceGlossaryConsistency,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
@@ -562,6 +564,31 @@ async function processTranslateJob(
     };
   }
 
+  // Auto-lock recurring defined terms (Warranty Schedule, Nominated Vehicle, Period, Make…)
+  // that the glossary-skim call won't nominate on its own — see lockRepeatedTerms doc comment.
+  if (engine === 'llm') {
+    try {
+      const lockedTerms = await lockRepeatedTerms({
+        modelId: translateModelId,
+        userId,
+        paragraphsByPage,
+        existingTerms: glossaryTerms,
+        targetLanguage,
+        guidance: glossaryPrep.guidance,
+      });
+      if (lockedTerms.length) {
+        const bySource = new Map();
+        for (const t of [...glossaryTerms, ...lockedTerms]) {
+          const key = String(t.source).toLowerCase();
+          if (!bySource.has(key)) bySource.set(key, t);
+        }
+        glossaryTerms = [...bySource.values()];
+      }
+    } catch (err) {
+      console.warn('[translate] lockRepeatedTerms failed:', err.message);
+    }
+  }
+
   if ((sourceFormat === 'xlsx' || sourceFormat === 'xls') && glossaryPrep.guidance != null) {
     glossaryPrep.guidance = [
       glossaryPrep.guidance,
@@ -795,6 +822,48 @@ async function processTranslateJob(
       }
     }
     console.log('[translate] repair stats', repairStats);
+  }
+
+  // ── 5c. Glossary consistency backstop ────────────────────────────────────────
+  // Chunks translate in parallel with no shared state, so a forced term (user-declared or
+  // auto-locked above) can still land differently per chunk. Re-translate just the segments
+  // that drifted from their canonical rendering.
+  if (engine === 'llm') {
+    const runningGlossary = {};
+    for (const t of glossaryTerms) {
+      if (t.source && t.target && !t.doNotTranslate) runningGlossary[t.source] = t.target;
+    }
+    let consistencyStats = null;
+    try {
+      consistencyStats = await enforceGlossaryConsistency({
+        pairs: reviewPairs,
+        glossaryTerms,
+        modelId: translateModelId,
+        userId,
+        sourceLanguage,
+        targetLanguage,
+        guidance: glossaryPrep.guidance,
+        runningGlossary,
+        intakeAnswers,
+        concurrency: 3,
+        onProgress: ({ done, total }) => {
+          setJobStatus(jobId, {
+            stage: `Checking glossary consistency: ${done + 1} of ${total}`,
+            progress: 82,
+          }).catch(() => {});
+        },
+      });
+    } catch (err) {
+      console.warn('[translate] enforceGlossaryConsistency failed:', err.message);
+    }
+    if (consistencyStats?.drifted) {
+      for (const pair of reviewPairs) {
+        if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
+          translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
+        }
+      }
+      console.log('[translate] glossary consistency stats', consistencyStats);
+    }
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
