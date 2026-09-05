@@ -1079,7 +1079,7 @@ function TranslationsTab({ glossaries }) {
                     <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                       {estimate.charCount.toLocaleString()} chars
                       {estimate.languageCount > 1 ? ` × ${estimate.languageCount} languages` : ''}
-                      {estimate.estCostUsd != null ? ` · ~US$${estimate.estCostUsd.toFixed(4)} (${estimate.modelId})` : ''}
+                      {estimate.estCostAud != null ? ` · ~A$${estimate.estCostAud.toFixed(4)} (${estimate.modelId})` : ''}
                     </span>
                   )}
                 </div>

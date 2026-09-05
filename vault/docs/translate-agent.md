@@ -99,7 +99,7 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/translate/config` | Models configured? |
-| `POST` | `/api/translate/estimate` | Extract-only (no translation) — returns `charCount`, `pageCount`, rough `estCostUsd` before submitting |
+| `POST` | `/api/translate/estimate` | Extract-only (no translation) — returns `charCount`, `pageCount`, rough `estCostAud` before submitting |
 | `GET` | `/api/translate/jobs` | List jobs |
 | `GET` | `/api/translate/jobs/:id/status` | Poll status + `translatedTextJson` when generating |
 | `POST` | `/api/translate/jobs` | Multipart: `file` (or legacy `pdf`), `targetLanguage`, `intakeAnswers`, optional `glossaryId`, `scannedPageImages`, `enableReview` |
@@ -141,7 +141,7 @@ Stored in `translate_jobs."translatedFile"` / `"translatedFileMime"` / `"transla
 
 ## Upfront estimate
 
-`POST /api/translate/estimate` runs extraction only (no LLM calls) and returns `charCount`, `pageCount`, and a rough `estCostUsd` from `costCalculator.calculateCost()` using a ~4 chars/token heuristic for both input and output. Multiplied by language count when `targetLanguages` is passed. Informational only — actual usage varies with glossary size and whether the review pass runs.
+`POST /api/translate/estimate` runs extraction only (no LLM calls) and returns `charCount`, `pageCount`, and a rough `estCostAud` — `costCalculator.calculateCost()` (USD, ~4 chars/token heuristic for both input and output) converted to AUD via `marketData.getUsdToAudRate()` (the same Frankfurter lookup Shares uses; 5-minute cache). Multiplied by language count when `targetLanguages` is passed. Informational only — actual usage varies with glossary size and whether the review pass runs.
 
 ---
 

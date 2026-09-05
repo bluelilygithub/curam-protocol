@@ -26,6 +26,7 @@ const {
 const translateMemory = require('../services/translateMemory');
 const { buildNativeXlsx, buildNativeDocx } = require('../services/translateNativeOutput');
 const { calculateCost } = require('../services/costCalculator');
+const { getUsdToAudRate } = require('../services/marketData');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
@@ -143,14 +144,17 @@ router.post('/estimate', sourceUpload, async (req, res) => {
     const estTokensIn = Math.ceil(charCount / 4);
     const estTokensOut = estTokensIn;
 
-    let estCostUsd = null;
+    let estCostAud = null;
     let modelId = null;
     try {
       const models = await resolveTranslateModels({ userId: req.user.id });
       modelId = models.translate?.modelId || null;
       if (modelId) {
-        const perLanguage = calculateCost(modelId, estTokensIn, estTokensOut);
-        if (perLanguage != null) estCostUsd = Number(perLanguage) * languageCount;
+        const perLanguageUsd = calculateCost(modelId, estTokensIn, estTokensOut);
+        if (perLanguageUsd != null) {
+          const usdAud = await getUsdToAudRate();
+          estCostAud = Number(perLanguageUsd) * languageCount * usdAud;
+        }
       }
     } catch {}
 
@@ -161,7 +165,8 @@ router.post('/estimate', sourceUpload, async (req, res) => {
       languageCount,
       estTokensIn: estTokensIn * languageCount,
       estTokensOut: estTokensOut * languageCount,
-      estCostUsd,
+      estCostAud,
+      currency: 'AUD',
       modelId,
       note: 'Rough estimate from character count — actual usage varies with glossary size and review pass.',
     });
