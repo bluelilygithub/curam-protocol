@@ -462,8 +462,9 @@ Be concise. Empty arrays are fine. No markdown fences.
 Use the pair index (0-based global index shown) when flagging rows.
 ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional audience was specified; list dialectalChoices when non-standard forms were used.\n` : ''}`;
 
-  // ── 2. LLM review of ALL pairs in batches (side-by-side) ───────────────────
+  // ── 2. LLM review of ALL pairs in batches (side-by-side), run in parallel ──
   const BATCH = 35;
+  const REVIEW_CONCURRENCY = Math.max(1, Math.min(6, Number(process.env.TRANSLATE_REVIEW_CONCURRENCY) || 4));
   const llmAcc = {
     uncertainTerms: [],
     restructuredSentences: [],
@@ -474,7 +475,10 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     overallNotes: [],
   };
 
-  for (let offset = 0; offset < allPairs.length; offset += BATCH) {
+  const offsets = [];
+  for (let offset = 0; offset < allPairs.length; offset += BATCH) offsets.push(offset);
+
+  async function reviewOneBatch(offset) {
     const batch = allPairs.slice(offset, offset + BATCH);
     const prompt = [
       `Source language: ${sourceLanguage || 'auto'}`,
@@ -519,6 +523,20 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
       console.error('[translate] review batch failed:', err.message);
       llmAcc.overallNotes.push(`Review batch starting at ${offset} failed: ${err.message}`);
     }
+  }
+
+  {
+    let next = 0;
+    async function worker() {
+      while (true) {
+        const slot = next;
+        next += 1;
+        if (slot >= offsets.length) return;
+        await reviewOneBatch(offsets[slot]);
+      }
+    }
+    const n = Math.max(1, Math.min(REVIEW_CONCURRENCY, offsets.length));
+    await Promise.all(Array.from({ length: n }, () => worker()));
   }
 
   // ── 3. Merge: deterministic garbled always wins / prepends ─────────────────

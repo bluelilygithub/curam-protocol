@@ -654,14 +654,15 @@ async function processTranslateJob(
       }
     }
 
-    // Chunk: ~5 paragraphs / ~3200 chars. Parallel pool makes wall-clock closer to Google.
+    // Chunk: ~10 paragraphs / ~6000 chars. Bigger batches = fewer round trips.
+    // Parallel pool makes wall-clock closer to Google.
     const chunks = [];
     for (const pageNum of allPages) {
       const paras = paragraphsByPage[pageNum];
       let currentChunk = { paras: [], chars: 0 };
       for (const rawPara of paras) {
-        for (const para of splitLongParagraph(rawPara, 3200)) {
-          if (currentChunk.paras.length >= 5 || currentChunk.chars + para.length > 3200) {
+        for (const para of splitLongParagraph(rawPara, 6000)) {
+          if (currentChunk.paras.length >= 10 || currentChunk.chars + para.length > 6000) {
             if (currentChunk.paras.length) { chunks.push(currentChunk); currentChunk = { paras: [], chars: 0 }; }
           }
           currentChunk.paras.push({ pageNum, text: para });
@@ -671,7 +672,7 @@ async function processTranslateJob(
       if (currentChunk.paras.length) chunks.push(currentChunk);
     }
 
-    const LLM_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.TRANSLATE_LLM_CONCURRENCY) || 4));
+    const LLM_CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.TRANSLATE_LLM_CONCURRENCY) || 6));
     let inFlight = 0;
     const chunkResults = await mapPool(chunks, LLM_CONCURRENCY, async (chunk, chunkIndex) => {
       inFlight += 1;
