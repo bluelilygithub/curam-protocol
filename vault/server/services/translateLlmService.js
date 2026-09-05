@@ -86,6 +86,8 @@ HARD RULES (non-negotiable):
 - Copy [REDACTED] (and [REDACTED:…]) EXACTLY — never translate, explain, expand, or replace with meta-text such as "[texto no disponible…]", "[unable to translate]", etc.
 - Never insert commentary about the translation process into the output.
 - Apply the target language's decimal separator convention CONSISTENTLY to every number (e.g. French/Spanish/German use a comma: "4,5"; do not leave some numbers with a period "4.5" while others use a comma in the same document).
+- Preserve grammatical mood exactly: an imperative/directive instruction in the source (e.g. "Proceed", "Submit", "Review") must stay imperative in the target, never softened into an infinitive or noun form that reads as a heading rather than an instruction.
+- Glossary and do-not-translate terms must be grammatically INFLECTED to fit the sentence around them (gender, number, and any required article) — never paste a locked term's dictionary form verbatim if that creates a disagreement or a redundant double-noun with a word already in the sentence. Adapt the term's form; keep its core wording and meaning fixed.
 `.trim();
 
 function buildGlossaryBlock(terms) {
