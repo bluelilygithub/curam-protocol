@@ -915,7 +915,9 @@ function TranslationsTab({ glossaries }) {
                 {modelCatalog.length > 0 && (
                   <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
                     <Field label="Translate model (this job only)"
-                      hint={`Default: ${defaultTranslateModel || 'not set'}. Overrides Settings for this job only.`}>
+                      hint={translateModelOverride
+                        ? `Overriding Settings default (${defaultTranslateModel || 'not set'}) for this job only.`
+                        : `Using Settings default (${defaultTranslateModel || 'not set'}). Pick a model to override for this job only.`}>
                       <Sel value={translateModelOverride} onChange={setTranslateModelOverride}>
                         <option value="">Use default ({defaultTranslateModel || 'not set'})</option>
                         {modelCatalog.map(m => (
@@ -925,7 +927,9 @@ function TranslationsTab({ glossaries }) {
                     </Field>
                     {enableReview && (
                       <Field label="Review model (this job only)"
-                        hint={`Default: ${defaultReviewModel || 'not set'}. Overrides Settings for this job only.`}>
+                        hint={reviewModelOverride
+                          ? `Overriding Settings default (${defaultReviewModel || 'not set'}) for this job only.`
+                          : `Using Settings default (${defaultReviewModel || 'not set'}). Pick a model to override for this job only.`}>
                         <Sel value={reviewModelOverride} onChange={setReviewModelOverride}>
                           <option value="">Use default ({defaultReviewModel || 'not set'})</option>
                           {modelCatalog.map(m => (
