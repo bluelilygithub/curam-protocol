@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 const SALT_ROUNDS = 12;
 
 async function getAdminCount(client = pool) {
@@ -220,6 +221,56 @@ router.put('/users/:id/admin', async (req, res) => {
       [makeAdmin, userId]
     );
     res.json({ user: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/users/:id/feature-access — workspace defaults + this user's overrides.
+router.get('/users/:id/feature-access', async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+
+  try {
+    const { rows: userRows } = await pool.query(
+      'SELECT id, "isAdmin", "featureOverrides" FROM users WHERE id=$1', [userId]
+    );
+    const target = userRows[0];
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const { rows } = await pool.query(
+      "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
+    );
+    const workspaceFlags = flagsFromSettingRows(rows);
+    const overrides = target.featureOverrides || {};
+    const effectiveFlags = applyUserOverrides(workspaceFlags, overrides);
+
+    res.json({ workspaceFlags, overrides, effectiveFlags, isAdmin: target.isAdmin });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users/:id/feature-access — body: { overrides: { finance: false, ... } }
+// Overrides can only turn a workspace-enabled feature OFF for this user, never turn one on.
+router.post('/users/:id/feature-access', async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+  const overrides = req.body?.overrides;
+  if (!overrides || typeof overrides !== 'object') return res.status(400).json({ error: 'overrides object required' });
+
+  const cleaned = {};
+  for (const key of FEATURE_ACCESS_KEYS) {
+    if (overrides[key] === false) cleaned[key] = false;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'UPDATE users SET "featureOverrides"=$1 WHERE id=$2 RETURNING id, "featureOverrides"',
+      [Object.keys(cleaned).length ? JSON.stringify(cleaned) : null, userId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ ok: true, overrides: rows[0].featureOverrides || {} });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

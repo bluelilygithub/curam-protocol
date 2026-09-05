@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { FEATURE_ACCESS_KEYS, flagsFromSettingRows } = require('../config/featureAccess');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser, validateVaultModelsCatalog } = require('../services/modelResolver');
 const {
   SLOT_KEYS: DOC_REDACTION_SLOT_KEYS,
@@ -239,13 +239,21 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/settings/feature-access
-router.get('/feature-access', async (_req, res) => {
+// GET /api/settings/feature-access — workspace defaults narrowed by this user's overrides.
+router.get('/feature-access', async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
     );
-    const flags = flagsFromSettingRows(rows);
+    let flags = flagsFromSettingRows(rows);
+
+    if (!req.user?.isAdmin) {
+      const { rows: userRows } = await pool.query(
+        'SELECT "featureOverrides" FROM users WHERE id=$1', [req.user.id]
+      );
+      flags = applyUserOverrides(flags, userRows[0]?.featureOverrides);
+    }
+
     res.json({ flags });
   } catch (err) {
     res.status(500).json({ error: err.message });

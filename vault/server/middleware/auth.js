@@ -1,7 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
-const { FEATURE_ACCESS_KEYS, flagsFromSettingRows } = require('../config/featureAccess');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 
 async function requireAuth(req, res, next) {
   // Skip auth for health check and auth routes
@@ -41,11 +41,17 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-async function loadFeatureAccess() {
+async function loadFeatureAccess(userId) {
   const { rows } = await pool.query(
     "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
   );
-  return flagsFromSettingRows(rows);
+  const workspaceFlags = flagsFromSettingRows(rows);
+  if (!userId) return workspaceFlags;
+
+  const { rows: userRows } = await pool.query(
+    'SELECT "featureOverrides" FROM users WHERE id=$1', [userId]
+  );
+  return applyUserOverrides(workspaceFlags, userRows[0]?.featureOverrides);
 }
 
 function requireFeature(featureKey) {
@@ -53,7 +59,7 @@ function requireFeature(featureKey) {
     try {
       if (!FEATURE_ACCESS_KEYS.includes(featureKey)) return next();
       if (req.user?.isAdmin) return next();
-      const access = await loadFeatureAccess();
+      const access = await loadFeatureAccess(req.user?.id);
       if (access[featureKey] === false) {
         return res.status(403).json({ error: 'Feature disabled for member accounts' });
       }
@@ -64,4 +70,4 @@ function requireFeature(featureKey) {
   };
 }
 
-module.exports = { requireAuth, requireAdmin, requireFeature };
+module.exports = { requireAuth, requireAdmin, requireFeature, loadFeatureAccess };

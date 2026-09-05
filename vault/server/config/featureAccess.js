@@ -56,8 +56,22 @@ function flagsFromSettingRows(rows) {
   return flags;
 }
 
+/**
+ * Apply a per-user narrowing on top of workspace flags. An override can only turn a
+ * feature OFF for that user — it can never grant one the workspace has disabled.
+ */
+function applyUserOverrides(workspaceFlags, overrides) {
+  const flags = { ...workspaceFlags };
+  if (!overrides || typeof overrides !== 'object') return flags;
+  for (const key of FEATURE_ACCESS_KEYS) {
+    if (overrides[key] === false) flags[key] = false;
+  }
+  return flags;
+}
+
 module.exports = {
   FEATURE_ACCESS_DEFAULTS,
   FEATURE_ACCESS_KEYS,
   flagsFromSettingRows,
+  applyUserOverrides,
 };

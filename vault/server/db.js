@@ -1121,6 +1121,9 @@ async function initSchema() {
   // ── Multi-user: idempotent userId column additions ─────────────────────────
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN NOT NULL DEFAULT FALSE`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Per-user narrowing of workspace feature access. NULL/empty = inherit workspace defaults fully.
+  // Keys present here can only turn a feature OFF for this user — never grant one the workspace has disabled.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "featureOverrides" JSONB`);
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);

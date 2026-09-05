@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/apiClient';
 import { relativeTime } from '../utils/relativeTime';
+import { FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 
 export default function UsersAdminPanel({ title = 'Members' }) {
   const [users, setUsers] = useState([]);
@@ -12,6 +13,10 @@ export default function UsersAdminPanel({ title = 'Members' }) {
   const [newPassword, setNewPassword] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [busyUserId, setBusyUserId] = useState(null);
+  const [featuresFor, setFeaturesFor] = useState(null);
+  const [featuresState, setFeaturesState] = useState(null); // { workspaceFlags, overrides }
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [featuresSaving, setFeaturesSaving] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -95,6 +100,54 @@ export default function UsersAdminPanel({ title = 'Members' }) {
       setError(err.message || 'Failed to delete user');
     } finally {
       setBusyUserId(null);
+    }
+  };
+
+  const openFeatures = async (user) => {
+    setError('');
+    setResetPasswordFor(null);
+    setDeleteConfirmId(null);
+    setFeaturesFor(user.id);
+    setFeaturesLoading(true);
+    try {
+      const res = await api.get(`/api/admin/users/${user.id}/feature-access`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load feature access');
+      setFeaturesState({ workspaceFlags: data.workspaceFlags, overrides: { ...data.overrides } });
+    } catch (err) {
+      setError(err.message || 'Failed to load feature access');
+      setFeaturesFor(null);
+    } finally {
+      setFeaturesLoading(false);
+    }
+  };
+
+  const toggleFeatureOverride = (key, workspaceEnabled) => {
+    setFeaturesState((prev) => {
+      const overrides = { ...prev.overrides };
+      const currentlyOn = overrides[key] !== false; // inherits workspace unless explicitly narrowed off
+      if (currentlyOn) {
+        if (workspaceEnabled) overrides[key] = false; // narrow off
+      } else {
+        delete overrides[key]; // revert to inheriting workspace default
+      }
+      return { ...prev, overrides };
+    });
+  };
+
+  const saveFeatures = async (userId) => {
+    setFeaturesSaving(true);
+    setError('');
+    try {
+      const res = await api.post(`/api/admin/users/${userId}/feature-access`, { overrides: featuresState.overrides });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save feature access');
+      setFeaturesFor(null);
+      setFeaturesState(null);
+    } catch (err) {
+      setError(err.message || 'Failed to save feature access');
+    } finally {
+      setFeaturesSaving(false);
     }
   };
 
@@ -197,6 +250,16 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {!user.isAdmin && (
+                        <button
+                          onClick={() => (featuresFor === user.id ? setFeaturesFor(null) : openFeatures(user))}
+                          disabled={busyUserId === user.id}
+                          className="px-2.5 py-1 rounded-md text-xs border hover:opacity-70 transition-opacity disabled:opacity-50"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                        >
+                          {featuresFor === user.id ? 'Close Features' : 'Features'}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleToggleAdmin(user)}
                         disabled={busyUserId === user.id}
@@ -279,6 +342,59 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                         >
                           Cancel
                         </button>
+                      </div>
+                    )}
+
+                    {featuresFor === user.id && (
+                      <div className="mt-2 rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                        {featuresLoading || !featuresState ? (
+                          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
+                        ) : (
+                          <>
+                            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                              Narrows this user's access below the workspace defaults. Unchecking here turns a feature off just for them — it can't turn on a feature the workspace has disabled.
+                            </p>
+                            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5 max-h-64 overflow-y-auto">
+                              {FEATURE_ACCESS_OPTIONS.map((opt) => {
+                                const workspaceEnabled = featuresState.workspaceFlags[opt.key] !== false;
+                                const checked = workspaceEnabled && featuresState.overrides[opt.key] !== false;
+                                return (
+                                  <label
+                                    key={opt.key}
+                                    className="flex items-center gap-2 text-xs"
+                                    style={{ color: workspaceEnabled ? 'var(--color-text)' : 'var(--color-muted)', opacity: workspaceEnabled ? 1 : 0.5 }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={!workspaceEnabled}
+                                      onChange={() => toggleFeatureOverride(opt.key, workspaceEnabled)}
+                                    />
+                                    {opt.label}
+                                    {!workspaceEnabled && ' (off workspace-wide)'}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <div className="flex items-center gap-2 mt-3">
+                              <button
+                                onClick={() => saveFeatures(user.id)}
+                                disabled={featuresSaving}
+                                className="px-3 py-1.5 rounded-md text-xs text-white disabled:opacity-50"
+                                style={{ background: 'var(--color-primary)' }}
+                              >
+                                {featuresSaving ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => { setFeaturesFor(null); setFeaturesState(null); }}
+                                className="px-3 py-1.5 rounded-md text-xs border hover:opacity-70 transition-opacity"
+                                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </td>

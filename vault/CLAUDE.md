@@ -17,8 +17,9 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
 - `server/db.js` — all tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
-- `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
-- `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
+- `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard + `requireFeature`/`loadFeatureAccess` (workspace flags narrowed by per-user `featureOverrides`)
+- `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints + per-user feature-access endpoints
+- `server/config/featureAccess.js` — `FEATURE_ACCESS_DEFAULTS`/`FEATURE_ACCESS_KEYS`, `flagsFromSettingRows()`, `applyUserOverrides()` (per-user narrowing, see **Feature access**)
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
 - `server/services/modelResolver.js` — **`getModelsForUser()`**: resolves **`light`** / **`standard`** / Gemini / DeepSeek from Settings (see **Model selection**)
 - `client/src/hooks/useModels.js` — loads **`vault_models`** + **`default_model`** + **`branch_eval_model`** via `/api/settings`
@@ -71,6 +72,23 @@ Token-based, not JWT. 32-byte random hex stored in `auth_sessions` table. Every 
 `/api/admin/*` is protected by `requireAdmin` (checks `users."isAdmin"`). The seeded first user is admin by default.
 
 **Never use raw `fetch('/api/...')` in frontend.** Always use `apiClient`.
+
+---
+
+## Feature access
+
+Two layers, workspace-wide then per-user, both **allow-by-default**:
+
+1. **Workspace defaults** — `workspace_settings` rows keyed `feature_<name>` (`true`/`false`), admin-editable via Settings → Feature Access → `POST /api/settings/feature-access`. Missing row = default from `FEATURE_ACCESS_DEFAULTS`.
+2. **Per-user narrowing** — `users."featureOverrides"` JSONB column (nullable; `null`/`{}` = inherit workspace defaults untouched). Only keys set to `false` are respected — **an override can turn a feature off for one member, never on** beyond what the workspace already allows. Managed by admin via `UsersAdminPanel` "Features" panel → `GET`/`POST /api/admin/users/:id/feature-access`.
+
+Resolution: `applyUserOverrides(workspaceFlags, overrides)` in `server/config/featureAccess.js` — `final[key] = workspaceFlags[key] && overrides[key] !== false`.
+
+- `loadFeatureAccess(userId)` (`server/middleware/auth.js`) does the full merge server-side; `requireFeature(key)` route guard uses it and always lets admins through regardless of overrides.
+- `GET /api/settings/feature-access` (used by ~20 client pages to gate nav/UI) returns the caller's own merged flags — admins always get unnarrowed workspace flags.
+- Admins are never narrowed by `featureOverrides` — the UI only exposes the panel for non-admin rows.
+
+**Known gap:** client's `FEATURE_ACCESS_OPTIONS` (`client/src/utils/featureAccess.js`) lists `translate` and `guitar`, which are not in server `FEATURE_ACCESS_KEYS` — those two can't be toggled workspace-wide or per-user server-side yet.
 
 ---
 
@@ -299,6 +317,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
 - `sessions."deletedAt"` is a soft-delete timestamp. Chat delete moves sessions to Deleted; messages remain for restore. Normal lists/search/RAG must filter `s."deletedAt" IS NULL`.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
+- `users."featureOverrides"` is nullable `JSONB` — per-user feature narrowing, see **Feature access**. `null` = no narrowing.
 - `tasks."order"` double-quoted everywhere (SQL reserved word).
 - `tasks."keyResultId"` FK added via `ALTER TABLE` after `key_results` is created (avoids forward reference).
 - `gmail_tokens.expiryDate` is `BIGINT` (Unix ms). Cast to `Number()` in routes.
