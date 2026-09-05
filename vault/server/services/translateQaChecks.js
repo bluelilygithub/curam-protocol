@@ -251,6 +251,13 @@ function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { li
   }
 
   return [...counts.values()]
+    // Reject trivial short single-word matches ("If", "As", "Or") -- CAPITALIZED_RUN_RE has no
+    // minimum length, so a common short word that happens to recur as its own line (a PDF
+    // line-wrap fragment, not a real defined term) can otherwise get locked into the glossary.
+    // Once locked, applyGlossarySubstitutions' unanchored regex replace matches that word as a
+    // SUBSTRING inside unrelated target-language words (e.g. "If"->"Si" corrupting "différend"
+    // into "dSiférend" via a bare "if" match) -- confirmed on a real QA run, not theoretical.
+    .filter((e) => e.phrase.replace(/\s+/g, '').length >= 4)
     .filter((e) => e.count >= minCount
       && (e.midSentenceCount >= 2 || e.standaloneCount >= 2 || e.hasDefinitionMarker))
     .sort((a, b) => b.count - a.count)

@@ -78,6 +78,22 @@ test('detects a standalone recurring field-label paragraph even with zero mid-se
   assert.ok(terms.includes('Application Term'), `expected Application Term in ${JSON.stringify(terms)}`);
 });
 
+test('rejects a trivial short word even if it recurs as its own line', () => {
+  // Confirmed on a real QA run: "If" recurring as an isolated line (a PDF line-wrap fragment
+  // from repeated "If the warranty claim is valid..." conditional clauses) qualified via the
+  // standalone-paragraph signal and got locked into the glossary as "If" -> "Si". Because
+  // applyGlossarySubstitutions matches the locked source as a bare substring, every occurrence
+  // of "if" inside an unrelated French word in the target text was corrupted too (e.g.
+  // "différend" -> "dSiférend", "modifiées" -> "modSiiées"). A candidate this short should never
+  // reach the glossary regardless of how often it recurs.
+  const paras = {
+    1: ['If', 'Some unrelated clause about registration requirements.', 'If', 'If'],
+  };
+  const out = detectRepeatedTermCandidates(paras, []);
+  const terms = out.map((c) => c.term);
+  assert.ok(!terms.includes('If'), `did not expect "If" in ${JSON.stringify(terms)}`);
+});
+
 test('does not flag ordinary sentence-initial capitalisation', () => {
   const paras = {
     1: [

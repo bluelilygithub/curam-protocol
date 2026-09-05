@@ -632,8 +632,13 @@ function applyGlossarySubstitutions(text, terms) {
   // Longer sources first
   subs.sort((a, b) => String(b.source).length - String(a.source).length);
   for (const sub of subs) {
+    // Second line of defence against a short/generic term corrupting unrelated words as a bare
+    // substring match (e.g. a locked "If"->"Si" term turning "différend" into "dSiférend") --
+    // word-boundary anchors mean this only ever replaces the term as a whole word/phrase.
+    // \b doesn't reliably bound accented characters, so also require the match not be flanked
+    // by a letter on either side.
     const escaped = String(sub.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    t = t.replace(new RegExp(escaped, 'gi'), sub.target);
+    t = t.replace(new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'giu'), (m, pre, hit) => pre + sub.target);
   }
   return t;
 }
