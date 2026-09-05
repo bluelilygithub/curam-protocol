@@ -146,5 +146,41 @@ test('handles empty paragraphsByPage', () => {
   assert.deepStrictEqual(detectRepeatedTermCandidates(undefined, []), []);
 });
 
+// Confirmed missed on a real feasibility-report translation job: CAPITALIZED_RUN_RE requires
+// the initial capital to be followed by lowercase letters, so an ALL-CAPS status word like
+// "PASS" never matched it at all (the regex would only capture the leading "P").
+test('detects a recurring ALL-CAPS status word even though it never matches the Title-Case pattern', () => {
+  const paras = {
+    1: ['Field Accuracy 96.2% PASS', 'STP Rate 92.5% PASS', 'Exceptions 11 REVIEW'],
+  };
+  const out = detectRepeatedTermCandidates(paras, []);
+  const terms = out.map((c) => c.term);
+  assert.ok(terms.includes('PASS'), `expected PASS in ${JSON.stringify(terms)}`);
+});
+
+// Confirmed missed on the same job: "Tier 1" / "Tier 2" recur exactly twice each, spread across
+// a table row and a heading — below the old minCount=3 floor even though the pattern itself
+// (a Title-Case word directly followed by a small number) is a strong recurring-label signal.
+test('detects a "Word N" numbered-label pattern on just two occurrences', () => {
+  const paras = {
+    1: ['Tier 1: Time Savings', 'Tier 2: Error Reduction'],
+  };
+  const out = detectRepeatedTermCandidates(paras, []);
+  const terms = out.map((c) => c.term);
+  assert.ok(terms.includes('Tier'), `expected Tier in ${JSON.stringify(terms)}`);
+});
+
+// A legitimate technical acronym (ERP) must not be swept up by the status-word/numbered-label
+// signals just because it's short and capitalized — it should still need the normal prose signals.
+test('does not auto-qualify an ordinary acronym as a status word', () => {
+  const paras = {
+    1: ['The ERP system needs API integration.', 'Confirm the ERP system supports API calls.'],
+  };
+  const out = detectRepeatedTermCandidates(paras, []);
+  const terms = out.map((c) => c.term);
+  assert.ok(!terms.includes('ERP'), `did not expect ERP in ${JSON.stringify(terms)}`);
+  assert.ok(!terms.includes('API'), `did not expect API in ${JSON.stringify(terms)}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

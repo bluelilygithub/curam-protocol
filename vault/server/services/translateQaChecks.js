@@ -200,6 +200,21 @@ const SENTENCE_END_RE = /[.!?]\s*$/;
 // immediately followed by one of these is a defined term by definition, no repetition needed.
 const DEFINITION_MARKER_RE = /^\s*(?:means|refers to|is defined as|has the meaning)\b/i;
 
+// Common table/status-column words. Confirmed missed on a real job: CAPITALIZED_RUN_RE requires
+// an initial capital followed by LOWERCASE letters, so an ALL-CAPS status word like "PASS" never
+// matches it at all — the phrase it finds is just "P". A fixed whitelist (not "any ALL-CAPS
+// token") deliberately avoids catching legitimate untranslated acronyms (ERP, API, ISO, CAD, STP)
+// that appear in the same kind of document and must NOT be sent through the glossary as if they
+// needed a translated rendering.
+const STATUS_WORD_RE = /\b(PASS|FAIL|FAILED|REVIEW|WARN|WARNING|PENDING|APPROVED|REJECTED|COMPLETE|COMPLETED)\b/g;
+
+// "Tier 1" / "Phase 2" / "Level 3" / "Category 4" — a Title-Case word immediately followed by a
+// small number. Confirmed missed on a real job: "Tier" recurred often enough in general to pass
+// the normal signals, yet still drifted (Palier in one chunk, Tier in another) — worth locking
+// this pattern outright as soon as it recurs at all, rather than relying on it also happening to
+// satisfy the mid-sentence/standalone thresholds for prose.
+const NUMBERED_LABEL_RE = /\b([A-Z][a-zà-ž]{2,15})\s+\d{1,2}\b/g;
+
 /**
  * Scan source paragraphs for repeated capitalized terms/phrases that read as defined terms
  * or domain vocabulary (e.g. "Warranty Schedule", "Nominated Vehicle", "Period", "Make") —
@@ -219,12 +234,37 @@ const DEFINITION_MARKER_RE = /^\s*(?:means|refers to|is defined as|has the meani
  * Phrases already covered by existingTerms (case-insensitive) are skipped. Returns up to
  * `limit` candidates, most frequent first, each with one example sentence for context.
  */
-function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { limit = 15, minCount = 3 } = {}) {
+function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { limit = 15, minCount = 2 } = {}) {
   const known = new Set((existingTerms || []).map((t) => String(t?.source || '').toLowerCase()).filter(Boolean));
   // phrase -> { count, midSentenceCount, standaloneCount, hasDefinitionMarker, example }
   const counts = new Map();
 
   const allParagraphs = Object.values(paragraphsByPage || {}).flat();
+
+  // Status words and "Word N" labels qualify on recurrence alone (≥2×) — no mid-sentence/
+  // standalone/definition-marker signal needed. Both patterns are inherently the kind of short
+  // table/heading label that drifts between chunks precisely because nothing else about them
+  // (brand-like capitalization, an obvious defined-term clause) would nominate them otherwise.
+  const autoQualify = new Map(); // phrase -> { count, example }
+  const recordAuto = (phrase, exampleText) => {
+    const key = phrase.toLowerCase();
+    if (known.has(key)) return;
+    const entry = autoQualify.get(key) || { phrase, count: 0, example: exampleText };
+    entry.count += 1;
+    autoQualify.set(key, entry);
+  };
+  for (const para of allParagraphs) {
+    const text = String(para || '');
+    let m;
+    STATUS_WORD_RE.lastIndex = 0;
+    while ((m = STATUS_WORD_RE.exec(text)) !== null) recordAuto(m[1], text);
+    NUMBERED_LABEL_RE.lastIndex = 0;
+    while ((m = NUMBERED_LABEL_RE.exec(text)) !== null) recordAuto(m[1], text);
+  }
+  const autoQualified = [...autoQualify.values()]
+    .filter((e) => e.count >= 2)
+    .map((e) => ({ term: e.phrase, count: e.count, example: e.example.slice(0, 300) }));
+
   for (const para of allParagraphs) {
     const text = String(para || '');
     const trimmed = text.trim();
@@ -250,7 +290,7 @@ function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { li
     }
   }
 
-  return [...counts.values()]
+  const prose = [...counts.values()]
     // Reject trivial short single-word matches ("If", "As", "Or") -- CAPITALIZED_RUN_RE has no
     // minimum length, so a common short word that happens to recur as its own line (a PDF
     // line-wrap fragment, not a real defined term) can otherwise get locked into the glossary.
@@ -260,9 +300,18 @@ function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { li
     .filter((e) => e.phrase.replace(/\s+/g, '').length >= 4)
     .filter((e) => e.count >= minCount
       && (e.midSentenceCount >= 2 || e.standaloneCount >= 2 || e.hasDefinitionMarker))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit)
     .map((e) => ({ term: e.phrase, count: e.count, example: e.example.slice(0, 300) }));
+
+  const byTerm = new Map();
+  for (const c of [...prose, ...autoQualified]) {
+    const key = c.term.toLowerCase();
+    const existing = byTerm.get(key);
+    if (!existing || c.count > existing.count) byTerm.set(key, c);
+  }
+
+  return [...byTerm.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 /**

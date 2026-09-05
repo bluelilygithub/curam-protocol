@@ -6,7 +6,7 @@ const { pool } = require('../db');
 const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../services/translateModelResolver');
 const {
   proposeGlossary,
-  reportGlossaryDrift,
+  autoFixGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
@@ -1078,21 +1078,36 @@ async function processTranslateJob(
     console.log('[translate] repair stats', repairStats);
   }
 
-  // ── 5c. Glossary drift report ────────────────────────────────────────────────
+  // ── 5c. Glossary drift: auto-fix the safe case, report the rest ─────────────
   // Chunks translate in parallel with no shared state, so a forced term (user-declared or
-  // auto-locked above) can still land differently per chunk. Pure string comparison, no LLM
-  // calls — flags drift into the QA summary instead of spending a retranslate call per segment
-  // (tried previously; added real latency and didn't reliably fix anything anyway).
+  // auto-locked above) can still land differently per chunk. Two passes, both pure string
+  // comparison — no LLM calls:
+  //  1. autoFixGlossaryDrift — the common real case (confirmed on an actual job): a chunk left
+  //     the source term untranslated, verbatim, inside the target. That's mechanically fixable
+  //     with a direct string replace, so we just do it instead of only flagging it.
+  //  2. Whatever's left (a genuinely different wrong rendering, not a plain leftover) still can't
+  //     be safely auto-corrected — surfaced in the QA summary same as before.
   let glossaryDriftTerms = [];
+  let glossaryDriftAutoFixedCount = 0;
   if (engine === 'llm') {
-    const drift = reportGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
-    if (drift.terms.length) {
-      glossaryDriftTerms = drift.terms.map((t) => ({
+    const { fixedCount, remainingTerms } = autoFixGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
+    glossaryDriftAutoFixedCount = fixedCount;
+    if (fixedCount > 0) {
+      // Sync fixed targets back into translatedByPage (autoFixGlossaryDrift mutated pair.target).
+      for (const pair of reviewPairs) {
+        if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
+          translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
+        }
+      }
+      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s)`);
+    }
+    if (remainingTerms.length) {
+      glossaryDriftTerms = remainingTerms.map((t) => ({
         source: t.source,
         renderedAs: '(varies)',
-        issue: `Glossary term drift: ${t.count} occurrence(s) did not match the locked rendering "${t.target}" (rows ${t.examples.join(', ')}${t.count > t.examples.length ? ', …' : ''}).`,
+        issue: `Glossary term drift: ${t.count} occurrence(s) did not match the locked rendering "${t.target}" and weren't a plain untranslated leftover, so couldn't be auto-fixed (rows ${t.examples.join(', ')}${t.count > t.examples.length ? ', …' : ''}).`,
       }));
-      console.log('[translate] glossary drift report', drift);
+      console.log('[translate] glossary drift remaining (not auto-fixable)', remainingTerms);
     }
   }
 
@@ -1109,6 +1124,7 @@ async function processTranslateJob(
     guidance: glossaryPrep.guidance || '',
     glossaryTermCount: glossaryTerms.length,
     tmReuseCount,
+    glossaryDriftAutoFixedCount,
     translateModel: engine === 'llm' ? translateModelId : 'google-translate-v2',
     reviewModel: enableReview ? reviewModelId : null,
     repairStats,

@@ -195,6 +195,10 @@ Rules:
  * canonical rendering, and return the findings for the QA summary. Zero LLM calls, zero added
  * latency. Does not mutate pairs — surfacing the drift beats silently guessing at a fix.
  */
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function reportGlossaryDrift({ pairs, glossaryTerms }) {
   const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
   if (!forced.length || !pairs?.length) return { checked: 0, terms: [] };
@@ -205,7 +209,7 @@ function reportGlossaryDrift({ pairs, glossaryTerms }) {
     const tgt = String(pair?.target || '');
     if (!src || !tgt) return;
     for (const t of forced) {
-      const re = new RegExp(`\\b${String(t.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      const re = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
       if (!re.test(src) || tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue;
       const key = t.source;
       const entry = byTerm.get(key) || { source: t.source, target: t.target, count: 0, examples: [] };
@@ -216,6 +220,52 @@ function reportGlossaryDrift({ pairs, glossaryTerms }) {
   });
 
   return { checked: pairs.length, terms: [...byTerm.values()] };
+}
+
+/**
+ * Deterministic drift FIX (not just report) for the one sub-case that's safe to auto-correct:
+ * the chunk simply left the source term untranslated, verbatim, inside the target. Confirmed on
+ * a real job — a locked term ("Tier") rendered correctly ("Palier") in most chunks but left as
+ * literal English in one — the exact pattern this catches and repairs with zero LLM cost.
+ *
+ * Deliberately does NOT attempt to fix a drift where the target used some OTHER wrong rendering
+ * (a different synonym, a mistranslation) — we have no reliable way to locate and replace that
+ * without an LLM call, and guessing wrong is worse than leaving it flagged. Those still come back
+ * in `remainingTerms` for the QA panel, same shape as `reportGlossaryDrift`'s output.
+ *
+ * Mutates `pairs[i].target` in place for every fix applied — caller is responsible for syncing
+ * the fixed text back into its own page/paragraph structure (translatedByPage).
+ */
+function autoFixGlossaryDrift({ pairs, glossaryTerms }) {
+  const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
+  if (!forced.length || !pairs?.length) return { fixedCount: 0, remainingTerms: [] };
+
+  const remaining = new Map();
+  let fixedCount = 0;
+
+  pairs.forEach((pair, i) => {
+    const src = String(pair?.source || '');
+    if (!src || !pair?.target) return;
+    for (const t of forced) {
+      const srcRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
+      if (!srcRe.test(src)) continue;
+      const tgt = String(pair.target);
+      if (tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue; // canonical already present
+
+      const leakRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'gi');
+      if (leakRe.test(tgt)) {
+        pair.target = tgt.replace(leakRe, t.target);
+        fixedCount += 1;
+      } else {
+        const entry = remaining.get(t.source) || { source: t.source, target: t.target, count: 0, examples: [] };
+        entry.count += 1;
+        if (entry.examples.length < 5) entry.examples.push(i);
+        remaining.set(t.source, entry);
+      }
+    }
+  });
+
+  return { fixedCount, remainingTerms: [...remaining.values()] };
 }
 
 /**
@@ -766,6 +816,7 @@ async function repairIncompletePairs({
 module.exports = {
   proposeGlossary,
   reportGlossaryDrift,
+  autoFixGlossaryDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
