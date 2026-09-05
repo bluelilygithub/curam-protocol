@@ -85,6 +85,7 @@ HARD RULES (non-negotiable):
 - Preserve identifiers exactly (e.g. Q-15, R3, R-01, P-16) — do not renumber or change letter prefixes.
 - Copy [REDACTED] (and [REDACTED:…]) EXACTLY — never translate, explain, expand, or replace with meta-text such as "[texto no disponible…]", "[unable to translate]", etc.
 - Never insert commentary about the translation process into the output.
+- Apply the target language's decimal separator convention CONSISTENTLY to every number (e.g. French/Spanish/German use a comma: "4,5"; do not leave some numbers with a period "4.5" while others use a comma in the same document).
 `.trim();
 
 function buildGlossaryBlock(terms) {

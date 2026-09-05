@@ -13,7 +13,7 @@ const {
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
 } = require('../services/translateLlmService');
-const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder } = require('../services/translateQaChecks');
+const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 const {
   isGoogleTranslateConfigured,
@@ -613,21 +613,33 @@ async function processTranslateJob(
     }
 
     for (const chunk of chunks) {
-      const texts = chunk.paras.map(p => wrapDoNotTranslate(p.text, glossaryTerms));
+      // Leaked code/template debris (e.g. object dumps, unresolved internal
+      // tokens) must never go to the translator — copy through verbatim.
+      const artifactFlags = chunk.paras.map(p => isCodeLikeArtifact(p.text));
+      const translateIdxs = chunk.paras.map((_, i) => i).filter(i => !artifactFlags[i]);
+      const texts = translateIdxs.map(i => wrapDoNotTranslate(chunk.paras[i].text, glossaryTerms));
       totalCharCount += texts.reduce((s, t) => s + t.length, 0);
-      let translations;
-      try {
-        translations = await googleTranslateTexts({
-          texts,
-          targetLanguage,
-          sourceLanguage,
-        });
-        translations = translations.map((t) => stripDoNotTranslateSpans(t));
-        translations = translations.map((t, i) =>
-          enforceRedactionPassThrough(chunk.paras[i].text, applyGlossarySubstitutions(t, glossaryTerms))
-        );      } catch (err) {
-        console.error('[translate] Google chunk failed:', err.message);
-        translations = chunk.paras.map(p => `[Translation error] ${p.text}`);
+      let translations = chunk.paras.map((p) => p.text); // default: passthrough for artifacts
+      if (texts.length) {
+        try {
+          let translated = await googleTranslateTexts({
+            texts,
+            targetLanguage,
+            sourceLanguage,
+          });
+          translated = translated.map((t) => stripDoNotTranslateSpans(t));
+          translateIdxs.forEach((chunkIdx, i) => {
+            translations[chunkIdx] = enforceRedactionPassThrough(
+              chunk.paras[chunkIdx].text,
+              applyGlossarySubstitutions(translated[i], glossaryTerms)
+            );
+          });
+        } catch (err) {
+          console.error('[translate] Google chunk failed:', err.message);
+          translateIdxs.forEach((chunkIdx) => {
+            translations[chunkIdx] = `[Translation error] ${chunk.paras[chunkIdx].text}`;
+          });
+        }
       }
 
       translations.forEach((t, i) => {
@@ -677,31 +689,38 @@ async function processTranslateJob(
     const chunkResults = await mapPool(chunks, LLM_CONCURRENCY, async (chunk, chunkIndex) => {
       inFlight += 1;
       const texts = chunk.paras.map(p => p.text);
+      // Leaked code/template debris (e.g. object dumps, unresolved internal
+      // tokens) must never go to the translator — copy through verbatim.
+      const artifactFlags = texts.map(t => isCodeLikeArtifact(t));
+      const translateIdxs = texts.map((_, i) => i).filter(i => !artifactFlags[i]);
       await setJobStatus(jobId, {
         stage: `Translating: ${chunksDone} of ${chunks.length} done · ${inFlight} in flight (×${LLM_CONCURRENCY})`,
         progress: 48 + Math.round((chunksDone / Math.max(chunks.length, 1)) * 32),
       });
-      let translations;
-      try {
-        translations = await translateParagraphBatch({
-          modelId: translateModelId,
-          userId,
-          paragraphs: texts,
-          sourceLanguage,
-          targetLanguage,
-          glossaryTerms,
-          guidance: glossaryPrep.guidance,
-          runningGlossary,
-          intakeAnswers,
-          onProgress: ({ phase, n }) => {
-            setJobStatus(jobId, {
-              stage: `Translating chunk ${chunkIndex + 1}/${chunks.length}: ${phase || 'working'} (${n || texts.length} paras)`,
-            }).catch(() => {});
-          },
-        });
-      } catch (err) {
-        console.error('[translate] chunk failed:', err.message);
-        translations = texts.map(t => `[Translation error] ${t}`);
+      let translations = [...texts]; // default: passthrough for artifacts
+      if (translateIdxs.length) {
+        try {
+          const translated = await translateParagraphBatch({
+            modelId: translateModelId,
+            userId,
+            paragraphs: translateIdxs.map(i => texts[i]),
+            sourceLanguage,
+            targetLanguage,
+            glossaryTerms,
+            guidance: glossaryPrep.guidance,
+            runningGlossary,
+            intakeAnswers,
+            onProgress: ({ phase, n }) => {
+              setJobStatus(jobId, {
+                stage: `Translating chunk ${chunkIndex + 1}/${chunks.length}: ${phase || 'working'} (${n || texts.length} paras)`,
+              }).catch(() => {});
+            },
+          });
+          translateIdxs.forEach((i, j) => { translations[i] = translated[j]; });
+        } catch (err) {
+          console.error('[translate] chunk failed:', err.message);
+          translateIdxs.forEach((i) => { translations[i] = `[Translation error] ${texts[i]}`; });
+        }
       }
       inFlight -= 1;
       chunksDone += 1;

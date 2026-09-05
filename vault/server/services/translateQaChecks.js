@@ -82,6 +82,27 @@ function looksNonLinguistic(text) {
   if (/^\[?\s*REDACTED\s*\]?$/i.test(t)) return true;
   if (/^\[REDACTED(?::[^\]]+)?\]$/i.test(t)) return true;
   if (/^(?:xxx+|…|\.\.\.)$/i.test(t)) return true;
+  if (isCodeLikeArtifact(t)) return true;
+  return false;
+}
+
+/**
+ * Extracted "paragraph" is actually leaked code/template debris, not document
+ * prose — e.g. a serialized object dump (`Paragraph( 'caseSensitive': 1 ...)`)
+ * or an unresolved internal template token (`(check_internal_consistency target)`).
+ * Seen coming from some source PDFs (embedded field/debug artifacts on the page).
+ * These must never be sent to a translator — copy through verbatim instead.
+ */
+function isCodeLikeArtifact(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  // Object/dict-style debug dumps: Paragraph( 'key': value 'key2': value ...)
+  if (/^[A-Za-z]{2,30}\s*\(\s*'[\w]+'\s*:/.test(t)) return true;
+  // Two or more quoted-key:value pairs anywhere in the string
+  const kvMatches = t.match(/'[\w]+'\s*:\s*(?:'[^']*'|[\d.]+)/g) || [];
+  if (kvMatches.length >= 2) return true;
+  // Internal snake_case template token: (check_internal_consistency target)
+  if (/\(\s*[a-z][a-z0-9_]{2,40}\s+target\s*\)/i.test(t)) return true;
   return false;
 }
 
@@ -459,4 +480,6 @@ module.exports = {
   enforceRedactionPassThrough,
   lockedDoNotTranslateTerms,
   isMetaCommentaryInner,
+  looksNonLinguistic,
+  isCodeLikeArtifact,
 };

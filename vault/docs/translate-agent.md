@@ -54,7 +54,7 @@ Download filename: `translated-{basename}.pdf` (layout chosen per job).
 1. **Upload + intake** — domain (required), audience, tone, must-keep terms, notes; optional saved glossary; optional review pass.
 2. **Extract** — `translateExtract.extractForTranslate` → `paragraphsByPage` (+ OCR for sparse PDF pages).
 3. **Glossary prep** — Vault translate model proposes / merges terms from intake + text skim + saved glossary.
-4. **Translate** — chunked paragraph batches via `callModel` + glossary substitutions.
+4. **Translate** — chunked paragraph batches via `callModel` + glossary substitutions. Paragraphs that look like leaked code/template debris (e.g. a serialized object dump, an unresolved internal token) are detected (`translateQaChecks.isCodeLikeArtifact`) and copied through verbatim instead of being sent to the translator.
 5. **Hard sanity gate (deterministic)** — `translateQaChecks.hardSanityGate` on every source⟶target pair. If too many segments are identical to source (>30%), contain placeholders (≥2 or >5%), or are empty (>10%), the job **fails** with an error and a QA summary — no bilingual PDF.
 6. **Review (optional)** — deterministic completeness runs first on **all** pairs (auto “Garbled / incomplete rows”); then the review model compares every pair side-by-side in batches for subjective issues; claim verification spot-checks a sample of “None flagged” segments.
 7. **Client PDF** — `@react-pdf/renderer` bilingual PDF uploaded to complete the job.
