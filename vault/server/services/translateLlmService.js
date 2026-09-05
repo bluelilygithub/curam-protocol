@@ -678,9 +678,27 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
 }
 
 /** Apply forced glossary substitutions on already-translated text (belt and braces). */
+// A filename token (identifier, not prose) that happens to contain a locked term as a substring
+// separated only by underscores/digits — e.g. "Transmittal_2024-157_Scanned.pdf" — still passes
+// applyGlossarySubstitutions' word-boundary check, because an underscore isn't a letter either.
+// Confirmed on a real job: "Transmittal" inside that exact filename got replaced with "Bordereau
+// de transmission", producing a filename that no longer exists on disk. Filenames are
+// identifiers and must never be touched by glossary substitution.
+const FILENAME_TOKEN_RE = /\S*\.(?:pdf|docx?|xlsx?|pptx?|tiff?|dwg|dxf|jpe?g|png|gif|bmp|csv|txt|zip|msg|eml)\b/gi;
+
 function applyGlossarySubstitutions(text, terms) {
   let t = String(text || '');
   const subs = (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target);
+  if (!subs.length) return t;
+
+  // Swap filename-like tokens out for placeholders before substituting, restore after — keeps
+  // them completely outside every glossary regex regardless of what term happens to match inside.
+  const filenames = [];
+  t = t.replace(FILENAME_TOKEN_RE, (m) => {
+    filenames.push(m);
+    return `⁣FN${filenames.length - 1}⁣`;
+  });
+
   // Longer sources first
   subs.sort((a, b) => String(b.source).length - String(a.source).length);
   for (const sub of subs) {
@@ -692,6 +710,8 @@ function applyGlossarySubstitutions(text, terms) {
     const escaped = String(sub.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     t = t.replace(new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'giu'), (m, pre, hit) => pre + sub.target);
   }
+
+  t = t.replace(/⁣FN(\d+)⁣/g, (m, i) => filenames[Number(i)]);
   return t;
 }
 
