@@ -507,6 +507,11 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 // ── Submit batch job (multi-language fan-out) ──────────────────────────────────
 // Same intake as a single job, but `targetLanguages` is a JSON array. Extraction (+ OCR) runs
 // once and is shared across every language instead of repeating it per job.
+//
+// Deprecated: target language is now a single Settings-level choice (translate_target_language),
+// not picked per job, so there's no UI path left to select more than one language per run.
+// Route kept (unused by the client) rather than removed, since translate_jobs."batchId" and
+// existing rows still reference it — deleting it is a bigger change than this ask needs.
 router.post('/jobs/batch', sourceUpload, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
 

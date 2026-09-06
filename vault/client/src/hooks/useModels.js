@@ -15,6 +15,7 @@ export function useModels() {
   const [translateModel, setTranslateModel] = useState('');
   const [translateReviewModel, setTranslateReviewModel] = useState('');
   const [translateAgentCard, setTranslateAgentCard] = useState(null);
+  const [translateTargetLanguage, setTranslateTargetLanguage] = useState('fr');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +60,7 @@ export function useModels() {
         }
         if (settings.translate_model) setTranslateModel(settings.translate_model);
         if (settings.translate_review_model) setTranslateReviewModel(settings.translate_review_model);
+        if (settings.translate_target_language) setTranslateTargetLanguage(settings.translate_target_language);
       }
       if (embeddingRes.ok) {
         const emb = await embeddingRes.json();
@@ -154,6 +156,14 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  const saveTranslateTargetLanguage = useCallback(async (lang) => {
+    const res = await api.post('/api/settings', { key: 'translate_target_language', value: lang });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save translate target language');
+    setTranslateTargetLanguage(lang);
+    return { ok: true };
+  }, []);
+
   return {
     models,
     setModels,
@@ -179,5 +189,7 @@ export function useModels() {
     translateAgentCard,
     saveTranslateModel,
     saveTranslateReviewModel,
+    translateTargetLanguage,
+    saveTranslateTargetLanguage,
   };
 }

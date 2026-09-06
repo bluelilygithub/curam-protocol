@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { pdf, Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
+import { LANGUAGES } from '../utils/translateLanguages';
 
 let _pdfjsLib = null;
 async function getPdfJs() {
@@ -15,23 +17,16 @@ async function getPdfJs() {
   return _pdfjsLib;
 }
 
-// ── Language options ──────────────────────────────────────────────────────────
-const LANGUAGES = [
-  { code: 'en', label: 'English' },
-  { code: 'mi', label: 'te reo Māori' },
-  { code: 'fr', label: 'French' },
-  { code: 'de', label: 'German' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'it', label: 'Italian' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'zh-CN', label: 'Chinese (Simplified)' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'ko', label: 'Korean' },
-  { code: 'ru', label: 'Russian' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'pl', label: 'Polish' },
-  { code: 'sv', label: 'Swedish' },
+// Job stage order mirrors server pipeline stages (see docs/translate-agent.md § Pipeline):
+// pending → extracting → ocr → preparing → translating → reviewing → generating → done/failed.
+const PROGRESS_STAGE_ORDER = ['pending', 'extracting', 'ocr', 'preparing', 'translating', 'reviewing', 'generating'];
+const PROGRESS_STEP_LABELS = [
+  'Extracting document text',
+  'OCR on scanned pages',
+  'Preparing glossary',
+  'Translating',
+  'QA review',
+  'Generating PDF',
 ];
 
 const FONT_BY_LANG = {
@@ -473,8 +468,9 @@ function TranslationsTab({ glossaries }) {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [file, setFile]             = useState(null);
   const [dragOver, setDragOver]     = useState(false);
+  // Target language is a Settings-level choice (Settings → AI & Chat → Translate agent), not
+  // picked per job — loaded once below and used read-only here.
   const [targetLang, setTargetLang] = useState('fr');
-  const [extraLangs, setExtraLangs] = useState([]); // additional target languages — fan-out into one job per language
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
@@ -503,12 +499,10 @@ function TranslationsTab({ glossaries }) {
   const [activeJob, setActiveJob]   = useState(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [batchPendingIds, setBatchPendingIds] = useState([]);
   const fileRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
   const pollRef = useRef(null);
-  const batchPollRef = useRef(null);
-  const batchHandledRef = useRef(new Set());
+  const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
 
   const loadJobs = useCallback(() => {
     api.get('/api/translate/jobs').then(r => r.json()).then(setJobs).catch(() => {})
@@ -536,6 +530,9 @@ function TranslationsTab({ glossaries }) {
         setEngine('google');
         setEnableReview(false);
       }
+    }).catch(() => {});
+    api.get('/api/settings').then(r => r.json()).then((s) => {
+      if (s.translate_target_language) setTargetLang(s.translate_target_language);
     }).catch(() => {});
   }, []);
 
@@ -639,17 +636,13 @@ function TranslationsTab({ glossaries }) {
     }
     setSubmitting(true);
     try {
-      const allLangs = [targetLang, ...extraLangs.filter((l) => l !== targetLang)];
-      const isBatch = allLangs.length > 1;
-
       const fd = new FormData();
       fd.append('file', file);
-      if (isBatch) fd.append('targetLanguages', JSON.stringify(allLangs));
-      else fd.append('targetLanguage', targetLang);
+      fd.append('targetLanguage', targetLang);
       fd.append('engine', engine);
       fd.append('pdfLayout', pdfLayout);
       if (glossaryId) fd.append('glossaryId', glossaryId);
-      if (!isBatch && useGlobalGlossary) fd.append('useGlobalGlossary', 'true');
+      if (useGlobalGlossary) fd.append('useGlobalGlossary', 'true');
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
       if (engine === 'llm' && translateModelOverride) fd.append('translateModelId', translateModelOverride);
@@ -663,16 +656,14 @@ function TranslationsTab({ glossaries }) {
         regionalAudience: targetLang === 'mi' ? regionalAudience.trim() : '',
       }));
 
-      const res  = await api.postForm(isBatch ? '/api/translate/jobs/batch' : '/api/translate/jobs', fd);
+      const res  = await api.postForm('/api/translate/jobs', fd);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Submission failed');
 
-      if (isBatch) {
-        setBatchPendingIds(body.jobIds || []);
-        addToast(`Batch started — translating into ${allLangs.length} languages`, 'success');
-      } else {
-        setActiveJobId(body.jobId);
-      }
+      startProcessing('Translating document…', 'Please don’t navigate away while this runs.', {
+        steps: PROGRESS_STEP_LABELS,
+      });
+      setActiveJobId(body.jobId);
       setFile(null); setPreflight(null); setEstimate(null);
       loadJobs();
     } catch (e) {
@@ -682,7 +673,9 @@ function TranslationsTab({ glossaries }) {
     }
   };
 
-  // Poll active job
+  // Poll active job — drives the global ProcessingModal (see processingStore) instead of an
+  // inline progress row, so a long translation reads the same way as other blocking agent runs
+  // (e.g. Property Scenario).
   useEffect(() => {
     if (!activeJobId) return;
     clearInterval(pollRef.current);
@@ -692,47 +685,32 @@ function TranslationsTab({ glossaries }) {
         const data = await res.json();
         setActiveJob(data);
 
+        const stageIdx = PROGRESS_STAGE_ORDER.indexOf(data.status) - 1;
+        if (stageIdx >= 0) {
+          setProcessingSteps(PROGRESS_STEP_LABELS.map((label, i) => ({
+            label,
+            status: i < stageIdx ? 'done' : i === stageIdx ? 'active' : 'pending',
+          })));
+        }
+        updateProcessingDetail(data.stage
+          ? `${data.stage}${data.progress != null ? ` — ${data.progress}%` : ''}`
+          : null);
+
         if (data.status === 'generating' && data.translatedTextJson && !generatingPdf) {
           clearInterval(pollRef.current);
           generateAndUploadPdf(data);
         }
-        if (data.status === 'done' || data.status === 'failed') {
+        if (data.status === 'failed' || data.status === 'done') {
           clearInterval(pollRef.current);
+          stopProcessing();
           setActiveJobId(null);
+          if (data.status === 'failed') addToast(data.errorMessage || 'Translation failed', 'error');
           loadJobs();
         }
       } catch {}
     }, 2000);
     return () => clearInterval(pollRef.current);
   }, [activeJobId, generatingPdf]);
-
-  // Poll a multi-language batch — each job builds its own PDF client-side once it reaches
-  // 'generating', same as the single-job flow above, just fanned out over several job ids.
-  useEffect(() => {
-    if (!batchPendingIds.length) return;
-    clearInterval(batchPollRef.current);
-    batchPollRef.current = setInterval(async () => {
-      const remaining = [];
-      for (const id of batchPendingIds) {
-        try {
-          const res = await api.get(`/api/translate/jobs/${id}/status`);
-          const data = await res.json();
-          if (data.status === 'generating' && data.translatedTextJson && !batchHandledRef.current.has(id)) {
-            batchHandledRef.current.add(id);
-            generateAndUploadPdf(data);
-          }
-          if (data.status !== 'done' && data.status !== 'failed') remaining.push(id);
-        } catch { remaining.push(id); }
-      }
-      setBatchPendingIds(remaining);
-      if (!remaining.length) {
-        clearInterval(batchPollRef.current);
-        loadJobs();
-        addToast('Batch translation finished', 'success');
-      }
-    }, 3000);
-    return () => clearInterval(batchPollRef.current);
-  }, [batchPendingIds]);
 
   const runEstimate = async () => {
     if (!file) return;
@@ -742,8 +720,6 @@ function TranslationsTab({ glossaries }) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('targetLanguage', targetLang);
-      const allLangs = [targetLang, ...extraLangs.filter((l) => l !== targetLang)];
-      if (allLangs.length > 1) fd.append('targetLanguages', JSON.stringify(allLangs));
       const res = await api.postForm('/api/translate/estimate', fd);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Estimate failed');
@@ -757,6 +733,10 @@ function TranslationsTab({ glossaries }) {
 
   const generateAndUploadPdf = async (jobData) => {
     setGeneratingPdf(true);
+    setProcessingSteps(PROGRESS_STEP_LABELS.map((label, i) => ({
+      label, status: i < PROGRESS_STEP_LABELS.length - 1 ? 'done' : 'active',
+    })));
+    updateProcessingDetail('Generating bilingual PDF in browser…');
     try {
       // JSONB columns come back from pg already parsed; handle both string and object
       const payload = typeof jobData.translatedTextJson === 'string'
@@ -776,7 +756,6 @@ function TranslationsTab({ glossaries }) {
       fd.append('translatedPdf', blob, 'translated.pdf');
       const res = await api.postForm(`/api/translate/jobs/${jobData.id}/complete`, fd);
       if (!res.ok) throw new Error('Failed to save PDF');
-      setActiveJob(prev => ({ ...prev, status: 'done', progress: 100 }));
       loadJobs();
       addToast('Translation complete — ready to download', 'success');
     } catch (e) {
@@ -789,6 +768,7 @@ function TranslationsTab({ glossaries }) {
       setGeneratingPdf(false);
       setActiveJobId(null);
       setActiveJob(null);
+      stopProcessing();
     }
   };
 
@@ -830,9 +810,6 @@ function TranslationsTab({ glossaries }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
-  const isProcessing = activeJobId && activeJob && !['done', 'failed'].includes(activeJob.status);
-  const progressPct = generatingPdf ? 95 : (activeJob?.progress || 0);
-  const stageLabel  = generatingPdf ? 'Generating bilingual PDF in browser…' : (activeJob?.stage || '');
 
   return (
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
@@ -914,38 +891,12 @@ function TranslationsTab({ glossaries }) {
                   <Field label="Translate to"
                     hint={targetLang === 'mi'
                       ? 'Defaults to standard te reo Māori (Te Taura Whiri), not a specific iwi dialect.'
-                      : undefined}>
-                    <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
-                      {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
-                    </Sel>
+                      : 'Set in Settings → AI & Chat → Translate agent.'}>
+                    <p className="text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
+                    </p>
                   </Field>
-                  <div className="mt-2">
-                    <details>
-                      <summary className="text-xs cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>
-                        Also translate into more languages{extraLangs.length ? ` (+${extraLangs.length})` : ''}
-                      </summary>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {LANGUAGES.filter(l => l.code !== targetLang).map(l => {
-                          const checked = extraLangs.includes(l.code);
-                          return (
-                            <label key={l.code}
-                              className="text-xs px-2 py-1 rounded-full border cursor-pointer select-none"
-                              style={{
-                                borderColor: 'var(--color-border)',
-                                background: checked ? 'var(--color-primary)' : 'transparent',
-                                color: checked ? '#fff' : 'var(--color-text)',
-                              }}>
-                              <input type="checkbox" className="hidden" checked={checked}
-                                onChange={() => setExtraLangs(prev => checked
-                                  ? prev.filter(c => c !== l.code)
-                                  : (prev.length >= 7 ? prev : [...prev, l.code]))} />
-                              {l.label}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  </div>
                 </div>
                 <div className="flex-1 min-w-40">
                   <Field label="Saved glossary (optional)"
@@ -961,15 +912,13 @@ function TranslationsTab({ glossaries }) {
                       ))}
                     </Sel>
                   </Field>
-                  <label className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--color-text)', opacity: extraLangs.length ? 0.5 : 1, cursor: extraLangs.length ? 'not-allowed' : 'pointer' }}>
-                    <input type="checkbox" checked={useGlobalGlossary} disabled={extraLangs.length > 0}
+                  <label className="flex items-center gap-2 mt-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                    <input type="checkbox" checked={useGlobalGlossary}
                       onChange={(e) => setUseGlobalGlossary(e.target.checked)} />
                     Use global glossary for {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
-                    {extraLangs.length
-                      ? ' (single-language jobs only)'
-                      : globalGlossary
-                        ? ` (${globalGlossary.termCount} terms learned so far)`
-                        : ' (none yet — this job will start building one)'}
+                    {globalGlossary
+                      ? ` (${globalGlossary.termCount} terms learned so far)`
+                      : ' (none yet — this job will start building one)'}
                   </label>
                 </div>
               </div>
@@ -1124,29 +1073,11 @@ function TranslationsTab({ glossaries }) {
                 </div>
                 <Btn onClick={handleSubmit}
                   disabled={submitting || preflighting || (engine === 'llm' && !domain)}>
-                  {submitting ? 'Submitting…' : `Start Translation${extraLangs.length ? ` (${extraLangs.length + 1} languages)` : ''} (${engine === 'google' ? 'Google' : 'LLM'})`}
+                  {submitting ? 'Submitting…' : `Start Translation (${engine === 'google' ? 'Google' : 'LLM'})`}
                 </Btn>
               </div>
             </>
           )}
-        </div>
-      )}
-
-      {/* Active job progress */}
-      {isProcessing && (
-        <div className="rounded-xl border p-4 flex flex-col gap-3"
-          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-              {stageLabel || 'Processing…'}
-            </span>
-            <StatusBadge status={generatingPdf ? 'generating' : (activeJob?.status || 'pending')} />
-          </div>
-          <div className="w-full rounded-full h-2" style={{ background: 'var(--color-border)' }}>
-            <div className="h-2 rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%`, background: 'var(--color-primary)' }} />
-          </div>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{progressPct}% complete</p>
         </div>
       )}
 

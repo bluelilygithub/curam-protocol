@@ -6,11 +6,15 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 **Backend:** `vault/server/routes/translate.js`  
 **Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js` · `translateMemory.js` · `translateNativeOutput.js`  
 **Tables:** `translate_jobs`, `translate_glossaries`, `translate_memory`  
-**Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier)
+**Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier) and `translate_target_language` (workspace-wide target language; job intake no longer picks it per run — see **Target language** below).
 
 Feature flag / app: **Translate** (languages).
 
 ---
+
+## Target language
+
+Set once in **Settings → AI & Chat → Translate agent → Target language** (`translate_target_language`, default `fr`). Job intake shows this as read-only, not a picker — every run in the workspace translates into that language until it's changed in Settings. Multi-language fan-out per run was removed from the UI for the same reason (one target language, chosen at the workspace level, not per job); the old `POST /api/translate/jobs/batch` route is still on the server (`translate_jobs."batchId"` and existing rows reference it) but has no client caller anymore.
 
 ## Engines
 
@@ -68,7 +72,7 @@ Download filename: `translated-{basename}.pdf` (layout chosen per job).
 7. **Review (optional)** — deterministic completeness runs first on **all** pairs (auto “Garbled / incomplete rows”); then the review model compares every pair side-by-side in batches for subjective issues; claim verification spot-checks a sample of “None flagged” segments.
 8. **Client PDF** — `@react-pdf/renderer` bilingual PDF uploaded to complete the job.
 
-Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed`.
+Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed`. The client shows this progression in the global blocking **ProcessingModal** (`processingStore`/`runWithStepLog` pattern, same as Property Scenario) rather than an inline row — polling `GET /jobs/:id/status` drives step state (`setProcessingSteps`) and the stage/percent detail line.
 
 ### Speed notes
 

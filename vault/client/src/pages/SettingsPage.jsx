@@ -7,6 +7,7 @@ import { useIcon } from '../providers/IconProvider';
 import { formatModelSelectLabel } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
+import { LANGUAGES as TRANSLATE_LANGUAGES } from '../utils/translateLanguages';
 import GmailConnect from '../components/GmailConnect';
 import CalendarConnect from '../components/CalendarConnect';
 import DriveConnect from '../components/DriveConnect';
@@ -121,6 +122,8 @@ function SettingsPage() {
     translateReviewModel,
     saveTranslateModel,
     saveTranslateReviewModel,
+    translateTargetLanguage,
+    saveTranslateTargetLanguage,
     reload: reloadModels,
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
@@ -1618,6 +1621,28 @@ function SettingsPage() {
               <strong style={{ color: 'var(--color-text)' }}> Review</strong> runs the QA pass (polarity, terminology, auditor flags).
               Leave blank to use your vault default model and a different secondary tier when available.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Target language
+            </label>
+            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
+              Every translation run uses this language — set once here, not per job.
+            </p>
+            <select
+              value={translateTargetLanguage}
+              onChange={async (e) => {
+                try { await saveTranslateTargetLanguage(e.target.value); }
+                catch (err) { /* ignore */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {TRANSLATE_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
           </div>
 
           <div>

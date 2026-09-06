@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-settings-language-modal)
+
+### Translate — target language moved to Settings, multi-language fan-out removed, progress moved to a modal
+- New setting `translate_target_language` (Settings → AI & Chat → Translate agent → Target language). Job intake now shows the configured language read-only instead of a per-job picker — one workspace-wide language, changed in Settings, not chosen per run.
+- Removed the "Also translate into more languages" per-job checkboxes and the client's call into `POST /api/translate/jobs/batch` — one language per run only. The batch route itself is left on the server (unused) since `translate_jobs."batchId"` and existing rows still reference it.
+- Job progress (extracting → OCR → glossary → translating → review → generating) now displays in the global blocking **ProcessingModal** (`processingStore`, same pattern as Property Scenario) instead of an inline progress bar row on the page.
+- `LANGUAGES` list moved to a shared `client/src/utils/translateLanguages.js` so both TranslatePage and SettingsPage use one source.
+
 ## 2026-09-07 (translate-global-glossary)
 
 ### Translate — global (auto-learned) glossary per language
