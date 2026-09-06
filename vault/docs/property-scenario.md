@@ -49,6 +49,7 @@ CDR PRD lenders ──► comparison table / charts
 | 9 | Deterministic pre-extraction spans | `extractSpans.js`, grounding span checks |
 | 10 | Wire `runFromText` to HTTP + Describe UI | `wireApi.js`, routes `/parse` `/clarify` |
 | 11 | Quarantined document insights | `insights/*` |
+| 12 | Follow-up conversation + what-if mutation | `whatIf.js`, routes `/advice/ask` `/advice/what-if` |
 
 ---
 
@@ -66,6 +67,8 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `POST` | `/cdr/refresh` | Clear CDR cache and refetch |
 | `POST` | `/insights` | `{ product\|product_id, question }` — cited document Q&A |
 | `POST` | `/insights/compare` | `{ products\|product_ids, question }` — multi-doc compare |
+| `POST` | `/advice/ask` | `{ question, calcResult, scenarioType, history? }` — explain-only Q&A grounded in calc totals; `history` (last 6 Q&A pairs) threads prior turns into the prompt for multi-turn follow-up. Never changes totals. |
+| `POST` | `/advice/what-if` | `{ scenario, question }` — exploratory recalculation. LLM maps the question to a whitelisted field change only (never invents a path); applies via the same `applyClarifications` as clarify, recalculates on a clone. Returns `original_totals` vs `what_if_totals`. Original scenario/calc untouched. |
 | `POST` | `/calculators/*` | Standalone repayment / extra-repayments / offset / borrowing-power |
 | `POST` | `/calculators/buyer-qualify` | Lite buyer qualification (serviceability, LVR, DTI, genuine savings, FHBG) |
 | `POST` | `/calculators/qualification-proforma` | Full proforma: strict + levers + `leversDelta` + `bankPanel` (capacity + CDR) + supplement |
@@ -121,6 +124,7 @@ Also:
 - Bridging: `requires_user_decision: true`; refuse-until-clarified is default; IO cost is secondary  
 - CDR: special-eligibility products excluded from mainstream comparison; per-row MOCK/CDR provenance; fees labeled estimated  
 - Insights: every claim needs a document quote/location; otherwise `uncited_gaps` — locked `INSIGHT_DISCLAIMER`
+- What-if (Stage 12): LLM may only assign a value to a field_path drawn from a server-built whitelist of the scenario's existing editable leaves — any other path is dropped, not applied. Runs on a clone; the on-screen scenario/calc is never mutated.
 
 ---
 

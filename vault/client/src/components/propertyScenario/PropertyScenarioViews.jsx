@@ -684,6 +684,9 @@ export function FollowUpPanel({ advice, calcResult, scenarioType, answers = {}, 
   const [customText, setCustomText] = useState('');
   const [customQuestions, setCustomQuestions] = useState([]); // user-added questions
   const [error, setError] = useState(null);
+  // Ordered turn history for this session — threaded into advice/ask so
+  // question 2 can build on question 1's answer. Explain-only; never feeds calc.
+  const [turns, setTurns] = useState([]);
 
   if (!advice) return null;
 
@@ -700,9 +703,11 @@ export function FollowUpPanel({ advice, calcResult, scenarioType, answers = {}, 
         question: question.trim(),
         calcResult,
         scenarioType,
+        history: turns,
       });
       if (res.ok && res.answer) {
         onAnswer?.(question, res.answer);
+        setTurns((prev) => [...prev, { question: question.trim(), answer: res.answer }]);
       } else {
         setError(res.message || 'Could not get an answer — try again.');
       }
@@ -836,6 +841,130 @@ export function FollowUpPanel({ advice, calcResult, scenarioType, answers = {}, 
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      <WhatIfPanel scenario={calcResult?.scenario} />
+    </div>
+  );
+}
+
+/**
+ * "What if…" panel — DOES recalculate, unlike the explain-only Q&A above.
+ * Sends the current scenario + free-text question; server whitelists which
+ * fields the LLM may adjust and returns original vs what-if totals side by
+ * side. Never overwrites the live scenario/calc on screen.
+ */
+export function WhatIfPanel({ scenario }) {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  if (!scenario) return null;
+
+  async function runWhatIf() {
+    if (!text.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.post('/api/property-scenario/advice/what-if', {
+        scenario,
+        question: text.trim(),
+      });
+      if (res.ok) {
+        setResult(res);
+      } else {
+        setError(res.message || 'Could not run that what-if — try rephrasing.');
+      }
+    } catch (err) {
+      setError(err.message || 'Request failed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const totalKeys = result
+    ? Array.from(new Set([
+      ...Object.keys(result.original_totals || {}),
+      ...Object.keys(result.what_if_totals || {}),
+    ]))
+    : [];
+
+  return (
+    <div className="rounded-2xl border p-5 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div>
+        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Try a what-if</h3>
+        <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+          Unlike the questions above, this recalculates your scenario with the change applied — e.g.
+          "what if my deposit was $50k more?" or "what if the rate was 6.2%?". Your original result is untouched.
+        </p>
+      </div>
+
+      {error && (
+        <p className="text-xs px-3 py-2 rounded-lg" style={{ color: '#ef4444', background: '#fef2f2' }}>{error}</p>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && runWhatIf()}
+          placeholder="e.g. What if I put in an extra $50,000 deposit?"
+          className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+        <button
+          type="button"
+          disabled={!text.trim() || loading}
+          onClick={runWhatIf}
+          className="px-3 py-2 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {loading ? 'Calculating…' : 'Run what-if'}
+        </button>
+      </div>
+
+      {result && (
+        <div className="space-y-3">
+          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {result.appliedChanges.map((c) => (
+              <div key={c.field_path}>
+                Changed <strong>{c.field_path}</strong>: {String(c.from)} → {String(c.to)}
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left" style={{ color: 'var(--color-muted)' }}>
+                  <th className="px-3 py-2 font-medium">Total</th>
+                  <th className="px-3 py-2 font-medium text-right">Original</th>
+                  <th className="px-3 py-2 font-medium text-right">What-if</th>
+                </tr>
+              </thead>
+              <tbody>
+                {totalKeys.map((k) => {
+                  const before = result.original_totals?.[k];
+                  const after = result.what_if_totals?.[k];
+                  return (
+                    <tr key={k} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{k}</td>
+                      <td className="px-3 py-2 text-right" style={{ color: 'var(--color-muted)' }}>
+                        {typeof before === 'number' ? money(before) : String(before ?? '—')}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium" style={{ color: 'var(--color-text)' }}>
+                        {typeof after === 'number' ? money(after) : String(after ?? '—')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.disclaimer}</p>
         </div>
       )}
     </div>

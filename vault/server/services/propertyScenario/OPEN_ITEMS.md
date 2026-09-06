@@ -2,7 +2,27 @@
 
 Tracked gaps that are **not blocking** the next independent stage, but must not be silently assumed done.
 
-Last updated: 2026-07-15 (Stage 11 — document insight layer added; W1 browser click-through still open)
+Last updated: 2026-09-06 (Stage 12 — follow-up conversation + what-if mutation added; W1 browser click-through still open)
+
+---
+
+## Open — Stage 12 (additive)
+
+### F1. Follow-up conversation + what-if — shipped server+client; browser walkthrough not done
+
+**Status:** `whatIf.js` + `/advice/ask` history param + `/advice/what-if` route + `WhatIfPanel`/`FollowUpPanel` client changes added this session. Not yet exercised in a running app (local dev broken — see `local-setup-issues.md`).
+
+**Done:**
+
+- `advice/ask` accepts `history` (last 6 Q&A pairs) — multi-turn explain-only follow-up, no calc access
+- `advice/what-if` — LLM proposes field changes from a server-built whitelist only (`collectEditableFields`); rejected paths never applied; recalculates on a clone via `runFromScenario`; original calc/scenario untouched
+- Client: `FollowUpPanel` threads `turns` history; new `WhatIfPanel` renders original-vs-what-if totals table
+
+**Still required to close F1:**
+
+- Deploy to `version-7`, confirm on Railway: ask two follow-up questions in sequence and see the second reference the first; run a what-if and see recalculated totals next to the original
+- Confirm whitelist covers the fields brokers actually ask about in a live scenario (e.g. deposit, rate) — extend `EDITABLE_LEAF_KEYS` in `whatIf.js` if a common ask gets rejected
+- No test coverage added yet (`whatIf.js` has no unit test) — add one asserting an out-of-whitelist path is rejected, not applied
 
 ---
 

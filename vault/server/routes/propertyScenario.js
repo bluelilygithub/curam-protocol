@@ -33,6 +33,7 @@ const {
   compareInsights,
   INSIGHT_DISCLAIMER,
 } = require('../services/propertyScenario/insights');
+const { runWhatIf } = require('../services/propertyScenario/whatIf');
 
 async function loadLiveLenders(req) {
   const force = req.query.refresh === '1' || req.query.force === '1'
@@ -694,10 +695,18 @@ router.post('/calculators/qualification-proforma', async (req, res) => {
  */
 router.post('/advice/ask', async (req, res) => {
   try {
-    const { question, calcResult, scenarioType } = req.body || {};
+    const { question, calcResult, scenarioType, history } = req.body || {};
     if (!question || typeof question !== 'string' || !question.trim()) {
       return res.status(400).json({ ok: false, error: 'invalid_request', message: 'question is required' });
     }
+    // Multi-turn: prior Q&A pairs from this session, most recent last. Capped so
+    // the prompt can't grow unbounded — this is conversational memory for
+    // explanation only, it never feeds back into the deterministic calculation.
+    const priorTurns = Array.isArray(history)
+      ? history
+        .filter((h) => h && String(h.question || '').trim() && String(h.answer || '').trim())
+        .slice(-6)
+      : [];
 
     const { callModel } = require('../services/callModel');
     const { getModelsForUser } = require('../services/modelResolver');
@@ -738,6 +747,9 @@ router.post('/advice/ask', async (req, res) => {
       cdrBank ? `\nBest CDR rate: ${cdrBank.rate}% p.a. — ${cdrBank.lender} (${cdrBank.product || 'variable'})` : '',
       caveats.length ? `\nCaveats:\n${caveats.map((c) => `  · ${c}`).join('\n')}` : '',
       assumptions.length ? `\nAssumptions:\n${assumptions.map((a) => `  · ${a}`).join('\n')}` : '',
+      priorTurns.length
+        ? `\nEarlier in this conversation:\n${priorTurns.map((t) => `Q: ${t.question}\nA: ${t.answer}`).join('\n\n')}`
+        : '',
       '',
       `Question: ${question.trim()}`,
     ].filter((l) => l !== null).join('\n');
@@ -747,6 +759,31 @@ router.post('/advice/ask', async (req, res) => {
   } catch (err) {
     console.error('[property-scenario] advice/ask', err);
     return res.status(422).json({ ok: false, error: 'ask_failed', message: err.message || 'Ask failed' });
+  }
+});
+
+/**
+ * POST /api/property-scenario/advice/what-if
+ * Body: { scenario, question, modelId? }
+ * Exploratory scenario mutation — DOES recalculate totals, unlike advice/ask.
+ * LLM may only assign values to a whitelisted set of existing field paths;
+ * the original scenario/calculation are never mutated. Returns original vs
+ * what-if totals side by side.
+ */
+router.post('/advice/what-if', async (req, res) => {
+  try {
+    const { scenario, question } = req.body || {};
+    const result = await runWhatIf({
+      scenario,
+      question,
+      userId: req.user?.id,
+      modelId: req.body?.modelId,
+    });
+    const status = result.ok ? 200 : (result.error === 'invalid_request' ? 400 : 422);
+    return res.status(status).json(result);
+  } catch (err) {
+    console.error('[property-scenario] advice/what-if', err);
+    return res.status(422).json({ ok: false, error: 'what_if_failed', message: err.message || 'What-if failed' });
   }
 });
 
