@@ -582,7 +582,10 @@ function TranslationsTab({ glossaries }) {
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
-  const [useGlobalGlossary, setUseGlobalGlossary] = useState(false);
+  // Default on: every job contributes to (and benefits from) that language's learned glossary
+  // unless a manual glossary is picked instead. Was opt-in before — nothing accumulated because
+  // nobody thought to tick a checkbox on every run.
+  const [useGlobalGlossary, setUseGlobalGlossary] = useState(true);
   const [globalGlossary, setGlobalGlossary] = useState(null); // { termCount } for the current targetLang, or null if none yet
   const [domain, setDomain] = useState('general');
   const [audience, setAudience] = useState('client');
@@ -1027,10 +1030,10 @@ function TranslationsTab({ glossaries }) {
                   <label className="flex items-center gap-2 mt-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
                     <input type="checkbox" checked={useGlobalGlossary}
                       onChange={(e) => setUseGlobalGlossary(e.target.checked)} />
-                    Use global glossary for {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
+                    Build/use the learned glossary for {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
                     {globalGlossary
-                      ? ` (${globalGlossary.termCount} terms learned so far)`
-                      : ' (none yet — this job will start building one)'}
+                      ? ` — ${globalGlossary.termCount} term${globalGlossary.termCount === 1 ? '' : 's'} learned so far (view/edit in the Glossaries tab)`
+                      : ' — nothing learned yet; this job starts it'}
                   </label>
                 </div>
               </div>
@@ -1137,28 +1140,26 @@ function TranslationsTab({ glossaries }) {
               </div>
               )}
 
-              <div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={runEstimate}
-                    disabled={estimating || preflighting || !file}
-                    className="text-xs px-3 py-2 rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-50"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                    {estimating ? 'Estimating…' : 'Get estimate'}
-                  </button>
-                  {estimate && (
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {estimate.charCount.toLocaleString()} chars
-                      {estimate.languageCount > 1 ? ` × ${estimate.languageCount} languages` : ''}
-                      {estimate.estCostAud != null ? ` · ~A$${estimate.estCostAud.toFixed(4)} (${estimate.modelId})` : ''}
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={runEstimate}
+                  disabled={estimating || preflighting || !file}
+                  className="text-xs px-3 py-2 rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-50"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  {estimating ? 'Estimating…' : 'Get estimate'}
+                </button>
                 <Btn onClick={handleSubmit}
                   disabled={submitting || preflighting || (engine === 'llm' && !domain)}>
                   {submitting ? 'Submitting…' : `Start Translation (${engine === 'google' ? 'Google' : 'LLM'})`}
                 </Btn>
+                {estimate && (
+                  <span className="text-xs w-full" style={{ color: 'var(--color-muted)' }}>
+                    {estimate.charCount.toLocaleString()} chars
+                    {estimate.languageCount > 1 ? ` × ${estimate.languageCount} languages` : ''}
+                    {estimate.estCostAud != null ? ` · ~A$${estimate.estCostAud.toFixed(4)} (${estimate.modelId})` : ''}
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -1227,19 +1228,6 @@ function TranslationsTab({ glossaries }) {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
-                          <button onClick={() => downloadOriginalJob(job)}
-                            className="text-xs px-2 py-1 rounded border"
-                            title="Download the untouched source file, as uploaded"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                            Original
-                          </button>
-                          {job.status === 'done' && (
-                            <button onClick={() => downloadJob(job)}
-                              className="text-xs px-2 py-1 rounded border"
-                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                              Download PDF
-                            </button>
-                          )}
                           {job.hasNativeOutput && (
                             <button onClick={() => downloadNativeJob(job)}
                               className="text-xs px-2 py-1 rounded border"
@@ -1252,7 +1240,7 @@ function TranslationsTab({ glossaries }) {
                             <button onClick={() => setQaJob(job)}
                               className="text-xs px-2 py-1 rounded border"
                               style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
-                              QA
+                              View Results
                             </button>
                           )}
                           <button onClick={() => deleteJob(job.id)} disabled={deletingId === job.id}

@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-row-cleanup-glossary-default-on)
+
+### Translate — cleaner job row, glossary learning now on by default
+- Removed "Original" and "Download PDF" buttons from the job history row — both stay available inside **View Results** (renamed from "QA"), so a job's outputs live in one modal instead of scattered across the row.
+- Row now shows: native Word/Excel download (when available), View Results, Delete.
+- **Root cause of "nothing being learned":** the global glossary checkbox defaulted to unchecked, so unless a user ticked it on every single job, nothing ever accumulated — the empty state was correct, just confusing. Now defaults **on**; untick it to use a manually-picked glossary instead.
+- Estimate + Start Translation buttons moved onto the same row (estimate result text wraps to its own line below).
+
 ## 2026-09-07 (translate-original-download-glossary-review)
 
 ### Translate — download original source, review/edit a language's learned glossary
