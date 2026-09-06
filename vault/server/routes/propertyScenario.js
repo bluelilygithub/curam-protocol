@@ -34,6 +34,7 @@ const {
   INSIGHT_DISCLAIMER,
 } = require('../services/propertyScenario/insights');
 const { runWhatIf } = require('../services/propertyScenario/whatIf');
+const { pool } = require('../db');
 
 async function loadLiveLenders(req) {
   const force = req.query.refresh === '1' || req.query.force === '1'
@@ -818,6 +819,103 @@ router.post('/pdf', async (req, res) => {
   } catch (err) {
     console.error('[property-scenario] /pdf', err);
     return res.status(500).json({ ok: false, error: err.message || 'PDF generation failed' });
+  }
+});
+
+// ── Saved proforma runs (client name + resume-later + history) ────────────────
+
+/**
+ * GET /api/property-scenario/proformas
+ * List this user's saved proforma runs, most recently updated first.
+ * Returns a summary row (not the full inputs/result) — fetch by id for detail.
+ */
+router.get('/proformas', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "clientName", "createdAt", "updatedAt",
+              result->'strict'->'summary'->>'overall_status' AS overall_status,
+              (result->'strict'->'summary'->>'loan_requested')::numeric AS loan_requested
+         FROM property_scenario_proformas
+        WHERE "userId" = $1
+        ORDER BY "updatedAt" DESC
+        LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ ok: true, proformas: rows });
+  } catch (err) {
+    console.error('[property-scenario] proformas list', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to list saved proformas' });
+  }
+});
+
+/** GET /api/property-scenario/proformas/:id — full saved record (inputs + result) to resume. */
+router.get('/proformas/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "clientName", inputs, result, "createdAt", "updatedAt"
+         FROM property_scenario_proformas
+        WHERE id = $1 AND "userId" = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, proforma: rows[0] });
+  } catch (err) {
+    console.error('[property-scenario] proformas get', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to load saved proforma' });
+  }
+});
+
+/**
+ * POST /api/property-scenario/proformas
+ * Body: { id?, clientName, inputs, result? }
+ * Creates a new saved run, or updates one this user already owns when id is given.
+ * result is optional — lets a broker save a half-filled file before running it.
+ */
+router.post('/proformas', async (req, res) => {
+  try {
+    const { id, clientName, inputs, result } = req.body || {};
+    if (!inputs || typeof inputs !== 'object') {
+      return res.status(400).json({ ok: false, error: 'invalid_request', message: 'inputs is required' });
+    }
+    const name = String(clientName || '').trim();
+
+    if (id) {
+      const { rows } = await pool.query(
+        `UPDATE property_scenario_proformas
+            SET "clientName" = $1, inputs = $2, result = $3, "updatedAt" = NOW()
+          WHERE id = $4 AND "userId" = $5
+          RETURNING id, "clientName", "createdAt", "updatedAt"`,
+        [name, JSON.stringify(inputs), result ? JSON.stringify(result) : null, id, req.user.id]
+      );
+      if (!rows.length) return res.status(404).json({ ok: false, error: 'not_found' });
+      return res.json({ ok: true, proforma: rows[0] });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO property_scenario_proformas ("userId", "clientName", inputs, result)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, "clientName", "createdAt", "updatedAt"`,
+      [req.user.id, name, JSON.stringify(inputs), result ? JSON.stringify(result) : null]
+    );
+    res.json({ ok: true, proforma: rows[0] });
+  } catch (err) {
+    console.error('[property-scenario] proformas save', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to save proforma' });
+  }
+});
+
+/** DELETE /api/property-scenario/proformas/:id */
+router.delete('/proformas/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM property_scenario_proformas WHERE id = $1 AND "userId" = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[property-scenario] proformas delete', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to delete proforma' });
   }
 });
 

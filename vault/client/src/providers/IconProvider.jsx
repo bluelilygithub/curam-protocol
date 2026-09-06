@@ -14,6 +14,7 @@ const semanticMap = {
   x: { lucide: 'X' },
   mail: { lucide: 'Mail' },
   trash: { lucide: 'Trash2' },
+  save: { lucide: 'Save' },
   plus: { lucide: 'Plus' },
   edit: { lucide: 'Pencil' },
   x: { lucide: 'X' },

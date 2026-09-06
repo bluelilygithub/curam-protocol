@@ -83,7 +83,7 @@ const TABS = [
   { id: 'lenders', label: 'Lenders' },
   { id: 'calculators', label: 'Calculators' },
   { id: 'advice', label: 'Follow-ups' },
-  { id: 'broker', label: 'Broker Prep' },
+  { id: 'broker', label: 'Broker Prep', icon: 'clipboard-list' },
 ];
 
 const MODES = [
@@ -1801,6 +1801,15 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [showAdverse, setShowAdverse] = useState(false);
   const [proformaTab, setProformaTab] = useState('overview');
   const proformaResultRef       = useRef(null);
+  // Save / resume-later
+  const [clientName, setClientName] = useState(() => seeded?.client_name || '');
+  const [savedId, setSavedId]       = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [showSaved, setShowSaved]   = useState(false);
+  const [savedList, setSavedList]   = useState(null); // null = not yet loaded
+  const [savedListLoading, setSavedListLoading] = useState(false);
+  const [savedListError, setSavedListError]     = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId]   = useState(null);
 
   function buildInputPayload() {
     const liabilityRows = pLiabilities
@@ -1857,6 +1866,127 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       saveFileProfileFromPayload(p);
     }
   }, []);
+
+  /** Repopulate every field from a saved run's inputs — mirrors the initial useState mapping above. */
+  function applySavedInputs(inputs) {
+    if (!inputs) return;
+    setPPrice(inputs.property_value != null ? formatNumberForInput(inputs.property_value) : '');
+    setPDeposit(inputs.deposit_amount != null ? formatNumberForInput(inputs.deposit_amount) : '');
+    setPState(inputs.state || DEFAULT_STATE);
+    setPFhb(inputs.is_fhb === true ? 'yes' : inputs.is_fhb === false ? 'no' : '');
+    setPPpor(inputs.is_ppor === false ? 'investment' : 'ppor');
+    setPIncome(inputs.gross_annual_income != null ? formatNumberForInput(inputs.gross_annual_income) : '');
+    setPPartner(inputs.partner_gross_income ? formatNumberForInput(inputs.partner_gross_income) : '');
+    setPHousehold(inputs.household_type || 'single');
+    setPDependents(inputs.dependents != null && inputs.dependents !== '' ? String(inputs.dependents) : '');
+    setPEmployment(inputs.employment_type || 'payg_fulltime');
+    setPMonthsInRole(inputs.months_in_current_role != null ? String(inputs.months_in_current_role) : '');
+    setPHecs(inputs.has_hecs === true ? 'yes' : 'no');
+    setPNewBuild(inputs.is_new_build === true ? 'yes' : 'no');
+    setPDebts(inputs.monthly_debt_repayments ? formatNumberForInput(inputs.monthly_debt_repayments) : '');
+    setPExpenses(inputs.monthly_expenses ? formatNumberForInput(inputs.monthly_expenses) : '');
+    setPCardLimits(inputs.credit_card_limits_total ? formatNumberForInput(inputs.credit_card_limits_total) : '');
+    setPLiabilities(Array.isArray(inputs.liabilities) && inputs.liabilities.length
+      ? inputs.liabilities.map((row) => ({
+        type: row.type || 'other',
+        label: row.label || '',
+        monthly: formatNumberForInput(row.monthly_repayment ?? row.monthlyRepayment ?? '') || '',
+      }))
+      : []);
+    setPOvertime(inputs.overtime_bonus_annual ? formatNumberForInput(inputs.overtime_bonus_annual) : '');
+    setPOvertimeRegularity(inputs.overtime_bonus_regularity || 'irregular');
+    setPAddbacks(inputs.self_employed_addbacks_annual ? formatNumberForInput(inputs.self_employed_addbacks_annual) : '');
+    setPSeYear1(inputs.self_employed_year1_income != null ? formatNumberForInput(inputs.self_employed_year1_income) : '');
+    setPSeYear2(inputs.self_employed_year2_income != null ? formatNumberForInput(inputs.self_employed_year2_income) : '');
+    setPSeTrending(inputs.self_employed_income_method === 'weighted');
+    setPAdverseCredit(inputs.has_adverse_credit === true ? 'yes' : 'no');
+    setPAdverseSeverity(inputs.adverse_credit_severity || 'default');
+    setPGenuineHeldMonths(inputs.genuine_savings_held_months != null ? String(inputs.genuine_savings_held_months) : '');
+    setPDepositGift(inputs.deposit_gift_amount ? formatNumberForInput(inputs.deposit_gift_amount) : '');
+    setPTerm(inputs.loan_term_years ? String(inputs.loan_term_years) : '30');
+    setPRateType(inputs.rate_type === 'fixed' ? 'fixed' : 'variable');
+    setPRate(inputs.target_rate_pct != null
+      ? formatNumberForInput(inputs.target_rate_pct, { allowDecimals: true })
+      : getInitialMarketRateInput(inputs.rate_type === 'fixed' ? 'fixed' : 'variable'));
+    setPAge(inputs.applicant_age ? String(inputs.applicant_age) : '');
+    setPPropTypeClass(inputs.property_type_class || 'house_town');
+    setPRentalIncome(inputs.gross_rental_income ? formatNumberForInput(inputs.gross_rental_income) : '');
+  }
+
+  async function loadPreviousRuns() {
+    setSavedListLoading(true);
+    setSavedListError(null);
+    try {
+      const res = await api.get('/api/property-scenario/proformas');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to load saved runs');
+      setSavedList(data.proformas || []);
+    } catch (err) {
+      setSavedListError(err.message || 'Failed to load saved runs');
+    } finally {
+      setSavedListLoading(false);
+    }
+  }
+
+  function toggleSavedPanel() {
+    const next = !showSaved;
+    setShowSaved(next);
+    if (next && savedList === null) loadPreviousRuns();
+  }
+
+  async function loadSavedRun(id) {
+    setSavedListError(null);
+    try {
+      const res = await api.get(`/api/property-scenario/proformas/${id}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to load saved run');
+      applySavedInputs(data.proforma.inputs);
+      setClientName(data.proforma.clientName || '');
+      setSavedId(data.proforma.id);
+      setProforma(data.proforma.result || null);
+      setProformaTab('overview');
+      setShowSaved(false);
+      addToast(`Loaded ${data.proforma.clientName || 'saved run'}`, 'success');
+    } catch (err) {
+      setSavedListError(err.message || 'Failed to load saved run');
+    }
+  }
+
+  async function deleteSavedRun(id, e) {
+    e.stopPropagation();
+    try {
+      const res = await api.delete(`/api/property-scenario/proformas/${id}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Delete failed');
+      setSavedList((prev) => (prev || []).filter((p) => p.id !== id));
+      if (savedId === id) setSavedId(null);
+      setConfirmDeleteId(null);
+      addToast('Saved run deleted', 'success');
+    } catch (err) {
+      addToast(err.message || 'Delete failed', 'error');
+    }
+  }
+
+  async function saveCurrentProforma() {
+    setSaving(true);
+    try {
+      const res = await api.post('/api/property-scenario/proformas', {
+        id: savedId || undefined,
+        clientName: clientName.trim(),
+        inputs: buildInputPayload(),
+        result: proforma || null,
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Save failed');
+      setSavedId(data.proforma.id);
+      setSavedList(null); // force refresh next time the panel opens
+      addToast(savedId ? 'Proforma updated' : 'Proforma saved — resume it anytime from Previous runs', 'success');
+    } catch (err) {
+      addToast(err.message || 'Save failed', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function runProforma() {
     const price = parseFormattedNumber(pPrice);
@@ -1937,6 +2067,106 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
 
   return (
     <div className="space-y-5">
+      {/* Client name + save + previous runs */}
+      <div className="rounded-xl border p-3 sm:p-4 flex flex-wrap items-end gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <label className="block space-y-1 flex-1 min-w-[200px]">
+          <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Client name<FieldTip text="Label this file so you can find and resume it under Previous runs." /></span>
+          <input
+            type="text"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            placeholder="e.g. J & M Chen"
+            style={FIELD}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={saveCurrentProforma}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+          style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+        >
+          {getIcon('save', { size: 14 })}
+          {saving ? 'Saving…' : savedId ? 'Update saved run' : 'Save to resume later'}
+        </button>
+        <button
+          type="button"
+          onClick={toggleSavedPanel}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+          style={{ background: showSaved ? 'var(--color-primary)' : 'var(--color-bg)', color: showSaved ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
+        >
+          {getIcon('history', { size: 14 })}
+          Previous runs
+        </button>
+      </div>
+
+      {showSaved && (
+        <div className="rounded-xl border p-3 sm:p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          {savedListLoading && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+          {savedListError && <p className="text-xs" style={{ color: '#ef4444' }}>{savedListError}</p>}
+          {!savedListLoading && Array.isArray(savedList) && savedList.length === 0 && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No saved runs yet — use "Save to resume later" above.</p>
+          )}
+          {!savedListLoading && Array.isArray(savedList) && savedList.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => loadSavedRun(p.id)}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-left transition-opacity duration-200 hover:opacity-70"
+              style={{ background: 'var(--color-bg)', border: p.id === savedId ? '1px solid var(--color-primary)' : '1px solid transparent' }}
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                  {p.clientName || 'Untitled'}
+                </span>
+                <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+                  Updated {new Date(p.updatedAt).toLocaleDateString('en-AU')}
+                  {p.overall_status ? ` · ${p.overall_status}` : ''}
+                  {p.loan_requested ? ` · $${Number(p.loan_requested).toLocaleString('en-AU')}` : ''}
+                </span>
+              </span>
+              {confirmDeleteId === p.id ? (
+                <span className="shrink-0 flex items-center gap-2 text-xs">
+                  <span style={{ color: 'var(--color-muted)' }}>Delete?</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => deleteSavedRun(p.id, e)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') deleteSavedRun(p.id, e); }}
+                    className="font-medium transition-opacity duration-200 hover:opacity-70"
+                    style={{ color: '#ef4444' }}
+                  >
+                    Yes
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setConfirmDeleteId(null); } }}
+                    className="font-medium transition-opacity duration-200 hover:opacity-70"
+                    style={{ color: 'var(--color-text)' }}
+                  >
+                    No
+                  </span>
+                </span>
+              ) : (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(p.id); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setConfirmDeleteId(p.id); } }}
+                  className="shrink-0 p-1.5 rounded-lg transition-opacity duration-200 hover:opacity-70"
+                  style={{ color: '#ef4444' }}
+                  aria-label="Delete saved run"
+                >
+                  {getIcon('trash', { size: 14 })}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-xl border p-4 sm:p-5 space-y-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
         <div>
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Qualification proforma — the broker-realistic file review</p>
@@ -2250,7 +2480,10 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
         <div ref={proformaResultRef} className="space-y-5">
           {/* Proforma section tabs */}
           <div className="flex gap-1 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
-            {[{ id: 'overview', label: 'Overview' }, { id: 'broker', label: 'Broker Prep' }].map((t) => (
+            {[
+              { id: 'overview', label: 'Overview' },
+              { id: 'broker', label: 'Broker Prep · 65-item checklist', icon: 'clipboard-list' },
+            ].map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -2259,8 +2492,12 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                 style={{
                   background: proformaTab === t.id ? 'var(--color-primary)' : 'transparent',
                   color: proformaTab === t.id ? '#fff' : 'var(--color-muted)',
+                  border: t.id === 'broker' && proformaTab !== t.id ? '1px solid var(--color-primary)' : 'none',
                 }}
               >
+                {t.icon && (
+                  <span className="inline-flex align-middle mr-1.5">{getIcon(t.icon, { size: 13 })}</span>
+                )}
                 {t.label}
               </button>
             ))}
@@ -2947,6 +3184,7 @@ function coerceAnswer(raw, type) {
 }
 
 function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUpAnswers, onFollowUpAnswer }) {
+  const getIcon = useIcon();
   const calc = demo?.calculation;
   const charts = demo?.charts;
 
@@ -3007,6 +3245,9 @@ function ResultsView({ demo, tab, setTab, loading, error, scenarioType, followUp
                 color: tab === t.id ? '#fff' : 'var(--color-muted)',
               }}
             >
+              {t.icon && (
+                <span className="inline-flex align-middle mr-1.5">{getIcon(t.icon, { size: 13 })}</span>
+              )}
               {t.label}
             </button>
           ))}

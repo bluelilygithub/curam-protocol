@@ -705,11 +705,12 @@ export function FollowUpPanel({ advice, calcResult, scenarioType, answers = {}, 
         scenarioType,
         history: turns,
       });
-      if (res.ok && res.answer) {
-        onAnswer?.(question, res.answer);
-        setTurns((prev) => [...prev, { question: question.trim(), answer: res.answer }]);
+      const data = await res.json();
+      if (data.ok && data.answer) {
+        onAnswer?.(question, data.answer);
+        setTurns((prev) => [...prev, { question: question.trim(), answer: data.answer }]);
       } else {
-        setError(res.message || 'Could not get an answer — try again.');
+        setError(data.message || 'Could not get an answer — try again.');
       }
     } catch (err) {
       setError(err.message || 'Request failed.');
@@ -873,10 +874,11 @@ export function WhatIfPanel({ scenario }) {
         scenario,
         question: text.trim(),
       });
-      if (res.ok) {
-        setResult(res);
+      const data = await res.json();
+      if (data.ok) {
+        setResult(data);
       } else {
-        setError(res.message || 'Could not run that what-if — try rephrasing.');
+        setError(data.message || 'Could not run that what-if — try rephrasing.');
       }
     } catch (err) {
       setError(err.message || 'Request failed.');

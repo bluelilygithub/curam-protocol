@@ -72,6 +72,10 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `POST` | `/calculators/*` | Standalone repayment / extra-repayments / offset / borrowing-power |
 | `POST` | `/calculators/buyer-qualify` | Lite buyer qualification (serviceability, LVR, DTI, genuine savings, FHBG) |
 | `POST` | `/calculators/qualification-proforma` | Full proforma: strict + levers + `leversDelta` + `bankPanel` (capacity + CDR) + supplement |
+| `GET` | `/proformas` | List this user's saved proforma runs (summary rows), most recently updated first |
+| `GET` | `/proformas/:id` | Full saved record (inputs + result) to resume |
+| `POST` | `/proformas` | `{ id?, clientName, inputs, result? }` — create, or update when `id` is this user's own row |
+| `DELETE` | `/proformas/:id` | Delete a saved run |
 
 ---
 
@@ -89,6 +93,8 @@ Primary homepage path for “will a bank look at this file?”. Builds on the sa
 | **Supplement** | `proformaSupplement.js` | Rate stress, product-fit guidance, income stress caveats, post-settlement cashflow |
 
 **Per-bank capacity:** `estimateBankCapacity()` reuses surplus → max-loan maths with each bank’s curated knobs (`overtimeCrediting` → shade %, `rentalShadingPct`, `hemStance`). Assessment rate is `max(targetRate + 3.0, bank.assessmentFloorRate)` — each bank carries its own floor (8.50% for most; 8.65% Macquarie, 8.55% BOQ). The floor only binds when the product rate is low enough that adding 3% does not reach it. Always labelled indicative — not a quote or approval.
+
+**Save / resume:** Client name field + Save/Update button on the proforma form, backed by `property_scenario_proformas` (userId-scoped). **Previous runs** panel lists saved rows (client name, status, loan amount, updated date), click to reload every field plus the last computed result, inline Yes/No delete per row.
 
 **Journey:** Buy / lite qualify / refinance can **Continue to qualification proforma** with prefilled fields. Completing the **proforma** (or lite check) writes a shared browser **file profile** (`vault:propertyScenario:fileProfile`) that pre-fills related fields on every other agent (buy, sell, refinance, calculators, NLP state/PPOR, lite qualify). Homepage cards are grouped: Check my file · Plan a transaction · Quick tools.
 

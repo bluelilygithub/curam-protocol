@@ -18,6 +18,11 @@ export default function ProcessingModal({ open, title, message }) {
   const heading = title !== undefined ? title : (storeMessage || 'Working…');
   const body = message !== undefined ? message : (storeDetail ?? 'This can take a few moments.');
   const hasSteps = Array.isArray(steps) && steps.length > 0;
+  const doneCount = hasSteps ? steps.filter((s) => s.status === 'done').length : 0;
+  // Active step counts as half-progress so the bar still moves while it's running,
+  // not just when a step flips to done.
+  const activeBonus = hasSteps && steps.some((s) => s.status === 'active') ? 0.5 : 0;
+  const progressPct = hasSteps ? Math.min(100, Math.round(((doneCount + activeBonus) / steps.length) * 100)) : 0;
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -63,6 +68,22 @@ export default function ProcessingModal({ open, title, message }) {
               {body && <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{body}</div>}
             </div>
           </div>
+
+          {hasSteps && (
+            <div
+              className="h-1.5 rounded-full overflow-hidden"
+              style={{ background: 'var(--color-border)' }}
+              role="progressbar"
+              aria-valuenow={progressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-200"
+                style={{ width: `${progressPct}%`, background: 'var(--color-primary)' }}
+              />
+            </div>
+          )}
 
           {hasSteps && (
             <div

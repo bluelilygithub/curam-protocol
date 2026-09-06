@@ -1569,6 +1569,24 @@ async function initSchema() {
       ON product_scout_runs ("userId", "createdAt" DESC)
   `);
 
+  // Saved qualification proforma runs — client name + inputs so a broker can
+  // pause a file review and resume it later, and browse/delete past runs.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS property_scenario_proformas (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "clientName" TEXT NOT NULL DEFAULT '',
+      inputs       JSONB NOT NULL,
+      result       JSONB,
+      "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_property_scenario_proformas_user_time
+      ON property_scenario_proformas ("userId", "updatedAt" DESC)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS seo_projects (
       id              SERIAL PRIMARY KEY,
