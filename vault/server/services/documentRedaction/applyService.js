@@ -26,6 +26,7 @@ const { findOccurrences, parseDocxBuffer } = require('./docxParse');
 const { entityKeyFor } = require('./mergeCandidates');
 const { resolveDocumentRedactionModels } = require('../documentRedactionModelResolver');
 const { generateSyntheticReplacements } = require('./syntheticReplacements');
+const { lookupSynthetic, rememberSynthetic } = require('./entityDictionary');
 const { applyReplacementsToDocx } = require('./applyDocx');
 const { exportSanitizedPdf } = require('./pdfExport');
 const { decisionSummary } = require('./reviewService');
@@ -128,6 +129,9 @@ function collectReplacementOps(approved, entityMapEntries, ir) {
  * @param {{ consumer: string, requirement: string }} [opts.target]
  * @param {string} [opts.strategyOverride]
  * @param {boolean} [opts.skipLlm] — skip local-model synthetics (heuristics / non-LLM strategies)
+ * @param {boolean} [opts.reuseAcrossJobs] — opt-in: reuse this user's prior synthetic values
+ *   for the same real value + category from other jobs (entityDictionary.js), and remember
+ *   this job's new ones for future jobs. Off by default.
  * @param {{ cancelled?: boolean }} [opts.cancelState]
  */
 async function applyRedactions(jobId, userId, opts = {}) {
@@ -214,13 +218,17 @@ async function applyRedactions(jobId, userId, opts = {}) {
   const priorMap = applyPass === 'frontier' ? loadEntityMap(jobId) : null;
   const priorByKey = new Map((priorMap?.entries || []).map((e) => [e.entityKey, e]));
 
+  const reuseAcrossJobs = opts.reuseAcrossJobs === true || opts.reuseAcrossJobs === 'true' || opts.reuseAcrossJobs === 1;
+
   const entities = gate.approved.map((c) => {
     const realValue = c.entityText || c.surfaceForms?.[0] || '';
     const entityKey = c.entityKey || entityKeyFor(realValue, c.categoryLabel);
     const prior = priorByKey.get(entityKey);
-    // Prefer user edits; then prior map synthetic; then suggested
+    const dictionaryHit = reuseAcrossJobs ? lookupSynthetic(userId, realValue, c.categoryLabel) : null;
+    // Prefer user edits; then prior map synthetic (same job); then cross-job dictionary; then suggested
     const seed = c.userReplacement
       || prior?.syntheticValue
+      || dictionaryHit
       || c.suggestedReplacement
       || '';
     return {
@@ -228,7 +236,10 @@ async function applyRedactions(jobId, userId, opts = {}) {
       realValue,
       categoryLabel: c.categoryLabel,
       seedReplacement: seed,
-      userLocked: Boolean(c.userReplacement) || c.decision === 'edited' || Boolean(prior?.syntheticValue && applyPass === 'frontier' && c.suggestedReplacement === prior.syntheticValue),
+      userLocked: Boolean(c.userReplacement)
+        || c.decision === 'edited'
+        || Boolean(prior?.syntheticValue && applyPass === 'frontier' && c.suggestedReplacement === prior.syntheticValue)
+        || Boolean(dictionaryHit),
     };
   });
 
@@ -254,6 +265,13 @@ async function applyRedactions(jobId, userId, opts = {}) {
   throwIfCancelled();
 
   const newEntries = buildEntityMapEntries(gate.approved, syn.map, applyPass);
+
+  if (reuseAcrossJobs) {
+    for (const e of newEntries) {
+      rememberSynthetic(userId, e.realValue, e.categoryLabel, e.syntheticValue);
+    }
+  }
+
   let entityMapEntries;
   if (applyPass === 'frontier') {
     entityMapEntries = mergeEntityMapEntries(priorMap?.entries || [], newEntries);

@@ -104,6 +104,9 @@ async function proposeRedactionCandidates({
       brief: briefText,
       modelId: resolved.local.modelId,
       jobId: job.id,
+      onProgress: (chunkIndex, totalChunks) => {
+        saveJob({ ...job, llmProgress: { stage: 'propose', chunkIndex, totalChunks, updatedAt: new Date().toISOString() } });
+      },
     });
     llmRaw = llmMeta.candidates || [];
   }
@@ -131,6 +134,7 @@ async function proposeRedactionCandidates({
   job = saveJob({
     ...job,
     status: 'proposing_complete',
+    llmProgress: null,
     candidateCount: merged.length,
     sources: {
       deterministic: patternRaw.length,

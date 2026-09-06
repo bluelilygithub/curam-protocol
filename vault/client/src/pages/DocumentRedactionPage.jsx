@@ -96,6 +96,8 @@ export default function DocumentRedactionPage() {
   const [filterSource, setFilterSource] = useState('');
   const [filterDecision, setFilterDecision] = useState('');
   const [minScore, setMinScore] = useState(0);
+  const [bulkPattern, setBulkPattern] = useState('');
+  const [bulkIsRegex, setBulkIsRegex] = useState(false);
 
   const [editingId, setEditingId] = useState(null);
   const [editReplacement, setEditReplacement] = useState('');
@@ -111,6 +113,7 @@ export default function DocumentRedactionPage() {
   const [frontierAnalysis, setFrontierAnalysis] = useState(null);
   const [frontierInstructions, setFrontierInstructions] = useState('');
   const [applyModal, setApplyModal] = useState(null); // { applyPass }
+  const [reuseAcrossJobs, setReuseAcrossJobs] = useState(false);
   const [applyStyleId, setApplyStyleId] = useState('Blackout');
   const [applyUseModel, setApplyUseModel] = useState(false);
   const [stylePreview, setStylePreview] = useState(null);
@@ -352,6 +355,26 @@ export default function DocumentRedactionPage() {
     setSummary(data.summary || decisionSummaryLocal(data.candidates || []));
   }
 
+  async function bulkDecide(decision) {
+    if (!job || !bulkPattern.trim()) return;
+    setError('');
+    const res = await api.post(`/api/document-redaction/jobs/${job.id}/candidates/bulk-decision`, {
+      pattern: bulkPattern.trim(),
+      isRegex: bulkIsRegex,
+      categoryLabel: filterCategory || undefined,
+      decision,
+      scope: 'pending',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error || 'Bulk decision failed');
+      return;
+    }
+    setCandidates(data.candidates || []);
+    setSummary(data.summary || decisionSummaryLocal(data.candidates || []));
+    setBulkPattern('');
+  }
+
   function startEdit(c) {
     setEditingId(c.id);
     setEditReplacement(c.userReplacement || c.suggestedReplacement || '');
@@ -425,6 +448,7 @@ export default function DocumentRedactionPage() {
   async function requestMore() {
     if (!job) return;
     setError('');
+    let pollTimer = null;
     try {
       await runWithStepLog(
         processing,
@@ -436,6 +460,20 @@ export default function DocumentRedactionPage() {
           'Merging new suggestions',
         ],
         async () => {
+          // Real chunk progress: poll the job while the (blocking) resuggest call is in flight.
+          pollTimer = setInterval(async () => {
+            try {
+              const pollRes = await api.get(`/api/document-redaction/jobs/${job.id}`);
+              const pollData = await pollRes.json().catch(() => ({}));
+              const p = pollData?.job?.llmProgress;
+              if (p?.totalChunks) {
+                processing.updateProcessingDetail(
+                  `Processing document excerpt ${p.chunkIndex}/${p.totalChunks}…`,
+                );
+              }
+            } catch { /* polling is best-effort */ }
+          }, 1500);
+
           const res = await api.post(`/api/document-redaction/jobs/${job.id}/resuggest`, {});
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || 'Resuggest failed');
@@ -447,6 +485,8 @@ export default function DocumentRedactionPage() {
       );
     } catch (err) {
       setError(err.message || 'Resuggest failed');
+    } finally {
+      if (pollTimer) clearInterval(pollTimer);
     }
   }
 
@@ -553,6 +593,7 @@ export default function DocumentRedactionPage() {
             styleId: style.id,
             styleLabel: style.label,
             skipLlm,
+            reuseAcrossJobs,
           }, { signal: controller.signal });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -1380,6 +1421,40 @@ export default function DocumentRedactionPage() {
                   />
                 </label>
               </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span style={{ color: 'var(--color-muted)' }}>Bulk decide pending matching</span>
+                <input
+                  type="text"
+                  value={bulkPattern}
+                  onChange={(e) => setBulkPattern(e.target.value)}
+                  placeholder={bulkIsRegex ? 'regex, e.g. @acme\\.com$' : 'text match, e.g. @acme.com'}
+                  className="px-2 py-1 rounded-lg border outline-none flex-1 min-w-[160px]"
+                  style={FIELD}
+                />
+                <label className="flex items-center gap-1" style={{ color: 'var(--color-muted)' }}>
+                  <input type="checkbox" checked={bulkIsRegex} onChange={(e) => setBulkIsRegex(e.target.checked)} />
+                  Regex
+                </label>
+                <button
+                  type="button"
+                  onClick={() => bulkDecide('approved')}
+                  disabled={!bulkPattern.trim()}
+                  className="underline transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                >
+                  Approve matches
+                </button>
+                <button
+                  type="button"
+                  onClick={() => bulkDecide('rejected')}
+                  disabled={!bulkPattern.trim()}
+                  className="underline transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                >
+                  Reject matches
+                </button>
+                {filterCategory && (
+                  <span style={{ color: 'var(--color-muted)' }}>(limited to category: {filterCategory})</span>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto divide-y" style={{ borderColor: 'var(--color-border)' }}>
@@ -1519,6 +1594,20 @@ export default function DocumentRedactionPage() {
                 </span>
               </label>
             )}
+
+            <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={reuseAcrossJobs}
+                onChange={(e) => setReuseAcrossJobs(e.target.checked)}
+              />
+              <span>
+                Reuse this account's synthetic values across jobs — same real entity gets the same
+                synthetic value in other document-redaction jobs too (e.g. repeated docs for the
+                same client), instead of a fresh fake each time.
+              </span>
+            </label>
 
             <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
               <div className="flex items-center justify-between gap-2">

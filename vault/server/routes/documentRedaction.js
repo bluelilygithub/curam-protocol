@@ -16,6 +16,7 @@ const {
 } = require('../services/documentRedaction/jobStore');
 const {
   patchCandidate,
+  bulkDecideByPattern,
   addUserCandidate,
   requestMoreSuggestions,
   decisionSummary,
@@ -68,6 +69,7 @@ function publicJobView(job) {
     localModelId: job.localModelId,
     sources: job.sources,
     documentStats: job.documentStats,
+    llmProgress: job.llmProgress || null,
   };
 }
 
@@ -192,6 +194,19 @@ router.patch('/jobs/:id/candidates/:candidateId', (req, res) => {
   }
 });
 
+/**
+ * POST /api/document-redaction/jobs/:id/candidates/bulk-decision
+ * Body: { pattern?, isRegex?, categoryLabel?, decision: 'approved'|'rejected', scope?: 'pending'|'all' }
+ */
+router.post('/jobs/:id/candidates/bulk-decision', (req, res) => {
+  try {
+    const result = bulkDecideByPattern(req.params.id, req.user.id, req.body || {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 /** POST /api/document-redaction/jobs/:id/candidates — user-added from preview selection */
 router.post('/jobs/:id/candidates', (req, res) => {
   try {
@@ -221,7 +236,9 @@ router.post('/jobs/:id/resuggest', async (req, res) => {
 /**
  * POST /api/document-redaction/jobs/:id/apply
  * Body: { confirmApply: true, applyPass?, pendingScoreThreshold?, acceptTrackedChanges?,
- *         target?: { consumer, requirement }, strategyOverride?, skipLlm? }
+ *         target?: { consumer, requirement }, strategyOverride?, skipLlm?,
+ *         reuseAcrossJobs? — opt-in: reuse this user's prior synthetic values for the
+ *         same real value + category across jobs (server/services/documentRedaction/entityDictionary.js) }
  * `target` is the chain-ready apply input. Human UI maps style dropdown → target.
  */
 router.post('/jobs/:id/apply', async (req, res) => {

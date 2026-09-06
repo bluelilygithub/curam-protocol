@@ -100,6 +100,81 @@ function patchCandidate(jobId, userId, candidateId, patch = {}) {
   return { candidate: next, summary, candidates };
 }
 
+/**
+ * Bulk-decide candidates matching a text pattern (substring or regex) and/or category.
+ * Never auto-applies — same decision store/gates as a single patch, just batched.
+ * @param {object} body { pattern, isRegex?, categoryLabel?, decision, scope? }
+ *   scope: 'pending' (default, only undecided) | 'all'
+ */
+function bulkDecideByPattern(jobId, userId, body = {}) {
+  requireJob(jobId, userId);
+  const decision = String(body.decision || '').trim();
+  if (!['approved', 'rejected'].includes(decision)) {
+    const err = new Error('decision must be approved|rejected');
+    err.status = 400;
+    throw err;
+  }
+
+  const pattern = String(body.pattern || '').trim();
+  const categoryLabel = body.categoryLabel ? normalizeCategoryLabel(body.categoryLabel) : null;
+  if (!pattern && !categoryLabel) {
+    const err = new Error('Provide a pattern and/or categoryLabel to match against');
+    err.status = 400;
+    throw err;
+  }
+
+  let matcher = () => true;
+  if (pattern) {
+    if (body.isRegex) {
+      let re;
+      try {
+        re = new RegExp(pattern, 'i');
+      } catch {
+        const err = new Error('Invalid regex pattern');
+        err.status = 400;
+        throw err;
+      }
+      matcher = (text) => re.test(text);
+    } else {
+      const needle = pattern.toLowerCase();
+      matcher = (text) => text.toLowerCase().includes(needle);
+    }
+  }
+
+  const scope = body.scope === 'all' ? 'all' : 'pending';
+  const candidates = loadCandidates(jobId);
+  const now = new Date().toISOString();
+  let matched = 0;
+
+  const next = candidates.map((c) => {
+    if (scope === 'pending' && c.decision && c.decision !== 'pending') return c;
+    if (categoryLabel && String(c.categoryLabel || '').toLowerCase() !== categoryLabel.toLowerCase()) return c;
+    const text = c.entityText || c.surfaceForms?.[0] || '';
+    if (!matcher(text)) return c;
+    matched += 1;
+    return {
+      ...c,
+      decision,
+      decisionAt: now,
+      decidedBy: 'user',
+      updatedAt: now,
+    };
+  });
+
+  saveCandidates(jobId, next);
+  const summary = decisionSummary(next);
+  saveJob({ ...loadJob(jobId, userId), status: 'hitl_candidates', decisionSummary: summary });
+  appendAudit(jobId, {
+    type: 'candidate_bulk_decision',
+    pattern,
+    isRegex: Boolean(body.isRegex),
+    categoryLabel,
+    decision,
+    matched,
+  });
+  return { candidates: next, summary, matched };
+}
+
 function addUserCandidate(jobId, userId, body = {}) {
   requireJob(jobId, userId);
   const ir = loadIr(jobId);
@@ -283,6 +358,11 @@ async function requestMoreSuggestions(jobId, userId, { extraBrief } = {}) {
     brief,
     modelId: resolved.local.modelId,
     jobId,
+    onProgress: (chunkIndex, totalChunks) => {
+      const current = loadJob(jobId, userId);
+      if (!current) return;
+      saveJob({ ...current, llmProgress: { stage: 'resuggest', chunkIndex, totalChunks, updatedAt: new Date().toISOString() } });
+    },
   });
 
   let fresh = (llmMeta.candidates || []).filter((c) => {
@@ -330,6 +410,7 @@ async function requestMoreSuggestions(jobId, userId, { extraBrief } = {}) {
     ...job,
     status: 'hitl_candidates',
     decisionSummary: summary,
+    llmProgress: null,
     lastResuggestAt: new Date().toISOString(),
     llm: {
       ...(job.llm || {}),
@@ -358,6 +439,7 @@ async function requestMoreSuggestions(jobId, userId, { extraBrief } = {}) {
 module.exports = {
   decisionSummary,
   patchCandidate,
+  bulkDecideByPattern,
   addUserCandidate,
   requestMoreSuggestions,
   buildFeedbackContext,

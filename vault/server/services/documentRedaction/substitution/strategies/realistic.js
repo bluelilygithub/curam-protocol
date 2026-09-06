@@ -8,6 +8,7 @@
 
 const { callModel } = require('../../../callModel');
 const { REQUIREMENTS } = require('../target');
+const { validateAndRepair } = require('../../validators');
 
 const id = 'realistic';
 const satisfies = [REQUIREMENTS.MUST_REMAIN_READABLE];
@@ -123,10 +124,24 @@ async function generate({ modelId, entities, skipLlm = false }) {
     map.set(e.entityKey, heuristicFallback(e.realValue, e.categoryLabel, e.seedReplacement));
   }
 
+  // Format-validate + repair (ABN checksum, email, AU phone shape) — never fabricate a
+  // value that fails a basic format check the brief's category implies.
+  const repairedKeys = [];
+  const byKey = new Map(list.map((e) => [e.entityKey, e]));
+  for (const [key, value] of map.entries()) {
+    const entity = byKey.get(key);
+    if (!entity) continue;
+    const { value: repaired, wasInvalid } = validateAndRepair(entity.categoryLabel, value, entity.realValue);
+    if (wasInvalid) {
+      map.set(key, repaired);
+      repairedKeys.push(key);
+    }
+  }
+
   return {
     map,
     errors,
-    meta: { strategyId: id, fabricatedValues: true },
+    meta: { strategyId: id, fabricatedValues: true, formatRepairedKeys: repairedKeys },
   };
 }
 

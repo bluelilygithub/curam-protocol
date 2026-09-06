@@ -97,8 +97,9 @@ function resolveLocations(ir, byId, item) {
  * @param {string} opts.brief
  * @param {string} opts.modelId — from local slot resolver
  * @param {string} opts.jobId
+ * @param {function} [opts.onProgress] — called (chunkIndex, totalChunks) after each chunk resolves
  */
-async function extractLlmCandidates({ ir, brief, modelId, jobId }) {
+async function extractLlmCandidates({ ir, brief, modelId, jobId, onProgress }) {
   if (!modelId) {
     const err = new Error('Local model id required for LLM candidate extraction');
     err.status = 400;
@@ -155,6 +156,12 @@ async function extractLlmCandidates({ ir, brief, modelId, jobId }) {
     } catch (err) {
       errors.push({ chunk: i + 1, message: err.message || String(err) });
       console.warn(`[document-redaction] LLM chunk ${i + 1} failed:`, err.message);
+    }
+
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress(i + 1, chunks.length);
+      } catch { /* progress reporting must never break extraction */ }
     }
   }
 
