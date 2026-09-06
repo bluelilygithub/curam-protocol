@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-polarity-check-broadened)
+
+### Translate — polarity/meaning-inversion check widened past its one example
+Confirmed on a real job (French): source "Our best campaign is budget-constrained and it hits hardest on weekends" (explains why weekend performance suffers) came back as "…et elle est la plus puissante le week-end" ("it is the strongest on weekends") — a full meaning inversion, not a grammar slip. Both readings are fluent French, so nothing *looked* wrong. The `polarityOrSentenceTypeIssues` review category existed and ran but its prompt only demonstrated one narrow case (a compliance-status flip); the reviewer model didn't generalize to "a weakness reframed as a strength." Broadened the review prompt and the translate-time hard rule in `translateLlmService.js` to describe the general pattern instead of the one example — negation drops/adds and weakness↔strength reframing, not just compliance wording.
+
 ## 2026-09-07 (translate-table-extraction-root-cause-note)
 
 ### Translate — docs: confirmed both recent bugs share one root cause

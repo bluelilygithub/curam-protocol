@@ -88,7 +88,7 @@ function mergeGlossaryTerms(...lists) {
 // content into the adjacent paragraph. Only mention it when it's actually relevant.
 const TRANSLATOR_HARD_RULES_BASE = `
 HARD RULES (non-negotiable):
-- Preserve polarity and relational wording. Do NOT flip "measured against / assessed against / mapped against / compliant with" into "not compliant" / "non-conforme" unless the source explicitly states non-compliance.
+- Preserve polarity and relational wording. Do NOT flip "measured against / assessed against / mapped against / compliant with" into "not compliant" / "non-conforme" unless the source explicitly states non-compliance. More generally: if the source frames something as a weakness, problem, or constraint (e.g. "X is budget-constrained and it hits hardest on Y"), the target must keep that same negative framing — never let an idiom render as its positive-sounding opposite ("X is strongest on Y") just because both readings are grammatically fluent.
 - Preserve identifiers exactly (e.g. Q-15, R3, R-01, P-16) — do not renumber or change letter prefixes.
 - Never insert commentary about the translation process into the output.
 - Apply the target language's decimal separator convention CONSISTENTLY to every number (e.g. French/Spanish/German use a comma: "4,5"; do not leave some numbers with a period "4.5" while others use a comma in the same document).
@@ -568,7 +568,10 @@ async function reviewTranslation({
 You will receive numbered SOURCE ⟶ TARGET pairs. Compare them line by line.
 Completeness (empty / identical-to-source / placeholder markers) is already checked deterministically —
 focus on subjective issues only. Still list any incomplete rows you notice under garbledOrIncompleteRows.
-Flag polarity flips (e.g. source "measured/assessed against" rendered as "not compliant" / "no conforme") under polarityOrSentenceTypeIssues.
+Flag polarity/meaning flips under polarityOrSentenceTypeIssues — this is not limited to the compliance-status example below, check EVERY pair for it:
+  - Compliance framing: source "measured/assessed against" rendered as "not compliant" / "no conforme".
+  - Negation dropped or added (source has "not"/"never"/"cannot" and target doesn't, or vice versa).
+  - A weakness/problem/limitation reframed as a strength (or vice versa) — e.g. source explains *why performance suffers* under a constraint ("it hits hardest on weekends" = the problem is worst then) rendered as if that constraint were an *advantage* ("it is strongest on weekends"). This kind of flip is easy to miss because both sentences are fluent and grammatically correct — the surface reads fine, only the meaning inverts. Re-read each pair asking "does the target claim the opposite outcome/valence from the source," not just "is the target grammatical."
 Flag identifier drift (Q-15 → P-16) under uncertainTerms or garbledOrIncompleteRows.
 Flag target-language process meta (e.g. "[texto no disponible para traducir]") under garbledOrIncompleteRows.
 
