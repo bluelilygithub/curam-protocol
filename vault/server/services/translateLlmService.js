@@ -16,6 +16,7 @@ const {
   enforceRedactionPassThrough,
   lockedDoNotTranslateTerms,
   findPlaceholder,
+  isTruncatedShort,
 } = require('./translateQaChecks');
 
 const LANG_NAMES = {
@@ -753,7 +754,7 @@ async function repairIncompletePairs({
 }) {
   const indexes = [];
   (pairs || []).forEach((p, i) => {
-    if (isIncompleteTarget(p?.target)) indexes.push(i);
+    if (isIncompleteTarget(p?.target) || isTruncatedShort(p?.source, p?.target)) indexes.push(i);
   });
   if (!indexes.length) {
     return { attempted: 0, llmRepaired: 0, googleRepaired: 0, stillFailing: 0 };
@@ -799,7 +800,8 @@ async function repairIncompletePairs({
             pair.source,
             applyGlossarySubstitutions(t, glossaryTerms)
           );
-          if (cleaned && !isIncompleteTarget(cleaned) && !findPlaceholder(cleaned)) {
+          if (cleaned && !isIncompleteTarget(cleaned) && !findPlaceholder(cleaned)
+            && !isTruncatedShort(pair.source, cleaned)) {
             pair.target = cleaned;
             llmRepaired += 1;
             continue;
@@ -837,7 +839,7 @@ async function repairIncompletePairs({
   const n = Math.max(1, Math.min(concurrency, indexes.length));
   await Promise.all(Array.from({ length: n }, () => worker()));
 
-  const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target)).length;
+  const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target) || isTruncatedShort(p.source, p.target)).length;
   return {
     attempted: indexes.length,
     llmRepaired,

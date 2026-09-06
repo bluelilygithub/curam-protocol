@@ -65,6 +65,19 @@ const PLACEHOLDER_SOFT_ABS = 2;
 /** Catastrophic — fail the job (e.g. flash model returned incomplete for most chunks). */
 const PLACEHOLDER_HARD_FAIL_RATIO = 0.25;
 const PLACEHOLDER_HARD_FAIL_ABS_RATIO = 0.25;
+/**
+ * A long source segment (e.g. a wide table row/block flattened into one paragraph by PDF
+ * extraction — see the multi-column limitation) can get a translation that stops partway
+ * through without tripping any other check: it's non-empty, not identical to source, and
+ * contains no placeholder text, so it reads as a plausible complete answer. Confirmed on a
+ * real job: a ~900-char financial table paragraph came back translated only as far as the
+ * header row — the rest of the table and an entire trailing paragraph were silently dropped,
+ * and the QA report showed 0 auto-flagged because none of the existing checks look at length.
+ * Below this ratio of source length, for a source long enough that noise doesn't explain it,
+ * flag it as truncated so it goes through the same repair pass as any other incomplete segment.
+ */
+const TRUNCATION_MIN_SOURCE_LEN = 200;
+const TRUNCATION_RATIO = 0.3;
 
 function normalizeForCompare(text) {
   return String(text || '')
@@ -350,7 +363,29 @@ function checkSegmentCompleteness(source, target, { skipIdentical = false } = {}
       reasons.push('identical_to_source');
     }
   }
+  const srcLen = String(source ?? '').trim().length;
+  const tgtLen = tgt.trim().length;
+  if (
+    tgtLen > 0
+    && srcLen >= TRUNCATION_MIN_SOURCE_LEN
+    && tgtLen < srcLen * TRUNCATION_RATIO
+    && !looksNonLinguistic(source)
+  ) {
+    reasons.push('truncated_short');
+  }
   return { ok: reasons.length === 0, reasons };
+}
+
+/** Standalone truncation check (see TRUNCATION_MIN_SOURCE_LEN/TRUNCATION_RATIO above) — used
+ * by the repair pass to catch a plausible-looking but incomplete target the same way the
+ * completeness check does, without needing the full reasons list. */
+function isTruncatedShort(source, target) {
+  const srcLen = String(source ?? '').trim().length;
+  const tgtLen = String(target ?? '').trim().length;
+  return tgtLen > 0
+    && srcLen >= TRUNCATION_MIN_SOURCE_LEN
+    && tgtLen < srcLen * TRUNCATION_RATIO
+    && !looksNonLinguistic(source);
 }
 
 /**
@@ -367,6 +402,7 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
   let identicalCount = 0;
   let placeholderCount = 0;
   let redactionMissingCount = 0;
+  let truncatedCount = 0;
 
   (pairs || []).forEach((pair, index) => {
     const source = pair?.source ?? '';
@@ -380,6 +416,7 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
     if (reasons.some((r) => r === 'identical_to_source')) identicalCount += 1;
     if (reasons.some((r) => r.startsWith('placeholder:'))) placeholderCount += 1;
     if (reasons.some((r) => r === 'redaction_token_missing')) redactionMissingCount += 1;
+    if (reasons.some((r) => r === 'truncated_short')) truncatedCount += 1;
 
     garbledOrIncompleteRows.push({
       index,
@@ -401,6 +438,7 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
       identicalCount,
       placeholderCount,
       redactionMissingCount,
+      truncatedCount,
       identicalRatio: total ? identicalCount / total : 0,
       placeholderRatio: total ? placeholderCount / total : 0,
       sameLangSkippedIdentical: Boolean(sameLang),
@@ -615,4 +653,5 @@ module.exports = {
   isMetaCommentaryInner,
   looksNonLinguistic,
   isCodeLikeArtifact,
+  isTruncatedShort,
 };

@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-mojibake-and-silent-truncation)
+
+### Translate — fixed te reo Māori mojibake and a QA report that missed a genuinely broken job
+Two real, confirmed defects on the same job (a te reo Māori translation whose QA report claimed 0 issues across every category while the actual PDF had macron characters rendering as garbage and an entire financial table silently dropped after the header row):
+
+1. **Mojibake:** `FONT_BY_LANG` (`TranslatePage.jsx`) had no entry for `mi` (or `pl`), so the client PDF fell back to react-pdf's built-in Helvetica — WinAnsi/Latin-1 only, no macrons (ā ē ī ō ū) and no Polish diacritics. Every macron vowel rendered as a missing-glyph substitution. Added `client/public/fonts/NotoSans-Regular.ttf` (Latin Extended-A/B) and routed `mi`/`pl` through it, same pattern as the existing CJK/Arabic entries.
+2. **Silent truncation, invisible to QA:** a ~900-char financial table (flattened into one paragraph by the known multi-column PDF extraction limitation) came back translated only as far as the header row. Non-empty, not identical to source, no placeholder text — every existing completeness check passed it clean because none of them looked at length. New check `isTruncatedShort()` in `translateQaChecks.js`: source ≥200 chars and target under 30% of that length now flags `truncated_short`, feeding the same repair pass (LLM retry → Google fallback) as an empty/placeholder segment, and the repair pass no longer accepts a retry that's still truncated.
+
 ## 2026-09-07 (translate-language-dropdown-restored)
 
 ### Translate — target language dropdown restored, Irish/Gaelic added

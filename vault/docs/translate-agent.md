@@ -39,6 +39,8 @@ LLM translate chunks ~20 paragraphs / ~8000 chars per call and runs **up to 8 ch
 | **Separate translated document** | Translation pages only |
 | **Bilingual pages** | Full original page, then full translation page (legacy) |
 
+**Fonts.** `@react-pdf/renderer`'s built-in Helvetica only covers WinAnsi/Latin-1 — no macrons, no Polish diacritics. `FONT_BY_LANG` in `TranslatePage.jsx` routes a target language through an embedded Noto font instead when Helvetica can't render it: `zh-CN`/`ja`/`ko` → Noto Sans SC/JP, `ar` → Noto Sans Arabic, and `mi` (macrons: ā ē ī ō ū) / `pl` (ą ę ł ń ś ź ż) → `NotoSans-Regular.ttf` (`client/public/fonts/`). Confirmed on a real te reo Māori job: with `mi` missing from that map, every macron vowel rendered as a missing-glyph substitution — mojibake across the whole translated PDF ("Tā Mahere" → "TM Mahere", etc.) — invisible in the QA report because the underlying text content was correct; only the rendered glyph was wrong. Adding a target language with non-Latin-1 characters needs an entry here, not just an entry in the `LANGUAGES` list.
+
 ---
 
 ## Supported uploads
@@ -91,6 +93,7 @@ Before any subjective LLM check, each target must be:
 - **(a)** non-empty  
 - **(b)** different from the source (after normalize), except non-linguistic cells / same-language jobs  
 - **(c)** free of placeholders such as `[Translation incomplete]`, `[unable to translate]`, `TBD`, `TODO`, etc.
+- **(d)** not **disproportionately shorter** than the source — `isTruncatedShort()`/`TRUNCATION_RATIO` in `translateQaChecks.js`: for a source ≥200 chars, a target under 30% of its length is flagged `truncated_short`. Confirmed on a real job: a ~900-char financial table (flattened into one paragraph by the multi-column PDF extraction limitation) came back translated only as far as the header row — non-empty, not identical to source, no placeholder text, so every prior check passed it as clean while most of the table and a trailing paragraph were silently dropped. This check also feeds the repair pass (`repairIncompletePairs` retries a truncated segment the same as an empty/placeholder one, and won't accept a retry that's still truncated).
 
 Hard-fail only when **>25%** of segments still have placeholders (mass failure). Moderate rates complete with a soft warning and Garbled rows listed. `[REDACTED]` must pass through unchanged (locked DNT + post-process) — this is about a source document that already contains literal `[REDACTED]` markers (e.g. a pre-redacted contract or FOI release) surviving translation intact; it's unrelated to the separate **document redaction agent** at `/document-redaction`. If a QA report flags a missing `[REDACTED]` token, it means the source had one that the translation dropped or paraphrased away. Deterministic checks also flag **bracketed process meta** in any language (e.g. `[texto no disponible para traducir]`), not only English `[Translation incomplete]`. Incomplete segments get a **repair pass** (LLM retry → optional Google fallback) before the gate.
 

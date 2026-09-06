@@ -29,11 +29,19 @@ const PROGRESS_STEP_LABELS = [
   'Generating PDF',
 ];
 
+// Helvetica (react-pdf's built-in default) only covers WinAnsi/Latin-1 — no macrons, no Polish
+// diacritics. Confirmed on a real te reo Māori job: every macron vowel (ā ē ī ō ū) rendered as
+// garbage (missing-glyph substitution), producing mojibake across the whole translated PDF
+// ("TM Mahere" instead of "Tā Mahere", etc.) — invisible in the QA report because the text
+// content itself was correct, only the rendered glyph was wrong. NotoSans-Regular covers Latin
+// Extended-A/B, so 'mi' and 'pl' (ą ę ł ń ś ź ż, also outside Latin-1) route through it too.
 const FONT_BY_LANG = {
   'zh-CN': '/fonts/NotoSansSC.ttf',
   'ja':    '/fonts/NotoSansJP.ttf',
   'ar':    '/fonts/NotoSansArabic.ttf',
   'ko':    '/fonts/NotoSansJP.ttf', // fallback
+  'mi':    '/fonts/NotoSans-Regular.ttf',
+  'pl':    '/fonts/NotoSans-Regular.ttf',
 };
 
 const ACCEPT_UPLOAD =
