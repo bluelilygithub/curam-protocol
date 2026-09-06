@@ -1819,13 +1819,23 @@ async function initSchema() {
   // ── Translate agent ───────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_glossaries (
-      id           SERIAL PRIMARY KEY,
-      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name         TEXT NOT NULL,
-      terms        JSONB NOT NULL DEFAULT '[]',
-      "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
-      "updatedAt"  TIMESTAMPTZ DEFAULT NOW()
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name             TEXT NOT NULL,
+      terms            JSONB NOT NULL DEFAULT '[]',
+      "targetLanguage" TEXT,
+      "isGlobal"       BOOLEAN NOT NULL DEFAULT FALSE,
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"      TIMESTAMPTZ DEFAULT NOW()
     )
+  `);
+  await pool.query(`ALTER TABLE translate_glossaries ADD COLUMN IF NOT EXISTS "targetLanguage" TEXT`);
+  await pool.query(`ALTER TABLE translate_glossaries ADD COLUMN IF NOT EXISTS "isGlobal" BOOLEAN NOT NULL DEFAULT FALSE`);
+  // One global (auto-learned) glossary per user per target language.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_glossaries_global_lang
+    ON translate_glossaries ("userId", "targetLanguage")
+    WHERE "isGlobal" = TRUE
   `);
 
   await pool.query(`

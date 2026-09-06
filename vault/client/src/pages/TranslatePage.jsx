@@ -120,11 +120,12 @@ function Input({ value, onChange, placeholder, type = 'text', ...rest }) {
   );
 }
 
-function Sel({ value, onChange, children }) {
+function Sel({ value, onChange, children, ...rest }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
       className="text-sm px-3 py-2 rounded-lg border w-full"
-      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+      {...rest}>
       {children}
     </select>
   );
@@ -173,7 +174,7 @@ function parseQa(job) {
   } catch { return null; }
 }
 
-function QaPanel({ qa, onClose }) {
+function QaPanel({ qa, onClose, job, onDownload, onDownloadNative }) {
   if (!qa) return null;
   const sections = [
     ['Uncertain terms', qa.uncertainTerms],
@@ -190,6 +191,22 @@ function QaPanel({ qa, onClose }) {
   return (
     <Modal title="Translation QA summary" onClose={onClose} wide>
       <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
+        {job?.status === 'done' && (
+          <div className="flex gap-2">
+            <button onClick={() => onDownload?.(job)}
+              className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              Download PDF
+            </button>
+            {job.hasNativeOutput && (
+              <button onClick={() => onDownloadNative?.(job)}
+                className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                Download {/\.xlsx?$/i.test(job.filename || '') ? 'Excel' : 'Word'}
+              </button>
+            )}
+          </div>
+        )}
         {qa.hardFail && (
           <p className="text-xs px-2 py-2 rounded border"
             style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
@@ -461,6 +478,8 @@ function TranslationsTab({ glossaries }) {
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
+  const [useGlobalGlossary, setUseGlobalGlossary] = useState(false);
+  const [globalGlossary, setGlobalGlossary] = useState(null); // { termCount } for the current targetLang, or null if none yet
   const [domain, setDomain] = useState('general');
   const [audience, setAudience] = useState('client');
   const [tone, setTone] = useState('natural');
@@ -497,6 +516,13 @@ function TranslationsTab({ glossaries }) {
   }, []);
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
+
+  // Look up whether a global (auto-learned) glossary already exists for the chosen target
+  // language — surfaced as an opt-in checkbox rather than forcing the manual glossary picker.
+  useEffect(() => {
+    if (!targetLang) { setGlobalGlossary(null); return; }
+    api.get(`/api/translate/glossaries/global/${targetLang}`).then(r => r.json()).then(setGlobalGlossary).catch(() => setGlobalGlossary(null));
+  }, [targetLang]);
 
   useEffect(() => {
     api.get('/api/translate/config').then(r => r.json()).then((d) => {
@@ -623,6 +649,7 @@ function TranslationsTab({ glossaries }) {
       fd.append('engine', engine);
       fd.append('pdfLayout', pdfLayout);
       if (glossaryId) fd.append('glossaryId', glossaryId);
+      if (!isBatch && useGlobalGlossary) fd.append('useGlobalGlossary', 'true');
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
       if (engine === 'llm' && translateModelOverride) fd.append('translateModelId', translateModelOverride);
@@ -922,16 +949,28 @@ function TranslationsTab({ glossaries }) {
                 </div>
                 <div className="flex-1 min-w-40">
                   <Field label="Saved glossary (optional)"
-                    hint={engine === 'llm'
-                      ? 'Merged with terms the model proposes from your answers.'
-                      : 'Applied as do-not-translate / substitutions for Google Translate.'}>
-                    <Sel value={glossaryId} onChange={setGlossaryId}>
+                    hint={useGlobalGlossary
+                      ? 'Disabled — using the global glossary for this language instead.'
+                      : engine === 'llm'
+                        ? 'Merged with terms the model proposes from your answers.'
+                        : 'Applied as do-not-translate / substitutions for Google Translate.'}>
+                    <Sel value={glossaryId} onChange={setGlossaryId} disabled={useGlobalGlossary}>
                       <option value="">None</option>
                       {glossaries.map(g => (
                         <option key={g.id} value={g.id}>{g.name} ({g.termCount} terms)</option>
                       ))}
                     </Sel>
                   </Field>
+                  <label className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--color-text)', opacity: extraLangs.length ? 0.5 : 1, cursor: extraLangs.length ? 'not-allowed' : 'pointer' }}>
+                    <input type="checkbox" checked={useGlobalGlossary} disabled={extraLangs.length > 0}
+                      onChange={(e) => setUseGlobalGlossary(e.target.checked)} />
+                    Use global glossary for {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
+                    {extraLangs.length
+                      ? ' (single-language jobs only)'
+                      : globalGlossary
+                        ? ` (${globalGlossary.termCount} terms learned so far)`
+                        : ' (none yet — this job will start building one)'}
+                  </label>
                 </div>
               </div>
 
@@ -1212,7 +1251,8 @@ function TranslationsTab({ glossaries }) {
       </div>
 
       {qaJob && (
-        <QaPanel qa={parseQa(qaJob)} onClose={() => setQaJob(null)} />
+        <QaPanel qa={parseQa(qaJob)} job={qaJob} onClose={() => setQaJob(null)}
+          onDownload={downloadJob} onDownloadNative={downloadNativeJob} />
       )}
     </div>
   );

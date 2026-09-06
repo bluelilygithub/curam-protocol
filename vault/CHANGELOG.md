@@ -4,6 +4,19 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-global-glossary)
+
+### Translate — global (auto-learned) glossary per language
+- One glossary per `(userId, targetLanguage)`, flagged `translate_glossaries."isGlobal"`. `GET /api/translate/glossaries/global/:lang` looks it up.
+- Single-language job intake: checkbox "Use global glossary for [lang]" — resolves/creates that language's glossary and uses it instead of a manually-picked one. Disabled during multi-language batch fan-out (no per-language glossary slot to write back into).
+- On job completion, that run's glossary terms merge back into the global glossary (`upsertGlobalGlossaryTerms`), keyed by source text — an existing entry always wins over a fresh proposal, so a locked term never flips back and forth across jobs.
+- Manual saved glossaries are unchanged — this is additive, not a replacement.
+
+### Translate — QA modal gets its own prominent download button
+- "Download PDF" (+ native Word/Excel when available) now shown at the top of the Translation QA summary modal, not just the jobs table row — QA output and the file it applies to are one action away from each other.
+
+---
+
 ## 2026-09-06 (finance-payg-withholding)
 
 ### Finance — Wages: separate PAYG Withholding Payable account

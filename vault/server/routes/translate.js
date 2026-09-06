@@ -234,6 +234,54 @@ router.delete('/glossaries/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Global glossary: one auto-learned glossary per (userId, targetLanguage). Looked up/created
+// when a job opts in with `useGlobalGlossary`, and topped up with newly proposed/locked terms
+// when that job finishes — see upsertGlobalGlossaryTerms below.
+router.get('/glossaries/global/:lang', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, terms, "targetLanguage", "createdAt", "updatedAt",
+              jsonb_array_length(terms) AS "termCount"
+       FROM translate_glossaries WHERE "userId"=$1 AND "targetLanguage"=$2 AND "isGlobal"=TRUE`,
+      [req.user.id, req.params.lang]
+    );
+    res.json(rows[0] || null);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+async function findOrCreateGlobalGlossary(userId, targetLanguage) {
+  const { rows } = await pool.query(
+    `SELECT * FROM translate_glossaries WHERE "userId"=$1 AND "targetLanguage"=$2 AND "isGlobal"=TRUE`,
+    [userId, targetLanguage]
+  );
+  if (rows[0]) return rows[0];
+  const inserted = await pool.query(
+    `INSERT INTO translate_glossaries ("userId", name, terms, "targetLanguage", "isGlobal")
+     VALUES ($1,$2,'[]',$3,TRUE) RETURNING *`,
+    [userId, `Global — ${targetLanguage}`, targetLanguage]
+  );
+  return inserted.rows[0];
+}
+
+// Merges newly-seen glossary terms into the global glossary for a language, keyed by source
+// text (case-insensitive). Existing entries win — a job's fresh proposal never overwrites a
+// term the user (or a prior job) already locked in.
+async function upsertGlobalGlossaryTerms(userId, targetLanguage, newTerms) {
+  if (!Array.isArray(newTerms) || !newTerms.length) return;
+  const glossary = await findOrCreateGlobalGlossary(userId, targetLanguage);
+  const existing = Array.isArray(glossary.terms) ? glossary.terms : [];
+  const bySource = new Map(existing.map((t) => [String(t.source || '').trim().toLowerCase(), t]));
+  for (const t of newTerms) {
+    const key = String(t?.source || '').trim().toLowerCase();
+    if (!key || bySource.has(key)) continue;
+    bySource.set(key, t);
+  }
+  await pool.query(
+    `UPDATE translate_glossaries SET terms=$1, "updatedAt"=NOW() WHERE id=$2`,
+    [JSON.stringify([...bySource.values()]), glossary.id]
+  );
+}
+
 // ── Translation memory ──────────────────────────────────────────────────────────
 router.get('/memory/stats', async (req, res) => {
   try {
@@ -380,8 +428,15 @@ router.post('/jobs', sourceUpload, async (req, res) => {
     }
   }
 
-  const { targetLanguage, glossaryId } = req.body;
+  const { targetLanguage } = req.body;
+  let { glossaryId } = req.body;
   if (!targetLanguage) return res.status(400).json({ error: 'targetLanguage required' });
+
+  const useGlobalGlossary = String(req.body.useGlobalGlossary || '') === 'true';
+  if (useGlobalGlossary && !glossaryId) {
+    const globalGlossary = await findOrCreateGlobalGlossary(req.user.id, targetLanguage);
+    glossaryId = globalGlossary.id;
+  }
 
   let intakeAnswers = {};
   try {
@@ -421,6 +476,7 @@ router.post('/jobs', sourceUpload, async (req, res) => {
   intakeAnswers.pdfLayout = pdfLayout;
   if (overrides.translateModelId) intakeAnswers.translateModelId = overrides.translateModelId;
   if (overrides.reviewModelId) intakeAnswers.reviewModelId = overrides.reviewModelId;
+  if (useGlobalGlossary) intakeAnswers.useGlobalGlossary = true;
 
   const { rows } = await pool.query(
     `INSERT INTO translate_jobs
@@ -1271,6 +1327,16 @@ async function processTranslateJob(
   }
 
   // ── 7c. Native (editable) output for .docx/.xlsx sources ────────────────────
+  // ── 7b. Learn back into the global glossary, if this job opted in ───────────
+  // Best-effort — a glossary write failure should never fail an otherwise-complete job.
+  if (engine === 'llm' && intakeAnswers?.useGlobalGlossary) {
+    try {
+      await upsertGlobalGlossaryTerms(userId, targetLanguage, glossaryTerms);
+    } catch (err) {
+      console.warn('[translate] global glossary learn-back failed:', err.message);
+    }
+  }
+
   // Best-effort, alongside the always-available PDF below — never blocks the job on failure.
   let nativeOutput = null;
   try {

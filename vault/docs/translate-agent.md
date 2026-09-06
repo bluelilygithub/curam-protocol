@@ -120,6 +120,8 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 
 Glossaries: CRUD under `/api/translate/glossaries`.
 
+**Global (auto-learned) glossary.** One glossary per `(userId, targetLanguage)`, flagged `"isGlobal"=TRUE` in `translate_glossaries`. `GET /api/translate/glossaries/global/:lang` looks it up (`null` if none yet). A single-language job (not the batch fan-out) can pass `useGlobalGlossary=true` instead of a `glossaryId` — the server resolves/creates that language's global glossary and uses it as the job's glossary. When the job finishes, `upsertGlobalGlossaryTerms` merges that run's `glossaryTerms` back into it, keyed by source text (case-insensitive); an existing entry always wins over a fresh proposal, so a term stays fixed once seen. Intake UI: a checkbox next to the manual glossary picker, disabled during multi-language fan-out (batch route has no per-language glossary slot to write back into).
+
 Translation memory: `GET /api/translate/memory/stats` (segment counts + reuse counts per language pair), `GET /api/translate/memory/export.tmx` (TMX 1.4 export, optional `?sourceLang=&targetLang=` filter).
 
 ---
