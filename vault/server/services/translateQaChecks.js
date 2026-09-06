@@ -186,8 +186,19 @@ function enforceRedactionPassThrough(source, target) {
   return tgt;
 }
 
-/** Locked glossary entries always injected — never translate these tokens. */
-function lockedDoNotTranslateTerms() {
+/**
+ * Locked glossary entry for a real redaction marker — only returned when `text` actually
+ * contains one. Confirmed on a real job: this used to be injected unconditionally into every
+ * job's glossary and system prompt, priming the model with "[REDACTED]" as the thing to fall
+ * back on for content it couldn't cleanly parse. On a document with zero legitimate redaction
+ * (a normal commercial proposal) that primed marker got used as a hallucinated placeholder for
+ * a garbled table-row paragraph — the model dumped that row's real content into the *previous*
+ * paragraph and rendered its own slot as literal "[REDACTED]", a structural corruption with
+ * nothing in the source to justify it. Only prime the model with this when it's actually needed.
+ */
+function lockedDoNotTranslateTerms(text) {
+  if (!REDACTION_TOKEN_RE.test(String(text || ''))) return [];
+  REDACTION_TOKEN_RE.lastIndex = 0; // reset — it's a global regex, reused by callers
   return [
     { source: '[REDACTED]', target: '', doNotTranslate: true, note: 'Locked redaction marker — copy exactly' },
   ];

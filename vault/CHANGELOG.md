@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-redaction-hallucination-fix)
+
+### Translate — fixed hallucinated [REDACTED] on documents with no redaction at all
+- Root cause of a real bug report (structural corruption in a client SEO proposal — zero legitimate redaction in the source): `lockedDoNotTranslateTerms()` and the `[REDACTED]` hard rule in `translateLlmService.js` were injected into **every** job's prompt unconditionally, regardless of whether the source contained the token. On a garbled table-row paragraph (multi-column table extraction limitation — see below), the model reached for that primed marker as a fallback, rendering its own slot as a hallucinated `[REDACTED]` and dumping the row's real content into the adjacent paragraph.
+- Fix: both now take the actual text being translated (`lockedDoNotTranslateTerms(text)`, `translatorHardRules(text)`) and only fire when that text contains a literal `[REDACTED]`/`[REDACTED:…]` token. Applied at all three injection sites — glossary prep, batch translate, single-paragraph retry.
+- Documented the same multi-column extraction limitation also hits an ordinary 3-column data table, not just sidebar/tab layouts — it's what garbled the paragraph in the first place.
+- The unrelated report findings (glossary terms rendered as unapproved synonyms/paraphrases, e.g. "high-intent buyers", "tyre kickers") are the documented drift limitation — `autoFixGlossaryDrift` only catches a literal untranslated leftover, not a paraphrase; add such terms to a saved or global glossary to lock the exact rendering from the first chunk.
+
 ## 2026-09-07 (translate-row-cleanup-glossary-default-on)
 
 ### Translate — cleaner job row, glossary learning now on by default

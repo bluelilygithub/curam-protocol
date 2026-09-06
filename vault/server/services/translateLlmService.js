@@ -79,16 +79,28 @@ function mergeGlossaryTerms(...lists) {
   return [...bySource.values()];
 }
 
-const TRANSLATOR_HARD_RULES = `
+// The [REDACTED] rule is appended only when the text actually being translated contains that
+// token (see translatorHardRules below). Confirmed on a real job: having it always present,
+// on every document regardless of content, primed the model to reach for "[REDACTED]" as a
+// fallback for a paragraph it couldn't cleanly parse (e.g. a garbled table row) — producing a
+// hallucinated redaction with nothing in the source to justify it, plus dumping that row's real
+// content into the adjacent paragraph. Only mention it when it's actually relevant.
+const TRANSLATOR_HARD_RULES_BASE = `
 HARD RULES (non-negotiable):
 - Preserve polarity and relational wording. Do NOT flip "measured against / assessed against / mapped against / compliant with" into "not compliant" / "non-conforme" unless the source explicitly states non-compliance.
 - Preserve identifiers exactly (e.g. Q-15, R3, R-01, P-16) — do not renumber or change letter prefixes.
-- Copy [REDACTED] (and [REDACTED:…]) EXACTLY — never translate, explain, expand, or replace with meta-text such as "[texto no disponible…]", "[unable to translate]", etc.
 - Never insert commentary about the translation process into the output.
 - Apply the target language's decimal separator convention CONSISTENTLY to every number (e.g. French/Spanish/German use a comma: "4,5"; do not leave some numbers with a period "4.5" while others use a comma in the same document).
 - Preserve grammatical mood exactly: an imperative/directive instruction in the source (e.g. "Proceed", "Submit", "Review") must stay imperative in the target, never softened into an infinitive or noun form that reads as a heading rather than an instruction.
 - Glossary and do-not-translate terms must be grammatically INFLECTED to fit the sentence around them (gender, number, and any required article) — never paste a locked term's dictionary form verbatim if that creates a disagreement or a redundant double-noun with a word already in the sentence. Adapt the term's form; keep its core wording and meaning fixed.
 `.trim();
+
+const REDACTION_HARD_RULE = '- Copy [REDACTED] (and [REDACTED:…]) EXACTLY — never translate, explain, expand, or replace with meta-text such as "[texto no disponible…]", "[unable to translate]", etc.';
+
+function translatorHardRules(text) {
+  if (!/\[REDACTED(?::[^\]]+)?\]/i.test(String(text || ''))) return TRANSLATOR_HARD_RULES_BASE;
+  return `${TRANSLATOR_HARD_RULES_BASE}\n${REDACTION_HARD_RULE}`;
+}
 
 function buildGlossaryBlock(terms) {
   if (!Array.isArray(terms) || !terms.length) return '(none)';
@@ -177,7 +189,7 @@ Rules:
     .filter((t) => t?.source && (t.doNotTranslate || t.target));
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
-    terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(), existingTerms || [], terms, lockedTerms),
+    terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(sourceSkim), existingTerms || [], terms, lockedTerms),
     uncertainTerms: Array.isArray(parsed.uncertainTerms) ? parsed.uncertainTerms : [],
     dialectalChoices: Array.isArray(parsed.dialectalChoices) ? parsed.dialectalChoices : [],
     guidance: parsed.guidance || '',
@@ -346,14 +358,15 @@ async function translateParagraphBatch({
     })];
   }
 
-  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(), glossaryTerms);
+  const batchText = paragraphs.join('\n');
+  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(batchText), glossaryTerms);
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
 
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
 Preserve sentence type (statement vs question), polarity (affirmative vs negative), and meaning.
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
-${TRANSLATOR_HARD_RULES}
+${translatorHardRules(batchText)}
 ${policy ? `\n${policy}\n` : ''}
 Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
 No markdown fences. No commentary.`;
@@ -477,12 +490,12 @@ async function translateOneParagraph({
   const system = `You are a professional document translator.
 Translate the paragraph into ${langName(targetLanguage)}.
 Preserve meaning, polarity, and sentence type. Obey the glossary.
-${TRANSLATOR_HARD_RULES}
+${translatorHardRules(paragraph)}
 ${policy ? `\n${policy}\n` : ''}
 Return ONLY valid JSON: { "translation": "..." }
 No markdown fences.`;
 
-  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(), glossaryTerms);
+  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(paragraph), glossaryTerms);
   const prompt = [
     `Source language: ${sourceLanguage || 'auto'}`,
     `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
