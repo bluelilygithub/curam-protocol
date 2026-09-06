@@ -4,6 +4,15 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-06 (finance-payg-withholding)
+
+### Finance — Wages: separate PAYG Withholding Payable account
+- New system liability account `2400` **PAYG Withholding Payable**, auto-created via `ensureAccounts()`.
+- Wage entry journal (`POST /api/finance/wages`) now credits withheld tax to `2400` instead of `2000` Accounts Payable — keeps employee PAYG liability out of trade creditors for accurate MYOB import (single-user file, no MYOB subscription needed; `GET /api/finance/export/myob` already emits the resulting journal lines against whichever account code they're posted to).
+- Existing wage journals already posted to `2000` are not retro-migrated.
+
+---
+
 ## 2026-09-04 (translate-engine-layout)
 
 ### Translate — LLM or Google + PDF layout choice

@@ -69,6 +69,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '2100', name: 'Credit Card',            type: 'liability' },
   { code: '2200', name: 'GST Collected',          type: 'liability' },
   { code: '2300', name: 'Super Payable',          type: 'liability' },
+  { code: '2400', name: 'PAYG Withholding Payable', type: 'liability' },
   { code: '3000', name: "Owner's Equity",         type: 'equity'    },
   { code: '4000', name: 'Income',                 type: 'income'    },
   { code: '4100', name: 'Interest Income',        type: 'income'    },
@@ -1549,19 +1550,19 @@ router.post('/wages', async (req, res) => {
     );
     const wage = rows[0];
 
-    // Journal: DR Wages (gross), DR Super Expense, CR Bank (net), CR AP (tax), CR Super Payable
+    // Journal: DR Wages (gross), DR Super Expense, CR Bank (net), CR PAYG Withholding Payable (tax), CR Super Payable
     await ensureAccounts(userId);
     const wagesId = await accountByCode(userId, '6000');
     const superExpId = await accountByCode(userId, '6100');
     const bankId  = await accountByCode(userId, '1000');
-    const apId    = await accountByCode(userId, '2000');
+    const paygId  = await accountByCode(userId, '2400');
     const superLiabId = await accountByCode(userId, '2300');
     if (wagesId && bankId) {
       const lines = [
         { accountId: wagesId, debit: grossAmt, credit: 0 },
         { accountId: bankId,  debit: 0,        credit: netAmt },
       ];
-      if (taxAmt > 0 && apId)        lines.push({ accountId: apId,        debit: 0, credit: taxAmt });
+      if (taxAmt > 0 && paygId)      lines.push({ accountId: paygId,      debit: 0, credit: taxAmt });
       if (superAmt > 0 && superExpId && superLiabId) {
         lines.push({ accountId: superExpId,  debit: superAmt, credit: 0 });
         lines.push({ accountId: superLiabId, debit: 0,        credit: superAmt });
