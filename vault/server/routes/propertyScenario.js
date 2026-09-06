@@ -832,7 +832,7 @@ router.post('/pdf', async (req, res) => {
 router.get('/proformas', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, "clientName", "createdAt", "updatedAt",
+      `SELECT id, "clientName", "createdAt", "updatedAt", "checklistPct",
               result->'strict'->'summary'->>'overall_status' AS overall_status,
               (result->'strict'->'summary'->>'loan_requested')::numeric AS loan_requested
          FROM property_scenario_proformas
@@ -852,7 +852,7 @@ router.get('/proformas', async (req, res) => {
 router.get('/proformas/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, "clientName", inputs, result, "createdAt", "updatedAt"
+      `SELECT id, "clientName", inputs, result, checklist, "checklistPct", "createdAt", "updatedAt"
          FROM property_scenario_proformas
         WHERE id = $1 AND "userId" = $2`,
       [req.params.id, req.user.id]
@@ -867,40 +867,69 @@ router.get('/proformas/:id', async (req, res) => {
 
 /**
  * POST /api/property-scenario/proformas
- * Body: { id?, clientName, inputs, result? }
+ * Body: { id?, clientName, inputs, result?, checklist?, checklistPct? }
  * Creates a new saved run, or updates one this user already owns when id is given.
  * result is optional — lets a broker save a half-filled file before running it.
  */
 router.post('/proformas', async (req, res) => {
   try {
-    const { id, clientName, inputs, result } = req.body || {};
+    const { id, clientName, inputs, result, checklist, checklistPct } = req.body || {};
     if (!inputs || typeof inputs !== 'object') {
       return res.status(400).json({ ok: false, error: 'invalid_request', message: 'inputs is required' });
     }
     const name = String(clientName || '').trim();
+    const pct = Number.isFinite(Number(checklistPct)) ? Math.round(Number(checklistPct)) : null;
 
     if (id) {
       const { rows } = await pool.query(
         `UPDATE property_scenario_proformas
-            SET "clientName" = $1, inputs = $2, result = $3, "updatedAt" = NOW()
-          WHERE id = $4 AND "userId" = $5
-          RETURNING id, "clientName", "createdAt", "updatedAt"`,
-        [name, JSON.stringify(inputs), result ? JSON.stringify(result) : null, id, req.user.id]
+            SET "clientName" = $1, inputs = $2, result = $3, checklist = $4, "checklistPct" = $5, "updatedAt" = NOW()
+          WHERE id = $6 AND "userId" = $7
+          RETURNING id, "clientName", "createdAt", "updatedAt", "checklistPct"`,
+        [name, JSON.stringify(inputs), result ? JSON.stringify(result) : null,
+          checklist ? JSON.stringify(checklist) : null, pct, id, req.user.id]
       );
       if (!rows.length) return res.status(404).json({ ok: false, error: 'not_found' });
       return res.json({ ok: true, proforma: rows[0] });
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO property_scenario_proformas ("userId", "clientName", inputs, result)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, "clientName", "createdAt", "updatedAt"`,
-      [req.user.id, name, JSON.stringify(inputs), result ? JSON.stringify(result) : null]
+      `INSERT INTO property_scenario_proformas ("userId", "clientName", inputs, result, checklist, "checklistPct")
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, "clientName", "createdAt", "updatedAt", "checklistPct"`,
+      [req.user.id, name, JSON.stringify(inputs), result ? JSON.stringify(result) : null,
+        checklist ? JSON.stringify(checklist) : null, pct]
     );
     res.json({ ok: true, proforma: rows[0] });
   } catch (err) {
     console.error('[property-scenario] proformas save', err);
     res.status(500).json({ ok: false, error: err.message || 'Failed to save proforma' });
+  }
+});
+
+/**
+ * PATCH /api/property-scenario/proformas/:id/checklist
+ * Body: { checklist, checklistPct }
+ * Lightweight autosave for checklist ticks — doesn't touch inputs/result, so
+ * ticking a box doesn't require re-sending (or re-triggering a recalc of) the
+ * whole proforma.
+ */
+router.patch('/proformas/:id/checklist', async (req, res) => {
+  try {
+    const { checklist, checklistPct } = req.body || {};
+    const pct = Number.isFinite(Number(checklistPct)) ? Math.round(Number(checklistPct)) : null;
+    const { rows } = await pool.query(
+      `UPDATE property_scenario_proformas
+          SET checklist = $1, "checklistPct" = $2, "updatedAt" = NOW()
+        WHERE id = $3 AND "userId" = $4
+        RETURNING id, "checklistPct"`,
+      [checklist ? JSON.stringify(checklist) : null, pct, req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, proforma: rows[0] });
+  } catch (err) {
+    console.error('[property-scenario] proformas checklist patch', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to save checklist' });
   }
 });
 

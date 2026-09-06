@@ -76,6 +76,7 @@ All under `/api/property-scenario` (auth + `requireFeature('propertyScenario')`)
 | `GET` | `/proformas/:id` | Full saved record (inputs + result) to resume |
 | `POST` | `/proformas` | `{ id?, clientName, inputs, result? }` — create, or update when `id` is this user's own row |
 | `DELETE` | `/proformas/:id` | Delete a saved run |
+| `PATCH` | `/proformas/:id/checklist` | `{ checklist, checklistPct }` — lightweight Broker Prep checklist autosave, doesn't touch inputs/result |
 
 ---
 
@@ -94,7 +95,9 @@ Primary homepage path for “will a bank look at this file?”. Builds on the sa
 
 **Per-bank capacity:** `estimateBankCapacity()` reuses surplus → max-loan maths with each bank’s curated knobs (`overtimeCrediting` → shade %, `rentalShadingPct`, `hemStance`). Assessment rate is `max(targetRate + 3.0, bank.assessmentFloorRate)` — each bank carries its own floor (8.50% for most; 8.65% Macquarie, 8.55% BOQ). The floor only binds when the product rate is low enough that adding 3% does not reach it. Always labelled indicative — not a quote or approval.
 
-**Save / resume:** Client name field + Save/Update button on the proforma form, backed by `property_scenario_proformas` (userId-scoped). **Previous runs** panel lists saved rows (client name, status, loan amount, updated date), click to reload every field plus the last computed result, inline Yes/No delete per row.
+**Save / resume:** Client name field + Save/Update button on the proforma form, backed by `property_scenario_proformas` (userId-scoped). **Previous runs** panel lists saved rows (client name, status, loan amount, Broker Prep %, updated date), click to reload every field plus the last computed result, inline Yes/No delete per row.
+
+**Broker Prep checklist persistence:** `checked` state is lifted into `QualificationProformaForm` (the panel itself is conditionally rendered per tab, so its own `useState` reset on every tab switch — this was the bug). Persisted to `localStorage` on every tick (survives tab switches and reloads even before the first Save), and autosaved to the DB via `PATCH /proformas/:id/checklist` once the run has a `savedId`. The proforma tab button shows live `done/total` progress once any item is ticked.
 
 **Journey:** Buy / lite qualify / refinance can **Continue to qualification proforma** with prefilled fields. Completing the **proforma** (or lite check) writes a shared browser **file profile** (`vault:propertyScenario:fileProfile`) that pre-fills related fields on every other agent (buy, sell, refinance, calculators, NLP state/PPOR, lite qualify). Homepage cards are grouped: Check my file · Plan a transaction · Quick tools.
 

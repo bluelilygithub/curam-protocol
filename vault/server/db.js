@@ -1578,6 +1578,8 @@ async function initSchema() {
       "clientName" TEXT NOT NULL DEFAULT '',
       inputs       JSONB NOT NULL,
       result       JSONB,
+      checklist    JSONB,
+      "checklistPct" INTEGER,
       "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -1586,6 +1588,9 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_property_scenario_proformas_user_time
       ON property_scenario_proformas ("userId", "updatedAt" DESC)
   `);
+  // Added after initial ship — ALTER for rows created before checklist persistence existed.
+  await pool.query(`ALTER TABLE property_scenario_proformas ADD COLUMN IF NOT EXISTS checklist JSONB`);
+  await pool.query(`ALTER TABLE property_scenario_proformas ADD COLUMN IF NOT EXISTS "checklistPct" INTEGER`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS seo_projects (

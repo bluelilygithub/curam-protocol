@@ -1810,6 +1810,39 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   const [savedListLoading, setSavedListLoading] = useState(false);
   const [savedListError, setSavedListError]     = useState(null);
   const [confirmDeleteId, setConfirmDeleteId]   = useState(null);
+  // Broker Prep checklist — lifted here (not inside BrokerPrepPanel) because the panel
+  // is conditionally rendered per tab and would otherwise reset on every tab switch.
+  // Draft key falls back to a stable per-mount id until the run is actually saved,
+  // so progress still survives a tab switch even before the first Save.
+  const draftKeyRef = useRef(`draft-${Date.now()}`);
+  const checklistStorageKey = `vault:propertyScenario:brokerChecklist:${savedId || draftKeyRef.current}`;
+  const [brokerChecked, setBrokerChecked] = useState(() => {
+    try {
+      const raw = localStorage.getItem(checklistStorageKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(checklistStorageKey, JSON.stringify(brokerChecked));
+    } catch {
+      /* localStorage unavailable — checklist still holds for this session */
+    }
+    // Once this run has a savedId, push checklist ticks straight to the DB too —
+    // otherwise progress only survives on this browser until the next full Save.
+    if (savedId) {
+      const pct = Math.round(
+        (Object.values(brokerChecked).filter(Boolean).length / brokerChecklistTotal()) * 100
+      );
+      api.patch(`/api/property-scenario/proformas/${savedId}/checklist`, {
+        checklist: brokerChecked,
+        checklistPct: pct,
+      }).catch(() => { /* best-effort autosave */ });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brokerChecked, checklistStorageKey, savedId]);
 
   function buildInputPayload() {
     const liabilityRows = pLiabilities
@@ -1942,6 +1975,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
       if (!data.ok) throw new Error(data.error || 'Failed to load saved run');
       applySavedInputs(data.proforma.inputs);
       setClientName(data.proforma.clientName || '');
+      setBrokerChecked(data.proforma.checklist || {});
       setSavedId(data.proforma.id);
       setProforma(data.proforma.result || null);
       setProformaTab('overview');
@@ -1970,11 +2004,16 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
   async function saveCurrentProforma() {
     setSaving(true);
     try {
+      const checklistPct = Math.round(
+        (Object.values(brokerChecked).filter(Boolean).length / brokerChecklistTotal()) * 100
+      );
       const res = await api.post('/api/property-scenario/proformas', {
         id: savedId || undefined,
         clientName: clientName.trim(),
         inputs: buildInputPayload(),
         result: proforma || null,
+        checklist: brokerChecked,
+        checklistPct,
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Save failed');
@@ -2123,6 +2162,7 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
                   Updated {new Date(p.updatedAt).toLocaleDateString('en-AU')}
                   {p.overall_status ? ` · ${p.overall_status}` : ''}
                   {p.loan_requested ? ` · $${Number(p.loan_requested).toLocaleString('en-AU')}` : ''}
+                  {p.checklistPct != null ? ` · Broker Prep ${p.checklistPct}%` : ''}
                 </span>
               </span>
               {confirmDeleteId === p.id ? (
@@ -2482,7 +2522,17 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           <div className="flex gap-1 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
             {[
               { id: 'overview', label: 'Overview' },
-              { id: 'broker', label: 'Broker Prep · 65-item checklist', icon: 'clipboard-list' },
+              {
+                id: 'broker',
+                label: (() => {
+                  const total = brokerChecklistTotal();
+                  const done = Object.values(brokerChecked).filter(Boolean).length;
+                  return done > 0
+                    ? `Broker Prep · ${Math.round((done / total) * 100)}% (${done}/${total})`
+                    : `Broker Prep · ${total}-item checklist`;
+                })(),
+                icon: 'clipboard-list',
+              },
             ].map((t) => (
               <button
                 key={t.id}
@@ -2504,7 +2554,9 @@ function QualificationProformaForm({ getIcon, addToast, onSwitchToBuy, initialIn
           </div>
 
           {/* Broker Prep tab */}
-          {proformaTab === 'broker' && <BrokerPrepPanel getIcon={getIcon} />}
+          {proformaTab === 'broker' && (
+            <BrokerPrepPanel getIcon={getIcon} checked={brokerChecked} onChecked={setBrokerChecked} />
+          )}
 
           {/* Overview tab — all existing proforma content */}
           <div className={proformaTab === 'overview' ? '' : 'hidden'}>
@@ -3666,9 +3718,22 @@ const BROKER_CHECKLIST = [
   },
 ];
 
-function BrokerPrepPanel({ getIcon }) {
+/** Total checklist items — used to compute a % without loading the full checked map (e.g. list rows). */
+export function brokerChecklistTotal() {
+  return BROKER_CHECKLIST.reduce((sum, g) => sum + g.items.length, 0);
+}
+
+/**
+ * checked/onChecked make this a controlled component when the caller wants the
+ * checklist to survive a tab unmount (it's conditionally rendered, so its own
+ * useState resets every time you switch away and back). Falls back to internal
+ * state for callers that don't need persistence (e.g. the fixture demo).
+ */
+function BrokerPrepPanel({ getIcon, checked: checkedProp, onChecked }) {
   const totalItems = BROKER_CHECKLIST.reduce((sum, g) => sum + g.items.length, 0);
-  const [checked, setChecked] = React.useState({});
+  const [internalChecked, setInternalChecked] = React.useState({});
+  const checked = checkedProp || internalChecked;
+  const setChecked = onChecked || setInternalChecked;
   const [expanded, setExpanded] = React.useState(
     () => Object.fromEntries(BROKER_CHECKLIST.map((g) => [g.id, true])),
   );
@@ -3703,7 +3768,7 @@ function BrokerPrepPanel({ getIcon }) {
           <div className="min-w-0">
             <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pre-application checklist</p>
             <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-              For mortgage broker use. This list assumes your fact-finding is complete and you are preparing to submit a loan application. Tick each item as you verify it — the checklist resets when you leave this tab.
+              For mortgage broker use. This list assumes your fact-finding is complete and you are preparing to submit a loan application. Tick each item as you verify it — progress is saved with this file.
             </p>
           </div>
           <div className="shrink-0 text-right">
