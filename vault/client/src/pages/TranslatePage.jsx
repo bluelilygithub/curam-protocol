@@ -169,6 +169,101 @@ function parseQa(job) {
   } catch { return null; }
 }
 
+// Plain-text QA report for HITL review — the sections/order mirror what QaPanel renders on
+// screen, so the download and the modal never drift apart.
+function buildQaReportText(job, qa) {
+  const lines = [];
+  const push = (s = '') => lines.push(s);
+  push(`Translation QA Report`);
+  push(`File: ${job?.filename || '—'}`);
+  push(`Target language: ${job?.targetLanguage || '—'}`);
+  push(`Translate model: ${qa.translateModel || '—'} · Review model: ${qa.reviewModel || '—'}`);
+  push(`Generated: ${new Date().toISOString()}`);
+  push('');
+
+  if (qa.hardFail) {
+    push(`HARD QA GATE FAILED${qa.hardFailCode ? ` (${qa.hardFailCode})` : ''}`);
+    push(qa.overallNotes || 'Translation did not pass completeness checks.');
+    push('');
+  } else if (qa.softFail) {
+    push(`COMPLETED WITH WARNINGS${qa.softFailCode ? ` (${qa.softFailCode})` : ''}`);
+    push(qa.overallNotes || 'Some segments still need review (see Garbled / incomplete rows).');
+    push('');
+  } else if (qa.skipped) {
+    push('Subjective review pass was skipped for this job.');
+    push('');
+  }
+
+  if (qa.repairStats?.attempted > 0) {
+    push(`Repair pass: attempted ${qa.repairStats.attempted}`
+      + (qa.repairStats.llmRepaired != null ? ` · LLM fixed ${qa.repairStats.llmRepaired}` : '')
+      + (qa.repairStats.googleRepaired != null ? ` · Google fixed ${qa.repairStats.googleRepaired}` : '')
+      + (qa.repairStats.stillFailing != null ? ` · still failing ${qa.repairStats.stillFailing}` : ''));
+    push('');
+  }
+
+  const cc = qa.completenessCheck;
+  if (cc?.ran) {
+    push(`Completeness (deterministic): ${cc.autoFlagged ?? 0} auto-flagged of ${cc.total ?? '—'}`
+      + (cc.identicalCount != null ? ` · identical-to-source: ${cc.identicalCount}` : '')
+      + (cc.placeholderCount != null ? ` · placeholders: ${cc.placeholderCount}` : '')
+      + (cc.emptyCount != null ? ` · empty: ${cc.emptyCount}` : ''));
+    if (qa.reviewedPairCount != null) {
+      push(`Pairs compared: ${qa.reviewedPairCount}/${qa.totalPairCount ?? qa.reviewedPairCount}`);
+    }
+    push('');
+  }
+
+  if (qa.maoriPolicy) { push(`Māori policy: ${qa.maoriPolicy}`); push(''); }
+  if (qa.glossaryTermCount != null) { push(`Glossary terms: ${qa.glossaryTermCount}`); push(''); }
+
+  const sections = [
+    ['Uncertain terms', qa.uncertainTerms],
+    ['Dialectal choices (vs standard)', qa.dialectalChoices],
+    ['Polarity / sentence-type issues', qa.polarityOrSentenceTypeIssues],
+    ['Restructured sentences', qa.restructuredSentences],
+    ['Garbled / incomplete rows', qa.garbledOrIncompleteRows],
+    ['Audience flags', qa.audienceFlags],
+  ];
+  for (const [title, items] of sections) {
+    push(`${title} (${Array.isArray(items) ? items.length : 0})`);
+    if (!items?.length) {
+      push('  None flagged');
+    } else {
+      for (const it of items) {
+        const idx = typeof it.index === 'number' ? `#${it.index} ` : '';
+        const body = (it.used && it.standardForm)
+          ? `Used "${it.used}" (standard: "${it.standardForm}")${it.context ? ` — ${it.context}` : ''}`
+          : [
+            it.source || it.excerpt || it.target || JSON.stringify(it),
+            it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : '',
+            it.renderedAs || it.proposedTarget ? ` → ${it.renderedAs || it.proposedTarget}` : '',
+            it.check ? ` [${it.check}]` : '',
+          ].join('');
+        push(`  ${idx}${body}`);
+      }
+    }
+    push('');
+  }
+
+  if (qa.claimVerification?.note) {
+    push(`Claim verification: ${qa.claimVerification.note}`);
+  }
+
+  return lines.join('\n');
+}
+
+function downloadQaReport(job, qa) {
+  const text = buildQaReportText(job, qa);
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qa-report-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function QaPanel({ qa, onClose, job, onDownload, onDownloadNative }) {
   if (!qa) return null;
   const sections = [
@@ -186,22 +281,29 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative }) {
   return (
     <Modal title="Translation QA summary" onClose={onClose} wide>
       <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
-        {job?.status === 'done' && (
-          <div className="flex gap-2">
-            <button onClick={() => onDownload?.(job)}
-              className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}>
-              Download PDF
-            </button>
-            {job.hasNativeOutput && (
-              <button onClick={() => onDownloadNative?.(job)}
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => downloadQaReport(job, qa)}
+            className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}>
+            Download QA report
+          </button>
+          {job?.status === 'done' && (
+            <>
+              <button onClick={() => onDownload?.(job)}
                 className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                Download {/\.xlsx?$/i.test(job.filename || '') ? 'Excel' : 'Word'}
+                Download translated PDF
               </button>
-            )}
-          </div>
-        )}
+              {job.hasNativeOutput && (
+                <button onClick={() => onDownloadNative?.(job)}
+                  className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  Download {/\.xlsx?$/i.test(job.filename || '') ? 'Excel' : 'Word'}
+                </button>
+              )}
+            </>
+          )}
+        </div>
         {qa.hardFail && (
           <p className="text-xs px-2 py-2 rounded border"
             style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
@@ -486,11 +588,6 @@ function TranslationsTab({ glossaries }) {
   const [engine, setEngine] = useState('llm'); // llm | google
   const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
-  const [modelCatalog, setModelCatalog] = useState([]);
-  const [defaultTranslateModel, setDefaultTranslateModel] = useState('');
-  const [defaultReviewModel, setDefaultReviewModel] = useState('');
-  const [translateModelOverride, setTranslateModelOverride] = useState(''); // '' = use Settings default
-  const [reviewModelOverride, setReviewModelOverride] = useState('');
   const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
@@ -523,9 +620,6 @@ function TranslationsTab({ glossaries }) {
       const llmOk = d.engines?.llm?.available !== false && (d.engines?.llm?.available || d.configured);
       const googleOk = Boolean(d.engines?.google?.available);
       setEngineAvailability({ llm: Boolean(d.engines?.llm?.available ?? llmOk), google: googleOk });
-      setModelCatalog(Array.isArray(d.catalog) ? d.catalog : []);
-      setDefaultTranslateModel(d.engines?.llm?.translateModel || '');
-      setDefaultReviewModel(d.engines?.llm?.reviewModel || '');
       if (!d.engines?.llm?.available && googleOk) {
         setEngine('google');
         setEnableReview(false);
@@ -645,8 +739,6 @@ function TranslationsTab({ glossaries }) {
       if (useGlobalGlossary) fd.append('useGlobalGlossary', 'true');
       fd.append('scannedPageImages', JSON.stringify(preflight.scannedImages || {}));
       fd.append('enableReview', enableReview ? 'true' : 'false');
-      if (engine === 'llm' && translateModelOverride) fd.append('translateModelId', translateModelOverride);
-      if (engine === 'llm' && reviewModelOverride) fd.append('reviewModelId', reviewModelOverride);
       fd.append('intakeAnswers', JSON.stringify({
         domain: domain || 'general',
         audience,
@@ -1006,34 +1098,6 @@ function TranslationsTab({ glossaries }) {
                   <input type="checkbox" checked={enableReview} onChange={e => setEnableReview(e.target.checked)} />
                   Run second-model QA review after translation (recommended)
                 </label>
-                {modelCatalog.length > 0 && (
-                  <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                    <Field label="Translate model (this job only)"
-                      hint={translateModelOverride
-                        ? `Overriding Settings default (${defaultTranslateModel || 'not set'}) for this job only.`
-                        : `Using Settings default (${defaultTranslateModel || 'not set'}). Pick a model to override for this job only.`}>
-                      <Sel value={translateModelOverride} onChange={setTranslateModelOverride}>
-                        <option value="">Use default ({defaultTranslateModel || 'not set'})</option>
-                        {modelCatalog.map(m => (
-                          <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name}</option>
-                        ))}
-                      </Sel>
-                    </Field>
-                    {enableReview && (
-                      <Field label="Review model (this job only)"
-                        hint={reviewModelOverride
-                          ? `Overriding Settings default (${defaultReviewModel || 'not set'}) for this job only.`
-                          : `Using Settings default (${defaultReviewModel || 'not set'}). Pick a model to override for this job only.`}>
-                        <Sel value={reviewModelOverride} onChange={setReviewModelOverride}>
-                          <option value="">Use default ({defaultReviewModel || 'not set'})</option>
-                          {modelCatalog.map(m => (
-                            <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name}</option>
-                          ))}
-                        </Sel>
-                      </Field>
-                    )}
-                  </div>
-                )}
               </div>
               ) : (
               <div className="rounded-xl border p-4 flex flex-col gap-3"

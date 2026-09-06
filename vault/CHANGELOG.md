@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-no-model-override-qa-report)
+
+### Translate — removed per-job model override, QA report is now a real QA export
+- Removed the "Translate model (this job only)" / "Review model (this job only)" dropdowns from job intake — translate/review model is Settings-only (`translate_model` / `translate_review_model`), same as target language.
+- QA summary modal's download button previously fetched the same translated PDF as the row's "Download PDF" button — no QA content at all. Replaced with a dedicated **Download QA report** button that exports a plain-text report of the actual QA findings (uncertain terms, dialectal choices, polarity issues, restructured sentences, garbled rows, audience flags, completeness stats) built client-side from `qaSummaryJson`, for HITL review. The PDF/native-output download buttons stay, relabelled "Download translated PDF" so the two aren't confused again.
+
 ## 2026-09-07 (translate-settings-language-modal)
 
 ### Translate — target language moved to Settings, multi-language fan-out removed, progress moved to a modal

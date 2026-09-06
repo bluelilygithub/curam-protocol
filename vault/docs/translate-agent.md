@@ -16,6 +16,8 @@ Feature flag / app: **Translate** (languages).
 
 Set once in **Settings → AI & Chat → Translate agent → Target language** (`translate_target_language`, default `fr`). Job intake shows this as read-only, not a picker — every run in the workspace translates into that language until it's changed in Settings. Multi-language fan-out per run was removed from the UI for the same reason (one target language, chosen at the workspace level, not per job); the old `POST /api/translate/jobs/batch` route is still on the server (`translate_jobs."batchId"` and existing rows reference it) but has no client caller anymore.
 
+Same principle for the translate/review **model**: chosen once in the Translate agent Settings card (`translate_model` / `translate_review_model`), not per job — the per-job "this job only" model override dropdowns were removed from intake.
+
 ## Engines
 
 Choose per job:
@@ -71,6 +73,8 @@ Download filename: `translated-{basename}.pdf` (layout chosen per job).
 6. **Hard sanity gate (deterministic)** — `translateQaChecks.hardSanityGate` on every source⟶target pair. If too many segments are identical to source (>30%), contain placeholders (≥2 or >5%), or are empty (>10%), the job **fails** with an error and a QA summary — no bilingual PDF.
 7. **Review (optional)** — deterministic completeness runs first on **all** pairs (auto “Garbled / incomplete rows”); then the review model compares every pair side-by-side in batches for subjective issues; claim verification spot-checks a sample of “None flagged” segments.
 8. **Client PDF** — `@react-pdf/renderer` bilingual PDF uploaded to complete the job.
+
+The QA summary modal (jobs table → **QA**) has its own **Download QA report** button — a plain-text export of the same sections shown on screen (uncertain terms, dialectal choices, polarity/sentence-type issues, restructured sentences, garbled rows, audience flags, completeness stats), generated client-side from `qaSummaryJson` for HITL review. It's distinct from **Download translated PDF** / native Word-Excel output next to it — the QA report describes the translation, it isn't the translation.
 
 Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed`. The client shows this progression in the global blocking **ProcessingModal** (`processingStore`/`runWithStepLog` pattern, same as Property Scenario) rather than an inline row — polling `GET /jobs/:id/status` drives step state (`setProcessingSteps`) and the stage/percent detail line.
 
