@@ -75,7 +75,7 @@ router.get('/', async (req, res) => {
       FROM clients c
       LEFT JOIN client_contacts cc  ON cc."clientId" = c.id
       LEFT JOIN projects p          ON p."clientId"  = c.id AND p."userId" = c."userId"
-      LEFT JOIN fin_invoices fi     ON fi."clientRef" = c.id AND fi."userId" = c."userId"
+      LEFT JOIN fin_invoices fi     ON fi."clientRef" = c.id AND fi."userId" = c."userId" AND fi."docType" != 'quote'
       ${whereClause}
       GROUP BY c.id
       ORDER BY
@@ -205,7 +205,7 @@ router.get('/:id', async (req, res) => {
         MAX("issueDate") FILTER (WHERE status != 'void')         AS "lastInvoiceDate",
         COUNT(*)         FILTER (WHERE status != 'void')::int    AS "invoiceCount"
       FROM fin_invoices
-      WHERE "clientRef"=$1 AND "userId"=$2
+      WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote'
         AND EXTRACT(year FROM "issueDate") = EXTRACT(year FROM NOW())
     `, [clientId, userId]);
 

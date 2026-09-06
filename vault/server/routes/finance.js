@@ -1965,7 +1965,7 @@ router.get('/bas/:quarterId/warnings', async (req, res) => {
        FROM fin_invoices i
        LEFT JOIN fin_clients c ON c.id = i."clientId"
        WHERE i."userId"=$1 AND i."issueDate"::date BETWEEN $2 AND $3
-         AND i.status IN ('draft','sent')
+         AND i."docType" != 'quote' AND i.status IN ('draft','sent')
        ORDER BY i."issueDate", i.id`,
       [userId, from_date, to_date]
     );
@@ -1994,13 +1994,13 @@ router.get('/dashboard', async (req, res) => {
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1
+         FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote'
            AND (status='draft' OR (status='sent' AND ("dueDate" IS NULL OR "dueDate"::date >= $2)))`,
         [userId, today]
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1 AND status='sent' AND "dueDate"::date < $2`,
+         FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote' AND status='sent' AND "dueDate"::date < $2`,
         [userId, today]
       ),
       pool.query(
