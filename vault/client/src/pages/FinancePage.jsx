@@ -379,6 +379,10 @@ function getPresetRange(preset) {
   if (preset === 'year') {
     return { from: `${y}-01-01`, to: `${y}-12-31` };
   }
+  if (preset === 'fy') {
+    const fyStartYear = m >= 6 ? y : y - 1; // Jul (index 6) rolls FY over
+    return { from: `${fyStartYear}-07-01`, to: `${fyStartYear+1}-06-30` };
+  }
   return { from: '', to: '' }; // 'all' / 'custom' — no auto range
 }
 
@@ -387,6 +391,7 @@ const DATE_PRESETS = [
   { key: 'month',   label: 'Month'   },
   { key: 'quarter', label: 'Quarter' },
   { key: 'year',    label: 'Year'    },
+  { key: 'fy',      label: 'FY'      },
   { key: 'custom',  label: 'Custom'  },
   { key: 'all',     label: 'All'     },
 ];
@@ -464,6 +469,7 @@ function DashboardTab({ from, to }) {
     { label: 'Revenue',          value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`                           },
     { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0 },
     { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0    },
+    { label: 'Quotes',           value: fmt(data.quotesAmount),      sub: `${data.quotesCount} pending, not accepted`                             },
     { label: 'Expenses',         value: fmt(data.yearExpenses),      sub: 'ex GST'                                                        },
     { label: 'Wages',            value: fmt(data.yearWages),         sub: 'gross wages'                                                   },
     { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0                  },

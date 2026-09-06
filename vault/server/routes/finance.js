@@ -1986,7 +1986,7 @@ router.get('/dashboard', async (req, res) => {
     const from      = req.query.from || yearStart;
     const to        = req.query.to   || today;
 
-    const [paid, outstanding, overdue, expenses, wages] = await Promise.all([
+    const [paid, outstanding, overdue, quotes, expenses, wages] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
          FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
@@ -2002,6 +2002,11 @@ router.get('/dashboard', async (req, res) => {
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
          FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote' AND status='sent' AND "dueDate"::date < $2`,
         [userId, today]
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
+         FROM fin_invoices WHERE "userId"=$1 AND "docType"='quote' AND status IN ('draft','sent')`,
+        [userId]
       ),
       pool.query(
         `SELECT COALESCE(SUM(amount),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
@@ -2020,6 +2025,8 @@ router.get('/dashboard', async (req, res) => {
       outstandingCount:  parseInt(outstanding.rows[0].count),
       overdueAmount:     parseFloat(overdue.rows[0].total),
       overdueCount:      parseInt(overdue.rows[0].count),
+      quotesAmount:      parseFloat(quotes.rows[0].total),
+      quotesCount:       parseInt(quotes.rows[0].count),
       yearExpenses:      parseFloat(expenses.rows[0].total),
       yearWages:         parseFloat(wages.rows[0].total),
     });
