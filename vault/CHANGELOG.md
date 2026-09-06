@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-table-extraction-root-cause-note)
+
+### Translate — docs: confirmed both recent bugs share one root cause
+No code change — clarified in `docs/translate-agent.md` that the `[REDACTED]` hallucination and the silent table truncation (both fixed this week, both on the same source table) are two different symptoms of the same underlying defect: the multi-column PDF extraction limitation flattens a table's rows/columns into one garbled paragraph before translation ever runs. The font and completeness-check fixes shipped so far only address the downstream symptoms — a document with a real table can still garble on extraction until column-boundary detection is added (still deferred, documented as a bigger change).
+
 ## 2026-09-07 (translate-mojibake-and-silent-truncation)
 
 ### Translate — fixed te reo Māori mojibake and a QA report that missed a genuinely broken job
