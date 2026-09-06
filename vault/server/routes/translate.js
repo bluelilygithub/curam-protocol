@@ -179,9 +179,9 @@ router.post('/estimate', sourceUpload, async (req, res) => {
 router.get('/glossaries', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, terms, "createdAt", "updatedAt",
+      `SELECT id, name, terms, "targetLanguage", "isGlobal", "createdAt", "updatedAt",
               jsonb_array_length(terms) AS "termCount"
-       FROM translate_glossaries WHERE "userId"=$1 ORDER BY name ASC`,
+       FROM translate_glossaries WHERE "userId"=$1 ORDER BY "isGlobal" DESC, name ASC`,
       [req.user.id]
     );
     res.json(rows);
@@ -345,6 +345,30 @@ router.get('/jobs/:id/download', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.pdf"`);
     res.send(rows[0].translatedPdf);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+const ORIGINAL_MIME_BY_EXT = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+};
+
+// Lets a reviewer pull up the untouched source alongside the translation/QA report — useful
+// for HITL sanity-checking a flagged segment against the actual source wording.
+router.get('/jobs/:id/download-original', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT filename, "originalPdf" FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]?.originalPdf) return res.status(404).json({ error: 'Original file not available' });
+    const filename = rows[0].filename || 'document';
+    const ext = (filename.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+    res.setHeader('Content-Type', ORIGINAL_MIME_BY_EXT[ext] || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
+    res.send(rows[0].originalPdf);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

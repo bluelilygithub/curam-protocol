@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-original-download-glossary-review)
+
+### Translate — download original source, review/edit a language's learned glossary
+- New `GET /api/translate/jobs/:id/download-original` — the untouched uploaded file, for comparing against a QA-flagged segment. "Original" button added to every job row and the QA modal.
+- `GET /api/translate/glossaries` now returns `targetLanguage`/`isGlobal`; the Glossaries tab shows a language column and a "Global · learned" badge on auto-learned glossaries. Existing rename/edit-terms/delete UI already works on them — no new UI needed, just made them visible and distinguishable from manual glossaries.
+- Clarified in `docs/translate-agent.md`: a QA report's `[REDACTED]` mentions are about a source document that already contains literal redaction markers surviving translation — unrelated to the separate document redaction agent at `/document-redaction`.
+
 ## 2026-09-07 (translate-no-model-override-qa-report)
 
 ### Translate — removed per-job model override, QA report is now a real QA export

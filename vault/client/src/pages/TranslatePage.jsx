@@ -264,7 +264,7 @@ function downloadQaReport(job, qa) {
   URL.revokeObjectURL(url);
 }
 
-function QaPanel({ qa, onClose, job, onDownload, onDownloadNative }) {
+function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal }) {
   if (!qa) return null;
   const sections = [
     ['Uncertain terms', qa.uncertainTerms],
@@ -286,6 +286,12 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative }) {
             className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90"
             style={{ background: 'var(--color-primary)', color: '#fff' }}>
             Download QA report
+          </button>
+          <button onClick={() => onDownloadOriginal?.(job)}
+            className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+            title="Download the untouched source file, as uploaded"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            Download original
           </button>
           {job?.status === 'done' && (
             <>
@@ -887,6 +893,20 @@ function TranslationsTab({ glossaries }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
+  const downloadOriginalJob = async (job) => {
+    try {
+      const res = await api.get(`/api/translate/jobs/${job.id}/download-original`);
+      if (!res.ok) throw new Error('Original file not available');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = job.filename || 'document';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
   const downloadNativeJob = async (job) => {
     try {
       const res = await api.get(`/api/translate/jobs/${job.id}/download-native`);
@@ -1207,6 +1227,12 @@ function TranslationsTab({ glossaries }) {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
+                          <button onClick={() => downloadOriginalJob(job)}
+                            className="text-xs px-2 py-1 rounded border"
+                            title="Download the untouched source file, as uploaded"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            Original
+                          </button>
                           {job.status === 'done' && (
                             <button onClick={() => downloadJob(job)}
                               className="text-xs px-2 py-1 rounded border"
@@ -1247,7 +1273,7 @@ function TranslationsTab({ glossaries }) {
 
       {qaJob && (
         <QaPanel qa={parseQa(qaJob)} job={qaJob} onClose={() => setQaJob(null)}
-          onDownload={downloadJob} onDownloadNative={downloadNativeJob} />
+          onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob} />
       )}
     </div>
   );
@@ -1339,7 +1365,7 @@ function GlossariesTab({ glossaries, setGlossaries }) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                {['Name', 'Terms', 'Updated', ''].map(h => (
+                {['Name', 'Language', 'Terms', 'Updated', ''].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -1347,7 +1373,21 @@ function GlossariesTab({ glossaries, setGlossaries }) {
             <tbody>
               {glossaries.map(g => (
                 <tr key={g.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{g.name}</td>
+                  <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>
+                    {g.name}
+                    {g.isGlobal && (
+                      <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(37,99,235,0.1)', color: '#2563eb' }}
+                        title="Auto-learned from translation jobs that opted in — see Translations tab">
+                        Global · learned
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {g.targetLanguage
+                      ? (LANGUAGES.find(l => l.code === g.targetLanguage)?.label || g.targetLanguage)
+                      : '— (any)'}
+                  </td>
                   <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>{g.termCount ?? (g.terms?.length ?? 0)} terms</td>
                   <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     {new Date(g.updatedAt).toLocaleDateString('en-AU')}
