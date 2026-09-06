@@ -4,6 +4,7 @@
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'mi', label: 'te reo Māori' },
+  { code: 'ga', label: 'Irish (Gaelic)' },
   { code: 'fr', label: 'French' },
   { code: 'de', label: 'German' },
   { code: 'es', label: 'Spanish' },

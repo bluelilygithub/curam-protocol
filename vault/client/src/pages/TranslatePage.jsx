@@ -1006,11 +1006,10 @@ function TranslationsTab({ glossaries }) {
                   <Field label="Translate to"
                     hint={targetLang === 'mi'
                       ? 'Defaults to standard te reo Māori (Te Taura Whiri), not a specific iwi dialect.'
-                      : 'Set in Settings → AI & Chat → Translate agent.'}>
-                    <p className="text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                      {LANGUAGES.find(l => l.code === targetLang)?.label || targetLang}
-                    </p>
+                      : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
+                    <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
+                      {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                    </Sel>
                   </Field>
                 </div>
                 <div className="flex-1 min-w-40">

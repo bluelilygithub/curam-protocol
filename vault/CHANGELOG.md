@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-language-dropdown-restored)
+
+### Translate — target language dropdown restored, Irish/Gaelic added
+- Job intake's target language went from a dropdown to read-only text in an earlier change (moved to Settings-only). That broke translating a one-off document into a different language without changing the workspace default. Restored as a dropdown, seeded from `translate_target_language` — Settings still sets the default, the dropdown overrides it per job.
+- Added Irish (Gaelic) (`ga`) to the shared language list (`client/src/utils/translateLanguages.js`).
+
 ## 2026-09-07 (translate-redaction-hallucination-fix)
 
 ### Translate — fixed hallucinated [REDACTED] on documents with no redaction at all

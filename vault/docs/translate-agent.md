@@ -6,7 +6,7 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 **Backend:** `vault/server/routes/translate.js`  
 **Services:** `translateLlmService.js` · `translateModelResolver.js` · `translateExtract.js` · `translateQaChecks.js` · `googleTranslateService.js` · `translateMemory.js` · `translateNativeOutput.js`  
 **Tables:** `translate_jobs`, `translate_glossaries`, `translate_memory`  
-**Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier) and `translate_target_language` (workspace-wide target language; job intake no longer picks it per run — see **Target language** below).
+**Settings:** Translate agent card — `translate_model` / `translate_review_model` (fallback: vault default + secondary tier) and `translate_target_language` (workspace default target language, overridable per job — see **Target language** below).
 
 Feature flag / app: **Translate** (languages).
 
@@ -14,7 +14,7 @@ Feature flag / app: **Translate** (languages).
 
 ## Target language
 
-Set once in **Settings → AI & Chat → Translate agent → Target language** (`translate_target_language`, default `fr`). Job intake shows this as read-only, not a picker — every run in the workspace translates into that language until it's changed in Settings. Multi-language fan-out per run was removed from the UI for the same reason (one target language, chosen at the workspace level, not per job); the old `POST /api/translate/jobs/batch` route is still on the server (`translate_jobs."batchId"` and existing rows reference it) but has no client caller anymore.
+**Settings → AI & Chat → Translate agent → Target language** (`translate_target_language`, default `fr`) sets the workspace default. Job intake shows it as a dropdown seeded from that default — change it there to translate a single job into a different language without touching the workspace setting. (An earlier revision made this read-only per job; that broke picking a one-off language for a single document, so it's a dropdown again — the Settings value is just the starting point now.) Multi-language fan-out per run is still removed (one language per job); the old `POST /api/translate/jobs/batch` route is still on the server (`translate_jobs."batchId"` and existing rows reference it) but has no client caller.
 
 Same principle for the translate/review **model**: chosen once in the Translate agent Settings card (`translate_model` / `translate_review_model`), not per job — the per-job "this job only" model override dropdowns were removed from intake.
 

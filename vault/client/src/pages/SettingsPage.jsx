@@ -1628,7 +1628,7 @@ function SettingsPage() {
               Target language
             </label>
             <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
-              Every translation run uses this language — set once here, not per job.
+              Default target language for new translation jobs — the job intake dropdown can still override it for a one-off document.
             </p>
             <select
               value={translateTargetLanguage}
