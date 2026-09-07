@@ -195,13 +195,23 @@ function computeConfidence(qa) {
   // number, which is the bug a real report (qa-report-ESSAY EXAMPLES.txt: 8 pairs, 10
   // uncertainTerms) surfaced. Score by weighted deduction instead, so severity actually varies
   // the number rather than clamping to one floor value.
-  // - polarityOrSentenceTypeIssues / audienceFlags are genuine meaning/grammar defects a human
-  //   would need to fix — weighted heavily, capped so one bad document doesn't read as 0%.
+  // - polarityOrSentenceTypeIssues / audienceFlags / restructuredSentences are genuine
+  //   meaning/grammar defects a human would need to fix — weighted heavily, capped so one bad
+  //   document doesn't read as 0%.
   // - uncertainTerms are mostly glossary-nuance notes ("close but not the locked term"), not
   //   outright errors — weighted lightly.
-  // garbledOrIncompleteRows stays excluded: it's dominated by routine deterministic completeness
-  // noise (numbers/codes identical to source) already scored via hardFail/softFail above.
-  const criticalCount = (qa.polarityOrSentenceTypeIssues?.length || 0) + (qa.audienceFlags?.length || 0);
+  // garbledOrIncompleteRows is *not* uniformly excluded: only rows the deterministic gate itself
+  // found (check === 'deterministic_completeness' — numbers/codes identical to source, already
+  // scored via hardFail/softFail above) are routine noise. Rows the LLM reviewer added to that
+  // same array carry real defects — confirmed on a real report where it held an entire
+  // untranslated paragraph and visible raw glossary syntax ("Ceci / C'est") leaking to the
+  // reader, yet excluding the whole category scored that document 70%.
+  const llmGarbledCount = (qa.garbledOrIncompleteRows || [])
+    .filter((r) => r?.check !== 'deterministic_completeness').length;
+  const criticalCount = (qa.polarityOrSentenceTypeIssues?.length || 0)
+    + (qa.audienceFlags?.length || 0)
+    + (qa.restructuredSentences?.length || 0)
+    + llmGarbledCount;
   const advisoryCount = qa.uncertainTerms?.length || 0;
 
   let pct = 97;
@@ -694,7 +704,6 @@ function TranslationsTab({ glossaries }) {
   const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
   const [qaJob, setQaJob] = useState(null);
-  const [confidenceShown, setConfidenceShown] = useState(() => new Set()); // job ids — confidence toggled visible per row
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1316,12 +1325,6 @@ function TranslationsTab({ glossaries }) {
                   const tgtLabel = LANGUAGES.find(l => l.code === job.targetLanguage)?.label || job.targetLanguage;
                   const qa = parseQa(job);
                   const confidence = computeConfidence(qa);
-                  const showConfidence = confidenceShown.has(job.id);
-                  const toggleConfidence = () => setConfidenceShown(prev => {
-                    const next = new Set(prev);
-                    next.has(job.id) ? next.delete(job.id) : next.add(job.id);
-                    return next;
-                  });
                   return (
                     <tr key={job.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-3 py-2" style={{ color: 'var(--color-text)', maxWidth: 180 }}>
@@ -1357,7 +1360,7 @@ function TranslationsTab({ glossaries }) {
                         {job.status === 'failed' && job.errorMessage && (
                           <span className="ml-1 text-xs cursor-help" title={job.errorMessage} style={{ color: '#dc2626' }}>ⓘ</span>
                         )}
-                        {showConfidence && confidence && (
+                        {confidence && (
                           <div className="mt-1 text-xs" style={{ color: confidence.color }} title={confidence.reason}>
                             Confidence: {confidence.label}{confidence.pct != null ? ` (${confidence.pct}%)` : ''}
                           </div>
@@ -1365,14 +1368,6 @@ function TranslationsTab({ glossaries }) {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
-                          {qa && (
-                            <button onClick={toggleConfidence}
-                              className="text-xs px-2 py-1 rounded border"
-                              title="Model's confidence in translation quality, derived from QA results"
-                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                              {showConfidence ? 'Hide confidence' : 'Confidence'}
-                            </button>
-                          )}
                           {!['done', 'failed', 'cancelled'].includes(job.status) && (
                             <button onClick={() => cancelJob(job.id)}
                               className="text-xs px-2 py-1 rounded border"
