@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-about-modal)
+
+### Translate — "what does this agent do" info modal on the page header
+Added a `help-circle` icon next to the 🌐 Translate title that opens `TranslateAboutModal` — explains the job pipeline, what "Saved glossary" vs "Use global glossary" actually do, and a few things worth knowing (View Results modal, no legal certification, multi-column extraction limitation). Same modal pattern as Property Scenario's `AgentPurposeModal`, kept local to `TranslatePage.jsx` since this page has one agent rather than several.
+
 ## 2026-09-07 (translate-polarity-check-broadened)
 
 ### Translate — polarity/meaning-inversion check widened past its one example

@@ -3,6 +3,7 @@ import { pdf, Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/re
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
+import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES } from '../utils/translateLanguages';
 
 let _pdfjsLib = null;
@@ -1477,7 +1478,87 @@ function GlossariesTab({ glossaries, setGlossaries }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 const TABS = ['Translations', 'Glossaries'];
 
+// What-is-this modal for the page header — explains the agent and its moving parts (engine,
+// glossary vs. global glossary, QA review, PDF layouts) in one place instead of scattering
+// tooltips across the intake form.
+function TranslateAboutModal({ onClose, getIcon }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="translate-about-title"
+    >
+      <div
+        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 560, maxHeight: '85dvh' }}
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="mt-0.5 shrink-0" style={{ fontSize: 20 }}>🌐</span>
+            <div className="min-w-0">
+              <p id="translate-about-title" className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Translate</p>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                Upload a document, translate it into another language, review the result, download a bilingual PDF (and, when possible, an editable native file).
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose}
+            className="shrink-0 transition-opacity duration-200 hover:opacity-60"
+            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 0 }}
+            aria-label="Close">
+            {getIcon('x', { size: 18 })}
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4 text-sm" style={{ color: 'var(--color-text)' }}>
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>How a job runs</p>
+            <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              <li>Upload a PDF, Word (.docx), or Excel (.xlsx/.xls) file — up to 15 MB.</li>
+              <li>Pick a target language (defaults from Settings → AI & Chat → Translate agent, overridable per job) and answer a few intake questions (domain, audience, tone) — these shape the translation, not just the glossary.</li>
+              <li>Choose an engine: <strong>Vault LLM</strong> (slower, better for tone/glossaries/te reo Māori policy) or <strong>Google Translate</strong> (fast drafts, common languages).</li>
+              <li>Optionally enable a second-model QA review pass before the job finishes.</li>
+              <li>Download the bilingual PDF (side-by-side, translation-only, or bilingual-pages layout) once done — plus a native Word/Excel file when the source format supports it.</li>
+            </ul>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>What the glossary buttons do</p>
+            <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              <li><strong>Saved glossary (optional)</strong> — pick a glossary you've created in the <strong>Glossaries</strong> tab to lock specific terms to an exact rendering (or mark them do-not-translate) for this job.</li>
+              <li><strong>Use global glossary for [language]</strong> — on by default. Each target language has its own auto-learned glossary: every job that uses it contributes new terms back, and future jobs for that language reuse them. Untick it to use a manually-picked saved glossary instead for that one job.</li>
+              <li>Open the <strong>Glossaries</strong> tab any time to view, edit, or delete terms in either kind of glossary — a "Global · learned" badge marks the auto-learned ones. Edits there are picked up by the next job.</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>Also worth knowing</p>
+            <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              <li>Every job's <strong>View Results</strong> button shows the QA summary, with its own download for a plain-text QA report and the original/translated files — separate from the QA report itself.</li>
+              <li>Translations aren't legally certified — the PDF footer says so on every page.</li>
+              <li>A source PDF with multi-column layouts or data tables can garble on extraction — this is a known limitation, not something the glossary or QA settings control.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--color-border)' }}>
+          <button type="button" onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-70"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TranslatePage() {
+  const getIcon = useIcon();
+  const [aboutOpen, setAboutOpen]    = useState(false);
   const [tab, setTab]               = useState('Translations');
   const [configured, setConfigured] = useState(true);
   const [configMsg, setConfigMsg]   = useState('');
@@ -1501,12 +1582,20 @@ export default function TranslatePage() {
 
   return (
     <div className="flex flex-col h-full">
+      {aboutOpen && <TranslateAboutModal onClose={() => setAboutOpen(false)} getIcon={getIcon} />}
       {/* Header */}
       <div className="flex-shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div className="px-6 pt-4 pb-0">
           <div className="flex items-center gap-2 mb-3">
             <span style={{ fontSize: 20 }}>🌐</span>
             <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Translate</h1>
+            <button type="button" onClick={() => setAboutOpen(true)}
+              title="What does this agent do?"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'color 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}>
+              {getIcon('help-circle', { size: 16 })}
+            </button>
           </div>
           <div className="flex gap-0">
             {TABS.map(t => (

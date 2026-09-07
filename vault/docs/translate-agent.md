@@ -10,6 +10,8 @@ Professional document translation at **`/translate`**. Upload a source file, ans
 
 Feature flag / app: **Translate** (languages).
 
+A `help-circle` icon next to the page title opens **`TranslateAboutModal`** — explains the pipeline, what the saved-vs-global glossary controls do, and other things worth knowing (View Results, no legal certification, the multi-column extraction limitation). Same modal pattern as Property Scenario's `AgentPurposeModal`; kept local to this page since Translate has one agent, not a hub of several.
+
 ---
 
 ## Target language
