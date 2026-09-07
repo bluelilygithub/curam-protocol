@@ -148,34 +148,53 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
     messages.push({ role: 'user', content: userPrompt });
-    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model: modelId, messages, max_tokens: maxTokens }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
-    const choice = data.choices?.[0];
-    const text = normalizeMessageContent(choice?.message?.content);
-    // Reasoning-capable models (e.g. deepseek-reasoner-style) can spend the entire max_tokens
-    // budget on a hidden reasoning_content field and never reach the visible answer — that shows
-    // up as textLen:0 + finishReason:'length' regardless of how large max_tokens is. Captured
-    // here as pure diagnostics (no behavior change) to confirm/rule this out from server logs
-    // instead of guessing at it — see [callModel] empty deepseek response log line.
-    const reasoningContent = choice?.message?.reasoning_content;
-    const diagnostics = {
-      provider: 'deepseek',
-      modelId,
-      promptLen,
-      textLen: text.length,
-      empty: !text,
-      finishReason: choice?.finish_reason || null,
-      contentType: typeof choice?.message?.content,
-      maxTokens,
-      reasoningContentLen: typeof reasoningContent === 'string' ? reasoningContent.length : null,
-      completionTokens: data.usage?.completion_tokens ?? null,
-      reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens ?? null,
-    };
+
+    async function deepseekCall(tokenBudget) {
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: modelId, messages, max_tokens: tokenBudget }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
+      const choice = data.choices?.[0];
+      const text = normalizeMessageContent(choice?.message?.content);
+      const reasoningContent = choice?.message?.reasoning_content;
+      const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens ?? null;
+      const diagnostics = {
+        provider: 'deepseek',
+        modelId,
+        promptLen,
+        textLen: text.length,
+        empty: !text,
+        finishReason: choice?.finish_reason || null,
+        contentType: typeof choice?.message?.content,
+        maxTokens: tokenBudget,
+        reasoningContentLen: typeof reasoningContent === 'string' ? reasoningContent.length : null,
+        completionTokens: data.usage?.completion_tokens ?? null,
+        reasoningTokens,
+      };
+      return { text, data, diagnostics };
+    }
+
+    let { text, data, diagnostics } = await deepseekCall(maxTokens);
+
+    // Reasoning-capable models (e.g. deepseek-v*-flash) can spend the entire max_tokens
+    // budget on hidden reasoning_content and never reach the visible answer — that shows
+    // up as textLen:0 + finishReason:'length' with reasoningTokens == maxTokens. Confirmed
+    // via [callModel] empty deepseek response logs (reasoningTokens pinned to the budget).
+    // Fix: retry once with a much larger budget so there's room left for the actual answer
+    // after reasoning — cheaper than the caller giving up and falling back to pre_score/
+    // default-only output.
+    if (!text && diagnostics.finishReason === 'length' && diagnostics.reasoningTokens >= maxTokens) {
+      const bumped = Math.min(Math.max(maxTokens * 4, maxTokens + 8192), 32768);
+      console.warn('[callModel] deepseek reasoning consumed entire max_tokens — retrying with larger budget', {
+        ...diagnostics,
+        retryMaxTokens: bumped,
+      });
+      ({ text, data, diagnostics } = await deepseekCall(bumped));
+    }
+
     if (!text) console.warn('[callModel] empty deepseek response', diagnostics);
     if (!returnUsage) return text;
     return {
