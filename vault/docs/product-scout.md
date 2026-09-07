@@ -146,6 +146,11 @@ python main.py "standing desk mat" --json
 
 CLI does not yet expose delivery filters or workspace marketplace settings — set `AMAZON_DOMAIN` in `.env`. See `product-scout/README.md` for full CLI docs.
 
+## Performance
+
+- **Tier scouting runs in parallel.** `runBuyGuide` (`productScoutGuideService.js`) scouts all selected tiers via `Promise.all`, not sequentially — each tier's LLM compare call used to stack one after another, so scouting all 4 tiers meant 4 round-trips in serial. Now they overlap.
+- **Rainforest search cache.** `rainforestClient.searchProducts` caches results 10 min in-memory, keyed on query+domain+resultCount+sortBy+delivery filters. Covers tier-band refetches, retries, and re-opening the same run without re-hitting the API. In-process only — clears on deploy/restart, fine for Railway's single instance.
+
 ## Design notes
 
 - **Value score** — LLM judges features/specs vs price and review quality, not Amazon rank

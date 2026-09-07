@@ -1108,12 +1108,12 @@ async function runBuyGuide(userId, {
 
   const scoutsByKey = {};
 
-  for (let i = 0; i < framework.length; i += 1) {
-    const frame = framework[i];
-    const key = frame.key || TIER_KEYS[i];
-    if (!keysToScout.includes(key)) continue;
+  const tiersToRun = framework
+    .map((frame, i) => ({ frame, i, key: frame.key || TIER_KEYS[i] }))
+    .filter(({ key }) => keysToScout.includes(key));
 
-    scoutsByKey[key] = await scoutTier(
+  const scoutResults = await Promise.all(
+    tiersToRun.map(({ frame, i }) => scoutTier(
       userId,
       q,
       frame,
@@ -1121,8 +1121,12 @@ async function runBuyGuide(userId, {
       framework,
       allCandidates,
       { amazonDomain, modelId, shopperPriorities, searchQuery }
-    );
-  }
+    ))
+  );
+
+  tiersToRun.forEach(({ key }, idx) => {
+    scoutsByKey[key] = scoutResults[idx];
+  });
 
   const tiers = buildAllTierRows(framework, scoutsByKey, existing?.tiers || []);
   const scouted_tiers = collectScoutedTierKeys(tiers);

@@ -168,6 +168,43 @@ async function fetchProduct(input, defaultDomain = 'amazon.com.au') {
   return { product, amazonDomain, sourceUrl: parsed.url || product.link };
 }
 
+// Rainforest search results barely change minute to minute — cache briefly so
+// re-scouting the same query/domain/filters (retries, tier refetch overlap,
+// re-opening a run) doesn't re-hit the API and re-pay the round trip.
+const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+const searchCache = new Map();
+
+function searchCacheKey({ query, domain, fetchCount, sortBy, freeDelivery, within2Days }) {
+  return JSON.stringify([query.trim().toLowerCase(), domain, fetchCount, sortBy || null, freeDelivery, within2Days]);
+}
+
+function pruneSearchCache(now) {
+  for (const [key, entry] of searchCache) {
+    if (entry.expiresAt <= now) searchCache.delete(key);
+  }
+}
+
+function noResultsError({ freeDelivery, within2Days, domain, rawResults, parsed, afterDeliveryFilter }) {
+  const parts = [];
+  if (freeDelivery) parts.push('free delivery');
+  if (within2Days) parts.push('delivery within 2 days');
+  const err = new Error(
+    parts.length
+      ? `No Amazon results matched filters: ${parts.join(' + ')}. Try turning off a filter.`
+      : 'No Amazon search results returned. Check Rainforest API / marketplace settings.'
+  );
+  err.diagnostics = {
+    stage: 'rainforest_search',
+    domain,
+    rawResults,
+    parsed,
+    afterDeliveryFilter,
+    freeDelivery,
+    within2Days,
+  };
+  return err;
+}
+
 async function searchProducts(query, {
   maxResults = 10,
   amazonDomain = 'amazon.com.au',
@@ -178,6 +215,26 @@ async function searchProducts(query, {
   const { applyDeliveryFilters } = require('./productScoutDelivery');
   const domain = String(amazonDomain || 'amazon.com.au').trim() || 'amazon.com.au';
   const fetchCount = (freeDelivery || within2Days) ? Math.max(maxResults, 40) : maxResults;
+
+  const now = Date.now();
+  const cacheKey = searchCacheKey({ query, domain, fetchCount, sortBy, freeDelivery, within2Days });
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    console.log('[rainforest] search cache hit', { domain, query: query.trim().slice(0, 80) });
+    const filtered = applyDeliveryFilters(cached.result, { freeDelivery, within2Days }).slice(0, maxResults);
+    if (!filtered.length) {
+      throw noResultsError({
+        freeDelivery,
+        within2Days,
+        domain,
+        rawResults: cached.result.length,
+        parsed: cached.result.length,
+        afterDeliveryFilter: 0,
+      });
+    }
+    return filtered;
+  }
+  pruneSearchCache(now);
 
   const params = new URLSearchParams({
     api_key: apiKey(),
@@ -240,25 +297,17 @@ async function searchProducts(query, {
   });
 
   if (!filtered.length) {
-    const parts = [];
-    if (freeDelivery) parts.push('free delivery');
-    if (within2Days) parts.push('delivery within 2 days');
-    const err = new Error(
-      parts.length
-        ? `No Amazon results matched filters: ${parts.join(' + ')}. Try turning off a filter.`
-        : 'No Amazon search results returned. Check Rainforest API / marketplace settings.'
-    );
-    err.diagnostics = {
-      stage: 'rainforest_search',
+    throw noResultsError({
+      freeDelivery,
+      within2Days,
       domain,
       rawResults: rawCount,
       parsed: candidates.length,
       afterDeliveryFilter: filtered.length,
-      freeDelivery,
-      within2Days,
-    };
-    throw err;
+    });
   }
+
+  searchCache.set(cacheKey, { result: candidates, expiresAt: now + SEARCH_CACHE_TTL_MS });
 
   return filtered;
 }
