@@ -189,42 +189,40 @@ function computeConfidence(qa) {
 
   const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
 
-  // A ratio of flag-count-to-pair-count breaks down on real reports: uncertainTerms includes
-  // one entry per *glossary term* (not per pair), so an 8-pair document can carry 10+ entries —
-  // any ratio-vs-total then exceeds 1.0 and every job bottoms out at the same fixed "Low"
-  // number, which is the bug a real report (qa-report-ESSAY EXAMPLES.txt: 8 pairs, 10
-  // uncertainTerms) surfaced. Score by weighted deduction instead, so severity actually varies
-  // the number rather than clamping to one floor value.
-  // - polarityOrSentenceTypeIssues / audienceFlags / restructuredSentences are genuine
-  //   meaning/grammar defects a human would need to fix — weighted heavily, capped so one bad
-  //   document doesn't read as 0%.
-  // - uncertainTerms are mostly glossary-nuance notes ("close but not the locked term"), not
-  //   outright errors — weighted lightly.
-  // garbledOrIncompleteRows is *not* uniformly excluded: only rows the deterministic gate itself
-  // found (check === 'deterministic_completeness' — numbers/codes identical to source, already
-  // scored via hardFail/softFail above) are routine noise. Rows the LLM reviewer added to that
-  // same array carry real defects — confirmed on a real report where it held an entire
-  // untranslated paragraph and visible raw glossary syntax ("Ceci / C'est") leaking to the
-  // reader, yet excluding the whole category scored that document 70%.
-  const llmGarbledCount = (qa.garbledOrIncompleteRows || [])
-    .filter((r) => r?.check !== 'deterministic_completeness').length;
-  const criticalCount = (qa.polarityOrSentenceTypeIssues?.length || 0)
-    + (qa.audienceFlags?.length || 0)
-    + (qa.restructuredSentences?.length || 0)
-    + llmGarbledCount;
-  const advisoryCount = qa.uncertainTerms?.length || 0;
+  // Scored by which defect CATEGORIES fired, not how many items are in each — counting items
+  // made the score swing wildly between re-runs of the identical document (confirmed on real
+  // reports: the same source landed 17%/22%/35%/70% across separate QA runs, because the LLM
+  // reviewer's item counts per category jitter run to run — 4 vs 10 uncertainTerms, 1 vs 2
+  // garbled rows — even when the same underlying defects keep recurring). A category firing at
+  // all is the meaningful signal; exactly how many instances it lists is reviewer noise on top
+  // of that signal, not more evidence of a worse translation.
+  // garbledOrIncompleteRows only counts if the LLM reviewer (not the deterministic gate) added
+  // rows to it — check === 'deterministic_completeness' rows are routine numbers/codes identical
+  // to source, already scored via hardFail/softFail above.
+  const llmGarbled = (qa.garbledOrIncompleteRows || [])
+    .some((r) => r?.check !== 'deterministic_completeness');
+  const hasPolarity = (qa.polarityOrSentenceTypeIssues?.length || 0) > 0;
+  const hasAudience = (qa.audienceFlags?.length || 0) > 0;
+  const hasRestructured = (qa.restructuredSentences?.length || 0) > 0;
+  const hasUncertain = (qa.uncertainTerms?.length || 0) > 0;
 
   let pct = 97;
-  pct -= Math.min(50, criticalCount * 15);
-  pct -= Math.min(30, advisoryCount * 3);
-  if (qa.softFail) pct -= 20;
+  if (hasPolarity) pct -= 25;      // meaning/logic reversal — most severe category
+  if (hasAudience) pct -= 15;      // grammar/localization a native reader would notice
+  if (hasRestructured) pct -= 15;  // translator mishandled sentence structure
+  if (llmGarbled) pct -= 20;       // leaked markup / untranslated content the reviewer caught
+  if (hasUncertain) pct -= 10;     // glossary-nuance notes — flat, regardless of how many terms
+  if (qa.softFail) pct -= 15;
   pct = Math.max(5, Math.min(97, Math.round(pct)));
 
   const label = pct >= 80 ? 'High' : pct >= 55 ? 'Medium' : 'Low';
   const color = pct >= 80 ? '#16a34a' : pct >= 55 ? '#d97706' : '#dc2626';
   const parts = [];
-  if (criticalCount) parts.push(`${criticalCount} meaning/grammar issue${criticalCount === 1 ? '' : 's'}`);
-  if (advisoryCount) parts.push(`${advisoryCount} uncertain term${advisoryCount === 1 ? '' : 's'}`);
+  if (hasPolarity) parts.push('meaning/logic issue');
+  if (hasAudience) parts.push('grammar/localization flag');
+  if (hasRestructured) parts.push('restructured sentence');
+  if (llmGarbled) parts.push('leaked/garbled content');
+  if (hasUncertain) parts.push(`${qa.uncertainTerms.length} uncertain term${qa.uncertainTerms.length === 1 ? '' : 's'}`);
   if (qa.softFail) parts.push('completeness warnings');
   const reason = parts.length
     ? `${parts.join(', ')} (of ${total || '?'} segments).`
