@@ -282,7 +282,10 @@ function buildProductSpec(line, corrections = []) {
     // *is* the real-world pack size — a whole can/tin/jar is bought as one
     // unit. Used by scoreProduct to prefer a candidate whose pack size is
     // actually close to that over one that merely has the right keywords.
-    neededHint: parseQuantityFromLine(line),
+    // Run through normalizeNeededForPack so "2 cups flour"/"1 tbsp salt" is
+    // compared in grams too, not just already-gram/ml lines — otherwise the
+    // volume-vs-mass kind mismatch silently skipped every dry-goods case.
+    neededHint: normalizeNeededForPack(parseQuantityFromLine(line), { term, raw }),
     requiredTokens: significantTokens(term, { minLen: 3 }),
   };
 }
@@ -341,12 +344,16 @@ function scoreProduct(title, spec, referenceTitle = null) {
     score -= 20;
   }
 
-  // "1 x 400g can" states the real pack size, not just a quantity — a whole
-  // can/tin/jar is bought as one unit. Reward a candidate whose pack size is
-  // actually close to that, and penalise one wildly smaller/larger (a 70g
-  // flavoured snack pouch scoring the same as a plain 400g can on keywords
-  // alone was picking the pouch and then "buying 6 packs" of it).
-  if (packSize && spec.neededHint && spec.neededHint.kind === packSize.kind && packSize.value > 0) {
+  // "1 x 400g can" (or "2 cups flour", normalised to grams by neededHint)
+  // states the real pack size, not just a quantity — a whole can/tin/jar is
+  // bought as one unit. Reward a candidate whose pack size is actually close
+  // to that, and penalise one wildly smaller/larger (a 70g flavoured snack
+  // pouch scoring the same as a plain 400g can on keywords alone was picking
+  // the pouch and then "buying 6 packs" of it). Restricted to mass/volume —
+  // a count need (e.g. "2 eggs") legitimately matches a 12-pack; that's
+  // normal shopping, not a wrong-scale product, so it must not be penalised.
+  const scalableKinds = new Set(['mass', 'volume']);
+  if (packSize && spec.neededHint && scalableKinds.has(spec.neededHint.kind) && spec.neededHint.kind === packSize.kind && packSize.value > 0) {
     const ratio = packSize.value / spec.neededHint.value;
     if (ratio >= 0.7 && ratio <= 1.5) score += 16;
     else if (ratio < 0.25 || ratio > 5) score -= 16;
