@@ -590,6 +590,11 @@ function buildLessonCandidates(qa) {
     severity: SEVERITY.CRITICAL,
     term: { source: g.term, target: '', doNotTranslate: true, note: 'Added from Lessons learnt — do-not-translate enforcement gap' },
   }));
+  // Same term can independently surface from garbledOrIncompleteRows (above, grouped into `dnt`)
+  // AND from the review pass's own uncertainTerms — two different data sources describing the
+  // same root cause. Without this, e.g. "21 News" showed up once as a grouped DNT finding and
+  // again as a standalone "needs linguistic decision" item: same story, two disconnected bullets.
+  const dntTermKeys = new Set(dntGroups.keys());
 
   const global = (qa.polarityOrSentenceTypeIssues || []).map((it, i) => ({
     id: `polarity-${i}`,
@@ -621,6 +626,7 @@ function buildLessonCandidates(qa) {
   const alreadyStandard = [];
   (qa.uncertainTerms || []).forEach((it, i) => {
     if (!it?.source) return;
+    if (dntTermKeys.has(it.source.trim().toLowerCase())) return; // already covered by the dnt group above
     if (ALREADY_IN_GLOSSARY_RE.test(it.reason || '')) {
       // The model's own reason says this is already glossary-mandated — locking it "again" is
       // not a new suggestion, it's a no-op dressed up as one. Route to informational, not Lock.
