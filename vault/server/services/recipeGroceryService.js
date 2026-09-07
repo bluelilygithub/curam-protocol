@@ -203,6 +203,13 @@ function isRelevantMatch(term, title, { isProduct = false } = {}) {
 
 const MAX_PLAUSIBLE_ITEM_PRICE = 60;
 
+// Spices/seasonings normally come in small jars (~30-150g). A search can still
+// surface a genuine catering/foodservice tub (400g+) that technically matches
+// the ingredient name but is the wrong scale for a home recipe — penalise it
+// so a normal-sized jar wins when one exists.
+const SPICE_TERM_PATTERN = /\b(pepper|peppercorn|chilli|chili|paprika|cumin|cinnamon|nutmeg|oregano|basil|thyme|cayenne|turmeric|coriander seed|cardamom|clove|allspice|spice|seasoning)\b/i;
+const SPICE_BULK_MASS_THRESHOLD_G = 250;
+
 function storeSearchUrl(storeId, term) {
   const encoded = encodeURIComponent(term);
   return storeId === 'coles'
@@ -273,7 +280,12 @@ function scoreProduct(title, spec, referenceTitle = null) {
   // otherwise two similarly-relevant listings pick arbitrarily and one store
   // ends up costed off a real size while the other silently falls back to a
   // guessed default, so the two "same ingredient" rows aren't comparable.
-  if (parsePackSizeFromTitle(title)) score += 6;
+  const packSize = parsePackSizeFromTitle(title);
+  if (packSize) score += 6;
+
+  if (SPICE_TERM_PATTERN.test(spec.raw || '') && packSize?.kind === 'mass' && packSize.value >= SPICE_BULK_MASS_THRESHOLD_G) {
+    score -= 20;
+  }
 
   if (referenceTitle) {
     score += titleSimilarity(title, referenceTitle) * 35;
