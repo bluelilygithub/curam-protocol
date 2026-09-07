@@ -13,7 +13,7 @@ const FIELD = {
 };
 
 const MODES = [
-  { id: 'article', label: 'Article content', hint: 'Readable text only — no ads, header/footer, sidebars, or images.' },
+  { id: 'article', label: 'Article content', hint: 'Readable text only — no ads, header/footer, sidebars, "most read", or images.' },
   { id: 'images', label: 'Extract images', hint: 'Every image on the page with alt text and absolute URLs.' },
   { id: 'styled', label: 'Exact scrape', hint: 'Page as it appears, original inline styles kept, sandboxed preview.' },
 ];
@@ -29,6 +29,7 @@ export default function WebExtractorPage() {
 
   const [url, setUrl] = useState('');
   const [mode, setMode] = useState('article');
+  const [excludeTerms, setExcludeTerms] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -47,7 +48,8 @@ export default function WebExtractorPage() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode });
+      const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
+      const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode, excludeSections });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed');
       setResult(data);
@@ -190,6 +192,21 @@ export default function WebExtractorPage() {
           </button>
         ))}
       </div>
+
+      {mode === 'article' && (
+        <label className="block space-y-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+            Also exclude sections titled… <span style={{ color: 'var(--color-muted)' }}>(optional, comma-separated — e.g. "Author, Date, Newsletter signup")</span>
+          </span>
+          <input
+            value={excludeTerms}
+            onChange={(e) => setExcludeTerms(e.target.value)}
+            placeholder="Author, Date, In this section"
+            className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+            style={FIELD}
+          />
+        </label>
+      )}
 
       <button
         type="button"

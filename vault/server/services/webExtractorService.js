@@ -76,6 +76,50 @@ const JUNK_SELECTORS = [
   '[class*="comment" i]', '[id*="comment" i]',
 ];
 
+// Heading/label text that flags a block as supplementary (not article body),
+// even though it sits inside <article>/<main> and survives JUNK_SELECTORS.
+const JUNK_HEADING_PATTERNS = [
+  /^most read/i, /^most popular/i, /^trending( now)?$/i, /^popular (now|stories|articles)/i,
+  /^recent(ly)? (stories|articles|posts|news)/i, /^in this section/i, /^more (from|in|on|stories|articles)/i,
+  /^you may (also )?like/i, /^you might (also )?like/i, /^also read/i, /^also on/i,
+  /^related (articles|stories|content|posts)?$/i, /^recommended( for you)?$/i,
+  /^editor'?s pick(s)?/i, /^sponsored/i, /^advertisement/i, /^promoted/i,
+  /^what to read next/i, /^read (next|more)/i, /^up next/i, /^more like this/i,
+  /^latest (news|stories|articles)/i, /^top stories/i, /^next article/i, /^previous article/i,
+];
+
+const HEADING_LIKE_SELECTOR = 'h1, h2, h3, h4, h5, h6, [class*="heading" i], [class*="title" i]';
+// A block-level container worth removing wholesale when its heading matches.
+const REMOVABLE_ANCESTOR_SELECTOR = 'section, aside, div, ul, nav';
+
+function textMatchesAny(text, patterns) {
+  const t = (text || '').replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  return patterns.some((p) => (p instanceof RegExp ? p.test(t) : t.toLowerCase().includes(String(p).toLowerCase())));
+}
+
+/**
+ * Remove sections whose heading/label text matches a junk phrase (built-in
+ * "most read" / "related stories" style boilerplate, plus any user-supplied
+ * terms). Walks up from the matching heading to the nearest reasonably-scoped
+ * block ancestor and drops that whole subtree.
+ */
+function removeSupplementarySections(document, domWindow, customTerms = []) {
+  const patterns = [...JUNK_HEADING_PATTERNS, ...customTerms.filter(Boolean)];
+  if (!patterns.length) return;
+
+  document.querySelectorAll(HEADING_LIKE_SELECTOR).forEach((el) => {
+    if (!el.isConnected) return; // already removed as part of an earlier match
+    const label = el.tagName.toLowerCase().startsWith('h') ? el.textContent : (el.textContent || '').slice(0, 80);
+    if (!textMatchesAny(label, patterns)) return;
+
+    let target = el.closest(REMOVABLE_ANCESTOR_SELECTOR) || el;
+    // Don't nuke the whole document/body if the selector matched too broadly.
+    if (target === document.body || target === document.documentElement) target = el;
+    target.remove();
+  });
+}
+
 function absoluteUrl(src, base) {
   if (!src) return null;
   try { return new URL(src, base).toString(); } catch { return null; }
@@ -158,7 +202,7 @@ function blockToText(root, domWindow) {
  * Mode 1 — article text only: strip chrome (nav/header/footer/ads/sidebars/images),
  * return the readable body text (with heading line breaks) plus a lightly-cleaned HTML fragment.
  */
-function extractArticle(html, url) {
+function extractArticle(html, url, customExcludes = []) {
   const dom = new JSDOM(html, { url });
   const { document } = dom.window;
 
@@ -170,6 +214,8 @@ function extractArticle(html, url) {
   });
   // Images are excluded from this mode by request.
   document.querySelectorAll('img, picture, figure, video, source').forEach((el) => el.remove());
+  // "Most read" / "related stories" / user-named sections — supplementary, not article body.
+  removeSupplementarySections(document, dom.window, customExcludes);
 
   const main = findMainCandidate(document);
   const html_ = main ? main.innerHTML : '';
@@ -264,14 +310,14 @@ function extractStyled(html, url) {
   return { html: dom.serialize() };
 }
 
-async function runExtraction(rawUrl, mode) {
+async function runExtraction(rawUrl, mode, customExcludes = []) {
   const url = normaliseHttpUrl(rawUrl);
   const { body, statusCode } = await fetchHtml(url);
   if (statusCode >= 400) throw new Error(`Server returned ${statusCode}`);
 
   if (mode === 'images') return { url, mode, ...extractImages(body, url) };
   if (mode === 'styled') return { url, mode, ...extractStyled(body, url) };
-  return { url, mode: 'article', ...extractArticle(body, url) };
+  return { url, mode: 'article', ...extractArticle(body, url, customExcludes) };
 }
 
 module.exports = { runExtraction, extractArticle, extractImages, extractStyled, fetchBinary };

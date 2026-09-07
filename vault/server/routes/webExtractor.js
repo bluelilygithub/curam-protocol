@@ -39,13 +39,16 @@ function imageFilename(src, index, contentType) {
 const MODES = new Set(['article', 'images', 'styled']);
 
 router.post('/extract', async (req, res) => {
-  const { url, mode } = req.body || {};
+  const { url, mode, excludeSections } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url is required' });
   }
   const chosenMode = MODES.has(mode) ? mode : 'article';
+  const customExcludes = Array.isArray(excludeSections)
+    ? excludeSections.map((s) => String(s || '').trim()).filter(Boolean).slice(0, 20)
+    : [];
   try {
-    const result = await runExtraction(url, chosenMode);
+    const result = await runExtraction(url, chosenMode, customExcludes);
     res.json(result);
   } catch (err) {
     console.error('[web-extractor/extract]', err.message);
