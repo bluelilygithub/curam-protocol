@@ -483,6 +483,7 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
           </>
         )}
       </div>
+      {lessonsOpen && <LessonsLearntModal qa={qa} job={job} onClose={() => setLessonsOpen(false)} />}
     </Modal>
   );
 }
@@ -653,7 +654,6 @@ function LessonsLearntModal({ qa, job, onClose }) {
           </>
         )}
       </div>
-      {lessonsOpen && <LessonsLearntModal qa={qa} job={job} onClose={() => setLessonsOpen(false)} />}
     </Modal>
   );
 }
