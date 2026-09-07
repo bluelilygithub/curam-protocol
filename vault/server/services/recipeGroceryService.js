@@ -28,25 +28,28 @@ const PREMIUM_KEYWORDS = [
 
 const VARIANT_RULES = [
   {
+    // Milks always avoid lactose-free / a2 / oat-etc unless the ingredient line
+    // asks for them — those are distinct product lines, not a substitutable
+    // variant of "milk", and were slipping through as false matches.
     id: 'milk-standard',
     matchLine: (raw) => /\bmilk\b/.test(raw) && !/\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat|full\s*cream|full\s*fat|whole\b/.test(raw),
     searchSuffix: 'full cream',
     prefer: ['full cream', 'full fat', 'whole'],
-    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', '0 fat', 'low fat', 'fat free', 'trim'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', '0 fat', 'low fat', 'fat free', 'trim', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat'],
   },
   {
     id: 'milk-skim',
     matchLine: (raw) => /\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat\b/.test(raw),
     searchSuffix: 'light',
     prefer: ['skim', 'skimmed', 'lite', 'light', 'low fat', 'no fat'],
-    avoid: ['full cream', 'full fat', 'whole'],
+    avoid: ['full cream', 'full fat', 'whole', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat'],
   },
   {
     id: 'milk-full',
     matchLine: (raw) => /\bfull\s*(cream|fat)|whole\s*milk\b/.test(raw),
     searchSuffix: 'full cream',
     prefer: ['full cream', 'full fat', 'whole'],
-    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', 'low fat'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', 'low fat', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat'],
   },
   {
     id: 'salt-table',
@@ -265,6 +268,12 @@ function scoreProduct(title, spec, referenceTitle = null) {
   for (const premium of PREMIUM_KEYWORDS) {
     if (t.includes(premium) && !spec.variantHints.some((h) => t.includes(h))) score -= 12;
   }
+
+  // Prefer a title with an actual parseable pack size over one without —
+  // otherwise two similarly-relevant listings pick arbitrarily and one store
+  // ends up costed off a real size while the other silently falls back to a
+  // guessed default, so the two "same ingredient" rows aren't comparable.
+  if (parsePackSizeFromTitle(title)) score += 6;
 
   if (referenceTitle) {
     score += titleSimilarity(title, referenceTitle) * 35;
