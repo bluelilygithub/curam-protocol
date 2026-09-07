@@ -542,8 +542,26 @@ function tagSeverity(text, { floor } = {}) {
 //    - linguistic: review-pass uncertainTerms (`renderedAs`/`issue`, no proposedTarget) — genuine
 //      ambiguity with no confirmed correction. Needs a human linguistic call, not a ticket.
 //  - STYLE: dialectalChoices — an accepted regional choice, not an error; lockable as-is.
+// The model saying a term is already glossary-mandated means "lock" is a no-op, not a suggestion.
+const ALREADY_IN_GLOSSARY_RE = /already (?:in |mandated by |present in |part of )?(?:the )?glossary|already (?:standard|locked|mandated)/i;
+
+// A real term/short phrase, not a sentence of explanation. Catches the same field-conflation
+// failure the original proposedTarget/renderedAs bug had — this time the MODEL putting
+// explanatory prose ("Dre is Quebec French feminine for Dr; in European French...") into a field
+// meant to hold a short rendering, rather than client code picking the wrong field. Length +
+// explanatory-language heuristics; not perfect, but "42-char sentence with a semicolon" is never
+// a real term to lock.
+function looksMalformedTerm(s) {
+  const t = String(s || '').trim();
+  if (!t) return false;
+  if (t.length > 40) return true;
+  if (/[;]/.test(t)) return true;
+  if (/\b(is|means|refers to|in European|in Quebec|standard form|feminine for|masculine for)\b/i.test(t)) return true;
+  return false;
+}
+
 function buildLessonCandidates(qa) {
-  if (!qa) return { global: [], dnt: [], lock: [], driftEnforcement: [], driftLinguistic: [], style: [] };
+  if (!qa) return { global: [], dnt: [], lock: [], driftEnforcement: [], driftLinguistic: [], alreadyStandard: [], style: [] };
 
   const excerptOf = (it) => it.issue || it.reason || it.why || it.excerpt || it.source || '';
   const snippetOf = (it) => (it.sourceExcerpt || it.targetExcerpt)
@@ -600,17 +618,42 @@ function buildLessonCandidates(qa) {
   const lock = [];
   const driftEnforcement = [];
   const driftLinguistic = [];
+  const alreadyStandard = [];
   (qa.uncertainTerms || []).forEach((it, i) => {
     if (!it?.source) return;
-    if (it.proposedTarget && it.proposedTarget !== '(varies)') {
-      lock.push({
-        id: `lock-${i}`,
-        disposition: 'Lock rendering',
-        label: `Lock "${it.source}" → "${it.proposedTarget}"${it.reason ? ` (${it.reason})` : ''}`,
-        severity: tagSeverity(it.reason),
-        snippet: snippetOf(it),
-        term: { source: it.source, target: it.proposedTarget, note: it.reason || undefined },
+    if (ALREADY_IN_GLOSSARY_RE.test(it.reason || '')) {
+      // The model's own reason says this is already glossary-mandated — locking it "again" is
+      // not a new suggestion, it's a no-op dressed up as one. Route to informational, not Lock.
+      alreadyStandard.push({
+        id: `already-${i}`,
+        disposition: 'No action — already in glossary',
+        source: it.source,
+        detail: it.reason,
+        severity: SEVERITY.MINOR,
       });
+    } else if (it.proposedTarget && it.proposedTarget !== '(varies)') {
+      if (looksMalformedTerm(it.source) || looksMalformedTerm(it.proposedTarget)) {
+        // Same field-conflation failure mode as the original proposedTarget/renderedAs bug, just
+        // from the model itself this time: explanatory prose landed in a value field that's
+        // supposed to hold a short term. Don't trust it as a lockable pair — flag it instead.
+        driftLinguistic.push({
+          id: `malformed-lock-${i}`,
+          disposition: 'Needs manual entry (malformed field)',
+          source: it.source,
+          detail: `Looks like explanatory text landed in a term field, not a real term — raw: source="${it.source}", proposedTarget="${it.proposedTarget}".`,
+          snippet: snippetOf(it),
+          severity: SEVERITY.MODERATE,
+        });
+      } else {
+        lock.push({
+          id: `lock-${i}`,
+          disposition: 'Lock rendering',
+          label: `Lock "${it.source}" → "${it.proposedTarget}"${it.reason ? ` (${it.reason})` : ''}`,
+          severity: tagSeverity(it.reason),
+          snippet: snippetOf(it),
+          term: { source: it.source, target: it.proposedTarget, note: it.reason || undefined },
+        });
+      }
     } else if (it.lockedTarget) {
       // glossaryDriftTerms — a KNOWN, already-locked glossary term some rows didn't apply.
       // Not a glossary action; an enforcement/pipeline bug to ticket.
@@ -634,18 +677,41 @@ function buildLessonCandidates(qa) {
     }
   });
 
-  const style = (qa.dialectalChoices || [])
-    .filter((it) => it.used)
-    .map((it, i) => ({
+  const style = [];
+  (qa.dialectalChoices || []).filter((it) => it.used).forEach((it, i) => {
+    const sourceVal = it.standardForm || it.used;
+    if (ALREADY_IN_GLOSSARY_RE.test(it.context || '')) {
+      alreadyStandard.push({
+        id: `already-dialect-${i}`,
+        disposition: 'No action — already in glossary',
+        source: it.used,
+        detail: it.context,
+        severity: SEVERITY.MINOR,
+      });
+      return;
+    }
+    if (looksMalformedTerm(sourceVal) || looksMalformedTerm(it.used)) {
+      driftLinguistic.push({
+        id: `malformed-dialect-${i}`,
+        disposition: 'Needs manual entry (malformed field)',
+        source: it.used,
+        detail: `Looks like explanatory text landed in a term field, not a real term — raw: standardForm="${it.standardForm || ''}", used="${it.used}".`,
+        snippet: snippetOf(it),
+        severity: SEVERITY.MODERATE,
+      });
+      return;
+    }
+    style.push({
       id: `dialect-${i}`,
       disposition: 'Lock regional form',
-      label: `Lock "${it.standardForm || it.used}" → "${it.used}" as the standard rendering${it.context ? ` (${it.context})` : ''}`,
+      label: `Lock "${sourceVal}" → "${it.used}" as the standard rendering${it.context ? ` (${it.context})` : ''}`,
       severity: SEVERITY.MINOR,
       snippet: snippetOf(it),
-      term: { source: it.standardForm || it.used, target: it.used, note: it.context || undefined },
-    }));
+      term: { source: sourceVal, target: it.used, note: it.context || undefined },
+    });
+  });
 
-  return { global, dnt, lock, driftEnforcement, driftLinguistic, style };
+  return { global, dnt, lock, driftEnforcement, driftLinguistic, alreadyStandard, style };
 }
 
 function SeverityBadge({ severity }) {
@@ -679,7 +745,7 @@ function Snippet({ snippet }) {
 
 function LessonsLearntModal({ qa, job, onClose }) {
   const addToast = useToastStore(s => s.addToast);
-  const { global, dnt, lock, driftEnforcement, driftLinguistic, style } = buildLessonCandidates(qa);
+  const { global, dnt, lock, driftEnforcement, driftLinguistic, alreadyStandard, style } = buildLessonCandidates(qa);
   const [checkedGlobal, setCheckedGlobal] = useState(() => new Set());
   const [checkedDnt, setCheckedDnt] = useState(() => new Set());
   const [checkedLock, setCheckedLock] = useState(() => new Set());
@@ -695,7 +761,8 @@ function LessonsLearntModal({ qa, job, onClose }) {
   };
 
   const nothingToShow = global.length === 0 && dnt.length === 0 && lock.length === 0
-    && driftEnforcement.length === 0 && driftLinguistic.length === 0 && style.length === 0;
+    && driftEnforcement.length === 0 && driftLinguistic.length === 0
+    && alreadyStandard.length === 0 && style.length === 0;
   const nothingChecked = checkedGlobal.size === 0 && checkedDnt.size === 0
     && checkedLock.size === 0 && checkedStyle.size === 0;
 
@@ -893,6 +960,25 @@ function LessonsLearntModal({ qa, job, onClose }) {
                         </div>
                         <Snippet snippet={d.snippet} />
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {alreadyStandard.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Already in glossary ({alreadyStandard.length}) — no action needed
+                </p>
+                <ul className="space-y-1.5">
+                  {alreadyStandard.map(d => (
+                    <li key={d.id} className="flex items-start gap-2">
+                      <SeverityBadge severity={d.severity} />
+                      <DispositionTag text={d.disposition} />
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        <strong style={{ color: 'var(--color-text)' }}>{d.source}</strong> — {d.detail}
+                      </span>
                     </li>
                   ))}
                 </ul>
