@@ -2,14 +2,27 @@
 
 // Learned corrections for the grocery-price matcher — see docs/recipes.md
 // "Correction glossary". Workspace-shared: a fix one person adds applies to
-// everyone's future lookups for that ingredient term. Matching is a simple
-// substring test against the ingredient line — deliberately dumb and
-// predictable rather than fuzzy, so what you save is what applies.
+// everyone's future lookups for that ingredient term. Matching is token
+// overlap, not exact substring — the AI-parsed ingredientTerm ("red kidney
+// beans") won't always be a literal substring of the ingredient line
+// ("kidney beans (canned)"), and exact-substring matching silently dropped
+// corrections whenever the wording didn't line up exactly.
 //
 // Types:
 //   avoid_keyword  — value: { word }              subtract score if title contains it
 //   prefer_keyword — value: { word }               add score if title contains it
 //   pack_override  — value: { kind, value, unit, label } — replaces resolvePackSize()
+
+// Deliberately duplicated (not imported) from recipeGroceryService.js to
+// avoid a circular require — that module requires this one.
+const CORRECTION_STOPWORDS = new Set(['and', 'or', 'the', 'with', 'for', 'from', 'into', 'fresh', 'sliced', 'chopped', 'cooked', 'ground', 'canned', 'tinned', 'drained', 'rinsed']);
+function correctionTokens(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !CORRECTION_STOPWORDS.has(w));
+}
 
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
@@ -27,13 +40,19 @@ async function listCorrections() {
   return rows;
 }
 
-/** Corrections whose ingredientTerm appears in (or contains) this ingredient line/term. */
+/**
+ * Corrections whose ingredientTerm overlaps this ingredient line by
+ * significant tokens — most of the correction's key words appear in the
+ * line, so "red kidney beans" matches "1 x 400g can kidney beans (canned)".
+ */
 function correctionsForLine(corrections, line) {
-  const s = String(line || '').toLowerCase();
+  const lineTokens = new Set(correctionTokens(line));
+  if (!lineTokens.size) return [];
   return corrections.filter((c) => {
-    const key = String(c.ingredientTerm || '').toLowerCase().trim();
-    if (!key) return false;
-    return s.includes(key) || key.includes(s);
+    const keyTokens = correctionTokens(c.ingredientTerm);
+    if (!keyTokens.length) return false;
+    const hits = keyTokens.filter((t) => lineTokens.has(t)).length;
+    return hits / keyTokens.length >= 0.6;
   });
 }
 

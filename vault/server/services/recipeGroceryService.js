@@ -278,6 +278,11 @@ function buildProductSpec(line, corrections = []) {
     avoidHints,
     searchSuffix,
     packOverrides,
+    // The quantity mentioned in the ingredient line ("1 x 400g can") often
+    // *is* the real-world pack size — a whole can/tin/jar is bought as one
+    // unit. Used by scoreProduct to prefer a candidate whose pack size is
+    // actually close to that over one that merely has the right keywords.
+    neededHint: parseQuantityFromLine(line),
     requiredTokens: significantTokens(term, { minLen: 3 }),
   };
 }
@@ -334,6 +339,17 @@ function scoreProduct(title, spec, referenceTitle = null) {
 
   if (SPICE_TERM_PATTERN.test(spec.raw || '') && packSize?.kind === 'mass' && packSize.value >= SPICE_BULK_MASS_THRESHOLD_G) {
     score -= 20;
+  }
+
+  // "1 x 400g can" states the real pack size, not just a quantity — a whole
+  // can/tin/jar is bought as one unit. Reward a candidate whose pack size is
+  // actually close to that, and penalise one wildly smaller/larger (a 70g
+  // flavoured snack pouch scoring the same as a plain 400g can on keywords
+  // alone was picking the pouch and then "buying 6 packs" of it).
+  if (packSize && spec.neededHint && spec.neededHint.kind === packSize.kind && packSize.value > 0) {
+    const ratio = packSize.value / spec.neededHint.value;
+    if (ratio >= 0.7 && ratio <= 1.5) score += 16;
+    else if (ratio < 0.25 || ratio > 5) score -= 16;
   }
 
   if (referenceTitle) {
