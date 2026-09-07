@@ -189,14 +189,19 @@ function computeConfidence(qa) {
   if (qa.skipped) return { label: 'Unknown', pct: null, color: 'var(--color-muted)', reason: 'Subjective QA review was skipped for this job.' };
 
   const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
+  // Deliberately excludes garbledOrIncompleteRows — that category is dominated by routine
+  // deterministic completeness flags (numbers/codes/headers identical to source, short
+  // segments), already gated separately via hardFail/softFail above. Counting it here too
+  // pushed almost every real document's ratio past the "Low" cutoff regardless of actual
+  // translation quality — confirmed on real jobs, every one landed at the same 40%.
   const flagged = [
-    qa.uncertainTerms, qa.polarityOrSentenceTypeIssues, qa.garbledOrIncompleteRows, qa.audienceFlags,
+    qa.uncertainTerms, qa.polarityOrSentenceTypeIssues, qa.audienceFlags,
   ].reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
 
   if (!total) return { label: 'High', pct: 90, color: '#16a34a', reason: 'QA passed with no flagged segments.' };
   const ratio = flagged / total;
-  if (ratio < 0.02) return { label: 'High', pct: 92, color: '#16a34a', reason: `${flagged}/${total} segments flagged.` };
-  if (ratio < 0.10) return { label: 'Medium', pct: 70, color: '#d97706', reason: `${flagged}/${total} segments flagged.` };
+  if (ratio < 0.03) return { label: 'High', pct: 92, color: '#16a34a', reason: `${flagged}/${total} segments flagged.` };
+  if (ratio < 0.15) return { label: 'Medium', pct: 70, color: '#d97706', reason: `${flagged}/${total} segments flagged.` };
   return { label: 'Low', pct: 40, color: '#dc2626', reason: `${flagged}/${total} segments flagged.` };
 }
 
