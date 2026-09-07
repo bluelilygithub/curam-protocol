@@ -184,25 +184,43 @@ function parseQa(job) {
 // new model call. Deliberately a heuristic label, not a precise probability.
 function computeConfidence(qa) {
   if (!qa) return null;
-  if (qa.hardFail) return { label: 'Low', pct: 35, color: '#dc2626', reason: 'Hard QA gate failed.' };
-  if (qa.softFail) return { label: 'Medium', pct: 65, color: '#d97706', reason: 'Completed with warnings — some segments need review.' };
+  if (qa.hardFail) return { label: 'Low', pct: 15, color: '#dc2626', reason: 'Hard QA gate failed.' };
   if (qa.skipped) return { label: 'Unknown', pct: null, color: 'var(--color-muted)', reason: 'Subjective QA review was skipped for this job.' };
 
   const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
-  // Deliberately excludes garbledOrIncompleteRows — that category is dominated by routine
-  // deterministic completeness flags (numbers/codes/headers identical to source, short
-  // segments), already gated separately via hardFail/softFail above. Counting it here too
-  // pushed almost every real document's ratio past the "Low" cutoff regardless of actual
-  // translation quality — confirmed on real jobs, every one landed at the same 40%.
-  const flagged = [
-    qa.uncertainTerms, qa.polarityOrSentenceTypeIssues, qa.audienceFlags,
-  ].reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
 
-  if (!total) return { label: 'High', pct: 90, color: '#16a34a', reason: 'QA passed with no flagged segments.' };
-  const ratio = flagged / total;
-  if (ratio < 0.03) return { label: 'High', pct: 92, color: '#16a34a', reason: `${flagged}/${total} segments flagged.` };
-  if (ratio < 0.15) return { label: 'Medium', pct: 70, color: '#d97706', reason: `${flagged}/${total} segments flagged.` };
-  return { label: 'Low', pct: 40, color: '#dc2626', reason: `${flagged}/${total} segments flagged.` };
+  // A ratio of flag-count-to-pair-count breaks down on real reports: uncertainTerms includes
+  // one entry per *glossary term* (not per pair), so an 8-pair document can carry 10+ entries —
+  // any ratio-vs-total then exceeds 1.0 and every job bottoms out at the same fixed "Low"
+  // number, which is the bug a real report (qa-report-ESSAY EXAMPLES.txt: 8 pairs, 10
+  // uncertainTerms) surfaced. Score by weighted deduction instead, so severity actually varies
+  // the number rather than clamping to one floor value.
+  // - polarityOrSentenceTypeIssues / audienceFlags are genuine meaning/grammar defects a human
+  //   would need to fix — weighted heavily, capped so one bad document doesn't read as 0%.
+  // - uncertainTerms are mostly glossary-nuance notes ("close but not the locked term"), not
+  //   outright errors — weighted lightly.
+  // garbledOrIncompleteRows stays excluded: it's dominated by routine deterministic completeness
+  // noise (numbers/codes identical to source) already scored via hardFail/softFail above.
+  const criticalCount = (qa.polarityOrSentenceTypeIssues?.length || 0) + (qa.audienceFlags?.length || 0);
+  const advisoryCount = qa.uncertainTerms?.length || 0;
+
+  let pct = 97;
+  pct -= Math.min(50, criticalCount * 15);
+  pct -= Math.min(30, advisoryCount * 3);
+  if (qa.softFail) pct -= 20;
+  pct = Math.max(5, Math.min(97, Math.round(pct)));
+
+  const label = pct >= 80 ? 'High' : pct >= 55 ? 'Medium' : 'Low';
+  const color = pct >= 80 ? '#16a34a' : pct >= 55 ? '#d97706' : '#dc2626';
+  const parts = [];
+  if (criticalCount) parts.push(`${criticalCount} meaning/grammar issue${criticalCount === 1 ? '' : 's'}`);
+  if (advisoryCount) parts.push(`${advisoryCount} uncertain term${advisoryCount === 1 ? '' : 's'}`);
+  if (qa.softFail) parts.push('completeness warnings');
+  const reason = parts.length
+    ? `${parts.join(', ')} (of ${total || '?'} segments).`
+    : 'No issues flagged in QA review.';
+
+  return { label, pct, color, reason };
 }
 
 // Plain-text QA report for HITL review — the sections/order mirror what QaPanel renders on
