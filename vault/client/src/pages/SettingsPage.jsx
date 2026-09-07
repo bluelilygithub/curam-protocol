@@ -124,12 +124,17 @@ function SettingsPage() {
     saveTranslateReviewModel,
     translateTargetLanguage,
     saveTranslateTargetLanguage,
+    translateCustomInstructions,
+    saveTranslateCustomInstructions,
     reload: reloadModels,
   } = useModels();
   // Admin-only display order for the Translate agent's target-language dropdown. Defaults to
   // the base LANGUAGES order until an admin saves a custom one (translate_language_order).
   const [translateLanguageOrder, setTranslateLanguageOrder] = useState(TRANSLATE_LANGUAGES);
   const [savingLanguageOrder, setSavingLanguageOrder] = useState(false);
+  useEffect(() => {
+    setCustomInstructionsDraft(translateCustomInstructions || '');
+  }, [translateCustomInstructions]);
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
   const [modelInventoryError, setModelInventoryError] = useState('');
@@ -164,6 +169,10 @@ function SettingsPage() {
   const [branchEvalModelError, setBranchEvalModelError] = useState('');
   const [graphicsModelError, setGraphicsModelError] = useState('');
   const [embeddingModelError, setEmbeddingModelError] = useState('');
+  const [customInstructionsDraft, setCustomInstructionsDraft] = useState('');
+  const [customInstructionsSaving, setCustomInstructionsSaving] = useState(false);
+  const [customInstructionsSaved, setCustomInstructionsSaved] = useState(false);
+  const [customInstructionsError, setCustomInstructionsError] = useState('');
 
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
@@ -190,6 +199,7 @@ function SettingsPage() {
         'Appearance',
         'Profile',
         'AI & Chat',
+        'Translation',
         'Tasks',
         'Goals',
         'Integrations',
@@ -218,6 +228,7 @@ function SettingsPage() {
           'Appearance',
           'Profile',
           'AI & Chat',
+          'Translation',
           'Tasks',
           'Goals',
           'Integrations',
@@ -1639,140 +1650,6 @@ function SettingsPage() {
           )}
         </div>
 
-        {/* Translate agent — translate + review model slots */}
-        <div className="mb-4 p-4 rounded-xl border space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
-              Translate agent
-            </label>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              <strong style={{ color: 'var(--color-text)' }}>Translate</strong> does glossary prep and the document translation.
-              <strong style={{ color: 'var(--color-text)' }}> Review</strong> runs the QA pass (polarity, terminology, auditor flags).
-              Leave blank to use your vault default model and a different secondary tier when available.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-              Target language
-            </label>
-            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
-              Default target language for new translation jobs — the job intake dropdown can still override it for a one-off document.
-            </p>
-            <select
-              value={translateTargetLanguage}
-              onChange={async (e) => {
-                try { await saveTranslateTargetLanguage(e.target.value); }
-                catch (err) { /* ignore */ }
-              }}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              {translateLanguageOrder.map((l) => (
-                <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>
-              ))}
-            </select>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-              ⚠ next to a language means lower-quality output expected — sparse training examples for the LLM.
-            </p>
-          </div>
-
-          {user?.isAdmin && (
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                Language dropdown order
-              </label>
-              <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-                Order the choices shown in every target-language dropdown (job intake and this setting) — for every member, not just you.
-              </p>
-              <div className="rounded-lg border divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {translateLanguageOrder.map((l, i) => (
-                  <div key={l.code} className="flex items-center justify-between px-3 py-1.5 text-sm"
-                    style={{ color: 'var(--color-text)' }}>
-                    <span>{l.label}</span>
-                    <div className="flex gap-1">
-                      <button type="button" disabled={i === 0}
-                        onClick={() => {
-                          const next = [...translateLanguageOrder];
-                          [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                          setTranslateLanguageOrder(next);
-                        }}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
-                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} up`}>
-                        {getIcon('chevron-up', { size: 14 })}
-                      </button>
-                      <button type="button" disabled={i === translateLanguageOrder.length - 1}
-                        onClick={() => {
-                          const next = [...translateLanguageOrder];
-                          [next[i + 1], next[i]] = [next[i], next[i + 1]];
-                          setTranslateLanguageOrder(next);
-                        }}
-                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
-                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} down`}>
-                        {getIcon('chevron-down', { size: 14 })}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button type="button" disabled={savingLanguageOrder}
-                onClick={async () => {
-                  setSavingLanguageOrder(true);
-                  try {
-                    await api.post('/api/settings', {
-                      key: 'translate_language_order',
-                      value: JSON.stringify(translateLanguageOrder.map((l) => l.code)),
-                    });
-                  } finally { setSavingLanguageOrder(false); }
-                }}
-                className="mt-2 text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                {savingLanguageOrder ? 'Saving…' : 'Save order'}
-              </button>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-              Translate model
-            </label>
-            <select
-              value={translateModel}
-              onChange={async (e) => {
-                try { await saveTranslateModel(e.target.value); }
-                catch (err) { /* toast handled elsewhere if needed */ }
-              }}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              <option value="">Use vault default / standard tier</option>
-              {textModelChoices.map((m) => (
-                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-              Review model
-            </label>
-            <select
-              value={translateReviewModel}
-              onChange={async (e) => {
-                try { await saveTranslateReviewModel(e.target.value); }
-                catch (err) { /* ignore */ }
-              }}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              <option value="">Use vault secondary (or same as translate)</option>
-              {textModelChoices.map((m) => (
-                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {/* Theme builder design model */}
         {user?.isAdmin && (
           <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -2023,6 +1900,193 @@ function SettingsPage() {
         </form>
       </section>
       )}
+
+      {tab === 'Translation' && (<>
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Translation
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Models, target language, and prompt instructions for the Translate agent — moved off the AI Models tab so translate-specific tuning lives in one place.
+        </p>
+
+        <div className="mb-4 p-4 rounded-xl border space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Translate agent
+            </label>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              <strong style={{ color: 'var(--color-text)' }}>Translate</strong> does glossary prep and the document translation.
+              <strong style={{ color: 'var(--color-text)' }}> Review</strong> runs the QA pass (polarity, terminology, auditor flags).
+              Leave blank to use your vault default model and a different secondary tier when available.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Target language
+            </label>
+            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
+              Default target language for new translation jobs — the job intake dropdown can still override it for a one-off document.
+            </p>
+            <select
+              value={translateTargetLanguage}
+              onChange={async (e) => {
+                try { await saveTranslateTargetLanguage(e.target.value); }
+                catch (err) { /* ignore */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {translateLanguageOrder.map((l) => (
+                <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>
+              ))}
+            </select>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              ⚠ next to a language means lower-quality output expected — sparse training examples for the LLM.
+            </p>
+          </div>
+
+          {user?.isAdmin && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+                Language dropdown order
+              </label>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                Order the choices shown in every target-language dropdown (job intake and this setting) — for every member, not just you.
+              </p>
+              <div className="rounded-lg border divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {translateLanguageOrder.map((l, i) => (
+                  <div key={l.code} className="flex items-center justify-between px-3 py-1.5 text-sm"
+                    style={{ color: 'var(--color-text)' }}>
+                    <span>{l.label}</span>
+                    <div className="flex gap-1">
+                      <button type="button" disabled={i === 0}
+                        onClick={() => {
+                          const next = [...translateLanguageOrder];
+                          [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                          setTranslateLanguageOrder(next);
+                        }}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
+                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} up`}>
+                        {getIcon('chevron-up', { size: 14 })}
+                      </button>
+                      <button type="button" disabled={i === translateLanguageOrder.length - 1}
+                        onClick={() => {
+                          const next = [...translateLanguageOrder];
+                          [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                          setTranslateLanguageOrder(next);
+                        }}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
+                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} down`}>
+                        {getIcon('chevron-down', { size: 14 })}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={savingLanguageOrder}
+                onClick={async () => {
+                  setSavingLanguageOrder(true);
+                  try {
+                    await api.post('/api/settings', {
+                      key: 'translate_language_order',
+                      value: JSON.stringify(translateLanguageOrder.map((l) => l.code)),
+                    });
+                  } finally { setSavingLanguageOrder(false); }
+                }}
+                className="mt-2 text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {savingLanguageOrder ? 'Saving…' : 'Save order'}
+              </button>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Translate model
+            </label>
+            <select
+              value={translateModel}
+              onChange={async (e) => {
+                try { await saveTranslateModel(e.target.value); }
+                catch (err) { /* toast handled elsewhere if needed */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Use vault default / standard tier</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Review model
+            </label>
+            <select
+              value={translateReviewModel}
+              onChange={async (e) => {
+                try { await saveTranslateReviewModel(e.target.value); }
+                catch (err) { /* ignore */ }
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Use vault secondary (or same as translate)</option>
+              {textModelChoices.map((m) => (
+                <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mb-4 p-4 rounded-xl border space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+            Custom prompt instructions
+          </label>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Free text appended to the guidance every translate, repair, and review call already reads — use it for house style rules, terms to always leave in English, or corrections you keep having to make by hand. Applies to every job for every member (admin sets the workspace default; a non-admin's own text here overrides it for their jobs only).
+          </p>
+          <textarea
+            value={customInstructionsDraft}
+            onChange={(e) => setCustomInstructionsDraft(e.target.value)}
+            rows={6}
+            placeholder={'e.g. Never translate publication names (The Irish Times, The Guardian).\nKeep numbered legal clauses in the same numbering format as the source.\nPrefer formal "vous" register throughout.'}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              disabled={customInstructionsSaving || customInstructionsDraft === (translateCustomInstructions || '')}
+              onClick={async () => {
+                setCustomInstructionsError('');
+                setCustomInstructionsSaving(true);
+                try {
+                  await saveTranslateCustomInstructions(customInstructionsDraft);
+                  setCustomInstructionsSaved(true);
+                  setTimeout(() => setCustomInstructionsSaved(false), 2000);
+                } catch (err) {
+                  setCustomInstructionsError(err.message || 'Could not save custom instructions');
+                } finally {
+                  setCustomInstructionsSaving(false);
+                }
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: customInstructionsSaved ? '#22c55e' : 'var(--color-primary)' }}
+            >
+              {customInstructionsSaving ? 'Saving…' : customInstructionsSaved ? 'Saved ✓' : 'Save instructions'}
+            </button>
+            {customInstructionsError && (
+              <span className="text-xs" style={{ color: '#b45309' }}>{customInstructionsError}</span>
+            )}
+          </div>
+        </div>
+      </section>
+      </>)}
 
       {/* Live Preview — Appearance tab */}
       {tab === 'Appearance' && (

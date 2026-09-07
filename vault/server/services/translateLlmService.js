@@ -713,14 +713,27 @@ const FILENAME_TOKEN_RE = /\S*\.(?:pdf|docx?|xlsx?|pptx?|tiff?|dwg|dxf|jpe?g|png
 // hyphen or slash both qualify. Swap the whole URL out before any substitution runs.
 const URL_TOKEN_RE = /\bhttps?:\/\/\S+/gi;
 
+// A run of 2+ capitalized words, optionally joined by short connectors ("of", "to", "the", …) —
+// a proper noun or title still sitting in the target ("The Irish Times", "The Value of Data
+// Centres to Ireland"). Confirmed on real jobs: the model correctly left a masthead name / report
+// title in English, but the word-boundary substitution below has no concept of "this word is part
+// of a longer proper noun" and blindly rewrote a single word inside it anyway, producing "The
+// irlandais(e) Times" / "...to Irlande". Swapped out to a placeholder BEFORE any substitution
+// runs (same technique as URL_TOKEN_RE/FILENAME_TOKEN_RE) rather than checked match-by-match,
+// because checking context word-by-word breaks once an earlier substitution in the same string
+// has already replaced the neighbouring capitalized word (confirmed: substituting "Data Centres"
+// first destroys the very capitalization clue needed to protect "Ireland" right after it).
+const TITLE_SPAN_RE = /\b[A-ZÀ-Ž][\p{L}'’-]*(?:\s+(?:of|to|the|in|for|and|on|by|de|du|des|le|la|les|[A-ZÀ-Ž][\p{L}'’-]*))+\b/gu;
+const CAP_WORD_RE = /\b[A-ZÀ-Ž][\p{L}'’-]*\b/gu;
+
 function applyGlossarySubstitutions(text, terms) {
   let t = String(text || '');
   const subs = (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target);
   if (!subs.length) return t;
 
-  // Swap URLs and filename-like tokens out for placeholders before substituting, restore after —
-  // keeps them completely outside every glossary regex regardless of what term happens to match
-  // inside.
+  // Swap URLs, filename-like tokens, and proper-noun/title spans out for placeholders before
+  // substituting, restore after — keeps them completely outside every glossary regex regardless
+  // of what term happens to match inside.
   const urls = [];
   t = t.replace(URL_TOKEN_RE, (m) => {
     urls.push(m);
@@ -730,6 +743,16 @@ function applyGlossarySubstitutions(text, terms) {
   t = t.replace(FILENAME_TOKEN_RE, (m) => {
     filenames.push(m);
     return `⁣FN${filenames.length - 1}⁣`;
+  });
+  const titleSpans = [];
+  t = t.replace(TITLE_SPAN_RE, (m) => {
+    // Require at least 2 capitalized words in the span — a single capitalized word (any normal
+    // sentence start) must never get protected, or forced substitution would stop working almost
+    // everywhere.
+    const capCount = (m.match(CAP_WORD_RE) || []).length;
+    if (capCount < 2) return m;
+    titleSpans.push(m);
+    return `⁣TS${titleSpans.length - 1}⁣`;
   });
 
   // Longer sources first
@@ -743,6 +766,8 @@ function applyGlossarySubstitutions(text, terms) {
     const escaped = String(sub.source).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     t = t.replace(new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'giu'), (m, pre, hit) => pre + sub.target);
   }
+
+  t = t.replace(/⁣TS(\d+)⁣/g, (m, i) => titleSpans[Number(i)]);
 
   t = t.replace(/⁣FN(\d+)⁣/g, (m, i) => filenames[Number(i)]);
   t = t.replace(/⁣URL(\d+)⁣/g, (m, i) => urls[Number(i)]);

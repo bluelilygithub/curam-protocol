@@ -3,7 +3,7 @@
 const express = require('express');
 const multer  = require('multer');
 const { pool } = require('../db');
-const { resolveTranslateModels, getTranslateAgentCardConfig } = require('../services/translateModelResolver');
+const { resolveTranslateModels, getTranslateAgentCardConfig, loadCustomInstructions } = require('../services/translateModelResolver');
 const {
   proposeGlossary,
   autoFixGlossaryDrift,
@@ -1053,6 +1053,18 @@ async function processTranslateJob(
       glossaryPrep.guidance,
       'Spreadsheet cells are prefixed with [A1]-style refs — keep that prefix unchanged; translate only the cell text after it.',
     ].filter(Boolean).join('\n');
+  }
+
+  // Admin/user-authored free-text instructions from Settings → Translation — appended to the
+  // guidance block every translate/repair/review call already reads, so no separate prompt
+  // plumbing is needed: one setting, inherited everywhere glossaryPrep.guidance flows.
+  try {
+    const customInstructions = await loadCustomInstructions(userId);
+    if (customInstructions) {
+      glossaryPrep.guidance = [glossaryPrep.guidance, customInstructions].filter(Boolean).join('\n\n');
+    }
+  } catch (err) {
+    console.warn('[translate] loadCustomInstructions failed:', err.message);
   }
 
   await setJobStatus(jobId, {

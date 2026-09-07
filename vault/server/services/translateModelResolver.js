@@ -21,6 +21,8 @@ const SLOT_KEYS = {
   review: 'translate_review_model',
 };
 
+const CUSTOM_INSTRUCTIONS_KEY = 'translate_custom_instructions';
+
 const AGENT_CARD = {
   agentId: AGENT_ID,
   title: 'Translate agent',
@@ -179,6 +181,20 @@ async function resolveTranslateModels(ctx = {}) {
   };
 }
 
+/**
+ * Free-text custom instructions the admin (or user) can add on the Settings → Translation tab —
+ * appended to every translate/review prompt's guidance block, same own-setting-then-admin-fallback
+ * chain as the model slots above, so a non-admin without their own row still inherits the
+ * workspace default.
+ */
+async function loadCustomInstructions(userId) {
+  if (!userId) return '';
+  const own = await loadSetting(userId, CUSTOM_INSTRUCTIONS_KEY);
+  if (own) return own;
+  const admin = await loadFirstAdminSetting(CUSTOM_INSTRUCTIONS_KEY);
+  return admin || '';
+}
+
 async function getTranslateAgentCardConfig(userId) {
   const resolved = await resolveTranslateModels({ userId });
   return {
@@ -193,7 +209,9 @@ async function getTranslateAgentCardConfig(userId) {
 module.exports = {
   AGENT_ID,
   SLOT_KEYS,
+  CUSTOM_INSTRUCTIONS_KEY,
   AGENT_CARD,
   resolveTranslateModels,
   getTranslateAgentCardConfig,
+  loadCustomInstructions,
 };

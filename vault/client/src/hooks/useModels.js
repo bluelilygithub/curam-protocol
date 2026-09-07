@@ -16,6 +16,7 @@ export function useModels() {
   const [translateReviewModel, setTranslateReviewModel] = useState('');
   const [translateAgentCard, setTranslateAgentCard] = useState(null);
   const [translateTargetLanguage, setTranslateTargetLanguage] = useState('fr');
+  const [translateCustomInstructions, setTranslateCustomInstructions] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +62,7 @@ export function useModels() {
         if (settings.translate_model) setTranslateModel(settings.translate_model);
         if (settings.translate_review_model) setTranslateReviewModel(settings.translate_review_model);
         if (settings.translate_target_language) setTranslateTargetLanguage(settings.translate_target_language);
+        if (settings.translate_custom_instructions) setTranslateCustomInstructions(settings.translate_custom_instructions);
       }
       if (embeddingRes.ok) {
         const emb = await embeddingRes.json();
@@ -182,6 +184,14 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  const saveTranslateCustomInstructions = useCallback(async (text) => {
+    const res = await api.post('/api/settings', { key: 'translate_custom_instructions', value: text });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save custom instructions');
+    setTranslateCustomInstructions(text);
+    return { ok: true };
+  }, []);
+
   return {
     models,
     setModels,
@@ -209,5 +219,7 @@ export function useModels() {
     saveTranslateReviewModel,
     translateTargetLanguage,
     saveTranslateTargetLanguage,
+    translateCustomInstructions,
+    saveTranslateCustomInstructions,
   };
 }
