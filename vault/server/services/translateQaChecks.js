@@ -25,6 +25,14 @@ const PLACEHOLDER_PATTERNS = [
   /lorem\s+ipsum/i,
   /\bN\/?A\b\s*$/i,
   /^\[?\s*insert\s+translation/i,
+  // Confirmed on a real job: for a low-resource target language, the model sometimes gave up
+  // on a segment and emitted the single bare word "Translation" (no brackets, no "incomplete" —
+  // just that literal English word standing in for the whole target) instead of a genuine
+  // failure marker. None of the patterns above match it, since they all require either brackets
+  // or a qualifier word ("incomplete"/"error"/etc.) — a lone word passed every check as if it
+  // were real content. Anchored to the *whole* (trimmed) segment so a real sentence that happens
+  // to use the word "translation" mid-content is never falsely flagged.
+  /^\s*\[?\s*translation\s*\]?\s*\.?\s*$/i,
 ];
 
 /**

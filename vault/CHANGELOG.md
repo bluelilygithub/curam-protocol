@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-bare-translation-placeholder)
+
+### Translate — bare word "Translation" wasn't recognized as a failure placeholder
+Confirmed on a real Irish job: several segments came back as the literal single word "Translation" — the model giving up on a segment without any of the "incomplete"/"error"/"unable to translate" qualifiers every existing placeholder pattern requires, so it passed every completeness check as real content. Added a whole-segment pattern (`^\s*\[?\s*translation\s*\]?\s*\.?\s*$`, case-insensitive) that only matches when the *entire* trimmed target is just that word — a real sentence using "translation" mid-content is untouched.
+
 ## 2026-09-07 (translate-max-size-5mb)
 
 ### Translate — lowered max upload size 15 MB → 5 MB
