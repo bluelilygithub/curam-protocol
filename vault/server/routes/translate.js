@@ -52,7 +52,10 @@ getScheduler().catch(err => console.error('[translate] Tesseract init failed:', 
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 },
+  // Demo-scale cap — size is a poor proxy for job runtime (page/char count matters more), but
+  // it's the only pre-upload signal available. 5 MB keeps worst-case text (~150-250pp) and
+  // scanned (~30-60pp, OCR-bound) jobs in the few-minutes range rather than tens of minutes.
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (isAllowedUpload(file.originalname, file.mimetype)) return cb(null, true);
     cb(new Error('Only PDF, Word (.docx), or Excel (.xlsx/.xls) files are accepted'));

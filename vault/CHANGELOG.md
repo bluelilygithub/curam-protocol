@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-max-size-5mb)
+
+### Translate — lowered max upload size 15 MB → 5 MB
+Demo-scale cap. Size is a poor proxy for job runtime (page/char count matters more), but it's the only pre-upload signal available — 5 MB keeps a worst-case text PDF (~150-250pp) or OCR-bound scanned PDF (~30-60pp) in the few-minutes range instead of tens of minutes. Updated server multer limit, client pre-check, and UI copy.
+
 ## 2026-09-07 (translate-file-input-reset)
 
 ### Translate — re-selecting the same file after a job didn't work without a page refresh

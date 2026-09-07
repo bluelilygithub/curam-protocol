@@ -770,7 +770,7 @@ function TranslationsTab({ glossaries }) {
       addToast('Please select a PDF, Word (.docx), or Excel (.xlsx) file', 'error');
       return;
     }
-    if (f.size > 15 * 1024 * 1024) { addToast('File exceeds 15 MB limit', 'error'); return; }
+    if (f.size > 5 * 1024 * 1024) { addToast('File exceeds 5 MB limit', 'error'); return; }
     setFile(f);
     runPreflight(f);
   };
@@ -1030,7 +1030,7 @@ function TranslationsTab({ glossaries }) {
                 Drop a PDF, Word, or Excel file here — or click to browse
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Max 15 MB · PDF · .docx · .xlsx · scanned PDFs supported via OCR
+                Max 5 MB · PDF · .docx · .xlsx · scanned PDFs supported via OCR
               </p>
             </>
           ) : (
@@ -1593,7 +1593,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>How a job runs</p>
             <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
-              <li>Upload a PDF, Word (.docx), or Excel (.xlsx/.xls) file — up to 15 MB.</li>
+              <li>Upload a PDF, Word (.docx), or Excel (.xlsx/.xls) file — up to 5 MB.</li>
               <li>Pick a target language (defaults from Settings → AI & Chat → Translate agent, overridable per job) and answer a few intake questions (domain, audience, tone) — these shape the translation, not just the glossary.</li>
               <li>Choose an engine: <strong>Vault LLM</strong> (slower, better for tone/glossaries/te reo Māori policy) or <strong>Google Translate</strong> (fast drafts, common languages).</li>
               <li>Optionally enable a second-model QA review pass before the job finishes.</li>

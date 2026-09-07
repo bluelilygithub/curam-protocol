@@ -57,7 +57,7 @@ LLM translate chunks ~20 paragraphs / ~8000 chars per call and runs **up to 8 ch
 | Word | `.docx` | Paragraph text via mammoth. Legacy `.doc` is rejected — save as `.docx` (by **filename extension**, not browser-reported mimetype — see note below) |
 | Excel | `.xlsx`, `.xls` | Text cells only (numbers skipped). Each sheet is a section; cells prefixed `[A1]`-style |
 
-Max size: **15 MB**. Google Docs / Sheets: export as `.docx` / `.xlsx` then upload (no Drive OAuth).
+Max size: **5 MB** (demo-scale cap — size is a poor proxy for runtime, but it's the only pre-upload signal available; caps worst-case text PDFs around 150-250pp and OCR-bound scanned PDFs around 30-60pp, keeping jobs in the few-minutes range). Google Docs / Sheets: export as `.docx` / `.xlsx` then upload (no Drive OAuth).
 
 **Format detection is by filename extension, mimetype only as fallback.** Confirmed on a real upload: `detectSourceFormat` used to OR extension and mimetype together per format, checked in a fixed order — a file named `*.doc` whose browser-reported mimetype happened to be the DOCX one (content sniffing gets this wrong often enough) matched the `.docx` branch before ever reaching `.doc`'s own branch, since that branch's condition included `mt === MIME.docx`. The legacy-.doc rejection never fired: extraction "worked," a native Word download button appeared, silently contradicting the documented "legacy .doc is rejected" rule above. Extension now always wins when present; mimetype is only consulted for the rare upload with no extension at all.
 
