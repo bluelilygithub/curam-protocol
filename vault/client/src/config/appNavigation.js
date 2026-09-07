@@ -27,7 +27,7 @@ export const APP_NAV_GROUPS = [
       { id: 'graph', label: 'Knowledge Graph', path: '/graph', icon: 'share-2', featureKey: 'graph' },
       { id: 'debate', label: 'Multi-Model Debate', path: '/debate', icon: 'debate', featureKey: 'debate' },
       { id: 'compare', label: 'Document Compare', path: '/compare', icon: 'compare', featureKey: 'compare' },
-      { id: 'documentRedaction', label: 'Document redaction', path: '/document-redaction', icon: 'file-pen', featureKey: 'documentRedaction', matchPrefix: true },
+      { id: 'documentRedaction', label: 'Redaction', path: '/document-redaction', icon: 'file-pen', featureKey: 'documentRedaction', matchPrefix: true },
     ],
   },
   {
@@ -61,7 +61,7 @@ export const APP_NAV_GROUPS = [
     label: 'Money & data',
     items: [
       { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
-      { id: 'propertyScenario', label: 'Property scenario', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
+      { id: 'propertyScenario', label: 'Property', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
       { id: 'usage', label: 'Usage & Cost', path: '/usage', icon: 'usage', featureKey: 'usage' },
       { id: 'newsDigest', label: 'News Digest', path: '/news-digest', icon: 'news', featureKey: 'newsDigest' },

@@ -4,7 +4,7 @@ import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
-import { LANGUAGES, orderLanguages } from '../utils/translateLanguages';
+import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
 
 let _pdfjsLib = null;
 async function getPdfJs() {
@@ -177,6 +177,27 @@ function parseQa(job) {
   try {
     return typeof job.qaSummaryJson === 'string' ? JSON.parse(job.qaSummaryJson) : job.qaSummaryJson;
   } catch { return null; }
+}
+
+// Derived confidence in translation quality — no server-side score exists, so this reads the
+// signals the QA pass already produced (hard/soft gate, flagged-row ratio) rather than adding a
+// new model call. Deliberately a heuristic label, not a precise probability.
+function computeConfidence(qa) {
+  if (!qa) return null;
+  if (qa.hardFail) return { label: 'Low', pct: 35, color: '#dc2626', reason: 'Hard QA gate failed.' };
+  if (qa.softFail) return { label: 'Medium', pct: 65, color: '#d97706', reason: 'Completed with warnings — some segments need review.' };
+  if (qa.skipped) return { label: 'Unknown', pct: null, color: 'var(--color-muted)', reason: 'Subjective QA review was skipped for this job.' };
+
+  const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
+  const flagged = [
+    qa.uncertainTerms, qa.polarityOrSentenceTypeIssues, qa.garbledOrIncompleteRows, qa.audienceFlags,
+  ].reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+
+  if (!total) return { label: 'High', pct: 90, color: '#16a34a', reason: 'QA passed with no flagged segments.' };
+  const ratio = flagged / total;
+  if (ratio < 0.02) return { label: 'High', pct: 92, color: '#16a34a', reason: `${flagged}/${total} segments flagged.` };
+  if (ratio < 0.10) return { label: 'Medium', pct: 70, color: '#d97706', reason: `${flagged}/${total} segments flagged.` };
+  return { label: 'Low', pct: 40, color: '#dc2626', reason: `${flagged}/${total} segments flagged.` };
 }
 
 // Plain-text QA report for HITL review — the sections/order mirror what QaPanel renders on
@@ -650,6 +671,7 @@ function TranslationsTab({ glossaries }) {
   const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
   const [qaJob, setQaJob] = useState(null);
+  const [confidenceShown, setConfidenceShown] = useState(() => new Set()); // job ids — confidence toggled visible per row
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
   const [preflighting, setPreflighting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1084,9 +1106,11 @@ function TranslationsTab({ glossaries }) {
                   <Field label="Translate to"
                     hint={targetLang === 'mi'
                       ? 'Defaults to standard te reo Māori (Te Taura Whiri), not a specific iwi dialect.'
-                      : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
+                      : languageOptions.find(l => l.code === targetLang)?.lowResource
+                        ? '⚠ Lower-quality output expected — sparse training examples for this language.'
+                        : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
                     <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
-                      {languageOptions.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                      {languageOptions.map(l => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
                     </Sel>
                   </Field>
                 </div>
@@ -1267,6 +1291,14 @@ function TranslationsTab({ glossaries }) {
                     ? (LANGUAGES.find(l => l.code === job.sourceLanguage)?.label || job.sourceLanguage)
                     : '?';
                   const tgtLabel = LANGUAGES.find(l => l.code === job.targetLanguage)?.label || job.targetLanguage;
+                  const qa = parseQa(job);
+                  const confidence = computeConfidence(qa);
+                  const showConfidence = confidenceShown.has(job.id);
+                  const toggleConfidence = () => setConfidenceShown(prev => {
+                    const next = new Set(prev);
+                    next.has(job.id) ? next.delete(job.id) : next.add(job.id);
+                    return next;
+                  });
                   return (
                     <tr key={job.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-3 py-2" style={{ color: 'var(--color-text)', maxWidth: 180 }}>
@@ -1302,9 +1334,22 @@ function TranslationsTab({ glossaries }) {
                         {job.status === 'failed' && job.errorMessage && (
                           <span className="ml-1 text-xs cursor-help" title={job.errorMessage} style={{ color: '#dc2626' }}>ⓘ</span>
                         )}
+                        {showConfidence && confidence && (
+                          <div className="mt-1 text-xs" style={{ color: confidence.color }} title={confidence.reason}>
+                            Confidence: {confidence.label}{confidence.pct != null ? ` (${confidence.pct}%)` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
+                          {qa && (
+                            <button onClick={toggleConfidence}
+                              className="text-xs px-2 py-1 rounded border"
+                              title="Model's confidence in translation quality, derived from QA results"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              {showConfidence ? 'Hide confidence' : 'Confidence'}
+                            </button>
+                          )}
                           {!['done', 'failed', 'cancelled'].includes(job.status) && (
                             <button onClick={() => cancelJob(job.id)}
                               className="text-xs px-2 py-1 rounded border"

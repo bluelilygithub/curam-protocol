@@ -7,7 +7,7 @@ import { useIcon } from '../providers/IconProvider';
 import { formatModelSelectLabel } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
-import { LANGUAGES as TRANSLATE_LANGUAGES, orderLanguages } from '../utils/translateLanguages';
+import { LANGUAGES as TRANSLATE_LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
 import GmailConnect from '../components/GmailConnect';
 import CalendarConnect from '../components/CalendarConnect';
 import DriveConnect from '../components/DriveConnect';
@@ -1650,9 +1650,12 @@ function SettingsPage() {
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             >
               {translateLanguageOrder.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
+                <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>
               ))}
             </select>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              ⚠ next to a language means lower-quality output expected — sparse training examples for the LLM.
+            </p>
           </div>
 
           {user?.isAdmin && (

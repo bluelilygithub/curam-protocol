@@ -1,10 +1,13 @@
 // Shared target-language list for the Translate agent — used by TranslatePage (job history
 // labels) and SettingsPage (the single target-language setting, chosen once for the workspace
 // rather than per job — see docs/translate-agent.md).
+// `lowResource: true` marks languages with sparse training/example coverage for the LLM —
+// translation quality is less reliable for these. Flagged with a ⚠ next to the label wherever
+// this list is rendered as a dropdown (see LOW_RESOURCE_MARK / languageOptionLabel below).
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
-  { code: 'mi', label: 'te reo Māori' },
-  { code: 'ga', label: 'Irish (Gaelic)' },
+  { code: 'mi', label: 'te reo Māori', lowResource: true },
+  { code: 'ga', label: 'Irish (Gaelic)', lowResource: true },
   { code: 'fr', label: 'French' },
   { code: 'de', label: 'German' },
   { code: 'es', label: 'Spanish' },
@@ -18,8 +21,15 @@ export const LANGUAGES = [
   { code: 'nl', label: 'Dutch' },
   { code: 'pl', label: 'Polish' },
   { code: 'sv', label: 'Swedish' },
-  { code: 'af', label: 'Afrikaans' },
+  { code: 'af', label: 'Afrikaans', lowResource: true },
 ];
+
+export const LOW_RESOURCE_MARK = '⚠';
+
+/** Label for a dropdown <option> — appends the low-resource mark when flagged. */
+export function languageOptionLabel(lang) {
+  return lang.lowResource ? `${LOW_RESOURCE_MARK} ${lang.label}` : lang.label;
+}
 
 /**
  * Apply an admin-chosen display order (array of language codes, from the
