@@ -4,6 +4,13 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-afrikaans-language-order-email)
+
+### Translate — Afrikaans, admin-orderable language dropdown, email the three documents
+- Added **Afrikaans** to the shared language list.
+- **Admin-orderable dropdown:** Settings → AI & Chat → Translate agent → "Language dropdown order" (admin-only, up/down buttons per row) — saved as `translate_language_order`, applied via `orderLanguages()` everywhere the dropdown appears (job intake, Settings target-language select). Every member sees the admin's order via `GET /api/settings/translate-language-order` (first-admin's-row pattern, same as workspace-timezone).
+- **"Email these documents"** button in the View Results modal — sends whichever of the original file, translated PDF, and QA report exist for the job as email attachments to an address you enter, via `POST /api/translate/jobs/:id/email` and the existing `sendEmail` util (MailChannels/SMTP).
+
 ## 2026-09-07 (translate-about-modal)
 
 ### Translate — "what does this agent do" info modal on the page header

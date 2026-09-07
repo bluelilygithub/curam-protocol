@@ -18,6 +18,10 @@ A `help-circle` icon next to the page title opens **`TranslateAboutModal`** — 
 
 **Settings → AI & Chat → Translate agent → Target language** (`translate_target_language`, default `fr`) sets the workspace default. Job intake shows it as a dropdown seeded from that default — change it there to translate a single job into a different language without touching the workspace setting. (An earlier revision made this read-only per job; that broke picking a one-off language for a single document, so it's a dropdown again — the Settings value is just the starting point now.) Multi-language fan-out per run is still removed (one language per job); the old `POST /api/translate/jobs/batch` route is still on the server (`translate_jobs."batchId"` and existing rows reference it) but has no client caller.
 
+**Language list.** `client/src/utils/translateLanguages.js` — `LANGUAGES` (currently English, te reo Māori, Irish, French, German, Spanish, Italian, Portuguese, Chinese Simplified, Japanese, Arabic, Korean, Russian, Dutch, Polish, Swedish, Afrikaans). A new language needs an entry here and, if its script has characters outside WinAnsi/Latin-1, a `FONT_BY_LANG` entry too (see **Fonts** above) or it'll mojibake in the PDF the same way `mi` used to.
+
+**Admin-orderable dropdown.** Admins can reorder the language dropdown (Settings → AI & Chat → Translate agent → "Language dropdown order", up/down buttons, admin-only section) — saved as `translate_language_order` (JSON array of codes) on the admin's own settings row. `orderLanguages(order)` in `translateLanguages.js` applies it: listed codes come first in that order, anything not listed (including a language added later, before an admin re-saves the order) keeps its default position appended after. Every member sees the same order via `GET /api/settings/translate-language-order`, which reads the first admin's row — same "first admin's settings win" pattern as `GET /api/settings/workspace-timezone`.
+
 Same principle for the translate/review **model**: chosen once in the Translate agent Settings card (`translate_model` / `translate_review_model`), not per job — the per-job "this job only" model override dropdowns were removed from intake.
 
 ## Engines
@@ -136,6 +140,7 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | `GET` | `/api/translate/jobs/:id/download` | Download bilingual PDF |
 | `GET` | `/api/translate/jobs/:id/download-native` | Download native `.docx`/`.xlsx` output, when available (see **Native output** below) |
 | `GET` | `/api/translate/jobs/:id/download-original` | Download the untouched uploaded source file (`originalPdf` column, despite the name — holds whatever format was uploaded), for comparing against a flagged QA segment |
+| `POST` | `/api/translate/jobs/:id/email` | Emails whichever of the original file, translated PDF, and QA report (built server-side, `buildQaReportTextServer`) exist for the job as attachments — body `{ to }`. Uses `server/utils/sendEmail.js` (MailChannels or SMTP, whichever is configured). "Email these documents" button in the View Results modal. |
 | `DELETE` | `/api/translate/jobs/:id` | Delete job |
 
 Glossaries: CRUD under `/api/translate/glossaries`. `GET /api/translate/glossaries` returns `targetLanguage` + `isGlobal` on every row so the Glossaries tab can show a language column and a "Global · learned" badge — the same CRUD (rename, add/edit/remove terms) works on a global glossary as on a manually-created one, so it doubles as the review/edit UI for a language's accumulated terms.

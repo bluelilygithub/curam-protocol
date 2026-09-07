@@ -7,7 +7,7 @@ import { useIcon } from '../providers/IconProvider';
 import { formatModelSelectLabel } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
-import { LANGUAGES as TRANSLATE_LANGUAGES } from '../utils/translateLanguages';
+import { LANGUAGES as TRANSLATE_LANGUAGES, orderLanguages } from '../utils/translateLanguages';
 import GmailConnect from '../components/GmailConnect';
 import CalendarConnect from '../components/CalendarConnect';
 import DriveConnect from '../components/DriveConnect';
@@ -126,6 +126,10 @@ function SettingsPage() {
     saveTranslateTargetLanguage,
     reload: reloadModels,
   } = useModels();
+  // Admin-only display order for the Translate agent's target-language dropdown. Defaults to
+  // the base LANGUAGES order until an admin saves a custom one (translate_language_order).
+  const [translateLanguageOrder, setTranslateLanguageOrder] = useState(TRANSLATE_LANGUAGES);
+  const [savingLanguageOrder, setSavingLanguageOrder] = useState(false);
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
   const [modelInventoryError, setModelInventoryError] = useState('');
@@ -350,6 +354,12 @@ function SettingsPage() {
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
+      if (data.translate_language_order) {
+        try {
+          const parsed = JSON.parse(data.translate_language_order);
+          if (Array.isArray(parsed) && parsed.length) setTranslateLanguageOrder(orderLanguages(parsed));
+        } catch {}
+      }
     }).catch(() => {});
 
     api.get('/api/settings/mobile').then(r => r.json()).then(data => {
@@ -1639,11 +1649,66 @@ function SettingsPage() {
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             >
-              {TRANSLATE_LANGUAGES.map((l) => (
+              {translateLanguageOrder.map((l) => (
                 <option key={l.code} value={l.code}>{l.label}</option>
               ))}
             </select>
           </div>
+
+          {user?.isAdmin && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+                Language dropdown order
+              </label>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                Order the choices shown in every target-language dropdown (job intake and this setting) — for every member, not just you.
+              </p>
+              <div className="rounded-lg border divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                {translateLanguageOrder.map((l, i) => (
+                  <div key={l.code} className="flex items-center justify-between px-3 py-1.5 text-sm"
+                    style={{ color: 'var(--color-text)' }}>
+                    <span>{l.label}</span>
+                    <div className="flex gap-1">
+                      <button type="button" disabled={i === 0}
+                        onClick={() => {
+                          const next = [...translateLanguageOrder];
+                          [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                          setTranslateLanguageOrder(next);
+                        }}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
+                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} up`}>
+                        {getIcon('chevron-up', { size: 14 })}
+                      </button>
+                      <button type="button" disabled={i === translateLanguageOrder.length - 1}
+                        onClick={() => {
+                          const next = [...translateLanguageOrder];
+                          [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                          setTranslateLanguageOrder(next);
+                        }}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 disabled:opacity-25"
+                        style={{ color: 'var(--color-muted)' }} aria-label={`Move ${l.label} down`}>
+                        {getIcon('chevron-down', { size: 14 })}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" disabled={savingLanguageOrder}
+                onClick={async () => {
+                  setSavingLanguageOrder(true);
+                  try {
+                    await api.post('/api/settings', {
+                      key: 'translate_language_order',
+                      value: JSON.stringify(translateLanguageOrder.map((l) => l.code)),
+                    });
+                  } finally { setSavingLanguageOrder(false); }
+                }}
+                className="mt-2 text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {savingLanguageOrder ? 'Saving…' : 'Save order'}
+              </button>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>

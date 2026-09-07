@@ -18,4 +18,20 @@ export const LANGUAGES = [
   { code: 'nl', label: 'Dutch' },
   { code: 'pl', label: 'Polish' },
   { code: 'sv', label: 'Swedish' },
+  { code: 'af', label: 'Afrikaans' },
 ];
+
+/**
+ * Apply an admin-chosen display order (array of language codes, from the
+ * `translate_language_order` setting) to LANGUAGES. Codes not in `order` keep their default
+ * position, appended after the ordered ones — so adding a new language never requires an
+ * admin to update the order first for it to still appear.
+ */
+export function orderLanguages(order) {
+  if (!Array.isArray(order) || !order.length) return LANGUAGES;
+  const byCode = new Map(LANGUAGES.map((l) => [l.code, l]));
+  const ordered = order.map((c) => byCode.get(c)).filter(Boolean);
+  const seen = new Set(ordered.map((l) => l.code));
+  const remaining = LANGUAGES.filter((l) => !seen.has(l.code));
+  return [...ordered, ...remaining];
+}

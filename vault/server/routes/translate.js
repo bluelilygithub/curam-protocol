@@ -28,6 +28,7 @@ const { buildNativeXlsx, buildNativeDocx } = require('../services/translateNativ
 const { calculateCost } = require('../services/costCalculator');
 const { getUsdToAudRate } = require('../services/marketData');
 const { v4: uuidv4 } = require('uuid');
+const sendEmail = require('../utils/sendEmail');
 
 const router = express.Router();
 
@@ -383,6 +384,108 @@ router.get('/jobs/:id/download-native', async (req, res) => {
     res.setHeader('Content-Type', rows[0].translatedFileMime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${rows[0].translatedFileName || 'translated-document'}"`);
     res.send(rows[0].translatedFile);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Condensed server-side mirror of the client's buildQaReportText (TranslatePage.jsx) — same
+// purpose (a plain-text QA export for HITL review) but built here so the "email the three
+// documents" action doesn't need the browser to have the job open to attach it.
+function buildQaReportTextServer(job, qa) {
+  const lines = [];
+  const push = (s = '') => lines.push(s);
+  push('Translation QA Report');
+  push(`File: ${job.filename || '—'}`);
+  push(`Target language: ${job.targetLanguage || '—'}`);
+  push(`Translate model: ${qa.translateModel || '—'} · Review model: ${qa.reviewModel || '—'}`);
+  push(`Generated: ${new Date().toISOString()}`);
+  push('');
+  if (qa.hardFail) push(`HARD QA GATE FAILED${qa.hardFailCode ? ` (${qa.hardFailCode})` : ''}: ${qa.overallNotes || ''}`);
+  else if (qa.softFail) push(`COMPLETED WITH WARNINGS${qa.softFailCode ? ` (${qa.softFailCode})` : ''}: ${qa.overallNotes || ''}`);
+  else if (qa.skipped) push('Subjective review pass was skipped for this job.');
+  push('');
+  const sections = [
+    ['Uncertain terms', qa.uncertainTerms],
+    ['Dialectal choices (vs standard)', qa.dialectalChoices],
+    ['Polarity / sentence-type issues', qa.polarityOrSentenceTypeIssues],
+    ['Restructured sentences', qa.restructuredSentences],
+    ['Garbled / incomplete rows', qa.garbledOrIncompleteRows],
+    ['Audience flags', qa.audienceFlags],
+  ];
+  for (const [title, items] of sections) {
+    push(`${title} (${Array.isArray(items) ? items.length : 0})`);
+    if (!items?.length) {
+      push('  None flagged');
+    } else {
+      for (const it of items) {
+        const idx = typeof it.index === 'number' ? `#${it.index} ` : '';
+        const body = it.used && it.standardForm
+          ? `Used "${it.used}" (standard: "${it.standardForm}")${it.context ? ` — ${it.context}` : ''}`
+          : `${it.source || it.excerpt || it.target || JSON.stringify(it)}${it.issue || it.why || it.reason ? ` — ${it.issue || it.why || it.reason}` : ''}`;
+        push(`  ${idx}${body}`);
+      }
+    }
+    push('');
+  }
+  return lines.join('\n');
+}
+
+// Email the original source, translated PDF, and QA report together — for handing a job's full
+// output to someone who doesn't have Vault access (e.g. a client or an external reviewer).
+router.post('/jobs/:id/email', async (req, res) => {
+  try {
+    const to = String(req.body?.to || '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Valid recipient email required' });
+    }
+    const { rows } = await pool.query(
+      `SELECT filename, "originalPdf", "translatedPdf", "qaSummaryJson", "targetLanguage", status
+       FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    const job = rows[0];
+    if (!job) return res.status(404).json({ error: 'Not found' });
+
+    const base = (job.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const ext = (job.filename || '').match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || 'pdf';
+    const attachments = [];
+
+    if (job.originalPdf) {
+      attachments.push({
+        filename: job.filename || `original.${ext}`,
+        content: job.originalPdf,
+        contentType: ORIGINAL_MIME_BY_EXT[ext] || 'application/octet-stream',
+      });
+    }
+    if (job.translatedPdf) {
+      attachments.push({
+        filename: `translated-${base}.pdf`,
+        content: job.translatedPdf,
+        contentType: 'application/pdf',
+      });
+    }
+    let qa = null;
+    try { qa = job.qaSummaryJson ? (typeof job.qaSummaryJson === 'string' ? JSON.parse(job.qaSummaryJson) : job.qaSummaryJson) : null; } catch { qa = null; }
+    if (qa) {
+      attachments.push({
+        filename: `qa-report-${base}.txt`,
+        content: Buffer.from(buildQaReportTextServer(job, qa), 'utf8'),
+        contentType: 'text/plain',
+      });
+    }
+
+    if (!attachments.length) {
+      return res.status(400).json({ error: 'Nothing to email yet — this job has no original file, translated PDF, or QA report.' });
+    }
+
+    await sendEmail({
+      to,
+      subject: `Translation job: ${job.filename || 'document'}`,
+      html: `<p>Attached: ${attachments.map((a) => a.filename).join(', ')}.</p>`
+        + `<p style="color:#888;font-size:12px">Sent from Curam Vault — Translate agent.</p>`,
+      attachments,
+    });
+
+    res.json({ ok: true, attached: attachments.map((a) => a.filename) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

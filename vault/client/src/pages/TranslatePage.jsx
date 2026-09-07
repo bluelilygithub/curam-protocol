@@ -4,7 +4,7 @@ import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
-import { LANGUAGES } from '../utils/translateLanguages';
+import { LANGUAGES, orderLanguages } from '../utils/translateLanguages';
 
 let _pdfjsLib = null;
 async function getPdfJs() {
@@ -274,6 +274,25 @@ function downloadQaReport(job, qa) {
 }
 
 function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal }) {
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const sendEmail = async () => {
+    if (!emailTo.trim()) { addToast('Enter a recipient email', 'error'); return; }
+    setEmailSending(true);
+    try {
+      const res = await api.post(`/api/translate/jobs/${job.id}/email`, { to: emailTo.trim() });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Failed to send');
+      addToast(`Emailed ${body.attached?.length || 3} document(s) to ${emailTo.trim()}`, 'success');
+      setEmailOpen(false);
+      setEmailTo('');
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setEmailSending(false); }
+  };
+
   if (!qa) return null;
   const sections = [
     ['Uncertain terms', qa.uncertainTerms],
@@ -302,6 +321,12 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             Download original
           </button>
+          <button onClick={() => setEmailOpen(v => !v)}
+            className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+            title="Email the original, translated PDF, and QA report together"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            Email these documents
+          </button>
           {job?.status === 'done' && (
             <>
               <button onClick={() => onDownload?.(job)}
@@ -319,6 +344,22 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
             </>
           )}
         </div>
+        {emailOpen && (
+          <div className="flex gap-2 items-center flex-wrap">
+            <input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
+              placeholder="recipient@example.com"
+              className="text-sm px-3 py-2 rounded-lg border flex-1 min-w-48"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+            <button onClick={sendEmail} disabled={emailSending}
+              className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              {emailSending ? 'Sending…' : 'Send'}
+            </button>
+            <p className="text-xs w-full" style={{ color: 'var(--color-muted)' }}>
+              Sends whichever of the original file, translated PDF, and QA report exist for this job.
+            </p>
+          </div>
+        )}
         {qa.hardFail && (
           <p className="text-xs px-2 py-2 rounded border"
             style={{ borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
@@ -588,6 +629,7 @@ function TranslationsTab({ glossaries }) {
   // Target language is a Settings-level choice (Settings → AI & Chat → Translate agent), not
   // picked per job — loaded once below and used read-only here.
   const [targetLang, setTargetLang] = useState('fr');
+  const [languageOptions, setLanguageOptions] = useState(LANGUAGES); // admin-orderable, see Settings → Translate agent
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
@@ -645,6 +687,9 @@ function TranslationsTab({ glossaries }) {
     }).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then((s) => {
       if (s.translate_target_language) setTargetLang(s.translate_target_language);
+    }).catch(() => {});
+    api.get('/api/settings/translate-language-order').then(r => r.json()).then((d) => {
+      if (Array.isArray(d.order) && d.order.length) setLanguageOptions(orderLanguages(d.order));
     }).catch(() => {});
   }, []);
 
@@ -1017,7 +1062,7 @@ function TranslationsTab({ glossaries }) {
                       ? 'Defaults to standard te reo Māori (Te Taura Whiri), not a specific iwi dialect.'
                       : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
                     <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
-                      {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                      {languageOptions.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                     </Sel>
                   </Field>
                 </div>

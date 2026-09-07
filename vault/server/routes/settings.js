@@ -433,4 +433,23 @@ router.get('/workspace-timezone', async (_req, res) => {
   }
 });
 
+// GET /api/settings/translate-language-order — admin-chosen display order for the Translate
+// agent's target-language dropdown, same "first admin's settings row wins" pattern as
+// workspace-timezone above, so non-admin members see the same order without needing their own copy.
+router.get('/translate-language-order', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE s.key = 'translate_language_order' AND u."isAdmin" = TRUE
+       ORDER BY u.id ASC LIMIT 1`
+    );
+    let order = [];
+    try { order = rows[0]?.value ? JSON.parse(rows[0].value) : []; } catch { order = []; }
+    res.json({ order: Array.isArray(order) ? order : [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
