@@ -1367,10 +1367,15 @@ async function processTranslateJob(
       console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s)`);
     }
     if (remainingTerms.length) {
+      // NOT a new-term proposal — `t.target` is already the glossary's existing locked
+      // rendering; these rows just failed to use it and weren't a plain untranslated leftover
+      // (autoFixGlossaryDrift already fixed those). Row refs kept as their own field (not just
+      // baked into the issue string) so the client can list them without re-parsing prose.
       glossaryDriftTerms = remainingTerms.map((t) => ({
         source: t.source,
-        renderedAs: '(varies)',
-        issue: `Glossary term drift: ${t.count} occurrence(s) did not match the locked rendering "${t.target}" and weren't a plain untranslated leftover, so couldn't be auto-fixed (rows ${t.examples.join(', ')}${t.count > t.examples.length ? ', …' : ''}).`,
+        lockedTarget: t.target,
+        rows: t.examples,
+        issue: `${t.count} occurrence(s) did not match the locked rendering "${t.target}" and weren't a plain untranslated leftover, so couldn't be auto-fixed (rows ${t.examples.join(', ')}${t.count > t.examples.length ? ', …' : ''}).`,
       }));
       console.log('[translate] glossary drift remaining (not auto-fixable)', remainingTerms);
     }
