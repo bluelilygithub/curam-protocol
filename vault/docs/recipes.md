@@ -36,6 +36,8 @@ A hit only counts as a store match when the result's own URL is on `coles.com.au
 
 **Pantry staples skipped:** salt, pepper, and olive oil (`PANTRY_STAPLES` in `recipeService.js`) are assumed already on hand and never priced — `isPantryStapleLine()` in `recipeGroceryService.js` excludes them before the search runs (bell pepper etc still price normally). The panel's note line says which staples were skipped.
 
+**Correction glossary:** each priced row has a "This looks wrong" link. Typing what's wrong (e.g. *"that's a 12-pack, not 10"*) calls `POST /api/recipes/grocery/feedback`, which sends the note + ingredient + matched product to the `light` model (`recipeGroceryCorrections.js` → `learnFromFeedback`) to turn it into a structured rule — `avoid_keyword`, `prefer_keyword`, or `pack_override` — saved to `recipe_grocery_corrections` (workspace-shared, keyed by a generic `ingredientTerm` matched by substring against future ingredient lines), then immediately re-prices that one ingredient with the correction applied. `buildProductSpec()` folds saved keyword corrections into the same `avoidHints`/`variantHints` the built-in variant rules use; `resolvePackSize()` checks for a matching `pack_override` before parsing the title or falling back to a guessed default. A "Learned corrections" list under the results table shows and lets you remove saved rules. API: `GET /api/recipes/grocery/corrections`, `POST /api/recipes/grocery/feedback`, `DELETE /api/recipes/grocery/corrections/:id`. Table: `recipe_grocery_corrections`.
+
 Requires **`SERPER_SEARCH_API_KEY`** on Railway (default provider **Serper**). Add **Shopping search** in **Settings → AI & Chat → AI Models** (provider Serper or SerpAPI) — same row pattern as other models, with **Key set / Key missing**. Chat **`SEARCH_API_KEY`** (e.g. Brave) stays separate for `@search`.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
@@ -54,6 +56,9 @@ All long operations use the global **ProcessingModal**.
 | `POST` | `/api/recipes/named/suggest` | `{ name, notes? }` → Basic / Advanced / Master cards |
 | `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes? }` → full recipe + swaps + image |
 | `POST` | `/api/recipes/grocery/price` | `{ ingredients, recipeIngredients? }` → sourced Coles/Woolworths prices + links |
+| `GET` | `/api/recipes/grocery/corrections` | List the learned correction glossary |
+| `POST` | `/api/recipes/grocery/feedback` | `{ ingredient, store?, note, matchedProduct? }` → saves a correction + re-prices that ingredient |
+| `DELETE` | `/api/recipes/grocery/corrections/:id` | Remove a learned correction |
 | `POST` | `/api/recipes/image` | Regenerate dish photo `{ title, imagePrompt }` → `{ imageDataUrl }` |
 | `GET` | `/api/recipes/library` | List saved; `?tag=fast` filters |
 | `POST` | `/api/recipes/library` | Save favourite |

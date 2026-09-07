@@ -192,10 +192,148 @@ function formatStorePrice(cell) {
   return `$${cell.price.toFixed(2)}`;
 }
 
-function GroceryPriceResults({ result }) {
+function GroceryFeedbackRow({ row, store, onSubmitted }) {
+  const addToast = useToastStore((s) => s.addToast);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    if (!note.trim()) return;
+    setSending(true);
+    try {
+      const res = await api.post('/api/recipes/grocery/feedback', {
+        ingredient: row.ingredient,
+        store,
+        note: note.trim(),
+        matchedProduct: row[store]?.product || null,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save that correction');
+      onSubmitted(data.item);
+      addToast('Learned — recalculated with the correction', 'success');
+      setOpen(false);
+      setNote('');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="block text-[10px] mt-1 underline transition-opacity hover:opacity-70"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        This looks wrong
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={'What’s wrong? e.g. "that’s a 12-pack, not 10"'}
+        rows={2}
+        className="w-full text-[10px] p-1.5 rounded-lg border resize-none"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={sending || !note.trim()}
+          className="text-[10px] px-2 py-1 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          {sending ? 'Learning…' : 'Submit & recalc'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setNote(''); }}
+          className="text-[10px] px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GroceryCorrectionsGlossary() {
+  const addToast = useToastStore((s) => s.addToast);
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get('/api/recipes/grocery/corrections');
+      const data = await res.json();
+      setItems(data.corrections || []);
+    } catch {
+      setItems([]);
+    }
+  }, []);
+
+  useEffect(() => { if (open && items == null) load(); }, [open, items, load]);
+
+  const remove = async (id) => {
+    try {
+      await api.delete(`/api/recipes/grocery/corrections/${id}`);
+      setItems((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  return (
+    <div className="text-[10px]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="underline transition-opacity hover:opacity-70"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {open ? 'Hide learned corrections' : 'Learned corrections'}
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-1">
+          {items == null && <li style={{ color: 'var(--color-muted)' }}>Loading…</li>}
+          {items?.length === 0 && <li style={{ color: 'var(--color-muted)' }}>None yet — flag a wrong price above to teach it.</li>}
+          {items?.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-2 rounded-lg border p-1.5" style={{ borderColor: 'var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text)' }}>
+                <span className="font-medium">{c.ingredientTerm}</span>
+                {c.store ? ` (${c.store})` : ''} — {c.type.replace('_', ' ')}: {c.value?.word || c.value?.label || JSON.stringify(c.value)}
+              </span>
+              <button type="button" onClick={() => remove(c.id)} className="underline transition-opacity hover:opacity-70" style={{ color: 'var(--color-muted)' }}>
+                remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function GroceryPriceResults({ result, onResultChange }) {
   if (!result?.items?.length) return null;
   const cheapestRecipe = result.totals?.cheapestRecipeStore || result.totals?.cheapestStore;
   const cheapestBasket = result.totals?.cheapestBasketStore;
+
+  const handleItemUpdated = (updatedItem) => {
+    if (!updatedItem || !onResultChange) return;
+    const items = result.items.map((row) => (row.ingredient === updatedItem.ingredient ? updatedItem : row));
+    onResultChange({ ...result, items });
+  };
 
   return (
     <div className="space-y-3">
@@ -313,6 +451,9 @@ function GroceryPriceResults({ result }) {
                           {cell?.price ? `Source: ${cell.source || STORE_LABELS[store]}` : `Search ${STORE_LABELS[store]}`}
                         </a>
                       )}
+                      {cell?.price != null && (
+                        <GroceryFeedbackRow row={row} store={store} onSubmitted={handleItemUpdated} />
+                      )}
                     </td>
                   );
                 })}
@@ -321,6 +462,8 @@ function GroceryPriceResults({ result }) {
           </tbody>
         </table>
       </div>
+
+      <GroceryCorrectionsGlossary />
     </div>
   );
 }
@@ -341,6 +484,7 @@ function RecipeDetailPanel({
   onComparePrices,
   groceryLoading,
   groceryResult,
+  onGroceryResultChange,
   status,
 }) {
   const imageRef = useRef(null);
@@ -492,7 +636,7 @@ function RecipeDetailPanel({
               {groceryLoading ? 'Finding prices…' : groceryResult ? 'Refresh prices' : 'Get prices'}
             </button>
           </div>
-          {groceryResult && <GroceryPriceResults result={groceryResult} />}
+          {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={onGroceryResultChange} />}
         </div>
       )}
 
@@ -978,6 +1122,7 @@ export default function RecipesPage() {
                 onComparePrices={() => handleDetailGroceryPrice(expanded)}
                 groceryLoading={detailGroceryLoading}
                 groceryResult={detailGroceryResult}
+                onGroceryResultChange={setDetailGroceryResult}
                 onSave={() => handleSaveRecipe({
                   expanded,
                   dishImage,
@@ -1071,6 +1216,7 @@ export default function RecipesPage() {
                 onComparePrices={() => handleDetailGroceryPrice(namedExpanded)}
                 groceryLoading={detailGroceryLoading}
                 groceryResult={detailGroceryResult}
+                onGroceryResultChange={setDetailGroceryResult}
                 onSave={() => handleSaveRecipe({
                   expanded: namedExpanded,
                   dishImage: namedDishImage,
@@ -1136,7 +1282,7 @@ export default function RecipesPage() {
               {groceryResult ? 'Refresh prices' : 'Get prices'}
             </button>
 
-            {groceryResult && <GroceryPriceResults result={groceryResult} />}
+            {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={setGroceryResult} />}
           </section>
         )}
 

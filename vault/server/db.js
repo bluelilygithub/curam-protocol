@@ -782,6 +782,26 @@ async function initSchema() {
         ON recipes ("userId", "updatedAt" DESC)
     `);
 
+    // Learned grocery-price corrections — workspace-shared: one person flagging
+    // a bad match (wrong pack size, wrong keyword) helps every user's future
+    // lookups, not just theirs. See docs/recipes.md "Correction glossary".
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recipe_grocery_corrections (
+        id                SERIAL PRIMARY KEY,
+        "userId"          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        "ingredientTerm"  TEXT NOT NULL,
+        store             TEXT,
+        type              TEXT NOT NULL,
+        value             JSONB NOT NULL,
+        note              TEXT,
+        "createdAt"       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_recipe_grocery_corrections_term
+        ON recipe_grocery_corrections ("ingredientTerm")
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (

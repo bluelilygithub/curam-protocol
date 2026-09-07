@@ -15,6 +15,11 @@ const {
   deleteRecipe,
 } = require('../services/recipeService');
 const { priceIngredients } = require('../services/recipeGroceryService');
+const {
+  listCorrections,
+  deleteCorrection,
+  learnFromFeedback,
+} = require('../services/recipeGroceryCorrections');
 
 const router = express.Router();
 
@@ -92,6 +97,42 @@ router.post('/grocery/price', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[recipes/grocery/price]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Correction glossary — learned fixes for the grocery-price matcher.
+// See docs/recipes.md "Correction glossary".
+router.get('/grocery/corrections', async (req, res) => {
+  try {
+    res.json({ corrections: await listCorrections() });
+  } catch (err) {
+    console.error('[recipes/grocery/corrections]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/grocery/feedback', async (req, res) => {
+  try {
+    const { ingredient, store, note, matchedProduct } = req.body || {};
+    if (!ingredient || !note) {
+      return res.status(400).json({ error: 'ingredient and note are required' });
+    }
+    const correction = await learnFromFeedback({ userId: req.user.id, ingredient, store, note, matchedProduct });
+    const recalced = await priceIngredients(req.user.id, { ingredients: ingredient });
+    res.json({ correction, item: recalced.items?.[0] || null });
+  } catch (err) {
+    console.error('[recipes/grocery/feedback]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/grocery/corrections/:id', async (req, res) => {
+  try {
+    await deleteCorrection(req.user.id, req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[recipes/grocery/corrections delete]', err.message);
     res.status(400).json({ error: err.message });
   }
 });

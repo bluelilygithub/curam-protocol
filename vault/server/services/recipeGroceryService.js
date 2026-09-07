@@ -2,6 +2,7 @@
 
 const { webSearch, shoppingSearch, parsePriceString, getShoppingSearchConfig } = require('./webSearchService');
 const { PANTRY_STAPLES } = require('./recipeService');
+const { listCorrections, correctionsForLine } = require('./recipeGroceryCorrections');
 
 // Pantry staples (salt, pepper, olive oil) are assumed already owned — see
 // PANTRY_STAPLES in recipeService.js. Pricing them out is pointless and was
@@ -251,13 +252,24 @@ function storeSearchUrl(storeId, term) {
     : `https://www.woolworths.com.au/shop/search/products?searchTerm=${encoded}`;
 }
 
-function buildProductSpec(line) {
+function buildProductSpec(line, corrections = []) {
   const raw = String(line || '').toLowerCase();
   const term = ingredientSearchTerm(line);
   const rule = VARIANT_RULES.find((r) => r.matchLine(raw)) || null;
   const variantHints = rule ? [...rule.prefer] : [];
   const avoidHints = rule ? [...rule.avoid] : [];
   const searchSuffix = rule?.searchSuffix || null;
+
+  // Learned corrections (see recipeGroceryCorrections.js) layer on top of the
+  // built-in variant rules — same avoidHints/variantHints mechanism, so a
+  // saved correction is scored exactly like a hand-written rule.
+  const packOverrides = [];
+  for (const c of corrections) {
+    if (c.type === 'avoid_keyword' && c.value?.word) avoidHints.push(c.value.word);
+    else if (c.type === 'prefer_keyword' && c.value?.word) variantHints.push(c.value.word);
+    else if (c.type === 'pack_override' && c.value) packOverrides.push(c);
+  }
+
   return {
     line,
     term,
@@ -265,6 +277,7 @@ function buildProductSpec(line) {
     variantHints,
     avoidHints,
     searchSuffix,
+    packOverrides,
     requiredTokens: significantTokens(term, { minLen: 3 }),
   };
 }
@@ -587,7 +600,12 @@ function parsePackSizeFromTitle(title) {
   return found.sort((a, b) => b.value - a.value)[0];
 }
 
-function resolvePackSize(title, spec) {
+function resolvePackSize(title, spec, storeId = null) {
+  const override = (spec?.packOverrides || []).find((c) => !c.store || c.store === storeId);
+  if (override) {
+    const v = override.value;
+    return { kind: v.kind, value: Number(v.value), unit: v.unit, label: v.label || `${v.value}${v.unit}`, corrected: true };
+  }
   return parsePackSizeFromTitle(title) || inferDefaultPackSize(spec);
 }
 
@@ -606,13 +624,13 @@ function computeProportionalPrices(packPrice, needed, pack) {
   return { ratio, recipePrice, checkoutPrice };
 }
 
-function enrichCellWithQuantity(cell, line, { needed: neededOverride, spec: specOverride } = {}) {
+function enrichCellWithQuantity(cell, line, { needed: neededOverride, spec: specOverride, storeId = null } = {}) {
   if (!cell || cell.price == null) return cell;
 
   const spec = specOverride || buildProductSpec(line);
   const neededRaw = neededOverride || parseQuantityFromLine(line);
   const needed = normalizeNeededForPack(neededRaw, spec);
-  let pack = resolvePackSize(cell.product, spec);
+  let pack = resolvePackSize(cell.product, spec, storeId);
   const packEstimated = !!pack?.estimated;
 
   cell.quantityNeeded = neededRaw || needed;
@@ -688,8 +706,8 @@ async function findViaOrganic(storeId, term) {
   return null;
 }
 
-async function findMatchedStorePrices(line) {
-  const spec = buildProductSpec(line);
+async function findMatchedStorePrices(line, corrections = []) {
+  const spec = buildProductSpec(line, corrections);
   spec.term = ingredientSearchTerm(line);
   if (!spec.term) return { coles: null, woolworths: null, matched: false };
 
@@ -855,6 +873,16 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     searchConfigError = err.message;
   }
 
+  // Learned corrections (see recipeGroceryCorrections.js) apply to every
+  // lookup, not just the ingredient that triggered them — a fix one person
+  // saves helps everyone's future runs.
+  let allCorrections = [];
+  try {
+    allCorrections = await listCorrections();
+  } catch (err) {
+    console.warn('[recipeGrocery] failed to load corrections:', err.message);
+  }
+
   let items;
   if (!searchAvailable) {
     items = lines.map((line) => {
@@ -872,13 +900,13 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     });
   } else {
     items = await mapWithConcurrency(keptEntries, 3, async ({ line, origIdx }) => {
-      const spec = buildProductSpec(line);
+      const corrections = correctionsForLine(allCorrections, line);
+      const spec = buildProductSpec(line, corrections);
       const needed = parseQuantityFromIngredient(recipeIngredients?.[origIdx]) || parseQuantityFromLine(line);
       const qtyLabel = needed?.label || null;
-      const ctx = { needed, spec };
-      const found = await findMatchedStorePrices(line);
-      const coles = enrichCellWithQuantity(found.coles || emptyStoreCell('coles', spec.term), line, ctx);
-      const woolworths = enrichCellWithQuantity(found.woolworths || emptyStoreCell('woolworths', spec.term), line, ctx);
+      const found = await findMatchedStorePrices(line, corrections);
+      const coles = enrichCellWithQuantity(found.coles || emptyStoreCell('coles', spec.term), line, { needed, spec, storeId: 'coles' });
+      const woolworths = enrichCellWithQuantity(found.woolworths || emptyStoreCell('woolworths', spec.term), line, { needed, spec, storeId: 'woolworths' });
 
       let cheapestStore = null;
       let min = Infinity;
