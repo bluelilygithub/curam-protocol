@@ -822,6 +822,10 @@ function TranslationsTab({ glossaries }) {
       });
       setActiveJobId(body.jobId);
       setFile(null); setPreflight(null); setEstimate(null);
+      // Reset the native file input's value — selecting the *same* file again (e.g. re-running
+      // the same document into another language) doesn't fire a change event otherwise, so the
+      // dropzone looks like it silently ignored the click and only a page refresh "fixes" it.
+      if (fileRef.current) fileRef.current.value = '';
       loadJobs();
     } catch (e) {
       addToast(e.message, 'error');

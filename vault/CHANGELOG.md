@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-file-input-reset)
+
+### Translate — re-selecting the same file after a job didn't work without a page refresh
+File input's `value` was never cleared after submit — browsers don't fire `onChange` when you pick the identical file again, so the dropzone looked stuck. Reset `fileRef.current.value` after a successful submit.
+
 ## 2026-09-07 (translate-job-cancel)
 
 ### Translate — cancel a running job
