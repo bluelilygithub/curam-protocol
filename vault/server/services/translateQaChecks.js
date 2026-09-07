@@ -175,6 +175,72 @@ function hasHallucinatedRedaction(source, target) {
   return /\[REDACTED(?::[^\]]+)?\]/i.test(String(target || ''));
 }
 
+function escapeRegExpLiteral(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * DO-NOT-TRANSLATE terms get zero mechanical enforcement anywhere else in this pipeline —
+ * buildGlossaryBlock (translateLlmService.js) only tells the model "keep exactly" as a prompt
+ * instruction, and applyGlossarySubstitutions/reportGlossaryDrift/autoFixGlossaryDrift all
+ * explicitly filter doNotTranslate terms OUT of their own logic (they only touch forced
+ * source->target substitutions). So if the model just ignores the instruction for one DNT term
+ * in one chunk — confirmed on real jobs: "21 News" -> "21 Actualités", "Canfield Fair" ->
+ * "Canfield foire" — nothing downstream ever notices. This is the missing verification: for
+ * every DNT term whose exact source string is present in `source`, require it still be present
+ * verbatim in `target`. Returns the first missing term's source string, or null.
+ */
+function hasMissingDoNotTranslateTerm(source, target, glossaryTerms) {
+  const dnt = (glossaryTerms || []).filter((t) => t?.doNotTranslate && t.source);
+  if (!dnt.length) return null;
+  const src = String(source || '');
+  const tgt = String(target || '');
+  for (const t of dnt) {
+    const escaped = escapeRegExpLiteral(t.source);
+    // Same accented-safe word-boundary logic as applyGlossarySubstitutions (translateLlmService.js).
+    const re = new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'iu');
+    if (re.test(src) && !re.test(tgt)) return t.source;
+  }
+  return null;
+}
+
+// Small denylist of common English function/closed-class words that should never survive, as a
+// whole word, into a non-English target. Confirmed on a real job: "hurt" and "aisle" left
+// untranslated mid-French-sentence ("plusieurs personnes ont été hurt", "de tous les côtés de
+// l'aisle"). Deliberately NOT a general dictionary/stopword check against arbitrary target
+// languages — that has a huge false-positive surface (short target-language words coincidentally
+// spelled like English function words, e.g. French "car" = "because"). Narrow denylist, English
+// source only, expand only after confirming low false-positive rate against real reports.
+const STRAY_ENGLISH_WORDS = [
+  'hurt', 'aisle', 'the', 'and', 'with', 'from', 'been', 'were', 'was', 'have', 'has',
+  'they', 'their', 'there', 'which', 'about', 'because', 'before', 'after', 'during',
+  'through', 'between', 'other', 'some', 'such', 'only', 'also', 'both', 'either',
+  'should', 'would', 'could', 'might', 'must', 'will', 'shall',
+];
+const STRAY_ENGLISH_WORDS_RE = new RegExp(`\\b(${STRAY_ENGLISH_WORDS.join('|')})\\b`, 'i');
+
+/**
+ * Flags an ordinary English word left untranslated in a non-English target — a different failure
+ * mode from a DNT glossary term (that's a locked term the model wasn't supposed to translate;
+ * this is a plain word it simply failed to translate). English-source only in this v1 (skips
+ * gracefully for any other source language rather than guessing); requires the flagged word to
+ * also literally appear in the paired source (rules out a coincidental target-language word that
+ * happens to be spelled the same). Returns the matched word, or null.
+ */
+function hasStraySourceWord(source, target, { sourceLanguage, targetLanguage } = {}) {
+  const srcLang = String(sourceLanguage || '').toLowerCase();
+  const tgtLang = String(targetLanguage || '').toLowerCase();
+  if (!srcLang.startsWith('en') || srcLang === tgtLang) return null;
+  const tgt = String(target || '');
+  STRAY_ENGLISH_WORDS_RE.lastIndex = 0;
+  const m = STRAY_ENGLISH_WORDS_RE.exec(tgt);
+  if (!m) return null;
+  const word = m[1];
+  const wordRe = new RegExp(`\\b${escapeRegExpLiteral(word)}\\b`, 'i');
+  if (!wordRe.test(String(source || ''))) return null;
+  return word;
+}
+
 /**
  * If source contains [REDACTED…], ensure target keeps those tokens verbatim
  * and does not replace them with meta-commentary.
@@ -364,7 +430,9 @@ function detectRepeatedTermCandidates(paragraphsByPage, existingTerms = [], { li
  * Per-segment completeness: (a) non-empty (b) not identical to source (c) no placeholders.
  * @returns {{ ok: boolean, reasons: string[] }}
  */
-function checkSegmentCompleteness(source, target, { skipIdentical = false } = {}) {
+function checkSegmentCompleteness(source, target, {
+  skipIdentical = false, glossaryTerms = [], sourceLanguage, targetLanguage,
+} = {}) {
   const reasons = [];
   const tgt = String(target ?? '');
   if (!tgt.trim()) {
@@ -382,6 +450,14 @@ function checkSegmentCompleteness(source, target, { skipIdentical = false } = {}
   }
   if (hasHallucinatedRedaction(source, tgt)) {
     reasons.push('hallucinated_redaction');
+  }
+  const missingDnt = hasMissingDoNotTranslateTerm(source, tgt, glossaryTerms);
+  if (missingDnt) {
+    reasons.push(`dnt_term_missing:${missingDnt}`);
+  }
+  const strayWord = hasStraySourceWord(source, tgt, { sourceLanguage, targetLanguage });
+  if (strayWord) {
+    reasons.push(`stray_source_word:${strayWord}`);
   }
   if (!skipIdentical && !looksNonLinguistic(source)) {
     if (normalizeForCompare(source) === normalizeForCompare(tgt)) {
@@ -417,7 +493,7 @@ function isTruncatedShort(source, target) {
  * Run completeness on every pair. Returns automatic garbled rows + stats.
  * This MUST run before subjective LLM checks and cannot be skipped.
  */
-function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLanguage } = {}) {
+function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLanguage, glossaryTerms = [] } = {}) {
   const sameLang = sourceLanguage
     && targetLanguage
     && String(sourceLanguage).toLowerCase() === String(targetLanguage).toLowerCase();
@@ -428,12 +504,17 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
   let placeholderCount = 0;
   let redactionMissingCount = 0;
   let truncatedCount = 0;
+  let dntMissingCount = 0;
+  let strayWordCount = 0;
 
   (pairs || []).forEach((pair, index) => {
     const source = pair?.source ?? '';
     const target = pair?.target ?? '';
     const { ok, reasons } = checkSegmentCompleteness(source, target, {
       skipIdentical: sameLang,
+      glossaryTerms,
+      sourceLanguage,
+      targetLanguage,
     });
     if (ok) return;
 
@@ -442,6 +523,8 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
     if (reasons.some((r) => r.startsWith('placeholder:'))) placeholderCount += 1;
     if (reasons.some((r) => r === 'redaction_token_missing')) redactionMissingCount += 1;
     if (reasons.some((r) => r === 'truncated_short')) truncatedCount += 1;
+    if (reasons.some((r) => r.startsWith('dnt_term_missing:'))) dntMissingCount += 1;
+    if (reasons.some((r) => r.startsWith('stray_source_word:'))) strayWordCount += 1;
 
     garbledOrIncompleteRows.push({
       index,
@@ -464,6 +547,8 @@ function runDeterministicCompletenessCheck(pairs, { sourceLanguage, targetLangua
       placeholderCount,
       redactionMissingCount,
       truncatedCount,
+      dntMissingCount,
+      strayWordCount,
       identicalRatio: total ? identicalCount / total : 0,
       placeholderRatio: total ? placeholderCount / total : 0,
       sameLangSkippedIdentical: Boolean(sameLang),
@@ -484,11 +569,13 @@ function hardSanityGate(pairs, opts = {}) {
     placeholderHardFailRatio = PLACEHOLDER_HARD_FAIL_RATIO,
     sourceLanguage,
     targetLanguage,
+    glossaryTerms = [],
   } = opts;
 
   const { garbledOrIncompleteRows, stats } = runDeterministicCompletenessCheck(pairs, {
     sourceLanguage,
     targetLanguage,
+    glossaryTerms,
   });
 
   if (stats.total === 0) {
@@ -674,6 +761,8 @@ module.exports = {
   findPlaceholder,
   enforceRedactionPassThrough,
   hasHallucinatedRedaction,
+  hasMissingDoNotTranslateTerm,
+  hasStraySourceWord,
   lockedDoNotTranslateTerms,
   detectRepeatedTermCandidates,
   isMetaCommentaryInner,

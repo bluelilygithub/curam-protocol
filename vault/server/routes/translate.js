@@ -1341,7 +1341,7 @@ async function processTranslateJob(
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
-  const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage });
+  const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage, glossaryTerms });
 
   // ── 7. Review pass ──────────────────────────────────────────────────────────
   let qaSummary = {
@@ -1473,7 +1473,7 @@ async function processTranslateJob(
       }
     }
   } else {
-    const det = runDeterministicCompletenessCheck(reviewPairs, { sourceLanguage, targetLanguage });
+    const det = runDeterministicCompletenessCheck(reviewPairs, { sourceLanguage, targetLanguage, glossaryTerms });
     qaSummary.garbledOrIncompleteRows = det.garbledOrIncompleteRows;
     qaSummary.completenessCheck = {
       ran: true,

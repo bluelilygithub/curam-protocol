@@ -98,6 +98,26 @@ function stitchFragments(paragraphs) {
   return out;
 }
 
+// Fallback for a short document (or PDF page) that extracted as one giant paragraph — no
+// blank-line breaks in a docx, or no y-gap breaks in a PDF page with uniform, tight leading.
+// Without this, the whole document becomes a single translation "pair", so per-segment QA
+// signals (density-based confidence scoring, per-segment repair/retry) have nothing to isolate —
+// confirmed on a real ~400-word news article that extracted as exactly 1 paragraph. Only engages
+// when normal splitting produced exactly one long paragraph — never touches a document that
+// already split normally, so there's zero behavior change for the common case.
+const SENTENCE_SPLIT_RE = /[^.!?]+[.!?]+[\s]*/g;
+const SINGLE_BLOB_THRESHOLD = 400;
+
+function splitSingleBlobIntoSentences(paragraphs) {
+  if (!Array.isArray(paragraphs) || paragraphs.length !== 1) return paragraphs;
+  const only = paragraphs[0];
+  if (!only || only.length <= SINGLE_BLOB_THRESHOLD) return paragraphs;
+  const sentences = (only.match(SENTENCE_SPLIT_RE) || [only])
+    .map((s) => s.trim())
+    .filter((s) => s.length > 1);
+  return sentences.length > 1 ? sentences : paragraphs;
+}
+
 function splitParagraphs(text) {
   return String(text || '')
     .replace(/\r\n/g, '\n')
@@ -157,7 +177,9 @@ async function extractFromPdf(buffer) {
       prevH = line.h;
     }
     if (current.length) paragraphs.push(current.join(' '));
-    paragraphsByPage[pageNum] = stitchFragments(paragraphs.filter((p) => p.length > 1));
+    paragraphsByPage[pageNum] = splitSingleBlobIntoSentences(
+      stitchFragments(paragraphs.filter((p) => p.length > 1))
+    );
   }
 
   return {
@@ -175,7 +197,7 @@ async function extractFromPdf(buffer) {
 async function extractFromDocx(buffer) {
   const mammoth = require('mammoth');
   const result = await mammoth.extractRawText({ buffer });
-  const paragraphs = splitParagraphs(result.value);
+  const paragraphs = splitSingleBlobIntoSentences(splitParagraphs(result.value));
   if (!paragraphs.length) {
     throw new Error('No extractable text found in Word document');
   }

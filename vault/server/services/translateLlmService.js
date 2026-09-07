@@ -18,6 +18,8 @@ const {
   findPlaceholder,
   isTruncatedShort,
   hasHallucinatedRedaction,
+  hasMissingDoNotTranslateTerm,
+  hasStraySourceWord,
 } = require('./translateQaChecks');
 
 const LANG_NAMES = {
@@ -704,13 +706,26 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
 // identifiers and must never be touched by glossary substitution.
 const FILENAME_TOKEN_RE = /\S*\.(?:pdf|docx?|xlsx?|pptx?|tiff?|dwg|dxf|jpe?g|png|gif|bmp|csv|txt|zip|msg|eml)\b/gi;
 
+// A URL is an identifier, never prose — same corruption pattern as FILENAME_TOKEN_RE above, just
+// for web addresses. Confirmed on a real job: "https://.../us-news/..." became
+// "https://.../us-Actualités/..." because the glossary term "News"->"Actualités" matched inside
+// "us-news" — the word-boundary check above only requires a non-letter on either side, and a
+// hyphen or slash both qualify. Swap the whole URL out before any substitution runs.
+const URL_TOKEN_RE = /\bhttps?:\/\/\S+/gi;
+
 function applyGlossarySubstitutions(text, terms) {
   let t = String(text || '');
   const subs = (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target);
   if (!subs.length) return t;
 
-  // Swap filename-like tokens out for placeholders before substituting, restore after — keeps
-  // them completely outside every glossary regex regardless of what term happens to match inside.
+  // Swap URLs and filename-like tokens out for placeholders before substituting, restore after —
+  // keeps them completely outside every glossary regex regardless of what term happens to match
+  // inside.
+  const urls = [];
+  t = t.replace(URL_TOKEN_RE, (m) => {
+    urls.push(m);
+    return `⁣URL${urls.length - 1}⁣`;
+  });
   const filenames = [];
   t = t.replace(FILENAME_TOKEN_RE, (m) => {
     filenames.push(m);
@@ -730,6 +745,7 @@ function applyGlossarySubstitutions(text, terms) {
   }
 
   t = t.replace(/⁣FN(\d+)⁣/g, (m, i) => filenames[Number(i)]);
+  t = t.replace(/⁣URL(\d+)⁣/g, (m, i) => urls[Number(i)]);
   return t;
 }
 
@@ -759,7 +775,9 @@ async function repairIncompletePairs({
   const indexes = [];
   (pairs || []).forEach((p, i) => {
     if (isIncompleteTarget(p?.target) || isTruncatedShort(p?.source, p?.target)
-      || hasHallucinatedRedaction(p?.source, p?.target)) indexes.push(i);
+      || hasHallucinatedRedaction(p?.source, p?.target)
+      || hasMissingDoNotTranslateTerm(p?.source, p?.target, glossaryTerms)
+      || hasStraySourceWord(p?.source, p?.target, { sourceLanguage, targetLanguage })) indexes.push(i);
   });
   if (!indexes.length) {
     return { attempted: 0, llmRepaired: 0, googleRepaired: 0, stillFailing: 0 };
@@ -807,7 +825,9 @@ async function repairIncompletePairs({
           );
           if (cleaned && !isIncompleteTarget(cleaned) && !findPlaceholder(cleaned)
             && !isTruncatedShort(pair.source, cleaned)
-            && !hasHallucinatedRedaction(pair.source, cleaned)) {
+            && !hasHallucinatedRedaction(pair.source, cleaned)
+            && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
             pair.target = cleaned;
             llmRepaired += 1;
             continue;
@@ -831,7 +851,9 @@ async function repairIncompletePairs({
             applyGlossarySubstitutions(stripDoNotTranslateSpans(gt), glossaryTerms)
           );
           if (cleaned && cleaned.trim() && !findPlaceholder(cleaned)
-            && !hasHallucinatedRedaction(pair.source, cleaned)) {
+            && !hasHallucinatedRedaction(pair.source, cleaned)
+            && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
             pair.target = cleaned;
             googleRepaired += 1;
             continue;
@@ -847,7 +869,9 @@ async function repairIncompletePairs({
   await Promise.all(Array.from({ length: n }, () => worker()));
 
   const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target) || isTruncatedShort(p.source, p.target)
-    || hasHallucinatedRedaction(p.source, p.target)).length;
+    || hasHallucinatedRedaction(p.source, p.target)
+    || hasMissingDoNotTranslateTerm(p.source, p.target, glossaryTerms)
+    || hasStraySourceWord(p.source, p.target, { sourceLanguage, targetLanguage })).length;
   return {
     attempted: indexes.length,
     llmRepaired,
