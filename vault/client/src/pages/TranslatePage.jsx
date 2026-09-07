@@ -179,72 +179,6 @@ function parseQa(job) {
   } catch { return null; }
 }
 
-// Derived confidence in translation quality — no server-side score exists, so this reads the
-// signals the QA pass already produced (hard/soft gate, flagged-row ratio) rather than adding a
-// new model call. Deliberately a heuristic label, not a precise probability.
-function computeConfidence(qa) {
-  if (!qa) return null;
-  if (qa.hardFail) return { label: 'Low', pct: 15, color: '#dc2626', reason: 'Hard QA gate failed.' };
-  if (qa.skipped) return { label: 'Unknown', pct: null, color: 'var(--color-muted)', reason: 'Subjective QA review was skipped for this job.' };
-
-  const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
-
-  // Scored per defect CATEGORY, each weighted by how much of the document it actually touches —
-  // not a flat per-category penalty. A flat penalty meant one bad title and a doc that's wrong
-  // start-to-finish scored identically (confirmed on a real report: 1 polarity issue + 2 audience
-  // flags + 1 restructured sentence + 2 garbled rows + 5 uncertain terms, out of 20 segments,
-  // landed at 12% — reading as "doesn't work" when ~90% of the document was fluent, accurate
-  // French). Density = category's flagged-item count / total segments, floored at MIN_DENSITY so
-  // even a single real instance still costs something (a mangled title matters) — full category
-  // weight only applies once a category's problems are spread across a meaningful share of the
-  // doc, which is also what keeps a genuinely bad, pervasively-wrong document scoring just as low
-  // as the old flat penalty did (density → 1 for every category → same floor as before).
-  // garbledOrIncompleteRows only counts if the LLM reviewer (not the deterministic gate) added
-  // rows to it — check === 'deterministic_completeness' rows are routine numbers/codes identical
-  // to source, already scored via hardFail/softFail above.
-  const MIN_DENSITY = 0.4;
-  const garbledCount = (qa.garbledOrIncompleteRows || [])
-    .filter((r) => r?.check !== 'deterministic_completeness').length;
-  const polarityCount = qa.polarityOrSentenceTypeIssues?.length || 0;
-  const audienceCount = qa.audienceFlags?.length || 0;
-  const restructuredCount = qa.restructuredSentences?.length || 0;
-  const uncertainCount = qa.uncertainTerms?.length || 0;
-  const hasPolarity = polarityCount > 0;
-  const hasAudience = audienceCount > 0;
-  const hasRestructured = restructuredCount > 0;
-  const hasUncertain = uncertainCount > 0;
-  const llmGarbled = garbledCount > 0;
-
-  const weighted = (count, basePenalty) => {
-    if (!count || !total) return count ? basePenalty * MIN_DENSITY : 0;
-    return basePenalty * Math.max(MIN_DENSITY, Math.min(1, count / total));
-  };
-
-  let pct = 97;
-  pct -= weighted(polarityCount, 25);      // meaning/logic reversal — most severe category
-  pct -= weighted(audienceCount, 15);      // grammar/localization a native reader would notice
-  pct -= weighted(restructuredCount, 15);  // translator mishandled sentence structure
-  pct -= weighted(garbledCount, 20);       // leaked markup / untranslated content the reviewer caught
-  pct -= weighted(uncertainCount, 10);     // glossary-nuance notes
-  if (qa.softFail) pct -= 15;
-  pct = Math.max(5, Math.min(97, Math.round(pct)));
-
-  const label = pct >= 80 ? 'High' : pct >= 55 ? 'Medium' : 'Low';
-  const color = pct >= 80 ? '#16a34a' : pct >= 55 ? '#d97706' : '#dc2626';
-  const parts = [];
-  if (hasPolarity) parts.push('meaning/logic issue');
-  if (hasAudience) parts.push('grammar/localization flag');
-  if (hasRestructured) parts.push('restructured sentence');
-  if (llmGarbled) parts.push('leaked/garbled content');
-  if (hasUncertain) parts.push(`${qa.uncertainTerms.length} uncertain term${qa.uncertainTerms.length === 1 ? '' : 's'}`);
-  if (qa.softFail) parts.push('completeness warnings');
-  const reason = parts.length
-    ? `${parts.join(', ')} (of ${total || '?'} segments).`
-    : 'No issues flagged in QA review.';
-
-  return { label, pct, color, reason };
-}
-
 // Plain-text QA report for HITL review — the sections/order mirror what QaPanel renders on
 // screen, so the download and the modal never drift apart.
 function buildQaReportText(job, qa) {
@@ -344,6 +278,7 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSending, setEmailSending] = useState(false);
+  const [lessonsOpen, setLessonsOpen] = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
   const sendEmail = async () => {
@@ -393,6 +328,12 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
             title="Email the original, translated PDF, and QA report together"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             Email these documents
+          </button>
+          <button onClick={() => setLessonsOpen(true)}
+            className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+            title="Turn this job's QA findings into global instructions or glossary terms"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            Lessons learnt
           </button>
           {job?.status === 'done' && (
             <>
@@ -542,6 +483,177 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
           </>
         )}
       </div>
+    </Modal>
+  );
+}
+
+// Turn a finished job's QA findings into HITL-reviewable "lessons" — process-level fixes for
+// the global instruction prompt (every future job, every language) vs. term-level fixes for
+// this job's target-language glossary (this language only). Nothing is written until the user
+// checks a box and hits Apply — this only proposes.
+function buildLessonCandidates(qa) {
+  if (!qa) return { global: [], language: [] };
+
+  const excerptOf = (it) => it.issue || it.reason || it.why || it.excerpt || it.source || '';
+
+  const global = [];
+  (qa.polarityOrSentenceTypeIssues || []).forEach((it, i) => global.push({
+    id: `polarity-${i}`,
+    text: `Watch for meaning/logic reversals — e.g. "${excerptOf(it)}".`,
+  }));
+  (qa.restructuredSentences || []).forEach((it, i) => global.push({
+    id: `restructured-${i}`,
+    text: `Keep original sentence structure where the source allows it — flagged: "${excerptOf(it)}".`,
+  }));
+  (qa.audienceFlags || []).forEach((it, i) => global.push({
+    id: `audience-${i}`,
+    text: `Grammar/localization flag for this audience — "${excerptOf(it)}".`,
+  }));
+  (qa.garbledOrIncompleteRows || [])
+    .filter((it) => it?.check !== 'deterministic_completeness')
+    .forEach((it, i) => global.push({
+      id: `garbled-${i}`,
+      text: `Don't leave source markup/content untranslated — seen: "${excerptOf(it)}".`,
+    }));
+
+  const language = [];
+  (qa.uncertainTerms || []).forEach((it, i) => {
+    const target = it.proposedTarget || it.renderedAs || '';
+    if (!it.source) return;
+    language.push({
+      id: `uncertain-${i}`,
+      label: target
+        ? `Lock "${it.source}" → "${target}"${it.reason || it.issue ? ` (${it.reason || it.issue})` : ''}`
+        : `Note on "${it.source}"${it.reason || it.issue ? `: ${it.reason || it.issue}` : ''}`,
+      term: { source: it.source, target, note: it.reason || it.issue || undefined },
+    });
+  });
+  (qa.dialectalChoices || []).forEach((it, i) => {
+    if (!it.used) return;
+    language.push({
+      id: `dialect-${i}`,
+      label: `Lock "${it.standardForm || it.used}" → "${it.used}" as the standard rendering${it.context ? ` (${it.context})` : ''}`,
+      term: { source: it.standardForm || it.used, target: it.used, note: it.context || undefined },
+    });
+  });
+
+  return { global, language };
+}
+
+function LessonsLearntModal({ qa, job, onClose }) {
+  const addToast = useToastStore(s => s.addToast);
+  const { global, language } = buildLessonCandidates(qa);
+  const [checkedGlobal, setCheckedGlobal] = useState(() => new Set());
+  const [checkedLanguage, setCheckedLanguage] = useState(() => new Set());
+  const [applying, setApplying] = useState(false);
+
+  const toggle = (set, setSet, id) => {
+    setSet(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const nothingToShow = global.length === 0 && language.length === 0;
+  const nothingChecked = checkedGlobal.size === 0 && checkedLanguage.size === 0;
+
+  const apply = async () => {
+    setApplying(true);
+    try {
+      let globalDone = 0;
+      let languageDone = 0;
+
+      if (checkedGlobal.size) {
+        const lines = global.filter(g => checkedGlobal.has(g.id)).map(g => `- ${g.text}`);
+        const settingsRes = await api.get('/api/settings');
+        const settings = await settingsRes.json().catch(() => ({}));
+        const existing = settings?.translate_custom_instructions || '';
+        const merged = [existing, lines.join('\n')].filter(Boolean).join('\n\n');
+        const saveRes = await api.post('/api/settings', { key: 'translate_custom_instructions', value: merged });
+        if (!saveRes.ok) throw new Error('Could not save global instructions');
+        globalDone = checkedGlobal.size;
+      }
+
+      if (checkedLanguage.size && job?.targetLanguage) {
+        const terms = language.filter(l => checkedLanguage.has(l.id)).map(l => l.term);
+        const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, { terms });
+        if (!res.ok) throw new Error('Could not save glossary terms');
+        languageDone = checkedLanguage.size;
+      }
+
+      const parts = [];
+      if (globalDone) parts.push(`${globalDone} added to global instructions`);
+      if (languageDone) parts.push(`${languageDone} added to ${job?.targetLanguage || 'language'} glossary`);
+      addToast(parts.length ? parts.join(' · ') : 'Nothing selected', parts.length ? 'success' : 'error');
+      if (parts.length) onClose();
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <Modal title="Lessons learnt" onClose={onClose} wide>
+      <div className="flex flex-col gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Findings from this job's QA review. Check the ones worth keeping — global suggestions
+          are appended to the shared instruction prompt (every job, every language); language
+          suggestions are locked into the {job?.targetLanguage || 'target-language'} glossary.
+        </p>
+
+        {nothingToShow ? (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No QA findings on this job to learn from.</p>
+        ) : (
+          <>
+            <div>
+              <p className="text-xs font-semibold mb-2">Global suggestions (instruction prompt) — {global.length}</p>
+              {global.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {global.map(g => (
+                    <li key={g.id} className="flex items-start gap-2">
+                      <input type="checkbox" className="mt-0.5" checked={checkedGlobal.has(g.id)}
+                        onChange={() => toggle(checkedGlobal, setCheckedGlobal, g.id)} />
+                      <span className="text-xs">{g.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold mb-2">
+                Language suggestions ({job?.targetLanguage || '—'} glossary) — {language.length}
+              </p>
+              {language.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {language.map(l => (
+                    <li key={l.id} className="flex items-start gap-2">
+                      <input type="checkbox" className="mt-0.5" checked={checkedLanguage.has(l.id)}
+                        onChange={() => toggle(checkedLanguage, setCheckedLanguage, l.id)} />
+                      <span className="text-xs">{l.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={apply} disabled={applying || nothingChecked}
+                className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {applying ? 'Applying…' : 'Apply selected'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {lessonsOpen && <LessonsLearntModal qa={qa} job={job} onClose={() => setLessonsOpen(false)} />}
     </Modal>
   );
 }
@@ -1335,8 +1447,6 @@ function TranslationsTab({ glossaries }) {
                     ? (LANGUAGES.find(l => l.code === job.sourceLanguage)?.label || job.sourceLanguage)
                     : '?';
                   const tgtLabel = LANGUAGES.find(l => l.code === job.targetLanguage)?.label || job.targetLanguage;
-                  const qa = parseQa(job);
-                  const confidence = computeConfidence(qa);
                   return (
                     <tr key={job.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-3 py-2" style={{ color: 'var(--color-text)', maxWidth: 180 }}>
@@ -1371,11 +1481,6 @@ function TranslationsTab({ glossaries }) {
                         <StatusBadge status={job.status} />
                         {job.status === 'failed' && job.errorMessage && (
                           <span className="ml-1 text-xs cursor-help" title={job.errorMessage} style={{ color: '#dc2626' }}>ⓘ</span>
-                        )}
-                        {confidence && (
-                          <div className="mt-1 text-xs" style={{ color: confidence.color }} title={confidence.reason}>
-                            Confidence: {confidence.label}{confidence.pct != null ? ` (${confidence.pct}%)` : ''}
-                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2">

@@ -302,6 +302,30 @@ async function upsertGlobalGlossaryTerms(userId, targetLanguage, newTerms) {
   );
 }
 
+// "Lessons learnt" — HITL picks language-specific QA findings (uncertain terms, dialectal
+// choices, glossary drift) from a finished job's QA report and locks them into that language's
+// global glossary, same merge behaviour as the automatic top-up above (existing entries win).
+router.post('/glossaries/global/:lang/terms', async (req, res) => {
+  try {
+    const { terms } = req.body || {};
+    if (!Array.isArray(terms) || !terms.length) {
+      return res.status(400).json({ error: 'terms array is required' });
+    }
+    const cleanTerms = terms
+      .filter((t) => t && String(t.source || '').trim())
+      .map((t) => ({
+        source: String(t.source).trim(),
+        target: String(t.target || '').trim(),
+        note: t.note ? String(t.note).trim() : undefined,
+        doNotTranslate: !!t.doNotTranslate,
+      }));
+    if (!cleanTerms.length) return res.status(400).json({ error: 'No valid terms in request' });
+    await upsertGlobalGlossaryTerms(req.user.id, req.params.lang, cleanTerms);
+    const glossary = await findOrCreateGlobalGlossary(req.user.id, req.params.lang);
+    res.json(glossary);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Translation memory ──────────────────────────────────────────────────────────
 router.get('/memory/stats', async (req, res) => {
   try {
