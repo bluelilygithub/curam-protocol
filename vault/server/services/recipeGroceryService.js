@@ -62,6 +62,16 @@ const VARIANT_RULES = [
     prefer: ['pure cream', 'thickened cream', 'whipping'],
     avoid: ['light', 'lite', 'reduced fat'],
   },
+  {
+    // Generic "bread" is one significant token — without this it matches any
+    // product with "bread" in the name, including flavoured loaves that aren't
+    // what a plain-bread ingredient means (garlic bread, banana bread, etc).
+    id: 'bread-plain',
+    matchLine: (raw) => /\bbread\b/.test(raw) && !/garlic|banana|fruit|raisin|herb|cheese|chocolate|chilli|sourdough|rye|wholemeal|multigrain|multi-grain|grain|seed|turkish|flat\s*bread|naan|pita/.test(raw),
+    searchSuffix: 'white sliced',
+    prefer: ['white bread', 'sandwich', 'sliced bread', 'toast', 'wholemeal'],
+    avoid: ['garlic', 'banana', 'fruit', 'raisin', 'herb', 'cheese', 'chocolate', 'chilli', 'flavoured', 'flavored', 'cinnamon'],
+  },
 ];
 
 function searchTermVariants(term) {
