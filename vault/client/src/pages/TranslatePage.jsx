@@ -490,80 +490,145 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
 
 // Severity is a property of the CONTENT (what went wrong), independent of which bucket an item
 // landed in — an omission is CRITICAL whether or not it happened to carry a proposedTarget.
-// Coarse keyword match against the item's own issue/reason text; better than no signal, and
-// keeps the genuinely serious findings from sitting at the same visual weight as a style note.
-const SEVERITY_RULES = [
-  { level: 'CRITICAL', color: '#dc2626', re: /omit|omitted|missing|dropped|truncat|redact|coercive|legal|compliance/i },
-  { level: 'MODERATE', color: '#d97706', re: /meaning|logic|revers|shift|mistranslat|incorrect|wrong|drift/i },
+// Reason CODES (the machine-generated tokens from translateQaChecks.js, e.g.
+// "dnt_term_missing:X", "hallucinated_redaction") are checked first and are authoritative —
+// they say exactly what broke. Free-text keyword match is only a fallback for LLM-authored prose
+// (issue/reason/why strings) that carries no reason code at all.
+const SEVERITY = {
+  CRITICAL: { level: 'CRITICAL', color: '#dc2626' },
+  MODERATE: { level: 'MODERATE', color: '#d97706' },
+  MINOR: { level: 'MINOR', color: 'var(--color-muted)' },
+};
+const SEVERITY_RANK = { CRITICAL: 3, MODERATE: 2, MINOR: 1 };
+const CODE_SEVERITY_RULES = [
+  { level: 'CRITICAL', re: /dnt_term_missing|hallucinated_redaction|redaction_token_missing|empty_target/ },
+  { level: 'MODERATE', re: /stray_source_word|truncated_short|too_many_identical/ },
 ];
-function tagSeverity(text) {
+const TEXT_SEVERITY_RULES = [
+  { level: 'CRITICAL', re: /omit|omitted|missing|dropped|redact|coercive|legal|compliance/i },
+  { level: 'MODERATE', re: /meaning|logic|revers|shift|mistranslat|incorrect|wrong|drift|truncat/i },
+];
+function tagSeverity(text, { floor } = {}) {
   const t = String(text || '');
-  for (const rule of SEVERITY_RULES) {
-    if (rule.re.test(t)) return { level: rule.level, color: rule.color };
+  let level = 'MINOR';
+  for (const rule of CODE_SEVERITY_RULES) { if (rule.re.test(t)) { level = rule.level; break; } }
+  if (level === 'MINOR') {
+    for (const rule of TEXT_SEVERITY_RULES) { if (rule.re.test(t)) { level = rule.level; break; } }
   }
-  return { level: 'MINOR', color: 'var(--color-muted)' };
+  if (floor && SEVERITY_RANK[floor] > SEVERITY_RANK[level]) level = floor;
+  return SEVERITY[level];
 }
 
 // Turn a finished job's QA findings into HITL-reviewable "lessons" — process-level fixes for
 // the global instruction prompt (every future job, every language) vs. term-level fixes for
 // this job's target-language glossary (this language only). Nothing is written until the user
-// checks a box and hits Apply — this only proposes.
+// checks a box and hits Apply — this only proposes. Every item carries a `disposition` (the
+// recommended action, in one short phrase) alongside its evidence, so the reviewer isn't
+// re-deriving what to do from prose each time.
 //
-// Language findings split into three buckets by DATA SOURCE, not by guessing intent:
+// Findings are grouped by ROOT CAUSE, not flattened to sibling checkboxes:
+//  - DNT: every garbledOrIncompleteRows row flagging the SAME missing do-not-translate term
+//    (e.g. "21 News" leaking as "21 Actualités" across several rows) is one enforcement-rule
+//    finding with N instances, not N separate "lock this rendering" checkboxes — the real fix is
+//    a doNotTranslate:true glossary rule, not per-occurrence locks a reviewer could check some of
+//    and miss others.
 //  - LOCK: only from a genuine `proposedTarget` (proposeGlossary's own suggestion). Gating on
 //    this field, and only this field, is deliberate — `target = it.proposedTarget || it.renderedAs`
 //    used to fall through to `renderedAs`, which is "what the model actually (wrongly) rendered",
 //    turning "here's what's wrong" into "here's what to do" the moment proposedTarget was empty.
-//  - UNRESOLVED_DRIFT: review-pass uncertainTerms (`renderedAs`/`issue`, no proposedTarget) and
-//    glossaryDriftTerms. Neither carries a confirmed correct value to lock — glossaryDriftTerms in
-//    particular is already a KNOWN, already-locked glossary term (`lockedTarget`) that some rows
-//    just failed to use; adding it "again" would no-op. Informational only, never a checkbox.
-//  - STYLE_NOTE: dialectalChoices — an accepted regional choice, not an error; lockable as-is.
+//  - DRIFT, split by what the reader actually needs to do next:
+//    - enforcement: glossaryDriftTerms — the term is already locked (`lockedTarget`), some rows
+//      just didn't apply it. Not a glossary problem; a pipeline/engineering one.
+//    - linguistic: review-pass uncertainTerms (`renderedAs`/`issue`, no proposedTarget) — genuine
+//      ambiguity with no confirmed correction. Needs a human linguistic call, not a ticket.
+//  - STYLE: dialectalChoices — an accepted regional choice, not an error; lockable as-is.
 function buildLessonCandidates(qa) {
-  if (!qa) return { global: [], lock: [], drift: [], style: [] };
+  if (!qa) return { global: [], dnt: [], lock: [], driftEnforcement: [], driftLinguistic: [], style: [] };
 
   const excerptOf = (it) => it.issue || it.reason || it.why || it.excerpt || it.source || '';
+  const snippetOf = (it) => (it.sourceExcerpt || it.targetExcerpt)
+    ? { source: it.sourceExcerpt, target: it.targetExcerpt }
+    : (it.source && it.target ? { source: it.source, target: it.target } : null);
+
+  // ── DNT root-cause grouping — pull matching rows out of garbledOrIncompleteRows first ──────
+  const dntGroups = new Map();
+  const dntRowKeys = new Set();
+  (qa.garbledOrIncompleteRows || []).forEach((it, i) => {
+    const m = String(it.issue || '').match(/dnt_term_missing:([^;]+)/);
+    if (!m) return;
+    const term = m[1].trim();
+    if (!term) return;
+    dntRowKeys.add(i);
+    const key = term.toLowerCase();
+    const g = dntGroups.get(key) || { term, instances: [] };
+    g.instances.push({ index: it.index, source: it.source, target: it.target, excerpt: it.excerpt });
+    dntGroups.set(key, g);
+  });
+  const dnt = [...dntGroups.values()].map((g, i) => ({
+    id: `dnt-${i}`,
+    disposition: 'Do-not-translate rule',
+    detail: `"${g.term}" leaked into the translation in ${g.instances.length} row(s) instead of staying untranslated — a per-row lock wouldn't stop the next occurrence; the fix is one doNotTranslate rule.`,
+    instances: g.instances,
+    severity: SEVERITY.CRITICAL,
+    term: { source: g.term, target: '', doNotTranslate: true, note: 'Added from Lessons learnt — do-not-translate enforcement gap' },
+  }));
 
   const global = (qa.polarityOrSentenceTypeIssues || []).map((it, i) => ({
     id: `polarity-${i}`,
+    disposition: 'Global rule',
     text: `Watch for meaning/logic reversals — e.g. "${excerptOf(it)}".`,
-    severity: tagSeverity(excerptOf(it)),
+    severity: tagSeverity(excerptOf(it), { floor: 'MODERATE' }),
   })).concat((qa.restructuredSentences || []).map((it, i) => ({
     id: `restructured-${i}`,
+    disposition: 'Global rule',
     text: `Keep original sentence structure where the source allows it — flagged: "${excerptOf(it)}".`,
     severity: tagSeverity(excerptOf(it)),
   }))).concat((qa.audienceFlags || []).map((it, i) => ({
     id: `audience-${i}`,
+    disposition: 'Global rule',
     text: `Grammar/localization flag for this audience — "${excerptOf(it)}".`,
     severity: tagSeverity(excerptOf(it)),
   }))).concat((qa.garbledOrIncompleteRows || [])
-    .filter((it) => it?.check !== 'deterministic_completeness')
+    .filter((it, i) => it?.check !== 'deterministic_completeness' && !dntRowKeys.has(i))
     .map((it, i) => ({
       id: `garbled-${i}`,
+      disposition: 'Global rule',
       text: `Don't leave source markup/content untranslated — seen: "${excerptOf(it)}".`,
       severity: tagSeverity(excerptOf(it)),
     })));
 
   const lock = [];
-  const drift = [];
+  const driftEnforcement = [];
+  const driftLinguistic = [];
   (qa.uncertainTerms || []).forEach((it, i) => {
     if (!it?.source) return;
     if (it.proposedTarget && it.proposedTarget !== '(varies)') {
       lock.push({
         id: `lock-${i}`,
+        disposition: 'Lock rendering',
         label: `Lock "${it.source}" → "${it.proposedTarget}"${it.reason ? ` (${it.reason})` : ''}`,
         severity: tagSeverity(it.reason),
+        snippet: snippetOf(it),
         term: { source: it.source, target: it.proposedTarget, note: it.reason || undefined },
       });
-    } else {
-      // renderedAs/issue shape (review-pass uncertain term) or glossaryDriftTerms
-      // (lockedTarget/rows) — neither has a value worth proposing, only a problem to review.
-      drift.push({
-        id: `drift-${i}`,
+    } else if (it.lockedTarget) {
+      // glossaryDriftTerms — a KNOWN, already-locked glossary term some rows didn't apply.
+      // Not a glossary action; an enforcement/pipeline bug to ticket.
+      driftEnforcement.push({
+        id: `drift-enf-${i}`,
+        disposition: 'Enforcement gap (engineering)',
         source: it.source,
-        detail: it.lockedTarget
-          ? `Already locked to "${it.lockedTarget}" — some rows didn't use it${it.rows?.length ? ` (rows ${it.rows.join(', ')})` : ''}.`
-          : (it.issue || `Rendered as "${it.renderedAs}" — flagged, no confirmed correction.`),
+        detail: `Already locked to "${it.lockedTarget}" — some rows didn't use it${it.rows?.length ? ` (rows ${it.rows.join(', ')})` : ''}.`,
+        severity: tagSeverity(it.issue, { floor: 'MODERATE' }),
+      });
+    } else {
+      // renderedAs/issue shape — flagged, no confirmed correction. Genuine linguistic call.
+      driftLinguistic.push({
+        id: `drift-ling-${i}`,
+        disposition: 'Needs linguistic decision',
+        source: it.source,
+        detail: it.issue || `Rendered as "${it.renderedAs}" — flagged, no confirmed correction.`,
+        snippet: snippetOf(it),
         severity: tagSeverity(it.issue),
       });
     }
@@ -573,12 +638,14 @@ function buildLessonCandidates(qa) {
     .filter((it) => it.used)
     .map((it, i) => ({
       id: `dialect-${i}`,
+      disposition: 'Lock regional form',
       label: `Lock "${it.standardForm || it.used}" → "${it.used}" as the standard rendering${it.context ? ` (${it.context})` : ''}`,
-      severity: { level: 'MINOR', color: 'var(--color-muted)' },
+      severity: SEVERITY.MINOR,
+      snippet: snippetOf(it),
       term: { source: it.standardForm || it.used, target: it.used, note: it.context || undefined },
     }));
 
-  return { global, lock, drift, style };
+  return { global, dnt, lock, driftEnforcement, driftLinguistic, style };
 }
 
 function SeverityBadge({ severity }) {
@@ -591,10 +658,30 @@ function SeverityBadge({ severity }) {
   );
 }
 
+function DispositionTag({ text }) {
+  if (!text) return null;
+  return (
+    <span className="text-xs font-medium shrink-0" style={{ color: 'var(--color-primary)' }}>
+      [{text}]
+    </span>
+  );
+}
+
+function Snippet({ snippet }) {
+  if (!snippet || (!snippet.source && !snippet.target)) return null;
+  return (
+    <div className="text-xs mt-0.5 pl-2 border-l-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+      {snippet.source && <div>SRC: {snippet.source}</div>}
+      {snippet.target && <div>TGT: {snippet.target}</div>}
+    </div>
+  );
+}
+
 function LessonsLearntModal({ qa, job, onClose }) {
   const addToast = useToastStore(s => s.addToast);
-  const { global, lock, drift, style } = buildLessonCandidates(qa);
+  const { global, dnt, lock, driftEnforcement, driftLinguistic, style } = buildLessonCandidates(qa);
   const [checkedGlobal, setCheckedGlobal] = useState(() => new Set());
+  const [checkedDnt, setCheckedDnt] = useState(() => new Set());
   const [checkedLock, setCheckedLock] = useState(() => new Set());
   const [checkedStyle, setCheckedStyle] = useState(() => new Set());
   const [applying, setApplying] = useState(false);
@@ -607,8 +694,10 @@ function LessonsLearntModal({ qa, job, onClose }) {
     });
   };
 
-  const nothingToShow = global.length === 0 && lock.length === 0 && drift.length === 0 && style.length === 0;
-  const nothingChecked = checkedGlobal.size === 0 && checkedLock.size === 0 && checkedStyle.size === 0;
+  const nothingToShow = global.length === 0 && dnt.length === 0 && lock.length === 0
+    && driftEnforcement.length === 0 && driftLinguistic.length === 0 && style.length === 0;
+  const nothingChecked = checkedGlobal.size === 0 && checkedDnt.size === 0
+    && checkedLock.size === 0 && checkedStyle.size === 0;
 
   const apply = async () => {
     setApplying(true);
@@ -628,6 +717,7 @@ function LessonsLearntModal({ qa, job, onClose }) {
       }
 
       const checkedTerms = [
+        ...dnt.filter(d => checkedDnt.has(d.id)),
         ...lock.filter(l => checkedLock.has(l.id)),
         ...style.filter(s => checkedStyle.has(s.id)),
       ].map(l => l.term);
@@ -653,15 +743,48 @@ function LessonsLearntModal({ qa, job, onClose }) {
     <Modal title="Lessons learnt" onClose={onClose} wide>
       <div className="flex flex-col gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Findings from this job's QA review. Check the ones worth keeping — global suggestions
-          are appended to the shared instruction prompt (every job, every language); lock/style
-          suggestions are added to the {job?.targetLanguage || 'target-language'} glossary.
+          Findings from this job's QA review, grouped by root cause with a recommended action per
+          item. Checkable items add to the shared instruction prompt or the{' '}
+          {job?.targetLanguage || 'target-language'} glossary; the rest need a human call this
+          panel can't make for you.
         </p>
 
         {nothingToShow ? (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No QA findings on this job to learn from.</p>
         ) : (
           <>
+            {dnt.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-2">Do-not-translate rules — {dnt.length}</p>
+                <ul className="space-y-2">
+                  {dnt.map(d => (
+                    <li key={d.id} className="flex items-start gap-2">
+                      <input type="checkbox" className="mt-0.5" checked={checkedDnt.has(d.id)}
+                        onChange={() => toggle(setCheckedDnt, d.id)} />
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <SeverityBadge severity={d.severity} />
+                          <DispositionTag text={d.disposition} />
+                          <span className="text-xs">
+                            <strong>"{d.term.source}"</strong> — {d.detail}
+                          </span>
+                        </div>
+                        <div className="text-xs mt-1 pl-2 border-l-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          {d.instances.slice(0, 3).map((inst, i) => (
+                            <div key={i}>
+                              {typeof inst.index === 'number' ? `#${inst.index} ` : ''}
+                              {inst.target ? `TGT: ${inst.target.slice(0, 140)}` : (inst.excerpt || '').slice(0, 140)}
+                            </div>
+                          ))}
+                          {d.instances.length > 3 && <div>…and {d.instances.length - 3} more</div>}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div>
               <p className="text-xs font-semibold mb-2">Global suggestions (instruction prompt) — {global.length}</p>
               {global.length === 0 ? (
@@ -673,6 +796,7 @@ function LessonsLearntModal({ qa, job, onClose }) {
                       <input type="checkbox" className="mt-0.5" checked={checkedGlobal.has(g.id)}
                         onChange={() => toggle(setCheckedGlobal, g.id)} />
                       <SeverityBadge severity={g.severity} />
+                      <DispositionTag text={g.disposition} />
                       <span className="text-xs">{g.text}</span>
                     </li>
                   ))}
@@ -692,8 +816,14 @@ function LessonsLearntModal({ qa, job, onClose }) {
                     <li key={l.id} className="flex items-start gap-2">
                       <input type="checkbox" className="mt-0.5" checked={checkedLock.has(l.id)}
                         onChange={() => toggle(setCheckedLock, l.id)} />
-                      <SeverityBadge severity={l.severity} />
-                      <span className="text-xs">{l.label}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <SeverityBadge severity={l.severity} />
+                          <DispositionTag text={l.disposition} />
+                          <span className="text-xs">{l.label}</span>
+                        </div>
+                        <Snippet snippet={l.snippet} />
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -712,26 +842,57 @@ function LessonsLearntModal({ qa, job, onClose }) {
                     <li key={s.id} className="flex items-start gap-2">
                       <input type="checkbox" className="mt-0.5" checked={checkedStyle.has(s.id)}
                         onChange={() => toggle(setCheckedStyle, s.id)} />
-                      <SeverityBadge severity={s.severity} />
-                      <span className="text-xs">{s.label}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <SeverityBadge severity={s.severity} />
+                          <DispositionTag text={s.disposition} />
+                          <span className="text-xs">{s.label}</span>
+                        </div>
+                        <Snippet snippet={s.snippet} />
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
 
-            {drift.length > 0 && (
+            {driftEnforcement.length > 0 && (
               <div>
                 <p className="text-xs font-semibold mb-2">
-                  Needs manual review ({drift.length}) — no confirmed correction, not addable to glossary
+                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit
                 </p>
                 <ul className="space-y-1.5">
-                  {drift.map(d => (
+                  {driftEnforcement.map(d => (
                     <li key={d.id} className="flex items-start gap-2">
                       <SeverityBadge severity={d.severity} />
+                      <DispositionTag text={d.disposition} />
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                         <strong style={{ color: 'var(--color-text)' }}>{d.source}</strong> — {d.detail}
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {driftLinguistic.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Needs linguistic decision ({driftLinguistic.length}) — no confirmed correction, not addable to glossary
+                </p>
+                <ul className="space-y-1.5">
+                  {driftLinguistic.map(d => (
+                    <li key={d.id} className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <SeverityBadge severity={d.severity} />
+                          <DispositionTag text={d.disposition} />
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            <strong style={{ color: 'var(--color-text)' }}>{d.source}</strong> — {d.detail}
+                          </span>
+                        </div>
+                        <Snippet snippet={d.snippet} />
+                      </div>
                     </li>
                   ))}
                 </ul>

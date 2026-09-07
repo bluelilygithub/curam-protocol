@@ -578,14 +578,19 @@ Flag polarity/meaning flips under polarityOrSentenceTypeIssues — this is not l
 Flag identifier drift (Q-15 → P-16) under uncertainTerms or garbledOrIncompleteRows.
 Flag target-language process meta (e.g. "[texto no disponible para traducir]") under garbledOrIncompleteRows.
 
+For uncertainTerms and dialectalChoices, also quote the single SENTENCE (not the whole pair) that
+contains the term, from both SRC and TGT — you already have full source/target text for every pair
+above, so pull directly from it rather than paraphrasing. This lets a non-specialist reviewer check
+your finding without knowing the target language.
+
 Return ONLY valid JSON:
 {
-  "uncertainTerms": [ { "source": "...", "renderedAs": "...", "issue": "..." } ],
+  "uncertainTerms": [ { "source": "...", "renderedAs": "...", "issue": "...", "sourceExcerpt": "sentence containing it", "targetExcerpt": "matching target sentence" } ],
   "restructuredSentences": [ { "source": "...", "target": "...", "why": "..." } ],
   "polarityOrSentenceTypeIssues": [ { "source": "...", "target": "...", "issue": "..." } ],
   "garbledOrIncompleteRows": [ { "index": 0, "excerpt": "...", "issue": "..." } ],
   "audienceFlags": [ { "target": "...", "issue": "why an auditor/stakeholder might be confused or alarmed" } ],
-  "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "..." } ],
+  "dialectalChoices": [ { "used": "...", "standardForm": "...", "context": "...", "sourceExcerpt": "sentence containing it", "targetExcerpt": "matching target sentence" } ],
   "overallNotes": "2-4 sentences"
 }
 Be concise. Empty arrays are fine. No markdown fences.
