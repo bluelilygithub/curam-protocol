@@ -1274,7 +1274,7 @@ function TranslationsTab({ glossaries }) {
   const [regionalAudience, setRegionalAudience] = useState('');
   const [enableReview, setEnableReview] = useState(true);
   const [engine, setEngine] = useState('llm'); // llm | google
-  const [pdfLayout, setPdfLayout] = useState('side-by-side'); // side-by-side | translation-only | bilingual-pages
+  const [pdfLayout, setPdfLayout] = useState('translation-only'); // translation-only | bilingual-pages
   const [engineAvailability, setEngineAvailability] = useState({ llm: true, google: false });
   const [qaJob, setQaJob] = useState(null);
   const [preflight, setPreflight]   = useState(null); // { pageCount, scannedCount, scannedImages }
@@ -1767,11 +1767,17 @@ function TranslationsTab({ glossaries }) {
                 <div className="flex-1 min-w-40">
                   <Field label="PDF layout"
                     hint="How the download PDF presents source and translation.">
-                    <Sel value={pdfLayout} onChange={setPdfLayout}>
-                      <option value="side-by-side">Side by side (same page)</option>
-                      <option value="translation-only">Separate translated document</option>
-                      <option value="bilingual-pages">Bilingual pages (original then translation)</option>
-                    </Sel>
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      {[
+                        { v: 'translation-only', label: 'Separate translated document' },
+                        { v: 'bilingual-pages', label: 'Bilingual pages (original then translation)' },
+                      ].map(({ v, label }) => (
+                        <label key={v} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                          <input type="radio" name="pdfLayout" value={v} checked={pdfLayout === v} onChange={() => setPdfLayout(v)} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
                   </Field>
                 </div>
               </div>
@@ -2226,7 +2232,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
               <li>Pick a target language (defaults from Settings → AI & Chat → Translate agent, overridable per job) and answer a few intake questions (domain, audience, tone) — these shape the translation, not just the glossary.</li>
               <li>Choose an engine: <strong>Vault LLM</strong> (slower, better for tone/glossaries/te reo Māori policy) or <strong>Google Translate</strong> (fast drafts, common languages).</li>
               <li>Optionally enable a second-model QA review pass before the job finishes.</li>
-              <li>Download the bilingual PDF (side-by-side, translation-only, or bilingual-pages layout) once done — plus a native Word/Excel file when the source format supports it.</li>
+              <li>Download the bilingual PDF (separate translated document, or bilingual-pages layout) once done — plus a native Word/Excel file when the source format supports it.</li>
             </ul>
           </div>
 
