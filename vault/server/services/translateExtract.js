@@ -20,14 +20,28 @@ function extOf(filename = '') {
   return path.extname(filename).toLowerCase();
 }
 
+// Extension takes priority over browser-reported mimetype. Confirmed on a real upload: a file
+// named `*.doc` whose browser-reported mimetype happened to be the DOCX one (browsers/OS content
+// sniffing gets this wrong often enough) matched `ext === '.docx' || mt === MIME.docx` on the
+// *docx* branch before ever reaching the `.doc` branch below it — since the check was OR'd on
+// mimetype too, a mislabeled/misreported .doc slipped through as if it were docx: extraction
+// "worked", a native Word download appeared, and the explicit "legacy .doc is rejected" gate
+// never fired. Extension is the reliable, user-intended signal here — mimetype is only a
+// fallback for the rare upload with no filename extension at all.
 function detectSourceFormat(filename, mimetype = '') {
   const ext = extOf(filename);
+  if (ext === '.pdf') return 'pdf';
+  if (ext === '.docx') return 'docx';
+  if (ext === '.doc') return 'doc';
+  if (ext === '.xlsx') return 'xlsx';
+  if (ext === '.xls') return 'xls';
+
   const mt = String(mimetype || '').toLowerCase();
-  if (ext === '.pdf' || mt === MIME.pdf) return 'pdf';
-  if (ext === '.docx' || mt === MIME.docx) return 'docx';
-  if (ext === '.doc' || mt === MIME.doc) return 'doc';
-  if (ext === '.xlsx' || mt === MIME.xlsx) return 'xlsx';
-  if (ext === '.xls' || mt === MIME.xls) return 'xls';
+  if (mt === MIME.pdf) return 'pdf';
+  if (mt === MIME.docx) return 'docx';
+  if (mt === MIME.doc) return 'doc';
+  if (mt === MIME.xlsx) return 'xlsx';
+  if (mt === MIME.xls) return 'xls';
   return null;
 }
 

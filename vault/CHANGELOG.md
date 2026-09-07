@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-doc-extension-priority)
+
+### Translate — legacy .doc slipping through as .docx when mimetype was misreported
+`detectSourceFormat` OR'd extension and mimetype per format, checked in a fixed order: a `.doc`-named file whose browser-reported mimetype happened to be the DOCX one matched the `.docx` branch first (its condition included `mt === MIME.docx`), so the legacy-.doc rejection never ran — extraction proceeded, produced a real translation, and a native Word download button appeared for a format the docs say is rejected. Fixed: filename extension now always takes priority; mimetype is only consulted when there's no usable extension at all.
+
 ## 2026-09-07 (translate-afrikaans-language-order-email)
 
 ### Translate — Afrikaans, admin-orderable language dropdown, email the three documents
