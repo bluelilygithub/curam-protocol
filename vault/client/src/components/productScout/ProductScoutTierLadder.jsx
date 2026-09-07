@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { formatPriceBand } from './ProductScoutFeatureBrief';
 import ProductScoutResults from './ProductScoutResults';
 import ProductScoutFinalRecommendation from './ProductScoutFinalRecommendation';
+import ProductScoutReportActions from './ProductScoutReportActions';
 import { getScoutedTierKeys, resolveTierFocus, resolveTierGains, tierIsScouted } from '../../utils/productScoutGuide';
 
 function TierStep({ tier, index, isLast, defaultOpen, onScoutTier, scoutingTierKey }) {
@@ -175,16 +176,7 @@ export default function ProductScoutTierLadder({
         </p>
       )}
 
-      <ProductScoutFinalRecommendation
-        recommendation={recommendation}
-        onRefresh={onRefreshRecommendation}
-        refreshing={refreshingRecommendation}
-        canRefresh={canRecommend}
-        externalCheck={result?.external_price_check}
-        onRunExternalCheck={onRunExternalCheck}
-        checkingExternal={checkingExternal}
-        searchEnabled={searchEnabled}
-      />
+      <ProductScoutReportActions runId={result?.runId} />
 
       {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (
         <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
@@ -205,6 +197,21 @@ export default function ProductScoutTierLadder({
           />
         ))}
       </div>
+
+      {/* Overall pick across all scouted tiers — shown after each tier's own
+          recommendation so the ladder reads tier-by-tier, then the verdict. */}
+      {canRecommend && (
+        <ProductScoutFinalRecommendation
+          recommendation={recommendation}
+          onRefresh={onRefreshRecommendation}
+          refreshing={refreshingRecommendation}
+          canRefresh={canRecommend}
+          externalCheck={result?.external_price_check}
+          onRunExternalCheck={onRunExternalCheck}
+          checkingExternal={checkingExternal}
+          searchEnabled={searchEnabled}
+        />
+      )}
     </div>
   );
 }

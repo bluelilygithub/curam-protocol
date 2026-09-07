@@ -13,7 +13,7 @@ const {
   buildBudgetFitNote,
 } = require('./productScoutSettings');
 const { executeScoutComparison, getRun } = require('./productScoutService');
-const { looksLikeMonoCallHeadset, queryWantsStereoAudioWearable } = require('./productScoutRelevance');
+const { looksLikeMonoCallHeadset, queryWantsStereoAudioWearable, isAccessoryTerm } = require('./productScoutRelevance');
 
 const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
@@ -88,6 +88,11 @@ function buildEnrichedSearchQuery(baseQuery, featureBrief) {
     if (seen.has(lower)) return;
     // Avoid dumping long sentences into the search box
     if (t.split(/\s+/).length > 4) return;
+    // Accessory nouns (bag, cable, case, mount, …) bias Amazon's own ranking
+    // toward accessory-only listings when injected as literal search terms —
+    // keep them out of the query string; they still reach the LLM via
+    // shopperPriorities as a must-have requirement.
+    if (isAccessoryTerm(t)) return;
     seen.add(lower);
     terms.push(t);
   };

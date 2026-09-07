@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { startProductScoutTour, TOUR_KEY as SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import ProductScoutResults from '../components/productScout/ProductScoutResults';
+import ProductScoutReportActions from '../components/productScout/ProductScoutReportActions';
 import ProductScoutUrlCompare from '../components/productScout/ProductScoutUrlCompare';
 import ProductScoutGuidePanel from '../components/productScout/ProductScoutGuidePanel';
 import { useIcon } from '../providers/IconProvider';
@@ -330,6 +331,9 @@ export default function ProductScoutPage() {
                 style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
               >
                 <ProductScoutResults result={scoutResult} />
+                <div className="mt-3">
+                  <ProductScoutReportActions runId={scoutResult.runId ?? loadedRunId} />
+                </div>
                 <ProductScoutUrlCompare
                   runId={scoutResult.runId ?? loadedRunId}
                   comparisons={scoutResult.url_comparisons || []}

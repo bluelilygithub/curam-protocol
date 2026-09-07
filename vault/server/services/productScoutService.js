@@ -12,7 +12,7 @@ const { parseModelJson } = require('../utils/parseModelJson');
 const { getAmazonDomain, applyBudgetFilter, marketplaceLabel } = require('./productScoutSettings');
 const { attachPreScores, blendValueScore } = require('./productScoutScoring');
 const { sanitizeFeatureTable, cleanDeliveryDisplay } = require('./productScoutTableSanitize');
-const { filterFormFactorMismatches } = require('./productScoutRelevance');
+const { filterFormFactorMismatches, filterAccessoryMismatches } = require('./productScoutRelevance');
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Each candidate includes a pre_score (0–100) computed from price, star rating, and review count. Use it as your baseline.
@@ -376,7 +376,8 @@ async function executeScoutComparison(userId, query, {
   }
 
   const { kept: relevanceFiltered, removed: relevanceRemoved } = filterFormFactorMismatches(q, allCandidates);
-  allCandidates = relevanceFiltered;
+  const { kept: accessoryFiltered, removed: accessoryRemoved } = filterAccessoryMismatches(q, relevanceFiltered);
+  allCandidates = accessoryFiltered;
 
   const max = Number(maxPrice);
   const min = Number(minPrice);
@@ -400,6 +401,7 @@ async function executeScoutComparison(userId, query, {
     poolIn: Boolean(poolIn?.length),
     candidates: allCandidates.length,
     relevanceRemoved: relevanceRemoved.length,
+    accessoryRemoved: accessoryRemoved.length,
     primary: primaryScored.length,
     stretch: stretchScored.length,
     minPrice: hasMin ? min : null,

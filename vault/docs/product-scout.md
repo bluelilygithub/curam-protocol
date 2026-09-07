@@ -151,6 +151,24 @@ CLI does not yet expose delivery filters or workspace marketplace settings — s
 - **Tier scouting runs in parallel.** `runBuyGuide` (`productScoutGuideService.js`) scouts all selected tiers via `Promise.all`, not sequentially — each tier's LLM compare call used to stack one after another, so scouting all 4 tiers meant 4 round-trips in serial. Now they overlap.
 - **Rainforest search cache.** `rainforestClient.searchProducts` caches results 10 min in-memory, keyed on query+domain+resultCount+sortBy+delivery filters. Covers tier-band refetches, retries, and re-opening the same run without re-hitting the API. In-process only — clears on deploy/restart, fine for Railway's single instance.
 
+## Relevance filtering
+
+Two post-fetch guards drop candidates that don't match the shopper's product category, before pre-scoring/LLM ranking runs on them:
+
+- **`filterFormFactorMismatches`** — mono call-headsets vs. stereo earbuds/headphones queries.
+- **`filterAccessoryMismatches`** — a query naming a recognised device (monitor, laptop, tablet, camera, TV, speaker, watch, keyboard, mouse, printer, router, vacuum, blender, drone, projector, SSD/hard drive, …) drops candidates whose title reads as ONLY that device's accessory (case, bag, tote, sleeve, mount, stand, tripod, charger, cable, adapter, dock, strap, screen protector, skin, holder, stylus). Both guards never empty the pool entirely — if filtering would leave nothing, the original list is kept and a warning logged.
+
+`buildEnrichedSearchQuery` (`productScoutGuideService.js`) also keeps accessory nouns (e.g. a must-have "carrying bag" feature) out of the raw Amazon search string — injecting them as literal keywords was steering Amazon's own ranking toward accessory-only listings (a $55 monitor bag outranking actual monitors). Those requirements still reach the LLM via `shopperPriorities`.
+
+## Reports
+
+Any saved run (scout or guide mode) can be downloaded or emailed as a PDF via `productScoutReportPdf.js` (pdf-lib, no headless browser):
+
+- `GET /api/product-scout/runs/:id/pdf` — streams the PDF for download
+- `POST /api/product-scout/runs/:id/email` — `{ to }`, sends via `sendEmail` (attachment) — same MailChannels/SMTP path as password reset / shares emails
+
+Guide-mode reports list each scouted tier's own top pick + rationale first, then the overall cross-tier recommendation — same order as the UI (`ProductScoutTierLadder.jsx` renders `ProductScoutFinalRecommendation` after the tier ladder, not before). Client: `ProductScoutReportActions.jsx` (Download PDF / Email PDF buttons), used on both the guide ladder and quick-scout result panel.
+
 ## Design notes
 
 - **Value score** — LLM judges features/specs vs price and review quality, not Amazon rank
