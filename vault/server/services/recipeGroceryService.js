@@ -1,6 +1,19 @@
 'use strict';
 
 const { webSearch, shoppingSearch, parsePriceString, getShoppingSearchConfig } = require('./webSearchService');
+const { PANTRY_STAPLES } = require('./recipeService');
+
+// Pantry staples (salt, pepper, olive oil) are assumed already owned — see
+// PANTRY_STAPLES in recipeService.js. Pricing them out is pointless and was
+// producing nonsense matches (catering-size pepper tubs etc); skip them and
+// say so in the panel instead.
+function isPantryStapleLine(line) {
+  const s = String(line || '').toLowerCase();
+  if (/\bolive oil\b/.test(s)) return true;
+  if (/\bsalt\b/.test(s)) return true;
+  if (/\bpepper\b/.test(s) && !/(bell|capsicum|chilli|chili|cayenne|szechuan|sichuan|pepper\s*steak|jalape[nñ]o)/.test(s)) return true;
+  return false;
+}
 
 const AU_STORES = [
   { id: 'coles', label: 'Coles', domain: 'coles.com.au' },
@@ -783,11 +796,23 @@ function emptyStoreCell(storeId, term) {
 }
 
 async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}) {
-  let lines = normalizeIngredientLines(ingredients);
-  if (!lines.length && Array.isArray(recipeIngredients)) {
-    lines = formatRecipeIngredients(recipeIngredients);
+  let allLines = normalizeIngredientLines(ingredients);
+  if (!allLines.length && Array.isArray(recipeIngredients)) {
+    allLines = formatRecipeIngredients(recipeIngredients);
   }
-  if (!lines.length) throw new Error('List at least one ingredient to price');
+  if (!allLines.length) throw new Error('List at least one ingredient to price');
+
+  // Skip pantry staples (salt, pepper, olive oil) — assumed already on hand,
+  // and pricing them was producing nonsense matches. Keep original index for
+  // recipeIngredients lookup since that array is positional.
+  const excludedStaples = [];
+  const keptEntries = [];
+  allLines.forEach((line, origIdx) => {
+    if (isPantryStapleLine(line)) excludedStaples.push(line);
+    else keptEntries.push({ line, origIdx });
+  });
+  const lines = keptEntries.map((e) => e.line);
+  if (!lines.length) throw new Error('All listed ingredients are pantry staples (salt, pepper, olive oil) — nothing to price');
 
   let searchAvailable = false;
   let searchProvider = null;
@@ -815,10 +840,9 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
       };
     });
   } else {
-    const lineEntries = lines.map((line, idx) => ({ line, idx }));
-    items = await mapWithConcurrency(lineEntries, 3, async ({ line, idx }) => {
+    items = await mapWithConcurrency(keptEntries, 3, async ({ line, origIdx }) => {
       const spec = buildProductSpec(line);
-      const needed = parseQuantityFromIngredient(recipeIngredients?.[idx]) || parseQuantityFromLine(line);
+      const needed = parseQuantityFromIngredient(recipeIngredients?.[origIdx]) || parseQuantityFromLine(line);
       const qtyLabel = needed?.label || null;
       const ctx = { needed, spec };
       const found = await findMatchedStorePrices(line);
@@ -857,6 +881,10 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     liveFetchNote = 'Recipe cost uses the quantity in your ingredient line; pack total is what you pay at checkout (whole packs). Products are matched like-for-like across stores where possible.';
   }
 
+  if (excludedStaples.length) {
+    liveFetchNote = `${liveFetchNote} Pantry staples assumed on hand, not priced: ${excludedStaples.join(', ')}.`;
+  }
+
   return {
     disclaimer: searchAvailable
       ? 'Prices sourced from live product search — confirm in-store before you buy. Recipe cost is proportional to the quantity listed; pack total assumes whole packs at checkout.'
@@ -871,6 +899,7 @@ async function priceIngredients(_userId, { ingredients, recipeIngredients } = {}
     items,
     totals: computeTotals(items),
     missingPrices: items.filter((row) => !row.coles.price && !row.woolworths.price).map((r) => r.ingredient),
+    excludedStaples,
     liveFetchNote,
   };
 }
