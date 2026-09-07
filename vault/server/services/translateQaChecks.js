@@ -162,6 +162,20 @@ function findPlaceholder(text) {
 }
 
 /**
+ * Opposite failure mode from enforceRedactionPassThrough: the source has NO redaction marker
+ * at all, but the model produced one anyway — a hallucination, seen in practice on a bracketed
+ * "read more" link block the translator couldn't parse cleanly and reached for [REDACTED] as an
+ * escape hatch instead of translating. Real content is lost either way; treat it as an
+ * incomplete/failed segment so the repair pass (LLM retry, then Google fallback) re-does it
+ * rather than the row silently shipping as a real-looking redaction that was never in the source.
+ */
+function hasHallucinatedRedaction(source, target) {
+  const srcHasToken = /\[REDACTED(?::[^\]]+)?\]/i.test(String(source || ''));
+  if (srcHasToken) return false; // legitimate — enforceRedactionPassThrough already handles this
+  return /\[REDACTED(?::[^\]]+)?\]/i.test(String(target || ''));
+}
+
+/**
  * If source contains [REDACTED…], ensure target keeps those tokens verbatim
  * and does not replace them with meta-commentary.
  */
@@ -365,6 +379,9 @@ function checkSegmentCompleteness(source, target, { skipIdentical = false } = {}
   const tgtRedactions = (tgt.match(REDACTION_TOKEN_RE) || []).length;
   if (srcRedactions > 0 && tgtRedactions < srcRedactions) {
     reasons.push('redaction_token_missing');
+  }
+  if (hasHallucinatedRedaction(source, tgt)) {
+    reasons.push('hallucinated_redaction');
   }
   if (!skipIdentical && !looksNonLinguistic(source)) {
     if (normalizeForCompare(source) === normalizeForCompare(tgt)) {
@@ -656,6 +673,7 @@ module.exports = {
   verifyQaCategoryClaims,
   findPlaceholder,
   enforceRedactionPassThrough,
+  hasHallucinatedRedaction,
   lockedDoNotTranslateTerms,
   detectRepeatedTermCandidates,
   isMetaCommentaryInner,

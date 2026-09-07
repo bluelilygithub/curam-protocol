@@ -160,6 +160,11 @@ function SettingsPage() {
   const [productScoutMarketplaces, setProductScoutMarketplaces] = useState([]);
   const [productScoutDomainFromEnv, setProductScoutDomainFromEnv] = useState(false);
 
+  const [defaultModelError, setDefaultModelError] = useState('');
+  const [branchEvalModelError, setBranchEvalModelError] = useState('');
+  const [graphicsModelError, setGraphicsModelError] = useState('');
+  const [embeddingModelError, setEmbeddingModelError] = useState('');
+
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
   const [mobileSaved, setMobileSaved] = useState(false);
@@ -1522,7 +1527,11 @@ function SettingsPage() {
           </p>
           <select
             value={defaultModel}
-            onChange={e => saveDefaultModel(e.target.value)}
+            onChange={async (e) => {
+              setDefaultModelError('');
+              try { await saveDefaultModel(e.target.value); }
+              catch (err) { setDefaultModelError(err.message || 'Could not save default model'); }
+            }}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
@@ -1531,6 +1540,9 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          {defaultModelError && (
+            <p className="text-xs mt-2" style={{ color: '#b45309' }}>{defaultModelError}</p>
+          )}
         </div>
 
         {/* Branch evaluation model selector */}
@@ -1543,7 +1555,11 @@ function SettingsPage() {
           </p>
           <select
             value={branchEvalModel}
-            onChange={e => saveBranchEvalModel(e.target.value)}
+            onChange={async (e) => {
+              setBranchEvalModelError('');
+              try { await saveBranchEvalModel(e.target.value); }
+              catch (err) { setBranchEvalModelError(err.message || 'Could not save branch evaluation model'); }
+            }}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
@@ -1552,6 +1568,9 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          {branchEvalModelError && (
+            <p className="text-xs mt-2" style={{ color: '#b45309' }}>{branchEvalModelError}</p>
+          )}
         </div>
 
         {/* Document redaction agent — two model slots */}
@@ -1810,7 +1829,11 @@ function SettingsPage() {
             <>
               <select
                 value={embeddingModel || embeddingConfig?.model || 'embedding-001'}
-                onChange={(e) => saveEmbeddingModel(e.target.value)}
+                onChange={async (e) => {
+                  setEmbeddingModelError('');
+                  try { await saveEmbeddingModel(e.target.value); }
+                  catch (err) { setEmbeddingModelError(err.message || 'Could not save embedding model'); }
+                }}
                 className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
@@ -1818,6 +1841,9 @@ function SettingsPage() {
                   <option key={opt.id} value={opt.id}>{opt.label}</option>
                 ))}
               </select>
+              {embeddingModelError && (
+                <p className="text-xs mt-2" style={{ color: '#b45309' }}>{embeddingModelError}</p>
+              )}
               <p className="text-xs mt-2" style={{ color: embeddingConfig?.available ? 'var(--color-muted)' : '#b45309' }}>
                 {embeddingConfig?.available
                   ? `Production: ${embeddingConfig.hint}`
@@ -1837,7 +1863,11 @@ function SettingsPage() {
           </p>
           <select
             value={graphicsModel}
-            onChange={e => saveGraphicsModel(e.target.value)}
+            onChange={async (e) => {
+              setGraphicsModelError('');
+              try { await saveGraphicsModel(e.target.value); }
+              catch (err) { setGraphicsModelError(err.message || 'Could not save graphics model'); }
+            }}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
@@ -1846,6 +1876,9 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
             ))}
           </select>
+          {graphicsModelError && (
+            <p className="text-xs mt-2" style={{ color: '#b45309' }}>{graphicsModelError}</p>
+          )}
           <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
             This dropdown lists models configured below with provider `fal`. Leave blank to use the server fallback.
           </p>

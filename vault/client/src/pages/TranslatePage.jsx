@@ -189,29 +189,43 @@ function computeConfidence(qa) {
 
   const total = qa.reviewedPairCount ?? qa.totalPairCount ?? qa.completenessCheck?.total ?? 0;
 
-  // Scored by which defect CATEGORIES fired, not how many items are in each — counting items
-  // made the score swing wildly between re-runs of the identical document (confirmed on real
-  // reports: the same source landed 17%/22%/35%/70% across separate QA runs, because the LLM
-  // reviewer's item counts per category jitter run to run — 4 vs 10 uncertainTerms, 1 vs 2
-  // garbled rows — even when the same underlying defects keep recurring). A category firing at
-  // all is the meaningful signal; exactly how many instances it lists is reviewer noise on top
-  // of that signal, not more evidence of a worse translation.
+  // Scored per defect CATEGORY, each weighted by how much of the document it actually touches —
+  // not a flat per-category penalty. A flat penalty meant one bad title and a doc that's wrong
+  // start-to-finish scored identically (confirmed on a real report: 1 polarity issue + 2 audience
+  // flags + 1 restructured sentence + 2 garbled rows + 5 uncertain terms, out of 20 segments,
+  // landed at 12% — reading as "doesn't work" when ~90% of the document was fluent, accurate
+  // French). Density = category's flagged-item count / total segments, floored at MIN_DENSITY so
+  // even a single real instance still costs something (a mangled title matters) — full category
+  // weight only applies once a category's problems are spread across a meaningful share of the
+  // doc, which is also what keeps a genuinely bad, pervasively-wrong document scoring just as low
+  // as the old flat penalty did (density → 1 for every category → same floor as before).
   // garbledOrIncompleteRows only counts if the LLM reviewer (not the deterministic gate) added
   // rows to it — check === 'deterministic_completeness' rows are routine numbers/codes identical
   // to source, already scored via hardFail/softFail above.
-  const llmGarbled = (qa.garbledOrIncompleteRows || [])
-    .some((r) => r?.check !== 'deterministic_completeness');
-  const hasPolarity = (qa.polarityOrSentenceTypeIssues?.length || 0) > 0;
-  const hasAudience = (qa.audienceFlags?.length || 0) > 0;
-  const hasRestructured = (qa.restructuredSentences?.length || 0) > 0;
-  const hasUncertain = (qa.uncertainTerms?.length || 0) > 0;
+  const MIN_DENSITY = 0.4;
+  const garbledCount = (qa.garbledOrIncompleteRows || [])
+    .filter((r) => r?.check !== 'deterministic_completeness').length;
+  const polarityCount = qa.polarityOrSentenceTypeIssues?.length || 0;
+  const audienceCount = qa.audienceFlags?.length || 0;
+  const restructuredCount = qa.restructuredSentences?.length || 0;
+  const uncertainCount = qa.uncertainTerms?.length || 0;
+  const hasPolarity = polarityCount > 0;
+  const hasAudience = audienceCount > 0;
+  const hasRestructured = restructuredCount > 0;
+  const hasUncertain = uncertainCount > 0;
+  const llmGarbled = garbledCount > 0;
+
+  const weighted = (count, basePenalty) => {
+    if (!count || !total) return count ? basePenalty * MIN_DENSITY : 0;
+    return basePenalty * Math.max(MIN_DENSITY, Math.min(1, count / total));
+  };
 
   let pct = 97;
-  if (hasPolarity) pct -= 25;      // meaning/logic reversal — most severe category
-  if (hasAudience) pct -= 15;      // grammar/localization a native reader would notice
-  if (hasRestructured) pct -= 15;  // translator mishandled sentence structure
-  if (llmGarbled) pct -= 20;       // leaked markup / untranslated content the reviewer caught
-  if (hasUncertain) pct -= 10;     // glossary-nuance notes — flat, regardless of how many terms
+  pct -= weighted(polarityCount, 25);      // meaning/logic reversal — most severe category
+  pct -= weighted(audienceCount, 15);      // grammar/localization a native reader would notice
+  pct -= weighted(restructuredCount, 15);  // translator mishandled sentence structure
+  pct -= weighted(garbledCount, 20);       // leaked markup / untranslated content the reviewer caught
+  pct -= weighted(uncertainCount, 10);     // glossary-nuance notes
   if (qa.softFail) pct -= 15;
   pct = Math.max(5, Math.min(97, Math.round(pct)));
 

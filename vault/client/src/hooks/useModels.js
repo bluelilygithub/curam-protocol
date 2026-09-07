@@ -92,26 +92,44 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  // These used to flip local state BEFORE the POST resolved, then never checked res.ok — a
+  // failed save (expired session, 500, etc.) still left the dropdown showing the newly-picked
+  // model with no error and no Save button anywhere on the page, so it read as saved when the
+  // server never got it (confirmed: selection reverted on next page load). State now only
+  // updates after the server confirms, and a failure throws so the caller can surface it —
+  // same contract the document-redaction / translate model slots already used.
   const saveDefaultModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'default_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save default model');
     setDefaultModel(modelId);
-    await api.post('/api/settings', { key: 'default_model', value: modelId });
+    return { ok: true };
   }, []);
 
   const saveBranchEvalModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'branch_eval_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save branch evaluation model');
     setBranchEvalModel(modelId);
-    await api.post('/api/settings', { key: 'branch_eval_model', value: modelId });
+    return { ok: true };
   }, []);
 
   const saveGraphicsModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'graphics_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save graphics model');
     setGraphicsModel(modelId);
-    await api.post('/api/settings', { key: 'graphics_model', value: modelId });
+    return { ok: true };
   }, []);
 
   const saveEmbeddingModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'embedding_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save embedding model');
     setEmbeddingModel(modelId);
-    await api.post('/api/settings', { key: 'embedding_model', value: modelId });
     const embRes = await api.get('/api/settings/embedding-config');
     if (embRes.ok) setEmbeddingConfig(await embRes.json());
+    return { ok: true };
   }, []);
 
   const saveDocumentRedactionLocalModel = useCallback(async (modelId) => {
