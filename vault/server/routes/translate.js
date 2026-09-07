@@ -269,6 +269,20 @@ router.get('/glossaries/global/:lang', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Cross-job drift frequency for a language — how many jobs (not rows within one job) a term has
+// drifted in without ever reaching a confirmed lock. The Lessons learnt report reads this to tell
+// a one-off (ignore) from a recurring pattern (worth actually fixing).
+router.get('/drift-frequency/:lang', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "termKey", term, "jobCount", "lastSeenAt" FROM translate_term_drift
+       WHERE "userId"=$1 AND "targetLanguage"=$2 ORDER BY "jobCount" DESC`,
+      [req.user.id, req.params.lang]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 async function findOrCreateGlobalGlossary(userId, targetLanguage) {
   const { rows } = await pool.query(
     `SELECT * FROM translate_glossaries WHERE "userId"=$1 AND "targetLanguage"=$2 AND "isGlobal"=TRUE`,
@@ -281,6 +295,29 @@ async function findOrCreateGlobalGlossary(userId, targetLanguage) {
     [userId, `Global — ${targetLanguage}`, targetLanguage]
   );
   return inserted.rows[0];
+}
+
+// Cross-job drift tracking — see translate_term_drift in db.js. Only terms that DIDN'T reach a
+// confirmed lock (no proposedTarget, or the '(varies)' placeholder) are worth tracking: a term
+// that failed once is noise, one that recurs across jobs is a real pattern. Fire-and-forget from
+// the caller — never worth failing a completed job over a tracking write.
+async function recordTermDrift(userId, targetLanguage, uncertainTerms, jobId) {
+  const terms = (uncertainTerms || []).filter((t) => t?.source
+    && (!t.proposedTarget || t.proposedTarget === '(varies)'));
+  if (!terms.length) return;
+  const seen = new Set();
+  for (const t of terms) {
+    const key = String(t.source).trim().toLowerCase();
+    if (!key || seen.has(key)) continue; // one bump per job even if the term drifted on several rows
+    seen.add(key);
+    await pool.query(
+      `INSERT INTO translate_term_drift ("userId", "targetLanguage", "termKey", term, "jobCount", "lastJobId", "lastSeenAt")
+       VALUES ($1,$2,$3,$4,1,$5,NOW())
+       ON CONFLICT ("userId", "targetLanguage", "termKey")
+       DO UPDATE SET "jobCount"=translate_term_drift."jobCount"+1, "lastJobId"=$5, "lastSeenAt"=NOW(), term=$4`,
+      [userId, targetLanguage, key, t.source, jobId]
+    );
+  }
 }
 
 // Merges newly-seen glossary terms into the global glossary for a language, keyed by source
@@ -1578,6 +1615,9 @@ async function processTranslateJob(
   }
 
   await checkJobCancelled(jobId);
+
+  recordTermDrift(userId, targetLanguage, qaSummary.uncertainTerms, jobId)
+    .catch((err) => console.error('[translate] recordTermDrift failed:', err.message));
 
   // ── 8. Hand off to client PDF generation ────────────────────────────────────
   await setJobStatus(jobId, {

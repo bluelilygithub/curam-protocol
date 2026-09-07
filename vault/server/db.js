@@ -1838,6 +1838,29 @@ async function initSchema() {
     WHERE "isGlobal" = TRUE
   `);
 
+  // Cross-job drift tracking: a term drifting once in one job is noise; the same term drifting
+  // across several jobs is a real pattern worth a glossary/prompt fix. Incremented once per job
+  // for every uncertainTerms entry that ISN'T a confirmed lock (no proposedTarget) — Enforcement
+  // gap and Needs linguistic decision items on the Lessons learnt report. Read-only signal (a job
+  // count), never written to directly by the client.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_term_drift (
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "targetLanguage" TEXT NOT NULL,
+      "termKey"        TEXT NOT NULL,
+      term             TEXT NOT NULL,
+      "jobCount"       INTEGER NOT NULL DEFAULT 1,
+      "lastJobId"       INTEGER,
+      "firstSeenAt"    TIMESTAMPTZ DEFAULT NOW(),
+      "lastSeenAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_term_drift_key
+    ON translate_term_drift ("userId", "targetLanguage", "termKey")
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (
       id                  SERIAL PRIMARY KEY,

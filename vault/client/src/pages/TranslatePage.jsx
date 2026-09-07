@@ -763,6 +763,20 @@ function DispositionTag({ text }) {
   );
 }
 
+// A term drifting once is noise; the same term recurring across jobs (2+) is a pattern worth
+// actually fixing rather than re-triaging by eye every time. Only shown once frequency data has
+// loaded (driftFreq !== null) and only when it's actually recurred.
+function FrequencyBadge({ count }) {
+  if (!count || count < 2) return null;
+  return (
+    <span className="text-xs font-medium px-1.5 py-0.5 rounded shrink-0"
+      style={{ color: '#7c3aed', border: '1px solid #7c3aed', opacity: 0.9 }}
+      title="How many separate jobs this exact term has drifted in">
+      seen in {count} jobs
+    </span>
+  );
+}
+
 function Snippet({ snippet }) {
   if (!snippet || (!snippet.source && !snippet.target)) return null;
   return (
@@ -781,6 +795,26 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
   const [checkedLock, setCheckedLock] = useState(() => new Set());
   const [checkedStyle, setCheckedStyle] = useState(() => new Set());
   const [applying, setApplying] = useState(false);
+  // Cross-job frequency (termKey -> jobCount) — a term drifting once is noise, drifting across
+  // several jobs is a pattern. Tells the reader which enforcement/linguistic items are worth
+  // acting on without them eyeballing single reports over time.
+  const [driftFreq, setDriftFreq] = useState(null);
+  const [confirmDrafts, setConfirmDrafts] = useState({}); // id -> typed "confirmed standard" value
+  const [confirming, setConfirming] = useState(null); // id currently saving
+
+  useEffect(() => {
+    if (!job?.targetLanguage) return;
+    api.get(`/api/translate/drift-frequency/${job.targetLanguage}`)
+      .then(r => r.json())
+      .then(rows => {
+        const map = {};
+        (rows || []).forEach(r => { map[r.termKey] = r.jobCount; });
+        setDriftFreq(map);
+      })
+      .catch(() => setDriftFreq({}));
+  }, [job?.targetLanguage]);
+
+  const freqFor = (source) => driftFreq?.[String(source || '').trim().toLowerCase()] || 0;
 
   const toggle = (setSet, id) => {
     setSet(prev => {
@@ -788,6 +822,29 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  // "Confirm as standard" — for a Needs-linguistic-decision item, the reviewer (a human who
+  // actually knows the target language) supplies the correct rendering the tool couldn't
+  // determine on its own; that becomes a real glossary lock, same destination as Lock/style, just
+  // gated on explicit human confirmation instead of the model's own proposedTarget.
+  const confirmAsStandard = async (item) => {
+    const value = (confirmDrafts[item.id] || '').trim();
+    if (!value) { addToast('Enter the confirmed rendering first', 'error'); return; }
+    if (!job?.targetLanguage) return;
+    setConfirming(item.id);
+    try {
+      const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, {
+        terms: [{ source: item.source, target: value, note: 'Confirmed as standard from Lessons learnt' }],
+      });
+      if (!res.ok) throw new Error('Could not save glossary term');
+      addToast(`"${item.source}" → "${value}" locked into the glossary`, 'success');
+      setConfirmDrafts(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setConfirming(null);
+    }
   };
 
   const nothingToShow = global.length === 0 && dnt.length === 0 && lock.length === 0
@@ -959,13 +1016,15 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             {driftEnforcement.length > 0 && (
               <div>
                 <p className="text-xs font-semibold mb-2">
-                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit
+                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit.{' '}
+                  {driftFreq && <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}>Ignore one-offs; a "seen in N jobs" badge means it's a real pattern, not this job's noise.</span>}
                 </p>
                 <ul className="space-y-1.5">
-                  {driftEnforcement.map(d => (
+                  {[...driftEnforcement].sort((a, b) => freqFor(b.source) - freqFor(a.source)).map(d => (
                     <li key={d.id} className="flex items-start gap-2">
                       <SeverityBadge severity={d.severity} />
                       <DispositionTag text={d.disposition} />
+                      <FrequencyBadge count={freqFor(d.source)} />
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                         <strong style={{ color: 'var(--color-text)' }}>{d.source}</strong> — {d.detail}
                       </span>
@@ -978,20 +1037,36 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             {driftLinguistic.length > 0 && (
               <div>
                 <p className="text-xs font-semibold mb-2">
-                  Needs linguistic decision ({driftLinguistic.length}) — no confirmed correction, not addable to glossary
+                  Needs linguistic decision ({driftLinguistic.length}) — no confirmed correction yet
+                </p>
+                <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                  If you (or a translator) know the right rendering, type it and confirm — that locks it into the {job?.targetLanguage || 'target-language'} glossary immediately, same as Lock above.
                 </p>
                 <ul className="space-y-1.5">
-                  {driftLinguistic.map(d => (
+                  {[...driftLinguistic].sort((a, b) => freqFor(b.source) - freqFor(a.source)).map(d => (
                     <li key={d.id} className="flex items-start gap-2">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <SeverityBadge severity={d.severity} />
                           <DispositionTag text={d.disposition} />
+                          <FrequencyBadge count={freqFor(d.source)} />
                           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                             <strong style={{ color: 'var(--color-text)' }}>{d.source}</strong> — {d.detail}
                           </span>
                         </div>
                         <Snippet snippet={d.snippet} />
+                        <div className="flex items-center gap-2 mt-1">
+                          <input type="text" placeholder="Confirmed standard rendering…"
+                            value={confirmDrafts[d.id] || ''}
+                            onChange={(e) => setConfirmDrafts(prev => ({ ...prev, [d.id]: e.target.value }))}
+                            className="text-xs px-2 py-1 rounded border flex-1 min-w-40"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                          <button onClick={() => confirmAsStandard(d)} disabled={confirming === d.id || !(confirmDrafts[d.id] || '').trim()}
+                            className="text-xs px-2.5 py-1 rounded font-medium hover:opacity-90 disabled:opacity-50"
+                            style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                            {confirming === d.id ? 'Saving…' : 'Confirm as standard'}
+                          </button>
+                        </div>
                       </div>
                     </li>
                   ))}
