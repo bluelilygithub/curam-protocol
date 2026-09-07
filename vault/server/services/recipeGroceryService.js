@@ -546,6 +546,14 @@ function normalizeNeededForPack(needed, spec) {
       return { kind: 'mass', value: grams, unit: 'g', label: `${needed.label} (~${grams}g)` };
     }
   }
+  // "1/2 cube" of stock/bouillon parses as a bare count, but packs are only
+  // ever labelled by total weight (e.g. "105g") — without this conversion the
+  // kinds never match and the full pack price shows instead of a proportion.
+  if (needed.kind === 'count' && /\bcube/.test(term) && /\b(stock|bouillon)\b/.test(term)) {
+    const ASSUMED_CUBE_WEIGHT_G = 10;
+    const grams = Math.max(1, Math.round(needed.value * ASSUMED_CUBE_WEIGHT_G));
+    return { kind: 'mass', value: grams, unit: 'g', label: `${needed.label} cube (~${grams}g)` };
+  }
   return needed;
 }
 
