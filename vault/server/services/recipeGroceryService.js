@@ -389,13 +389,32 @@ function parseQuantityFromIngredient(ing) {
 /** Recipe quantity needed — grams, ml, or count. */
 function parseQuantityFromLine(line) {
   const s = String(line || '').trim();
-  const paren = s.match(/\((\d+(?:\.\d+)?|\d+\/\d+)\s*(g|kg|ml|l|litre|liters|oz|lb)\)/i);
-  if (paren) {
-    const val = parseFraction(paren[1]);
-    if (val != null) return normalizeQuantity(val, paren[2]);
+
+  // Parenthetical explicit weight/volume anywhere inside the parens, e.g.
+  // "(approx. 120g drained)" — was previously anchored to require the ")"
+  // immediately after the unit, so any extra words ("drained") broke it.
+  const parenMatch = s.match(/\(([^)]*)\)/);
+  if (parenMatch) {
+    const weightInParen = parenMatch[1].match(/(\d+\/\d+|\d+(?:\.\d+)?)\s*(g|kg|ml|mL|l|litre|liters|oz|lb)\b/i);
+    if (weightInParen) {
+      const val = parseFraction(weightInParen[1]);
+      if (val != null) return normalizeQuantity(val, weightInParen[2]);
+    }
   }
 
-  const measure = s.match(/(\d+(?:\.\d+)?|\d+\/\d+)\s*(kg|g|ml|mL|l|litre|liters|L|cup|cups|tbsp|tablespoons?|tsp|teaspoons?|clove|cloves|pcs?|each|bunch|can|cans|jar|packet|pkt|bottle|loaf|slice|slices|pinch)?/i);
+  // Explicit weight/volume anywhere in the line, not just at the start — catches
+  // "1 x 400g tin" where the leading "1" isn't the useful quantity.
+  const weightAnywhere = s.match(/(\d+\/\d+|\d+(?:\.\d+)?)\s*(kg|g|ml|mL|l|litre|liters|L)\b/i);
+  if (weightAnywhere) {
+    const val = parseFraction(weightAnywhere[1]);
+    if (val != null) return normalizeQuantity(val, weightAnywhere[2]);
+  }
+
+  // Fraction alternative must come before the plain-number alternative — a
+  // number/unit alternation tries the first branch first, so "1/3 cup" was
+  // matching just "1" (a valid \d+) and discarding "/3", collapsing every
+  // fractional quantity ("1/3 cup", "1/2 tsp") into a bare count of 1.
+  const measure = s.match(/(\d+\/\d+|\d+(?:\.\d+)?)\s*(cup|cups|tbsp|tablespoons?|tsp|teaspoons?|clove|cloves|pcs?|each|bunch|can|cans|jar|packet|pkt|bottle|loaf|slice|slices|pinch)?/i);
   if (measure) {
     const val = parseFraction(measure[1]);
     if (val != null) return normalizeQuantity(val, measure[2] || 'each');
@@ -404,17 +423,24 @@ function parseQuantityFromLine(line) {
   return null;
 }
 
+/** Trim a fraction result to at most 2dp for display (e.g. 0.3333.. -> 0.33). */
+function roundForLabel(n) {
+  const r = Math.round(n * 100) / 100;
+  return r % 1 === 0 ? r.toFixed(0) : String(r);
+}
+
 function normalizeQuantity(value, unitRaw) {
   const unit = String(unitRaw || 'each').toLowerCase().replace(/\./g, '');
-  if (unit === 'kg') return { kind: 'mass', value: value * 1000, unit: 'g', label: `${value}kg` };
-  if (unit === 'g') return { kind: 'mass', value, unit: 'g', label: `${value}g` };
-  if (unit === 'l' || unit === 'litre' || unit === 'liters') return { kind: 'volume', value: value * 1000, unit: 'ml', label: `${value}L` };
-  if (unit === 'ml') return { kind: 'volume', value, unit: 'ml', label: `${value}ml` };
-  if (unit === 'cup' || unit === 'cups') return { kind: 'volume', value: value * 250, unit: 'ml', label: `${value} cup${value === 1 ? '' : 's'}` };
-  if (unit === 'tbsp' || unit === 'tablespoon' || unit === 'tablespoons') return { kind: 'volume', value: value * 15, unit: 'ml', label: `${value} tbsp` };
-  if (unit === 'tsp' || unit === 'teaspoon' || unit === 'teaspoons') return { kind: 'volume', value: value * 5, unit: 'ml', label: `${value} tsp` };
+  const v = roundForLabel(value);
+  if (unit === 'kg') return { kind: 'mass', value: value * 1000, unit: 'g', label: `${v}kg` };
+  if (unit === 'g') return { kind: 'mass', value, unit: 'g', label: `${v}g` };
+  if (unit === 'l' || unit === 'litre' || unit === 'liters') return { kind: 'volume', value: value * 1000, unit: 'ml', label: `${v}L` };
+  if (unit === 'ml') return { kind: 'volume', value, unit: 'ml', label: `${v}ml` };
+  if (unit === 'cup' || unit === 'cups') return { kind: 'volume', value: value * 250, unit: 'ml', label: `${v} cup${value === 1 ? '' : 's'}` };
+  if (unit === 'tbsp' || unit === 'tablespoon' || unit === 'tablespoons') return { kind: 'volume', value: value * 15, unit: 'ml', label: `${v} tbsp` };
+  if (unit === 'tsp' || unit === 'teaspoon' || unit === 'teaspoons') return { kind: 'volume', value: value * 5, unit: 'ml', label: `${v} tsp` };
   if (unit === 'pinch') return { kind: 'volume', value: 1, unit: 'ml', label: 'pinch' };
-  return { kind: 'count', value, unit: 'each', label: `${value}` };
+  return { kind: 'count', value, unit: 'each', label: `${v}` };
 }
 
 const DEFAULT_PACK_BY_TERM = [
