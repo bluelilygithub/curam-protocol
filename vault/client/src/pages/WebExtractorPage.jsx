@@ -228,7 +228,26 @@ export default function WebExtractorPage() {
               </button>
             </div>
           </div>
-          <pre className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{result.text}</pre>
+          <div className="space-y-3">
+            {String(result.text || '').split(/\n{2,}/).filter(Boolean).map((block, i) => {
+              const m = block.match(/^(#{1,6})\s+(.*)$/s);
+              if (m) {
+                const level = m[1].length;
+                return (
+                  <p
+                    key={i}
+                    className="font-semibold"
+                    style={{ color: 'var(--color-text)', fontSize: `${Math.max(12, 18 - level * 1.5)}px` }}
+                  >
+                    {m[2]}
+                  </p>
+                );
+              }
+              return (
+                <p key={i} className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{block}</p>
+              );
+            })}
+          </div>
         </section>
       )}
 

@@ -16,12 +16,23 @@ function buildDocument(deps, { title, byline, url, text }) {
     url: { fontSize: 8.5, color: PRIMARY, marginBottom: 16 },
     divider: { borderBottomWidth: 1, borderBottomColor: '#E5E7EB', marginBottom: 16 },
     paragraph: { fontSize: 10.5, color: DARK, marginBottom: 10 },
+    heading1: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: DARK, marginTop: 6, marginBottom: 8 },
+    heading2: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: DARK, marginTop: 5, marginBottom: 7 },
+    heading3: { fontSize: 11.5, fontFamily: 'Helvetica-Bold', color: DARK, marginTop: 4, marginBottom: 6 },
   });
 
-  const paragraphs = String(text || '')
+  // Article text carries markdown-style `#`/`##`/`###` prefixes on heading
+  // lines (see webExtractorService.blockToText) — render those bold/larger.
+  const blocks = String(text || '')
     .split(/\n{2,}/)
-    .map((p) => p.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+    .map((p) => p.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .map((p) => {
+      const m = p.match(/^(#{1,6})\s+(.*)$/);
+      if (!m) return { type: 'paragraph', text: p };
+      const level = Math.min(m[1].length, 3);
+      return { type: `heading${level}`, text: m[2] };
+    });
 
   return React.createElement(Document, null,
     React.createElement(Page, { size: 'A4', style: styles.page },
@@ -29,7 +40,7 @@ function buildDocument(deps, { title, byline, url, text }) {
       byline && React.createElement(Text, { style: styles.byline }, byline),
       url && React.createElement(Link, { src: url, style: styles.url }, url),
       React.createElement(View, { style: styles.divider }),
-      ...paragraphs.map((p, i) => React.createElement(Text, { key: String(i), style: styles.paragraph }, p)),
+      ...blocks.map((b, i) => React.createElement(Text, { key: String(i), style: styles[b.type] || styles.paragraph }, b.text)),
     ),
   );
 }

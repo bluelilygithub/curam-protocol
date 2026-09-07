@@ -100,9 +100,63 @@ function findMainCandidate(doc) {
   return best || doc.body;
 }
 
+const HEADING_LEVEL = { h1: 1, h2: 2, h3: 3, h4: 4, h5: 5, h6: 6 };
+const BLOCK_TAGS = new Set([
+  'p', 'div', 'section', 'article', 'li', 'blockquote', 'pre',
+  'tr', 'table', 'ul', 'ol', 'br', 'hr',
+]);
+
+/**
+ * Walk an element tree to plain text, inserting blank lines around block
+ * elements and marking headings with a markdown-style `#` prefix + a blank
+ * line on each side, so heading breaks survive the flatten to text/PDF.
+ */
+function blockToText(root, domWindow) {
+  const lines = [];
+  let current = '';
+
+  const flushCurrent = () => {
+    const t = current.replace(/[ \t]+/g, ' ').trim();
+    if (t) lines.push(t);
+    current = '';
+  };
+
+  const walk = (node) => {
+    if (node.nodeType === domWindow.Node.TEXT_NODE) {
+      current += node.textContent;
+      return;
+    }
+    if (node.nodeType !== domWindow.Node.ELEMENT_NODE) return;
+
+    const tag = node.tagName.toLowerCase();
+    const level = HEADING_LEVEL[tag];
+
+    if (level) {
+      flushCurrent();
+      const headingText = node.textContent.replace(/\s+/g, ' ').trim();
+      if (headingText) lines.push(`${'#'.repeat(level)} ${headingText}`);
+      return;
+    }
+
+    if (tag === 'br') {
+      current += '\n';
+      return;
+    }
+
+    const isBlock = BLOCK_TAGS.has(tag);
+    if (isBlock) flushCurrent();
+    for (const child of node.childNodes) walk(child);
+    if (isBlock) flushCurrent();
+  };
+
+  walk(root);
+  flushCurrent();
+  return lines.join('\n\n');
+}
+
 /**
  * Mode 1 — article text only: strip chrome (nav/header/footer/ads/sidebars/images),
- * return the readable body text plus a lightly-cleaned HTML fragment.
+ * return the readable body text (with heading line breaks) plus a lightly-cleaned HTML fragment.
  */
 function extractArticle(html, url) {
   const dom = new JSDOM(html, { url });
@@ -119,10 +173,7 @@ function extractArticle(html, url) {
 
   const main = findMainCandidate(document);
   const html_ = main ? main.innerHTML : '';
-  const text = (main ? main.textContent : document.body.textContent || '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n\s*/g, '\n\n')
-    .trim();
+  const text = blockToText(main || document.body, dom.window);
 
   return { title, byline, text, html: html_ };
 }
