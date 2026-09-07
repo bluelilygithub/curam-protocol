@@ -31,6 +31,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   seo: true,
   html: true,
   searchConsole: true,
+  webExtractor: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

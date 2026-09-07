@@ -141,6 +141,7 @@ app.use('/api/document-redaction', requireFeature('documentRedaction'), require(
 app.use('/api/google-ads', requireFeature('googleAds'), require('./routes/seo'));
 app.use('/api/seo', requireFeature('seo'), require('./routes/seoAudit'));
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
+app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate', requireFeature('translate'), require('./routes/translate'));
 app.use('/api/guitar',    requireFeature('guitar'),    require('./routes/guitar'));

@@ -47,7 +47,9 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `product-scout/` — standalone Python CLI (see `product-scout/README.md`)
 - `server/services/sharesChartData.js` — Charts tab payloads (benchmarks, beat/lag, drawdowns, heatmap, earnings)
 - `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
-- `server/routes/htmlAudit.js` — HTML Lighthouse API (`/api/html/audits`)
+- `server/routes/htmlAudit.js` — Lighthouse API (`/api/html/audits`)
+- `server/routes/webExtractor.js` — Web Extractor API (`POST /api/web-extractor/extract`), 3 modes: article / images / styled
+- `server/services/webExtractorService.js` — jsdom-based extraction: article text (strips ads/nav/header/footer/sidebar/images), image list, exact-scrape (absolute-URL rewrite, original inline styles kept)
 - `server/routes/gsc.js` — Search Console OAuth + snapshots (`/api/gsc/*`; callback before requireAuth)
 - `server/services/gscService.js` — Search Console sites + 28-day searchanalytics
 - `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn
@@ -350,7 +352,9 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 **Search** (`/search-console`): Google Search Console — OAuth (`webmasters.readonly`), 28-day queries, pages, and query/URL cannibalisation. Tables: `gsc_tokens`, `gsc_snapshots`. Flag `searchConsole`. Redirect: `GSC_REDIRECT_URI` or `{APP_URL}/api/gsc/callback`. Docs: **`docs/search-console-agent.md`**.
 
-**HTML** (`/html`): Google Lighthouse via PageSpeed Insights (mobile **and** desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities with file URLs, failed checks, copyable developer brief. Table: `html_audits`. Flag `html`. Requires `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
+**Lighthouse** (`/html`, nav label "Lighthouse"): Google Lighthouse via PageSpeed Insights (mobile **and** desktop). Performance, accessibility, best practices, Lighthouse SEO, lab metrics, opportunities with file URLs, failed checks, copyable developer brief. Table: `html_audits`. Flag `html`. Requires `PAGESPEED_API_KEY`. Docs: **`docs/html-agent.md`**.
+
+**Web Extractor** (`/web-extractor`): Pull content from any public URL, three modes — **Article content** (jsdom strips nav/header/footer/sidebar/ads/comments/images, returns readable text + title/byline), **Extract images** (dedup'd `<img>` + `og:image`, absolute URLs, alt text), **Exact scrape** (original HTML with relative asset/link URLs rewritten absolute, inline styles/`<style>` untouched, rendered read-only in a sandboxed iframe; no persistence — stateless single-shot API). Uses the same SSRF-safe `htmlFetch.fetchHtml()` as Translate/SEO/pinned URLs. Flag `webExtractor`. Route: `server/routes/webExtractor.js`. Service: `server/services/webExtractorService.js`.
 
 **Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
 

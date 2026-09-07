@@ -31,6 +31,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   searchConsole: true,
   translate: true,
   guitar: true,
+  webExtractor: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -42,7 +43,8 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'searchConsole', label: 'Search' },
       { key: 'googleAds', label: 'Adwords' },
       { key: 'domains', label: 'Domain' },
-      { key: 'html', label: 'HTML' },
+      { key: 'html', label: 'Lighthouse' },
+      { key: 'webExtractor', label: 'Web Extractor' },
       { key: 'themeBuilder', label: 'WP Theme Builder' },
     ],
   },

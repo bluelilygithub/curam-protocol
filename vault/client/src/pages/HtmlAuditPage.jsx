@@ -290,7 +290,7 @@ export default function HtmlAuditPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
             {getIcon('gauge', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>HTML</h1>
+          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Lighthouse</h1>
         </div>
 
         <input
@@ -389,7 +389,7 @@ export default function HtmlAuditPage() {
         {!id && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>HTML · Lighthouse</h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Lighthouse</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                 Runs Google Lighthouse on a public URL for <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then stores a developer brief (opportunities, files, failed checks, docs links). This is lab performance, not the SEO crawl.
               </p>
