@@ -77,13 +77,20 @@ function extractImages(html, url) {
   const seen = new Set();
   const images = [];
 
+  const firstSrcsetUrl = (val) => (val || '').split(',')[0]?.trim().split(/\s+/)[0];
+
   document.querySelectorAll('img').forEach((img) => {
-    const raw = img.getAttribute('src')
-      || img.getAttribute('data-src')
-      || (img.getAttribute('srcset') || '').split(',')[0]?.trim().split(' ')[0];
+    // Lazy-load attrs hold the real image; plain src is often a tiny placeholder
+    // (base64 blur-up or 1x1 gif) — prefer the lazy attrs when present.
+    const raw = img.getAttribute('data-src')
+      || img.getAttribute('data-lazy-src')
+      || img.getAttribute('data-original')
+      || firstSrcsetUrl(img.getAttribute('data-srcset'))
+      || firstSrcsetUrl(img.getAttribute('srcset'))
+      || img.getAttribute('src');
+    if (!raw || raw.startsWith('data:')) return;
     const abs = absoluteUrl(raw, url);
     if (!abs || seen.has(abs)) return;
-    if (abs.startsWith('data:')) return;
     seen.add(abs);
     images.push({
       src: abs,
@@ -91,6 +98,16 @@ function extractImages(html, url) {
       width: img.getAttribute('width') || null,
       height: img.getAttribute('height') || null,
     });
+  });
+
+  // <picture><source srcset></picture> images not duplicated by a sibling <img> above.
+  document.querySelectorAll('picture source[srcset]').forEach((source) => {
+    const raw = firstSrcsetUrl(source.getAttribute('srcset'));
+    if (!raw || raw.startsWith('data:')) return;
+    const abs = absoluteUrl(raw, url);
+    if (!abs || seen.has(abs)) return;
+    seen.add(abs);
+    images.push({ src: abs, alt: '', width: null, height: null });
   });
 
   const og = document.querySelector('meta[property="og:image"]')?.getAttribute('content');

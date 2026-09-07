@@ -67,6 +67,37 @@ export default function WebExtractorPage() {
     }
   };
 
+  const [downloading, setDownloading] = useState(false);
+  const handleDownloadPdf = async () => {
+    if (!result) return;
+    setDownloading(true);
+    try {
+      const res = await api.post('/api/web-extractor/pdf', {
+        title: result.title,
+        byline: result.byline,
+        url: result.url,
+        text: result.text,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'PDF generation failed');
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${(result.title || 'article').replace(/[^\w-]+/g, '-').slice(0, 60)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (!canUse) return <Navigate to="/" replace />;
 
   return (
@@ -128,14 +159,25 @@ export default function WebExtractorPage() {
               <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{result.title || result.url}</p>
               {result.byline ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.byline}</p> : null}
             </div>
-            <button
-              type="button"
-              onClick={() => copyText(result.text)}
-              className="shrink-0 px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              Copy text
-            </button>
+            <div className="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => copyText(result.text)}
+                className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Copy text
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloading}
+                className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70 disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {downloading ? 'Preparing…' : 'Download PDF'}
+              </button>
+            </div>
           </div>
           <pre className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{result.text}</pre>
         </section>
