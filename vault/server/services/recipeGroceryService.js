@@ -39,6 +39,27 @@ const PREMIUM_KEYWORDS = [
   'premium', 'select', 'finest', 'deluxe',
 ];
 
+// A candidate can match on keywords while being the wrong physical form of the
+// ingredient (milk powder for "milk", stock concentrate for "stock", dried
+// herbs for a fresh one) — a bug class that kept recurring one ingredient at a
+// time (bread, milk, pepper...). Penalise any of these words in the matched
+// title unless the ingredient line itself asked for that form, instead of
+// hand-maintaining a per-ingredient avoid list for each one as it's found.
+const FORM_MISMATCH_WORDS = [
+  'powder', 'powdered', 'dried', 'dehydrated', 'freeze-dried', 'freeze dried',
+  'concentrate', 'concentrated', 'granules', 'instant', 'condensed', 'evaporated',
+  'crystals', 'extract', 'essence',
+];
+
+function formMismatchPenalty(title, spec) {
+  const raw = spec?.raw || '';
+  let penalty = 0;
+  for (const word of FORM_MISMATCH_WORDS) {
+    if (title.includes(word) && !raw.includes(word)) penalty -= 18;
+  }
+  return penalty;
+}
+
 const VARIANT_RULES = [
   {
     // Milks always avoid lactose-free / a2 / oat-etc unless the ingredient line
@@ -48,21 +69,21 @@ const VARIANT_RULES = [
     matchLine: (raw) => /\bmilk\b/.test(raw) && !/\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat|full\s*cream|full\s*fat|whole\b/.test(raw),
     searchSuffix: 'full cream',
     prefer: ['full cream', 'full fat', 'whole'],
-    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', '0 fat', 'low fat', 'fat free', 'trim', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'powder', 'powdered', 'condensed', 'evaporated', 'canned', 'longlife', 'long life', 'uht'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', '0 fat', 'low fat', 'fat free', 'trim', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'canned', 'longlife', 'long life', 'uht'],
   },
   {
     id: 'milk-skim',
     matchLine: (raw) => /\bskim|skimmed|lite|light|low\s*fat|no\s*fat|fat\s*free|0%\s*fat\b/.test(raw),
     searchSuffix: 'light',
     prefer: ['skim', 'skimmed', 'lite', 'light', 'low fat', 'no fat'],
-    avoid: ['full cream', 'full fat', 'whole', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'powder', 'powdered', 'condensed', 'evaporated', 'canned', 'longlife', 'long life', 'uht'],
+    avoid: ['full cream', 'full fat', 'whole', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'canned', 'longlife', 'long life', 'uht'],
   },
   {
     id: 'milk-full',
     matchLine: (raw) => /\bfull\s*(cream|fat)|whole\s*milk\b/.test(raw),
     searchSuffix: 'full cream',
     prefer: ['full cream', 'full fat', 'whole'],
-    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', 'low fat', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'powder', 'powdered', 'condensed', 'evaporated', 'canned', 'longlife', 'long life', 'uht'],
+    avoid: ['skim', 'skimmed', 'lite', 'light', 'no fat', 'low fat', 'lactose free', 'lactose-free', 'free from lactose', 'lactose', 'a2', 'oat', 'almond', 'soy', 'goat', 'canned', 'longlife', 'long life', 'uht'],
   },
   {
     id: 'salt-table',
@@ -288,6 +309,8 @@ function scoreProduct(title, spec, referenceTitle = null) {
   for (const premium of PREMIUM_KEYWORDS) {
     if (t.includes(premium) && !spec.variantHints.some((h) => t.includes(h))) score -= 12;
   }
+
+  score += formMismatchPenalty(t, spec);
 
   // Prefer a title with an actual parseable pack size over one without —
   // otherwise two similarly-relevant listings pick arbitrarily and one store
