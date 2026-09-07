@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-09-07 (translate-job-cancel)
+
+### Translate — cancel a running job
+New `POST /api/translate/jobs/:id/cancel` sets `status='cancelled'` (unless already done/failed/cancelled). `checkJobCancelled(jobId)` re-checks the job's status at each pipeline stage boundary (after extraction, before glossary prep/translate/review, between OCR batches, before PDF hand-off) and throws a sentinel the pipeline's `.catch` recognizes — a call already in flight finishes normally, but no further stage starts. `markJobFailed` guards `WHERE status <> 'cancelled'` so it can't stomp a cancellation back to `failed`. Client: **Cancel** button on any non-terminal job row, plus the ProcessingModal's own cancel action while a job is actively running.
+
 ## 2026-09-07 (translate-doc-extension-priority)
 
 ### Translate — legacy .doc slipping through as .docx when mimetype was misreported

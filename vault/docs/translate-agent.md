@@ -90,7 +90,9 @@ Download filename: `translated-{basename}.pdf` (layout chosen per job).
 
 The QA summary modal (jobs table → **View Results**) has its own **Download QA report** button — a plain-text export of the same sections shown on screen (uncertain terms, dialectal choices, polarity/sentence-type issues, restructured sentences, garbled rows, audience flags, completeness stats), generated client-side from `qaSummaryJson` for HITL review. It's distinct from **Download translated PDF** / **Download original** / native Word-Excel output next to it — the QA report describes the translation, it isn't the translation. Those file downloads live only in this modal now (the jobs table row itself only keeps the native Word/Excel button, View Results, and Delete) — one place for everything about a job's output.
 
-Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed`. The client shows this progression in the global blocking **ProcessingModal** (`processingStore`/`runWithStepLog` pattern, same as Property Scenario) rather than an inline row — polling `GET /jobs/:id/status` drives step state (`setProcessingSteps`) and the stage/percent detail line.
+Job stages: `pending` → `extracting` → `ocr` (PDF only) → `preparing` → `translating` → `reviewing` → `generating` → `done` / `failed` / `cancelled`. The client shows this progression in the global blocking **ProcessingModal** (`processingStore`/`runWithStepLog` pattern, same as Property Scenario) rather than an inline row — polling `GET /jobs/:id/status` drives step state (`setProcessingSteps`) and the stage/percent detail line.
+
+**Cancelling a job.** `POST /api/translate/jobs/:id/cancel` sets `status='cancelled'` immediately (only if the job isn't already `done`/`failed`/`cancelled`). The background pipeline doesn't get killed mid-call — `checkJobCancelled(jobId)` in `server/routes/translate.js` re-reads the job's status at each stage boundary (after extraction, before glossary prep, before translate, before review, between OCR batches, before PDF hand-off) and throws a sentinel error the pipeline's `.catch` recognizes; a translate/review call already in flight still finishes normally, but no further stage starts. `markJobFailed` won't overwrite a `cancelled` row back to `failed` (`WHERE status <> 'cancelled'`). Client: **Cancel** button on any non-terminal job row, and the **ProcessingModal**'s own cancel action for the job that's actively running (`processingStore`'s `cancellable`/`onCancel`).
 
 ### Speed notes
 
@@ -137,6 +139,7 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | `GET` | `/api/translate/jobs/:id/status` | Poll status + `translatedTextJson` when generating |
 | `POST` | `/api/translate/jobs` | Multipart: `file` (or legacy `pdf`), `targetLanguage`, `intakeAnswers`, optional `glossaryId`, `scannedPageImages`, `enableReview` |
 | `POST` | `/api/translate/jobs/batch` | Same as above but `targetLanguages` (JSON array, 2-8 codes) instead of `targetLanguage` — one job per language sharing a `batchId`, extraction/OCR done once and reused |
+| `POST` | `/api/translate/jobs/:id/cancel` | Cancel a running job — sets `status='cancelled'`; pipeline stops at its next stage checkpoint |
 | `POST` | `/api/translate/jobs/:id/complete` | Upload generated `translatedPdf` |
 | `POST` | `/api/translate/jobs/:id/fail` | Mark failed from client |
 | `GET` | `/api/translate/jobs/:id/download` | Download bilingual PDF |

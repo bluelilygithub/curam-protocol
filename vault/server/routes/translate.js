@@ -79,7 +79,23 @@ async function setJobStatus(jobId, fields) {
 }
 
 async function markJobFailed(jobId, message) {
-  await setJobStatus(jobId, { status: 'failed', errorMessage: message, progress: 0 });
+  // Don't stomp a user-initiated cancellation with 'failed' — a translate/review call already
+  // in flight when cancel was clicked still throws/settles normally, and its .catch shouldn't
+  // overwrite the status the cancel endpoint already set.
+  await pool.query(
+    `UPDATE translate_jobs SET status='failed', "errorMessage"=$2, progress=0
+     WHERE id=$1 AND status <> 'cancelled'`,
+    [jobId, message]
+  );
+}
+
+const JOB_CANCELLED = 'JOB_CANCELLED';
+
+/** Throws if the job has been cancelled since the last checkpoint — call between pipeline
+ * stages so a long-running job stops promptly instead of continuing to completion unseen. */
+async function checkJobCancelled(jobId) {
+  const { rows } = await pool.query(`SELECT status FROM translate_jobs WHERE id=$1`, [jobId]);
+  if (rows[0]?.status === 'cancelled') throw new Error(JOB_CANCELLED);
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -499,6 +515,23 @@ router.delete('/jobs/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Cancel a running job. Marks it 'cancelled' immediately; the background pipeline checks this
+// status between stages (see checkJobCancelled in processTranslateJob) and stops on its own
+// next checkpoint rather than being killed mid-call — a translate/review call already in flight
+// still finishes, but no further stage starts.
+router.post('/jobs/:id/cancel', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE translate_jobs SET status='cancelled', "errorMessage"='Cancelled by user'
+       WHERE id=$1 AND "userId"=$2 AND status NOT IN ('done', 'failed', 'cancelled')
+       RETURNING id`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(409).json({ error: 'Job already finished or not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/jobs/:id/fail', async (req, res) => {
   try {
     const message = req.body?.error || (req.file ? 'Client-side generation error' : 'Unknown error');
@@ -862,6 +895,7 @@ async function extractAndOcr(jobId, fileBuffer, fileMeta, scannedImages, sourceF
       const done = Math.min(i + batchSize, scannedPages.length);
       const pct  = 10 + Math.round((done / scannedPages.length) * 25);
       await setJobStatus(jobId, { stage: `OCR: ${done} of ${scannedPages.length} pages`, progress: pct });
+      await checkJobCancelled(jobId); // OCR is the slowest stage on a scanned PDF — check between batches, not just once at the end
     }
     if (confidences.length) {
       avgOcrConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length / 100;
@@ -926,6 +960,8 @@ async function processTranslateJob(
   if (!sourceSkim.trim()) {
     throw new Error('No extractable text found in this file');
   }
+
+  await checkJobCancelled(jobId);
 
   // ── 4. Glossary + translate (engine-specific) ───────────────────────────────
   await setJobStatus(jobId, {
@@ -1042,6 +1078,8 @@ async function processTranslateJob(
   } catch (err) {
     console.warn('[translate] TM lookup failed:', err.message);
   }
+
+  await checkJobCancelled(jobId);
 
   // ── 5. Translate ────────────────────────────────────────────────────────────
   await setJobStatus(jobId, {
@@ -1370,6 +1408,8 @@ async function processTranslateJob(
     qaSummary.softFailCode = gate.softFailCode;
     qaSummary.overallNotes = [gate.message, qaSummary.overallNotes].filter(Boolean).join(' ');
   }
+  await checkJobCancelled(jobId);
+
   if (enableReview && reviewPairs.length) {
     // Subjective LLM review needs a review model (even for Google translate jobs)
     if (!reviewModelId) {
@@ -1492,6 +1532,8 @@ async function processTranslateJob(
       translatedFileName: `translated-${base}.${nativeOutput.ext}`,
     });
   }
+
+  await checkJobCancelled(jobId);
 
   // ── 8. Hand off to client PDF generation ────────────────────────────────────
   await setJobStatus(jobId, {

@@ -146,6 +146,7 @@ function StatusBadge({ status }) {
     generating: { label: 'Generating',  color: '#d97706', bg: 'rgba(217,119,6,0.1)'  },
     done:       { label: 'Done',        color: '#16a34a', bg: 'rgba(22,163,74,0.1)'  },
     failed:     { label: 'Failed',      color: '#dc2626', bg: 'rgba(220,38,38,0.1)'  },
+    cancelled:  { label: 'Cancelled',   color: 'var(--color-muted)', bg: 'rgba(0,0,0,0.06)' },
   };
   const s = map[status] || map.pending;
   return (
@@ -817,6 +818,7 @@ function TranslationsTab({ glossaries }) {
 
       startProcessing('Translating document…', 'Please don’t navigate away while this runs.', {
         steps: PROGRESS_STEP_LABELS,
+        onCancel: () => cancelJob(body.jobId),
       });
       setActiveJobId(body.jobId);
       setFile(null); setPreflight(null); setEstimate(null);
@@ -855,17 +857,35 @@ function TranslationsTab({ glossaries }) {
           clearInterval(pollRef.current);
           generateAndUploadPdf(data);
         }
-        if (data.status === 'failed' || data.status === 'done') {
+        if (data.status === 'failed' || data.status === 'done' || data.status === 'cancelled') {
           clearInterval(pollRef.current);
           stopProcessing();
           setActiveJobId(null);
           if (data.status === 'failed') addToast(data.errorMessage || 'Translation failed', 'error');
+          if (data.status === 'cancelled') addToast('Translation cancelled');
           loadJobs();
         }
       } catch {}
     }, 2000);
     return () => clearInterval(pollRef.current);
   }, [activeJobId, generatingPdf]);
+
+  const cancelJob = async (jobId) => {
+    try {
+      const res = await api.post(`/api/translate/jobs/${jobId}/cancel`, {});
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not cancel — it may have already finished');
+      }
+      if (jobId === activeJobId) {
+        clearInterval(pollRef.current);
+        stopProcessing();
+        setActiveJobId(null);
+      }
+      addToast('Cancelling…');
+      loadJobs();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
 
   const runEstimate = async () => {
     if (!file) return;
@@ -1281,6 +1301,13 @@ function TranslationsTab({ glossaries }) {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
+                          {!['done', 'failed', 'cancelled'].includes(job.status) && (
+                            <button onClick={() => cancelJob(job.id)}
+                              className="text-xs px-2 py-1 rounded border"
+                              style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
+                              Cancel
+                            </button>
+                          )}
                           {job.hasNativeOutput && (
                             <button onClick={() => downloadNativeJob(job)}
                               className="text-xs px-2 py-1 rounded border"
