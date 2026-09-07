@@ -82,9 +82,12 @@ function isRejectedUrl(url) {
 function matchesStore(storeId, source, url, title = '') {
   const src = String(source || '').toLowerCase();
   const u = String(url || '').toLowerCase();
-  const t = String(title || '').toLowerCase();
   const domain = AU_STORES.find((s) => s.id === storeId)?.domain || '';
-  return STORE_MATCH[storeId](src) || STORE_MATCH[storeId](t) || (domain && u.includes(domain));
+  // Require the retailer's own domain in the URL, or an exact source-field match —
+  // matching on title text alone lets unrelated listings that merely mention the
+  // store name (comparison sites, "vs" articles) pass as real store prices.
+  if (domain && u.includes(domain)) return true;
+  return STORE_MATCH[storeId](src);
 }
 
 function extractPriceFromResult(r) {
@@ -666,20 +669,35 @@ function computeTotals(items) {
       }
     }
 
+    // "total" must be one consistent per-row pick (recipePrice where known, else
+    // checkout price) — summing recipeSum and basketSum separately double-counted
+    // rows that had both and dropped rows that only had one, so the displayed
+    // total didn't match what the line items actually added up to.
+    let effectiveSum = 0;
+    let effectivePriced = 0;
+    for (const row of items) {
+      const c = row[store];
+      const effective = c?.recipePrice ?? c?.checkoutPrice ?? c?.price;
+      if (effective != null && effective > 0) {
+        effectiveSum += effective;
+        effectivePriced += 1;
+      }
+    }
+
     totals[store] = {
       recipeTotal: recipePriced > 0 ? recipeSum : null,
       recipeLabel: recipePriced > 0 ? `$${recipeSum.toFixed(2)}` : null,
       basketTotal: priced > 0 ? basketSum : null,
       basketLabel: priced > 0 ? `$${basketSum.toFixed(2)}` : null,
-      total: recipePriced > 0 ? recipeSum : (priced > 0 ? basketSum : null),
-      label: recipePriced > 0 ? `$${recipeSum.toFixed(2)}` : (priced > 0 ? `$${basketSum.toFixed(2)}` : null),
-      complete: recipePriced === items.length && items.length > 0,
+      total: effectivePriced > 0 ? effectiveSum : null,
+      label: effectivePriced > 0 ? `$${effectiveSum.toFixed(2)}` : null,
+      complete: effectivePriced === items.length && items.length > 0,
       pricedCount: priced,
       recipePricedCount: recipePriced,
     };
 
-    if (recipePriced > 0 && recipeSum < cheapestRecipeSum) {
-      cheapestRecipeSum = recipeSum;
+    if (effectivePriced > 0 && effectiveSum < cheapestRecipeSum) {
+      cheapestRecipeSum = effectiveSum;
       cheapestRecipeStore = store;
     }
     if (priced > 0 && basketSum < cheapestBasketSum) {

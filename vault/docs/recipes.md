@@ -30,6 +30,8 @@ Leftover-based recipe assistant at **`/recipes`**. List what you have in the fri
 3. Items with no matching listing show **"Not found"** plus a direct link to search that store manually — never a fabricated price.
 4. **Shop → Grocery prices** (Shop group) is the same tool for a manual, ad-hoc shopping list not tied to a recipe.
 
+A hit only counts as a store match when the result's own URL is on `coles.com.au`/`woolworths.com.au`, or its `source` field names that store exactly — matching on title text alone was accepting unrelated listings (comparison sites, "vs" articles) that merely mentioned the store name. The store **total** is one consistent per-item pick (`recipePrice` if the quantity was comparable to the pack, else the pack `checkoutPrice`) summed once — it no longer sums `recipePrice` and `checkoutPrice` as two separate pools, which used to drop or double-count rows and make the total not match the line items shown.
+
 Requires **`SERPER_SEARCH_API_KEY`** on Railway (default provider **Serper**). Add **Shopping search** in **Settings → AI & Chat → AI Models** (provider Serper or SerpAPI) — same row pattern as other models, with **Key set / Key missing**. Chat **`SEARCH_API_KEY`** (e.g. Brave) stays separate for `@search`.
 
 **My recipes** — browse saved items, filter by tag, expand to view steps, delete with inline confirm.
