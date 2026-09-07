@@ -1,7 +1,65 @@
 'use strict';
 
+const http = require('http');
+const https = require('https');
 const { JSDOM } = require('jsdom');
-const { fetchHtml, normaliseHttpUrl } = require('./htmlFetch');
+const { fetchHtml, normaliseHttpUrl, checkSsrf } = require('./htmlFetch');
+
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+/** Binary-safe fetch for images — htmlFetch's fetchHtml decodes everything as utf8 text. */
+function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
+    let parsed;
+    try { parsed = new URL(url); } catch { return reject(new Error('Invalid URL')); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return reject(new Error('Only http/https URLs are allowed'));
+    }
+    checkSsrf(parsed.hostname).then(() => {
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req = mod.request({
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+          Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+        },
+        timeout: timeoutMs,
+      }, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          const next = new URL(res.headers.location, url).toString();
+          res.resume();
+          return resolve(fetchBinary(next, redirectsLeft - 1, timeoutMs));
+        }
+        if (res.statusCode >= 400) {
+          res.resume();
+          return reject(new Error(`Server returned ${res.statusCode}`));
+        }
+        const chunks = [];
+        let bytes = 0;
+        res.on('data', (chunk) => {
+          bytes += chunk.length;
+          if (bytes > MAX_IMAGE_BYTES) {
+            req.destroy();
+            return reject(new Error('Image too large'));
+          }
+          chunks.push(chunk);
+        });
+        res.on('end', () => resolve({
+          buffer: Buffer.concat(chunks),
+          contentType: res.headers['content-type'] || 'application/octet-stream',
+        }));
+        res.on('error', reject);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+      req.end();
+    }).catch(reject);
+  });
+}
 
 const JUNK_SELECTORS = [
   'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
@@ -165,4 +223,4 @@ async function runExtraction(rawUrl, mode) {
   return { url, mode: 'article', ...extractArticle(body, url) };
 }
 
-module.exports = { runExtraction, extractArticle, extractImages, extractStyled };
+module.exports = { runExtraction, extractArticle, extractImages, extractStyled, fetchBinary };

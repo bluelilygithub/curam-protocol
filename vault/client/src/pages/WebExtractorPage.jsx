@@ -68,6 +68,55 @@ export default function WebExtractorPage() {
   };
 
   const [downloading, setDownloading] = useState(false);
+  const [downloadingSrc, setDownloadingSrc] = useState(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  const saveBlob = (blob, filename) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const handleDownloadImage = async (src) => {
+    setDownloadingSrc(src);
+    try {
+      const res = await api.post('/api/web-extractor/download-image', { src });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Download failed');
+      }
+      const blob = await res.blob();
+      const name = decodeURIComponent(src.split('/').pop() || 'image').split('?')[0] || 'image';
+      saveBlob(blob, name);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setDownloadingSrc(null);
+    }
+  };
+
+  const handleDownloadAllImages = async () => {
+    if (!result?.images?.length) return;
+    setDownloadingAll(true);
+    try {
+      const res = await api.post('/api/web-extractor/download-images-zip', { images: result.images });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Zip failed');
+      }
+      const blob = await res.blob();
+      saveBlob(blob, 'images.zip');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
   const handleDownloadPdf = async () => {
     if (!result) return;
     setDownloading(true);
@@ -185,13 +234,37 @@ export default function WebExtractorPage() {
 
       {result?.mode === 'images' && (
         <section className="rounded-2xl border p-6 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{result.count} image{result.count === 1 ? '' : 's'}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{result.count} image{result.count === 1 ? '' : 's'}</p>
+            {result.count > 0 && (
+              <button
+                type="button"
+                onClick={handleDownloadAllImages}
+                disabled={downloadingAll}
+                className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70 disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {downloadingAll ? 'Zipping…' : 'Download all'}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {result.images.map((img) => (
-              <a key={img.src} href={img.src} target="_blank" rel="noreferrer" className="block space-y-1 transition-opacity hover:opacity-70">
-                <img src={img.src} alt={img.alt} className="w-full h-24 object-cover rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+              <div key={img.src} className="space-y-1">
+                <a href={img.src} target="_blank" rel="noreferrer" className="block transition-opacity hover:opacity-70">
+                  <img src={img.src} alt={img.alt} className="w-full h-24 object-cover rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+                </a>
                 <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{img.alt || img.src}</span>
-              </a>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadImage(img.src)}
+                  disabled={downloadingSrc === img.src}
+                  className="w-full px-2 py-1 rounded-lg text-xs border transition-opacity hover:opacity-70 disabled:opacity-50"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {downloadingSrc === img.src ? 'Downloading…' : 'Download'}
+                </button>
+              </div>
             ))}
           </div>
         </section>
