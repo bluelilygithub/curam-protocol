@@ -160,6 +160,14 @@ An LLM-guessed 4-tier price framework can be entirely disconnected from what Ama
 
 Both filter candidates through the same relevance guards used at scout time (`filterFormFactorMismatches`, `filterAccessoryMismatches`) so an accessory or wrong-category listing can't skew the real min/max. Both fail silently (keep the LLM's original framework) on any search error — this is a safety net, not a hard dependency. `ProductScoutTierSelect.jsx` auto-selects any tier marked `floor_adjusted` or `ceiling_adjusted` by default so the fix isn't just a subtitle nobody reads. Step 1 is consequently no longer Amazon-fetch-free — two extra small Rainforest searches per brief (cached 10 min, so repeat brief attempts on the same query don't re-fetch).
 
+## Must-haves as capability thresholds, not exact phrases
+
+Confirmed gap: a shopper describes a category generically ("dual microphone"), but a market-leading product uses its own vocabulary ("five-mic array") — every layer (enrichment string, must-have matching, scoring) was keyword-literal, so the leader could be excluded purely on wording even when it exceeds the requirement.
+
+`BRIEF_SYSTEM` + `buildBriefPrompt` (`productScoutGuideService.js`) now instruct the brief LLM to phrase must-haves as capability **thresholds** — `kind: "spec"`, `spec_type: "numeric_min"` (e.g. "Microphone count: at least 2") — instead of a fixed `kind: "feature"` label ("Dual microphone") whenever the requirement is really a minimum count/capacity. A numeric threshold is satisfied by anything meeting-or-exceeding it regardless of wording; `buildEnrichedSearchQuery` also naturally turns a numeric spec into a plain number term ("2 mics") rather than a fixed phrase, which is less likely to exclude differently-worded listings from Amazon's own search ranking.
+
+This is a partial fix — it only helps requirements that are genuinely a count/capacity. It doesn't teach the LLM comparison step to recognize synonymous capabilities described in totally different terms (e.g. "ANC" vs "active noise suppression"); that's a harder, not-yet-done fix.
+
 ## Pipeline version stamp
 
 Every saved run (scout or guide) carries `pipeline_version` (`PIPELINE_VERSION` in `productScoutService.js`, e.g. `ps-v6`) — bumped whenever a change alters what a run actually returns (candidate sourcing, filtering, scoring, tier framework), not for cosmetic UI tweaks. Same idea as the `creationtoolversion` stamp translate embeds in its TMX export. Shown in the PDF report header and under the tier ladder in the UI, so a run is traceable to the exact pipeline behavior that produced it without asking "what was live when this ran."

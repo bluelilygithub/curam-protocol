@@ -25,6 +25,7 @@ const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
 const BRIEF_SYSTEM = `You are a product buying advisor for Amazon shoppers.
 For EVERY product category, start from Amazon's left-sidebar filters — the standard dimensions shoppers click to narrow results (type, form factor, size, style, connectivity, capacity, etc.). These differ per category; infer the correct set from the search query.
+Phrase must-haves as capability THRESHOLDS, not exact counts or brand-style labels. A shopper who says "dual microphone" means "at least 2 mics for noise handling" — a 5-mic array satisfies that and should not be excluded for using different wording. Prefer kind "spec" with spec_type "numeric_min" (e.g. "Microphone count: at least 2") over a fixed "feature" label like "Dual microphone" whenever the requirement is really a minimum count/capacity, not an exact category name. This keeps search terms and scoring open to market-leading products that describe the same capability differently.
 Return ONLY valid JSON. No markdown fences.`;
 
 const RECOMMEND_SYSTEM = `You are an unbiased product analyst. Recommend the single best VALUE FOR MONEY pick across price tiers for this shopper — not the most expensive or cheapest by default.
@@ -481,8 +482,8 @@ CRITICAL: Emit fields in this exact order so truncation still keeps tiers: summa
 5. amazon_sidebar_filters — ${filterCount} Amazon left-sidebar dimensions for THIS query (type/form-factor first).
    Each: kind "spec", usually spec_type "enum", spec_options with "Any" plus 3–5 realistic values, spec_value "Any".
 6. features — ${featureCount}. Do not duplicate sidebar filters.
-   a) kind "spec" — measurable (battery h, weight kg, etc.)
-   b) kind "feature" — yes/no capabilities (ANC, waterproof, etc.)
+   a) kind "spec" — measurable (battery h, weight kg, etc.). Prefer this over kind "feature" whenever the shopper's requirement is really a minimum count/capacity (e.g. "dual mic" → spec "Microphone count", numeric_min 2) — a product with MORE than the stated count/capacity still satisfies a threshold, so this keeps market-leading products with different specs/wording from being excluded.
+   b) kind "feature" — yes/no capabilities that aren't a count/threshold (ANC, waterproof, etc.)
 
 Spec shape: {"feature":"<label>","kind":"spec","importance":"must|nice","why_it_matters":"...","spec_type":"numeric_min|numeric_max|enum|text","spec_unit":"<unit or null>","spec_value":<default>,"spec_options":[...]}
 
