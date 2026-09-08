@@ -13,7 +13,7 @@ Unbiased purchasing agent: Amazon search → LLM value scoring → cross-market 
 
 Both CLI and Vault API implement the same core pipeline:
 
-1. **Rainforest API** — plain Amazon search (top 8–10), not sponsored picks
+1. **Rainforest API** — plain Amazon search (top 8–10), sponsored listings included (see Sponsored listings below)
 2. **LLM** — structured JSON comparison, top 3 by value score (`getModelsForUser` → `standard` tier in Vault)
 3. **Web search** — external alternatives (`SEARCH_API_KEY`, same as chat `@search`)
 
@@ -159,6 +159,10 @@ An LLM-guessed 4-tier price framework can be entirely disconnected from what Ama
 - **Ceiling** (`sanityCheckTierCeiling`) — finds the first tier whose floor sits above the real max price found, and compresses that tier (and everything above it) into the space between the real ceiling (`realMax * 1.15`) and 70% of that ceiling — instead of leaving a dead band nobody could ever fill. Marks affected tiers `ceiling_adjusted: true` and appends a note to their subtitle.
 
 Both filter candidates through the same relevance guards used at scout time (`filterFormFactorMismatches`, `filterAccessoryMismatches`) so an accessory or wrong-category listing can't skew the real min/max. Both fail silently (keep the LLM's original framework) on any search error — this is a safety net, not a hard dependency. `ProductScoutTierSelect.jsx` auto-selects any tier marked `floor_adjusted` or `ceiling_adjusted` by default so the fix isn't just a subtitle nobody reads. Step 1 is consequently no longer Amazon-fetch-free — two extra small Rainforest searches per brief (cached 10 min, so repeat brief attempts on the same query don't re-fetch).
+
+## Sponsored listings
+
+`rainforestClient.searchProducts` no longer sets `exclude_sponsored` — sponsored results are included in every search. A sponsored placement can be the best product for the query, and our scoring (`pre_score`: price/rating/reviews) is placement-blind, so excluding them only shrank the pool for no benefit. Each candidate now carries `is_sponsored` (from Rainforest's `sponsored` field) for future UI/audit use — not currently used to filter or penalize.
 
 ## Plain-query pool supplement
 

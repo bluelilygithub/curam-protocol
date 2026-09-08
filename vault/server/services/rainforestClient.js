@@ -236,13 +236,17 @@ async function searchProducts(query, {
   }
   pruneSearchCache(now);
 
+  // Sponsored listings are NOT excluded — a sponsored placement can be the
+  // best product for the query, and pre_score (price/rating/reviews) is
+  // placement-blind, so including them costs nothing and only grows the
+  // pool. Sponsored status is captured on each candidate below for UI/audit
+  // use, not used to penalize or filter.
   const params = new URLSearchParams({
     api_key: apiKey(),
     type: 'search',
     amazon_domain: domain,
     search_term: query.trim(),
     number_of_results: String(fetchCount),
-    exclude_sponsored: 'true',
   });
   if (sortBy) params.set('sort_by', String(sortBy));
 
@@ -275,6 +279,7 @@ async function searchProducts(query, {
       feature_bullets: bullets.slice(0, 6),
       link: item.link,
       is_prime: Boolean(item.is_prime),
+      is_sponsored: Boolean(item.sponsored),
       position: item.position,
       delivery_display: delivery_info.delivery_display,
       delivery_info,
