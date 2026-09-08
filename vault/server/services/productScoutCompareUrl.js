@@ -3,7 +3,7 @@
 const { pool } = require('../db');
 const { fetchProduct } = require('./rainforestClient');
 const { callModel } = require('./callModel');
-const { getModelsForUser } = require('./modelResolver');
+const { resolveProductScoutModel } = require('./productScoutModelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { getAmazonDomain } = require('./productScoutSettings');
@@ -315,7 +315,7 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
     rating: product.rating,
   });
 
-  const { standard: modelId } = await getModelsForUser(userId);
+  const modelId = await resolveProductScoutModel(userId);
   const baseArgs = {
     query: scout.query,
     budget: resolveBudgetContext(scout),
