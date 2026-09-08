@@ -196,6 +196,45 @@ function suggestTierKeyForPrice(price, tiers) {
   return null;
 }
 
+/**
+ * Deterministic (non-LLM) explanation for why a shopper-found URL didn't
+ * already show up as a scouted pick — derived from the guide's own tier
+ * framework, not a guess. Covers the three cases that actually happen:
+ * priced below every band, priced in a band that hasn't been searched yet,
+ * or priced in an already-searched band but outranked there.
+ */
+function explainNotIncluded(urlPrice, tiers) {
+  if (!Number.isFinite(urlPrice) || !Array.isArray(tiers) || !tiers.length) return null;
+
+  const lowestMin = tiers.reduce((min, t) => {
+    const m = t.price_min != null ? Number(t.price_min) : null;
+    return Number.isFinite(m) && (min == null || m < min) ? m : min;
+  }, null);
+  const highestMax = tiers.reduce((max, t) => {
+    const m = t.price_max != null ? Number(t.price_max) : null;
+    return Number.isFinite(m) && (max == null || m > max) ? m : max;
+  }, null);
+
+  const bandKey = suggestTierKeyForPrice(urlPrice, tiers);
+  const band = tiers.find((t) => t.key === bandKey);
+
+  if (!band) {
+    if (Number.isFinite(lowestMin) && urlPrice < lowestMin) {
+      return `Priced below every scouted tier's floor (lowest tier starts at $${lowestMin}) — this guide's price bands didn't reach low enough to catch it.`;
+    }
+    if (Number.isFinite(highestMax) && urlPrice > highestMax) {
+      return `Priced above every defined tier band (highest tier tops out at $${highestMax}) — outside the framework this guide built.`;
+    }
+    return 'Falls outside the price bands this guide defined.';
+  }
+
+  const scouted = Boolean(band?.scout?.comparison?.top3?.length);
+  if (!scouted) {
+    return `Falls in the ${band.label || band.key} band ($${band.price_min ?? '—'}–${band.price_max ?? '—'}), which hasn't been searched yet — search that tier to see if Amazon surfaces it there too.`;
+  }
+  return `Falls in the already-searched ${band.label || band.key} band, but wasn't in that tier's top 3 — either Amazon's search results for that tier's query didn't return it, or it lost on value score (reviews/rating) to the picks shown there.`;
+}
+
 function resolveBudgetPicks(scout) {
   if (scout?.mode === 'guide') {
     const picks = [];
@@ -359,6 +398,7 @@ async function compareUrlToScout(userId, { url, runId, scoutResult }) {
   analysis.prefer_url_over_picks = derivePreferUrlOverPicks(analysis, product, budgetPicks);
   const urlPrice = parseMoney(product.price ?? product.price_display);
   analysis.suggested_tier_key = suggestTierKeyForPrice(urlPrice, scout.tiers);
+  analysis.not_included_reason = explainNotIncluded(urlPrice, scout.tiers);
 
   const comparisonEntry = {
     url: sourceUrl || trimmedUrl,

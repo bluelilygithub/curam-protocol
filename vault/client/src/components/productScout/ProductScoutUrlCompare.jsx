@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
-import useProcessingStore from '../../store/processingStore';
+import useProcessingStore, { runWithStepLog } from '../../store/processingStore';
 import { formatListingRatings } from '../../utils/productScoutCompareTable';
 
 function AnalysisBlock({ title, children }) {
@@ -78,6 +78,13 @@ function UrlComparisonCard({ entry }) {
         </p>
       )}
 
+      {analysis.not_included_reason && (
+        <p className="text-[11px] rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+          <strong style={{ color: 'var(--color-text)' }}>Why wasn't this in the original scout? </strong>
+          {analysis.not_included_reason}
+        </p>
+      )}
+
       {analysis.worth_stretching != null && (
         <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
           {analysis.prefer_url_over_picks
@@ -129,7 +136,6 @@ function UrlComparisonCard({ entry }) {
 
 export default function ProductScoutUrlCompare({ runId, comparisons = [], onCompared }) {
   const addToast = useToastStore((s) => s.addToast);
-  const { startProcessing, stopProcessing } = useProcessingStore();
   const [url, setUrl] = useState('');
   const [error, setError] = useState(null);
 
@@ -145,12 +151,25 @@ export default function ProductScoutUrlCompare({ runId, comparisons = [], onComp
       return;
     }
 
-    startProcessing('Comparing product…', 'Fetching the Amazon listing and analysing it against your budget picks.');
     setError(null);
     try {
-      const res = await api.post('/api/product-scout/compare-url', { url: trimmed, runId });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Compare failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Comparing product…',
+        'Fetching the Amazon listing and analysing it against your budget picks.',
+        [
+          'Fetching the Amazon listing',
+          'Checking which price band it falls in',
+          'AI comparison vs your budget picks',
+          'Updating overall recommendation',
+        ],
+        async () => {
+          const res = await api.post('/api/product-scout/compare-url', { url: trimmed, runId });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Compare failed');
+          return json;
+        }
+      );
       setUrl('');
       onCompared?.(data);
       addToast('URL comparison ready', 'success');
@@ -158,8 +177,6 @@ export default function ProductScoutUrlCompare({ runId, comparisons = [], onComp
       const msg = err.message || 'Compare failed';
       setError(msg);
       addToast(msg, 'error');
-    } finally {
-      stopProcessing();
     }
   };
 

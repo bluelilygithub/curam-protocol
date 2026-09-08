@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
-import useProcessingStore from '../../store/processingStore';
+import useProcessingStore, { runWithStepLog } from '../../store/processingStore';
 import ProductScoutFeatureBrief from './ProductScoutFeatureBrief';
 import ProductScoutTierSelect from './ProductScoutTierSelect';
 import ProductScoutTierLadder from './ProductScoutTierLadder';
@@ -11,8 +11,6 @@ const STEPS = { form: 'form', brief: 'brief', selectTiers: 'selectTiers', result
 
 export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loadedRunId, searchEnabled = false }) {
   const addToast = useToastStore((s) => s.addToast);
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
   const [step, setStep] = useState(STEPS.form);
   const [query, setQuery] = useState('');
   const [userFeatures, setUserFeatures] = useState('');
@@ -49,20 +47,30 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast('Describe what you are shopping for', 'error');
       return;
     }
-    startProcessing('Building feature brief…', 'Planning must-have features and four price tiers — not searching Amazon yet.');
     setError(null);
     setErrorDiagnostics(null);
     try {
-      const res = await api.post('/api/product-scout/guide/brief', {
-        query: q,
-        userFeatures,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const err = new Error(data.error || 'Brief failed');
-        err.diagnostics = data.diagnostics || null;
-        throw err;
-      }
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Building feature brief…',
+        'Planning must-have features and four price tiers — not searching Amazon yet.',
+        [
+          'Reading your description',
+          'Drafting sidebar filters & must-have specs',
+          'Building 4 price tiers',
+          'Finalizing brief',
+        ],
+        async () => {
+          const res = await api.post('/api/product-scout/guide/brief', { query: q, userFeatures });
+          const json = await res.json();
+          if (!res.ok) {
+            const err = new Error(json.error || 'Brief failed');
+            err.diagnostics = json.diagnostics || null;
+            throw err;
+          }
+          return json;
+        }
+      );
       setFeatureBrief({
         ...data.feature_brief,
         budgetHint: data.budgetHint ?? data.feature_brief?.budgetHint ?? null,
@@ -73,8 +81,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       setError(err.message);
       setErrorDiagnostics(err.diagnostics || null);
       addToast(err.message, 'error');
-    } finally {
-      stopProcessing();
     }
   };
 
@@ -96,30 +102,41 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       setRunning(true);
     }
     const count = selectedTierKeys.length;
-    startProcessing(
-      singleTier ? 'Searching tier…' : `Searching ${count} tier${count !== 1 ? 's' : ''}…`,
-      singleTier
-        ? 'Running Amazon search for this price tier.'
-        : 'Searching Amazon only for the tiers you selected.'
-    );
     setError(null);
     setErrorDiagnostics(null);
+    // Always prefer the latest edited brief — never fall back to a prior run's copy.
+    const briefForScout = featureBrief || result?.feature_brief;
     try {
-      // Always prefer the latest edited brief — never fall back to a prior run's copy.
-      const briefForScout = featureBrief || result?.feature_brief;
-      const res = await api.post('/api/product-scout/guide/run', {
-        query: query.trim(),
-        userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
-        featureBrief: briefForScout,
-        selectedTierKeys,
-        ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const err = new Error(data.error || 'Guide failed');
-        err.diagnostics = data.diagnostics || null;
-        throw err;
-      }
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        singleTier ? 'Searching tier…' : `Searching ${count} tier${count !== 1 ? 's' : ''}…`,
+        singleTier
+          ? 'Running Amazon search for this price tier.'
+          : 'Searching Amazon only for the tiers you selected.',
+        [
+          'Searching Amazon (Rainforest)',
+          'Filtering by price band & relevance',
+          'Scoring candidates',
+          `AI value comparison${count > 1 ? ' per tier' : ''}`,
+          'Building recommendation',
+        ],
+        async () => {
+          const res = await api.post('/api/product-scout/guide/run', {
+            query: query.trim(),
+            userFeatures: userFeatures.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
+            featureBrief: briefForScout,
+            selectedTierKeys,
+            ...(append || singleTier ? { runId: result?.runId ?? loadedRunId } : {}),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            const err = new Error(json.error || 'Guide failed');
+            err.diagnostics = json.diagnostics || null;
+            throw err;
+          }
+          return json;
+        }
+      );
       setResult(data);
       setFeatureBrief(data.feature_brief || briefForScout);
       setStep(STEPS.results);
@@ -139,7 +156,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     } finally {
       setRunning(false);
       setScoutingTierKey(null);
-      stopProcessing();
     }
   };
 
@@ -151,11 +167,19 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     const runId = result?.runId ?? loadedRunId;
     if (!runId) return;
     setRefreshingRecommendation(true);
-    startProcessing('Updating recommendation…', 'Comparing tier winners for best overall value.');
     try {
-      const res = await api.post('/api/product-scout/guide/recommendation', { runId });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Recommendation failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Updating recommendation…',
+        'Comparing tier winners for best overall value.',
+        ['Gathering tier winners', 'AI cross-tier comparison', 'Finalizing verdict'],
+        async () => {
+          const res = await api.post('/api/product-scout/guide/recommendation', { runId });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Recommendation failed');
+          return json;
+        }
+      );
       setResult(data);
       onRunSaved?.(data);
       addToast('Recommendation updated', 'success');
@@ -163,7 +187,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast(err.message, 'error');
     } finally {
       setRefreshingRecommendation(false);
-      stopProcessing();
     }
   };
 
@@ -171,11 +194,19 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
     const runId = result?.runId ?? loadedRunId;
     if (!runId) return;
     setCheckingExternal(true);
-    startProcessing('Checking non-Amazon options…', 'Searching retailers using your recommended product specs.');
     try {
-      const res = await api.post('/api/product-scout/guide/external-check', { runId });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'External check failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Checking non-Amazon options…',
+        'Searching retailers using your recommended product specs.',
+        ['Building search terms from your pick', 'Searching other retailers', 'Reading results'],
+        async () => {
+          const res = await api.post('/api/product-scout/guide/external-check', { runId });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'External check failed');
+          return json;
+        }
+      );
       setResult(data);
       onRunSaved?.(data);
       addToast('Non-Amazon check complete', 'success');
@@ -183,7 +214,6 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
       addToast(err.message, 'error');
     } finally {
       setCheckingExternal(false);
-      stopProcessing();
     }
   };
 

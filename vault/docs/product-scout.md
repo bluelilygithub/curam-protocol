@@ -151,6 +151,21 @@ CLI does not yet expose delivery filters or workspace marketplace settings — s
 - **Tier scouting runs in parallel.** `runBuyGuide` (`productScoutGuideService.js`) scouts all selected tiers via `Promise.all`, not sequentially — each tier's LLM compare call used to stack one after another, so scouting all 4 tiers meant 4 round-trips in serial. Now they overlap.
 - **Rainforest search cache.** `rainforestClient.searchProducts` caches results 10 min in-memory, keyed on query+domain+resultCount+sortBy+delivery filters. Covers tier-band refetches, retries, and re-opening the same run without re-hitting the API. In-process only — clears on deploy/restart, fine for Railway's single instance.
 
+## "Why wasn't this in the original scout?"
+
+When a shopper-compared URL turns out cheaper/better than the scouted picks, `compareUrlToScout` (`productScoutCompareUrl.js`) computes `not_included_reason` deterministically from the guide's own tier framework — not an LLM guess:
+
+- priced below every tier's floor → says so, and names the lowest floor
+- priced above every tier's ceiling → says so
+- falls in a tier that hasn't been searched yet → names the tier, suggests searching it
+- falls in an already-searched tier but wasn't in that tier's top 3 → says it lost on ranking/reviews or Amazon's search for that tier's query didn't return it
+
+Shown in `ProductScoutUrlCompare.jsx` under "Why wasn't this in the original scout?".
+
+## Progress steps during long operations
+
+Brief generation, tier scouting, recommendation refresh, external check, and URL compare now use `runWithStepLog` (`client/src/store/processingStore.js`) instead of a static `startProcessing` message — the `ProcessingModal` shows a live step list (e.g. "Searching Amazon (Rainforest)" → "Filtering by price band & relevance" → "Scoring candidates" → "AI value comparison" → "Building recommendation") that advances on a timer while the request is in flight, plus an elapsed-time readout. The steps are illustrative pacing, not a real server-side progress feed — there's no SSE for these endpoints — but they replace the previous single static "please wait" message.
+
 ## Relevance filtering
 
 Two post-fetch guards drop candidates that don't match the shopper's product category, before pre-scoring/LLM ranking runs on them:

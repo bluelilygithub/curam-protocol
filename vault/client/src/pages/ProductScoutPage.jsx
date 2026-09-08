@@ -9,7 +9,7 @@ import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
-import useProcessingStore from '../store/processingStore';
+import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 function FilterToggle({ label, checked, onChange }) {
@@ -34,7 +34,6 @@ export default function ProductScoutPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
-  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.productScout !== false;
@@ -89,16 +88,26 @@ export default function ProductScoutPage() {
       addToast('Enter a product search query', 'error');
       return;
     }
-    startProcessing('Searching products…', 'Single comparison without the tier guide.');
     setScoutError(null);
     try {
-      const res = await api.post('/api/product-scout/run', {
-        query: q,
-        freeDelivery,
-        within2Days,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Search failed');
+      const data = await runWithStepLog(
+        useProcessingStore.getState(),
+        'Searching products…',
+        'Single comparison without the tier guide.',
+        [
+          'Searching Amazon (Rainforest)',
+          'Filtering by price band & relevance',
+          'Scoring candidates',
+          'AI value comparison',
+          'Checking non-Amazon alternatives',
+        ],
+        async () => {
+          const res = await api.post('/api/product-scout/run', { query: q, freeDelivery, within2Days });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Search failed');
+          return json;
+        }
+      );
       setScoutResult(data);
       setGuideResult(null);
       setLoadedRunId(data.runId ?? null);
@@ -110,8 +119,6 @@ export default function ProductScoutPage() {
       setScoutError(msg);
       addToast(msg, 'error');
       setScoutResult(null);
-    } finally {
-      stopProcessing();
     }
   };
 
