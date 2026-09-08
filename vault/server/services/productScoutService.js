@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { searchProducts } = require('./rainforestClient');
 const { webSearch } = require('./webSearchService');
 const { callModel } = require('./callModel');
-const { getModelsForUser } = require('./modelResolver');
+const { resolveProductScoutModel } = require('./productScoutModelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { captureIf, makeFingerprint } = require('./SuggestionService');
 const { formatMarkdown } = require('./productScoutFormat');
@@ -362,7 +362,7 @@ async function executeScoutComparison(userId, query, {
 } = {}) {
   const q = String(query || '').trim();
   const domain = amazonDomain || await getAmazonDomain(pool);
-  const model = modelId || (await getModelsForUser(userId)).standard;
+  const model = modelId || (await resolveProductScoutModel(userId));
 
   let allCandidates = poolIn;
   if (!allCandidates?.length) {

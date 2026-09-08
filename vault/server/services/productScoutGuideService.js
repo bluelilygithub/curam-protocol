@@ -3,7 +3,7 @@
 const { pool } = require('../db');
 const { searchProducts } = require('./rainforestClient');
 const { callModel } = require('./callModel');
-const { getModelsForUser } = require('./modelResolver');
+const { resolveProductScoutModel } = require('./productScoutModelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const {
@@ -386,7 +386,7 @@ async function generateFinalRecommendation(userId, {
 
   let rec;
   try {
-    const { standard: modelId } = await getModelsForUser(userId);
+    const modelId = await resolveProductScoutModel(userId);
     const text = await callGuideModel(
       userId,
       modelId,
@@ -959,7 +959,7 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
     throw new Error('budgetHint must be a positive number');
   }
 
-  const { standard: modelId } = await getModelsForUser(userId);
+  const modelId = await resolveProductScoutModel(userId);
   const attempts = [
     { compact: false, maxTokens: 8192 },
     { compact: true, maxTokens: 4096 },
@@ -1062,7 +1062,7 @@ async function runBuyGuide(userId, {
   }
 
   const amazonDomain = existing?.amazonDomain || await getAmazonDomain(pool);
-  const { standard: modelId } = await getModelsForUser(userId);
+  const modelId = await resolveProductScoutModel(userId);
 
   const shopperPriorities = (featureBrief.features || [])
     .filter((f) => f.importance === 'must')

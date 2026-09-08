@@ -160,6 +160,15 @@ Two post-fetch guards drop candidates that don't match the shopper's product cat
 
 `buildEnrichedSearchQuery` (`productScoutGuideService.js`) also keeps accessory nouns (e.g. a must-have "carrying bag" feature) out of the raw Amazon search string — injecting them as literal keywords was steering Amazon's own ranking toward accessory-only listings (a $55 monitor bag outranking actual monitors). Those requirements still reach the LLM via `shopperPriorities`.
 
+## Model override
+
+Product Scout (brief, tier compare, final recommendation) uses the workspace `standard` tier by default like everything else. Settings → Amazon Search → **Model override** lets a user (or admin, as a workspace-wide fallback) pin Product Scout to a specific connected model instead — e.g. to avoid a reasoning-heavy DeepSeek id (`-flash`/`-reasoner`) that can spend its entire token budget on hidden reasoning and return an empty structured-JSON response (see `callModel.js` deepseek retry-with-larger-budget fix for the underlying failure mode).
+
+- Settings key: `product_scout_model` (empty = inherit `standard`)
+- Resolution: user's own setting → first admin's setting → `standard`
+- Server: `productScoutModelResolver.js` (`resolveProductScoutModel`, `getProductScoutModelConfig`, `saveProductScoutModel`)
+- API: `GET /api/product-scout/model-config`, `POST /api/product-scout/model-config { modelId }`
+
 ## Reports
 
 Any saved run (scout or guide mode) can be downloaded or emailed as a PDF via `productScoutReportPdf.js` (pdf-lib, no headless browser):

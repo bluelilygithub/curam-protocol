@@ -126,8 +126,13 @@ function SettingsPage() {
     saveTranslateTargetLanguage,
     translateCustomInstructions,
     saveTranslateCustomInstructions,
+    productScoutModel,
+    productScoutModelConfig,
+    saveProductScoutModel,
     reload: reloadModels,
   } = useModels();
+  const [productScoutModelSaved, setProductScoutModelSaved] = useState(false);
+  const [productScoutModelError, setProductScoutModelError] = useState('');
   // Admin-only display order for the Translate agent's target-language dropdown. Defaults to
   // the base LANGUAGES order until an admin saves a custom one (translate_language_order).
   const [translateLanguageOrder, setTranslateLanguageOrder] = useState(TRANSLATE_LANGUAGES);
@@ -2993,6 +2998,53 @@ function SettingsPage() {
             {productScoutAmazonSaved ? 'Saved ✓' : productScoutAmazonDomain}
           </span>
         </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Model override
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Feature brief, tier comparison, and final recommendation normally use your default (standard) chat model above. Pin Amazon Search to a different connected model here — useful when the default is a reasoning model (e.g. DeepSeek's <code>-flash</code>/<code>-reasoner</code> ids) that can burn its whole token budget on hidden reasoning and return an empty response.
+        </p>
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+          Model
+        </label>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={productScoutModel}
+            onChange={async (e) => {
+              const modelId = e.target.value;
+              setProductScoutModelError('');
+              setProductScoutModelSaved(false);
+              try {
+                await saveProductScoutModel(modelId);
+                setProductScoutModelSaved(true);
+                setTimeout(() => setProductScoutModelSaved(false), 2000);
+              } catch (err) {
+                setProductScoutModelError(err.message || 'Could not save model');
+              }
+            }}
+            className="px-3 py-1.5 rounded-lg border text-sm outline-none min-w-[240px]"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <option value="">Use default model ({productScoutModelConfig?.globalStandard || defaultModel || '—'})</option>
+            {textModelChoices.map((m) => (
+              <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+            ))}
+          </select>
+          <span className="text-xs" style={{ color: productScoutModelSaved ? '#22c55e' : 'var(--color-muted)' }}>
+            {productScoutModelSaved ? 'Saved ✓' : (productScoutModel || 'Using default')}
+          </span>
+        </div>
+        {productScoutModelConfig?.fromAdmin && !productScoutModel && (
+          <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+            Inherited from an admin's override.
+          </p>
+        )}
+        {productScoutModelError && (
+          <p className="text-xs mt-2" style={{ color: '#b45309' }}>{productScoutModelError}</p>
+        )}
       </section>
       </>
       )}

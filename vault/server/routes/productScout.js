@@ -8,6 +8,7 @@ const { compareUrlToScout } = require('../services/productScoutCompareUrl');
 const { buildGuideBrief, runBuyGuide, refreshGuideRecommendation } = require('../services/productScoutGuideService');
 const { runExternalPriceCheck } = require('../services/productScoutExternalCheck');
 const { buildProductScoutReportPdfBuffer } = require('../services/productScoutReportPdf');
+const { getProductScoutModelConfig, saveProductScoutModel } = require('../services/productScoutModelResolver');
 const sendEmail = require('../utils/sendEmail');
 const {
   getAmazonDomain,
@@ -53,6 +54,10 @@ router.get('/config-check', handle(async () => {
 }));
 
 router.get('/settings', handle(async () => getProductScoutSettings(pool)));
+
+router.get('/model-config', handle(async (req) => getProductScoutModelConfig(req.user.id)));
+
+router.post('/model-config', handle(async (req) => saveProductScoutModel(req.user.id, req.body?.modelId)));
 
 router.post('/settings', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });

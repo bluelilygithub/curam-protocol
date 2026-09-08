@@ -17,15 +17,23 @@ export function useModels() {
   const [translateAgentCard, setTranslateAgentCard] = useState(null);
   const [translateTargetLanguage, setTranslateTargetLanguage] = useState('fr');
   const [translateCustomInstructions, setTranslateCustomInstructions] = useState('');
+  const [productScoutModel, setProductScoutModel] = useState('');
+  const [productScoutModelConfig, setProductScoutModelConfig] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [effectiveRes, settingsRes, embeddingRes] = await Promise.all([
+      const [effectiveRes, settingsRes, embeddingRes, productScoutModelRes] = await Promise.all([
         api.get('/api/settings/effective-models'),
         api.get('/api/settings'),
         api.get('/api/settings/embedding-config'),
+        api.get('/api/product-scout/model-config').catch(() => null),
       ]);
+      if (productScoutModelRes?.ok) {
+        const cfg = await productScoutModelRes.json();
+        setProductScoutModelConfig(cfg);
+        setProductScoutModel(cfg.modelId || '');
+      }
       if (effectiveRes.ok) {
         const data = await effectiveRes.json();
         if (Array.isArray(data.models) && data.models.length > 0) {
@@ -192,6 +200,15 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  const saveProductScoutModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/product-scout/model-config', { modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save Product Scout model');
+    setProductScoutModel(data.modelId || '');
+    setProductScoutModelConfig(data);
+    return { ok: true };
+  }, []);
+
   return {
     models,
     setModels,
@@ -221,5 +238,8 @@ export function useModels() {
     saveTranslateTargetLanguage,
     translateCustomInstructions,
     saveTranslateCustomInstructions,
+    productScoutModel,
+    productScoutModelConfig,
+    saveProductScoutModel,
   };
 }
