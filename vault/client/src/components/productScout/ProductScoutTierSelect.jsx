@@ -9,13 +9,14 @@ function tierKey(tier, index) {
 function defaultSelection(tiers, previouslyScouted = [], recommendedKey = null) {
   const scouted = new Set(previouslyScouted);
   const available = tiers
-    .map((t, i) => ({ key: tierKey(t, i), index: i }))
+    .map((t, i) => ({ key: tierKey(t, i), index: i, tier: t }))
     .filter((t) => !scouted.has(t.key));
   if (!available.length) return [];
 
+  let keys;
   if (recommendedKey && available.some((t) => t.key === recommendedKey)) {
     const recIdx = tiers.findIndex((t, i) => tierKey(t, i) === recommendedKey);
-    const keys = [recommendedKey];
+    keys = [recommendedKey];
     // When suggesting Enthusiast+, also preselect the band below — deals often live there.
     if (recIdx >= 2) {
       const lowerKey = tierKey(tiers[recIdx - 1], recIdx - 1);
@@ -23,10 +24,18 @@ function defaultSelection(tiers, previouslyScouted = [], recommendedKey = null) 
         keys.unshift(lowerKey);
       }
     }
-    return keys;
+  } else {
+    keys = [available[0].key];
   }
 
-  return [available[0].key];
+  // A tier whose floor got pulled down by the real-listing sanity check (see
+  // sanityCheckEssentialsFloor) needs to actually get searched to matter —
+  // don't make the shopper notice and opt in manually.
+  for (const t of available) {
+    if (t.tier?.floor_adjusted && !keys.includes(t.key)) keys.unshift(t.key);
+  }
+
+  return keys;
 }
 
 export default function ProductScoutTierSelect({
