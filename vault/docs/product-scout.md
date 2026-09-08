@@ -160,6 +160,12 @@ An LLM-guessed 4-tier price framework can be entirely disconnected from what Ama
 
 Both filter candidates through the same relevance guards used at scout time (`filterFormFactorMismatches`, `filterAccessoryMismatches`) so an accessory or wrong-category listing can't skew the real min/max. Both fail silently (keep the LLM's original framework) on any search error — this is a safety net, not a hard dependency. `ProductScoutTierSelect.jsx` auto-selects any tier marked `floor_adjusted` or `ceiling_adjusted` by default so the fix isn't just a subtitle nobody reads. Step 1 is consequently no longer Amazon-fetch-free — two extra small Rainforest searches per brief (cached 10 min, so repeat brief attempts on the same query don't re-fetch).
 
+## Plain-query pool supplement
+
+Confirmed via Railway logs: an enriched search string (`smart glasses Smart sunglasses 6h 40degrees 100g`) never surfaced Ray-Ban Meta Wayfarer anywhere in its 40-result Amazon pool, which topped out at $129.99 — a well-known branded product was invisible to the whole scoring pipeline before any LLM ran, buried by Amazon's own ranking under generic dropship listings that happened to match the literal enrichment keywords better.
+
+`runBuyGuide` now runs a small supplementary search (15 results) on the **plain, unenriched base query** whenever the enriched search string differs from it, and merges any new ASINs into the candidate pool (deduped). This doesn't replace the enriched search — it still runs first and is the primary source — it just gives a recognisable brand a second chance to be seen even when it doesn't literally contain the enrichment terms. Logged as `[productScout] guide plain-query supplement`.
+
 ## "Why wasn't this in the original scout?"
 
 When a shopper-compared URL turns out cheaper/better than the scouted picks, `compareUrlToScout` (`productScoutCompareUrl.js`) computes `not_included_reason` deterministically from the guide's own tier framework — not an LLM guess:

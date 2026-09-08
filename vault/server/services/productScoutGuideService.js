@@ -1239,6 +1239,37 @@ async function runBuyGuide(userId, {
     throw err;
   }
 
+  // Enriched search strings (must-have terms, garbled spec fragments) can bury
+  // a well-known branded product under generic dropship listings that happen
+  // to match the literal keywords better — confirmed case: "smart glasses
+  // Smart sunglasses 6h 40degrees 100g" never surfaced Ray-Ban Meta Wayfarer
+  // anywhere in 40 results, topping out at $129.99, even though it was
+  // clearly the best-fit product once a shopper found it manually. Merge in
+  // a small supplementary search on the plain base query so a recognisable
+  // brand still gets a shot even when it doesn't match the enrichment terms.
+  if (searchQuery !== q) {
+    try {
+      const plainCandidates = await searchProducts(q, { maxResults: 15, amazonDomain });
+      const seenAsins = new Set(allCandidates.map((c) => c.asin).filter(Boolean));
+      const added = plainCandidates.filter((c) => c.asin && !seenAsins.has(c.asin));
+      if (added.length) {
+        console.log('[productScout] guide plain-query supplement', {
+          query: q,
+          searchQuery,
+          added: added.length,
+          addedSamples: added.slice(0, 5).map((c) => ({
+            asin: c.asin,
+            title: String(c.title || '').slice(0, 60),
+            price: c.price_display || c.price,
+          })),
+        });
+        allCandidates = [...allCandidates, ...added];
+      }
+    } catch (err) {
+      console.warn('[productScout] guide plain-query supplement failed (non-fatal):', err.message);
+    }
+  }
+
   console.log('[productScout] guide candidates', {
     count: allCandidates.length,
     searchQuery,
