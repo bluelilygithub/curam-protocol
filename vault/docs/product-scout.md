@@ -151,6 +151,10 @@ CLI does not yet expose delivery filters or workspace marketplace settings — s
 - **Tier scouting runs in parallel.** `runBuyGuide` (`productScoutGuideService.js`) scouts all selected tiers via `Promise.all`, not sequentially — each tier's LLM compare call used to stack one after another, so scouting all 4 tiers meant 4 round-trips in serial. Now they overlap.
 - **Rainforest search cache.** `rainforestClient.searchProducts` caches results 10 min in-memory, keyed on query+domain+resultCount+sortBy+delivery filters. Covers tier-band refetches, retries, and re-opening the same run without re-hitting the API. In-process only — clears on deploy/restart, fine for Railway's single instance.
 
+## Essentials floor sanity check
+
+An LLM-guessed tier framework can set the Essentials floor above what Amazon actually sells at (e.g. Essentials $150–$280 when a real $126 listing exists) — anything cheaper than that floor then has no tier that could ever surface it, no matter how good it is. `buildGuideBrief` now runs one small price-sorted Rainforest search (10 results, `sort_by=price_low_to_high`) against the raw query as part of Step 1, filters it through the same relevance guards used at scout time (`filterFormFactorMismatches`, `filterAccessoryMismatches`), and lowers the Essentials floor to just under the cheapest genuinely relevant listing found — only ever down, never up, and only Essentials (other tiers are untouched). Fails silently (keeps the LLM's original framework) on any search error. When it adjusts, a note is appended to the Essentials tier's subtitle so it's visible in the ladder UI without any client changes. Step 1 is consequently no longer Amazon-fetch-free — one extra Rainforest search per brief.
+
 ## "Why wasn't this in the original scout?"
 
 When a shopper-compared URL turns out cheaper/better than the scouted picks, `compareUrlToScout` (`productScoutCompareUrl.js`) computes `not_included_reason` deterministically from the guide's own tier framework — not an LLM guess:

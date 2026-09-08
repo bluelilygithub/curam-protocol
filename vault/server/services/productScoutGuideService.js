@@ -13,7 +13,13 @@ const {
   buildBudgetFitNote,
 } = require('./productScoutSettings');
 const { executeScoutComparison, getRun } = require('./productScoutService');
-const { looksLikeMonoCallHeadset, queryWantsStereoAudioWearable, isAccessoryTerm } = require('./productScoutRelevance');
+const {
+  looksLikeMonoCallHeadset,
+  queryWantsStereoAudioWearable,
+  isAccessoryTerm,
+  filterFormFactorMismatches,
+  filterAccessoryMismatches,
+} = require('./productScoutRelevance');
 
 const TIER_KEYS = ['essentials', 'smart_upgrade', 'enthusiast', 'pro'];
 
@@ -947,7 +953,65 @@ async function scoutTier(userId, query, frame, index, framework, allCandidates, 
 }
 
 /**
- * Step 1: feature brief + tier price framework (no Amazon fetch).
+ * Cheap real-listing check on the Essentials floor: an LLM-guessed price
+ * framework can set a floor above what Amazon actually sells (e.g. Essentials
+ * $150-$280 when a real, on-topic $126 listing exists) — anything cheaper
+ * than the floor then has no tier that can ever surface it. Runs one small
+ * price-sorted Rainforest search (10 results) and lowers the Essentials
+ * floor to just under the cheapest genuinely relevant listing found, if
+ * that's lower than what the LLM proposed. Never raises the floor, never
+ * touches other tiers, and fails silently (keeps the LLM's framework) on
+ * any search/parsing error — this is a sanity check, not a hard dependency.
+ */
+async function sanityCheckEssentialsFloor(query, tierFramework, amazonDomain) {
+  const essentials = tierFramework?.[0];
+  const proposedMin = essentials?.price_min != null ? Number(essentials.price_min) : null;
+  if (!essentials || !Number.isFinite(proposedMin) || proposedMin <= 0) return tierFramework;
+
+  try {
+    const sample = await searchProducts(query, {
+      maxResults: 10,
+      amazonDomain,
+      sortBy: 'price_low_to_high',
+    });
+    const { kept: formOk } = filterFormFactorMismatches(query, sample);
+    const { kept: relevant } = filterAccessoryMismatches(query, formOk);
+    const prices = relevant
+      .map((c) => Number(c.price))
+      .filter((p) => Number.isFinite(p) && p > 0);
+    if (!prices.length) return tierFramework;
+
+    const cheapest = Math.min(...prices);
+    if (cheapest >= proposedMin) return tierFramework;
+
+    const adjustedMin = Math.max(0, Math.floor(cheapest * 0.9));
+    console.log('[productScout] Essentials floor sanity check — lowering floor to match real listings', {
+      query,
+      proposedMin,
+      cheapestFound: cheapest,
+      adjustedMin,
+    });
+
+    const note = `Floor lowered from $${proposedMin} to $${adjustedMin} — a $${Math.round(cheapest)} listing was found on Amazon.`;
+    const next = [...tierFramework];
+    next[0] = {
+      ...essentials,
+      price_min: adjustedMin,
+      floor_adjusted: true,
+      subtitle: essentials.subtitle ? `${essentials.subtitle} (${note})` : note,
+    };
+    return next;
+  } catch (err) {
+    console.warn('[productScout] Essentials floor sanity check failed (non-fatal):', err.message);
+    return tierFramework;
+  }
+}
+
+/**
+ * Step 1: feature brief + tier price framework. Also runs one small
+ * Rainforest sample (see sanityCheckEssentialsFloor) to sanity-check the
+ * Essentials floor against real listings — the only Amazon fetch at this
+ * step; full tier scouting still happens in Step 2 (runBuyGuide).
  */
 async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
   const q = String(query || '').trim();
@@ -960,10 +1024,21 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
   }
 
   const modelId = await resolveProductScoutModel(userId);
+  const amazonDomain = await getAmazonDomain(pool);
   const attempts = [
     { compact: false, maxTokens: 8192 },
     { compact: true, maxTokens: 4096 },
   ];
+
+  async function finalize(brief) {
+    brief.tier_framework = await sanityCheckEssentialsFloor(q, brief.tier_framework, amazonDomain);
+    return {
+      query: q,
+      userFeatures,
+      budgetHint: hint,
+      feature_brief: brief,
+    };
+  }
 
   let lastText = '';
   let lastErr;
@@ -981,12 +1056,7 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
         budgetHint: hint,
         allowDefaultTiers: false,
       });
-      return {
-        query: q,
-        userFeatures,
-        budgetHint: hint,
-        feature_brief: brief,
-      };
+      return await finalize(brief);
     } catch (err) {
       lastErr = err;
       console.warn(`[productScout] guide brief attempt ${i + 1} failed:`, err.message);
@@ -1000,29 +1070,19 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
       budgetHint: hint,
       allowDefaultTiers: true,
     });
-    return {
-      query: q,
-      userFeatures,
-      budgetHint: hint,
-      feature_brief: brief,
-    };
+    return await finalize(brief);
   } catch {
     if (userFeatures.length) {
-      return {
-        query: q,
-        userFeatures,
-        budgetHint: hint,
-        feature_brief: {
-          summary: `Shopping for ${q}.`,
-          tier_framework: defaultTierFramework(hint),
+      return await finalize({
+        summary: `Shopping for ${q}.`,
+        tier_framework: defaultTierFramework(hint),
+        features: featuresFromUserInput(userFeatures),
+        ...resolveRecommendedTier({
           features: featuresFromUserInput(userFeatures),
-          ...resolveRecommendedTier({
-            features: featuresFromUserInput(userFeatures),
-            budgetHint: hint,
-            tierFramework: defaultTierFramework(hint),
-          }),
-        },
-      };
+          budgetHint: hint,
+          tierFramework: defaultTierFramework(hint),
+        }),
+      });
     }
     throw lastErr || new Error('Feature brief missing tier framework');
   }
