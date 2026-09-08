@@ -31,8 +31,12 @@ const { filterFormFactorMismatches, filterAccessoryMismatches } = require('./pro
  *   ps-v7  must-haves phrased as capability thresholds (numeric_min counts),
  *          not exact-phrase labels — a product describing the same capability
  *          with different wording (or exceeding a count) isn't excluded
+ *   ps-v8  market-leader brand lookup: web-searches "best <query>", asks the
+ *          light model to name recurring brands, then searches Amazon for
+ *          them by name and merges results — automates what a shopper
+ *          otherwise had to do manually via Compare URL
  */
-const PIPELINE_VERSION = 'ps-v7';
+const PIPELINE_VERSION = 'ps-v8';
 
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Each candidate includes a pre_score (0–100) computed from price, star rating, and review count. Use it as your baseline.

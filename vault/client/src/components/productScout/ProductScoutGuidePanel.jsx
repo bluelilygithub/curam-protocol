@@ -115,6 +115,7 @@ export default function ProductScoutGuidePanel({ onRunSaved, loadedResult, loade
           : 'Searching Amazon only for the tiers you selected.',
         [
           'Searching Amazon (Rainforest)',
+          'Checking for market-leading brands',
           'Filtering by price band & relevance',
           'Scoring candidates',
           `AI value comparison${count > 1 ? ' per tier' : ''}`,

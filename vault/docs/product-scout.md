@@ -168,6 +168,14 @@ Confirmed gap: a shopper describes a category generically ("dual microphone"), b
 
 This is a partial fix — it only helps requirements that are genuinely a count/capacity. It doesn't teach the LLM comparison step to recognize synonymous capabilities described in totally different terms (e.g. "ANC" vs "active noise suppression"); that's a harder, not-yet-done fix.
 
+## Market-leader brand lookup
+
+Confirmed the threshold-phrasing fix (ps-v7) wasn't enough: no phrasing of a query — broad or narrow — surfaced the market leader unless the shopper named it directly or pasted its URL via Compare URL. Amazon's own search ranking for a generic category term buries well-known products under high-volume generic listings regardless of how the query or must-haves are worded.
+
+`findMarketLeaderBrandTerms` (`productScoutGuideService.js`) automates the "name it yourself" workaround: web-searches `best <query> 2025 top rated brand` (same `webSearchService` used for cross-market checks), asks the `light` model to name up to 2 brands/products that recur across the results, then runs a small (8-result) Amazon search for `<query> <brand>` per name and merges new ASINs into the candidate pool. Runs once per `runBuyGuide` call (not per tier). Fails silently on any error (no `SEARCH_API_KEY`, no light model configured, no clear brand in results) — falls back to the existing plain-query + enriched-query pool with no behavior change.
+
+Cost: +1 web search, +1 light-tier LLM call, +up to 2 small Rainforest searches per "Search N tiers" click — logged as `[productScout] guide market-leader supplement`.
+
 ## Pipeline version stamp
 
 Every saved run (scout or guide) carries `pipeline_version` (`PIPELINE_VERSION` in `productScoutService.js`, e.g. `ps-v6`) — bumped whenever a change alters what a run actually returns (candidate sourcing, filtering, scoring, tier framework), not for cosmetic UI tweaks. Same idea as the `creationtoolversion` stamp translate embeds in its TMX export. Shown in the PDF report header and under the tier ladder in the UI, so a run is traceable to the exact pipeline behavior that produced it without asking "what was live when this ran."

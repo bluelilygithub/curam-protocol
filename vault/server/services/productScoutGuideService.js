@@ -3,6 +3,8 @@
 const { pool } = require('../db');
 const { searchProducts } = require('./rainforestClient');
 const { callModel } = require('./callModel');
+const { webSearch } = require('./webSearchService');
+const { getModelsForUser } = require('./modelResolver');
 const { resolveProductScoutModel } = require('./productScoutModelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
@@ -1164,6 +1166,37 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
 }
 
 /**
+ * Amazon's own search ranking for a generic category query buries
+ * well-known market-leading products under high-volume generic dropship
+ * listings that happen to match the literal keywords better — confirmed
+ * case: no phrasing of "smart glasses" (broad or narrow) surfaced Ray-Ban
+ * Meta Wayfarer; it only appeared once the shopper named it directly.
+ * Rather than requiring shoppers to already know the market leader's name,
+ * ask the web who it is (same web search used for cross-market checks) and
+ * feed that name back into Amazon search as a supplemental fetch.
+ */
+async function findMarketLeaderBrandTerms(userId, query) {
+  try {
+    const results = await webSearch(`best ${query} 2025 top rated brand`, { num: 6 });
+    if (!results?.length) return [];
+    const snippetText = results
+      .slice(0, 6)
+      .map((r) => `${r.title || ''} — ${r.snippet || ''}`)
+      .join('\n');
+    const { light: modelId } = await getModelsForUser(userId);
+    if (!modelId) return [];
+    const prompt = `Web search results for "best ${query}":\n${snippetText}\n\nName up to 2 specific market-leading BRAND or PRODUCT NAMES that recur across these results for this category (e.g. "Ray-Ban Meta", "Bose QuietComfort") — not generic category words. Comma-separated, no explanation. If none are clear, reply "none".`;
+    const text = await callModel(modelId, prompt, { maxTokens: 100 });
+    const cleaned = String(text || '').trim();
+    if (!cleaned || /^none$/i.test(cleaned)) return [];
+    return cleaned.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2);
+  } catch (err) {
+    console.warn('[productScout] market-leader brand lookup failed (non-fatal):', err.message);
+    return [];
+  }
+}
+
+/**
  * Step 2: Product Scout for selected price tiers only.
  */
 async function runBuyGuide(userId, {
@@ -1268,6 +1301,33 @@ async function runBuyGuide(userId, {
       }
     } catch (err) {
       console.warn('[productScout] guide plain-query supplement failed (non-fatal):', err.message);
+    }
+  }
+
+  // Ask the web who the market leader is, then search Amazon for it by name —
+  // automates what a shopper otherwise has to do manually (paste the market
+  // leader's URL into Compare URL) after noticing it's missing.
+  const brandTerms = await findMarketLeaderBrandTerms(userId, q);
+  for (const brand of brandTerms) {
+    try {
+      const brandCandidates = await searchProducts(`${q} ${brand}`, { maxResults: 8, amazonDomain });
+      const seenAsins = new Set(allCandidates.map((c) => c.asin).filter(Boolean));
+      const added = brandCandidates.filter((c) => c.asin && !seenAsins.has(c.asin));
+      if (added.length) {
+        console.log('[productScout] guide market-leader supplement', {
+          query: q,
+          brand,
+          added: added.length,
+          addedSamples: added.slice(0, 5).map((c) => ({
+            asin: c.asin,
+            title: String(c.title || '').slice(0, 60),
+            price: c.price_display || c.price,
+          })),
+        });
+        allCandidates = [...allCandidates, ...added];
+      }
+    } catch (err) {
+      console.warn('[productScout] guide market-leader supplement failed (non-fatal):', err.message, { brand });
     }
   }
 
