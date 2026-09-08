@@ -160,6 +160,10 @@ An LLM-guessed 4-tier price framework can be entirely disconnected from what Ama
 
 Both filter candidates through the same relevance guards used at scout time (`filterFormFactorMismatches`, `filterAccessoryMismatches`) so an accessory or wrong-category listing can't skew the real min/max. Both fail silently (keep the LLM's original framework) on any search error — this is a safety net, not a hard dependency. `ProductScoutTierSelect.jsx` auto-selects any tier marked `floor_adjusted` or `ceiling_adjusted` by default so the fix isn't just a subtitle nobody reads. Step 1 is consequently no longer Amazon-fetch-free — two extra small Rainforest searches per brief (cached 10 min, so repeat brief attempts on the same query don't re-fetch).
 
+## Pipeline version stamp
+
+Every saved run (scout or guide) carries `pipeline_version` (`PIPELINE_VERSION` in `productScoutService.js`, e.g. `ps-v6`) — bumped whenever a change alters what a run actually returns (candidate sourcing, filtering, scoring, tier framework), not for cosmetic UI tweaks. Same idea as the `creationtoolversion` stamp translate embeds in its TMX export. Shown in the PDF report header and under the tier ladder in the UI, so a run is traceable to the exact pipeline behavior that produced it without asking "what was live when this ran."
+
 ## Sponsored listings
 
 `rainforestClient.searchProducts` no longer sets `exclude_sponsored` — sponsored results are included in every search. A sponsored placement can be the best product for the query, and our scoring (`pre_score`: price/rating/reviews) is placement-blind, so excluding them only shrank the pool for no benefit. Each candidate now carries `is_sponsored` (from Rainforest's `sponsored` field) for future UI/audit use — not currently used to filter or penalize.

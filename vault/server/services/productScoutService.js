@@ -14,6 +14,23 @@ const { attachPreScores, blendValueScore } = require('./productScoutScoring');
 const { sanitizeFeatureTable, cleanDeliveryDisplay } = require('./productScoutTableSanitize');
 const { filterFormFactorMismatches, filterAccessoryMismatches } = require('./productScoutRelevance');
 
+/**
+ * Bump whenever a change alters what a scout run actually returns — candidate
+ * sourcing, filtering, scoring, or tier framework — not cosmetic UI tweaks.
+ * Stamped onto every saved run and shown on the PDF report (same idea as the
+ * creationtoolversion stamp in translate's TMX export) so a run is always
+ * traceable to the exact pipeline behavior that produced it, without having
+ * to ask "what was live when this ran."
+ *
+ *   ps-v1  baseline
+ *   ps-v2  accessory-vs-device relevance filter (filterAccessoryMismatches)
+ *   ps-v3  Essentials floor sanity check against real listings
+ *   ps-v4  tier ceiling sanity check + Settings > Amazon Search model override
+ *   ps-v5  plain-query candidate pool supplement (alongside enriched search)
+ *   ps-v6  sponsored listings no longer excluded from search
+ */
+const PIPELINE_VERSION = 'ps-v6';
+
 const COMPARE_SYSTEM = `You are an unbiased product analyst. Score products on VALUE: features and quality relative to price and reviews — not brand loyalty or Amazon placement.
 Each candidate includes a pre_score (0–100) computed from price, star rating, and review count. Use it as your baseline.
 Your value_score for each pick should stay within ±12 of that product's pre_score unless listing bullets clearly justify a larger move — explain why in value_rationale.
@@ -520,6 +537,7 @@ async function runProductScout(userId, query, { maxPrice, freeDelivery = false, 
 
   const result = {
     mode: 'scout',
+    pipeline_version: PIPELINE_VERSION,
     query: q,
     candidates_fetched: scout.candidates_fetched,
     amazonDomain,
@@ -607,4 +625,5 @@ module.exports = {
   listRuns,
   getRun,
   deleteRuns,
+  PIPELINE_VERSION,
 };

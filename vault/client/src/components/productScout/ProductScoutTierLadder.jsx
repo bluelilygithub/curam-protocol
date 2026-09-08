@@ -176,6 +176,12 @@ export default function ProductScoutTierLadder({
         </p>
       )}
 
+      {result?.pipeline_version && (
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          Pipeline {result.pipeline_version}
+        </p>
+      )}
+
       <ProductScoutReportActions runId={result?.runId} />
 
       {scoutedTiers.length > 0 && scoutedTiers.length < tiers.length && (

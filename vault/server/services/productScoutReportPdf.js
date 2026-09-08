@@ -148,7 +148,7 @@ function pickLines(pick, { label = null } = {}) {
 function buildGuideReport(b, result, fonts) {
   const { bold } = fonts;
   b.heading(clean(result.query || 'Product Scout guide'), { size: 16 });
-  b.text(`Generated ${fmtDate(result.createdAt)}`, { size: 9, color: C.muted, gap: 10 });
+  b.text(`Generated ${fmtDate(result.createdAt)}${result.pipeline_version ? ` · Pipeline ${result.pipeline_version}` : ''}`, { size: 9, color: C.muted, gap: 10 });
 
   if (result.feature_brief?.summary) {
     b.text(result.feature_brief.summary, { size: 10, gap: 12 });
@@ -188,7 +188,7 @@ function buildGuideReport(b, result, fonts) {
 function buildScoutReport(b, result, fonts) {
   const { bold } = fonts;
   b.heading(clean(result.query || 'Product Scout result'), { size: 16 });
-  b.text(`Generated ${fmtDate(result.createdAt)}`, { size: 9, color: C.muted, gap: 10 });
+  b.text(`Generated ${fmtDate(result.createdAt)}${result.pipeline_version ? ` · Pipeline ${result.pipeline_version}` : ''}`, { size: 9, color: C.muted, gap: 10 });
 
   const comparison = result.comparison || {};
   if (comparison.selection_summary) b.text(comparison.selection_summary, { size: 10, gap: 10 });

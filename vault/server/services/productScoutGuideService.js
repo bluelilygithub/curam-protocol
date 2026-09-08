@@ -12,7 +12,7 @@ const {
   filterByPriceBand,
   buildBudgetFitNote,
 } = require('./productScoutSettings');
-const { executeScoutComparison, getRun } = require('./productScoutService');
+const { executeScoutComparison, getRun, PIPELINE_VERSION } = require('./productScoutService');
 const {
   looksLikeMonoCallHeadset,
   queryWantsStereoAudioWearable,
@@ -1338,6 +1338,7 @@ async function runBuyGuide(userId, {
 
   const result = {
     mode: 'guide',
+    pipeline_version: PIPELINE_VERSION,
     query: q,
     search_query: searchQuery,
     userFeatures: userFeatures || existing?.userFeatures || [],
@@ -1377,7 +1378,7 @@ async function refreshGuideRecommendation(userId, runId) {
     throw new Error('Scout at least one tier first');
   }
 
-  const result = { ...existing };
+  const result = { ...existing, pipeline_version: PIPELINE_VERSION };
   try {
     result.final_recommendation = await generateFinalRecommendation(userId, {
       query: existing.query,
