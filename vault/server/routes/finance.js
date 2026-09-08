@@ -42,6 +42,24 @@ const receiptUpload = multer({
 });
 const { pool } = require('../db');
 
+async function getWorkspaceTimezone() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE s.key = 'user_timezone' AND u."isAdmin" = TRUE
+       ORDER BY u.id ASC LIMIT 1`
+    );
+    return rows[0]?.value?.trim() || 'Australia/Sydney';
+  } catch {
+    return 'Australia/Sydney';
+  }
+}
+
+function getDateInTz(tz) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async function nextInvoiceNumber(userId, docType = 'invoice') {
@@ -764,7 +782,7 @@ router.post('/invoices/:id/send', async (req, res) => {
                  WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
                  ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
               ) AS "clientEmail",
-              COALESCE(fc.address, cr.address) AS "clientAddress",
+              fc.address AS "clientAddress",
               COALESCE(fc.abn, NULL) AS "clientAbn"
        FROM fin_invoices i
        LEFT JOIN fin_clients fc ON fc.id = i."clientId"
@@ -1981,8 +1999,9 @@ router.get('/bas/:quarterId/warnings', async (req, res) => {
 router.get('/dashboard', async (req, res) => {
   try {
     const userId    = req.user.id;
-    const yearStart = `${new Date().getFullYear()}-01-01`;
-    const today     = new Date().toISOString().slice(0, 10);
+    const tz        = await getWorkspaceTimezone();
+    const today     = getDateInTz(tz);
+    const yearStart = `${today.slice(0, 4)}-01-01`;
     const from      = req.query.from || yearStart;
     const to        = req.query.to   || today;
 
