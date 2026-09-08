@@ -958,13 +958,30 @@ router.post('/invoices/:id/send', async (req, res) => {
       console.error('[finance] PDF generation for email attachment failed:', pdfErr.message);
     }
 
-    await sendEmail({
-      to,
-      cc: adminEmail || undefined,
-      subject: `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
-      html,
-      attachments: pdfAttachment ? [pdfAttachment] : undefined,
-    });
+    let sendResult;
+    try {
+      sendResult = await sendEmail({
+        to,
+        cc: adminEmail || undefined,
+        subject: `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
+        html,
+        attachments: pdfAttachment ? [pdfAttachment] : undefined,
+      });
+      await pool.query(
+        `INSERT INTO fin_invoice_send_log
+           ("invoiceId","userId","sentTo",cc,provider,"messageId","pdfAttached",ok)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE)`,
+        [invoiceId, userId, to, adminEmail || null, sendResult?.provider || null, sendResult?.messageId || null, !!pdfAttachment]
+      );
+    } catch (sendErr) {
+      await pool.query(
+        `INSERT INTO fin_invoice_send_log
+           ("invoiceId","userId","sentTo",cc,"pdfAttached",ok,error)
+         VALUES ($1,$2,$3,$4,$5,FALSE,$6)`,
+        [invoiceId, userId, to, adminEmail || null, !!pdfAttachment, sendErr.message]
+      ).catch(() => {});
+      throw sendErr;
+    }
 
     // Mark as sent and post the invoice journal (AR / Income / GST) if not already posted
     await pool.query(
@@ -1008,6 +1025,22 @@ router.post('/invoices/:id/send', async (req, res) => {
     res.json({ ok: true, sentTo: to });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/invoices/:id/send-log', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows } = await pool.query(
+      `SELECT sl.* FROM fin_invoice_send_log sl
+       JOIN fin_invoices i ON i.id = sl."invoiceId"
+       WHERE sl."invoiceId"=$1 AND i."userId"=$2
+       ORDER BY sl."sentAt" DESC`,
+      [req.params.id, userId]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

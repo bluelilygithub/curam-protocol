@@ -124,8 +124,12 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
           const chunks = [];
           res.on('data', (c) => chunks.push(c));
           res.on('end', () => {
-            if (res.statusCode >= 200 && res.statusCode < 300) resolve({ ok: true, provider: 'mailchannels' });
-            else reject(new Error(`MailChannels error ${res.statusCode}: ${Buffer.concat(chunks).toString()}`));
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              const messageId = res.headers['x-message-id'] || null;
+              resolve({ ok: true, provider: 'mailchannels', messageId });
+            } else {
+              reject(new Error(`MailChannels error ${res.statusCode}: ${Buffer.concat(chunks).toString()}`));
+            }
           });
         }
       );
@@ -142,7 +146,7 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
   }
   const transporter = nodemailer.createTransport(smtp);
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: defaultFromAddress(from),
     to,
     cc: cc || undefined,
@@ -152,7 +156,7 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
       ? attachments.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType }))
       : undefined,
   });
-  return { ok: true, provider: 'smtp' };
+  return { ok: true, provider: 'smtp', messageId: info?.messageId || null };
 }
 
 module.exports = sendEmail;

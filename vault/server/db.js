@@ -855,6 +855,23 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_invoice_send_log (
+        id            SERIAL PRIMARY KEY,
+        "invoiceId"   INTEGER NOT NULL REFERENCES fin_invoices(id) ON DELETE CASCADE,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "sentTo"      TEXT NOT NULL,
+        cc            TEXT,
+        provider      TEXT,
+        "messageId"   TEXT,
+        "pdfAttached" BOOLEAN NOT NULL DEFAULT FALSE,
+        ok            BOOLEAN NOT NULL DEFAULT TRUE,
+        error         TEXT,
+        "sentAt"      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fin_invoice_send_log_invoice ON fin_invoice_send_log("invoiceId", "sentAt" DESC)`);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS fin_invoice_items (
         id           SERIAL PRIMARY KEY,
         "invoiceId"  INTEGER NOT NULL REFERENCES fin_invoices(id) ON DELETE CASCADE,

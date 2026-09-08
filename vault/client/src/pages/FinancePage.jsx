@@ -662,6 +662,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   const [incomeCodes, setIncomeCodes] = useState([]);
   const [modal, setModal] = useState(null);
   const [viewInvoice, setViewInvoice] = useState(null);
+  const [sendLog, setSendLog] = useState([]);
   const [sendModal, setSendModal] = useState(null);
   const [sendTo, setSendTo]       = useState('');
   const [sendMessage, setSendMessage] = useState('');
@@ -800,6 +801,9 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
       await load();
       setSendModal(null);
       addToast(`${sendModal.docType === 'quote' ? 'Quote' : 'Invoice'} sent to ${sendTo.trim()}`);
+      if (viewInvoice?.id === sendModal.id) {
+        api.get(`/api/finance/invoices/${sendModal.id}/send-log`).then(r => r.json()).then(setSendLog).catch(() => {});
+      }
     } catch (e) {
       setSendError(e.message);
     } finally {
@@ -822,8 +826,10 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
   };
 
   const viewDetail = async (inv) => {
+    setSendLog([]);
     const data = await api.get(`/api/finance/invoices/${inv.id}`).then(r => r.json());
     setViewInvoice(data);
+    api.get(`/api/finance/invoices/${inv.id}/send-log`).then(r => r.json()).then(setSendLog).catch(() => setSendLog([]));
   };
 
   const downloadPdf = async (inv) => {
@@ -1224,6 +1230,24 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
             </div>
 
             {viewInvoice.notes && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{viewInvoice.notes}</p>}
+
+            {sendLog.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Send history</div>
+                <div className="space-y-1">
+                  {sendLog.map(l => (
+                    <div key={l.id} className="text-xs flex items-center gap-2" style={{ color: l.ok ? 'var(--color-text)' : '#991b1b' }}>
+                      <span style={{ opacity: 0.7 }}>{new Date(l.sentAt).toLocaleString('en-AU')}</span>
+                      <span>{l.ok ? '✓ sent' : '✗ failed'}</span>
+                      <span>to {l.sentTo}</span>
+                      {l.pdfAttached && <span style={{ opacity: 0.7 }}>· PDF attached</span>}
+                      {l.provider && <span style={{ opacity: 0.7 }}>· via {l.provider}</span>}
+                      {l.error && <span title={l.error} style={{ opacity: 0.7 }}>· {l.error}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-2 justify-end">
               {viewInvoice.status !== 'paid' && viewInvoice.status !== 'void' && (
