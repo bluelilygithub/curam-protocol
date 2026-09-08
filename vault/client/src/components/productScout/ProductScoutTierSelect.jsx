@@ -32,7 +32,7 @@ function defaultSelection(tiers, previouslyScouted = [], recommendedKey = null) 
   // sanityCheckEssentialsFloor) needs to actually get searched to matter —
   // don't make the shopper notice and opt in manually.
   for (const t of available) {
-    if (t.tier?.floor_adjusted && !keys.includes(t.key)) keys.unshift(t.key);
+    if ((t.tier?.floor_adjusted || t.tier?.ceiling_adjusted) && !keys.includes(t.key)) keys.unshift(t.key);
   }
 
   return keys;

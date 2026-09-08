@@ -1008,6 +1008,79 @@ async function sanityCheckEssentialsFloor(query, tierFramework, amazonDomain) {
 }
 
 /**
+ * Ceiling check: the Essentials-floor check only fixes the bottom of the
+ * framework — nothing validated the top. An LLM can invent an Enthusiast/Pro
+ * band ($600-$1200) that sits entirely above what Amazon actually sells this
+ * product for (real ceiling ~$509), so that tier is guaranteed empty before
+ * anyone searches it. Finds the real ceiling from a price-sorted sample and
+ * compresses any tier(s) whose floor sits above it into the space between
+ * the last reachable tier and that real ceiling, instead of leaving them as
+ * unreachable dead bands.
+ */
+async function sanityCheckTierCeiling(query, tierFramework, amazonDomain) {
+  if (!Array.isArray(tierFramework) || tierFramework.length < 2) return tierFramework;
+  const lastMin = tierFramework[tierFramework.length - 1]?.price_min;
+  if (lastMin == null || !Number.isFinite(Number(lastMin)) || Number(lastMin) <= 0) return tierFramework;
+
+  try {
+    const sample = await searchProducts(query, {
+      maxResults: 10,
+      amazonDomain,
+      sortBy: 'price_high_to_low',
+    });
+    const { kept: formOk } = filterFormFactorMismatches(query, sample);
+    const { kept: relevant } = filterAccessoryMismatches(query, formOk);
+    const prices = relevant
+      .map((c) => Number(c.price))
+      .filter((p) => Number.isFinite(p) && p > 0);
+    if (!prices.length) return tierFramework;
+
+    const realMax = Math.max(...prices);
+    const unreachableIdx = tierFramework.findIndex(
+      (t) => t.price_min != null && Number(t.price_min) > realMax
+    );
+    if (unreachableIdx <= 0) return tierFramework;
+
+    const prev = tierFramework[unreachableIdx - 1];
+    const prevAnchor = Number(prev?.price_max ?? prev?.price_min ?? 0);
+    // The previous tier's own ceiling can also sit above realMax (an
+    // over-optimistic Smart upgrade band, say) — don't anchor above the
+    // real ceiling itself, or the compressed range collapses to nothing.
+    const ceilingAnchor = Math.round(realMax * 1.15);
+    const floorAnchor = Math.min(prevAnchor, Math.round(ceilingAnchor * 0.7));
+    const remaining = tierFramework.length - unreachableIdx;
+    const step = (ceilingAnchor - floorAnchor) / remaining;
+
+    console.log('[productScout] Tier ceiling sanity check — compressing unreachable tiers into real price range', {
+      query,
+      realMax,
+      unreachableFrom: tierFramework[unreachableIdx].key,
+      floorAnchor,
+      ceilingAnchor,
+    });
+
+    const next = [...tierFramework];
+    for (let i = unreachableIdx; i < next.length; i += 1) {
+      const bandMin = Math.round(floorAnchor + step * (i - unreachableIdx));
+      const isLast = i === next.length - 1;
+      const bandMax = isLast ? null : Math.round(floorAnchor + step * (i - unreachableIdx + 1));
+      const note = `Compressed — Amazon's real ceiling for this search is ~$${Math.round(realMax)}, well below the original estimate.`;
+      next[i] = {
+        ...next[i],
+        price_min: bandMin,
+        price_max: bandMax,
+        ceiling_adjusted: true,
+        subtitle: next[i].subtitle ? `${next[i].subtitle} (${note})` : note,
+      };
+    }
+    return next;
+  } catch (err) {
+    console.warn('[productScout] Tier ceiling sanity check failed (non-fatal):', err.message);
+    return tierFramework;
+  }
+}
+
+/**
  * Step 1: feature brief + tier price framework. Also runs one small
  * Rainforest sample (see sanityCheckEssentialsFloor) to sanity-check the
  * Essentials floor against real listings — the only Amazon fetch at this
@@ -1032,6 +1105,7 @@ async function buildGuideBrief(userId, query, userFeaturesRaw, budgetHint) {
 
   async function finalize(brief) {
     brief.tier_framework = await sanityCheckEssentialsFloor(q, brief.tier_framework, amazonDomain);
+    brief.tier_framework = await sanityCheckTierCeiling(q, brief.tier_framework, amazonDomain);
     return {
       query: q,
       userFeatures,
