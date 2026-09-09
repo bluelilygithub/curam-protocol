@@ -1109,8 +1109,15 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 }
 
 // ── PDF generation (client-side) ──────────────────────────────────────────────
-async function registerFonts(targetLanguage) {
-  const fontUrl = FONT_BY_LANG[targetLanguage];
+// The PDF always shows BOTH source and translated text (side-by-side / bilingual-pages
+// layouts render the original alongside the translation), so font choice must cover
+// whichever of source/target needs non-Latin1 glyphs — not just the target. Confirmed on
+// a real mi → en job: source language (te reo Māori) needed Noto but target (English)
+// didn't, so FONT_BY_LANG[targetLanguage] alone missed it, Helvetica rendered the page,
+// and every macron vowel in the ORIGINAL column silently vanished (WinAnsi encoding drops
+// unmapped glyphs rather than showing a placeholder) — "Māori" → "Mori".
+async function registerFonts(targetLanguage, sourceLanguage) {
+  const fontUrl = FONT_BY_LANG[targetLanguage] || FONT_BY_LANG[sourceLanguage];
   if (!fontUrl) return;
   try {
     Font.register({ family: 'NotoTarget', src: fontUrl });
@@ -1121,7 +1128,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf',
     pdfLayout = 'side-by-side' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
-  const useNoto = !!FONT_BY_LANG[targetLanguage];
+  const useNoto = !!FONT_BY_LANG[targetLanguage] || !!FONT_BY_LANG[sourceLanguage];
   const layout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(pdfLayout)
     ? pdfLayout
     : 'side-by-side';
@@ -1574,7 +1581,7 @@ function TranslationsTab({ glossaries }) {
 
       if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
 
-      await registerFonts(jobData.targetLanguage);
+      await registerFonts(jobData.targetLanguage, jobData.sourceLanguage);
       const doc = buildBilingualPdf({
         ...payload,
         sourceLanguage: jobData.sourceLanguage,
