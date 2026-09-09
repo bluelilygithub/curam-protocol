@@ -14,6 +14,7 @@ const MIME = {
   doc: 'application/msword',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xls: 'application/vnd.ms-excel',
+  txt: 'text/plain',
 };
 
 function extOf(filename = '') {
@@ -35,6 +36,7 @@ function detectSourceFormat(filename, mimetype = '') {
   if (ext === '.doc') return 'doc';
   if (ext === '.xlsx') return 'xlsx';
   if (ext === '.xls') return 'xls';
+  if (ext === '.txt') return 'txt';
 
   const mt = String(mimetype || '').toLowerCase();
   if (mt === MIME.pdf) return 'pdf';
@@ -42,6 +44,7 @@ function detectSourceFormat(filename, mimetype = '') {
   if (mt === MIME.doc) return 'doc';
   if (mt === MIME.xlsx) return 'xlsx';
   if (mt === MIME.xls) return 'xls';
+  if (mt === MIME.txt) return 'txt';
   return null;
 }
 
@@ -211,6 +214,21 @@ async function extractFromDocx(buffer) {
   };
 }
 
+async function extractFromTxt(buffer) {
+  const paragraphs = splitSingleBlobIntoSentences(splitParagraphs(buffer.toString('utf8')));
+  if (!paragraphs.length) {
+    throw new Error('No extractable text found');
+  }
+  return {
+    sourceFormat: 'txt',
+    pageCount: 1,
+    paragraphsByPage: { 1: paragraphs },
+    pageLabels: { 1: 'Document' },
+    pageTexts: null,
+    scannedCandidatePages: [],
+  };
+}
+
 function colLetter(n) {
   let s = '';
   let x = n;
@@ -270,9 +288,10 @@ async function extractFromSpreadsheet(buffer, sourceFormat) {
 async function extractForTranslate({ buffer, filename, mimetype }) {
   const format = detectSourceFormat(filename, mimetype);
   if (!format) {
-    throw new Error('Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).');
+    throw new Error('Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text.');
   }
   if (format === 'pdf') return extractFromPdf(buffer);
+  if (format === 'txt') return extractFromTxt(buffer);
   if (format === 'docx' || format === 'doc') {
     if (format === 'doc') {
       throw new Error('Legacy .doc is not supported — save as .docx and re-upload.');

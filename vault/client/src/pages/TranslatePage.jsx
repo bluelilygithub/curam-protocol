@@ -63,10 +63,10 @@ const FONT_BY_LANG = {
 };
 
 const ACCEPT_UPLOAD =
-  '.pdf,.docx,.xlsx,.xls,application/pdf,'
+  '.pdf,.docx,.xlsx,.xls,.txt,application/pdf,'
   + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
   + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
-  + 'application/vnd.ms-excel';
+  + 'application/vnd.ms-excel,text/plain';
 
 function detectUploadKind(file) {
   if (!file) return null;
@@ -78,6 +78,7 @@ function detectUploadKind(file) {
   if (name.endsWith('.xlsx')
     || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
   if (name.endsWith('.xls') || type === 'application/vnd.ms-excel') return 'xls';
+  if (name.endsWith('.txt') || type === 'text/plain') return 'txt';
   return null;
 }
 
@@ -1254,6 +1255,8 @@ function TranslationsTab({ glossaries }) {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [file, setFile]             = useState(null);
   const [dragOver, setDragOver]     = useState(false);
+  const [pasteMode, setPasteMode]   = useState(false);
+  const [pasteText, setPasteText]   = useState('');
   // Target language is a Settings-level choice (Settings → AI & Chat → Translate agent), not
   // picked per job — loaded once below and used read-only here.
   const [targetLang, setTargetLang] = useState('fr');
@@ -1380,6 +1383,18 @@ function TranslationsTab({ glossaries }) {
         return;
       }
 
+      if (kind === 'txt') {
+        setPreflight({
+          kind: 'txt',
+          pageCount: 1,
+          scannedCount: 0,
+          scannedImages: {},
+          unitLabel: 'document',
+          summary: 'Plain text — sent to the server as-is',
+        });
+        return;
+      }
+
       addToast('Unsupported file type', 'error');
       setFile(null);
     } catch (e) {
@@ -1394,12 +1409,20 @@ function TranslationsTab({ glossaries }) {
     if (!f) return;
     const kind = detectUploadKind(f);
     if (!kind) {
-      addToast('Please select a PDF, Word (.docx), or Excel (.xlsx) file', 'error');
+      addToast('Please select a PDF, Word (.docx), Excel (.xlsx), or text (.txt) file', 'error');
       return;
     }
     if (f.size > 5 * 1024 * 1024) { addToast('File exceeds 5 MB limit', 'error'); return; }
     setFile(f);
     runPreflight(f);
+  };
+
+  const usePastedText = () => {
+    if (!pasteText.trim()) return;
+    const blob = new Blob([pasteText], { type: 'text/plain' });
+    const f = new File([blob], 'pasted-text.txt', { type: 'text/plain' });
+    setPasteMode(false);
+    handleFileSelect(f);
   };
 
   const handleDrop = (e) => {
@@ -1636,43 +1659,70 @@ function TranslationsTab({ glossaries }) {
 
       {/* Upload zone */}
       <div>
-        <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>New Translation</h2>
-        <div
-          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => !file && fileRef.current?.click()}
-          className="rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer"
-          style={{
-            borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
-            background:  dragOver ? 'rgba(var(--color-primary-rgb, 99,102,241),0.04)' : 'var(--color-surface)',
-          }}
-        >
-          <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden"
-            onChange={e => handleFileSelect(e.target.files[0])} />
-          {!file ? (
-            <>
-              <div className="text-3xl mb-2">🌐</div>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                Drop a PDF, Word, or Excel file here — or click to browse
-              </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Max 5 MB · PDF · .docx · .xlsx · scanned PDFs supported via OCR
-              </p>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-2xl">📄</div>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</p>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                {(file.size / 1024 / 1024).toFixed(1)} MB
-                {detectUploadKind(file) ? ` · ${detectUploadKind(file).toUpperCase()}` : ''}
-              </p>
-              <button onClick={e => { e.stopPropagation(); setFile(null); setPreflight(null); }}
-                className="text-xs" style={{ color: 'var(--color-muted)' }}>Remove</button>
-            </div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>New Translation</h2>
+          {!file && (
+            <button
+              onClick={() => setPasteMode(m => !m)}
+              className="text-xs font-medium hover:opacity-70"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              {pasteMode ? 'Upload a file instead' : 'Paste text instead'}
+            </button>
           )}
         </div>
+
+        {!file && pasteMode ? (
+          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <textarea
+              value={pasteText}
+              onChange={e => setPasteText(e.target.value)}
+              placeholder="Paste the text you want translated…"
+              className="w-full text-sm px-3 py-2 rounded-lg border outline-none"
+              style={{ minHeight: 220, resize: 'vertical', background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+            <div className="flex justify-end mt-3">
+              <Btn onClick={usePastedText} disabled={!pasteText.trim()}>Use this text</Btn>
+            </div>
+          </div>
+        ) : (
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => !file && fileRef.current?.click()}
+            className="rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer"
+            style={{
+              borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
+              background:  dragOver ? 'rgba(var(--color-primary-rgb, 99,102,241),0.04)' : 'var(--color-surface)',
+            }}
+          >
+            <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden"
+              onChange={e => handleFileSelect(e.target.files[0])} />
+            {!file ? (
+              <>
+                <div className="text-3xl mb-2">🌐</div>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                  Drop a PDF, Word, Excel, or text file here — or click to browse
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Max 5 MB · PDF · .docx · .xlsx · .txt · scanned PDFs supported via OCR
+                </p>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-2xl">📄</div>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</p>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {(file.size / 1024 / 1024).toFixed(1)} MB
+                  {detectUploadKind(file) ? ` · ${detectUploadKind(file).toUpperCase()}` : ''}
+                </p>
+                <button onClick={e => { e.stopPropagation(); setFile(null); setPreflight(null); setPasteText(''); }}
+                  className="text-xs" style={{ color: 'var(--color-muted)' }}>Remove</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Preflight info + options */}
@@ -2228,7 +2278,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>How a job runs</p>
             <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
-              <li>Upload a PDF, Word (.docx), or Excel (.xlsx/.xls) file — up to 5 MB.</li>
+              <li>Upload a PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt) file — up to 5 MB. Or paste text directly instead of uploading a file.</li>
               <li>Pick a target language (defaults from Settings → AI & Chat → Translate agent, overridable per job) and answer a few intake questions (domain, audience, tone) — these shape the translation, not just the glossary.</li>
               <li>Choose an engine: <strong>Vault LLM</strong> (slower, better for tone/glossaries/te reo Māori policy) or <strong>Google Translate</strong> (fast drafts, common languages).</li>
               <li>Optionally enable a second-model QA review pass before the job finishes.</li>

@@ -58,6 +58,9 @@ LLM translate chunks ~20 paragraphs / ~8000 chars per call and runs **up to 8 ch
 | PDF | `.pdf` | Native text + OCR for scanned pages (client preflight renders page images) |
 | Word | `.docx` | Paragraph text via mammoth. Legacy `.doc` is rejected — save as `.docx` (by **filename extension**, not browser-reported mimetype — see note below) |
 | Excel | `.xlsx`, `.xls` | Text cells only (numbers skipped). Each sheet is a section; cells prefixed `[A1]`-style |
+| Plain text | `.txt` | Paragraph split on blank lines, same as `.docx`. No native-output download (only `.docx`/`.xlsx` sources get one) — translated PDF only |
+
+**Paste text instead of uploading.** `TranslatePage.jsx` — "Paste text instead" toggle above the dropzone swaps the drop-zone for a textarea; "Use this text" wraps the pasted content as an in-memory `File` (`pasted-text.txt`, `text/plain`) and feeds it through the same `handleFileSelect` → preflight → submit path as a real upload. No separate route or pipeline branch — it rides the `.txt` support above.
 
 Max size: **5 MB** (demo-scale cap — size is a poor proxy for runtime, but it's the only pre-upload signal available; caps worst-case text PDFs around 150-250pp and OCR-bound scanned PDFs around 30-60pp, keeping jobs in the few-minutes range). Google Docs / Sheets: export as `.docx` / `.xlsx` then upload (no Drive OAuth).
 

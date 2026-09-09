@@ -162,6 +162,16 @@ const TOOL_HELP = {
       'To lock filled values permanently: run the filled PDF through the "Flatten" tool.',
     ],
   },
+  text2pdf: {
+    title: 'Text → PDF',
+    what: 'Paste formatted text — copied from anywhere — into a text box and generate a PDF.',
+    features: [
+      'Supports lightweight markdown: # / ## / ### headings, **bold**, and - bullet lines',
+      'Optional document title, rendered as a heading with a divider',
+      'Blank lines separate paragraphs',
+      'No file upload needed — just paste and generate',
+    ],
+  },
   officetopdf: {
     title: 'Office → PDF',
     what: 'Convert Microsoft Office and OpenDocument files to PDF using LibreOffice on the server.',
@@ -201,6 +211,7 @@ const MODES = [
   { id: 'split',        label: 'Split',            icon: 'scissors'    },
   { id: 'rotate',       label: 'Rotate Pages',     icon: 'rotate-cw'   },
   { id: 'img2pdf',      label: 'Images → PDF',     icon: 'file-image'  },
+  { id: 'text2pdf',     label: 'Text → PDF',       icon: 'file-text'   },
   { id: 'extracttext',  label: 'Extract Text',     icon: 'type'        },
   { id: 'officetopdf',  label: 'Office → PDF',     icon: 'file-up'     },
   { id: 'pdftooffice',  label: 'PDF → Word',       icon: 'file-down'   },
@@ -217,7 +228,7 @@ const MODES = [
 
 const MODE_GROUPS = [
   { label: 'Organise', ids: ['merge', 'split', 'rotate'] },
-  { label: 'Convert',  ids: ['img2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf'] },
+  { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf'] },
   { label: 'Edit',     ids: ['watermark', 'pagenumbers'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo']     },
@@ -620,6 +631,12 @@ export default function PdfPage() {
   const [officeFile, setOfficeFile] = useState(null);
   const [officeBusy, setOfficeBusy] = useState(false);
   const [officeError, setOfficeError] = useState('');
+
+  // Text → PDF
+  const [t2pTitle, setT2pTitle] = useState('');
+  const [t2pText, setT2pText] = useState('');
+  const [t2pBusy, setT2pBusy] = useState(false);
+  const [t2pError, setT2pError] = useState('');
 
   // PDF → Office
   const [pto_file, setPtoFile] = useState(null);
@@ -1360,6 +1377,21 @@ export default function PdfPage() {
     finally { stopProcessing(); setOfficeBusy(false); }
   };
 
+  // ── Text → PDF ───────────────────────────────────────────────────────────────
+  const runText2Pdf = async () => {
+    if (!t2pText.trim()) return setT2pError('Paste some text first.');
+    setT2pError('');
+    startProcessing('Generating PDF…', t2pTitle || 'Formatted text');
+    setT2pBusy(true);
+    try {
+      const res = await api.post('/api/pdf/text2pdf', { title: t2pTitle, text: t2pText });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'PDF generation failed.');
+      setResultModal({ dataUrl: data.dataUrl, filename: `${(t2pTitle || 'document').replace(/[^\w.-]+/g, '_')}.pdf` });
+    } catch (e) { setT2pError(e.message || 'PDF generation failed.'); }
+    finally { stopProcessing(); setT2pBusy(false); }
+  };
+
   // ── PDF → Office ─────────────────────────────────────────────────────────────
   const runPdfToOffice = async () => {
     if (!pto_file) return setPtoError('Upload a PDF first.');
@@ -1403,6 +1435,7 @@ export default function PdfPage() {
     split: 'Extract a page range into a new PDF.',
     rotate: 'Rotate all or specific pages.',
     img2pdf: 'Pack images into a PDF document.',
+    text2pdf: 'Paste formatted text and generate a PDF.',
     extracttext: 'Pull all text from a PDF (client-side).',
     watermark: 'Stamp a diagonal text watermark.',
     pagenumbers: 'Add page numbers to every page.',
@@ -2007,6 +2040,35 @@ export default function PdfPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Text → PDF ═════════════════════════════════════════════ */}
+          {mode === 'text2pdf' && (
+            <section>
+              <ToolHeader id="text2pdf" label="Text → PDF" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="max-w-2xl">
+                <label className={lbl} style={{ color: 'var(--color-muted)' }}>Title (optional)</label>
+                <input
+                  className={inp} style={inpStyle}
+                  value={t2pTitle}
+                  onChange={(e) => setT2pTitle(e.target.value)}
+                  placeholder="Document title"
+                />
+                <label className={`${lbl} mt-4`} style={{ color: 'var(--color-muted)' }}>
+                  Paste formatted content — # heading, **bold**, - bullet, blank line = new paragraph
+                </label>
+                <textarea
+                  className={inp} style={{ ...inpStyle, minHeight: 320, resize: 'vertical', fontFamily: 'inherit' }}
+                  value={t2pText}
+                  onChange={(e) => setT2pText(e.target.value)}
+                  placeholder={'# Heading\n\nPaste or type your content here. Use **bold** and\n- bullet points\nas needed.'}
+                />
+                <ErrMsg msg={t2pError} />
+                <div className="mt-3">
+                  <RunBtn onClick={runText2Pdf} busy={t2pBusy} disabled={!t2pText.trim()} label="Generate PDF" getIcon={getIcon} />
                 </div>
               </div>
             </section>

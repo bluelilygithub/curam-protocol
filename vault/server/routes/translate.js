@@ -58,7 +58,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (isAllowedUpload(file.originalname, file.mimetype)) return cb(null, true);
-    cb(new Error('Only PDF, Word (.docx), or Excel (.xlsx/.xls) files are accepted'));
+    cb(new Error('Only PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt) files are accepted'));
   },
 });
 
@@ -434,6 +434,7 @@ const ORIGINAL_MIME_BY_EXT = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xls: 'application/vnd.ms-excel',
+  txt: 'text/plain',
 };
 
 // Lets a reviewer pull up the untouched source alongside the translation/QA report — useful
@@ -619,11 +620,11 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
 
 // ── Submit job ────────────────────────────────────────────────────────────────
 router.post('/jobs', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   const engine = String(req.body.engine || 'llm').toLowerCase() === 'google' ? 'google' : 'llm';
@@ -737,11 +738,11 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 // Route kept (unused by the client) rather than removed, since translate_jobs."batchId" and
 // existing rows still reference it — deleting it is a bigger change than this ask needs.
 router.post('/jobs/batch', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   let targetLanguages;
@@ -1011,7 +1012,9 @@ async function processTranslateJob(
       ? 'Reconstructing paragraphs…'
       : sourceFormat === 'docx'
         ? 'Preparing Word document text…'
-        : 'Preparing spreadsheet cells…',
+        : sourceFormat === 'txt'
+          ? 'Preparing text…'
+          : 'Preparing spreadsheet cells…',
     progress: 38,
   });
 
