@@ -9,7 +9,6 @@
 
 const crypto = require('crypto');
 const { pool } = require('../db');
-const { findPlaceholder } = require('./translateQaChecks');
 
 function normalize(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
@@ -19,23 +18,8 @@ function hashOf(text) {
   return crypto.createHash('md5').update(normalize(text)).digest('hex');
 }
 
-/** Pure predicate — extracted so the "never persist a broken translation" rule is unit-testable
- * without a database connection. See savePairs' doc comment for the real incident this guards. */
-function isSafeToPersist(source, target) {
-  return source.length > 1 && target.length > 1 && !findPlaceholder(target);
-}
-
-/**
- * Returns a Map<sourceText, targetText> for every exact match found.
- *
- * `engine` ('llm' | 'google') scopes the lookup — confirmed real bug: TM was originally
- * engine-agnostic, so picking LLM after a Google-engine run of the same document (or vice versa)
- * silently reused the OTHER engine's cached output, defeating an explicit engine choice —
- * especially confusing for a user deliberately comparing the two engines against each other.
- * Required, not optional, so a caller can't accidentally fall back to the old cross-engine
- * behaviour by omitting it.
- */
-async function lookupExact({ userId, sourceLang, targetLang, engine, texts }) {
+/** Returns a Map<sourceText, targetText> for every exact match found. */
+async function lookupExact({ userId, sourceLang, targetLang, texts }) {
   const hits = new Map();
   const candidates = [...new Set(texts.map(normalize).filter(Boolean))];
   if (!candidates.length) return hits;
@@ -43,8 +27,8 @@ async function lookupExact({ userId, sourceLang, targetLang, engine, texts }) {
   const hashes = candidates.map(hashOf);
   const { rows } = await pool.query(
     `SELECT "sourceHash", "targetText" FROM translate_memory
-     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND engine=$4 AND "sourceHash" = ANY($5)`,
-    [userId, sourceLang, targetLang, engine, hashes]
+     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND "sourceHash" = ANY($4)`,
+    [userId, sourceLang, targetLang, hashes]
   );
   if (!rows.length) return hits;
 
@@ -56,26 +40,12 @@ async function lookupExact({ userId, sourceLang, targetLang, engine, texts }) {
   return hits;
 }
 
-/**
- * Upsert every source->target pair from a completed job. Skips very short/placeholder text.
- *
- * Confirmed real gap: the old filter only rejected the literal "[Translation incomplete]"/
- * "[Translation error]" prefix, not the full range of placeholder/garbled patterns
- * translateQaChecks.findPlaceholder already knows about (other bracketed meta-commentary, other
- * language incompleteness markers). Because a TM-hit paragraph skips the LLM/repair pipeline
- * entirely on reuse (translate.js's per-chunk loop excludes tmFlags from translateIdxs), a bad
- * translation that slipped past the old narrower filter would self-perpetuate: it gets flagged
- * as garbled on every future job containing that paragraph, but is never regenerated or
- * corrected, since the paragraph never goes back through translation to produce a fresh (and
- * self-healing, via this same ON CONFLICT upsert) result. Widening the filter here to match
- * findPlaceholder's full pattern set stops a bad entry from ever being written in the first
- * place — the cheaper, upstream half of the fix (see the TM-hit reuse routing in translate.js's
- * chunk loop for the other half, which re-checks an EXISTING cached hit at reuse time).
- */
-async function savePairs({ userId, sourceLang, targetLang, engine, domain, pairs }) {
+/** Upsert every source->target pair from a completed job. Skips very short/placeholder text. */
+async function savePairs({ userId, sourceLang, targetLang, domain, pairs }) {
   const cleaned = pairs
     .map((p) => ({ source: normalize(p.source), target: normalize(p.target) }))
-    .filter((p) => isSafeToPersist(p.source, p.target));
+    .filter((p) => p.source.length > 1 && p.target.length > 1
+      && !/^\[translation (incomplete|error)\]/i.test(p.target));
   if (!cleaned.length) return 0;
 
   const client = await pool.connect();
@@ -84,11 +54,11 @@ async function savePairs({ userId, sourceLang, targetLang, engine, domain, pairs
     await client.query('BEGIN');
     for (const { source, target } of cleaned) {
       await client.query(
-        `INSERT INTO translate_memory ("userId","sourceLang","targetLang",engine,"sourceHash","sourceText","targetText",domain,"hitCount")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0)
-         ON CONFLICT ("userId","sourceLang","targetLang",engine,"sourceHash")
+        `INSERT INTO translate_memory ("userId","sourceLang","targetLang","sourceHash","sourceText","targetText",domain,"hitCount")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,0)
+         ON CONFLICT ("userId","sourceLang","targetLang","sourceHash")
          DO UPDATE SET "targetText"=EXCLUDED."targetText", domain=EXCLUDED.domain, "updatedAt"=NOW()`,
-        [userId, sourceLang, targetLang, engine, hashOf(source), source, target, domain || null]
+        [userId, sourceLang, targetLang, hashOf(source), source, target, domain || null]
       );
       saved += 1;
     }
@@ -102,13 +72,13 @@ async function savePairs({ userId, sourceLang, targetLang, engine, domain, pairs
   return saved;
 }
 
-async function bumpHitCounts({ userId, sourceLang, targetLang, engine, sources }) {
+async function bumpHitCounts({ userId, sourceLang, targetLang, sources }) {
   const hashes = [...new Set(sources.map(normalize).filter(Boolean))].map(hashOf);
   if (!hashes.length) return;
   await pool.query(
     `UPDATE translate_memory SET "hitCount"="hitCount"+1
-     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND engine=$4 AND "sourceHash" = ANY($5)`,
-    [userId, sourceLang, targetLang, engine, hashes]
+     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND "sourceHash" = ANY($4)`,
+    [userId, sourceLang, targetLang, hashes]
   ).catch(() => {});
 }
 
@@ -152,4 +122,4 @@ async function exportTmx({ userId, sourceLang, targetLang }) {
 </tmx>`;
 }
 
-module.exports = { lookupExact, savePairs, bumpHitCounts, stats, exportTmx, normalize, isSafeToPersist };
+module.exports = { lookupExact, savePairs, bumpHitCounts, stats, exportTmx, normalize };

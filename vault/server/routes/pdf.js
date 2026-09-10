@@ -10,7 +10,6 @@ const path = require('path');
 const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
-const { generateTextPdf } = require('../services/textToPdf');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -197,20 +196,6 @@ router.post('/chat', async (req, res) => {
     console.error('PDF chat error:', err);
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
     res.end();
-  }
-});
-
-// ── Text → PDF ─────────────────────────────────────────────────────────────────
-router.post('/text2pdf', async (req, res) => {
-  try {
-    const text = String(req.body?.text || '').trim();
-    if (!text) return res.status(400).json({ error: 'Paste some text first.' });
-    const title = String(req.body?.title || '').trim().slice(0, 200);
-    const buf = await generateTextPdf({ title, text });
-    res.json({ dataUrl: `data:application/pdf;base64,${buf.toString('base64')}` });
-  } catch (err) {
-    console.error('PDF text2pdf:', err);
-    res.status(500).json({ error: err.message || 'PDF generation failed' });
   }
 });
 

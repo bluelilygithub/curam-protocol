@@ -7,7 +7,7 @@
 'use strict';
 
 const assert = require('assert');
-const { detectRepeatedTermCandidates, hasStraySourceWord, hardSanityGate, findPlaceholder } = require('./translateQaChecks');
+const { detectRepeatedTermCandidates } = require('./translateQaChecks');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -180,112 +180,6 @@ test('does not auto-qualify an ordinary acronym as a status word', () => {
   const terms = out.map((c) => c.term);
   assert.ok(!terms.includes('ERP'), `did not expect ERP in ${JSON.stringify(terms)}`);
   assert.ok(!terms.includes('API'), `did not expect API in ${JSON.stringify(terms)}`);
-});
-
-// hasStraySourceWord — confirmed real false-positive: a do-not-translate term like
-// "Fair and Square Ltd" left correctly untranslated verbatim contains "and", a genuine denylist
-// word that's also genuinely present in the source — without masking DNT spans first, this
-// flagged an entirely correct segment as having a stray untranslated word, which caused
-// repairIncompletePairs to needlessly (and riskily) re-translate it.
-test('does not flag "and" inside a correctly-preserved do-not-translate term', () => {
-  const source = 'Fair and Square Ltd was founded in 1990.';
-  const target = 'Fair and Square Ltd a été fondée en 1990.';
-  const result = hasStraySourceWord(source, target, {
-    sourceLanguage: 'en', targetLanguage: 'fr',
-    glossaryTerms: [{ source: 'Fair and Square Ltd', doNotTranslate: true }],
-  });
-  assert.strictEqual(result, null);
-});
-
-test('still flags a genuine stray word outside any do-not-translate span', () => {
-  const source = 'Several people were hurt during the event.';
-  const target = 'Plusieurs personnes ont été hurt pendant l\'événement.';
-  const result = hasStraySourceWord(source, target, {
-    sourceLanguage: 'en', targetLanguage: 'fr',
-    glossaryTerms: [{ source: 'Fair and Square Ltd', doNotTranslate: true }], // unrelated DNT term present
-  });
-  assert.strictEqual(result, 'hurt');
-});
-
-test('still flags a stray word with no glossaryTerms at all (backward compatible)', () => {
-  const source = 'Several people were hurt during the event.';
-  const target = 'Plusieurs personnes ont été hurt pendant l\'événement.';
-  const result = hasStraySourceWord(source, target, { sourceLanguage: 'en', targetLanguage: 'fr' });
-  assert.strictEqual(result, 'hurt');
-});
-
-// hardSanityGate placeholder threshold — confirmed real gap: a job with 10-13% of segments still
-// reading "[Translation incomplete] <source>" after both repair attempts failed soft-passed
-// under the old 25% ratio threshold, shipping real broken text into the PDF with only a QA-report
-// footnote to catch it.
-function makePairs(okCount, badCount) {
-  const pairs = [];
-  for (let i = 0; i < okCount; i++) pairs.push({ source: `ok sentence ${i}`, target: `translated ok sentence ${i}` });
-  for (let i = 0; i < badCount; i++) pairs.push({ source: `bad ${i}`, target: `[Translation incomplete] bad ${i}` });
-  return pairs;
-}
-
-test('hardSanityGate hard-fails a realistic document with 10-13% placeholder segments', () => {
-  // 30 segments, 4 bad = 13.3% — the exact real-world scenario this threshold exists to catch.
-  const gate = hardSanityGate(makePairs(26, 4), {});
-  assert.strictEqual(gate.ok, false);
-  assert.strictEqual(gate.code, 'placeholders_present');
-});
-
-test('hardSanityGate does not hard-fail a tiny document on ratio alone below the absolute floor', () => {
-  // 1 bad out of 5 is 20% — well above the ratio threshold — but only 1 failing segment, below
-  // the absolute floor (3), so a small document doesn't hard-fail on one unlucky paragraph.
-  const gate = hardSanityGate(makePairs(4, 1), {});
-  assert.strictEqual(gate.ok, true);
-});
-
-test('hardSanityGate hard-fails when repairStillFailing reaches the absolute count, regardless of ratio', () => {
-  // Otherwise-clean document (0% placeholder ratio) but repairIncompletePairs reported 2
-  // segments that survived BOTH independent repair attempts — a stronger signal than ratio alone.
-  const gate = hardSanityGate(makePairs(20, 0), { repairStillFailing: 2 });
-  assert.strictEqual(gate.ok, false);
-  assert.strictEqual(gate.code, 'repair_still_failing');
-});
-
-test('hardSanityGate passes a clean document with repairStillFailing below the count threshold', () => {
-  const gate = hardSanityGate(makePairs(20, 0), { repairStillFailing: 1 });
-  assert.strictEqual(gate.ok, true);
-});
-
-// SERIOUS CONFIRMED REGRESSION, fixed — findPlaceholder's bare (unbracketed) TBD/TODO/N-A
-// patterns matched completely ordinary, legitimate English business content, not just genuine
-// leftover placeholder markup. Combined with hardSanityGate's lowered hard-fail threshold, a
-// routine document with a few "N/A" form fields could hard-fail entirely (no PDF generated) for
-// content that was translated correctly. None of these three had a "confirmed on a real job"
-// citation like every other entry in PLACEHOLDER_PATTERNS — a red flag they were unverified.
-test('does not flag ordinary business sentences containing TBD or TODO as a placeholder', () => {
-  assert.strictEqual(findPlaceholder('The launch date is still TBD.'), null);
-  assert.strictEqual(findPlaceholder('Please review the TODO list before the meeting.'), null);
-});
-
-test('does not flag a legitimate "N/A" field value as a placeholder', () => {
-  assert.strictEqual(findPlaceholder('N/A'), null);
-  assert.strictEqual(findPlaceholder('Status: N/A'), null);
-  assert.strictEqual(findPlaceholder('Q1 revenue: N/A'), null);
-});
-
-test('still flags the bracketed [TBD]/[TODO] template-marker forms — genuine leftover markup', () => {
-  assert.strictEqual(findPlaceholder('[TBD]'), '[TBD]');
-  assert.strictEqual(findPlaceholder('[TODO]'), '[TODO]');
-});
-
-test('still flags a genuine incomplete-translation marker', () => {
-  assert.strictEqual(findPlaceholder('[Translation incomplete] some text'), '[Translation incomplete]');
-});
-
-// The realistic scenario this whole fix exists for: a routine document with a few legitimate
-// "N/A" cells must not hard-fail just because it crossed the (correctly) tightened threshold.
-test('hardSanityGate does not hard-fail a routine document with legitimate N/A form fields', () => {
-  const pairs = [];
-  for (let i = 0; i < 17; i++) pairs.push({ source: `Field ${i} value`, target: `Valeur du champ ${i}` });
-  for (let i = 0; i < 3; i++) pairs.push({ source: 'Not applicable', target: 'N/A' });
-  const gate = hardSanityGate(pairs, {});
-  assert.strictEqual(gate.ok, true);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

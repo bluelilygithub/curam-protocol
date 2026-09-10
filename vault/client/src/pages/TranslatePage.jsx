@@ -5,7 +5,6 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
-import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts';
 
 // Deployed commit shown on QA/Lessons-learnt reports so a stale build is checkable at a glance
 // instead of re-testing a fix against a report that never actually deployed — see /api/health.
@@ -48,11 +47,26 @@ const PROGRESS_STEP_LABELS = [
   'Generating PDF',
 ];
 
+// Helvetica (react-pdf's built-in default) only covers WinAnsi/Latin-1 — no macrons, no Polish
+// diacritics. Confirmed on a real te reo Māori job: every macron vowel (ā ē ī ō ū) rendered as
+// garbage (missing-glyph substitution), producing mojibake across the whole translated PDF
+// ("TM Mahere" instead of "Tā Mahere", etc.) — invisible in the QA report because the text
+// content itself was correct, only the rendered glyph was wrong. NotoSans-Regular covers Latin
+// Extended-A/B, so 'mi' and 'pl' (ą ę ł ń ś ź ż, also outside Latin-1) route through it too.
+const FONT_BY_LANG = {
+  'zh-CN': '/fonts/NotoSansSC.ttf',
+  'ja':    '/fonts/NotoSansJP.ttf',
+  'ar':    '/fonts/NotoSansArabic.ttf',
+  'ko':    '/fonts/NotoSansJP.ttf', // fallback
+  'mi':    '/fonts/NotoSans-Regular.ttf',
+  'pl':    '/fonts/NotoSans-Regular.ttf',
+};
+
 const ACCEPT_UPLOAD =
-  '.pdf,.docx,.xlsx,.xls,.txt,application/pdf,'
+  '.pdf,.docx,.xlsx,.xls,application/pdf,'
   + 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
   + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
-  + 'application/vnd.ms-excel,text/plain';
+  + 'application/vnd.ms-excel';
 
 function detectUploadKind(file) {
   if (!file) return null;
@@ -64,7 +78,6 @@ function detectUploadKind(file) {
   if (name.endsWith('.xlsx')
     || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
   if (name.endsWith('.xls') || type === 'application/vnd.ms-excel') return 'xls';
-  if (name.endsWith('.txt') || type === 'text/plain') return 'txt';
   return null;
 }
 
@@ -281,12 +294,11 @@ function downloadQaReport(job, qa, appVersion) {
   URL.revokeObjectURL(url);
 }
 
-function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal, onDownloadText, onDownloadSideBySide }) {
+function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal }) {
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
-  const [sideBySideBusy, setSideBySideBusy] = useState(false);
   const addToast = useToastStore(s => s.addToast);
   const appVersion = useAppVersion();
 
@@ -353,19 +365,6 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
                 className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 Download translated PDF
-              </button>
-              <button onClick={() => onDownloadText?.(job)}
-                className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
-                title="Plain-text export of the translation only — no source column, no styling"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                Download plain text
-              </button>
-              <button onClick={async () => { setSideBySideBusy(true); try { await onDownloadSideBySide?.(job); } finally { setSideBySideBusy(false); } }}
-                disabled={sideBySideBusy}
-                className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70 disabled:opacity-50"
-                title="Original and translation in two columns on the same page — built on demand, doesn't change this job's saved PDF"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                {sideBySideBusy ? 'Building…' : 'Download side-by-side PDF'}
               </button>
               {job.hasNativeOutput && (
                 <button onClick={() => onDownloadNative?.(job)}
@@ -825,14 +824,6 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
     });
   };
 
-  // Select-all / clear toggle for a section — flips based on current state (if everything's
-  // already checked, clicking clears instead of re-checking, so it's one button either way).
-  const selectAll = (setSet, items) => {
-    setSet(prev => (prev.size === items.length ? new Set() : new Set(items.map(i => i.id))));
-  };
-
-  const [logOpen, setLogOpen] = useState(false);
-
   // "Confirm as standard" — for a Needs-linguistic-decision item, the reviewer (a human who
   // actually knows the target language) supplies the correct rendering the tool couldn't
   // determine on its own; that becomes a real glossary lock, same destination as Lock/style, just
@@ -843,14 +834,8 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
     if (!job?.targetLanguage) return;
     setConfirming(item.id);
     try {
-      const res = await api.post('/api/translate/lessons/apply', {
-        targetLanguage: job.targetLanguage,
-        terms: [{
-          source: item.source, target: value, disposition: 'Confirmed as standard',
-          note: 'Confirmed as standard from Lessons learnt',
-        }],
-        jobId: job?.id,
-        jobFilename: job?.filename,
+      const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, {
+        terms: [{ source: item.source, target: value, note: 'Confirmed as standard from Lessons learnt' }],
       });
       if (!res.ok) throw new Error('Could not save glossary term');
       addToast(`"${item.source}" → "${value}" locked into the glossary`, 'success');
@@ -871,25 +856,34 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
   const apply = async () => {
     setApplying(true);
     try {
-      const globalLines = global.filter(g => checkedGlobal.has(g.id)).map(g => g.text);
+      let globalDone = 0;
+      let languageDone = 0;
+
+      if (checkedGlobal.size) {
+        const lines = global.filter(g => checkedGlobal.has(g.id)).map(g => `- ${g.text}`);
+        const settingsRes = await api.get('/api/settings');
+        const settings = await settingsRes.json().catch(() => ({}));
+        const existing = settings?.translate_custom_instructions || '';
+        const merged = [existing, lines.join('\n')].filter(Boolean).join('\n\n');
+        const saveRes = await api.post('/api/settings', { key: 'translate_custom_instructions', value: merged });
+        if (!saveRes.ok) throw new Error('Could not save global instructions');
+        globalDone = checkedGlobal.size;
+      }
+
       const checkedTerms = [
-        ...dnt.filter(d => checkedDnt.has(d.id)).map(d => ({ ...d.term, disposition: d.disposition })),
-        ...lock.filter(l => checkedLock.has(l.id)).map(l => ({ ...l.term, disposition: l.disposition })),
-        ...style.filter(s => checkedStyle.has(s.id)).map(s => ({ ...s.term, disposition: s.disposition })),
-      ];
-      const res = await api.post('/api/translate/lessons/apply', {
-        targetLanguage: job?.targetLanguage,
-        globalLines,
-        terms: checkedTerms,
-        jobId: job?.id,
-        jobFilename: job?.filename,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not apply selected items');
+        ...dnt.filter(d => checkedDnt.has(d.id)),
+        ...lock.filter(l => checkedLock.has(l.id)),
+        ...style.filter(s => checkedStyle.has(s.id)),
+      ].map(l => l.term);
+      if (checkedTerms.length && job?.targetLanguage) {
+        const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, { terms: checkedTerms });
+        if (!res.ok) throw new Error('Could not save glossary terms');
+        languageDone = checkedTerms.length;
+      }
 
       const parts = [];
-      if (data.globalApplied) parts.push(`${data.globalApplied} added to global instructions`);
-      if (data.termsApplied) parts.push(`${data.termsApplied} added to ${job?.targetLanguage || 'language'} glossary`);
+      if (globalDone) parts.push(`${globalDone} added to global instructions`);
+      if (languageDone) parts.push(`${languageDone} added to ${job?.targetLanguage || 'language'} glossary`);
       addToast(parts.length ? parts.join(' · ') : 'Nothing selected', parts.length ? 'success' : 'error');
       if (parts.length) onClose();
     } catch (e) {
@@ -902,16 +896,9 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
   return (
     <Modal title="Lessons learnt" onClose={onClose} wide>
       <div className="flex flex-col gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }} title="Deployed commit this checklist's grouping/severity/disposition logic ran on — check this before re-testing a fix against a stale build">
-            Agent build: {appVersion || 'checking…'}
-          </p>
-          <button onClick={() => setLogOpen(true)}
-            className="text-xs font-medium hover:opacity-70 shrink-0"
-            style={{ color: 'var(--color-primary)' }}>
-            View lessons log
-          </button>
-        </div>
+        <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }} title="Deployed commit this checklist's grouping/severity/disposition logic ran on — check this before re-testing a fix against a stale build">
+          Agent build: {appVersion || 'checking…'}
+        </p>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Findings from this job's QA review, grouped by root cause with a recommended action per
           item. Checkable items add to the shared instruction prompt or the{' '}
@@ -925,12 +912,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
           <>
             {dnt.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold">Do-not-translate rules — {dnt.length}</p>
-                  <button onClick={() => selectAll(setCheckedDnt, dnt)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-                    {checkedDnt.size === dnt.length ? 'Clear' : 'Select all'}
-                  </button>
-                </div>
+                <p className="text-xs font-semibold mb-2">Do-not-translate rules — {dnt.length}</p>
                 <ul className="space-y-2">
                   {dnt.map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -961,14 +943,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             )}
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">Global suggestions (instruction prompt) — {global.length}</p>
-                {global.length > 0 && (
-                  <button onClick={() => selectAll(setCheckedGlobal, global)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-                    {checkedGlobal.size === global.length ? 'Clear' : 'Select all'}
-                  </button>
-                )}
-              </div>
+              <p className="text-xs font-semibold mb-2">Global suggestions (instruction prompt) — {global.length}</p>
               {global.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -987,16 +962,9 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">
-                  Lock into glossary ({job?.targetLanguage || '—'}) — {lock.length}
-                </p>
-                {lock.length > 0 && (
-                  <button onClick={() => selectAll(setCheckedLock, lock)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-                    {checkedLock.size === lock.length ? 'Clear' : 'Select all'}
-                  </button>
-                )}
-              </div>
+              <p className="text-xs font-semibold mb-2">
+                Lock into glossary ({job?.targetLanguage || '—'}) — {lock.length}
+              </p>
               {lock.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -1020,16 +988,9 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">
-                  Regional/style choices to lock ({job?.targetLanguage || '—'}) — {style.length}
-                </p>
-                {style.length > 0 && (
-                  <button onClick={() => selectAll(setCheckedStyle, style)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-                    {checkedStyle.size === style.length ? 'Clear' : 'Select all'}
-                  </button>
-                )}
-              </div>
+              <p className="text-xs font-semibold mb-2">
+                Regional/style choices to lock ({job?.targetLanguage || '—'}) — {style.length}
+              </p>
               {style.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -1053,15 +1014,11 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             {driftEnforcement.length > 0 && (
-              <details>
-                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
-                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit
-                </summary>
-                {driftFreq && (
-                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-                    Ignore one-offs; a "seen in N jobs" badge means it's a real pattern, not this job's noise.
-                  </p>
-                )}
+              <div>
+                <p className="text-xs font-semibold mb-2">
+                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit.{' '}
+                  {driftFreq && <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}>Ignore one-offs; a "seen in N jobs" badge means it's a real pattern, not this job's noise.</span>}
+                </p>
                 <ul className="space-y-1.5">
                   {[...driftEnforcement].sort((a, b) => freqFor(b.source) - freqFor(a.source)).map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -1074,7 +1031,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
                     </li>
                   ))}
                 </ul>
-              </details>
+              </div>
             )}
 
             {driftLinguistic.length > 0 && (
@@ -1118,10 +1075,10 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             )}
 
             {alreadyStandard.length > 0 && (
-              <details>
-                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
+              <div>
+                <p className="text-xs font-semibold mb-2">
                   Already in glossary ({alreadyStandard.length}) — no action needed
-                </summary>
+                </p>
                 <ul className="space-y-1.5">
                   {alreadyStandard.map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -1133,7 +1090,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
                     </li>
                   ))}
                 </ul>
-              </details>
+              </div>
             )}
 
             <div className="flex justify-end">
@@ -1146,134 +1103,13 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
           </>
         )}
       </div>
-      {logOpen && <LessonsLogModal defaultLanguage={job?.targetLanguage} onClose={() => setLogOpen(false)} />}
-    </Modal>
-  );
-}
-
-// Audit trail for everything applied via "Lessons learnt" — the apply action itself only writes
-// to a free-text Settings blob (global) or a learned glossary's term list (per language), neither
-// of which carries history. This reads translate_lessons_log, one row per applied item, so
-// "what did we apply, and when" doesn't require reconstructing it from a growing text blob and
-// term `note` fields.
-function LessonsLogModal({ defaultLanguage, onClose }) {
-  const [scope, setScope] = useState('all'); // 'all' | 'global' | 'language'
-  const [lang, setLang] = useState(defaultLanguage || '');
-  const [rows, setRows] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    setRows(null);
-    setError('');
-    const params = new URLSearchParams();
-    if (scope !== 'all') params.set('scope', scope);
-    if (scope !== 'global' && lang) params.set('targetLanguage', lang);
-    api.get(`/api/translate/lessons?${params.toString()}`)
-      .then(r => r.json())
-      .then(setRows)
-      .catch(() => setError('Could not load the lessons log'));
-  }, [scope, lang]);
-
-  return (
-    <Modal title="Lessons log" onClose={onClose} wide>
-      <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Every item ever applied from a "Lessons learnt" panel, newest first — global instruction
-          lines and per-language glossary locks, each with the job it came from.
-        </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="w-44">
-            <Sel value={scope} onChange={setScope}>
-              <option value="all">All</option>
-              <option value="global">Global rules only</option>
-              <option value="language">Language locks only</option>
-            </Sel>
-          </div>
-          {scope !== 'global' && (
-            <div className="w-44">
-              <Sel value={lang} onChange={setLang}>
-                <option value="">Any language</option>
-                {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
-              </Sel>
-            </div>
-          )}
-        </div>
-
-        {error && <p className="text-xs" style={{ color: '#dc2626' }}>{error}</p>}
-        {!error && rows === null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
-        {!error && rows && rows.length === 0 && (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing applied yet for this filter.</p>
-        )}
-        {!error && rows && rows.length > 0 && (
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                  {['Date', 'Scope', 'Disposition', 'Applied', 'Job'].map(h => (
-                    <th key={h} className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
-                      {new Date(r.createdAt).toLocaleDateString('en-AU')}
-                    </td>
-                    <td className="px-2 py-1.5 whitespace-nowrap">
-                      {r.scope === 'global' ? 'Global' : (LANGUAGES.find(l => l.code === r.targetLanguage)?.label || r.targetLanguage)}
-                    </td>
-                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-primary)' }}>{r.disposition}</td>
-                    <td className="px-2 py-1.5">
-                      {r.sourceTerm ? <strong>"{r.sourceTerm}"{r.targetTerm ? ` → "${r.targetTerm}"` : ''}</strong> : null}
-                      {r.detail && <div style={{ color: r.sourceTerm ? 'var(--color-muted)' : 'var(--color-text)' }}>{r.detail}</div>}
-                    </td>
-                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }} title={r.jobFilename || ''}>
-                      {r.jobId ? `#${r.jobId}` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </Modal>
   );
 }
 
 // ── PDF generation (client-side) ──────────────────────────────────────────────
-// Font-selection logic lives in translatePdfFonts.js (plain JS, unit-tested with node — see
-// translatePdfFonts.test.js) so the font-fallback regression it guards against (mi → en font
-// selection checking target only, missing that source needed Noto) can be tested without a
-// bundler/JSX. Imported here, not duplicated, so the test suite verifies the logic this page
-// actually runs.
-// react-pdf/textkit runs every word through a hyphenation callback to compute line-wrap
-// candidates — by default an English-syllable hyphenator. Fed a word in a language it
-// doesn't recognise (te reo Māori, Polish, etc.), it can split and reconstruct the word
-// wrong, corrupting letters around the break — not only at actual wrap points, since the
-// callback also runs during width-fitting for words that never end up wrapping. Confirmed
-// on a real mi → en job: "Māori" rendered as "M ori" and "Kōhanga" as "KMhanga" throughout
-// the PDF even though the correct Noto font was already selected and its glyphs are all
-// present — the corruption was happening in text-layout, not glyph rendering. Disabling
-// hyphenation (treat every word as unbreakable) removes the callback from the picture
-// entirely. Registered once; @react-pdf de-dupes repeat calls internally. This is a
-// module-level Font singleton local to THIS bundle — server-side PDF generators
-// (textToPdf.js, webExtractorPdf.js, propertyScenarioPdf.js, invoicePdf.js) are separate
-// processes and each needs (or already has) its own registerHyphenationCallback call; this
-// one only protects client-side renders in this page.
-let hyphenationDisabled = false;
-function disableHyphenation() {
-  if (hyphenationDisabled) return;
-  hyphenationDisabled = true;
-  try {
-    Font.registerHyphenationCallback((word) => [word]);
-  } catch {}
-}
-
-async function registerFonts(targetLanguage, sourceLanguage) {
-  disableHyphenation();
-  const fontUrl = pickPdfFontUrl(targetLanguage, sourceLanguage);
+async function registerFonts(targetLanguage) {
+  const fontUrl = FONT_BY_LANG[targetLanguage];
   if (!fontUrl) return;
   try {
     Font.register({ family: 'NotoTarget', src: fontUrl });
@@ -1284,7 +1120,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf',
     pdfLayout = 'side-by-side' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
-  const useNoto = needsNotoFont(targetLanguage, sourceLanguage);
+  const useNoto = !!FONT_BY_LANG[targetLanguage];
   const layout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(pdfLayout)
     ? pdfLayout
     : 'side-by-side';
@@ -1418,19 +1254,9 @@ function TranslationsTab({ glossaries }) {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [file, setFile]             = useState(null);
   const [dragOver, setDragOver]     = useState(false);
-  const [pasteMode, setPasteMode]   = useState(false);
-  const [pasteText, setPasteText]   = useState('');
   // Target language is a Settings-level choice (Settings → AI & Chat → Translate agent), not
   // picked per job — loaded once below and used read-only here.
   const [targetLang, setTargetLang] = useState('fr');
-  // Confirmed real bug: the workspace-default fetch below used to overwrite targetLang
-  // unconditionally whenever it resolved — if a user picked a language quickly and that fetch
-  // resolved a beat later (ordinary network timing, not a rare edge case), their manual
-  // selection was silently reverted to the workspace default right before they submitted, with
-  // no visual indication anything changed ("I selected English but it did French"). This ref
-  // tracks whether the user has manually changed the dropdown since mount, so the settings
-  // fetch's default only applies before that point, never after.
-  const targetLangTouchedRef = useRef(false);
   const [languageOptions, setLanguageOptions] = useState(LANGUAGES); // admin-orderable, see Settings → Translate agent
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
@@ -1460,20 +1286,8 @@ function TranslationsTab({ glossaries }) {
   const [deletingId, setDeletingId] = useState(null);
   const fileRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
-  // { jobId, intervalId } — scoped to the job it was started for, not just a bare interval id, so
-  // a second job's poll (started before the first job's generateAndUploadPdf finally-block runs)
-  // can't have its active/processing state incorrectly cleared by the first job's completion.
   const pollRef = useRef(null);
-  const activeJobIdRef = useRef(null); // live mirror of activeJobId, for async closures that need the current value, not the one captured at call time
-  const pollFailureCountRef = useRef(0);
-  const stallWarnedForJobRef = useRef(null); // jobId we've already shown the stall toast for, so it doesn't repeat every poll
   const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
-
-  useEffect(() => { activeJobIdRef.current = activeJobId; }, [activeJobId]);
-
-  // Well above normal chunk/repair latency (TRANSLATE_CALL_TIMEOUT_MS is 45s per call, with up to
-  // several retry/split levels) but short enough to actually flag a real stall promptly.
-  const STALL_THRESHOLD_MS = 3 * 60 * 1000;
 
   const loadJobs = useCallback(() => {
     api.get('/api/translate/jobs').then(r => r.json()).then(setJobs).catch(() => {})
@@ -1500,7 +1314,7 @@ function TranslationsTab({ glossaries }) {
       }
     }).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then((s) => {
-      if (s.translate_target_language && !targetLangTouchedRef.current) setTargetLang(s.translate_target_language);
+      if (s.translate_target_language) setTargetLang(s.translate_target_language);
     }).catch(() => {});
     api.get('/api/settings/translate-language-order').then(r => r.json()).then((d) => {
       if (Array.isArray(d.order) && d.order.length) setLanguageOptions(orderLanguages(d.order));
@@ -1566,18 +1380,6 @@ function TranslationsTab({ glossaries }) {
         return;
       }
 
-      if (kind === 'txt') {
-        setPreflight({
-          kind: 'txt',
-          pageCount: 1,
-          scannedCount: 0,
-          scannedImages: {},
-          unitLabel: 'document',
-          summary: 'Plain text — sent to the server as-is',
-        });
-        return;
-      }
-
       addToast('Unsupported file type', 'error');
       setFile(null);
     } catch (e) {
@@ -1592,20 +1394,12 @@ function TranslationsTab({ glossaries }) {
     if (!f) return;
     const kind = detectUploadKind(f);
     if (!kind) {
-      addToast('Please select a PDF, Word (.docx), Excel (.xlsx), or text (.txt) file', 'error');
+      addToast('Please select a PDF, Word (.docx), or Excel (.xlsx) file', 'error');
       return;
     }
     if (f.size > 5 * 1024 * 1024) { addToast('File exceeds 5 MB limit', 'error'); return; }
     setFile(f);
     runPreflight(f);
-  };
-
-  const usePastedText = () => {
-    if (!pasteText.trim()) return;
-    const blob = new Blob([pasteText], { type: 'text/plain' });
-    const f = new File([blob], 'pasted-text.txt', { type: 'text/plain' });
-    setPasteMode(false);
-    handleFileSelect(f);
   };
 
   const handleDrop = (e) => {
@@ -1672,34 +1466,12 @@ function TranslationsTab({ glossaries }) {
   // (e.g. Property Scenario).
   useEffect(() => {
     if (!activeJobId) return;
-    if (pollRef.current) clearInterval(pollRef.current.intervalId);
-    pollFailureCountRef.current = 0;
-    stallWarnedForJobRef.current = null;
-    const thisJobId = activeJobId;
-    const intervalId = setInterval(async () => {
-      let res;
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
       try {
-        res = await api.get(`/api/translate/jobs/${thisJobId}/status`);
-        if (!res.ok) throw new Error(`status ${res.status}`);
+        const res  = await api.get(`/api/translate/jobs/${activeJobId}/status`);
         const data = await res.json();
-        pollFailureCountRef.current = 0;
         setActiveJob(data);
-
-        // Stall detection — a hung server-side job (e.g. an LLM call the cancellation
-        // checkpoints don't cover mid-call) otherwise reports the same stage/percent forever
-        // with nothing to tell a real stall apart from ordinary slow progress. lastProgressAt is
-        // bumped on every server-side setJobStatus write, so comparing against it (rather than
-        // just "haven't heard from the poll") catches a stall even though polling itself is fine.
-        if (data.lastProgressAt) {
-          const staleMs = Date.now() - new Date(data.lastProgressAt).getTime();
-          if (staleMs > STALL_THRESHOLD_MS && stallWarnedForJobRef.current !== thisJobId) {
-            stallWarnedForJobRef.current = thisJobId;
-            addToast(
-              `This job hasn't reported progress in over ${Math.round(STALL_THRESHOLD_MS / 60000)} minutes — it may be stuck. You can cancel it below.`,
-              'error',
-            );
-          }
-        }
 
         const stageIdx = PROGRESS_STAGE_ORDER.indexOf(data.status) - 1;
         if (stageIdx >= 0) {
@@ -1713,30 +1485,20 @@ function TranslationsTab({ glossaries }) {
           : null);
 
         if (data.status === 'generating' && data.translatedTextJson && !generatingPdf) {
-          clearInterval(intervalId);
+          clearInterval(pollRef.current);
           generateAndUploadPdf(data);
         }
         if (data.status === 'failed' || data.status === 'done' || data.status === 'cancelled') {
-          clearInterval(intervalId);
+          clearInterval(pollRef.current);
           stopProcessing();
           setActiveJobId(null);
           if (data.status === 'failed') addToast(data.errorMessage || 'Translation failed', 'error');
           if (data.status === 'cancelled') addToast('Translation cancelled');
           loadJobs();
         }
-      } catch {
-        // Transient poll failures (network blip, momentary 500, malformed body) are common enough
-        // not to surface on the first miss — but silently retrying forever with zero feedback
-        // hides a genuine "lost contact with the server" case. Surface it once after a few misses
-        // in a row rather than on every single failed tick.
-        pollFailureCountRef.current += 1;
-        if (pollFailureCountRef.current === 3) {
-          addToast('Having trouble checking this job\'s status — will keep retrying.', 'error');
-        }
-      }
+      } catch {}
     }, 2000);
-    pollRef.current = { jobId: thisJobId, intervalId };
-    return () => clearInterval(intervalId);
+    return () => clearInterval(pollRef.current);
   }, [activeJobId, generatingPdf]);
 
   const cancelJob = async (jobId) => {
@@ -1747,7 +1509,7 @@ function TranslationsTab({ glossaries }) {
         throw new Error(body.error || 'Could not cancel — it may have already finished');
       }
       if (jobId === activeJobId) {
-        if (pollRef.current) clearInterval(pollRef.current.intervalId);
+        clearInterval(pollRef.current);
         stopProcessing();
         setActiveJobId(null);
       }
@@ -1789,7 +1551,7 @@ function TranslationsTab({ glossaries }) {
 
       if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
 
-      await registerFonts(jobData.targetLanguage, jobData.sourceLanguage);
+      await registerFonts(jobData.targetLanguage);
       const doc = buildBilingualPdf({
         ...payload,
         sourceLanguage: jobData.sourceLanguage,
@@ -1804,53 +1566,15 @@ function TranslationsTab({ glossaries }) {
       addToast('Translation complete — ready to download', 'success');
     } catch (e) {
       addToast('PDF generation failed: ' + e.message, 'error');
-      // Mark failed on server via the dedicated status endpoint. If THIS call also fails (e.g.
-      // the same network issue caused both), the job is left stuck in 'generating' status
-      // server-side with no client-side poll watching it anymore — see the "Retry PDF
-      // generation" action in the jobs table, which re-runs just this client step from the
-      // already-persisted translatedTextJson (no re-translation, no LLM cost) for exactly that
-      // orphaned case.
+      // Mark failed on server via the dedicated status endpoint
       api.postForm(`/api/translate/jobs/${jobData.id}/fail`, (() => {
         const fd = new FormData(); fd.append('error', e.message); return fd;
       })()).catch(() => {});
-      loadJobs();
     } finally {
       setGeneratingPdf(false);
-      // Guard against a race: if a second job was started (and became the tracked active job)
-      // while this job's PDF generation was still in flight, this job's completion must not
-      // clear the SECOND job's active/processing state. Compare against the live ref, not the
-      // activeJobId value captured in this function's closure at call time.
-      if (activeJobIdRef.current === jobData.id || pollRef.current?.jobId === jobData.id) {
-        setActiveJobId(null);
-        setActiveJob(null);
-        stopProcessing();
-      }
-    }
-  };
-
-  // A job can be found in server-side 'generating' status with no client actively tracking it —
-  // e.g. PDF generation threw AND the subsequent /fail notification also failed (same root-cause
-  // network issue for both), or the tab was closed mid-generation. Polling for that job already
-  // stopped client-side (the poll effect clears its interval as soon as it sees 'generating'), so
-  // nothing revisits it on its own. Re-fetches the job's already-persisted translatedTextJson and
-  // re-runs just the client PDF step — no re-translation, no LLM cost.
-  const retryPdfGeneration = async (job) => {
-    try {
-      const res = await api.get(`/api/translate/jobs/${job.id}/status`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load this job');
-      if (!data.translatedTextJson) throw new Error('This job has no saved translation to rebuild the PDF from');
-      startProcessing('Rebuilding PDF…', 'Retrying PDF generation for a job that got stuck.', {
-        steps: PROGRESS_STEP_LABELS,
-      });
-      // Set synchronously (not just via setActiveJobId, which only updates the ref on next
-      // render) so generateAndUploadPdf's own finally-block race guard recognizes this job as
-      // the one to clear processing state for once it's done.
-      activeJobIdRef.current = job.id;
-      setActiveJobId(job.id);
-      await generateAndUploadPdf(data);
-    } catch (e) {
-      addToast(e.message, 'error');
+      setActiveJobId(null);
+      setActiveJob(null);
+      stopProcessing();
     }
   };
 
@@ -1906,124 +1630,49 @@ function TranslationsTab({ glossaries }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
-  const downloadTextJob = async (job) => {
-    try {
-      const res = await api.get(`/api/translate/jobs/${job.id}/download-text`);
-      if (!res.ok) throw new Error('Text not available for this job');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `translated-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) { addToast(e.message, 'error'); }
-  };
-
-  // Side-by-side (original + translation in two columns) was removed as a job-intake choice —
-  // see the "PDF layout" radio buttons above, which only offer "Separate translated document" or
-  // "Bilingual pages" for new jobs. Restored here as an on-demand rebuild from a job's already
-  // -persisted translatedTextJson instead of a job-creation setting: doesn't touch this job's own
-  // saved PDF (translated-${...}.pdf via Download translated PDF stays whatever layout the job
-  // was actually run with) or re-run any translation — pure client-side re-render of already
-  // -translated text into a different layout, downloaded directly, no server write at all.
-  const downloadSideBySidePdf = async (job) => {
-    try {
-      const res = await api.get(`/api/translate/jobs/${job.id}/status`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load this job');
-      if (!data.translatedTextJson) throw new Error('This job has no saved translation to build a PDF from');
-      const payload = typeof data.translatedTextJson === 'string'
-        ? JSON.parse(data.translatedTextJson)
-        : data.translatedTextJson;
-      if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
-
-      await registerFonts(data.targetLanguage, data.sourceLanguage);
-      const doc = buildBilingualPdf({
-        ...payload,
-        sourceLanguage: data.sourceLanguage,
-        targetLanguage: data.targetLanguage,
-        pdfLayout: 'side-by-side',
-      });
-      const blob = await pdf(doc).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `side-by-side-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) { addToast(e.message, 'error'); }
-  };
 
   return (
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
 
       {/* Upload zone */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>New Translation</h2>
-          {!file && (
-            <button
-              onClick={() => setPasteMode(m => !m)}
-              className="text-xs font-medium hover:opacity-70"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              {pasteMode ? 'Upload a file instead' : 'Paste text instead'}
-            </button>
+        <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>New Translation</h2>
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => !file && fileRef.current?.click()}
+          className="rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer"
+          style={{
+            borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
+            background:  dragOver ? 'rgba(var(--color-primary-rgb, 99,102,241),0.04)' : 'var(--color-surface)',
+          }}
+        >
+          <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden"
+            onChange={e => handleFileSelect(e.target.files[0])} />
+          {!file ? (
+            <>
+              <div className="text-3xl mb-2">🌐</div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                Drop a PDF, Word, or Excel file here — or click to browse
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Max 5 MB · PDF · .docx · .xlsx · scanned PDFs supported via OCR
+              </p>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-2xl">📄</div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                {(file.size / 1024 / 1024).toFixed(1)} MB
+                {detectUploadKind(file) ? ` · ${detectUploadKind(file).toUpperCase()}` : ''}
+              </p>
+              <button onClick={e => { e.stopPropagation(); setFile(null); setPreflight(null); }}
+                className="text-xs" style={{ color: 'var(--color-muted)' }}>Remove</button>
+            </div>
           )}
         </div>
-
-        {!file && pasteMode ? (
-          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <textarea
-              value={pasteText}
-              onChange={e => setPasteText(e.target.value)}
-              placeholder="Paste the text you want translated…"
-              className="w-full text-sm px-3 py-2 rounded-lg border outline-none"
-              style={{ minHeight: 220, resize: 'vertical', background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            <div className="flex justify-end mt-3">
-              <Btn onClick={usePastedText} disabled={!pasteText.trim()}>Use this text</Btn>
-            </div>
-          </div>
-        ) : (
-          <div
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => !file && fileRef.current?.click()}
-            className="rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer"
-            style={{
-              borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
-              background:  dragOver ? 'rgba(var(--color-primary-rgb, 99,102,241),0.04)' : 'var(--color-surface)',
-            }}
-          >
-            <input ref={fileRef} type="file" accept={ACCEPT_UPLOAD} className="hidden"
-              onChange={e => handleFileSelect(e.target.files[0])} />
-            {!file ? (
-              <>
-                <div className="text-3xl mb-2">🌐</div>
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                  Drop a PDF, Word, Excel, or text file here — or click to browse
-                </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                  Max 5 MB · PDF · .docx · .xlsx · .txt · scanned PDFs supported via OCR
-                </p>
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div className="text-2xl">📄</div>
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</p>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                  {(file.size / 1024 / 1024).toFixed(1)} MB
-                  {detectUploadKind(file) ? ` · ${detectUploadKind(file).toUpperCase()}` : ''}
-                </p>
-                <button onClick={e => { e.stopPropagation(); setFile(null); setPreflight(null); setPasteText(''); }}
-                  className="text-xs" style={{ color: 'var(--color-muted)' }}>Remove</button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Preflight info + options */}
@@ -2065,7 +1714,7 @@ function TranslationsTab({ glossaries }) {
                       : languageOptions.find(l => l.code === targetLang)?.lowResource
                         ? '⚠ Lower-quality output expected — sparse training examples for this language.'
                         : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
-                    <Sel value={targetLang} onChange={(v) => { targetLangTouchedRef.current = true; setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
+                    <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
                       {languageOptions.map(l => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
                     </Sel>
                   </Field>
@@ -2298,14 +1947,6 @@ function TranslationsTab({ glossaries }) {
                               Cancel
                             </button>
                           )}
-                          {job.status === 'generating' && job.id !== activeJobId && (
-                            <button onClick={() => retryPdfGeneration(job)} disabled={generatingPdf}
-                              className="text-xs px-2 py-1 rounded border"
-                              title="This job's translation finished, but building the PDF failed or was interrupted — retry it without re-translating"
-                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
-                              Retry PDF generation
-                            </button>
-                          )}
                           {job.hasNativeOutput && (
                             <button onClick={() => downloadNativeJob(job)}
                               className="text-xs px-2 py-1 rounded border"
@@ -2339,8 +1980,7 @@ function TranslationsTab({ glossaries }) {
 
       {qaJob && (
         <QaPanel qa={parseQa(qaJob)} job={qaJob} onClose={() => setQaJob(null)}
-          onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob}
-          onDownloadText={downloadTextJob} onDownloadSideBySide={downloadSideBySidePdf} />
+          onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob} />
       )}
     </div>
   );
@@ -2352,7 +1992,6 @@ function GlossariesTab({ glossaries, setGlossaries }) {
   const [form, setForm]       = useState({ name: '', terms: [] });
   const [saving, setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(null);
-  const [logOpen, setLogOpen] = useState(false);
   const addToast = useToastStore(s => s.addToast);
   const csvRef = useRef(null);
 
@@ -2421,15 +2060,8 @@ function GlossariesTab({ glossaries, setGlossaries }) {
     <div className="p-6 max-w-3xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Glossaries</h2>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setLogOpen(true)} className="text-sm font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-            View lessons log
-          </button>
-          <Btn onClick={openNew}>New Glossary</Btn>
-        </div>
+        <Btn onClick={openNew}>New Glossary</Btn>
       </div>
-
-      {logOpen && <LessonsLogModal onClose={() => setLogOpen(false)} />}
 
       {glossaries.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
@@ -2596,7 +2228,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>How a job runs</p>
             <ul className="space-y-1.5 list-disc list-inside text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
-              <li>Upload a PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt) file — up to 5 MB. Or paste text directly instead of uploading a file.</li>
+              <li>Upload a PDF, Word (.docx), or Excel (.xlsx/.xls) file — up to 5 MB.</li>
               <li>Pick a target language (defaults from Settings → AI & Chat → Translate agent, overridable per job) and answer a few intake questions (domain, audience, tone) — these shape the translation, not just the glossary.</li>
               <li>Choose an engine: <strong>Vault LLM</strong> (slower, better for tone/glossaries/te reo Māori policy) or <strong>Google Translate</strong> (fast drafts, common languages).</li>
               <li>Optionally enable a second-model QA review pass before the job finishes.</li>

@@ -71,22 +71,12 @@ function languagePolicyBlock(targetLanguage, intakeAnswers = {}) {
   return '';
 }
 
-// Dedup key normalizes to NFKC before lowercasing — the same visible macron'd word can arrive as
-// either a single precomposed codepoint (e.g. "ō" = U+014D) or a base letter + combining
-// diacritic (base "o" + U+0304 combining macron), which render identically but are different
-// strings to plain .toLowerCase(). OCR output is a plausible source of the decomposed form.
-// Without normalizing first, two entries for what's visually the same term wouldn't dedupe —
-// silently doubling glossary entries over time instead of merging them.
-function normalizeTermKey(source) {
-  return String(source).normalize('NFKC').toLowerCase();
-}
-
 function mergeGlossaryTerms(...lists) {
   const bySource = new Map();
   for (const list of lists) {
     for (const t of list || []) {
       if (!t?.source) continue;
-      const key = normalizeTermKey(t.source);
+      const key = String(t.source).toLowerCase();
       if (!bySource.has(key)) bySource.set(key, t);
     }
   }
@@ -126,104 +116,6 @@ function buildGlossaryBlock(terms) {
 
 function finalizeTranslation(source, target) {
   return enforceRedactionPassThrough(source, String(target || '').trim());
-}
-
-/**
- * The glossary-proposing LLM call occasionally degenerates on a "X / Y"-style bilingual gloss —
- * instead of "treasure / cherished taonga" it can produce "treasure / cherished treasure /
- * cherished treasure / cherished taonga", repeating its own alternatives several times over.
- * Confirmed on a real te reo Māori job: this happened for multiple terms in one glossary
- * (taonga, iwi), and since applyGlossarySubstitutions pastes a term's target in verbatim
- * wherever the source occurs (by design — "obey the glossary exactly"), the garbled target
- * propagated into the final translated PDF unchanged, reading as a broken machine-translation
- * artefact rather than a clean two-way gloss. Collapses to the first and last distinct
- * "/"-separated alternatives (usually the plain-English gloss and the original-language term),
- * dropping any repeated middle segments. A normal 1-2 alternative target passes through
- * untouched. Applied both where glossary terms are parsed (new proposals) and where they're
- * used for substitution (defence in depth against an already-corrupted term saved from a
- * pre-fix job, e.g. via the global/learned glossary).
- */
-function collapseRepeatedGlossaryTarget(target) {
-  const raw = String(target || '').trim();
-  const parts = raw.split(/\s*\/\s*/).map((s) => s.trim()).filter(Boolean);
-  if (parts.length <= 2) return raw;
-  const seen = new Set();
-  const unique = [];
-  for (const p of parts) {
-    const key = p.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(p);
-  }
-  if (unique.length <= 2) return unique.join(' / ');
-  return [unique[0], unique[unique.length - 1]].join(' / ');
-}
-
-/**
- * General repetition-loop guard for TRANSLATED TEXT itself (not just a glossary term's target
- * field) — collapses a "phrase / phrase / phrase..." run where the SAME multi-word phrase
- * repeats consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from
- * (and not fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's
- * *target field*, but this corruption was the translator model's own raw prose output —
- * independently generating a repetition-loop ("treasure / cherished treasure / cherished
- * treasure / cherished taonga") rather than leaking an untranslated term that
- * applyGlossarySubstitutions would catch. Likely nudged by the glossary block's own "X / Y"
- * bilingual-gloss instruction pattern — a known LLM degeneration mode (repeating a template it
- * was just shown). Applied as a final pass on every translated segment, catching the loop
- * regardless of which stage produced it.
- *
- * SERIOUS CONFIRMED REGRESSION, now fixed: an earlier version of this function collapsed on ANY
- * repeated segment, single words/tokens included, on the theory that a real "X / Y" gloss always
- * has two DIFFERENT alternatives so an identical repeat could never be legitimate. That's true
- * for a bilingual GLOSS specifically, but this function runs on *all* translated text — and a
- * short single-token value repeating in an ordinary table/list ("Pass / Pass / Pass / Fail",
- * "0 / 0 / 0 / 0 / 12", "A / A / B / A") is completely normal real data, not a degeneration
- * artefact, and got its repeated values SILENTLY DELETED. Every confirmed real bug case (the
- * only evidence this function was ever built from) involved a MULTI-WORD phrase ("cherished
- * treasure"), never a bare short token — restricting collapsing to phrases containing at least
- * one space fixes the data-loss false positive. Trade-off: a single-word duplicate gloss
- * ("iwi / tribe / tribe") is no longer auto-collapsed — an accepted, much smaller cost than
- * silently destroying real user data. "a / b / c" (no repeats) and "research / studies"
- * (genuinely different alternatives) pass through untouched either way.
- */
-function collapseRepeatedPhraseLoops(text) {
-  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){1,}/gi, (m, seg) => {
-    if (!/\s/.test(seg.trim())) return m; // single-token repeat — leave real data alone
-    return seg;
-  });
-}
-
-function sanitizeGlossaryTermList(list) {
-  return (Array.isArray(list) ? list : []).map((t) => (
-    t?.target ? { ...t, target: collapseRepeatedGlossaryTarget(t.target) } : t
-  ));
-}
-
-// Word-boundary-safe existence check — same pattern applyGlossarySubstitutions itself uses to
-// anchor matches (\b alone doesn't reliably bound accented characters).
-function wordExistsInText(word, text) {
-  const escaped = String(word || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (!escaped) return false;
-  return new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'iu').test(String(text || ''));
-}
-
-/**
- * Drops any glossary term whose `source` doesn't verbatim occur (word-boundary-safe) anywhere in
- * the source text — a guard against the glossary-proposing LLM hallucinating a term that isn't a
- * real word at all. Confirmed on a real te reo Māori QA report: terms like "ōrero", "ānui",
- * "ītori", "ātou" were locked into the glossary and then flagged as an "enforcement gap" ("seen
- * in 9 jobs") because most rows "didn't use" the locked rendering — but those aren't real words;
- * they're truncated fragments of "kōrero", "whānui", "hītori", "rātou" (the same dropped-leading-
- * consonant-before-a-macron-vowel LLM generation defect documented elsewhere in this file). No
- * amount of "enforcement" can make a translator consistently use a rendering for a word that
- * doesn't occur in the document — the fix is to never lock a term that isn't real, not to chase
- * a reliability bug that doesn't exist. Applied to `terms` and `lockedTerms` (the ENFORCED
- * lists) — not `uncertainTerms`/`dialectalChoices`, which are informational QA flags, not
- * substitution-driving, so a bad entry there is lower-stakes noise rather than a false "locked
- * but never enforced" signal.
- */
-function dropHallucinatedTerms(list, sourceSkim) {
-  return (Array.isArray(list) ? list : []).filter((t) => t?.source && wordExistsInText(t.source, sourceSkim));
 }
 
 
@@ -296,17 +188,9 @@ Rules:
   }
 
   const parsed = parseModelJson(res.text) || {};
-  const terms = dropHallucinatedTerms(
-    sanitizeGlossaryTermList(Array.isArray(parsed.terms) ? parsed.terms : []),
-    sourceSkim,
-  );
-  const lockedTerms = dropHallucinatedTerms(
-    sanitizeGlossaryTermList(
-      (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
-        .filter((t) => t?.source && (t.doNotTranslate || t.target))
-    ),
-    sourceSkim,
-  );
+  const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
+  const lockedTerms = (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
+    .filter((t) => t?.source && (t.doNotTranslate || t.target));
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
     terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(sourceSkim), existingTerms || [], terms, lockedTerms),
@@ -331,18 +215,6 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Unicode-safe "whole phrase" boundary — plain `\b` doesn't fire before/after an accented/macron'd
-// character (e.g. "Ōtākou"), so `\bterm\b` silently never matches a term starting or ending with
-// one. Confirmed on a real job: this exact gap in reportGlossaryDrift/autoFixGlossaryDrift/
-// autoFixPartialReoTermDrift meant drift on a macron'd term went undetected AND unfixed, with a
-// false "clean" QA signal — worse than not checking, since it looks like the drift never
-// happened. Mirrors the pattern already proven at applyGlossarySubstitutions' own substitution
-// site. `pattern` must not itself use capture group 1 — that's reserved for the leading boundary
-// character, which any replace() callback must prepend back: `(m, pre) => pre + replacement`.
-function boundedPhraseRegex(pattern, flags = '') {
-  return new RegExp(`(^|[^\\p{L}])(${pattern})(?![\\p{L}])`, flags.includes('u') ? flags : `${flags}u`);
-}
-
 function reportGlossaryDrift({ pairs, glossaryTerms }) {
   const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
   if (!forced.length || !pairs?.length) return { checked: 0, terms: [] };
@@ -353,7 +225,7 @@ function reportGlossaryDrift({ pairs, glossaryTerms }) {
     const tgt = String(pair?.target || '');
     if (!src || !tgt) return;
     for (const t of forced) {
-      const re = boundedPhraseRegex(escapeRegExp(t.source), 'i');
+      const re = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
       if (!re.test(src) || tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue;
       const key = t.source;
       const entry = byTerm.get(key) || { source: t.source, target: t.target, count: 0, examples: [] };
@@ -391,14 +263,14 @@ function autoFixGlossaryDrift({ pairs, glossaryTerms }) {
     const src = String(pair?.source || '');
     if (!src || !pair?.target) return;
     for (const t of forced) {
-      const srcRe = boundedPhraseRegex(escapeRegExp(t.source), 'i');
+      const srcRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
       if (!srcRe.test(src)) continue;
       const tgt = String(pair.target);
       if (tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue; // canonical already present
 
-      const leakRe = boundedPhraseRegex(escapeRegExp(t.source), 'gi');
+      const leakRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'gi');
       if (leakRe.test(tgt)) {
-        pair.target = tgt.replace(leakRe, (m, pre) => pre + t.target);
+        pair.target = tgt.replace(leakRe, t.target);
         fixedCount += 1;
       } else {
         const entry = remaining.get(t.source) || { source: t.source, target: t.target, count: 0, examples: [] };
@@ -410,54 +282,6 @@ function autoFixGlossaryDrift({ pairs, glossaryTerms }) {
   });
 
   return { fixedCount, remainingTerms: [...remaining.values()] };
-}
-
-/**
- * Repairs a specific, mechanical partial-translation pattern in a multi-word do-not-translate
- * term shaped "<prefix> Reo <Language>" (e.g. "Tāone Reo Māori", "Te Wiki o te Reo Māori"). The
- * translator sometimes partially obeys the do-not-translate instruction — it leaves <prefix>
- * alone but still renders the embedded "Reo <Language>" as its normal English gloss "<Language>
- * language", producing "<prefix> <Language> language" verbatim. Confirmed on a real job,
- * benchmarked against Google Translate on the same document: BOTH independently produced the
- * identical hybrid "Te Wiki o te Māori language" at the same sentence — not a defect unique to
- * this pipeline, but a shared weakness of general MT on campaign/proper names built from an
- * ordinary compositional phrase ("reo Māori" = "the Māori language" is a completely normal,
- * correct translation everywhere else in the SAME document, which is exactly what makes the
- * model's prior to translate it strong even inside a name it's told not to touch). Where THIS
- * pipeline is worse than Google on the same document: internal consistency — three different
- * renderings of the same term across one document, vs Google settling on one (wrong) rendering
- * throughout. This closes that consistency gap by mechanically reconstructing the hybrid back to
- * the canonical term, same repair-not-guess philosophy as autoFixGlossaryDrift above (pure
- * string operation, no LLM call, only ever touches an exact reconstructable pattern).
- */
-function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
-  const dntTerms = (glossaryTerms || [])
-    .filter((t) => t?.doNotTranslate && t?.source)
-    .map((t) => {
-      const m = String(t.source).match(/^(.*?)\breo\s+(\S+)\s*$/i);
-      if (!m) return null;
-      const prefix = m[1].trim();
-      const lang = m[2].trim();
-      const hybridPattern = `${prefix ? `${escapeRegExp(prefix)}\\s+` : ''}${escapeRegExp(lang)}\\s+language`;
-      const hybridRe = boundedPhraseRegex(hybridPattern, 'gi');
-      return { source: t.source, hybridRe };
-    })
-    .filter(Boolean);
-  if (!dntTerms.length || !pairs?.length) return { fixedCount: 0 };
-
-  let fixedCount = 0;
-  pairs.forEach((pair) => {
-    if (!pair?.target) return;
-    for (const t of dntTerms) {
-      t.hybridRe.lastIndex = 0;
-      if (t.hybridRe.test(String(pair.target))) {
-        t.hybridRe.lastIndex = 0;
-        pair.target = String(pair.target).replace(t.hybridRe, (m, pre) => pre + t.source);
-        fixedCount += 1;
-      }
-    }
-  });
-  return { fixedCount };
 }
 
 /**
@@ -734,23 +558,6 @@ No markdown fences.`;
  * 2) LLM compares source⟶target side-by-side in batches for subjective issues
  * 3) Merge + claim verification spot-check on "None flagged" categories
  */
-/**
- * Confirmed real gap: when a review batch's LLM call failed (rate limit, timeout), the catch
- * block only appended a note to overallNotes — reviewedPairCount was still set to the FULL pair
- * count regardless, falsely implying every segment got subjective QA review (polarity, uncertain
- * terms, etc.) when a whole batch's worth never did. Pure function so the count math is
- * unit-testable without mocking callModel — reviewTranslation itself just plugs the real
- * totalPairs/failedBatchSizes into it.
- */
-function computeReviewCoverage(totalPairs, failedBatchSizes) {
-  const unreviewedPairCount = (failedBatchSizes || []).reduce((sum, n) => sum + n, 0);
-  return {
-    reviewedPairCount: Math.max(0, totalPairs - unreviewedPairCount),
-    unreviewedPairCount,
-    reviewCoverageIncomplete: unreviewedPairCount > 0,
-  };
-}
-
 async function reviewTranslation({
   modelId, userId, sourceLanguage, targetLanguage, pairs, glossaryTerms, intakeAnswers = {},
 }) {
@@ -805,7 +612,6 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
 
   const offsets = [];
   for (let offset = 0; offset < allPairs.length; offset += BATCH) offsets.push(offset);
-  const failedBatchSizes = [];
 
   async function reviewOneBatch(offset) {
     const batch = allPairs.slice(offset, offset + BATCH);
@@ -851,7 +657,6 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     } catch (err) {
       console.error('[translate] review batch failed:', err.message);
       llmAcc.overallNotes.push(`Review batch starting at ${offset} failed: ${err.message}`);
-      failedBatchSizes.push(batch.length);
     }
   }
 
@@ -881,7 +686,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     audienceFlags: llmAcc.audienceFlags,
     dialectalChoices: llmAcc.dialectalChoices,
     overallNotes: llmAcc.overallNotes.filter(Boolean).join(' '),
-    ...computeReviewCoverage(allPairs.length, failedBatchSizes),
+    reviewedPairCount: allPairs.length,
     totalPairCount: allPairs.length,
     completenessCheck: {
       ran: true,
@@ -928,10 +733,8 @@ const CAP_WORD_RE = /\b[A-ZÀ-Ž][\p{L}'’-]*\b/gu;
 
 function applyGlossarySubstitutions(text, terms) {
   let t = String(text || '');
-  const subs = sanitizeGlossaryTermList(
-    (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target)
-  );
-  if (!subs.length) return collapseRepeatedPhraseLoops(t);
+  const subs = (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target);
+  if (!subs.length) return t;
 
   // Swap URLs, filename-like tokens, and proper-noun/title spans out for placeholders before
   // substituting, restore after — keeps them completely outside every glossary regex regardless
@@ -973,13 +776,7 @@ function applyGlossarySubstitutions(text, terms) {
 
   t = t.replace(/⁣FN(\d+)⁣/g, (m, i) => filenames[Number(i)]);
   t = t.replace(/⁣URL(\d+)⁣/g, (m, i) => urls[Number(i)]);
-  // Final guard: collapse any repetition-loop degeneration in the translated text itself — not
-  // only in a glossary term's own target field (collapseRepeatedGlossaryTarget above catches
-  // that earlier), since the translator model can independently generate the same "X / Y /
-  // Y / Y..." loop as prose. Every translated segment passes through this function (both
-  // engines, main loop, and repair pass), so this is the one place that catches it regardless
-  // of origin.
-  return collapseRepeatedPhraseLoops(t);
+  return t;
 }
 
 function isIncompleteTarget(target) {
@@ -1010,7 +807,7 @@ async function repairIncompletePairs({
     if (isIncompleteTarget(p?.target) || isTruncatedShort(p?.source, p?.target)
       || hasHallucinatedRedaction(p?.source, p?.target)
       || hasMissingDoNotTranslateTerm(p?.source, p?.target, glossaryTerms)
-      || hasStraySourceWord(p?.source, p?.target, { sourceLanguage, targetLanguage, glossaryTerms })) indexes.push(i);
+      || hasStraySourceWord(p?.source, p?.target, { sourceLanguage, targetLanguage })) indexes.push(i);
   });
   if (!indexes.length) {
     return { attempted: 0, llmRepaired: 0, googleRepaired: 0, stillFailing: 0 };
@@ -1060,7 +857,7 @@ async function repairIncompletePairs({
             && !isTruncatedShort(pair.source, cleaned)
             && !hasHallucinatedRedaction(pair.source, cleaned)
             && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
-            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage, glossaryTerms })) {
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
             pair.target = cleaned;
             llmRepaired += 1;
             continue;
@@ -1086,7 +883,7 @@ async function repairIncompletePairs({
           if (cleaned && cleaned.trim() && !findPlaceholder(cleaned)
             && !hasHallucinatedRedaction(pair.source, cleaned)
             && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
-            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage, glossaryTerms })) {
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
             pair.target = cleaned;
             googleRepaired += 1;
             continue;
@@ -1104,7 +901,7 @@ async function repairIncompletePairs({
   const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target) || isTruncatedShort(p.source, p.target)
     || hasHallucinatedRedaction(p.source, p.target)
     || hasMissingDoNotTranslateTerm(p.source, p.target, glossaryTerms)
-    || hasStraySourceWord(p.source, p.target, { sourceLanguage, targetLanguage, glossaryTerms })).length;
+    || hasStraySourceWord(p.source, p.target, { sourceLanguage, targetLanguage })).length;
   return {
     attempted: indexes.length,
     llmRepaired,
@@ -1117,16 +914,9 @@ module.exports = {
   proposeGlossary,
   reportGlossaryDrift,
   autoFixGlossaryDrift,
-  autoFixPartialReoTermDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
-  collapseRepeatedGlossaryTarget,
-  collapseRepeatedPhraseLoops,
-  normalizeTermKey,
-  mergeGlossaryTerms,
-  computeReviewCoverage,
-  dropHallucinatedTerms,
   repairIncompletePairs,
   isIncompleteTarget,
   langName,
