@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -151,6 +151,57 @@ test('applyGlossarySubstitutions also catches a repetition-loop that never invol
   );
   assert.strictEqual(out, 'a treasure / cherished treasure / cherished taonga result');
   assert.ok(!out.includes('cherished treasure / cherished treasure'), `loop not collapsed: ${out}`);
+});
+
+// dropHallucinatedTerms — confirmed real case from a QA "Lessons learnt" report: locked terms
+// "ōrero", "ānui", "ītori", "ātou" were flagged as an "enforcement gap" (seen in 9 jobs — most
+// rows "didn't use" the locked rendering). Investigated: those aren't real words. They're
+// truncated fragments of "kōrero", "whānui", "hītori", "rātou" — the same dropped-leading-
+// consonant-before-a-macron-vowel LLM generation defect documented elsewhere in this file, just
+// showing up in a glossary term this time instead of a QA uncertain-term listing. No amount of
+// "enforcement" can make a translator consistently use a rendering for a word that isn't in the
+// document — the real fix is to never lock a term that doesn't verbatim exist in the source.
+const MAORI_SOURCE_SAMPLE = 'He taonga tuku iho te reo Māori. Ka kōrero ngā tāngata i ēnei rā mō ō rātou take, mō te whānui o te motu, mō te hītori o te reo.';
+
+test('dropHallucinatedTerms keeps a real word that appears in the source', () => {
+  const out = dropHallucinatedTerms([{ source: 'kōrero', target: 'speech' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 1);
+});
+
+test('dropHallucinatedTerms keeps another real word (ēnei)', () => {
+  const out = dropHallucinatedTerms([{ source: 'ēnei', target: 'these' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 1);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "kōrero"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ōrero', target: 'speech / language' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "whānui"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ānui', target: 'widely / broadly' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "hītori"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ītori', target: 'history' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "rātou"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ātou', target: 'your / their' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms filters a mixed list, keeping only real words', () => {
+  const terms = [
+    { source: 'kōrero', target: 'speech' },
+    { source: 'ōrero', target: 'speech / language' },
+    { source: 'ēnei', target: 'these' },
+    { source: 'ātou', target: 'your / their' },
+  ];
+  const out = dropHallucinatedTerms(terms, MAORI_SOURCE_SAMPLE).map((t) => t.source);
+  assert.deepStrictEqual(out, ['kōrero', 'ēnei']);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

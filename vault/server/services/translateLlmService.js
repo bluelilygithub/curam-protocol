@@ -182,6 +182,33 @@ function sanitizeGlossaryTermList(list) {
   ));
 }
 
+// Word-boundary-safe existence check — same pattern applyGlossarySubstitutions itself uses to
+// anchor matches (\b alone doesn't reliably bound accented characters).
+function wordExistsInText(word, text) {
+  const escaped = String(word || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!escaped) return false;
+  return new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'iu').test(String(text || ''));
+}
+
+/**
+ * Drops any glossary term whose `source` doesn't verbatim occur (word-boundary-safe) anywhere in
+ * the source text — a guard against the glossary-proposing LLM hallucinating a term that isn't a
+ * real word at all. Confirmed on a real te reo Māori QA report: terms like "ōrero", "ānui",
+ * "ītori", "ātou" were locked into the glossary and then flagged as an "enforcement gap" ("seen
+ * in 9 jobs") because most rows "didn't use" the locked rendering — but those aren't real words;
+ * they're truncated fragments of "kōrero", "whānui", "hītori", "rātou" (the same dropped-leading-
+ * consonant-before-a-macron-vowel LLM generation defect documented elsewhere in this file). No
+ * amount of "enforcement" can make a translator consistently use a rendering for a word that
+ * doesn't occur in the document — the fix is to never lock a term that isn't real, not to chase
+ * a reliability bug that doesn't exist. Applied to `terms` and `lockedTerms` (the ENFORCED
+ * lists) — not `uncertainTerms`/`dialectalChoices`, which are informational QA flags, not
+ * substitution-driving, so a bad entry there is lower-stakes noise rather than a false "locked
+ * but never enforced" signal.
+ */
+function dropHallucinatedTerms(list, sourceSkim) {
+  return (Array.isArray(list) ? list : []).filter((t) => t?.source && wordExistsInText(t.source, sourceSkim));
+}
+
 
 /**
  * Propose / merge glossary from intake answers + source skim + optional saved glossary.
@@ -252,10 +279,16 @@ Rules:
   }
 
   const parsed = parseModelJson(res.text) || {};
-  const terms = sanitizeGlossaryTermList(Array.isArray(parsed.terms) ? parsed.terms : []);
-  const lockedTerms = sanitizeGlossaryTermList(
-    (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
-      .filter((t) => t?.source && (t.doNotTranslate || t.target))
+  const terms = dropHallucinatedTerms(
+    sanitizeGlossaryTermList(Array.isArray(parsed.terms) ? parsed.terms : []),
+    sourceSkim,
+  );
+  const lockedTerms = dropHallucinatedTerms(
+    sanitizeGlossaryTermList(
+      (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
+        .filter((t) => t?.source && (t.doNotTranslate || t.target))
+    ),
+    sourceSkim,
   );
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
@@ -993,6 +1026,7 @@ module.exports = {
   applyGlossarySubstitutions,
   collapseRepeatedGlossaryTarget,
   collapseRepeatedPhraseLoops,
+  dropHallucinatedTerms,
   repairIncompletePairs,
   isIncompleteTarget,
   langName,

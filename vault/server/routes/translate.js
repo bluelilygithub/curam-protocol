@@ -13,6 +13,7 @@ const {
   hardSanityGate,
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
+  dropHallucinatedTerms,
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
@@ -1056,11 +1057,11 @@ async function processTranslateJob(
     progress: 38,
   });
 
-  const sourceSkim = Object.keys(paragraphsByPage)
+  const sourceFullText = Object.keys(paragraphsByPage)
     .map(Number).sort((a, b) => a - b)
     .flatMap(p => paragraphsByPage[p])
-    .join('\n')
-    .slice(0, 8000);
+    .join('\n');
+  const sourceSkim = sourceFullText.slice(0, 8000);
 
   if (!sourceSkim.trim()) {
     throw new Error('No extractable text found in this file');
@@ -1082,7 +1083,12 @@ async function processTranslateJob(
         `SELECT terms FROM translate_glossaries WHERE id=$1 AND "userId"=$2`,
         [glossaryId, userId]
       );
-      existingTerms = rows[0]?.terms || [];
+      // Self-heals a saved/global glossary that already picked up a hallucinated term (e.g. a
+      // truncated macron fragment like "ōrero" from before dropHallucinatedTerms existed in
+      // proposeGlossary) — checked against the FULL document text, not the 8000-char sourceSkim
+      // below, so a legitimate carried-over term late in a long document isn't wrongly dropped
+      // just for falling outside that truncated preview.
+      existingTerms = dropHallucinatedTerms(rows[0]?.terms || [], sourceFullText);
     } catch {}
   }
 
