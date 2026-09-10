@@ -19,11 +19,21 @@ const PLACEHOLDER_PATTERNS = [
   /\[\s*impossible\s+[àa]\s+traduire\s*\]/i,
   /\[\s*TODO\s*\]/i,
   /\[\s*TBD\s*\]/i,
-  /\bTBD\b/,
-  /\bTODO\b/,
+  // SERIOUS CONFIRMED REGRESSION, fixed — bare (unbracketed) \bTBD\b, \bTODO\b, and a
+  // trailing-\bN\/?A\b pattern used to sit here, matching ordinary, completely legitimate
+  // English business content: "The launch date is still TBD.", "Please review the TODO list",
+  // and any segment ending in "N/A" (an extremely common, correct form/table-field value —
+  // "Status: N/A" is normal content, not a translation failure). None of these three had a
+  // "confirmed on a real job" citation like every other entry in this list does — a red flag
+  // they were unverified additions. The bracketed forms above ([TODO], [TBD]) already give safe
+  // coverage for a genuine leftover template marker; a real incomplete translation leaves that
+  // marker, not just a coincidental use of a common word. Removed rather than narrowed, since no
+  // realistic anchoring (segment length, position) reliably tells "the model gave up" apart from
+  // "the source document genuinely said this" for these particular words. FIXME (below) is kept
+  // bare — it essentially never appears in the kind of business documents this agent translates
+  // (invoices, contracts, reports), unlike TBD/TODO/N-A which are everyday business English.
   /\bFIXME\b/,
   /lorem\s+ipsum/i,
-  /\bN\/?A\b\s*$/i,
   /^\[?\s*insert\s+translation/i,
   // Confirmed on a real job: for a low-resource target language, the model sometimes gave up
   // on a segment and emitted the single bare word "Translation" (no brackets, no "incomplete" —

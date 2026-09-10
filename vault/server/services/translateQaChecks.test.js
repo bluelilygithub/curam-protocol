@@ -7,7 +7,7 @@
 'use strict';
 
 const assert = require('assert');
-const { detectRepeatedTermCandidates, hasStraySourceWord, hardSanityGate } = require('./translateQaChecks');
+const { detectRepeatedTermCandidates, hasStraySourceWord, hardSanityGate, findPlaceholder } = require('./translateQaChecks');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -249,6 +249,42 @@ test('hardSanityGate hard-fails when repairStillFailing reaches the absolute cou
 
 test('hardSanityGate passes a clean document with repairStillFailing below the count threshold', () => {
   const gate = hardSanityGate(makePairs(20, 0), { repairStillFailing: 1 });
+  assert.strictEqual(gate.ok, true);
+});
+
+// SERIOUS CONFIRMED REGRESSION, fixed — findPlaceholder's bare (unbracketed) TBD/TODO/N-A
+// patterns matched completely ordinary, legitimate English business content, not just genuine
+// leftover placeholder markup. Combined with hardSanityGate's lowered hard-fail threshold, a
+// routine document with a few "N/A" form fields could hard-fail entirely (no PDF generated) for
+// content that was translated correctly. None of these three had a "confirmed on a real job"
+// citation like every other entry in PLACEHOLDER_PATTERNS — a red flag they were unverified.
+test('does not flag ordinary business sentences containing TBD or TODO as a placeholder', () => {
+  assert.strictEqual(findPlaceholder('The launch date is still TBD.'), null);
+  assert.strictEqual(findPlaceholder('Please review the TODO list before the meeting.'), null);
+});
+
+test('does not flag a legitimate "N/A" field value as a placeholder', () => {
+  assert.strictEqual(findPlaceholder('N/A'), null);
+  assert.strictEqual(findPlaceholder('Status: N/A'), null);
+  assert.strictEqual(findPlaceholder('Q1 revenue: N/A'), null);
+});
+
+test('still flags the bracketed [TBD]/[TODO] template-marker forms — genuine leftover markup', () => {
+  assert.strictEqual(findPlaceholder('[TBD]'), '[TBD]');
+  assert.strictEqual(findPlaceholder('[TODO]'), '[TODO]');
+});
+
+test('still flags a genuine incomplete-translation marker', () => {
+  assert.strictEqual(findPlaceholder('[Translation incomplete] some text'), '[Translation incomplete]');
+});
+
+// The realistic scenario this whole fix exists for: a routine document with a few legitimate
+// "N/A" cells must not hard-fail just because it crossed the (correctly) tightened threshold.
+test('hardSanityGate does not hard-fail a routine document with legitimate N/A form fields', () => {
+  const pairs = [];
+  for (let i = 0; i < 17; i++) pairs.push({ source: `Field ${i} value`, target: `Valeur du champ ${i}` });
+  for (let i = 0; i < 3; i++) pairs.push({ source: 'Not applicable', target: 'N/A' });
+  const gate = hardSanityGate(pairs, {});
   assert.strictEqual(gate.ok, true);
 });
 

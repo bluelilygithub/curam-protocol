@@ -161,29 +161,36 @@ function collapseRepeatedGlossaryTarget(target) {
 
 /**
  * General repetition-loop guard for TRANSLATED TEXT itself (not just a glossary term's target
- * field) — collapses any "phrase / phrase / phrase..." run where the SAME phrase repeats
- * consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from (and not
- * fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's *target
- * field*, but this corruption was the translator model's own raw prose output — independently
- * generating a repetition-loop ("treasure / cherished treasure / cherished treasure / cherished
- * taonga") rather than leaking an untranslated term that applyGlossarySubstitutions would catch.
- * Likely nudged by the glossary block's own "X / Y" bilingual-gloss instruction pattern — a
- * known LLM degeneration mode (repeating a template it was just shown) that a glossary-field-
- * only fix can't reach, since the model never necessarily goes through a forced substitution at
- * all here. Applied as a final pass on every translated segment, catching the loop regardless
- * of which stage produced it.
+ * field) — collapses a "phrase / phrase / phrase..." run where the SAME multi-word phrase
+ * repeats consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from
+ * (and not fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's
+ * *target field*, but this corruption was the translator model's own raw prose output —
+ * independently generating a repetition-loop ("treasure / cherished treasure / cherished
+ * treasure / cherished taonga") rather than leaking an untranslated term that
+ * applyGlossarySubstitutions would catch. Likely nudged by the glossary block's own "X / Y"
+ * bilingual-gloss instruction pattern — a known LLM degeneration mode (repeating a template it
+ * was just shown). Applied as a final pass on every translated segment, catching the loop
+ * regardless of which stage produced it.
  *
- * Threshold: collapses on the FIRST repeat (2 total identical consecutive occurrences), not
- * only 3+. A real "X / Y" two-way gloss always has two DIFFERENT alternatives by definition
- * ("iwi / tribe") — so two IDENTICAL consecutive segments ("tribe / tribe") can never be a
- * legitimate gloss, only a duplication bug; there's no false-positive risk in collapsing on the
- * first repeat. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
- * needed collapsing too, not just the longer 3+ chains caught by an earlier, more conservative
- * version of this threshold. "a / b / c" (no repeats) and "research / studies" (genuinely
- * different alternatives) pass through untouched.
+ * SERIOUS CONFIRMED REGRESSION, now fixed: an earlier version of this function collapsed on ANY
+ * repeated segment, single words/tokens included, on the theory that a real "X / Y" gloss always
+ * has two DIFFERENT alternatives so an identical repeat could never be legitimate. That's true
+ * for a bilingual GLOSS specifically, but this function runs on *all* translated text — and a
+ * short single-token value repeating in an ordinary table/list ("Pass / Pass / Pass / Fail",
+ * "0 / 0 / 0 / 0 / 12", "A / A / B / A") is completely normal real data, not a degeneration
+ * artefact, and got its repeated values SILENTLY DELETED. Every confirmed real bug case (the
+ * only evidence this function was ever built from) involved a MULTI-WORD phrase ("cherished
+ * treasure"), never a bare short token — restricting collapsing to phrases containing at least
+ * one space fixes the data-loss false positive. Trade-off: a single-word duplicate gloss
+ * ("iwi / tribe / tribe") is no longer auto-collapsed — an accepted, much smaller cost than
+ * silently destroying real user data. "a / b / c" (no repeats) and "research / studies"
+ * (genuinely different alternatives) pass through untouched either way.
  */
 function collapseRepeatedPhraseLoops(text) {
-  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){1,}/gi, (m, seg) => seg);
+  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){1,}/gi, (m, seg) => {
+    if (!/\s/.test(seg.trim())) return m; // single-token repeat — leave real data alone
+    return seg;
+  });
 }
 
 function sanitizeGlossaryTermList(list) {

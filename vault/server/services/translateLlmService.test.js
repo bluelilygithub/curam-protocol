@@ -123,9 +123,12 @@ test('collapses a real 6x repetition-loop in translated prose', () => {
   assert.strictEqual(out, 'The Māori language is a treasure / cherished treasure / cherished taonga passed down.');
 });
 
-test('collapses a repetition-loop with a differently-worded trailing segment', () => {
-  const out = collapseRepeatedPhraseLoops('deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa');
-  assert.strictEqual(out, 'deeply precious to Māori iwi / tribe (tribe) and to Aotearoa');
+// "tribe" is a single-token repeat, not a multi-word phrase — per the false-positive fix above,
+// this is now correctly left untouched (it reads as duplicated-but-plausible real content, same
+// category as "Pass / Pass / Pass", not distinguishable from real data by this function alone).
+test('leaves a repeated single-word segment untouched even with a differently-worded trailing part', () => {
+  const text = 'deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa';
+  assert.strictEqual(collapseRepeatedPhraseLoops(text), text);
 });
 
 test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
@@ -133,14 +136,31 @@ test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
   assert.strictEqual(collapseRepeatedPhraseLoops(text), text);
 });
 
-// Threshold is "any consecutive exact duplicate", not "3+ occurrences" — a real 2-way gloss
-// always has two DIFFERENT alternatives, so two IDENTICAL consecutive segments can never be
-// legitimate. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
-// needed collapsing too, not just longer 3+ chains.
-test('collapses just 2 identical consecutive occurrences (no false-positive risk)', () => {
+// SERIOUS CONFIRMED REGRESSION, fixed — a prior version of this function collapsed ANY repeated
+// segment, single tokens included, on the theory that an identical repeat could never be a
+// legitimate "X / Y" gloss. That's true for a bilingual gloss, but this function runs on ALL
+// translated text, and a real business document's tables/lists routinely repeat short values —
+// which were being silently deleted:
+//   "Test results: Pass / Pass / Pass / Fail / Pass" -> "Test results: Pass / Fail / Pass"
+//   "Column values: 0 / 0 / 0 / 0 / 12"              -> "Column values: 0 / 12"
+// Every confirmed real degeneration case involved a MULTI-WORD phrase ("cherished treasure"),
+// never a bare short token — collapsing is now restricted to phrases containing a space.
+test('does NOT collapse repeated short single-token values — real data, not a bug', () => {
+  const cases = [
+    'Test results: Pass / Pass / Pass / Fail / Pass',
+    'Column values: 0 / 0 / 0 / 0 / 12',
+    'Scores: A / A / B / A',
+    'Q1 revenue: N/A / N/A / N/A / $45,000',
+  ];
+  for (const text of cases) {
+    assert.strictEqual(collapseRepeatedPhraseLoops(text), text, `real data was altered: ${text}`);
+  }
+});
+
+test('still collapses a single-repeat multi-word phrase (the actual confirmed bug shape)', () => {
   assert.strictEqual(
-    collapseRepeatedPhraseLoops('deeply precious to iwi / tribe / tribe and to Aotearoa'),
-    'deeply precious to iwi / tribe and to Aotearoa',
+    collapseRepeatedPhraseLoops('deeply precious to iwi / cherished tribe / cherished tribe and to Aotearoa'),
+    'deeply precious to iwi / cherished tribe and to Aotearoa',
   );
 });
 
