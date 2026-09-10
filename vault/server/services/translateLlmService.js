@@ -149,6 +149,26 @@ function collapseRepeatedGlossaryTarget(target) {
   return [unique[0], unique[unique.length - 1]].join(' / ');
 }
 
+/**
+ * General repetition-loop guard for TRANSLATED TEXT itself (not just a glossary term's target
+ * field) — collapses any "phrase / phrase / phrase..." run where the SAME phrase repeats 3+
+ * times consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from
+ * (and not fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's
+ * *target field*, but this corruption was the translator model's own raw prose output —
+ * independently generating a repetition-loop ("treasure / cherished treasure / cherished
+ * treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga",
+ * growing longer on a later run of the same document) rather than leaking an untranslated term
+ * that applyGlossarySubstitutions would catch. Likely nudged by the glossary block's own
+ * "X / Y" bilingual-gloss instruction pattern — a known LLM degeneration mode (repeating a
+ * template it was just shown) that a glossary-field-only fix can't reach, since the model never
+ * necessarily goes through a forced substitution at all here. Applied as a final pass on every
+ * translated segment, catching the loop regardless of which stage produced it.
+ * "a / b / c" (no repeats) and "research / studies" (a real 2-way gloss) pass through untouched.
+ */
+function collapseRepeatedPhraseLoops(text) {
+  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){2,}/gi, (m, seg) => seg);
+}
+
 function sanitizeGlossaryTermList(list) {
   return (Array.isArray(list) ? list : []).map((t) => (
     t?.target ? { ...t, target: collapseRepeatedGlossaryTarget(t.target) } : t
@@ -775,7 +795,7 @@ function applyGlossarySubstitutions(text, terms) {
   const subs = sanitizeGlossaryTermList(
     (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target)
   );
-  if (!subs.length) return t;
+  if (!subs.length) return collapseRepeatedPhraseLoops(t);
 
   // Swap URLs, filename-like tokens, and proper-noun/title spans out for placeholders before
   // substituting, restore after — keeps them completely outside every glossary regex regardless
@@ -817,7 +837,13 @@ function applyGlossarySubstitutions(text, terms) {
 
   t = t.replace(/⁣FN(\d+)⁣/g, (m, i) => filenames[Number(i)]);
   t = t.replace(/⁣URL(\d+)⁣/g, (m, i) => urls[Number(i)]);
-  return t;
+  // Final guard: collapse any repetition-loop degeneration in the translated text itself — not
+  // only in a glossary term's own target field (collapseRepeatedGlossaryTarget above catches
+  // that earlier), since the translator model can independently generate the same "X / Y /
+  // Y / Y..." loop as prose. Every translated segment passes through this function (both
+  // engines, main loop, and repair pass), so this is the one place that catches it regardless
+  // of origin.
+  return collapseRepeatedPhraseLoops(t);
 }
 
 function isIncompleteTarget(target) {
@@ -959,6 +985,7 @@ module.exports = {
   reviewTranslation,
   applyGlossarySubstitutions,
   collapseRepeatedGlossaryTarget,
+  collapseRepeatedPhraseLoops,
   repairIncompletePairs,
   isIncompleteTarget,
   langName,

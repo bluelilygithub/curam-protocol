@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -108,6 +108,39 @@ test('applyGlossarySubstitutions sanitizes a garbled target before substituting'
   const terms = [{ source: 'taonga', target: 'treasure / cherished treasure / cherished treasure / cherished taonga' }];
   const out = applyGlossarySubstitutions('This taonga is precious.', terms);
   assert.strictEqual(out, 'This treasure / cherished taonga is precious.');
+});
+
+// collapseRepeatedPhraseLoops — confirmed real case: the TRANSLATOR MODEL's own raw output
+// (not a glossary-substitution leak — collapseRepeatedGlossaryTarget doesn't touch this) grew a
+// repetition-loop over a later run of the same document: "treasure / cherished treasure /
+// cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished
+// taonga" (6 repeats of "cherished treasure"). This is a general guard applied inside
+// applyGlossarySubstitutions to every translated segment, regardless of where the loop came from.
+test('collapses a real 6x repetition-loop in translated prose', () => {
+  const out = collapseRepeatedPhraseLoops(
+    'The Māori language is a treasure / cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga passed down.',
+  );
+  assert.strictEqual(out, 'The Māori language is a treasure / cherished treasure / cherished taonga passed down.');
+});
+
+test('collapses a repetition-loop with a differently-worded trailing segment', () => {
+  const out = collapseRepeatedPhraseLoops('deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa');
+  assert.strictEqual(out, 'deeply precious to Māori iwi / tribe (tribe) and to Aotearoa');
+});
+
+test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
+  const text = 'a normal research / studies phrase stays put';
+  assert.strictEqual(collapseRepeatedPhraseLoops(text), text);
+});
+
+test('applyGlossarySubstitutions also catches a repetition-loop that never involved substitution', () => {
+  // No glossary term matches this text at all — the loop guard must still fire on plain input.
+  // 3+ repeats required to trigger (2 total is a legitimate one-off "X / Y" gloss, not a loop).
+  const out = applyGlossarySubstitutions(
+    'a treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga result', [],
+  );
+  assert.strictEqual(out, 'a treasure / cherished treasure / cherished taonga result');
+  assert.ok(!out.includes('cherished treasure / cherished treasure'), `loop not collapsed: ${out}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
