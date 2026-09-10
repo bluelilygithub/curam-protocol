@@ -1948,6 +1948,13 @@ async function initSchema() {
     )
   `);
 
+  // lastProgressAt — bumped on every setJobStatus write (server/routes/translate.js). Lets the
+  // client distinguish "still working, just slow" from "genuinely hung" — before this, a job
+  // stuck inside a single long-running call (an LLM call the cancellation checkpoints don't
+  // cover mid-call) reported the same stage/percent forever with nothing to tell a stall apart
+  // from ordinary progress.
+  await pool.query(`ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "lastProgressAt" TIMESTAMPTZ DEFAULT NOW()`);
+
   // 90-day retention cleanup
   await pool.query(`
     DELETE FROM translate_jobs WHERE "createdAt" < NOW() - INTERVAL '90 days'

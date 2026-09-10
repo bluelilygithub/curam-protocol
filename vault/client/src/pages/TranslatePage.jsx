@@ -1444,8 +1444,20 @@ function TranslationsTab({ glossaries }) {
   const [deletingId, setDeletingId] = useState(null);
   const fileRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
+  // { jobId, intervalId } — scoped to the job it was started for, not just a bare interval id, so
+  // a second job's poll (started before the first job's generateAndUploadPdf finally-block runs)
+  // can't have its active/processing state incorrectly cleared by the first job's completion.
   const pollRef = useRef(null);
+  const activeJobIdRef = useRef(null); // live mirror of activeJobId, for async closures that need the current value, not the one captured at call time
+  const pollFailureCountRef = useRef(0);
+  const stallWarnedForJobRef = useRef(null); // jobId we've already shown the stall toast for, so it doesn't repeat every poll
   const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
+
+  useEffect(() => { activeJobIdRef.current = activeJobId; }, [activeJobId]);
+
+  // Well above normal chunk/repair latency (TRANSLATE_CALL_TIMEOUT_MS is 45s per call, with up to
+  // several retry/split levels) but short enough to actually flag a real stall promptly.
+  const STALL_THRESHOLD_MS = 3 * 60 * 1000;
 
   const loadJobs = useCallback(() => {
     api.get('/api/translate/jobs').then(r => r.json()).then(setJobs).catch(() => {})
@@ -1644,12 +1656,34 @@ function TranslationsTab({ glossaries }) {
   // (e.g. Property Scenario).
   useEffect(() => {
     if (!activeJobId) return;
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+    if (pollRef.current) clearInterval(pollRef.current.intervalId);
+    pollFailureCountRef.current = 0;
+    stallWarnedForJobRef.current = null;
+    const thisJobId = activeJobId;
+    const intervalId = setInterval(async () => {
+      let res;
       try {
-        const res  = await api.get(`/api/translate/jobs/${activeJobId}/status`);
+        res = await api.get(`/api/translate/jobs/${thisJobId}/status`);
+        if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
+        pollFailureCountRef.current = 0;
         setActiveJob(data);
+
+        // Stall detection — a hung server-side job (e.g. an LLM call the cancellation
+        // checkpoints don't cover mid-call) otherwise reports the same stage/percent forever
+        // with nothing to tell a real stall apart from ordinary slow progress. lastProgressAt is
+        // bumped on every server-side setJobStatus write, so comparing against it (rather than
+        // just "haven't heard from the poll") catches a stall even though polling itself is fine.
+        if (data.lastProgressAt) {
+          const staleMs = Date.now() - new Date(data.lastProgressAt).getTime();
+          if (staleMs > STALL_THRESHOLD_MS && stallWarnedForJobRef.current !== thisJobId) {
+            stallWarnedForJobRef.current = thisJobId;
+            addToast(
+              `This job hasn't reported progress in over ${Math.round(STALL_THRESHOLD_MS / 60000)} minutes — it may be stuck. You can cancel it below.`,
+              'error',
+            );
+          }
+        }
 
         const stageIdx = PROGRESS_STAGE_ORDER.indexOf(data.status) - 1;
         if (stageIdx >= 0) {
@@ -1663,20 +1697,30 @@ function TranslationsTab({ glossaries }) {
           : null);
 
         if (data.status === 'generating' && data.translatedTextJson && !generatingPdf) {
-          clearInterval(pollRef.current);
+          clearInterval(intervalId);
           generateAndUploadPdf(data);
         }
         if (data.status === 'failed' || data.status === 'done' || data.status === 'cancelled') {
-          clearInterval(pollRef.current);
+          clearInterval(intervalId);
           stopProcessing();
           setActiveJobId(null);
           if (data.status === 'failed') addToast(data.errorMessage || 'Translation failed', 'error');
           if (data.status === 'cancelled') addToast('Translation cancelled');
           loadJobs();
         }
-      } catch {}
+      } catch {
+        // Transient poll failures (network blip, momentary 500, malformed body) are common enough
+        // not to surface on the first miss — but silently retrying forever with zero feedback
+        // hides a genuine "lost contact with the server" case. Surface it once after a few misses
+        // in a row rather than on every single failed tick.
+        pollFailureCountRef.current += 1;
+        if (pollFailureCountRef.current === 3) {
+          addToast('Having trouble checking this job\'s status — will keep retrying.', 'error');
+        }
+      }
     }, 2000);
-    return () => clearInterval(pollRef.current);
+    pollRef.current = { jobId: thisJobId, intervalId };
+    return () => clearInterval(intervalId);
   }, [activeJobId, generatingPdf]);
 
   const cancelJob = async (jobId) => {
@@ -1687,7 +1731,7 @@ function TranslationsTab({ glossaries }) {
         throw new Error(body.error || 'Could not cancel — it may have already finished');
       }
       if (jobId === activeJobId) {
-        clearInterval(pollRef.current);
+        if (pollRef.current) clearInterval(pollRef.current.intervalId);
         stopProcessing();
         setActiveJobId(null);
       }
@@ -1744,15 +1788,53 @@ function TranslationsTab({ glossaries }) {
       addToast('Translation complete — ready to download', 'success');
     } catch (e) {
       addToast('PDF generation failed: ' + e.message, 'error');
-      // Mark failed on server via the dedicated status endpoint
+      // Mark failed on server via the dedicated status endpoint. If THIS call also fails (e.g.
+      // the same network issue caused both), the job is left stuck in 'generating' status
+      // server-side with no client-side poll watching it anymore — see the "Retry PDF
+      // generation" action in the jobs table, which re-runs just this client step from the
+      // already-persisted translatedTextJson (no re-translation, no LLM cost) for exactly that
+      // orphaned case.
       api.postForm(`/api/translate/jobs/${jobData.id}/fail`, (() => {
         const fd = new FormData(); fd.append('error', e.message); return fd;
       })()).catch(() => {});
+      loadJobs();
     } finally {
       setGeneratingPdf(false);
-      setActiveJobId(null);
-      setActiveJob(null);
-      stopProcessing();
+      // Guard against a race: if a second job was started (and became the tracked active job)
+      // while this job's PDF generation was still in flight, this job's completion must not
+      // clear the SECOND job's active/processing state. Compare against the live ref, not the
+      // activeJobId value captured in this function's closure at call time.
+      if (activeJobIdRef.current === jobData.id || pollRef.current?.jobId === jobData.id) {
+        setActiveJobId(null);
+        setActiveJob(null);
+        stopProcessing();
+      }
+    }
+  };
+
+  // A job can be found in server-side 'generating' status with no client actively tracking it —
+  // e.g. PDF generation threw AND the subsequent /fail notification also failed (same root-cause
+  // network issue for both), or the tab was closed mid-generation. Polling for that job already
+  // stopped client-side (the poll effect clears its interval as soon as it sees 'generating'), so
+  // nothing revisits it on its own. Re-fetches the job's already-persisted translatedTextJson and
+  // re-runs just the client PDF step — no re-translation, no LLM cost.
+  const retryPdfGeneration = async (job) => {
+    try {
+      const res = await api.get(`/api/translate/jobs/${job.id}/status`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load this job');
+      if (!data.translatedTextJson) throw new Error('This job has no saved translation to rebuild the PDF from');
+      startProcessing('Rebuilding PDF…', 'Retrying PDF generation for a job that got stuck.', {
+        steps: PROGRESS_STEP_LABELS,
+      });
+      // Set synchronously (not just via setActiveJobId, which only updates the ref on next
+      // render) so generateAndUploadPdf's own finally-block race guard recognizes this job as
+      // the one to clear processing state for once it's done.
+      activeJobIdRef.current = job.id;
+      setActiveJobId(job.id);
+      await generateAndUploadPdf(data);
+    } catch (e) {
+      addToast(e.message, 'error');
     }
   };
 
@@ -2164,6 +2246,14 @@ function TranslationsTab({ glossaries }) {
                               className="text-xs px-2 py-1 rounded border"
                               style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>
                               Cancel
+                            </button>
+                          )}
+                          {job.status === 'generating' && job.id !== activeJobId && (
+                            <button onClick={() => retryPdfGeneration(job)} disabled={generatingPdf}
+                              className="text-xs px-2 py-1 rounded border"
+                              title="This job's translation finished, but building the PDF failed or was interrupted — retry it without re-translating"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                              Retry PDF generation
                             </button>
                           )}
                           {job.hasNativeOutput && (

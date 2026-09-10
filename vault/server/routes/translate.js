@@ -80,7 +80,9 @@ function sourceUpload(req, res, next) {
 async function setJobStatus(jobId, fields) {
   const keys   = Object.keys(fields);
   const values = Object.values(fields);
-  const sets   = keys.map((k, i) => `"${k}"=$${i + 2}`).join(', ');
+  // lastProgressAt bumped on every write — the client's poll loop uses it to tell "still
+  // working" from "genuinely hung" (see the polling effect in TranslatePage.jsx).
+  const sets   = [...keys.map((k, i) => `"${k}"=$${i + 2}`), `"lastProgressAt"=NOW()`].join(', ');
   await pool.query(`UPDATE translate_jobs SET ${sets} WHERE id=$1`, [jobId, ...values]);
 }
 
@@ -524,7 +526,7 @@ router.get('/jobs/:id/status', async (req, res) => {
               "pageCount", "scannedPageCount", "avgOcrConfidence", "translatedTextJson",
               "qaSummaryJson", "proposedGlossaryJson", "intakeAnswers",
               ("translatedFile" IS NOT NULL) AS "hasNativeOutput", "translatedFileName",
-              "errorMessage", "completedAt"
+              "errorMessage", "completedAt", "lastProgressAt"
        FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
       [req.params.id, req.user.id]
     );
@@ -1443,6 +1445,15 @@ async function processTranslateJob(
     const LLM_CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.TRANSLATE_LLM_CONCURRENCY) || 6));
     let inFlight = 0;
     const chunkResults = await mapPool(chunks, LLM_CONCURRENCY, async (chunk, chunkIndex) => {
+      // Confirmed real gap: checkJobCancelled was only called at stage boundaries, not inside
+      // this per-chunk worker — a cancel click let every in-flight chunk (each potentially
+      // recursing to depth 6-7 via splitAndRetryTranslate) run to completion before the next
+      // checkpoint, contradicting the cancel endpoint's own comment that a job "stops on its own
+      // next checkpoint." mapPool is a true worker pool (each slot pulls the next chunk only when
+      // free, not all-at-once), so throwing here stops this slot from starting the NEXT chunk —
+      // combined with the post-translate check below, cancellation is caught either before a
+      // chunk starts or right after it finishes, instead of only after the whole translate stage.
+      await checkJobCancelled(jobId);
       inFlight += 1;
       const texts = chunk.paras.map(p => p.text);
       // Leaked code/template debris (e.g. object dumps, unresolved internal
@@ -1487,6 +1498,10 @@ async function processTranslateJob(
           translateIdxs.forEach((i) => { translations[i] = `[Translation error] ${texts[i]}`; });
         }
       }
+      // Re-check right after translation resolves, before this chunk's results get applied
+      // below (via mapPool's returned array) — a cancel that landed mid-translate must still
+      // stop this chunk's output from being written, not just block the NEXT chunk from starting.
+      await checkJobCancelled(jobId);
       inFlight -= 1;
       chunksDone += 1;
       const chars = texts.reduce((s, t) => s + t.length, 0);
