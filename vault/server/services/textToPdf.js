@@ -86,6 +86,17 @@ function buildDocument(deps, { title, text }) {
 
 async function generateTextPdf({ title, text }) {
   const deps = await import('@react-pdf/renderer');
+  // Pasted text can be in any language — react-pdf/textkit runs every word through a
+  // hyphenation callback (English-syllable patterns by default) during layout, which can
+  // mis-split and corrupt non-English words even when the correct font/glyphs are present.
+  // Confirmed on the Translate agent's identical @react-pdf/renderer pipeline (see
+  // docs/translate-agent.md — TranslatePage.jsx's disableHyphenation()); applying the same
+  // fix here since this tool has the same "paste anything" surface. This is a separate
+  // module instance from the browser bundle (server-side render), so Translate's client-side
+  // fix does not cover this file — must be set independently.
+  try {
+    deps.Font.registerHyphenationCallback((word) => [word]);
+  } catch {}
   const element = buildDocument(deps, { title, text });
   return deps.renderToBuffer(element);
 }

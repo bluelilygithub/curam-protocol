@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -78,6 +78,36 @@ test('autoFixGlossaryDrift reports (does not guess) a non-leftover drift', () =>
   assert.strictEqual(fixedCount, 0);
   assert.strictEqual(remainingTerms.length, 1);
   assert.strictEqual(remainingTerms[0].source, 'Tier');
+});
+
+// collapseRepeatedGlossaryTarget — confirmed real case: proposeGlossary's LLM call degenerated
+// on a "X / Y" bilingual gloss for te reo Māori terms, repeating its own alternatives several
+// times over ("treasure / cherished taonga" -> "treasure / cherished treasure / cherished
+// treasure / cherished taonga"), and applyGlossarySubstitutions pasted it in verbatim.
+test('collapses a garbled recursive gloss to first + last alternative', () => {
+  const out = collapseRepeatedGlossaryTarget(
+    'treasure / cherished treasure / cherished treasure / cherished taonga',
+  );
+  assert.strictEqual(out, 'treasure / cherished taonga');
+});
+
+test('collapses a shorter garbled chain the same way', () => {
+  const out = collapseRepeatedGlossaryTarget('iwi / tribe / tribe / tribe / tribes');
+  assert.strictEqual(out, 'iwi / tribes');
+});
+
+test('leaves a normal 2-alternative gloss untouched', () => {
+  assert.strictEqual(collapseRepeatedGlossaryTarget('research / studies'), 'research / studies');
+});
+
+test('leaves a single plain target untouched', () => {
+  assert.strictEqual(collapseRepeatedGlossaryTarget('Palier'), 'Palier');
+});
+
+test('applyGlossarySubstitutions sanitizes a garbled target before substituting', () => {
+  const terms = [{ source: 'taonga', target: 'treasure / cherished treasure / cherished treasure / cherished taonga' }];
+  const out = applyGlossarySubstitutions('This taonga is precious.', terms);
+  assert.strictEqual(out, 'This treasure / cherished taonga is precious.');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

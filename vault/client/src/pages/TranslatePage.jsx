@@ -5,6 +5,7 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
+import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts';
 
 // Deployed commit shown on QA/Lessons-learnt reports so a stale build is checkable at a glance
 // instead of re-testing a fix against a report that never actually deployed — see /api/health.
@@ -46,21 +47,6 @@ const PROGRESS_STEP_LABELS = [
   'QA review',
   'Generating PDF',
 ];
-
-// Helvetica (react-pdf's built-in default) only covers WinAnsi/Latin-1 — no macrons, no Polish
-// diacritics. Confirmed on a real te reo Māori job: every macron vowel (ā ē ī ō ū) rendered as
-// garbage (missing-glyph substitution), producing mojibake across the whole translated PDF
-// ("TM Mahere" instead of "Tā Mahere", etc.) — invisible in the QA report because the text
-// content itself was correct, only the rendered glyph was wrong. NotoSans-Regular covers Latin
-// Extended-A/B, so 'mi' and 'pl' (ą ę ł ń ś ź ż, also outside Latin-1) route through it too.
-const FONT_BY_LANG = {
-  'zh-CN': '/fonts/NotoSansSC.ttf',
-  'ja':    '/fonts/NotoSansJP.ttf',
-  'ar':    '/fonts/NotoSansArabic.ttf',
-  'ko':    '/fonts/NotoSansJP.ttf', // fallback
-  'mi':    '/fonts/NotoSans-Regular.ttf',
-  'pl':    '/fonts/NotoSans-Regular.ttf',
-};
 
 const ACCEPT_UPLOAD =
   '.pdf,.docx,.xlsx,.xls,.txt,application/pdf,'
@@ -1109,13 +1095,11 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 }
 
 // ── PDF generation (client-side) ──────────────────────────────────────────────
-// The PDF always shows BOTH source and translated text (side-by-side / bilingual-pages
-// layouts render the original alongside the translation), so font choice must cover
-// whichever of source/target needs non-Latin1 glyphs — not just the target. Confirmed on
-// a real mi → en job: source language (te reo Māori) needed Noto but target (English)
-// didn't, so FONT_BY_LANG[targetLanguage] alone missed it, Helvetica rendered the page,
-// and every macron vowel in the ORIGINAL column silently vanished (WinAnsi encoding drops
-// unmapped glyphs rather than showing a placeholder) — "Māori" → "Mori".
+// Font-selection logic lives in translatePdfFonts.js (plain JS, unit-tested with node — see
+// translatePdfFonts.test.js) so the font-fallback regression it guards against (mi → en font
+// selection checking target only, missing that source needed Noto) can be tested without a
+// bundler/JSX. Imported here, not duplicated, so the test suite verifies the logic this page
+// actually runs.
 // react-pdf/textkit runs every word through a hyphenation callback to compute line-wrap
 // candidates — by default an English-syllable hyphenator. Fed a word in a language it
 // doesn't recognise (te reo Māori, Polish, etc.), it can split and reconstruct the word
@@ -1125,7 +1109,11 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 // the PDF even though the correct Noto font was already selected and its glyphs are all
 // present — the corruption was happening in text-layout, not glyph rendering. Disabling
 // hyphenation (treat every word as unbreakable) removes the callback from the picture
-// entirely. Registered once; @react-pdf de-dupes repeat calls internally.
+// entirely. Registered once; @react-pdf de-dupes repeat calls internally. This is a
+// module-level Font singleton local to THIS bundle — server-side PDF generators
+// (textToPdf.js, webExtractorPdf.js, propertyScenarioPdf.js, invoicePdf.js) are separate
+// processes and each needs (or already has) its own registerHyphenationCallback call; this
+// one only protects client-side renders in this page.
 let hyphenationDisabled = false;
 function disableHyphenation() {
   if (hyphenationDisabled) return;
@@ -1137,7 +1125,7 @@ function disableHyphenation() {
 
 async function registerFonts(targetLanguage, sourceLanguage) {
   disableHyphenation();
-  const fontUrl = FONT_BY_LANG[targetLanguage] || FONT_BY_LANG[sourceLanguage];
+  const fontUrl = pickPdfFontUrl(targetLanguage, sourceLanguage);
   if (!fontUrl) return;
   try {
     Font.register({ family: 'NotoTarget', src: fontUrl });
@@ -1148,7 +1136,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
     avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf',
     pdfLayout = 'side-by-side' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
-  const useNoto = !!FONT_BY_LANG[targetLanguage] || !!FONT_BY_LANG[sourceLanguage];
+  const useNoto = needsNotoFont(targetLanguage, sourceLanguage);
   const layout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(pdfLayout)
     ? pdfLayout
     : 'side-by-side';

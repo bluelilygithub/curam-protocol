@@ -958,6 +958,7 @@ module.exports = {
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
+  collapseRepeatedGlossaryTarget,
   repairIncompletePairs,
   isIncompleteTarget,
   langName,
