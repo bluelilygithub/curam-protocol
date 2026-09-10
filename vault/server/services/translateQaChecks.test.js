@@ -7,7 +7,7 @@
 'use strict';
 
 const assert = require('assert');
-const { detectRepeatedTermCandidates } = require('./translateQaChecks');
+const { detectRepeatedTermCandidates, PLACEHOLDER_PATTERNS } = require('./translateQaChecks');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -180,6 +180,23 @@ test('does not auto-qualify an ordinary acronym as a status word', () => {
   const terms = out.map((c) => c.term);
   assert.ok(!terms.includes('ERP'), `did not expect ERP in ${JSON.stringify(terms)}`);
   assert.ok(!terms.includes('API'), `did not expect API in ${JSON.stringify(terms)}`);
+});
+
+// SERIOUS CONFIRMED REGRESSION, fixed — bare (unbracketed) TBD/TODO/N-A patterns used to flag
+// completely normal English business content as a translation failure. See fix note in
+// translateQaChecks.js PLACEHOLDER_PATTERNS.
+test('does not flag ordinary business sentences containing TBD or TODO as a placeholder', () => {
+  assert.ok(!PLACEHOLDER_PATTERNS.some((re) => re.test('The launch date is still TBD.')));
+  assert.ok(!PLACEHOLDER_PATTERNS.some((re) => re.test('Please review the TODO list')));
+});
+
+test('does not flag a legitimate "N/A" field value as a placeholder', () => {
+  assert.ok(!PLACEHOLDER_PATTERNS.some((re) => re.test('Status: N/A')));
+});
+
+test('still flags the bracketed [TBD]/[TODO] template-marker forms — genuine leftover markup', () => {
+  assert.ok(PLACEHOLDER_PATTERNS.some((re) => re.test('[TBD]')));
+  assert.ok(PLACEHOLDER_PATTERNS.some((re) => re.test('[TODO]')));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

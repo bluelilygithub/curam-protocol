@@ -214,6 +214,12 @@ Format responses in plain prose by default. Code blocks for actual code/commands
 ## Known Bugs / To Revisit
 - **Drag project into folder doesn't persist** — server `PUT /api/projects/:id` includes `folderId`, sidebar calls `fetchProjects()` after update. Still not working locally — suspect nodemon not picking up changes or local/Railway env difference. Needs network tab debugging.
 
+## Translate Agent — Regression Lessons (2026-09-10)
+Two real-data-loss bugs found and fixed, restored to live code w/ regression tests:
+1. **Repetition-loop collapser** — built for narrow Māori "iwi / tribe / tribe" bug, ran unconditionally on every segment/language. After threshold change, silently deleted legit repeated table values ("Pass / Pass / Pass / Fail" → "Pass / Fail"). Fix: restrict to multi-word phrases only, never single tokens.
+2. **Placeholder detection** — bare `TBD`/`TODO`/`N/A` patterns matched inside ordinary sentences. Combined w/ hard-fail threshold tightened 25%→10%, could hard-fail a whole job over legit "N/A" form fields (no PDF produced). Fix: removed bare-word patterns, kept only bracketed forms (`[TBD]`, `[TODO]`).
+**Lesson:** narrow-fix logic applied unconditionally to all content is a recurring failure shape here — test against plain generic content (tables, lists, form fields) before shipping, not just the bug case.
+
 ## User Management API (Admin only)
 - `GET /api/admin/users` — list users with last login and active session count
 - `POST /api/admin/users` — create user `{ email, password, isAdmin }`

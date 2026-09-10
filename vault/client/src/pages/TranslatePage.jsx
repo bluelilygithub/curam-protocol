@@ -1274,8 +1274,11 @@ async function registerFonts(targetLanguage, sourceLanguage) {
 
 function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedPages = [],
     avgOcrConfidence, sourceLanguage, targetLanguage, pageLabels = {}, sourceFormat = 'pdf',
-    pdfLayout = 'side-by-side' }) {
+    pdfLayout = 'side-by-side', engine = 'llm' }) {
   const isLowConf = (pg) => scannedPages.includes(pg) && avgOcrConfidence != null && avgOcrConfidence < 0.7;
+  const footerText = engine === 'google'
+    ? 'Google Translate · for reference only · not legally certified'
+    : 'AI-generated translation (Vault LLM) · for reference only · not legally certified';
   const useNoto = needsNotoFont(targetLanguage, sourceLanguage);
   const layout = ['side-by-side', 'translation-only', 'bilingual-pages'].includes(pdfLayout)
     ? pdfLayout
@@ -1329,7 +1332,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
             </View>
           )}
           {trnParas.map((p, i) => <Text key={i} style={styles.para}>{p}</Text>)}
-          <Text style={styles.footer}>AI-generated translation · for reference only · not legally certified</Text>
+          <Text style={styles.footer}>{footerText}</Text>
         </Page>
       );
       continue;
@@ -1357,7 +1360,7 @@ function buildBilingualPdf({ sourceByPage, translatedByPage, pageCount, scannedP
               {trnParas.map((p, i) => <Text key={i} style={styles.paraSm}>{p}</Text>)}
             </View>
           </View>
-          <Text style={styles.footer}>AI-generated translation · for reference only · not legally certified</Text>
+          <Text style={styles.footer}>{footerText}</Text>
         </Page>
       );
       continue;
@@ -1730,10 +1733,14 @@ function TranslationsTab({ glossaries }) {
       if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
 
       await registerFonts(jobData.targetLanguage, jobData.sourceLanguage);
+      const jobIntake = typeof jobData.intakeAnswers === 'string'
+        ? JSON.parse(jobData.intakeAnswers)
+        : jobData.intakeAnswers;
       const doc = buildBilingualPdf({
         ...payload,
         sourceLanguage: jobData.sourceLanguage,
         targetLanguage: jobData.targetLanguage,
+        engine: jobIntake?.engine === 'google' ? 'google' : 'llm',
       });
       const blob = await pdf(doc).toBlob();
       const fd = new FormData();

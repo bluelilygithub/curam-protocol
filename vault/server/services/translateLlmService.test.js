@@ -123,9 +123,10 @@ test('collapses a real 6x repetition-loop in translated prose', () => {
   assert.strictEqual(out, 'The Māori language is a treasure / cherished treasure / cherished taonga passed down.');
 });
 
-test('collapses a repetition-loop with a differently-worded trailing segment', () => {
+test('leaves a single-token repetition-loop untouched (accepted trade-off, see fix note)', () => {
+  // Was collapsed before the single-token data-loss fix; single tokens are real data now.
   const out = collapseRepeatedPhraseLoops('deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa');
-  assert.strictEqual(out, 'deeply precious to Māori iwi / tribe (tribe) and to Aotearoa');
+  assert.strictEqual(out, 'deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa');
 });
 
 test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
@@ -137,10 +138,28 @@ test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
 // always has two DIFFERENT alternatives, so two IDENTICAL consecutive segments can never be
 // legitimate. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
 // needed collapsing too, not just longer 3+ chains.
-test('collapses just 2 identical consecutive occurrences (no false-positive risk)', () => {
+test('leaves 2 identical single-token occurrences untouched (real data, not a gloss loop)', () => {
   assert.strictEqual(
     collapseRepeatedPhraseLoops('deeply precious to iwi / tribe / tribe and to Aotearoa'),
-    'deeply precious to iwi / tribe and to Aotearoa',
+    'deeply precious to iwi / tribe / tribe and to Aotearoa',
+  );
+});
+
+test('collapses a real multi-word repetition-loop down to one occurrence', () => {
+  assert.strictEqual(
+    collapseRepeatedPhraseLoops('cherished treasure / cherished treasure / cherished treasure'),
+    'cherished treasure',
+  );
+});
+
+test('never deletes repeated single-token table/list values (real data)', () => {
+  assert.strictEqual(
+    collapseRepeatedPhraseLoops('Test results: Pass / Pass / Pass / Fail'),
+    'Test results: Pass / Pass / Pass / Fail',
+  );
+  assert.strictEqual(
+    collapseRepeatedPhraseLoops('Column values: 0 / 0 / 0 / 0 / 12'),
+    'Column values: 0 / 0 / 0 / 0 / 12',
   );
 });
 

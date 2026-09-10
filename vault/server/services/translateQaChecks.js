@@ -19,11 +19,17 @@ const PLACEHOLDER_PATTERNS = [
   /\[\s*impossible\s+[àa]\s+traduire\s*\]/i,
   /\[\s*TODO\s*\]/i,
   /\[\s*TBD\s*\]/i,
-  /\bTBD\b/,
-  /\bTODO\b/,
+  // SERIOUS CONFIRMED REGRESSION, fixed — bare (unbracketed) \bTBD\b, \bTODO\b, and a
+  // trailing \bN\/?A\b pattern used to sit here. All three match routinely inside ordinary
+  // English business content: "The launch date is still TBD.", "Please review the TODO list",
+  // and any segment ending in "N/A" (an extremely common, correct form/table-field value —
+  // "Status: N/A" is normal content, not a translation failure). None of these three had a
+  // real-job case backing them — unlike every other pattern in this list, which was confirmed
+  // against an actual bad translation before being added — so they were unverified additions.
+  // The bracketed forms above ([TODO], [TBD]) already give safe, unambiguous leftover-markup
+  // coverage without the false-positive risk.
   /\bFIXME\b/,
   /lorem\s+ipsum/i,
-  /\bN\/?A\b\s*$/i,
   /^\[?\s*insert\s+translation/i,
   // Confirmed on a real job: for a low-resource target language, the model sometimes gave up
   // on a segment and emitted the single bare word "Translation" (no brackets, no "incomplete" —
