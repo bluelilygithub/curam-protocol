@@ -7,12 +7,15 @@ const { resolveTranslateModels, getTranslateAgentCardConfig, loadCustomInstructi
 const {
   proposeGlossary,
   autoFixGlossaryDrift,
+  autoFixPartialReoTermDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
   hardSanityGate,
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
+  dropHallucinatedTerms,
+  normalizeTermKey,
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
@@ -58,7 +61,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (isAllowedUpload(file.originalname, file.mimetype)) return cb(null, true);
-    cb(new Error('Only PDF, Word (.docx), or Excel (.xlsx/.xls) files are accepted'));
+    cb(new Error('Only PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt) files are accepted'));
   },
 });
 
@@ -77,7 +80,9 @@ function sourceUpload(req, res, next) {
 async function setJobStatus(jobId, fields) {
   const keys   = Object.keys(fields);
   const values = Object.values(fields);
-  const sets   = keys.map((k, i) => `"${k}"=$${i + 2}`).join(', ');
+  // lastProgressAt bumped on every write — the client's poll loop uses it to tell "still
+  // working" from "genuinely hung" (see the polling effect in TranslatePage.jsx).
+  const sets   = [...keys.map((k, i) => `"${k}"=$${i + 2}`), `"lastProgressAt"=NOW()`].join(', ');
   await pool.query(`UPDATE translate_jobs SET ${sets} WHERE id=$1`, [jobId, ...values]);
 }
 
@@ -307,7 +312,7 @@ async function recordTermDrift(userId, targetLanguage, uncertainTerms, jobId) {
   if (!terms.length) return;
   const seen = new Set();
   for (const t of terms) {
-    const key = String(t.source).trim().toLowerCase();
+    const key = normalizeTermKey(String(t.source).trim());
     if (!key || seen.has(key)) continue; // one bump per job even if the term drifted on several rows
     seen.add(key);
     await pool.query(
@@ -327,9 +332,12 @@ async function upsertGlobalGlossaryTerms(userId, targetLanguage, newTerms) {
   if (!Array.isArray(newTerms) || !newTerms.length) return;
   const glossary = await findOrCreateGlobalGlossary(userId, targetLanguage);
   const existing = Array.isArray(glossary.terms) ? glossary.terms : [];
-  const bySource = new Map(existing.map((t) => [String(t.source || '').trim().toLowerCase(), t]));
+  // normalizeTermKey (NFKC then lowercase) — a precomposed vs combining-diacritic form of the
+  // same macron'd word (visually identical, different codepoints; OCR is a plausible source of
+  // the decomposed form) must dedupe to the same key, or it silently doubles glossary entries.
+  const bySource = new Map(existing.map((t) => [normalizeTermKey(String(t.source || '').trim()), t]));
   for (const t of newTerms) {
-    const key = String(t?.source || '').trim().toLowerCase();
+    const key = normalizeTermKey(String(t?.source || '').trim());
     if (!key || bySource.has(key)) continue;
     bySource.set(key, t);
   }
@@ -360,6 +368,118 @@ router.post('/glossaries/global/:lang/terms', async (req, res) => {
     await upsertGlobalGlossaryTerms(req.user.id, req.params.lang, cleanTerms);
     const glossary = await findOrCreateGlobalGlossary(req.user.id, req.params.lang);
     res.json(glossary);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Lessons learnt audit log ──────────────────────────────────────────────────
+// "Lessons learnt" writes go to two places that carry no history of their own: a growing free-
+// text Settings blob (translate_custom_instructions, global — applies to every job/language) and
+// a per-language learned glossary's term list (translate_glossaries, isGlobal=TRUE). This table
+// is the audit trail neither of those provides: one row per applied item, with a date and the
+// job it came from, so "what did we apply, and when" is answerable without reconstructing it
+// from a text blob and term `note` fields.
+router.get('/lessons', async (req, res) => {
+  try {
+    const { scope, targetLanguage, limit } = req.query;
+    const where = [`"userId"=$1`];
+    const params = [req.user.id];
+    if (scope === 'global' || scope === 'language') {
+      params.push(scope);
+      where.push(`scope=$${params.length}`);
+    }
+    if (targetLanguage) {
+      params.push(targetLanguage);
+      where.push(`"targetLanguage"=$${params.length}`);
+    }
+    params.push(Math.min(500, Math.max(1, parseInt(limit, 10) || 200)));
+    const { rows } = await pool.query(
+      `SELECT id, scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail,
+              "jobId", "jobFilename", "createdAt"
+       FROM translate_lessons_log WHERE ${where.join(' AND ')}
+       ORDER BY "createdAt" DESC LIMIT $${params.length}`,
+      params
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Single endpoint for the Lessons learnt modal's "Apply selected" action — replaces two separate
+// client-side calls (POST /settings + POST /glossaries/global/:lang/terms) with one request that
+// also writes the audit rows, so the write and its log entry can't drift apart (e.g. a client
+// crash between the two old calls used to mean an applied change with no record of it).
+router.post('/lessons/apply', async (req, res) => {
+  try {
+    const { targetLanguage, globalLines, terms, jobId, jobFilename } = req.body || {};
+    const cleanGlobalLines = (Array.isArray(globalLines) ? globalLines : [])
+      .map((l) => String(l || '').trim()).filter(Boolean);
+    const cleanTerms = (Array.isArray(terms) ? terms : [])
+      .filter((t) => t && String(t.source || '').trim())
+      .map((t) => ({
+        source: String(t.source).trim(),
+        target: String(t.target || '').trim(),
+        note: t.note ? String(t.note).trim() : undefined,
+        doNotTranslate: !!t.doNotTranslate,
+        disposition: t.disposition || 'Lock rendering',
+      }));
+
+    if (!cleanGlobalLines.length && !cleanTerms.length) {
+      return res.status(400).json({ error: 'Nothing to apply' });
+    }
+    if (cleanTerms.length && !targetLanguage) {
+      return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
+    }
+
+    const logRows = [];
+
+    if (cleanGlobalLines.length) {
+      const { rows: settingsRows } = await pool.query(
+        `SELECT value FROM settings WHERE "userId"=$1 AND key='translate_custom_instructions'`,
+        [req.user.id]
+      );
+      const existing = settingsRows[0]?.value || '';
+      const merged = [existing, cleanGlobalLines.map((l) => `- ${l}`).join('\n')].filter(Boolean).join('\n\n');
+      await pool.query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1, 'translate_custom_instructions', $2)
+         ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
+        [req.user.id, merged]
+      );
+      for (const line of cleanGlobalLines) {
+        logRows.push({ scope: 'global', targetLanguage: null, disposition: 'Global rule', sourceTerm: null, targetTerm: null, detail: line });
+      }
+    }
+
+    if (cleanTerms.length) {
+      await upsertGlobalGlossaryTerms(req.user.id, targetLanguage, cleanTerms);
+      for (const t of cleanTerms) {
+        logRows.push({
+          scope: 'language', targetLanguage, disposition: t.disposition,
+          sourceTerm: t.source, targetTerm: t.doNotTranslate ? '(do not translate)' : t.target,
+          detail: t.note || `${t.source} → ${t.doNotTranslate ? 'do not translate' : t.target}`,
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const r of logRows) {
+        await client.query(
+          `INSERT INTO translate_lessons_log
+             ("userId", scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail, "jobId", "jobFilename")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.user.id, r.scope, r.targetLanguage, r.disposition, r.sourceTerm, r.targetTerm, r.detail,
+            jobId ? parseInt(jobId, 10) : null, jobFilename || null]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    res.json({ ok: true, globalApplied: cleanGlobalLines.length, termsApplied: cleanTerms.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -406,7 +526,7 @@ router.get('/jobs/:id/status', async (req, res) => {
               "pageCount", "scannedPageCount", "avgOcrConfidence", "translatedTextJson",
               "qaSummaryJson", "proposedGlossaryJson", "intakeAnswers",
               ("translatedFile" IS NOT NULL) AS "hasNativeOutput", "translatedFileName",
-              "errorMessage", "completedAt"
+              "errorMessage", "completedAt", "lastProgressAt"
        FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
       [req.params.id, req.user.id]
     );
@@ -434,6 +554,7 @@ const ORIGINAL_MIME_BY_EXT = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xls: 'application/vnd.ms-excel',
+  txt: 'text/plain',
 };
 
 // Lets a reviewer pull up the untouched source alongside the translation/QA report — useful
@@ -464,6 +585,44 @@ router.get('/jobs/:id/download-native', async (req, res) => {
     res.setHeader('Content-Type', rows[0].translatedFileMime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${rows[0].translatedFileName || 'translated-document'}"`);
     res.send(rows[0].translatedFile);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Plain-text export of the translation itself (not the QA report) — for a reviewer who wants to
+// paste the wording somewhere else, or diff it against another tool, without opening a PDF.
+// Translation-only output, one paragraph per line, page/sheet breaks marked — no source column,
+// no styling. Built fresh from translatedTextJson rather than re-parsing the stored PDF, so it's
+// exactly the text the PDF was generated from, unaffected by anything a PDF viewer/extractor
+// does to the rendered file.
+router.get('/jobs/:id/download-text', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT filename, "translatedTextJson" FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    const row = rows[0];
+    if (!row?.translatedTextJson) return res.status(404).json({ error: 'Translated text not available for this job' });
+    const payload = typeof row.translatedTextJson === 'string'
+      ? JSON.parse(row.translatedTextJson)
+      : row.translatedTextJson;
+    const translatedByPage = payload?.translatedByPage || {};
+    const pageLabels = payload?.pageLabels || {};
+    const pageCount = payload?.pageCount || Object.keys(translatedByPage).length;
+    const sourceFormat = payload?.sourceFormat || 'pdf';
+    const sectionWord = sourceFormat === 'xlsx' || sourceFormat === 'xls' ? 'Sheet' : 'Page';
+
+    const sections = [];
+    for (let pg = 1; pg <= pageCount; pg++) {
+      const paras = translatedByPage[pg] || translatedByPage[String(pg)] || [];
+      if (!paras.length) continue;
+      const label = pageLabels[pg] || pageLabels[String(pg)] || `${sectionWord} ${pg}`;
+      sections.push(pageCount > 1 ? `--- ${label} ---\n\n${paras.join('\n\n')}` : paras.join('\n\n'));
+    }
+
+    const base = (row.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_') || 'document';
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.txt"`);
+    res.send(sections.join('\n\n'));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -619,11 +778,11 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
 
 // ── Submit job ────────────────────────────────────────────────────────────────
 router.post('/jobs', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   const engine = String(req.body.engine || 'llm').toLowerCase() === 'google' ? 'google' : 'llm';
@@ -737,11 +896,11 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 // Route kept (unused by the client) rather than removed, since translate_jobs."batchId" and
 // existing rows still reference it — deleting it is a bigger change than this ask needs.
 router.post('/jobs/batch', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   let targetLanguages;
@@ -1011,15 +1170,17 @@ async function processTranslateJob(
       ? 'Reconstructing paragraphs…'
       : sourceFormat === 'docx'
         ? 'Preparing Word document text…'
-        : 'Preparing spreadsheet cells…',
+        : sourceFormat === 'txt'
+          ? 'Preparing text…'
+          : 'Preparing spreadsheet cells…',
     progress: 38,
   });
 
-  const sourceSkim = Object.keys(paragraphsByPage)
+  const sourceFullText = Object.keys(paragraphsByPage)
     .map(Number).sort((a, b) => a - b)
     .flatMap(p => paragraphsByPage[p])
-    .join('\n')
-    .slice(0, 8000);
+    .join('\n');
+  const sourceSkim = sourceFullText.slice(0, 8000);
 
   if (!sourceSkim.trim()) {
     throw new Error('No extractable text found in this file');
@@ -1041,7 +1202,12 @@ async function processTranslateJob(
         `SELECT terms FROM translate_glossaries WHERE id=$1 AND "userId"=$2`,
         [glossaryId, userId]
       );
-      existingTerms = rows[0]?.terms || [];
+      // Self-heals a saved/global glossary that already picked up a hallucinated term (e.g. a
+      // truncated macron fragment like "ōrero" from before dropHallucinatedTerms existed in
+      // proposeGlossary) — checked against the FULL document text, not the 8000-char sourceSkim
+      // below, so a legitimate carried-over term late in a long document isn't wrongly dropped
+      // just for falling outside that truncated preview.
+      existingTerms = dropHallucinatedTerms(rows[0]?.terms || [], sourceFullText);
     } catch {}
   }
 
@@ -1055,7 +1221,7 @@ async function processTranslateJob(
     const bySource = new Map();
     for (const t of [...lockedDoNotTranslateTerms(), ...existingTerms, ...mustKeep]) {
       if (!t?.source) continue;
-      const key = String(t.source).toLowerCase();
+      const key = normalizeTermKey(String(t.source));
       if (!bySource.has(key)) bySource.set(key, t);
     }
     return [...bySource.values()];
@@ -1141,15 +1307,18 @@ async function processTranslateJob(
   });
 
   // ── 4b. Translation memory lookup (exact match only) ────────────────────────
-  // Paragraphs already translated for this user/language pair are reused verbatim instead of
-  // being re-sent to the model — saves cost on repeat boilerplate and keeps wording identical
-  // across jobs. Google-engine jobs still benefit (memory is keyed by language pair, not engine).
+  // Paragraphs already translated for this user/language pair AND engine are reused verbatim
+  // instead of being re-sent to the model — saves cost on repeat boilerplate and keeps wording
+  // identical across jobs. Scoped by engine (not just language pair) since confirmed real bug:
+  // a user picking LLM after running the same document through Google (or vice versa) would
+  // otherwise silently get the OTHER engine's cached output back — defeating an explicit engine
+  // choice, especially when the whole point of running both was to compare them.
   let tmHits = new Map();
   try {
     const allPagesForTm = Object.keys(paragraphsByPage).map(Number);
     const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p]);
     tmHits = await translateMemory.lookupExact({
-      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, texts: allTexts,
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine, texts: allTexts,
     });
   } catch (err) {
     console.warn('[translate] TM lookup failed:', err.message);
@@ -1193,7 +1362,16 @@ async function processTranslateJob(
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = chunk.paras.map(p => isCodeLikeArtifact(p.text));
-      const tmFlags = chunk.paras.map(p => tmHits.has(translateMemory.normalize(p.text)));
+      // A TM hit is only trusted if the cached value doesn't itself look broken — confirmed real
+      // gap: a one-off bad translation saved to TM (before the savePairs filter was widened)
+      // would self-perpetuate forever, since a trusted TM hit skips translation entirely on
+      // reuse. If the cached target now fails the same placeholder check savePairs uses, drop
+      // the hit and let this paragraph go through translateIdxs for a fresh (and, via savePairs'
+      // ON CONFLICT upsert, self-healing) translation instead of reusing the corrupt value again.
+      const tmFlags = chunk.paras.map(p => {
+        const key = translateMemory.normalize(p.text);
+        return tmHits.has(key) && !findPlaceholder(tmHits.get(key));
+      });
       const translateIdxs = chunk.paras.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
       const texts = translateIdxs.map(i => wrapDoNotTranslate(chunk.paras[i].text, glossaryTerms));
       totalCharCount += texts.reduce((s, t) => s + t.length, 0);
@@ -1270,12 +1448,27 @@ async function processTranslateJob(
     const LLM_CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.TRANSLATE_LLM_CONCURRENCY) || 6));
     let inFlight = 0;
     const chunkResults = await mapPool(chunks, LLM_CONCURRENCY, async (chunk, chunkIndex) => {
+      // Confirmed real gap: checkJobCancelled was only called at stage boundaries, not inside
+      // this per-chunk worker — a cancel click let every in-flight chunk (each potentially
+      // recursing to depth 6-7 via splitAndRetryTranslate) run to completion before the next
+      // checkpoint, contradicting the cancel endpoint's own comment that a job "stops on its own
+      // next checkpoint." mapPool is a true worker pool (each slot pulls the next chunk only when
+      // free, not all-at-once), so throwing here stops this slot from starting the NEXT chunk —
+      // combined with the post-translate check below, cancellation is caught either before a
+      // chunk starts or right after it finishes, instead of only after the whole translate stage.
+      await checkJobCancelled(jobId);
       inFlight += 1;
       const texts = chunk.paras.map(p => p.text);
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = texts.map(t => isCodeLikeArtifact(t));
-      const tmFlags = texts.map(t => tmHits.has(translateMemory.normalize(t)));
+      // See the matching comment in the Google-engine branch above — a TM hit is only trusted if
+      // the cached value doesn't itself look broken, so a bad pre-existing TM entry gets a fresh
+      // (self-healing) translation instead of being reused forever.
+      const tmFlags = texts.map(t => {
+        const key = translateMemory.normalize(t);
+        return tmHits.has(key) && !findPlaceholder(tmHits.get(key));
+      });
       const translateIdxs = texts.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
       tmReuseCount += tmFlags.filter(Boolean).length;
       await setJobStatus(jobId, {
@@ -1308,6 +1501,10 @@ async function processTranslateJob(
           translateIdxs.forEach((i) => { translations[i] = `[Translation error] ${texts[i]}`; });
         }
       }
+      // Re-check right after translation resolves, before this chunk's results get applied
+      // below (via mapPool's returned array) — a cancel that landed mid-translate must still
+      // stop this chunk's output from being written, not just block the NEXT chunk from starting.
+      await checkJobCancelled(jobId);
       inFlight -= 1;
       chunksDone += 1;
       const chars = texts.reduce((s, t) => s + t.length, 0);
@@ -1382,26 +1579,37 @@ async function processTranslateJob(
 
   // ── 5c. Glossary drift: auto-fix the safe case, report the rest ─────────────
   // Chunks translate in parallel with no shared state, so a forced term (user-declared or
-  // auto-locked above) can still land differently per chunk. Two passes, both pure string
+  // auto-locked above) can still land differently per chunk. Three passes, all pure string
   // comparison — no LLM calls:
   //  1. autoFixGlossaryDrift — the common real case (confirmed on an actual job): a chunk left
   //     the source term untranslated, verbatim, inside the target. That's mechanically fixable
   //     with a direct string replace, so we just do it instead of only flagging it.
-  //  2. Whatever's left (a genuinely different wrong rendering, not a plain leftover) still can't
-  //     be safely auto-corrected — surfaced in the QA summary same as before.
+  //  2. autoFixPartialReoTermDrift — a do-not-translate term shaped "<prefix> Reo <Language>"
+  //     (e.g. "Tāone Reo Māori") gets partially obeyed: prefix left alone, but the embedded
+  //     "Reo <Language>" still rendered as "<Language> language" (a normal, correct translation
+  //     everywhere else in the document, which is exactly why the model's prior for it is strong
+  //     even inside a locked name). Confirmed on a real job, benchmarked against Google
+  //     Translate on the same document — both produced the identical hybrid at the same
+  //     sentence, but this pipeline additionally flip-flopped between 3 different renderings of
+  //     the same term across the document, unlike Google's one (still wrong) consistent choice.
+  //     This closes that consistency gap.
+  //  3. Whatever's left (a genuinely different wrong rendering, not a plain leftover or a
+  //     reconstructable hybrid) still can't be safely auto-corrected — surfaced in the QA
+  //     summary same as before.
   let glossaryDriftTerms = [];
   let glossaryDriftAutoFixedCount = 0;
   if (engine === 'llm') {
     const { fixedCount, remainingTerms } = autoFixGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
-    glossaryDriftAutoFixedCount = fixedCount;
-    if (fixedCount > 0) {
-      // Sync fixed targets back into translatedByPage (autoFixGlossaryDrift mutated pair.target).
+    const { fixedCount: reoFixedCount } = autoFixPartialReoTermDrift({ pairs: reviewPairs, glossaryTerms });
+    glossaryDriftAutoFixedCount = fixedCount + reoFixedCount;
+    if (glossaryDriftAutoFixedCount > 0) {
+      // Sync fixed targets back into translatedByPage (both passes mutate pair.target).
       for (const pair of reviewPairs) {
         if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
           translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
         }
       }
-      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s)`);
+      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s), partial-reo-term drift auto-fixed ${reoFixedCount} occurrence(s)`);
     }
     if (remainingTerms.length) {
       // NOT a new-term proposal — `t.target` is already the glossary's existing locked
@@ -1419,7 +1627,10 @@ async function processTranslateJob(
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
-  const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage, glossaryTerms });
+  const gate = hardSanityGate(reviewPairs, {
+    sourceLanguage, targetLanguage, glossaryTerms,
+    repairStillFailing: repairStats?.stillFailing || 0,
+  });
 
   // ── 7. Review pass ──────────────────────────────────────────────────────────
   let qaSummary = {
@@ -1566,12 +1777,12 @@ async function processTranslateJob(
   // ── 7b. Translation memory: save this job's pairs, bump reuse counts ────────
   try {
     await translateMemory.savePairs({
-      userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine,
       domain: intakeAnswers?.domain || null, pairs: reviewPairs,
     });
     if (tmReuseCount > 0) {
       await translateMemory.bumpHitCounts({
-        userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+        userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine,
         sources: [...tmHits.keys()],
       });
     }

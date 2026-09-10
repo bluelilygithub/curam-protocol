@@ -1898,6 +1898,30 @@ async function initSchema() {
     ON translate_term_drift ("userId", "targetLanguage", "termKey")
   `);
 
+  // Audit trail for "Lessons learnt" apply actions — the panel's own selections write global
+  // instructions to a Settings text blob and glossary terms to a per-language learned glossary,
+  // neither of which carries any history of what was applied, when, or from which job. One row
+  // per applied item (a global instruction line, or a locked/do-not-translate/regional-form
+  // term), so both "Global rules applied" and "Terms locked for <language>" can be listed with a
+  // date and source job, instead of reconstructing it from a growing text blob and term `note`
+  // fields. Read-only display data — never consulted by the translate pipeline itself.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_lessons_log (
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scope            TEXT NOT NULL CHECK (scope IN ('global', 'language')),
+      "targetLanguage" TEXT,
+      disposition      TEXT NOT NULL,
+      "sourceTerm"     TEXT,
+      "targetTerm"     TEXT,
+      detail           TEXT NOT NULL,
+      "jobId"          INTEGER,
+      "jobFilename"    TEXT,
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_lessons_log_user ON translate_lessons_log ("userId", "createdAt" DESC)`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (
       id                  SERIAL PRIMARY KEY,
@@ -1923,6 +1947,13 @@ async function initSchema() {
       "completedAt"       TIMESTAMPTZ
     )
   `);
+
+  // lastProgressAt — bumped on every setJobStatus write (server/routes/translate.js). Lets the
+  // client distinguish "still working, just slow" from "genuinely hung" — before this, a job
+  // stuck inside a single long-running call (an LLM call the cancellation checkpoints don't
+  // cover mid-call) reported the same stage/percent forever with nothing to tell a stall apart
+  // from ordinary progress.
+  await pool.query(`ALTER TABLE translate_jobs ADD COLUMN IF NOT EXISTS "lastProgressAt" TIMESTAMPTZ DEFAULT NOW()`);
 
   // 90-day retention cleanup
   await pool.query(`
@@ -1994,11 +2025,21 @@ async function initSchema() {
       "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // "engine" (llm | google) — confirmed real bug: TM was originally engine-agnostic by design
+  // ("Google-engine jobs still benefit too"), but that means picking LLM after a Google-engine
+  // run of the same document (or vice versa) silently reuses the OTHER engine's cached output —
+  // defeating the entire point of an explicit engine choice, especially for a user deliberately
+  // comparing the two engines against each other. Segments a user explicitly chose an engine for
+  // must come from that engine. Existing rows get 'llm' as a safe default (LLM was the original/
+  // default engine before Google was added) rather than NULL, so the unique index below can
+  // include it without nullable-column matching surprises.
+  await pool.query(`ALTER TABLE translate_memory ADD COLUMN IF NOT EXISTS engine TEXT NOT NULL DEFAULT 'llm'`);
   // Indexed on a fixed-length hash, not the raw paragraph text — a long segment can exceed
   // Postgres's btree index row-size limit if indexed directly.
+  await pool.query(`DROP INDEX IF EXISTS idx_translate_memory_unique`);
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_memory_unique
-      ON translate_memory ("userId", "sourceLang", "targetLang", "sourceHash")
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_memory_unique_v2
+      ON translate_memory ("userId", "sourceLang", "targetLang", engine, "sourceHash")
   `);
 
   // ── Guitar Learning Agent ─────────────────────────────────────────────────────
