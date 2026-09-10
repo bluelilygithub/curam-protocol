@@ -7,12 +7,14 @@ const { resolveTranslateModels, getTranslateAgentCardConfig, loadCustomInstructi
 const {
   proposeGlossary,
   autoFixGlossaryDrift,
+  autoFixPartialReoTermDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
   hardSanityGate,
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
+  dropHallucinatedTerms,
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
@@ -58,7 +60,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (isAllowedUpload(file.originalname, file.mimetype)) return cb(null, true);
-    cb(new Error('Only PDF, Word (.docx), or Excel (.xlsx/.xls) files are accepted'));
+    cb(new Error('Only PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt) files are accepted'));
   },
 });
 
@@ -363,6 +365,118 @@ router.post('/glossaries/global/:lang/terms', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Lessons learnt audit log ──────────────────────────────────────────────────
+// "Lessons learnt" writes go to two places that carry no history of their own: a growing free-
+// text Settings blob (translate_custom_instructions, global — applies to every job/language) and
+// a per-language learned glossary's term list (translate_glossaries, isGlobal=TRUE). This table
+// is the audit trail neither of those provides: one row per applied item, with a date and the
+// job it came from, so "what did we apply, and when" is answerable without reconstructing it
+// from a text blob and term `note` fields.
+router.get('/lessons', async (req, res) => {
+  try {
+    const { scope, targetLanguage, limit } = req.query;
+    const where = [`"userId"=$1`];
+    const params = [req.user.id];
+    if (scope === 'global' || scope === 'language') {
+      params.push(scope);
+      where.push(`scope=$${params.length}`);
+    }
+    if (targetLanguage) {
+      params.push(targetLanguage);
+      where.push(`"targetLanguage"=$${params.length}`);
+    }
+    params.push(Math.min(500, Math.max(1, parseInt(limit, 10) || 200)));
+    const { rows } = await pool.query(
+      `SELECT id, scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail,
+              "jobId", "jobFilename", "createdAt"
+       FROM translate_lessons_log WHERE ${where.join(' AND ')}
+       ORDER BY "createdAt" DESC LIMIT $${params.length}`,
+      params
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Single endpoint for the Lessons learnt modal's "Apply selected" action — replaces two separate
+// client-side calls (POST /settings + POST /glossaries/global/:lang/terms) with one request that
+// also writes the audit rows, so the write and its log entry can't drift apart (e.g. a client
+// crash between the two old calls used to mean an applied change with no record of it).
+router.post('/lessons/apply', async (req, res) => {
+  try {
+    const { targetLanguage, globalLines, terms, jobId, jobFilename } = req.body || {};
+    const cleanGlobalLines = (Array.isArray(globalLines) ? globalLines : [])
+      .map((l) => String(l || '').trim()).filter(Boolean);
+    const cleanTerms = (Array.isArray(terms) ? terms : [])
+      .filter((t) => t && String(t.source || '').trim())
+      .map((t) => ({
+        source: String(t.source).trim(),
+        target: String(t.target || '').trim(),
+        note: t.note ? String(t.note).trim() : undefined,
+        doNotTranslate: !!t.doNotTranslate,
+        disposition: t.disposition || 'Lock rendering',
+      }));
+
+    if (!cleanGlobalLines.length && !cleanTerms.length) {
+      return res.status(400).json({ error: 'Nothing to apply' });
+    }
+    if (cleanTerms.length && !targetLanguage) {
+      return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
+    }
+
+    const logRows = [];
+
+    if (cleanGlobalLines.length) {
+      const { rows: settingsRows } = await pool.query(
+        `SELECT value FROM settings WHERE "userId"=$1 AND key='translate_custom_instructions'`,
+        [req.user.id]
+      );
+      const existing = settingsRows[0]?.value || '';
+      const merged = [existing, cleanGlobalLines.map((l) => `- ${l}`).join('\n')].filter(Boolean).join('\n\n');
+      await pool.query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1, 'translate_custom_instructions', $2)
+         ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
+        [req.user.id, merged]
+      );
+      for (const line of cleanGlobalLines) {
+        logRows.push({ scope: 'global', targetLanguage: null, disposition: 'Global rule', sourceTerm: null, targetTerm: null, detail: line });
+      }
+    }
+
+    if (cleanTerms.length) {
+      await upsertGlobalGlossaryTerms(req.user.id, targetLanguage, cleanTerms);
+      for (const t of cleanTerms) {
+        logRows.push({
+          scope: 'language', targetLanguage, disposition: t.disposition,
+          sourceTerm: t.source, targetTerm: t.doNotTranslate ? '(do not translate)' : t.target,
+          detail: t.note || `${t.source} → ${t.doNotTranslate ? 'do not translate' : t.target}`,
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const r of logRows) {
+        await client.query(
+          `INSERT INTO translate_lessons_log
+             ("userId", scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail, "jobId", "jobFilename")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.user.id, r.scope, r.targetLanguage, r.disposition, r.sourceTerm, r.targetTerm, r.detail,
+            jobId ? parseInt(jobId, 10) : null, jobFilename || null]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    res.json({ ok: true, globalApplied: cleanGlobalLines.length, termsApplied: cleanTerms.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Translation memory ──────────────────────────────────────────────────────────
 router.get('/memory/stats', async (req, res) => {
   try {
@@ -434,6 +548,7 @@ const ORIGINAL_MIME_BY_EXT = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xls: 'application/vnd.ms-excel',
+  txt: 'text/plain',
 };
 
 // Lets a reviewer pull up the untouched source alongside the translation/QA report — useful
@@ -464,6 +579,44 @@ router.get('/jobs/:id/download-native', async (req, res) => {
     res.setHeader('Content-Type', rows[0].translatedFileMime || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${rows[0].translatedFileName || 'translated-document'}"`);
     res.send(rows[0].translatedFile);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Plain-text export of the translation itself (not the QA report) — for a reviewer who wants to
+// paste the wording somewhere else, or diff it against another tool, without opening a PDF.
+// Translation-only output, one paragraph per line, page/sheet breaks marked — no source column,
+// no styling. Built fresh from translatedTextJson rather than re-parsing the stored PDF, so it's
+// exactly the text the PDF was generated from, unaffected by anything a PDF viewer/extractor
+// does to the rendered file.
+router.get('/jobs/:id/download-text', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT filename, "translatedTextJson" FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    const row = rows[0];
+    if (!row?.translatedTextJson) return res.status(404).json({ error: 'Translated text not available for this job' });
+    const payload = typeof row.translatedTextJson === 'string'
+      ? JSON.parse(row.translatedTextJson)
+      : row.translatedTextJson;
+    const translatedByPage = payload?.translatedByPage || {};
+    const pageLabels = payload?.pageLabels || {};
+    const pageCount = payload?.pageCount || Object.keys(translatedByPage).length;
+    const sourceFormat = payload?.sourceFormat || 'pdf';
+    const sectionWord = sourceFormat === 'xlsx' || sourceFormat === 'xls' ? 'Sheet' : 'Page';
+
+    const sections = [];
+    for (let pg = 1; pg <= pageCount; pg++) {
+      const paras = translatedByPage[pg] || translatedByPage[String(pg)] || [];
+      if (!paras.length) continue;
+      const label = pageLabels[pg] || pageLabels[String(pg)] || `${sectionWord} ${pg}`;
+      sections.push(pageCount > 1 ? `--- ${label} ---\n\n${paras.join('\n\n')}` : paras.join('\n\n'));
+    }
+
+    const base = (row.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_') || 'document';
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.txt"`);
+    res.send(sections.join('\n\n'));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -619,11 +772,11 @@ router.post('/jobs/:id/complete', upload.single('translatedPdf'), async (req, re
 
 // ── Submit job ────────────────────────────────────────────────────────────────
 router.post('/jobs', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   const engine = String(req.body.engine || 'llm').toLowerCase() === 'google' ? 'google' : 'llm';
@@ -737,11 +890,11 @@ router.post('/jobs', sourceUpload, async (req, res) => {
 // Route kept (unused by the client) rather than removed, since translate_jobs."batchId" and
 // existing rows still reference it — deleting it is a bigger change than this ask needs.
 router.post('/jobs/batch', sourceUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, or Excel .xlsx)' });
+  if (!req.file) return res.status(400).json({ error: 'File required (PDF, Word .docx, Excel .xlsx, or .txt)' });
 
   const sourceFormat = detectSourceFormat(req.file.originalname, req.file.mimetype);
   if (!sourceFormat) {
-    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), or Excel (.xlsx/.xls).' });
+    return res.status(400).json({ error: 'Unsupported file type. Use PDF, Word (.docx), Excel (.xlsx/.xls), or plain text (.txt).' });
   }
 
   let targetLanguages;
@@ -1011,15 +1164,17 @@ async function processTranslateJob(
       ? 'Reconstructing paragraphs…'
       : sourceFormat === 'docx'
         ? 'Preparing Word document text…'
-        : 'Preparing spreadsheet cells…',
+        : sourceFormat === 'txt'
+          ? 'Preparing text…'
+          : 'Preparing spreadsheet cells…',
     progress: 38,
   });
 
-  const sourceSkim = Object.keys(paragraphsByPage)
+  const sourceFullText = Object.keys(paragraphsByPage)
     .map(Number).sort((a, b) => a - b)
     .flatMap(p => paragraphsByPage[p])
-    .join('\n')
-    .slice(0, 8000);
+    .join('\n');
+  const sourceSkim = sourceFullText.slice(0, 8000);
 
   if (!sourceSkim.trim()) {
     throw new Error('No extractable text found in this file');
@@ -1041,7 +1196,12 @@ async function processTranslateJob(
         `SELECT terms FROM translate_glossaries WHERE id=$1 AND "userId"=$2`,
         [glossaryId, userId]
       );
-      existingTerms = rows[0]?.terms || [];
+      // Self-heals a saved/global glossary that already picked up a hallucinated term (e.g. a
+      // truncated macron fragment like "ōrero" from before dropHallucinatedTerms existed in
+      // proposeGlossary) — checked against the FULL document text, not the 8000-char sourceSkim
+      // below, so a legitimate carried-over term late in a long document isn't wrongly dropped
+      // just for falling outside that truncated preview.
+      existingTerms = dropHallucinatedTerms(rows[0]?.terms || [], sourceFullText);
     } catch {}
   }
 
@@ -1382,26 +1542,37 @@ async function processTranslateJob(
 
   // ── 5c. Glossary drift: auto-fix the safe case, report the rest ─────────────
   // Chunks translate in parallel with no shared state, so a forced term (user-declared or
-  // auto-locked above) can still land differently per chunk. Two passes, both pure string
+  // auto-locked above) can still land differently per chunk. Three passes, all pure string
   // comparison — no LLM calls:
   //  1. autoFixGlossaryDrift — the common real case (confirmed on an actual job): a chunk left
   //     the source term untranslated, verbatim, inside the target. That's mechanically fixable
   //     with a direct string replace, so we just do it instead of only flagging it.
-  //  2. Whatever's left (a genuinely different wrong rendering, not a plain leftover) still can't
-  //     be safely auto-corrected — surfaced in the QA summary same as before.
+  //  2. autoFixPartialReoTermDrift — a do-not-translate term shaped "<prefix> Reo <Language>"
+  //     (e.g. "Tāone Reo Māori") gets partially obeyed: prefix left alone, but the embedded
+  //     "Reo <Language>" still rendered as "<Language> language" (a normal, correct translation
+  //     everywhere else in the document, which is exactly why the model's prior for it is strong
+  //     even inside a locked name). Confirmed on a real job, benchmarked against Google
+  //     Translate on the same document — both produced the identical hybrid at the same
+  //     sentence, but this pipeline additionally flip-flopped between 3 different renderings of
+  //     the same term across the document, unlike Google's one (still wrong) consistent choice.
+  //     This closes that consistency gap.
+  //  3. Whatever's left (a genuinely different wrong rendering, not a plain leftover or a
+  //     reconstructable hybrid) still can't be safely auto-corrected — surfaced in the QA
+  //     summary same as before.
   let glossaryDriftTerms = [];
   let glossaryDriftAutoFixedCount = 0;
   if (engine === 'llm') {
     const { fixedCount, remainingTerms } = autoFixGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
-    glossaryDriftAutoFixedCount = fixedCount;
-    if (fixedCount > 0) {
-      // Sync fixed targets back into translatedByPage (autoFixGlossaryDrift mutated pair.target).
+    const { fixedCount: reoFixedCount } = autoFixPartialReoTermDrift({ pairs: reviewPairs, glossaryTerms });
+    glossaryDriftAutoFixedCount = fixedCount + reoFixedCount;
+    if (glossaryDriftAutoFixedCount > 0) {
+      // Sync fixed targets back into translatedByPage (both passes mutate pair.target).
       for (const pair of reviewPairs) {
         if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
           translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
         }
       }
-      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s)`);
+      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s), partial-reo-term drift auto-fixed ${reoFixedCount} occurrence(s)`);
     }
     if (remainingTerms.length) {
       // NOT a new-term proposal — `t.target` is already the glossary's existing locked

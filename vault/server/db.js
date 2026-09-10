@@ -1898,6 +1898,30 @@ async function initSchema() {
     ON translate_term_drift ("userId", "targetLanguage", "termKey")
   `);
 
+  // Audit trail for "Lessons learnt" apply actions — the panel's own selections write global
+  // instructions to a Settings text blob and glossary terms to a per-language learned glossary,
+  // neither of which carries any history of what was applied, when, or from which job. One row
+  // per applied item (a global instruction line, or a locked/do-not-translate/regional-form
+  // term), so both "Global rules applied" and "Terms locked for <language>" can be listed with a
+  // date and source job, instead of reconstructing it from a growing text blob and term `note`
+  // fields. Read-only display data — never consulted by the translate pipeline itself.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS translate_lessons_log (
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scope            TEXT NOT NULL CHECK (scope IN ('global', 'language')),
+      "targetLanguage" TEXT,
+      disposition      TEXT NOT NULL,
+      "sourceTerm"     TEXT,
+      "targetTerm"     TEXT,
+      detail           TEXT NOT NULL,
+      "jobId"          INTEGER,
+      "jobFilename"    TEXT,
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_translate_lessons_log_user ON translate_lessons_log ("userId", "createdAt" DESC)`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_jobs (
       id                  SERIAL PRIMARY KEY,

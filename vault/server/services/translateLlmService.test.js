@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -78,6 +78,179 @@ test('autoFixGlossaryDrift reports (does not guess) a non-leftover drift', () =>
   assert.strictEqual(fixedCount, 0);
   assert.strictEqual(remainingTerms.length, 1);
   assert.strictEqual(remainingTerms[0].source, 'Tier');
+});
+
+// collapseRepeatedGlossaryTarget — confirmed real case: proposeGlossary's LLM call degenerated
+// on a "X / Y" bilingual gloss for te reo Māori terms, repeating its own alternatives several
+// times over ("treasure / cherished taonga" -> "treasure / cherished treasure / cherished
+// treasure / cherished taonga"), and applyGlossarySubstitutions pasted it in verbatim.
+test('collapses a garbled recursive gloss to first + last alternative', () => {
+  const out = collapseRepeatedGlossaryTarget(
+    'treasure / cherished treasure / cherished treasure / cherished taonga',
+  );
+  assert.strictEqual(out, 'treasure / cherished taonga');
+});
+
+test('collapses a shorter garbled chain the same way', () => {
+  const out = collapseRepeatedGlossaryTarget('iwi / tribe / tribe / tribe / tribes');
+  assert.strictEqual(out, 'iwi / tribes');
+});
+
+test('leaves a normal 2-alternative gloss untouched', () => {
+  assert.strictEqual(collapseRepeatedGlossaryTarget('research / studies'), 'research / studies');
+});
+
+test('leaves a single plain target untouched', () => {
+  assert.strictEqual(collapseRepeatedGlossaryTarget('Palier'), 'Palier');
+});
+
+test('applyGlossarySubstitutions sanitizes a garbled target before substituting', () => {
+  const terms = [{ source: 'taonga', target: 'treasure / cherished treasure / cherished treasure / cherished taonga' }];
+  const out = applyGlossarySubstitutions('This taonga is precious.', terms);
+  assert.strictEqual(out, 'This treasure / cherished taonga is precious.');
+});
+
+// collapseRepeatedPhraseLoops — confirmed real case: the TRANSLATOR MODEL's own raw output
+// (not a glossary-substitution leak — collapseRepeatedGlossaryTarget doesn't touch this) grew a
+// repetition-loop over a later run of the same document: "treasure / cherished treasure /
+// cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished
+// taonga" (6 repeats of "cherished treasure"). This is a general guard applied inside
+// applyGlossarySubstitutions to every translated segment, regardless of where the loop came from.
+test('collapses a real 6x repetition-loop in translated prose', () => {
+  const out = collapseRepeatedPhraseLoops(
+    'The Māori language is a treasure / cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga passed down.',
+  );
+  assert.strictEqual(out, 'The Māori language is a treasure / cherished treasure / cherished taonga passed down.');
+});
+
+test('collapses a repetition-loop with a differently-worded trailing segment', () => {
+  const out = collapseRepeatedPhraseLoops('deeply precious to Māori iwi / tribe / tribe / tribe / tribe / tribe (tribe) and to Aotearoa');
+  assert.strictEqual(out, 'deeply precious to Māori iwi / tribe (tribe) and to Aotearoa');
+});
+
+test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
+  const text = 'a normal research / studies phrase stays put';
+  assert.strictEqual(collapseRepeatedPhraseLoops(text), text);
+});
+
+// Threshold is "any consecutive exact duplicate", not "3+ occurrences" — a real 2-way gloss
+// always has two DIFFERENT alternatives, so two IDENTICAL consecutive segments can never be
+// legitimate. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
+// needed collapsing too, not just longer 3+ chains.
+test('collapses just 2 identical consecutive occurrences (no false-positive risk)', () => {
+  assert.strictEqual(
+    collapseRepeatedPhraseLoops('deeply precious to iwi / tribe / tribe and to Aotearoa'),
+    'deeply precious to iwi / tribe and to Aotearoa',
+  );
+});
+
+test('applyGlossarySubstitutions also catches a repetition-loop that never involved substitution', () => {
+  // No glossary term matches this text at all — the loop guard must still fire on plain input.
+  const out = applyGlossarySubstitutions(
+    'a treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga result', [],
+  );
+  assert.strictEqual(out, 'a treasure / cherished treasure / cherished taonga result');
+  assert.ok(!out.includes('cherished treasure / cherished treasure'), `loop not collapsed: ${out}`);
+});
+
+// dropHallucinatedTerms — confirmed real case from a QA "Lessons learnt" report: locked terms
+// "ōrero", "ānui", "ītori", "ātou" were flagged as an "enforcement gap" (seen in 9 jobs — most
+// rows "didn't use" the locked rendering). Investigated: those aren't real words. They're
+// truncated fragments of "kōrero", "whānui", "hītori", "rātou" — the same dropped-leading-
+// consonant-before-a-macron-vowel LLM generation defect documented elsewhere in this file, just
+// showing up in a glossary term this time instead of a QA uncertain-term listing. No amount of
+// "enforcement" can make a translator consistently use a rendering for a word that isn't in the
+// document — the real fix is to never lock a term that doesn't verbatim exist in the source.
+const MAORI_SOURCE_SAMPLE = 'He taonga tuku iho te reo Māori. Ka kōrero ngā tāngata i ēnei rā mō ō rātou take, mō te whānui o te motu, mō te hītori o te reo.';
+
+test('dropHallucinatedTerms keeps a real word that appears in the source', () => {
+  const out = dropHallucinatedTerms([{ source: 'kōrero', target: 'speech' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 1);
+});
+
+test('dropHallucinatedTerms keeps another real word (ēnei)', () => {
+  const out = dropHallucinatedTerms([{ source: 'ēnei', target: 'these' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 1);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "kōrero"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ōrero', target: 'speech / language' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "whānui"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ānui', target: 'widely / broadly' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "hītori"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ītori', target: 'history' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms drops a truncated fragment of "rātou"', () => {
+  const out = dropHallucinatedTerms([{ source: 'ātou', target: 'your / their' }], MAORI_SOURCE_SAMPLE);
+  assert.strictEqual(out.length, 0);
+});
+
+test('dropHallucinatedTerms filters a mixed list, keeping only real words', () => {
+  const terms = [
+    { source: 'kōrero', target: 'speech' },
+    { source: 'ōrero', target: 'speech / language' },
+    { source: 'ēnei', target: 'these' },
+    { source: 'ātou', target: 'your / their' },
+  ];
+  const out = dropHallucinatedTerms(terms, MAORI_SOURCE_SAMPLE).map((t) => t.source);
+  assert.deepStrictEqual(out, ['kōrero', 'ēnei']);
+});
+
+// autoFixPartialReoTermDrift — confirmed on a real job, benchmarked against Google Translate on
+// the same document: a do-not-translate term shaped "<prefix> Reo <Language>" gets partially
+// obeyed — the model leaves <prefix> alone but still renders the embedded "Reo <Language>" as
+// its normal English gloss "<Language> language" ("Tāone Reo Māori" -> "Tāone Māori language",
+// "Te Wiki o te Reo Māori" -> "Te Wiki o te Māori language"). Both this pipeline AND Google made
+// the identical hybrid error at the identical sentence (a shared MT weakness, not unique to this
+// tool) — but this pipeline additionally flip-flopped between 3 different renderings of the same
+// term across one document, unlike Google's one (still wrong) consistent choice. This closes
+// that consistency gap.
+const REO_TERMS = [
+  { source: 'Te Wiki o te Reo Māori', target: '', doNotTranslate: true },
+  { source: 'Tāone Reo Māori', target: '', doNotTranslate: true },
+];
+
+test('autoFixPartialReoTermDrift repairs "Te Wiki o te Māori language" back to the canonical term', () => {
+  const pairs = [{
+    source: 'I tēnei tau, e ahu ana Te Wiki o te Reo Māori ki tō tāone!',
+    target: 'This year, Te Wiki o te Māori language is coming to your town!',
+  }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(pairs[0].target, 'This year, Te Wiki o te Reo Māori is coming to your town!');
+});
+
+test('autoFixPartialReoTermDrift repairs the shorter "Tāone Māori language" hybrid too', () => {
+  const pairs = [{
+    source: "Tohua tō tāone hei 'Tāone Reo Māori'",
+    target: "Designate your town as a 'Tāone Māori language'",
+  }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(pairs[0].target, "Designate your town as a 'Tāone Reo Māori'");
+});
+
+test('autoFixPartialReoTermDrift leaves an already-correct rendering untouched', () => {
+  const pairs = [{ source: 'unrelated', target: 'Te Wiki o te Reo Māori stays correct here' }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 0);
+  assert.strictEqual(pairs[0].target, 'Te Wiki o te Reo Māori stays correct here');
+});
+
+test('autoFixPartialReoTermDrift ignores terms with no "Reo <Language>" shape', () => {
+  const pairs = [{ source: 'x', target: 'Kōhanga Reo language school' }];
+  const { fixedCount } = autoFixPartialReoTermDrift({
+    pairs, glossaryTerms: [{ source: 'Kōhanga Reo', target: '', doNotTranslate: true }],
+  });
+  assert.strictEqual(fixedCount, 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
