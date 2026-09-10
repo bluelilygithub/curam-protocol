@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, reportGlossaryDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms, normalizeTermKey, mergeGlossaryTerms, computeReviewCoverage } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -251,6 +251,88 @@ test('autoFixPartialReoTermDrift ignores terms with no "Reo <Language>" shape', 
     pairs, glossaryTerms: [{ source: 'Kōhanga Reo', target: '', doNotTranslate: true }],
   });
   assert.strictEqual(fixedCount, 0);
+});
+
+// boundedPhraseRegex / Unicode-safe boundaries — confirmed real gap: reportGlossaryDrift,
+// autoFixGlossaryDrift, and autoFixPartialReoTermDrift all used plain `\b`, which doesn't fire
+// before/after a macron'd character. A glossary term starting or ending with one (e.g. "Ōtākou")
+// silently never matched at all in these three functions — drift went undetected/unfixed with a
+// false "clean" QA signal, worse than not checking, since it looks like nothing was ever wrong.
+test('autoFixGlossaryDrift detects and fixes a leak for a term starting with a macron', () => {
+  const pairs = [{ source: 'Kei te haere mai a Ōtākou', target: 'Ōtākou is arriving' }];
+  const terms = [{ source: 'Ōtākou', target: 'The Otago Peninsula' }];
+  const { fixedCount, remainingTerms } = autoFixGlossaryDrift({ pairs, glossaryTerms: terms });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(remainingTerms.length, 0);
+  assert.strictEqual(pairs[0].target, 'The Otago Peninsula is arriving');
+});
+
+test('reportGlossaryDrift detects drift for a term ending with a macron', () => {
+  const pairs = [{ source: 'He kōrero mō Whanganui-a-Tara', target: 'A discussion about the capital' }];
+  const terms = [{ source: 'Whanganui-a-Tara', target: 'Wellington' }];
+  const { checked, terms: drifted } = reportGlossaryDrift({ pairs, glossaryTerms: terms });
+  assert.strictEqual(checked, 1);
+  assert.strictEqual(drifted.length, 1);
+  assert.strictEqual(drifted[0].source, 'Whanganui-a-Tara');
+});
+
+test('autoFixPartialReoTermDrift still repairs a hybrid when the prefix itself is macron-bounded', () => {
+  const pairs = [{ source: 'x', target: 'Ōpōtiki Māori language event' }];
+  const terms = [{ source: 'Ōpōtiki Reo Māori', target: '', doNotTranslate: true }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: terms });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(pairs[0].target, 'Ōpōtiki Reo Māori event');
+});
+
+// normalizeTermKey / mergeGlossaryTerms dedup — a precomposed macron'd word (e.g. "ko" + U+014D
+// "rero", i.e. a single precomposed codepoint for "o") and its combining-diacritic form (base
+// "o" + U+0304 combining macron) render visually identical but are different strings to plain
+// .toLowerCase(). Without NFKC normalization first, two glossary entries for what's visually the
+// same term would be treated as different keys and NOT deduped — OCR output is a plausible
+// source of the decomposed form, so this could silently double glossary entries over time.
+// Built via String.fromCodePoint, not typed macron characters, to guarantee the two strings are
+// actually byte-distinct rather than both accidentally normalizing to the same sequence when
+// this file itself is saved/read.
+const PRECOMPOSED_KORERO = `ko${String.fromCodePoint(0x014d)}rero`;
+const DECOMPOSED_KORERO = `ko${String.fromCodePoint(0x006f, 0x0304)}rero`;
+
+test('normalizeTermKey treats precomposed and decomposed macron forms as the same key', () => {
+  assert.notStrictEqual(PRECOMPOSED_KORERO, DECOMPOSED_KORERO); // confirm they really are different strings first
+  assert.strictEqual(normalizeTermKey(PRECOMPOSED_KORERO), normalizeTermKey(DECOMPOSED_KORERO));
+});
+
+test('mergeGlossaryTerms dedupes precomposed vs decomposed forms of the same term', () => {
+  const merged = mergeGlossaryTerms(
+    [{ source: PRECOMPOSED_KORERO, target: 'speech' }],
+    [{ source: DECOMPOSED_KORERO, target: 'language' }],
+  );
+  assert.strictEqual(merged.length, 1);
+  assert.strictEqual(merged[0].target, 'speech'); // first list wins, same as existing merge semantics
+});
+
+// computeReviewCoverage — confirmed real gap: reviewTranslation's summary set reviewedPairCount
+// to the FULL pair count regardless of whether a review batch's LLM call actually failed,
+// falsely implying every segment got subjective QA review (polarity, uncertain terms, etc.) when
+// a whole batch's worth never did.
+test('computeReviewCoverage reports full coverage when no batch failed', () => {
+  const result = computeReviewCoverage(100, []);
+  assert.deepStrictEqual(result, {
+    reviewedPairCount: 100, unreviewedPairCount: 0, reviewCoverageIncomplete: false,
+  });
+});
+
+test('computeReviewCoverage subtracts failed-batch pairs instead of claiming full coverage', () => {
+  const result = computeReviewCoverage(100, [35]); // one 35-pair batch failed
+  assert.deepStrictEqual(result, {
+    reviewedPairCount: 65, unreviewedPairCount: 35, reviewCoverageIncomplete: true,
+  });
+});
+
+test('computeReviewCoverage sums multiple failed batches', () => {
+  const result = computeReviewCoverage(100, [35, 35]);
+  assert.deepStrictEqual(result, {
+    reviewedPairCount: 30, unreviewedPairCount: 70, reviewCoverageIncomplete: true,
+  });
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

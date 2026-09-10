@@ -15,6 +15,7 @@ const {
   runDeterministicCompletenessCheck,
   repairIncompletePairs,
   dropHallucinatedTerms,
+  normalizeTermKey,
 } = require('../services/translateLlmService');
 const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
@@ -309,7 +310,7 @@ async function recordTermDrift(userId, targetLanguage, uncertainTerms, jobId) {
   if (!terms.length) return;
   const seen = new Set();
   for (const t of terms) {
-    const key = String(t.source).trim().toLowerCase();
+    const key = normalizeTermKey(String(t.source).trim());
     if (!key || seen.has(key)) continue; // one bump per job even if the term drifted on several rows
     seen.add(key);
     await pool.query(
@@ -329,9 +330,12 @@ async function upsertGlobalGlossaryTerms(userId, targetLanguage, newTerms) {
   if (!Array.isArray(newTerms) || !newTerms.length) return;
   const glossary = await findOrCreateGlobalGlossary(userId, targetLanguage);
   const existing = Array.isArray(glossary.terms) ? glossary.terms : [];
-  const bySource = new Map(existing.map((t) => [String(t.source || '').trim().toLowerCase(), t]));
+  // normalizeTermKey (NFKC then lowercase) — a precomposed vs combining-diacritic form of the
+  // same macron'd word (visually identical, different codepoints; OCR is a plausible source of
+  // the decomposed form) must dedupe to the same key, or it silently doubles glossary entries.
+  const bySource = new Map(existing.map((t) => [normalizeTermKey(String(t.source || '').trim()), t]));
   for (const t of newTerms) {
-    const key = String(t?.source || '').trim().toLowerCase();
+    const key = normalizeTermKey(String(t?.source || '').trim());
     if (!key || bySource.has(key)) continue;
     bySource.set(key, t);
   }
@@ -1215,7 +1219,7 @@ async function processTranslateJob(
     const bySource = new Map();
     for (const t of [...lockedDoNotTranslateTerms(), ...existingTerms, ...mustKeep]) {
       if (!t?.source) continue;
-      const key = String(t.source).toLowerCase();
+      const key = normalizeTermKey(String(t.source));
       if (!bySource.has(key)) bySource.set(key, t);
     }
     return [...bySource.values()];
@@ -1353,7 +1357,16 @@ async function processTranslateJob(
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = chunk.paras.map(p => isCodeLikeArtifact(p.text));
-      const tmFlags = chunk.paras.map(p => tmHits.has(translateMemory.normalize(p.text)));
+      // A TM hit is only trusted if the cached value doesn't itself look broken — confirmed real
+      // gap: a one-off bad translation saved to TM (before the savePairs filter was widened)
+      // would self-perpetuate forever, since a trusted TM hit skips translation entirely on
+      // reuse. If the cached target now fails the same placeholder check savePairs uses, drop
+      // the hit and let this paragraph go through translateIdxs for a fresh (and, via savePairs'
+      // ON CONFLICT upsert, self-healing) translation instead of reusing the corrupt value again.
+      const tmFlags = chunk.paras.map(p => {
+        const key = translateMemory.normalize(p.text);
+        return tmHits.has(key) && !findPlaceholder(tmHits.get(key));
+      });
       const translateIdxs = chunk.paras.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
       const texts = translateIdxs.map(i => wrapDoNotTranslate(chunk.paras[i].text, glossaryTerms));
       totalCharCount += texts.reduce((s, t) => s + t.length, 0);
@@ -1435,7 +1448,13 @@ async function processTranslateJob(
       // Leaked code/template debris (e.g. object dumps, unresolved internal
       // tokens) must never go to the translator — copy through verbatim.
       const artifactFlags = texts.map(t => isCodeLikeArtifact(t));
-      const tmFlags = texts.map(t => tmHits.has(translateMemory.normalize(t)));
+      // See the matching comment in the Google-engine branch above — a TM hit is only trusted if
+      // the cached value doesn't itself look broken, so a bad pre-existing TM entry gets a fresh
+      // (self-healing) translation instead of being reused forever.
+      const tmFlags = texts.map(t => {
+        const key = translateMemory.normalize(t);
+        return tmHits.has(key) && !findPlaceholder(tmHits.get(key));
+      });
       const translateIdxs = texts.map((_, i) => i).filter(i => !artifactFlags[i] && !tmFlags[i]);
       tmReuseCount += tmFlags.filter(Boolean).length;
       await setJobStatus(jobId, {
@@ -1590,7 +1609,10 @@ async function processTranslateJob(
   }
 
   // ── 6. Hard sanity gate (string logic — not an LLM) ─────────────────────────
-  const gate = hardSanityGate(reviewPairs, { sourceLanguage, targetLanguage, glossaryTerms });
+  const gate = hardSanityGate(reviewPairs, {
+    sourceLanguage, targetLanguage, glossaryTerms,
+    repairStillFailing: repairStats?.stillFailing || 0,
+  });
 
   // ── 7. Review pass ──────────────────────────────────────────────────────────
   let qaSummary = {

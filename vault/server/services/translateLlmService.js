@@ -71,12 +71,22 @@ function languagePolicyBlock(targetLanguage, intakeAnswers = {}) {
   return '';
 }
 
+// Dedup key normalizes to NFKC before lowercasing — the same visible macron'd word can arrive as
+// either a single precomposed codepoint (e.g. "ō" = U+014D) or a base letter + combining
+// diacritic (base "o" + U+0304 combining macron), which render identically but are different
+// strings to plain .toLowerCase(). OCR output is a plausible source of the decomposed form.
+// Without normalizing first, two entries for what's visually the same term wouldn't dedupe —
+// silently doubling glossary entries over time instead of merging them.
+function normalizeTermKey(source) {
+  return String(source).normalize('NFKC').toLowerCase();
+}
+
 function mergeGlossaryTerms(...lists) {
   const bySource = new Map();
   for (const list of lists) {
     for (const t of list || []) {
       if (!t?.source) continue;
-      const key = String(t.source).toLowerCase();
+      const key = normalizeTermKey(t.source);
       if (!bySource.has(key)) bySource.set(key, t);
     }
   }
@@ -314,6 +324,18 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Unicode-safe "whole phrase" boundary — plain `\b` doesn't fire before/after an accented/macron'd
+// character (e.g. "Ōtākou"), so `\bterm\b` silently never matches a term starting or ending with
+// one. Confirmed on a real job: this exact gap in reportGlossaryDrift/autoFixGlossaryDrift/
+// autoFixPartialReoTermDrift meant drift on a macron'd term went undetected AND unfixed, with a
+// false "clean" QA signal — worse than not checking, since it looks like the drift never
+// happened. Mirrors the pattern already proven at applyGlossarySubstitutions' own substitution
+// site. `pattern` must not itself use capture group 1 — that's reserved for the leading boundary
+// character, which any replace() callback must prepend back: `(m, pre) => pre + replacement`.
+function boundedPhraseRegex(pattern, flags = '') {
+  return new RegExp(`(^|[^\\p{L}])(${pattern})(?![\\p{L}])`, flags.includes('u') ? flags : `${flags}u`);
+}
+
 function reportGlossaryDrift({ pairs, glossaryTerms }) {
   const forced = (glossaryTerms || []).filter((t) => t?.source && t?.target && !t.doNotTranslate);
   if (!forced.length || !pairs?.length) return { checked: 0, terms: [] };
@@ -324,7 +346,7 @@ function reportGlossaryDrift({ pairs, glossaryTerms }) {
     const tgt = String(pair?.target || '');
     if (!src || !tgt) return;
     for (const t of forced) {
-      const re = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
+      const re = boundedPhraseRegex(escapeRegExp(t.source), 'i');
       if (!re.test(src) || tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue;
       const key = t.source;
       const entry = byTerm.get(key) || { source: t.source, target: t.target, count: 0, examples: [] };
@@ -362,14 +384,14 @@ function autoFixGlossaryDrift({ pairs, glossaryTerms }) {
     const src = String(pair?.source || '');
     if (!src || !pair?.target) return;
     for (const t of forced) {
-      const srcRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'i');
+      const srcRe = boundedPhraseRegex(escapeRegExp(t.source), 'i');
       if (!srcRe.test(src)) continue;
       const tgt = String(pair.target);
       if (tgt.toLowerCase().includes(String(t.target).toLowerCase())) continue; // canonical already present
 
-      const leakRe = new RegExp(`\\b${escapeRegExp(t.source)}\\b`, 'gi');
+      const leakRe = boundedPhraseRegex(escapeRegExp(t.source), 'gi');
       if (leakRe.test(tgt)) {
-        pair.target = tgt.replace(leakRe, t.target);
+        pair.target = tgt.replace(leakRe, (m, pre) => pre + t.target);
         fixedCount += 1;
       } else {
         const entry = remaining.get(t.source) || { source: t.source, target: t.target, count: 0, examples: [] };
@@ -409,10 +431,8 @@ function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
       if (!m) return null;
       const prefix = m[1].trim();
       const lang = m[2].trim();
-      const hybridRe = new RegExp(
-        `${prefix ? `\\b${escapeRegExp(prefix)}\\s+` : '\\b'}${escapeRegExp(lang)}\\s+language\\b`,
-        'gi',
-      );
+      const hybridPattern = `${prefix ? `${escapeRegExp(prefix)}\\s+` : ''}${escapeRegExp(lang)}\\s+language`;
+      const hybridRe = boundedPhraseRegex(hybridPattern, 'gi');
       return { source: t.source, hybridRe };
     })
     .filter(Boolean);
@@ -425,7 +445,7 @@ function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
       t.hybridRe.lastIndex = 0;
       if (t.hybridRe.test(String(pair.target))) {
         t.hybridRe.lastIndex = 0;
-        pair.target = String(pair.target).replace(t.hybridRe, t.source);
+        pair.target = String(pair.target).replace(t.hybridRe, (m, pre) => pre + t.source);
         fixedCount += 1;
       }
     }
@@ -707,6 +727,23 @@ No markdown fences.`;
  * 2) LLM compares source⟶target side-by-side in batches for subjective issues
  * 3) Merge + claim verification spot-check on "None flagged" categories
  */
+/**
+ * Confirmed real gap: when a review batch's LLM call failed (rate limit, timeout), the catch
+ * block only appended a note to overallNotes — reviewedPairCount was still set to the FULL pair
+ * count regardless, falsely implying every segment got subjective QA review (polarity, uncertain
+ * terms, etc.) when a whole batch's worth never did. Pure function so the count math is
+ * unit-testable without mocking callModel — reviewTranslation itself just plugs the real
+ * totalPairs/failedBatchSizes into it.
+ */
+function computeReviewCoverage(totalPairs, failedBatchSizes) {
+  const unreviewedPairCount = (failedBatchSizes || []).reduce((sum, n) => sum + n, 0);
+  return {
+    reviewedPairCount: Math.max(0, totalPairs - unreviewedPairCount),
+    unreviewedPairCount,
+    reviewCoverageIncomplete: unreviewedPairCount > 0,
+  };
+}
+
 async function reviewTranslation({
   modelId, userId, sourceLanguage, targetLanguage, pairs, glossaryTerms, intakeAnswers = {},
 }) {
@@ -761,6 +798,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
 
   const offsets = [];
   for (let offset = 0; offset < allPairs.length; offset += BATCH) offsets.push(offset);
+  const failedBatchSizes = [];
 
   async function reviewOneBatch(offset) {
     const batch = allPairs.slice(offset, offset + BATCH);
@@ -806,6 +844,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     } catch (err) {
       console.error('[translate] review batch failed:', err.message);
       llmAcc.overallNotes.push(`Review batch starting at ${offset} failed: ${err.message}`);
+      failedBatchSizes.push(batch.length);
     }
   }
 
@@ -835,7 +874,7 @@ ${policy ? `\nFor te reo Māori: verify Te Taura Whiri standard unless regional 
     audienceFlags: llmAcc.audienceFlags,
     dialectalChoices: llmAcc.dialectalChoices,
     overallNotes: llmAcc.overallNotes.filter(Boolean).join(' '),
-    reviewedPairCount: allPairs.length,
+    ...computeReviewCoverage(allPairs.length, failedBatchSizes),
     totalPairCount: allPairs.length,
     completenessCheck: {
       ran: true,
@@ -964,7 +1003,7 @@ async function repairIncompletePairs({
     if (isIncompleteTarget(p?.target) || isTruncatedShort(p?.source, p?.target)
       || hasHallucinatedRedaction(p?.source, p?.target)
       || hasMissingDoNotTranslateTerm(p?.source, p?.target, glossaryTerms)
-      || hasStraySourceWord(p?.source, p?.target, { sourceLanguage, targetLanguage })) indexes.push(i);
+      || hasStraySourceWord(p?.source, p?.target, { sourceLanguage, targetLanguage, glossaryTerms })) indexes.push(i);
   });
   if (!indexes.length) {
     return { attempted: 0, llmRepaired: 0, googleRepaired: 0, stillFailing: 0 };
@@ -1014,7 +1053,7 @@ async function repairIncompletePairs({
             && !isTruncatedShort(pair.source, cleaned)
             && !hasHallucinatedRedaction(pair.source, cleaned)
             && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
-            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage, glossaryTerms })) {
             pair.target = cleaned;
             llmRepaired += 1;
             continue;
@@ -1040,7 +1079,7 @@ async function repairIncompletePairs({
           if (cleaned && cleaned.trim() && !findPlaceholder(cleaned)
             && !hasHallucinatedRedaction(pair.source, cleaned)
             && !hasMissingDoNotTranslateTerm(pair.source, cleaned, glossaryTerms)
-            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage })) {
+            && !hasStraySourceWord(pair.source, cleaned, { sourceLanguage, targetLanguage, glossaryTerms })) {
             pair.target = cleaned;
             googleRepaired += 1;
             continue;
@@ -1058,7 +1097,7 @@ async function repairIncompletePairs({
   const stillFailing = pairs.filter((p) => isIncompleteTarget(p.target) || isTruncatedShort(p.source, p.target)
     || hasHallucinatedRedaction(p.source, p.target)
     || hasMissingDoNotTranslateTerm(p.source, p.target, glossaryTerms)
-    || hasStraySourceWord(p.source, p.target, { sourceLanguage, targetLanguage })).length;
+    || hasStraySourceWord(p.source, p.target, { sourceLanguage, targetLanguage, glossaryTerms })).length;
   return {
     attempted: indexes.length,
     llmRepaired,
@@ -1077,6 +1116,9 @@ module.exports = {
   applyGlossarySubstitutions,
   collapseRepeatedGlossaryTarget,
   collapseRepeatedPhraseLoops,
+  normalizeTermKey,
+  mergeGlossaryTerms,
+  computeReviewCoverage,
   dropHallucinatedTerms,
   repairIncompletePairs,
   isIncompleteTarget,
