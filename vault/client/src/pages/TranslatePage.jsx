@@ -817,6 +817,14 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
     });
   };
 
+  // Select-all / clear toggle for a section — flips based on current state (if everything's
+  // already checked, clicking clears instead of re-checking, so it's one button either way).
+  const selectAll = (setSet, items) => {
+    setSet(prev => (prev.size === items.length ? new Set() : new Set(items.map(i => i.id))));
+  };
+
+  const [logOpen, setLogOpen] = useState(false);
+
   // "Confirm as standard" — for a Needs-linguistic-decision item, the reviewer (a human who
   // actually knows the target language) supplies the correct rendering the tool couldn't
   // determine on its own; that becomes a real glossary lock, same destination as Lock/style, just
@@ -827,8 +835,14 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
     if (!job?.targetLanguage) return;
     setConfirming(item.id);
     try {
-      const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, {
-        terms: [{ source: item.source, target: value, note: 'Confirmed as standard from Lessons learnt' }],
+      const res = await api.post('/api/translate/lessons/apply', {
+        targetLanguage: job.targetLanguage,
+        terms: [{
+          source: item.source, target: value, disposition: 'Confirmed as standard',
+          note: 'Confirmed as standard from Lessons learnt',
+        }],
+        jobId: job?.id,
+        jobFilename: job?.filename,
       });
       if (!res.ok) throw new Error('Could not save glossary term');
       addToast(`"${item.source}" → "${value}" locked into the glossary`, 'success');
@@ -849,34 +863,25 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
   const apply = async () => {
     setApplying(true);
     try {
-      let globalDone = 0;
-      let languageDone = 0;
-
-      if (checkedGlobal.size) {
-        const lines = global.filter(g => checkedGlobal.has(g.id)).map(g => `- ${g.text}`);
-        const settingsRes = await api.get('/api/settings');
-        const settings = await settingsRes.json().catch(() => ({}));
-        const existing = settings?.translate_custom_instructions || '';
-        const merged = [existing, lines.join('\n')].filter(Boolean).join('\n\n');
-        const saveRes = await api.post('/api/settings', { key: 'translate_custom_instructions', value: merged });
-        if (!saveRes.ok) throw new Error('Could not save global instructions');
-        globalDone = checkedGlobal.size;
-      }
-
+      const globalLines = global.filter(g => checkedGlobal.has(g.id)).map(g => g.text);
       const checkedTerms = [
-        ...dnt.filter(d => checkedDnt.has(d.id)),
-        ...lock.filter(l => checkedLock.has(l.id)),
-        ...style.filter(s => checkedStyle.has(s.id)),
-      ].map(l => l.term);
-      if (checkedTerms.length && job?.targetLanguage) {
-        const res = await api.post(`/api/translate/glossaries/global/${job.targetLanguage}/terms`, { terms: checkedTerms });
-        if (!res.ok) throw new Error('Could not save glossary terms');
-        languageDone = checkedTerms.length;
-      }
+        ...dnt.filter(d => checkedDnt.has(d.id)).map(d => ({ ...d.term, disposition: d.disposition })),
+        ...lock.filter(l => checkedLock.has(l.id)).map(l => ({ ...l.term, disposition: l.disposition })),
+        ...style.filter(s => checkedStyle.has(s.id)).map(s => ({ ...s.term, disposition: s.disposition })),
+      ];
+      const res = await api.post('/api/translate/lessons/apply', {
+        targetLanguage: job?.targetLanguage,
+        globalLines,
+        terms: checkedTerms,
+        jobId: job?.id,
+        jobFilename: job?.filename,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not apply selected items');
 
       const parts = [];
-      if (globalDone) parts.push(`${globalDone} added to global instructions`);
-      if (languageDone) parts.push(`${languageDone} added to ${job?.targetLanguage || 'language'} glossary`);
+      if (data.globalApplied) parts.push(`${data.globalApplied} added to global instructions`);
+      if (data.termsApplied) parts.push(`${data.termsApplied} added to ${job?.targetLanguage || 'language'} glossary`);
       addToast(parts.length ? parts.join(' · ') : 'Nothing selected', parts.length ? 'success' : 'error');
       if (parts.length) onClose();
     } catch (e) {
@@ -889,9 +894,16 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
   return (
     <Modal title="Lessons learnt" onClose={onClose} wide>
       <div className="flex flex-col gap-4 text-sm" style={{ color: 'var(--color-text)' }}>
-        <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }} title="Deployed commit this checklist's grouping/severity/disposition logic ran on — check this before re-testing a fix against a stale build">
-          Agent build: {appVersion || 'checking…'}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-mono" style={{ color: 'var(--color-muted)' }} title="Deployed commit this checklist's grouping/severity/disposition logic ran on — check this before re-testing a fix against a stale build">
+            Agent build: {appVersion || 'checking…'}
+          </p>
+          <button onClick={() => setLogOpen(true)}
+            className="text-xs font-medium hover:opacity-70 shrink-0"
+            style={{ color: 'var(--color-primary)' }}>
+            View lessons log
+          </button>
+        </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Findings from this job's QA review, grouped by root cause with a recommended action per
           item. Checkable items add to the shared instruction prompt or the{' '}
@@ -905,7 +917,12 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
           <>
             {dnt.length > 0 && (
               <div>
-                <p className="text-xs font-semibold mb-2">Do-not-translate rules — {dnt.length}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold">Do-not-translate rules — {dnt.length}</p>
+                  <button onClick={() => selectAll(setCheckedDnt, dnt)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                    {checkedDnt.size === dnt.length ? 'Clear' : 'Select all'}
+                  </button>
+                </div>
                 <ul className="space-y-2">
                   {dnt.map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -936,7 +953,14 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             )}
 
             <div>
-              <p className="text-xs font-semibold mb-2">Global suggestions (instruction prompt) — {global.length}</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold">Global suggestions (instruction prompt) — {global.length}</p>
+                {global.length > 0 && (
+                  <button onClick={() => selectAll(setCheckedGlobal, global)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                    {checkedGlobal.size === global.length ? 'Clear' : 'Select all'}
+                  </button>
+                )}
+              </div>
               {global.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -955,9 +979,16 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             <div>
-              <p className="text-xs font-semibold mb-2">
-                Lock into glossary ({job?.targetLanguage || '—'}) — {lock.length}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold">
+                  Lock into glossary ({job?.targetLanguage || '—'}) — {lock.length}
+                </p>
+                {lock.length > 0 && (
+                  <button onClick={() => selectAll(setCheckedLock, lock)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                    {checkedLock.size === lock.length ? 'Clear' : 'Select all'}
+                  </button>
+                )}
+              </div>
               {lock.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -981,9 +1012,16 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             <div>
-              <p className="text-xs font-semibold mb-2">
-                Regional/style choices to lock ({job?.targetLanguage || '—'}) — {style.length}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold">
+                  Regional/style choices to lock ({job?.targetLanguage || '—'}) — {style.length}
+                </p>
+                {style.length > 0 && (
+                  <button onClick={() => selectAll(setCheckedStyle, style)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                    {checkedStyle.size === style.length ? 'Clear' : 'Select all'}
+                  </button>
+                )}
+              </div>
               {style.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>None flagged.</p>
               ) : (
@@ -1007,11 +1045,15 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             </div>
 
             {driftEnforcement.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold mb-2">
-                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit.{' '}
-                  {driftFreq && <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}>Ignore one-offs; a "seen in N jobs" badge means it's a real pattern, not this job's noise.</span>}
-                </p>
+              <details>
+                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
+                  Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit
+                </summary>
+                {driftFreq && (
+                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                    Ignore one-offs; a "seen in N jobs" badge means it's a real pattern, not this job's noise.
+                  </p>
+                )}
                 <ul className="space-y-1.5">
                   {[...driftEnforcement].sort((a, b) => freqFor(b.source) - freqFor(a.source)).map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -1024,7 +1066,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </details>
             )}
 
             {driftLinguistic.length > 0 && (
@@ -1068,10 +1110,10 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             )}
 
             {alreadyStandard.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold mb-2">
+              <details>
+                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
                   Already in glossary ({alreadyStandard.length}) — no action needed
-                </p>
+                </summary>
                 <ul className="space-y-1.5">
                   {alreadyStandard.map(d => (
                     <li key={d.id} className="flex items-start gap-2">
@@ -1083,7 +1125,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </details>
             )}
 
             <div className="flex justify-end">
@@ -1094,6 +1136,98 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
               </button>
             </div>
           </>
+        )}
+      </div>
+      {logOpen && <LessonsLogModal defaultLanguage={job?.targetLanguage} onClose={() => setLogOpen(false)} />}
+    </Modal>
+  );
+}
+
+// Audit trail for everything applied via "Lessons learnt" — the apply action itself only writes
+// to a free-text Settings blob (global) or a learned glossary's term list (per language), neither
+// of which carries history. This reads translate_lessons_log, one row per applied item, so
+// "what did we apply, and when" doesn't require reconstructing it from a growing text blob and
+// term `note` fields.
+function LessonsLogModal({ defaultLanguage, onClose }) {
+  const [scope, setScope] = useState('all'); // 'all' | 'global' | 'language'
+  const [lang, setLang] = useState(defaultLanguage || '');
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setRows(null);
+    setError('');
+    const params = new URLSearchParams();
+    if (scope !== 'all') params.set('scope', scope);
+    if (scope !== 'global' && lang) params.set('targetLanguage', lang);
+    api.get(`/api/translate/lessons?${params.toString()}`)
+      .then(r => r.json())
+      .then(setRows)
+      .catch(() => setError('Could not load the lessons log'));
+  }, [scope, lang]);
+
+  return (
+    <Modal title="Lessons log" onClose={onClose} wide>
+      <div className="flex flex-col gap-3 text-sm" style={{ color: 'var(--color-text)' }}>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Every item ever applied from a "Lessons learnt" panel, newest first — global instruction
+          lines and per-language glossary locks, each with the job it came from.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="w-44">
+            <Sel value={scope} onChange={setScope}>
+              <option value="all">All</option>
+              <option value="global">Global rules only</option>
+              <option value="language">Language locks only</option>
+            </Sel>
+          </div>
+          {scope !== 'global' && (
+            <div className="w-44">
+              <Sel value={lang} onChange={setLang}>
+                <option value="">Any language</option>
+                {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </Sel>
+            </div>
+          )}
+        </div>
+
+        {error && <p className="text-xs" style={{ color: '#dc2626' }}>{error}</p>}
+        {!error && rows === null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        {!error && rows && rows.length === 0 && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing applied yet for this filter.</p>
+        )}
+        {!error && rows && rows.length > 0 && (
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                  {['Date', 'Scope', 'Disposition', 'Applied', 'Job'].map(h => (
+                    <th key={h} className="text-left px-2 py-1.5 font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(r.createdAt).toLocaleDateString('en-AU')}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {r.scope === 'global' ? 'Global' : (LANGUAGES.find(l => l.code === r.targetLanguage)?.label || r.targetLanguage)}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-primary)' }}>{r.disposition}</td>
+                    <td className="px-2 py-1.5">
+                      {r.sourceTerm ? <strong>"{r.sourceTerm}"{r.targetTerm ? ` → "${r.targetTerm}"` : ''}</strong> : null}
+                      {r.detail && <div style={{ color: r.sourceTerm ? 'var(--color-muted)' : 'var(--color-text)' }}>{r.detail}</div>}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }} title={r.jobFilename || ''}>
+                      {r.jobId ? `#${r.jobId}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </Modal>
@@ -2078,6 +2212,7 @@ function GlossariesTab({ glossaries, setGlossaries }) {
   const [form, setForm]       = useState({ name: '', terms: [] });
   const [saving, setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [logOpen, setLogOpen] = useState(false);
   const addToast = useToastStore(s => s.addToast);
   const csvRef = useRef(null);
 
@@ -2146,8 +2281,15 @@ function GlossariesTab({ glossaries, setGlossaries }) {
     <div className="p-6 max-w-3xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Glossaries</h2>
-        <Btn onClick={openNew}>New Glossary</Btn>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setLogOpen(true)} className="text-sm font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+            View lessons log
+          </button>
+          <Btn onClick={openNew}>New Glossary</Btn>
+        </div>
       </div>
+
+      {logOpen && <LessonsLogModal onClose={() => setLogOpen(false)} />}
 
       {glossaries.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>

@@ -157,6 +157,23 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 
 ---
 
+## Lessons learnt — apply + audit log
+
+**Lessons learnt** (button on a job's QA panel) turns that job's QA findings into checkable action items, grouped by root cause, each tagged with a `disposition` (`Global rule`, `Do-not-translate rule`, `Lock rendering`, `Lock regional form`, `Enforcement gap (engineering)`, `Needs linguistic decision`, `No action — already in glossary`). See `buildLessonCandidates()` in `TranslatePage.jsx` for the grouping logic.
+
+Two destinations for a checked item, neither of which carries its own history:
+
+- **Global rule** items → appended as bullet lines to `translate_custom_instructions` (a Settings free-text field, applies to every job in every language).
+- **Lock rendering / Do-not-translate rule / Lock regional form** items, and a typed **"Confirm as standard"** answer to a *Needs linguistic decision* item → saved into that job's target language's auto-learned glossary (`translate_glossaries`, `isGlobal=TRUE`).
+
+**Applying does not affect the job just reviewed** — a checked item changes what a *future* job reads (the instruction prompt, or the language's learned glossary); the PDF/text you're looking at when you check the box keeps its existing content. Re-run the source through a new job to see the effect.
+
+**`Enforcement gap (engineering)`** and **`No action — already in glossary`** are informational only — no checkbox, nothing to apply — collapsed behind a `<details>` disclosure by default since they're read-only findings, not actions.
+
+**Audit log** (`translate_lessons_log` table) — both destinations above are opaque about *when* something was applied or *which job* it came from (a growing text blob; a term's `note` field at best). One row is written per applied item, via a single endpoint (`POST /api/translate/lessons/apply`) that does the actual settings/glossary write and the log insert together — so a write can't happen without its audit row (the old two-separate-calls version couldn't guarantee that). `GET /api/translate/lessons?scope=global|language&targetLanguage=xx` lists it, newest first. **"View lessons log"** opens it from either the Lessons learnt panel or the Glossaries tab header.
+
+---
+
 ## API (jobs)
 
 | Method | Path | Purpose |
@@ -172,6 +189,8 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | `POST` | `/api/translate/jobs/:id/fail` | Mark failed from client |
 | `GET` | `/api/translate/jobs/:id/download` | Download bilingual PDF |
 | `GET` | `/api/translate/jobs/:id/download-native` | Download native `.docx`/`.xlsx` output, when available (see **Native output** below) |
+| `POST` | `/api/translate/lessons/apply` | Lessons learnt "Apply selected" — writes global instructions and/or language glossary terms, plus an audit-log row per applied item, in one request (see **Lessons learnt** above) |
+| `GET` | `/api/translate/lessons` | List the lessons audit log — `?scope=global\|language&targetLanguage=xx&limit=` |
 | `GET` | `/api/translate/jobs/:id/download-text` | Plain-text export of the translation only (no source column, no PDF styling) — built fresh from `translatedTextJson`, one paragraph per line, `--- Page N ---`/`--- Sheet N ---` breaks for multi-page/sheet jobs |
 | `GET` | `/api/translate/jobs/:id/download-original` | Download the untouched uploaded source file (`originalPdf` column, despite the name — holds whatever format was uploaded), for comparing against a flagged QA segment |
 | `POST` | `/api/translate/jobs/:id/email` | Emails whichever of the original file, translated PDF, and QA report (built server-side, `buildQaReportTextServer`) exist for the job as attachments — body `{ to }`. Uses `server/utils/sendEmail.js` (MailChannels or SMTP, whichever is configured). "Email these documents" button in the View Results modal. |

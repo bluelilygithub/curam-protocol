@@ -364,6 +364,118 @@ router.post('/glossaries/global/:lang/terms', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Lessons learnt audit log ──────────────────────────────────────────────────
+// "Lessons learnt" writes go to two places that carry no history of their own: a growing free-
+// text Settings blob (translate_custom_instructions, global — applies to every job/language) and
+// a per-language learned glossary's term list (translate_glossaries, isGlobal=TRUE). This table
+// is the audit trail neither of those provides: one row per applied item, with a date and the
+// job it came from, so "what did we apply, and when" is answerable without reconstructing it
+// from a text blob and term `note` fields.
+router.get('/lessons', async (req, res) => {
+  try {
+    const { scope, targetLanguage, limit } = req.query;
+    const where = [`"userId"=$1`];
+    const params = [req.user.id];
+    if (scope === 'global' || scope === 'language') {
+      params.push(scope);
+      where.push(`scope=$${params.length}`);
+    }
+    if (targetLanguage) {
+      params.push(targetLanguage);
+      where.push(`"targetLanguage"=$${params.length}`);
+    }
+    params.push(Math.min(500, Math.max(1, parseInt(limit, 10) || 200)));
+    const { rows } = await pool.query(
+      `SELECT id, scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail,
+              "jobId", "jobFilename", "createdAt"
+       FROM translate_lessons_log WHERE ${where.join(' AND ')}
+       ORDER BY "createdAt" DESC LIMIT $${params.length}`,
+      params
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Single endpoint for the Lessons learnt modal's "Apply selected" action — replaces two separate
+// client-side calls (POST /settings + POST /glossaries/global/:lang/terms) with one request that
+// also writes the audit rows, so the write and its log entry can't drift apart (e.g. a client
+// crash between the two old calls used to mean an applied change with no record of it).
+router.post('/lessons/apply', async (req, res) => {
+  try {
+    const { targetLanguage, globalLines, terms, jobId, jobFilename } = req.body || {};
+    const cleanGlobalLines = (Array.isArray(globalLines) ? globalLines : [])
+      .map((l) => String(l || '').trim()).filter(Boolean);
+    const cleanTerms = (Array.isArray(terms) ? terms : [])
+      .filter((t) => t && String(t.source || '').trim())
+      .map((t) => ({
+        source: String(t.source).trim(),
+        target: String(t.target || '').trim(),
+        note: t.note ? String(t.note).trim() : undefined,
+        doNotTranslate: !!t.doNotTranslate,
+        disposition: t.disposition || 'Lock rendering',
+      }));
+
+    if (!cleanGlobalLines.length && !cleanTerms.length) {
+      return res.status(400).json({ error: 'Nothing to apply' });
+    }
+    if (cleanTerms.length && !targetLanguage) {
+      return res.status(400).json({ error: 'targetLanguage is required to lock terms' });
+    }
+
+    const logRows = [];
+
+    if (cleanGlobalLines.length) {
+      const { rows: settingsRows } = await pool.query(
+        `SELECT value FROM settings WHERE "userId"=$1 AND key='translate_custom_instructions'`,
+        [req.user.id]
+      );
+      const existing = settingsRows[0]?.value || '';
+      const merged = [existing, cleanGlobalLines.map((l) => `- ${l}`).join('\n')].filter(Boolean).join('\n\n');
+      await pool.query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1, 'translate_custom_instructions', $2)
+         ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
+        [req.user.id, merged]
+      );
+      for (const line of cleanGlobalLines) {
+        logRows.push({ scope: 'global', targetLanguage: null, disposition: 'Global rule', sourceTerm: null, targetTerm: null, detail: line });
+      }
+    }
+
+    if (cleanTerms.length) {
+      await upsertGlobalGlossaryTerms(req.user.id, targetLanguage, cleanTerms);
+      for (const t of cleanTerms) {
+        logRows.push({
+          scope: 'language', targetLanguage, disposition: t.disposition,
+          sourceTerm: t.source, targetTerm: t.doNotTranslate ? '(do not translate)' : t.target,
+          detail: t.note || `${t.source} → ${t.doNotTranslate ? 'do not translate' : t.target}`,
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const r of logRows) {
+        await client.query(
+          `INSERT INTO translate_lessons_log
+             ("userId", scope, "targetLanguage", disposition, "sourceTerm", "targetTerm", detail, "jobId", "jobFilename")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.user.id, r.scope, r.targetLanguage, r.disposition, r.sourceTerm, r.targetTerm, r.detail,
+            jobId ? parseInt(jobId, 10) : null, jobFilename || null]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    res.json({ ok: true, globalApplied: cleanGlobalLines.length, termsApplied: cleanTerms.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Translation memory ──────────────────────────────────────────────────────────
 router.get('/memory/stats', async (req, res) => {
   try {
