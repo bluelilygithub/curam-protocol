@@ -170,6 +170,7 @@ Policy text is injected into glossary, translate, and review prompts via `maoriL
 | `POST` | `/api/translate/jobs/:id/fail` | Mark failed from client |
 | `GET` | `/api/translate/jobs/:id/download` | Download bilingual PDF |
 | `GET` | `/api/translate/jobs/:id/download-native` | Download native `.docx`/`.xlsx` output, when available (see **Native output** below) |
+| `GET` | `/api/translate/jobs/:id/download-text` | Plain-text export of the translation only (no source column, no PDF styling) — built fresh from `translatedTextJson`, one paragraph per line, `--- Page N ---`/`--- Sheet N ---` breaks for multi-page/sheet jobs |
 | `GET` | `/api/translate/jobs/:id/download-original` | Download the untouched uploaded source file (`originalPdf` column, despite the name — holds whatever format was uploaded), for comparing against a flagged QA segment |
 | `POST` | `/api/translate/jobs/:id/email` | Emails whichever of the original file, translated PDF, and QA report (built server-side, `buildQaReportTextServer`) exist for the job as attachments — body `{ to }`. Uses `server/utils/sendEmail.js` (MailChannels or SMTP, whichever is configured). "Email these documents" button in the View Results modal. |
 | `DELETE` | `/api/translate/jobs/:id` | Delete job |

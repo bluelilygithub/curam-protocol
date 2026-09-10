@@ -468,6 +468,44 @@ router.get('/jobs/:id/download-native', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Plain-text export of the translation itself (not the QA report) — for a reviewer who wants to
+// paste the wording somewhere else, or diff it against another tool, without opening a PDF.
+// Translation-only output, one paragraph per line, page/sheet breaks marked — no source column,
+// no styling. Built fresh from translatedTextJson rather than re-parsing the stored PDF, so it's
+// exactly the text the PDF was generated from, unaffected by anything a PDF viewer/extractor
+// does to the rendered file.
+router.get('/jobs/:id/download-text', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT filename, "translatedTextJson" FROM translate_jobs WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    const row = rows[0];
+    if (!row?.translatedTextJson) return res.status(404).json({ error: 'Translated text not available for this job' });
+    const payload = typeof row.translatedTextJson === 'string'
+      ? JSON.parse(row.translatedTextJson)
+      : row.translatedTextJson;
+    const translatedByPage = payload?.translatedByPage || {};
+    const pageLabels = payload?.pageLabels || {};
+    const pageCount = payload?.pageCount || Object.keys(translatedByPage).length;
+    const sourceFormat = payload?.sourceFormat || 'pdf';
+    const sectionWord = sourceFormat === 'xlsx' || sourceFormat === 'xls' ? 'Sheet' : 'Page';
+
+    const sections = [];
+    for (let pg = 1; pg <= pageCount; pg++) {
+      const paras = translatedByPage[pg] || translatedByPage[String(pg)] || [];
+      if (!paras.length) continue;
+      const label = pageLabels[pg] || pageLabels[String(pg)] || `${sectionWord} ${pg}`;
+      sections.push(pageCount > 1 ? `--- ${label} ---\n\n${paras.join('\n\n')}` : paras.join('\n\n'));
+    }
+
+    const base = (row.filename || 'document').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_') || 'document';
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="translated-${base}.txt"`);
+    res.send(sections.join('\n\n'));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Condensed server-side mirror of the client's buildQaReportText (TranslatePage.jsx) — same
 // purpose (a plain-text QA export for HITL review) but built here so the "email the three
 // documents" action doesn't need the browser to have the job open to attach it.

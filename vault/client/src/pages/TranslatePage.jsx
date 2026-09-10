@@ -281,7 +281,7 @@ function downloadQaReport(job, qa, appVersion) {
   URL.revokeObjectURL(url);
 }
 
-function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal }) {
+function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal, onDownloadText }) {
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSending, setEmailSending] = useState(false);
@@ -352,6 +352,12 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
                 className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 Download translated PDF
+              </button>
+              <button onClick={() => onDownloadText?.(job)}
+                className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70"
+                title="Plain-text export of the translation only — no source column, no styling"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                Download plain text
               </button>
               {job.hasNativeOutput && (
                 <button onClick={() => onDownloadNative?.(job)}
@@ -1668,6 +1674,20 @@ function TranslationsTab({ glossaries }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
+  const downloadTextJob = async (job) => {
+    try {
+      const res = await api.get(`/api/translate/jobs/${job.id}/download-text`);
+      if (!res.ok) throw new Error('Text not available for this job');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `translated-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
 
   return (
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
@@ -2045,7 +2065,8 @@ function TranslationsTab({ glossaries }) {
 
       {qaJob && (
         <QaPanel qa={parseQa(qaJob)} job={qaJob} onClose={() => setQaJob(null)}
-          onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob} />
+          onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob}
+          onDownloadText={downloadTextJob} />
       )}
     </div>
   );
