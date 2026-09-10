@@ -598,6 +598,14 @@ async function translateParagraphBatch({
   // see protectDoNotTranslateTerms() above for why (instruction-only enforcement is non-deterministic).
   const protectedParagraphs = paragraphs.map((p) => protectDoNotTranslateTerms(p, glossaryTermsMerged));
   const hasProtectedTerms = protectedParagraphs.some((pp) => pp.tokens.length > 0);
+  // Runtime proof this is actually firing on a live job — grep Railway logs for [dnt-protect].
+  // Not conditional on hasProtectedTerms: a batch with ZERO doNotTranslate terms in glossaryTermsMerged
+  // is itself the diagnostic (means the term never reached the glossary for this batch at all).
+  console.log('[dnt-protect] batch', {
+    paragraphs: paragraphs.length,
+    dntTermsInGlossary: (glossaryTermsMerged || []).filter((t) => t?.doNotTranslate).map((t) => t.source),
+    tokensSwapped: protectedParagraphs.reduce((n, pp) => n + pp.tokens.length, 0),
+  });
 
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
@@ -605,7 +613,7 @@ Preserve sentence type (statement vs question), polarity (affirmative vs negativ
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
 ${translatorHardRules(batchText)}
 ${policy ? `\n${policy}\n` : ''}
-${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token into your translation EXACTLY as it appears, unchanged, in the same position. Never translate, alter, or omit a ⁣DNTn⁣ token.\n' : ''}Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token EXACTLY as it appears, unchanged, in the same position. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there. Never translate, alter, or omit the token itself; do not let its presence change or block any surrounding grammar.\n' : ''}Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
 No markdown fences. No commentary.`;
 
   const prompt = [
@@ -739,7 +747,7 @@ Translate the paragraph into ${langName(targetLanguage)}.
 Preserve meaning, polarity, and sentence type. Obey the glossary.
 ${translatorHardRules(paragraph)}
 ${policy ? `\n${policy}\n` : ''}
-${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token into your translation EXACTLY as it appears, unchanged, in the same position. Never translate, alter, or omit a ⁣DNTn⁣ token.\n' : ''}Return ONLY valid JSON: { "translation": "..." }
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token EXACTLY as it appears, unchanged, in the same position. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there. Never translate, alter, or omit the token itself; do not let its presence change or block any surrounding grammar.\n' : ''}Return ONLY valid JSON: { "translation": "..." }
 No markdown fences.`;
 
   const prompt = [

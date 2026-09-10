@@ -1215,6 +1215,9 @@ async function processTranslateJob(
   // so a "Reo <Language>" proper noun doesn't depend on an LLM call noticing it (that dependency
   // was the actual gap behind the confirmed multi-run non-determinism — see detectReoTermCandidates).
   const reoTermCandidates = detectReoTermCandidates(sourceFullText);
+  console.log('[dnt-protect] detectReoTermCandidates', {
+    jobId, found: reoTermCandidates.map((t) => t.source),
+  });
 
   const mergedExisting = (() => {
     const bySource = new Map();
