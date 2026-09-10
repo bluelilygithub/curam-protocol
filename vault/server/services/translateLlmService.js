@@ -118,6 +118,43 @@ function finalizeTranslation(source, target) {
   return enforceRedactionPassThrough(source, String(target || '').trim());
 }
 
+/**
+ * The glossary-proposing LLM call occasionally degenerates on a "X / Y"-style bilingual gloss —
+ * instead of "treasure / cherished taonga" it can produce "treasure / cherished treasure /
+ * cherished treasure / cherished taonga", repeating its own alternatives several times over.
+ * Confirmed on a real te reo Māori job: this happened for multiple terms in one glossary
+ * (taonga, iwi), and since applyGlossarySubstitutions pastes a term's target in verbatim
+ * wherever the source occurs (by design — "obey the glossary exactly"), the garbled target
+ * propagated into the final translated PDF unchanged, reading as a broken machine-translation
+ * artefact rather than a clean two-way gloss. Collapses to the first and last distinct
+ * "/"-separated alternatives (usually the plain-English gloss and the original-language term),
+ * dropping any repeated middle segments. A normal 1-2 alternative target passes through
+ * untouched. Applied both where glossary terms are parsed (new proposals) and where they're
+ * used for substitution (defence in depth against an already-corrupted term saved from a
+ * pre-fix job, e.g. via the global/learned glossary).
+ */
+function collapseRepeatedGlossaryTarget(target) {
+  const raw = String(target || '').trim();
+  const parts = raw.split(/\s*\/\s*/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 2) return raw;
+  const seen = new Set();
+  const unique = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(p);
+  }
+  if (unique.length <= 2) return unique.join(' / ');
+  return [unique[0], unique[unique.length - 1]].join(' / ');
+}
+
+function sanitizeGlossaryTermList(list) {
+  return (Array.isArray(list) ? list : []).map((t) => (
+    t?.target ? { ...t, target: collapseRepeatedGlossaryTarget(t.target) } : t
+  ));
+}
+
 
 /**
  * Propose / merge glossary from intake answers + source skim + optional saved glossary.
@@ -188,9 +225,11 @@ Rules:
   }
 
   const parsed = parseModelJson(res.text) || {};
-  const terms = Array.isArray(parsed.terms) ? parsed.terms : [];
-  const lockedTerms = (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
-    .filter((t) => t?.source && (t.doNotTranslate || t.target));
+  const terms = sanitizeGlossaryTermList(Array.isArray(parsed.terms) ? parsed.terms : []);
+  const lockedTerms = sanitizeGlossaryTermList(
+    (Array.isArray(parsed.lockedTerms) ? parsed.lockedTerms : [])
+      .filter((t) => t?.source && (t.doNotTranslate || t.target))
+  );
   return {
     sourceLanguage: parsed.sourceLanguage || 'auto',
     terms: mergeGlossaryTerms(lockedDoNotTranslateTerms(sourceSkim), existingTerms || [], terms, lockedTerms),
@@ -733,7 +772,9 @@ const CAP_WORD_RE = /\b[A-ZÀ-Ž][\p{L}'’-]*\b/gu;
 
 function applyGlossarySubstitutions(text, terms) {
   let t = String(text || '');
-  const subs = (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target);
+  const subs = sanitizeGlossaryTermList(
+    (terms || []).filter((x) => !x.doNotTranslate && x.source && x.target)
+  );
   if (!subs.length) return t;
 
   // Swap URLs, filename-like tokens, and proper-noun/title spans out for placeholders before
