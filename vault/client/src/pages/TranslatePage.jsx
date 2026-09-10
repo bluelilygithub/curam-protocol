@@ -1116,7 +1116,27 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 // didn't, so FONT_BY_LANG[targetLanguage] alone missed it, Helvetica rendered the page,
 // and every macron vowel in the ORIGINAL column silently vanished (WinAnsi encoding drops
 // unmapped glyphs rather than showing a placeholder) — "Māori" → "Mori".
+// react-pdf/textkit runs every word through a hyphenation callback to compute line-wrap
+// candidates — by default an English-syllable hyphenator. Fed a word in a language it
+// doesn't recognise (te reo Māori, Polish, etc.), it can split and reconstruct the word
+// wrong, corrupting letters around the break — not only at actual wrap points, since the
+// callback also runs during width-fitting for words that never end up wrapping. Confirmed
+// on a real mi → en job: "Māori" rendered as "M ori" and "Kōhanga" as "KMhanga" throughout
+// the PDF even though the correct Noto font was already selected and its glyphs are all
+// present — the corruption was happening in text-layout, not glyph rendering. Disabling
+// hyphenation (treat every word as unbreakable) removes the callback from the picture
+// entirely. Registered once; @react-pdf de-dupes repeat calls internally.
+let hyphenationDisabled = false;
+function disableHyphenation() {
+  if (hyphenationDisabled) return;
+  hyphenationDisabled = true;
+  try {
+    Font.registerHyphenationCallback((word) => [word]);
+  } catch {}
+}
+
 async function registerFonts(targetLanguage, sourceLanguage) {
+  disableHyphenation();
   const fontUrl = FONT_BY_LANG[targetLanguage] || FONT_BY_LANG[sourceLanguage];
   if (!fontUrl) return;
   try {
