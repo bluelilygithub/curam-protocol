@@ -16,7 +16,7 @@ const {
   repairIncompletePairs,
   dropHallucinatedTerms,
 } = require('../services/translateLlmService');
-const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates, detectReoTermCandidates } = require('../services/translateQaChecks');
+const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates, detectReoTermCandidates, paragraphContainsDoNotTranslateTerm } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 const {
   isGoogleTranslateConfigured,
@@ -1312,10 +1312,30 @@ async function processTranslateJob(
   // Paragraphs already translated for this user/language pair are reused verbatim instead of
   // being re-sent to the model — saves cost on repeat boilerplate and keeps wording identical
   // across jobs. Google-engine jobs still benefit (memory is keyed by language pair, not engine).
+  //
+  // SERIOUS CONFIRMED ROOT CAUSE — this is what made every one of a long series of translate-
+  // pipeline fixes appear to have zero effect on repeated real-job tests: TM is keyed only by
+  // (userId, sourceLang, targetLang, exact source text) — NOT by engine, model, or any code-
+  // version fingerprint. The very first run of a test document (before any of these fixes
+  // existed) saved its paragraph-level translations, including the wrong "Tāone Reo Māori" ->
+  // "Māori Language Town" pair, into translate_memory. EVERY subsequent run of the identical
+  // document hit that exact-text cache and reused the stale bad pair verbatim — completely
+  // bypassing translateParagraphBatch/translateOneParagraph (hence zero [dnt-protect] batch/
+  // translateOneParagraph log lines despite detectReoTermCandidates firing correctly every
+  // time) — and at job completion, savePairs below wrote that same stale pair straight back,
+  // re-poisoning the cache for the next run. A self-perpetuating loop no downstream translation
+  // logic fix could ever break, confirmed directly from Railway job logs (jobs 91-93: identical
+  // "Māori Language Town" output on every run, zero protection-path log lines each time).
+  //
+  // Fix: any paragraph containing a doNotTranslate term's source text is excluded from the TM
+  // lookup entirely, so it always goes through the live protected translate path instead of a
+  // cached pair — do-not-translate correctness is exactly the class of thing that must never be
+  // served from a cache that predates whatever protection logic exists today.
   let tmHits = new Map();
   try {
     const allPagesForTm = Object.keys(paragraphsByPage).map(Number);
-    const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p]);
+    const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p])
+      .filter((t) => !paragraphContainsDoNotTranslateTerm(t, glossaryTerms));
     tmHits = await translateMemory.lookupExact({
       userId, sourceLang: sourceLanguage, targetLang: targetLanguage, texts: allTexts,
     });

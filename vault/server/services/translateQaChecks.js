@@ -360,6 +360,23 @@ function detectReoTermCandidates(text) {
   return out;
 }
 
+/**
+ * SERIOUS CONFIRMED ROOT CAUSE, fixed — translation memory is keyed only by (userId, sourceLang,
+ * targetLang, exact source text), never by engine/model/code version. The first run of a test
+ * document (before any protection logic existed) saved a bad "Tāone Reo Māori" -> "Māori Language
+ * Town" pair; every later run of the SAME document hit that exact-text cache and reused the stale
+ * pair verbatim, bypassing translateParagraphBatch/translateOneParagraph entirely — a self-
+ * perpetuating loop confirmed directly from Railway job logs (identical bad output across
+ * multiple runs, zero protection-path log lines each time, despite detectReoTermCandidates firing
+ * correctly every time). A paragraph containing a doNotTranslate term must never be served from a
+ * cache that predates today's protection logic — always re-translate it live instead.
+ */
+function paragraphContainsDoNotTranslateTerm(text, glossaryTerms) {
+  const dntSources = (glossaryTerms || []).filter((t) => t?.doNotTranslate && t?.source).map((t) => t.source);
+  const t = String(text || '');
+  return dntSources.some((s) => t.includes(s));
+}
+
 // 1-4 Title-Case words, letters only (incl. accented) — candidate defined term / proper noun.
 const CAPITALIZED_RUN_RE = /\b[A-ZÀ-Ž][a-zà-ž]*(?:\s+[A-ZÀ-Ž][a-zà-ž]*){0,3}\b/g;
 const SENTENCE_END_RE = /[.!?]\s*$/;
@@ -820,6 +837,7 @@ module.exports = {
   hasStraySourceWord,
   lockedDoNotTranslateTerms,
   detectReoTermCandidates,
+  paragraphContainsDoNotTranslateTerm,
   detectRepeatedTermCandidates,
   isMetaCommentaryInner,
   looksNonLinguistic,

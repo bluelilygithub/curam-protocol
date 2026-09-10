@@ -7,7 +7,7 @@
 'use strict';
 
 const assert = require('assert');
-const { detectRepeatedTermCandidates, PLACEHOLDER_PATTERNS, detectReoTermCandidates } = require('./translateQaChecks');
+const { detectRepeatedTermCandidates, PLACEHOLDER_PATTERNS, detectReoTermCandidates, paragraphContainsDoNotTranslateTerm } = require('./translateQaChecks');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -225,6 +225,27 @@ test('detectReoTermCandidates finds multiple distinct Reo-shaped terms in one do
   const out = detectReoTermCandidates(doc);
   const sources = out.map((t) => t.source).sort();
   assert.deepStrictEqual(sources, ['Tāone Reo Māori', 'Wiki Reo Pākehā']);
+});
+
+// SERIOUS CONFIRMED ROOT CAUSE, fixed — translation memory cache (keyed only by source text, not
+// by engine/model/code version) served a stale bad pair verbatim on every repeat run of the same
+// test document, bypassing the live translate path and every fix tested against it. Confirmed
+// directly from Railway job logs: identical bad output across runs, zero protection-path log
+// lines each time. A paragraph containing a doNotTranslate term must always re-translate live.
+test('paragraphContainsDoNotTranslateTerm detects a doNotTranslate term inside a paragraph', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  const para = 'Join us for Tāone Reo Māori this year, celebrating language and culture.';
+  assert.strictEqual(paragraphContainsDoNotTranslateTerm(para, glossaryTerms), true);
+});
+
+test('paragraphContainsDoNotTranslateTerm is false for a paragraph with no locked term', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  assert.strictEqual(paragraphContainsDoNotTranslateTerm('An ordinary sentence.', glossaryTerms), false);
+});
+
+test('paragraphContainsDoNotTranslateTerm ignores glossary entries that are not doNotTranslate', () => {
+  const glossaryTerms = [{ source: 'Widget Pro', doNotTranslate: false, target: 'Widget Pro' }];
+  assert.strictEqual(paragraphContainsDoNotTranslateTerm('Buy a Widget Pro today.', glossaryTerms), false);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
