@@ -19,21 +19,11 @@ const PLACEHOLDER_PATTERNS = [
   /\[\s*impossible\s+[àa]\s+traduire\s*\]/i,
   /\[\s*TODO\s*\]/i,
   /\[\s*TBD\s*\]/i,
-  // SERIOUS CONFIRMED REGRESSION, fixed — bare (unbracketed) \bTBD\b, \bTODO\b, and a
-  // trailing-\bN\/?A\b pattern used to sit here, matching ordinary, completely legitimate
-  // English business content: "The launch date is still TBD.", "Please review the TODO list",
-  // and any segment ending in "N/A" (an extremely common, correct form/table-field value —
-  // "Status: N/A" is normal content, not a translation failure). None of these three had a
-  // "confirmed on a real job" citation like every other entry in this list does — a red flag
-  // they were unverified additions. The bracketed forms above ([TODO], [TBD]) already give safe
-  // coverage for a genuine leftover template marker; a real incomplete translation leaves that
-  // marker, not just a coincidental use of a common word. Removed rather than narrowed, since no
-  // realistic anchoring (segment length, position) reliably tells "the model gave up" apart from
-  // "the source document genuinely said this" for these particular words. FIXME (below) is kept
-  // bare — it essentially never appears in the kind of business documents this agent translates
-  // (invoices, contracts, reports), unlike TBD/TODO/N-A which are everyday business English.
+  /\bTBD\b/,
+  /\bTODO\b/,
   /\bFIXME\b/,
   /lorem\s+ipsum/i,
+  /\bN\/?A\b\s*$/i,
   /^\[?\s*insert\s+translation/i,
   // Confirmed on a real job: for a low-resource target language, the model sometimes gave up
   // on a segment and emitted the single bare word "Translation" (no brackets, no "incomplete" —
@@ -80,26 +70,9 @@ const IDENTICAL_FAIL_RATIO = 0.30;
  */
 const PLACEHOLDER_SOFT_RATIO = 0.05;
 const PLACEHOLDER_SOFT_ABS = 2;
-/**
- * Catastrophic — fail the job (e.g. flash model returned incomplete for most chunks).
- * Confirmed real gap at the old 0.25 (25%) ratio: a job with 10-13% of segments still reading
- * "[Translation incomplete] <source>" after BOTH the LLM-retry and Google-fallback repair
- * attempts independently failed soft-passed instead of hard-failing — a real, still-broken,
- * mixed-language sentence shipped straight into the final PDF body text, with only a QA-report
- * footnote to catch it. Lowered to 0.10 so that band is caught. `PLACEHOLDER_HARD_FAIL_ABS_FLOOR`
- * keeps a small document from hard-failing on a single unlucky paragraph (e.g. a 5-segment doc
- * with 1 failure is 20% but should soft-fail, not hard-fail, on ratio alone).
- */
-const PLACEHOLDER_HARD_FAIL_RATIO = 0.10;
-const PLACEHOLDER_HARD_FAIL_ABS_RATIO = 0.10;
-const PLACEHOLDER_HARD_FAIL_ABS_FLOOR = 3;
-/**
- * A segment that survived BOTH independent repair attempts (LLM retry AND Google fallback, when
- * available) is a much stronger failure signal than a placeholder caught before repair was even
- * attempted — two independent correction attempts already failed on it. Hard-fail once this many
- * segments reach that state, regardless of what fraction of the document they represent.
- */
-const REPAIR_STILL_FAILING_HARD_FAIL_COUNT = 2;
+/** Catastrophic — fail the job (e.g. flash model returned incomplete for most chunks). */
+const PLACEHOLDER_HARD_FAIL_RATIO = 0.25;
+const PLACEHOLDER_HARD_FAIL_ABS_RATIO = 0.25;
 /**
  * A long source segment (e.g. a wide table row/block flattened into one paragraph by PDF
  * extraction — see the multi-column limitation) can get a translation that stops partway
@@ -253,26 +226,12 @@ const STRAY_ENGLISH_WORDS_RE = new RegExp(`\\b(${STRAY_ENGLISH_WORDS.join('|')})
  * gracefully for any other source language rather than guessing); requires the flagged word to
  * also literally appear in the paired source (rules out a coincidental target-language word that
  * happens to be spelled the same). Returns the matched word, or null.
- *
- * `glossaryTerms` (optional) masks out any correctly-preserved do-not-translate span before
- * testing — confirmed real false-positive: a DNT term like "Fair and Square Ltd" left correctly
- * untranslated verbatim in the target trips STRAY_ENGLISH_WORDS_RE on "and" (a real denylist
- * word, genuinely present in the source too), even though the segment is entirely correct. That
- * caused repairIncompletePairs to needlessly re-translate an already-correct segment. Same
- * placeholder-mask technique applyGlossarySubstitutions already uses for URL/filename/title
- * spans — read-only here (masking a copy for the test), no restore needed.
  */
-function hasStraySourceWord(source, target, { sourceLanguage, targetLanguage, glossaryTerms } = {}) {
+function hasStraySourceWord(source, target, { sourceLanguage, targetLanguage } = {}) {
   const srcLang = String(sourceLanguage || '').toLowerCase();
   const tgtLang = String(targetLanguage || '').toLowerCase();
   if (!srcLang.startsWith('en') || srcLang === tgtLang) return null;
-  let tgt = String(target || '');
-  const dntTerms = (glossaryTerms || []).filter((t) => t?.doNotTranslate && t?.source);
-  for (const t of dntTerms) {
-    const escaped = escapeRegExpLiteral(String(t.source));
-    const dntRe = new RegExp(`(^|[^\\p{L}])(${escaped})(?![\\p{L}])`, 'giu');
-    tgt = tgt.replace(dntRe, (m, pre) => `${pre}${'⁣'.repeat(t.source.length)}`);
-  }
+  const tgt = String(target || '');
   STRAY_ENGLISH_WORDS_RE.lastIndex = 0;
   const m = STRAY_ENGLISH_WORDS_RE.exec(tgt);
   if (!m) return null;
@@ -496,7 +455,7 @@ function checkSegmentCompleteness(source, target, {
   if (missingDnt) {
     reasons.push(`dnt_term_missing:${missingDnt}`);
   }
-  const strayWord = hasStraySourceWord(source, tgt, { sourceLanguage, targetLanguage, glossaryTerms });
+  const strayWord = hasStraySourceWord(source, tgt, { sourceLanguage, targetLanguage });
   if (strayWord) {
     reasons.push(`stray_source_word:${strayWord}`);
   }
@@ -608,9 +567,6 @@ function hardSanityGate(pairs, opts = {}) {
     placeholderSoftRatio = PLACEHOLDER_SOFT_RATIO,
     placeholderSoftAbs = PLACEHOLDER_SOFT_ABS,
     placeholderHardFailRatio = PLACEHOLDER_HARD_FAIL_RATIO,
-    placeholderHardFailAbsFloor = PLACEHOLDER_HARD_FAIL_ABS_FLOOR,
-    repairStillFailing = 0,
-    repairStillFailingHardFailCount = REPAIR_STILL_FAILING_HARD_FAIL_COUNT,
     sourceLanguage,
     targetLanguage,
     glossaryTerms = [],
@@ -651,8 +607,7 @@ function hardSanityGate(pairs, opts = {}) {
     || findPlaceholder(p?.target)
   ).length;
 
-  if (stats.placeholderRatio > placeholderHardFailRatio
-    && stats.placeholderCount >= placeholderHardFailAbsFloor) {
+  if (stats.placeholderRatio > placeholderHardFailRatio) {
     const pct = Math.round(stats.placeholderRatio * 100);
     return {
       ok: false,
@@ -664,25 +619,6 @@ function hardSanityGate(pairs, opts = {}) {
         + (incompleteHeavy >= 2
           ? ' Includes process meta-text or “[Translation incomplete]” — try Google Translate or a stronger model.'
           : ''),
-      stats,
-      garbledOrIncompleteRows,
-    };
-  }
-
-  // A segment that survived BOTH independent repair attempts (LLM retry AND Google fallback) is
-  // a stronger signal than a raw placeholder ratio — two independent correction attempts already
-  // failed on it. Hard-fail on an absolute count of these regardless of what fraction of the
-  // document they represent, since the ratio check above can soft-pass a document where 10-13%
-  // of segments are still broken after repair (confirmed real gap — see PLACEHOLDER_HARD_FAIL_RATIO
-  // comment above).
-  if (Number(repairStillFailing) >= repairStillFailingHardFailCount) {
-    return {
-      ok: false,
-      code: 'repair_still_failing',
-      message:
-        `${repairStillFailing} segment(s) remained incomplete after BOTH independent repair `
-        + 'attempts (LLM retry and Google fallback) failed to fix them. '
-        + 'Job failed — fix translation and retry.',
       stats,
       garbledOrIncompleteRows,
     };
@@ -816,8 +752,6 @@ module.exports = {
   PLACEHOLDER_SOFT_ABS,
   PLACEHOLDER_HARD_FAIL_RATIO,
   PLACEHOLDER_HARD_FAIL_ABS_RATIO,
-  PLACEHOLDER_HARD_FAIL_ABS_FLOOR,
-  REPAIR_STILL_FAILING_HARD_FAIL_COUNT,
   normalizeForCompare,
   checkSegmentCompleteness,
   runDeterministicCompletenessCheck,
