@@ -1423,6 +1423,14 @@ function TranslationsTab({ glossaries }) {
   // Target language is a Settings-level choice (Settings → AI & Chat → Translate agent), not
   // picked per job — loaded once below and used read-only here.
   const [targetLang, setTargetLang] = useState('fr');
+  // Confirmed real bug: the workspace-default fetch below used to overwrite targetLang
+  // unconditionally whenever it resolved — if a user picked a language quickly and that fetch
+  // resolved a beat later (ordinary network timing, not a rare edge case), their manual
+  // selection was silently reverted to the workspace default right before they submitted, with
+  // no visual indication anything changed ("I selected English but it did French"). This ref
+  // tracks whether the user has manually changed the dropdown since mount, so the settings
+  // fetch's default only applies before that point, never after.
+  const targetLangTouchedRef = useRef(false);
   const [languageOptions, setLanguageOptions] = useState(LANGUAGES); // admin-orderable, see Settings → Translate agent
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
@@ -1492,7 +1500,7 @@ function TranslationsTab({ glossaries }) {
       }
     }).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then((s) => {
-      if (s.translate_target_language) setTargetLang(s.translate_target_language);
+      if (s.translate_target_language && !targetLangTouchedRef.current) setTargetLang(s.translate_target_language);
     }).catch(() => {});
     api.get('/api/settings/translate-language-order').then(r => r.json()).then((d) => {
       if (Array.isArray(d.order) && d.order.length) setLanguageOptions(orderLanguages(d.order));
@@ -2057,7 +2065,7 @@ function TranslationsTab({ glossaries }) {
                       : languageOptions.find(l => l.code === targetLang)?.lowResource
                         ? '⚠ Lower-quality output expected — sparse training examples for this language.'
                         : 'Defaults from Settings → AI & Chat → Translate agent; change here for this job only.'}>
-                    <Sel value={targetLang} onChange={(v) => { setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
+                    <Sel value={targetLang} onChange={(v) => { targetLangTouchedRef.current = true; setTargetLang(v); if (v !== 'mi') setRegionalAudience(''); }}>
                       {languageOptions.map(l => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
                     </Sel>
                   </Field>
