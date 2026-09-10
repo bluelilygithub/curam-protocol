@@ -322,7 +322,14 @@ function lockedDoNotTranslateTerms(text) {
 // silently truncating a trailing macron off the match ("Pākehā" → "Pākeh"). Same class of bug
 // already hit and fixed elsewhere in this codebase's macron/PDF-font work — checked here before
 // shipping instead of after.
-const REO_TERM_RE = /(?<![\p{L}\p{N}])(\p{Lu}[\p{L}'’]*(?:\s+\p{Lu}[\p{L}'’]*){0,3}\s+[Rr]eo\s+\p{Lu}[\p{L}'’]*)(?![\p{L}\p{N}])/gu;
+//
+// SERIOUS CONFIRMED BUG, fixed — the word-continuation class used to include ' and ' (for
+// contractions like O'Brien), which swallowed a closing quotation mark straight into the match
+// when the source wrapped the term in quotes ('Tāone Reo Māori' → captured as "Tāone Reo Māori'"
+// with the quote attached). Confirmed on a real job: this produced a second, malformed glossary
+// entry distinct from the clean term, splitting protection across two different source strings
+// for what should be one term. Apostrophes dropped from the class — this shape doesn't need them.
+const REO_TERM_RE = /(?<![\p{L}\p{N}])(\p{Lu}[\p{L}]*(?:\s+\p{Lu}[\p{L}]*){0,3}\s+[Rr]eo\s+\p{Lu}[\p{L}]*)(?![\p{L}\p{N}])/gu;
 
 /**
  * SERIOUS CONFIRMED GAP, fixed — the do-not-translate protection for "<prefix> Reo <Language>"

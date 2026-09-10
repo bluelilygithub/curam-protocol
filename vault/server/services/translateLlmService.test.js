@@ -306,16 +306,38 @@ test('restoreDoNotTranslateTerms puts the exact canonical term back after transl
   assert.strictEqual(count, 2, `expected 2 restored occurrences, got ${count} in: ${restored}`);
 });
 
-test('restoreDoNotTranslateTerms tolerates the model inserting a space at the token boundary', () => {
+test('restoreDoNotTranslateTerms tolerates the model inserting a space inside the brackets', () => {
   const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
   const { text, tokens } = protectDoNotTranslateTerms('Tāone Reo Māori event', glossaryTerms);
-  const drifted = text.replace(tokens[0].token, '⁣ DNT0 ⁣');
+  const drifted = text.replace(tokens[0].token, '[[ DNT0 ]]');
   const restored = restoreDoNotTranslateTerms(drifted, tokens);
   assert.ok(restored.includes('Tāone Reo Māori'), `expected restore to tolerate spacing drift: ${restored}`);
 });
 
 test('restoreDoNotTranslateTerms is a no-op when there are no tokens', () => {
   assert.strictEqual(restoreDoNotTranslateTerms('plain text', []), 'plain text');
+});
+
+// SERIOUS CONFIRMED BUG, fixed — real Railway job 91 proved the term WAS correctly detected and
+// swapped pre-call, but the model still produced a hallucinated replacement ("Māori Language
+// Town") in the final output instead of copying the invisible-character token verbatim. Switched
+// to a visible [[DNTn]] bracket token; this test locks the format so it can't silently regress
+// back to the fragile invisible-character version.
+test('protectDoNotTranslateTerms uses a visible [[DNTn]] bracket token, not invisible characters', () => {
+  const { text, tokens } = protectDoNotTranslateTerms('Tāone Reo Māori event', [
+    { source: 'Tāone Reo Māori', doNotTranslate: true, target: '' },
+  ]);
+  assert.strictEqual(tokens[0].token, '[[DNT0]]');
+  assert.ok(text.includes('[[DNT0]]'), `expected visible bracket token in: ${text}`);
+});
+
+test('restoreDoNotTranslateTerms logs (not throws) when the model drops a token entirely', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  const { tokens } = protectDoNotTranslateTerms('Tāone Reo Māori event', glossaryTerms);
+  // Simulate the model hallucinating a replacement instead of copying the token.
+  const hallucinated = 'Māori Language Town event';
+  const restored = restoreDoNotTranslateTerms(hallucinated, tokens);
+  assert.strictEqual(restored, hallucinated, 'falls through unchanged, not silently mangled further');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

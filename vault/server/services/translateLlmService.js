@@ -485,7 +485,14 @@ function protectDoNotTranslateTerms(text, glossaryTerms) {
   terms.forEach((term) => {
     const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g');
     out = out.replace(re, () => {
-      const token = `⁣DNT${tokens.length}⁣`;
+      // Visible bracket format, NOT invisible Unicode characters — confirmed root cause of the
+      // protection not surviving a real translate call (job 91: term correctly detected AND
+      // correctly swapped pre-call, per glossary-drift evidence in the final output the model
+      // still produced a hallucinated replacement, not the literal token). Invisible characters
+      // are a known weak point for LLM tokenizers/generation — a token the model can't clearly
+      // "see" is more likely to be paraphrased around than copied verbatim. [[DNT0]] is the same
+      // family of format production MT/LLM pipelines use for exactly this reason.
+      const token = `[[DNT${tokens.length}]]`;
       tokens.push({ token, term });
       return token;
     });
@@ -494,20 +501,24 @@ function protectDoNotTranslateTerms(text, glossaryTerms) {
 }
 
 /** Restore protectDoNotTranslateTerms() tokens after translation — tolerant of minor spacing
- * drift the model may introduce around the invisible-character boundary, same pattern as the
- * URL/filename restore below. Any token the model dropped entirely is left as-is (falls through
- * to the existing instruction + mechanical-repair defence-in-depth, not silently lost). */
+ * drift around the brackets. Logs (does not throw) when a token is missing entirely — that's
+ * the model failing to preserve it, real evidence for [dnt-protect] log analysis, not a case to
+ * silently swallow. Falls through to the existing instruction + mechanical-repair defence-in-depth
+ * either way — the term is never silently lost from the QA/repair surface. */
 function restoreDoNotTranslateTerms(text, tokens) {
   let out = String(text || '');
   (tokens || []).forEach(({ token, term }) => {
     if (out.includes(token)) {
       out = out.split(token).join(term);
-    } else {
-      // Tolerate the model inserting/stripping a space next to the invisible boundary chars.
-      const id = token.match(/\d+/)[0];
-      const loose = new RegExp(`\\u2063\\s*DNT${id}\\s*\\u2063`);
-      if (loose.test(out)) out = out.replace(loose, term);
+      return;
     }
+    const id = token.match(/\d+/)[0];
+    const loose = new RegExp(`\\[\\[\\s*DNT${id}\\s*\\]\\]`);
+    if (loose.test(out)) {
+      out = out.replace(loose, term);
+      return;
+    }
+    console.warn('[dnt-protect] token NOT preserved by model — restore failed', { token, term, preview: out.slice(0, 200) });
   });
   return out;
 }
@@ -582,6 +593,7 @@ async function translateParagraphBatch({
 
   // Single paragraph — simplest path
   if (paragraphs.length === 1) {
+    console.log('[dnt-protect] batch (single-paragraph path -> translateOneParagraph)', { paragraphs: 1 });
     return [await translateOneParagraph({
       modelId, userId,
       paragraph: paragraphs[0],
@@ -613,7 +625,7 @@ Preserve sentence type (statement vs question), polarity (affirmative vs negativ
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
 ${translatorHardRules(batchText)}
 ${policy ? `\n${policy}\n` : ''}
-${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token EXACTLY as it appears, unchanged, in the same position. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there. Never translate, alter, or omit the token itself; do not let its presence change or block any surrounding grammar.\n' : ''}Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped [[DNTn]] (double square brackets, DNT, a number) — these are opaque IDs standing in for a locked proper noun, NOT words to translate or interpret. Copy each [[DNTn]] token EXACTLY as it appears, character for character, in the same position — do not guess what it might mean, do not replace it with a plausible-sounding phrase, do not drop it. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there.\n' : ''}Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
 No markdown fences. No commentary.`;
 
   const prompt = [
@@ -741,13 +753,17 @@ async function translateOneParagraph({
   const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(paragraph), glossaryTerms);
   const protectedParagraph = protectDoNotTranslateTerms(paragraph, glossaryTermsMerged);
   const hasProtectedTerms = protectedParagraph.tokens.length > 0;
+  console.log('[dnt-protect] translateOneParagraph', {
+    dntTermsInGlossary: (glossaryTermsMerged || []).filter((t) => t?.doNotTranslate).map((t) => t.source),
+    tokensSwapped: protectedParagraph.tokens.length,
+  });
 
   const system = `You are a professional document translator.
 Translate the paragraph into ${langName(targetLanguage)}.
 Preserve meaning, polarity, and sentence type. Obey the glossary.
 ${translatorHardRules(paragraph)}
 ${policy ? `\n${policy}\n` : ''}
-${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token EXACTLY as it appears, unchanged, in the same position. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there. Never translate, alter, or omit the token itself; do not let its presence change or block any surrounding grammar.\n' : ''}Return ONLY valid JSON: { "translation": "..." }
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped [[DNTn]] (double square brackets, DNT, a number) — these are opaque IDs standing in for a locked proper noun, NOT words to translate or interpret. Copy each [[DNTn]] token EXACTLY as it appears, character for character, in the same position — do not guess what it might mean, do not replace it with a plausible-sounding phrase, do not drop it. This applies ONLY to the token itself: every normal grammar rule of the target language (articles, prepositions, contractions like French à+les→aux, gender/number agreement, elision) still applies in full to the words around it, exactly as if the token were an ordinary noun phrase there.\n' : ''}Return ONLY valid JSON: { "translation": "..." }
 No markdown fences.`;
 
   const prompt = [
