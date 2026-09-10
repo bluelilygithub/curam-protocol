@@ -384,6 +384,56 @@ function autoFixGlossaryDrift({ pairs, glossaryTerms }) {
 }
 
 /**
+ * Repairs a specific, mechanical partial-translation pattern in a multi-word do-not-translate
+ * term shaped "<prefix> Reo <Language>" (e.g. "Tāone Reo Māori", "Te Wiki o te Reo Māori"). The
+ * translator sometimes partially obeys the do-not-translate instruction — it leaves <prefix>
+ * alone but still renders the embedded "Reo <Language>" as its normal English gloss "<Language>
+ * language", producing "<prefix> <Language> language" verbatim. Confirmed on a real job,
+ * benchmarked against Google Translate on the same document: BOTH independently produced the
+ * identical hybrid "Te Wiki o te Māori language" at the same sentence — not a defect unique to
+ * this pipeline, but a shared weakness of general MT on campaign/proper names built from an
+ * ordinary compositional phrase ("reo Māori" = "the Māori language" is a completely normal,
+ * correct translation everywhere else in the SAME document, which is exactly what makes the
+ * model's prior to translate it strong even inside a name it's told not to touch). Where THIS
+ * pipeline is worse than Google on the same document: internal consistency — three different
+ * renderings of the same term across one document, vs Google settling on one (wrong) rendering
+ * throughout. This closes that consistency gap by mechanically reconstructing the hybrid back to
+ * the canonical term, same repair-not-guess philosophy as autoFixGlossaryDrift above (pure
+ * string operation, no LLM call, only ever touches an exact reconstructable pattern).
+ */
+function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
+  const dntTerms = (glossaryTerms || [])
+    .filter((t) => t?.doNotTranslate && t?.source)
+    .map((t) => {
+      const m = String(t.source).match(/^(.*?)\breo\s+(\S+)\s*$/i);
+      if (!m) return null;
+      const prefix = m[1].trim();
+      const lang = m[2].trim();
+      const hybridRe = new RegExp(
+        `${prefix ? `\\b${escapeRegExp(prefix)}\\s+` : '\\b'}${escapeRegExp(lang)}\\s+language\\b`,
+        'gi',
+      );
+      return { source: t.source, hybridRe };
+    })
+    .filter(Boolean);
+  if (!dntTerms.length || !pairs?.length) return { fixedCount: 0 };
+
+  let fixedCount = 0;
+  pairs.forEach((pair) => {
+    if (!pair?.target) return;
+    for (const t of dntTerms) {
+      t.hybridRe.lastIndex = 0;
+      if (t.hybridRe.test(String(pair.target))) {
+        t.hybridRe.lastIndex = 0;
+        pair.target = String(pair.target).replace(t.hybridRe, t.source);
+        fixedCount += 1;
+      }
+    }
+  });
+  return { fixedCount };
+}
+
+/**
  * Pull a translations[] array out of model text — full JSON, fenced, or truncated.
  */
 function extractTranslationsArray(text, expectedLen) {
@@ -1021,6 +1071,7 @@ module.exports = {
   proposeGlossary,
   reportGlossaryDrift,
   autoFixGlossaryDrift,
+  autoFixPartialReoTermDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,

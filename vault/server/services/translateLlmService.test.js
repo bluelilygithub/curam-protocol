@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -202,6 +202,55 @@ test('dropHallucinatedTerms filters a mixed list, keeping only real words', () =
   ];
   const out = dropHallucinatedTerms(terms, MAORI_SOURCE_SAMPLE).map((t) => t.source);
   assert.deepStrictEqual(out, ['kōrero', 'ēnei']);
+});
+
+// autoFixPartialReoTermDrift — confirmed on a real job, benchmarked against Google Translate on
+// the same document: a do-not-translate term shaped "<prefix> Reo <Language>" gets partially
+// obeyed — the model leaves <prefix> alone but still renders the embedded "Reo <Language>" as
+// its normal English gloss "<Language> language" ("Tāone Reo Māori" -> "Tāone Māori language",
+// "Te Wiki o te Reo Māori" -> "Te Wiki o te Māori language"). Both this pipeline AND Google made
+// the identical hybrid error at the identical sentence (a shared MT weakness, not unique to this
+// tool) — but this pipeline additionally flip-flopped between 3 different renderings of the same
+// term across one document, unlike Google's one (still wrong) consistent choice. This closes
+// that consistency gap.
+const REO_TERMS = [
+  { source: 'Te Wiki o te Reo Māori', target: '', doNotTranslate: true },
+  { source: 'Tāone Reo Māori', target: '', doNotTranslate: true },
+];
+
+test('autoFixPartialReoTermDrift repairs "Te Wiki o te Māori language" back to the canonical term', () => {
+  const pairs = [{
+    source: 'I tēnei tau, e ahu ana Te Wiki o te Reo Māori ki tō tāone!',
+    target: 'This year, Te Wiki o te Māori language is coming to your town!',
+  }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(pairs[0].target, 'This year, Te Wiki o te Reo Māori is coming to your town!');
+});
+
+test('autoFixPartialReoTermDrift repairs the shorter "Tāone Māori language" hybrid too', () => {
+  const pairs = [{
+    source: "Tohua tō tāone hei 'Tāone Reo Māori'",
+    target: "Designate your town as a 'Tāone Māori language'",
+  }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 1);
+  assert.strictEqual(pairs[0].target, "Designate your town as a 'Tāone Reo Māori'");
+});
+
+test('autoFixPartialReoTermDrift leaves an already-correct rendering untouched', () => {
+  const pairs = [{ source: 'unrelated', target: 'Te Wiki o te Reo Māori stays correct here' }];
+  const { fixedCount } = autoFixPartialReoTermDrift({ pairs, glossaryTerms: REO_TERMS });
+  assert.strictEqual(fixedCount, 0);
+  assert.strictEqual(pairs[0].target, 'Te Wiki o te Reo Māori stays correct here');
+});
+
+test('autoFixPartialReoTermDrift ignores terms with no "Reo <Language>" shape', () => {
+  const pairs = [{ source: 'x', target: 'Kōhanga Reo language school' }];
+  const { fixedCount } = autoFixPartialReoTermDrift({
+    pairs, glossaryTerms: [{ source: 'Kōhanga Reo', target: '', doNotTranslate: true }],
+  });
+  assert.strictEqual(fixedCount, 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

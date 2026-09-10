@@ -7,6 +7,7 @@ const { resolveTranslateModels, getTranslateAgentCardConfig, loadCustomInstructi
 const {
   proposeGlossary,
   autoFixGlossaryDrift,
+  autoFixPartialReoTermDrift,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
@@ -1541,26 +1542,37 @@ async function processTranslateJob(
 
   // ── 5c. Glossary drift: auto-fix the safe case, report the rest ─────────────
   // Chunks translate in parallel with no shared state, so a forced term (user-declared or
-  // auto-locked above) can still land differently per chunk. Two passes, both pure string
+  // auto-locked above) can still land differently per chunk. Three passes, all pure string
   // comparison — no LLM calls:
   //  1. autoFixGlossaryDrift — the common real case (confirmed on an actual job): a chunk left
   //     the source term untranslated, verbatim, inside the target. That's mechanically fixable
   //     with a direct string replace, so we just do it instead of only flagging it.
-  //  2. Whatever's left (a genuinely different wrong rendering, not a plain leftover) still can't
-  //     be safely auto-corrected — surfaced in the QA summary same as before.
+  //  2. autoFixPartialReoTermDrift — a do-not-translate term shaped "<prefix> Reo <Language>"
+  //     (e.g. "Tāone Reo Māori") gets partially obeyed: prefix left alone, but the embedded
+  //     "Reo <Language>" still rendered as "<Language> language" (a normal, correct translation
+  //     everywhere else in the document, which is exactly why the model's prior for it is strong
+  //     even inside a locked name). Confirmed on a real job, benchmarked against Google
+  //     Translate on the same document — both produced the identical hybrid at the same
+  //     sentence, but this pipeline additionally flip-flopped between 3 different renderings of
+  //     the same term across the document, unlike Google's one (still wrong) consistent choice.
+  //     This closes that consistency gap.
+  //  3. Whatever's left (a genuinely different wrong rendering, not a plain leftover or a
+  //     reconstructable hybrid) still can't be safely auto-corrected — surfaced in the QA
+  //     summary same as before.
   let glossaryDriftTerms = [];
   let glossaryDriftAutoFixedCount = 0;
   if (engine === 'llm') {
     const { fixedCount, remainingTerms } = autoFixGlossaryDrift({ pairs: reviewPairs, glossaryTerms });
-    glossaryDriftAutoFixedCount = fixedCount;
-    if (fixedCount > 0) {
-      // Sync fixed targets back into translatedByPage (autoFixGlossaryDrift mutated pair.target).
+    const { fixedCount: reoFixedCount } = autoFixPartialReoTermDrift({ pairs: reviewPairs, glossaryTerms });
+    glossaryDriftAutoFixedCount = fixedCount + reoFixedCount;
+    if (glossaryDriftAutoFixedCount > 0) {
+      // Sync fixed targets back into translatedByPage (both passes mutate pair.target).
       for (const pair of reviewPairs) {
         if (pair.pageNum != null && pair.idxInPage != null && translatedByPage[pair.pageNum]) {
           translatedByPage[pair.pageNum][pair.idxInPage] = pair.target;
         }
       }
-      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s)`);
+      console.log(`[translate] glossary drift auto-fixed ${fixedCount} occurrence(s), partial-reo-term drift auto-fixed ${reoFixedCount} occurrence(s)`);
     }
     if (remainingTerms.length) {
       // NOT a new-term proposal — `t.target` is already the glossary's existing locked
