@@ -25,8 +25,17 @@ function isSafeToPersist(source, target) {
   return source.length > 1 && target.length > 1 && !findPlaceholder(target);
 }
 
-/** Returns a Map<sourceText, targetText> for every exact match found. */
-async function lookupExact({ userId, sourceLang, targetLang, texts }) {
+/**
+ * Returns a Map<sourceText, targetText> for every exact match found.
+ *
+ * `engine` ('llm' | 'google') scopes the lookup — confirmed real bug: TM was originally
+ * engine-agnostic, so picking LLM after a Google-engine run of the same document (or vice versa)
+ * silently reused the OTHER engine's cached output, defeating an explicit engine choice —
+ * especially confusing for a user deliberately comparing the two engines against each other.
+ * Required, not optional, so a caller can't accidentally fall back to the old cross-engine
+ * behaviour by omitting it.
+ */
+async function lookupExact({ userId, sourceLang, targetLang, engine, texts }) {
   const hits = new Map();
   const candidates = [...new Set(texts.map(normalize).filter(Boolean))];
   if (!candidates.length) return hits;
@@ -34,8 +43,8 @@ async function lookupExact({ userId, sourceLang, targetLang, texts }) {
   const hashes = candidates.map(hashOf);
   const { rows } = await pool.query(
     `SELECT "sourceHash", "targetText" FROM translate_memory
-     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND "sourceHash" = ANY($4)`,
-    [userId, sourceLang, targetLang, hashes]
+     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND engine=$4 AND "sourceHash" = ANY($5)`,
+    [userId, sourceLang, targetLang, engine, hashes]
   );
   if (!rows.length) return hits;
 
@@ -63,7 +72,7 @@ async function lookupExact({ userId, sourceLang, targetLang, texts }) {
  * place — the cheaper, upstream half of the fix (see the TM-hit reuse routing in translate.js's
  * chunk loop for the other half, which re-checks an EXISTING cached hit at reuse time).
  */
-async function savePairs({ userId, sourceLang, targetLang, domain, pairs }) {
+async function savePairs({ userId, sourceLang, targetLang, engine, domain, pairs }) {
   const cleaned = pairs
     .map((p) => ({ source: normalize(p.source), target: normalize(p.target) }))
     .filter((p) => isSafeToPersist(p.source, p.target));
@@ -75,11 +84,11 @@ async function savePairs({ userId, sourceLang, targetLang, domain, pairs }) {
     await client.query('BEGIN');
     for (const { source, target } of cleaned) {
       await client.query(
-        `INSERT INTO translate_memory ("userId","sourceLang","targetLang","sourceHash","sourceText","targetText",domain,"hitCount")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,0)
-         ON CONFLICT ("userId","sourceLang","targetLang","sourceHash")
+        `INSERT INTO translate_memory ("userId","sourceLang","targetLang",engine,"sourceHash","sourceText","targetText",domain,"hitCount")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0)
+         ON CONFLICT ("userId","sourceLang","targetLang",engine,"sourceHash")
          DO UPDATE SET "targetText"=EXCLUDED."targetText", domain=EXCLUDED.domain, "updatedAt"=NOW()`,
-        [userId, sourceLang, targetLang, hashOf(source), source, target, domain || null]
+        [userId, sourceLang, targetLang, engine, hashOf(source), source, target, domain || null]
       );
       saved += 1;
     }
@@ -93,13 +102,13 @@ async function savePairs({ userId, sourceLang, targetLang, domain, pairs }) {
   return saved;
 }
 
-async function bumpHitCounts({ userId, sourceLang, targetLang, sources }) {
+async function bumpHitCounts({ userId, sourceLang, targetLang, engine, sources }) {
   const hashes = [...new Set(sources.map(normalize).filter(Boolean))].map(hashOf);
   if (!hashes.length) return;
   await pool.query(
     `UPDATE translate_memory SET "hitCount"="hitCount"+1
-     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND "sourceHash" = ANY($4)`,
-    [userId, sourceLang, targetLang, hashes]
+     WHERE "userId"=$1 AND "sourceLang"=$2 AND "targetLang"=$3 AND engine=$4 AND "sourceHash" = ANY($5)`,
+    [userId, sourceLang, targetLang, engine, hashes]
   ).catch(() => {});
 }
 

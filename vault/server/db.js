@@ -2025,11 +2025,21 @@ async function initSchema() {
       "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // "engine" (llm | google) — confirmed real bug: TM was originally engine-agnostic by design
+  // ("Google-engine jobs still benefit too"), but that means picking LLM after a Google-engine
+  // run of the same document (or vice versa) silently reuses the OTHER engine's cached output —
+  // defeating the entire point of an explicit engine choice, especially for a user deliberately
+  // comparing the two engines against each other. Segments a user explicitly chose an engine for
+  // must come from that engine. Existing rows get 'llm' as a safe default (LLM was the original/
+  // default engine before Google was added) rather than NULL, so the unique index below can
+  // include it without nullable-column matching surprises.
+  await pool.query(`ALTER TABLE translate_memory ADD COLUMN IF NOT EXISTS engine TEXT NOT NULL DEFAULT 'llm'`);
   // Indexed on a fixed-length hash, not the raw paragraph text — a long segment can exceed
   // Postgres's btree index row-size limit if indexed directly.
+  await pool.query(`DROP INDEX IF EXISTS idx_translate_memory_unique`);
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_memory_unique
-      ON translate_memory ("userId", "sourceLang", "targetLang", "sourceHash")
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_translate_memory_unique_v2
+      ON translate_memory ("userId", "sourceLang", "targetLang", engine, "sourceHash")
   `);
 
   // ── Guitar Learning Agent ─────────────────────────────────────────────────────

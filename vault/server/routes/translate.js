@@ -1307,15 +1307,18 @@ async function processTranslateJob(
   });
 
   // ── 4b. Translation memory lookup (exact match only) ────────────────────────
-  // Paragraphs already translated for this user/language pair are reused verbatim instead of
-  // being re-sent to the model — saves cost on repeat boilerplate and keeps wording identical
-  // across jobs. Google-engine jobs still benefit (memory is keyed by language pair, not engine).
+  // Paragraphs already translated for this user/language pair AND engine are reused verbatim
+  // instead of being re-sent to the model — saves cost on repeat boilerplate and keeps wording
+  // identical across jobs. Scoped by engine (not just language pair) since confirmed real bug:
+  // a user picking LLM after running the same document through Google (or vice versa) would
+  // otherwise silently get the OTHER engine's cached output back — defeating an explicit engine
+  // choice, especially when the whole point of running both was to compare them.
   let tmHits = new Map();
   try {
     const allPagesForTm = Object.keys(paragraphsByPage).map(Number);
     const allTexts = allPagesForTm.flatMap((p) => paragraphsByPage[p]);
     tmHits = await translateMemory.lookupExact({
-      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, texts: allTexts,
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine, texts: allTexts,
     });
   } catch (err) {
     console.warn('[translate] TM lookup failed:', err.message);
@@ -1774,12 +1777,12 @@ async function processTranslateJob(
   // ── 7b. Translation memory: save this job's pairs, bump reuse counts ────────
   try {
     await translateMemory.savePairs({
-      userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+      userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine,
       domain: intakeAnswers?.domain || null, pairs: reviewPairs,
     });
     if (tmReuseCount > 0) {
       await translateMemory.bumpHitCounts({
-        userId, sourceLang: sourceLanguage, targetLang: targetLanguage,
+        userId, sourceLang: sourceLanguage, targetLang: targetLanguage, engine,
         sources: [...tmHits.keys()],
       });
     }

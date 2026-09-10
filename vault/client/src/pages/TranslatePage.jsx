@@ -281,11 +281,12 @@ function downloadQaReport(job, qa, appVersion) {
   URL.revokeObjectURL(url);
 }
 
-function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal, onDownloadText }) {
+function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOriginal, onDownloadText, onDownloadSideBySide }) {
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [sideBySideBusy, setSideBySideBusy] = useState(false);
   const addToast = useToastStore(s => s.addToast);
   const appVersion = useAppVersion();
 
@@ -358,6 +359,13 @@ function QaPanel({ qa, onClose, job, onDownload, onDownloadNative, onDownloadOri
                 title="Plain-text export of the translation only — no source column, no styling"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 Download plain text
+              </button>
+              <button onClick={async () => { setSideBySideBusy(true); try { await onDownloadSideBySide?.(job); } finally { setSideBySideBusy(false); } }}
+                disabled={sideBySideBusy}
+                className="text-sm px-4 py-2 rounded-lg border font-medium hover:opacity-70 disabled:opacity-50"
+                title="Original and translation in two columns on the same page — built on demand, doesn't change this job's saved PDF"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                {sideBySideBusy ? 'Building…' : 'Download side-by-side PDF'}
               </button>
               {job.hasNativeOutput && (
                 <button onClick={() => onDownloadNative?.(job)}
@@ -1904,6 +1912,40 @@ function TranslationsTab({ glossaries }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
+  // Side-by-side (original + translation in two columns) was removed as a job-intake choice —
+  // see the "PDF layout" radio buttons above, which only offer "Separate translated document" or
+  // "Bilingual pages" for new jobs. Restored here as an on-demand rebuild from a job's already
+  // -persisted translatedTextJson instead of a job-creation setting: doesn't touch this job's own
+  // saved PDF (translated-${...}.pdf via Download translated PDF stays whatever layout the job
+  // was actually run with) or re-run any translation — pure client-side re-render of already
+  // -translated text into a different layout, downloaded directly, no server write at all.
+  const downloadSideBySidePdf = async (job) => {
+    try {
+      const res = await api.get(`/api/translate/jobs/${job.id}/status`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load this job');
+      if (!data.translatedTextJson) throw new Error('This job has no saved translation to build a PDF from');
+      const payload = typeof data.translatedTextJson === 'string'
+        ? JSON.parse(data.translatedTextJson)
+        : data.translatedTextJson;
+      if (!payload || typeof payload !== 'object') throw new Error('Translation data missing or invalid');
+
+      await registerFonts(data.targetLanguage, data.sourceLanguage);
+      const doc = buildBilingualPdf({
+        ...payload,
+        sourceLanguage: data.sourceLanguage,
+        targetLanguage: data.targetLanguage,
+        pdfLayout: 'side-by-side',
+      });
+      const blob = await pdf(doc).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `side-by-side-${(job.filename || 'document').replace(/\.[^.]+$/, '')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
 
   return (
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
@@ -2290,7 +2332,7 @@ function TranslationsTab({ glossaries }) {
       {qaJob && (
         <QaPanel qa={parseQa(qaJob)} job={qaJob} onClose={() => setQaJob(null)}
           onDownload={downloadJob} onDownloadNative={downloadNativeJob} onDownloadOriginal={downloadOriginalJob}
-          onDownloadText={downloadTextJob} />
+          onDownloadText={downloadTextJob} onDownloadSideBySide={downloadSideBySidePdf} />
       )}
     </div>
   );
