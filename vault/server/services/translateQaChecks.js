@@ -311,6 +311,48 @@ function lockedDoNotTranslateTerms(text) {
   ];
 }
 
+// 1-4 leading Title-Case words + "Reo"/"reo" + one Title-Case word (a language name) — e.g.
+// "Tāone Reo Māori". Confirmed proper noun shape from the real bug report: a phrase built out of
+// the completely ordinary, correctly-translatable compositional phrase "reo Māori" ("the Māori
+// language") embedded inside a fixed proper name the model must NOT translate.
+//
+// Uses \p{L} Unicode-letter classes with explicit lookaround boundaries, NOT \b — caught by this
+// file's own regression test: JS's \b is ASCII \w-based, so it doesn't treat a macron vowel
+// (ā/ē/ī/ō/ū, U+0100 range — outside the old A-Za-zÀ-ž Latin-1 range too) as a word character,
+// silently truncating a trailing macron off the match ("Pākehā" → "Pākeh"). Same class of bug
+// already hit and fixed elsewhere in this codebase's macron/PDF-font work — checked here before
+// shipping instead of after.
+const REO_TERM_RE = /(?<![\p{L}\p{N}])(\p{Lu}[\p{L}'’]*(?:\s+\p{Lu}[\p{L}'’]*){0,3}\s+[Rr]eo\s+\p{Lu}[\p{L}'’]*)(?![\p{L}\p{N}])/gu;
+
+/**
+ * SERIOUS CONFIRMED GAP, fixed — the do-not-translate protection for "<prefix> Reo <Language>"
+ * proper nouns (protectDoNotTranslateTerms in translateLlmService.js) only protects a term that
+ * is ALREADY present in glossaryTerms with doNotTranslate:true. Whether that happens at all used
+ * to depend entirely on proposeGlossary's own LLM call noticing and flagging the phrase — an LLM
+ * judgment call with no determinism guarantee, run to run. Confirmed on a real job: the SAME
+ * document produced a different wrong rendering of the SAME term on separate runs, in both
+ * English and French, because the term wasn't reliably reaching glossaryTerms as doNotTranslate
+ * in the first place — the (correctly-wired, unit-tested) protection step simply had nothing to
+ * protect on the runs where detection failed. This is a pure deterministic string scan, zero LLM
+ * cost, so the term is ALWAYS present as doNotTranslate before translation starts, every run,
+ * independent of any LLM call's judgment.
+ */
+function detectReoTermCandidates(text) {
+  const t = String(text || '');
+  const seen = new Set();
+  const out = [];
+  let m;
+  REO_TERM_RE.lastIndex = 0;
+  while ((m = REO_TERM_RE.exec(t)) !== null) {
+    const phrase = m[1].trim();
+    const key = phrase.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ source: phrase, target: '', doNotTranslate: true, note: 'Auto-locked "Reo <Language>" proper noun' });
+  }
+  return out;
+}
+
 // 1-4 Title-Case words, letters only (incl. accented) — candidate defined term / proper noun.
 const CAPITALIZED_RUN_RE = /\b[A-ZÀ-Ž][a-zà-ž]*(?:\s+[A-ZÀ-Ž][a-zà-ž]*){0,3}\b/g;
 const SENTENCE_END_RE = /[.!?]\s*$/;
@@ -770,6 +812,7 @@ module.exports = {
   hasMissingDoNotTranslateTerm,
   hasStraySourceWord,
   lockedDoNotTranslateTerms,
+  detectReoTermCandidates,
   detectRepeatedTermCandidates,
   isMetaCommentaryInner,
   looksNonLinguistic,

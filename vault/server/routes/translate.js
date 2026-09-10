@@ -16,7 +16,7 @@ const {
   repairIncompletePairs,
   dropHallucinatedTerms,
 } = require('../services/translateLlmService');
-const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates } = require('../services/translateQaChecks');
+const { verifyQaCategoryClaims, mergeGarbledRows, lockedDoNotTranslateTerms, enforceRedactionPassThrough, findPlaceholder, isCodeLikeArtifact, detectRepeatedTermCandidates, detectReoTermCandidates } = require('../services/translateQaChecks');
 const { isAllowedUpload, extractForTranslate, detectSourceFormat } = require('../services/translateExtract');
 const {
   isGoogleTranslateConfigured,
@@ -1211,9 +1211,14 @@ async function processTranslateJob(
     .filter(Boolean)
     .map(source => ({ source, target: '', doNotTranslate: true, note: 'User must-keep' }));
 
+  // Deterministic, zero-LLM-cost — scanned from the FULL document text, not the truncated skim,
+  // so a "Reo <Language>" proper noun doesn't depend on an LLM call noticing it (that dependency
+  // was the actual gap behind the confirmed multi-run non-determinism — see detectReoTermCandidates).
+  const reoTermCandidates = detectReoTermCandidates(sourceFullText);
+
   const mergedExisting = (() => {
     const bySource = new Map();
-    for (const t of [...lockedDoNotTranslateTerms(), ...existingTerms, ...mustKeep]) {
+    for (const t of [...lockedDoNotTranslateTerms(), ...existingTerms, ...mustKeep, ...reoTermCandidates]) {
       if (!t?.source) continue;
       const key = String(t.source).toLowerCase();
       if (!bySource.has(key)) bySource.set(key, t);

@@ -7,7 +7,7 @@
 'use strict';
 
 const assert = require('assert');
-const { detectRepeatedTermCandidates, PLACEHOLDER_PATTERNS } = require('./translateQaChecks');
+const { detectRepeatedTermCandidates, PLACEHOLDER_PATTERNS, detectReoTermCandidates } = require('./translateQaChecks');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -197,6 +197,34 @@ test('does not flag a legitimate "N/A" field value as a placeholder', () => {
 test('still flags the bracketed [TBD]/[TODO] template-marker forms — genuine leftover markup', () => {
   assert.ok(PLACEHOLDER_PATTERNS.some((re) => re.test('[TBD]')));
   assert.ok(PLACEHOLDER_PATTERNS.some((re) => re.test('[TODO]')));
+});
+
+// SERIOUS CONFIRMED GAP, fixed — protectDoNotTranslateTerms (translateLlmService.js) only
+// protects a term already in glossaryTerms with doNotTranslate:true. Whether "Tāone Reo Māori"
+// ever got there used to depend entirely on proposeGlossary's own LLM call noticing it — no
+// determinism guarantee. Confirmed on a real job: the SAME document, re-run, produced a
+// different wrong rendering each time in both English and French, because the term wasn't
+// reliably reaching glossaryTerms in the first place. detectReoTermCandidates is a pure
+// deterministic scan, zero LLM cost, so the term is ALWAYS present before translation starts.
+test('detectReoTermCandidates finds a "Reo <Language>" proper noun deterministically, deduped', () => {
+  const doc = 'Join us for Tāone Reo Māori this year. Tāone Reo Māori returns in spring, and '
+    + 'volunteers are needed for Tāone Reo Māori events across the city.';
+  const out = detectReoTermCandidates(doc);
+  assert.strictEqual(out.length, 1, `expected 1 deduped candidate, got ${JSON.stringify(out)}`);
+  assert.strictEqual(out[0].source, 'Tāone Reo Māori');
+  assert.strictEqual(out[0].doNotTranslate, true);
+});
+
+test('detectReoTermCandidates does not false-positive on ordinary prose', () => {
+  const out = detectReoTermCandidates('The report is due Friday. Please review the terms carefully.');
+  assert.strictEqual(out.length, 0);
+});
+
+test('detectReoTermCandidates finds multiple distinct Reo-shaped terms in one document', () => {
+  const doc = 'Tāone Reo Māori is this weekend. Wiki Reo Pākehā runs next month.';
+  const out = detectReoTermCandidates(doc);
+  const sources = out.map((t) => t.source).sort();
+  assert.deepStrictEqual(sources, ['Tāone Reo Māori', 'Wiki Reo Pākehā']);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
