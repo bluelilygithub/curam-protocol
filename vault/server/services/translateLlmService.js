@@ -151,22 +151,29 @@ function collapseRepeatedGlossaryTarget(target) {
 
 /**
  * General repetition-loop guard for TRANSLATED TEXT itself (not just a glossary term's target
- * field) — collapses any "phrase / phrase / phrase..." run where the SAME phrase repeats 3+
- * times consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from
- * (and not fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's
- * *target field*, but this corruption was the translator model's own raw prose output —
- * independently generating a repetition-loop ("treasure / cherished treasure / cherished
- * treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga",
- * growing longer on a later run of the same document) rather than leaking an untranslated term
- * that applyGlossarySubstitutions would catch. Likely nudged by the glossary block's own
- * "X / Y" bilingual-gloss instruction pattern — a known LLM degeneration mode (repeating a
- * template it was just shown) that a glossary-field-only fix can't reach, since the model never
- * necessarily goes through a forced substitution at all here. Applied as a final pass on every
- * translated segment, catching the loop regardless of which stage produced it.
- * "a / b / c" (no repeats) and "research / studies" (a real 2-way gloss) pass through untouched.
+ * field) — collapses any "phrase / phrase / phrase..." run where the SAME phrase repeats
+ * consecutively down to one occurrence. Confirmed on a real mi → en job, distinct from (and not
+ * fixed by) collapseRepeatedGlossaryTarget: that function sanitizes a glossary term's *target
+ * field*, but this corruption was the translator model's own raw prose output — independently
+ * generating a repetition-loop ("treasure / cherished treasure / cherished treasure / cherished
+ * taonga") rather than leaking an untranslated term that applyGlossarySubstitutions would catch.
+ * Likely nudged by the glossary block's own "X / Y" bilingual-gloss instruction pattern — a
+ * known LLM degeneration mode (repeating a template it was just shown) that a glossary-field-
+ * only fix can't reach, since the model never necessarily goes through a forced substitution at
+ * all here. Applied as a final pass on every translated segment, catching the loop regardless
+ * of which stage produced it.
+ *
+ * Threshold: collapses on the FIRST repeat (2 total identical consecutive occurrences), not
+ * only 3+. A real "X / Y" two-way gloss always has two DIFFERENT alternatives by definition
+ * ("iwi / tribe") — so two IDENTICAL consecutive segments ("tribe / tribe") can never be a
+ * legitimate gloss, only a duplication bug; there's no false-positive risk in collapsing on the
+ * first repeat. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
+ * needed collapsing too, not just the longer 3+ chains caught by an earlier, more conservative
+ * version of this threshold. "a / b / c" (no repeats) and "research / studies" (genuinely
+ * different alternatives) pass through untouched.
  */
 function collapseRepeatedPhraseLoops(text) {
-  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){2,}/gi, (m, seg) => seg);
+  return String(text || '').replace(/([^/\n]{2,60}?)(\s*\/\s*\1){1,}/gi, (m, seg) => seg);
 }
 
 function sanitizeGlossaryTermList(list) {

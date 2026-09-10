@@ -133,9 +133,19 @@ test('leaves a normal 2-alternative gloss (no repetition) untouched', () => {
   assert.strictEqual(collapseRepeatedPhraseLoops(text), text);
 });
 
+// Threshold is "any consecutive exact duplicate", not "3+ occurrences" — a real 2-way gloss
+// always has two DIFFERENT alternatives, so two IDENTICAL consecutive segments can never be
+// legitimate. Confirmed on a real job: "iwi / tribe / tribe" (only 2 occurrences of "tribe")
+// needed collapsing too, not just longer 3+ chains.
+test('collapses just 2 identical consecutive occurrences (no false-positive risk)', () => {
+  assert.strictEqual(
+    collapseRepeatedPhraseLoops('deeply precious to iwi / tribe / tribe and to Aotearoa'),
+    'deeply precious to iwi / tribe and to Aotearoa',
+  );
+});
+
 test('applyGlossarySubstitutions also catches a repetition-loop that never involved substitution', () => {
   // No glossary term matches this text at all — the loop guard must still fire on plain input.
-  // 3+ repeats required to trigger (2 total is a legitimate one-off "X / Y" gloss, not a loop).
   const out = applyGlossarySubstitutions(
     'a treasure / cherished treasure / cherished treasure / cherished treasure / cherished taonga result', [],
   );
