@@ -8,7 +8,7 @@
 'use strict';
 
 const assert = require('assert');
-const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms } = require('./translateLlmService');
+const { applyGlossarySubstitutions, autoFixGlossaryDrift, autoFixPartialReoTermDrift, collapseRepeatedGlossaryTarget, collapseRepeatedPhraseLoops, dropHallucinatedTerms, protectDoNotTranslateTerms, restoreDoNotTranslateTerms } = require('./translateLlmService');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
@@ -270,6 +270,52 @@ test('autoFixPartialReoTermDrift ignores terms with no "Reo <Language>" shape', 
     pairs, glossaryTerms: [{ source: 'Kōhanga Reo', target: '', doNotTranslate: true }],
   });
   assert.strictEqual(fixedCount, 0);
+});
+
+// SERIOUS CONFIRMED BUG, fixed — "DO NOT TRANSLATE" as a prompt instruction alone is not
+// enforcement; multi-run, multi-language evidence showed the same locked term ("Tāone Reo
+// Māori") rendering as a different wrong hybrid on almost every run, in both English and French,
+// including two different wrong renderings from two runs of the IDENTICAL input (non-determinism,
+// not just within-document inconsistency). See protectDoNotTranslateTerms() fix note.
+test('protectDoNotTranslateTerms swaps every occurrence of a multi-word doNotTranslate term for a token', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  const para = 'The Tāone Reo Māori event starts Friday, run by Tāone Reo Māori volunteers.';
+  const { text, tokens } = protectDoNotTranslateTerms(para, glossaryTerms);
+  assert.ok(!text.includes('Tāone Reo Māori'), 'term must not be visible to the model');
+  assert.strictEqual(tokens.length, 2);
+});
+
+test('protectDoNotTranslateTerms never swaps single-word doNotTranslate terms (kept out of scope)', () => {
+  const { tokens } = protectDoNotTranslateTerms('Visit Curam today', [{ source: 'Curam', doNotTranslate: true }]);
+  assert.strictEqual(tokens.length, 0);
+});
+
+test('restoreDoNotTranslateTerms puts the exact canonical term back after translation', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  const { text, tokens } = protectDoNotTranslateTerms(
+    'The Tāone Reo Māori event starts Friday, run by Tāone Reo Māori volunteers.', glossaryTerms,
+  );
+  // Simulate a translated sentence around the untouched tokens (what the model should return).
+  const translated = text
+    .replace('The', 'Le')
+    .replace('event starts Friday', 'événement commence vendredi')
+    .replace('run by', 'organisé par')
+    .replace('volunteers', 'bénévoles');
+  const restored = restoreDoNotTranslateTerms(translated, tokens);
+  const count = (restored.match(/Tāone Reo Māori/g) || []).length;
+  assert.strictEqual(count, 2, `expected 2 restored occurrences, got ${count} in: ${restored}`);
+});
+
+test('restoreDoNotTranslateTerms tolerates the model inserting a space at the token boundary', () => {
+  const glossaryTerms = [{ source: 'Tāone Reo Māori', doNotTranslate: true, target: '' }];
+  const { text, tokens } = protectDoNotTranslateTerms('Tāone Reo Māori event', glossaryTerms);
+  const drifted = text.replace(tokens[0].token, '⁣ DNT0 ⁣');
+  const restored = restoreDoNotTranslateTerms(drifted, tokens);
+  assert.ok(restored.includes('Tāone Reo Māori'), `expected restore to tolerate spacing drift: ${restored}`);
+});
+
+test('restoreDoNotTranslateTerms is a no-op when there are no tokens', () => {
+  assert.strictEqual(restoreDoNotTranslateTerms('plain text', []), 'plain text');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -447,6 +447,72 @@ function autoFixPartialReoTermDrift({ pairs, glossaryTerms }) {
 }
 
 /**
+ * Deterministic protection for doNotTranslate glossary terms ("Tāone Reo Māori" etc.), applied
+ * BEFORE the text reaches the model rather than repaired after.
+ *
+ * SERIOUS CONFIRMED BUG (multi-run, multi-language, evidence gathered across several English and
+ * French translate runs of the same source document): "DO NOT TRANSLATE" as a prompt instruction
+ * alone is not enforcement, it's a request — the model complies inconsistently, producing a
+ * different hybrid mistranslation of the same locked term on almost every run (English: "town
+ * Māori language" / "Tāone Māori language" / "Māori Language Town" all in the same document;
+ * French: "ville Reo Māori" / "Tāone langue māorie" / "ville langue māorie" across separate runs
+ * of the IDENTICAL input). autoFixPartialReoTermDrift (above) is a mechanical repair for exactly
+ * one English-shaped violation ("<prefix> <Language> language") and cannot catch a French
+ * "langue māorie" hybrid or a reordered "Māori Language Town" — every other shape passes through.
+ *
+ * Fix: swap each doNotTranslate term out for an opaque, invisible-character-delimited token
+ * before the paragraph is sent to the model (same technique already used for URLs/filenames in
+ * applyGlossarySubstitutions below), so the term's literal text is never visible to the model to
+ * mistranslate in the first place — deterministic and language-independent by construction, not
+ * by enumerating violation shapes after the fact. The instruction-based glossary line and the
+ * mechanical repair above are left in place as defence in depth for any term the swap misses
+ * (e.g. a variant spelling not matching `source` exactly).
+ *
+ * Multi-word terms only, longest-first, so a shorter term that happens to be a substring of a
+ * longer one (e.g. "Reo Māori" inside "Tāone Reo Māori") never partially swaps the longer one.
+ */
+function protectDoNotTranslateTerms(text, glossaryTerms) {
+  const terms = (glossaryTerms || [])
+    .filter((t) => t?.doNotTranslate && t?.source && /\s/.test(String(t.source).trim()))
+    .map((t) => String(t.source))
+    .filter((s, i, arr) => arr.indexOf(s) === i) // dedupe
+    .sort((a, b) => b.length - a.length);
+
+  if (!terms.length) return { text: String(text || ''), tokens: [] };
+
+  let out = String(text || '');
+  const tokens = [];
+  terms.forEach((term) => {
+    const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g');
+    out = out.replace(re, () => {
+      const token = `⁣DNT${tokens.length}⁣`;
+      tokens.push({ token, term });
+      return token;
+    });
+  });
+  return { text: out, tokens };
+}
+
+/** Restore protectDoNotTranslateTerms() tokens after translation — tolerant of minor spacing
+ * drift the model may introduce around the invisible-character boundary, same pattern as the
+ * URL/filename restore below. Any token the model dropped entirely is left as-is (falls through
+ * to the existing instruction + mechanical-repair defence-in-depth, not silently lost). */
+function restoreDoNotTranslateTerms(text, tokens) {
+  let out = String(text || '');
+  (tokens || []).forEach(({ token, term }) => {
+    if (out.includes(token)) {
+      out = out.split(token).join(term);
+    } else {
+      // Tolerate the model inserting/stripping a space next to the invisible boundary chars.
+      const id = token.match(/\d+/)[0];
+      const loose = new RegExp(`\\u2063\\s*DNT${id}\\s*\\u2063`);
+      if (loose.test(out)) out = out.replace(loose, term);
+    }
+  });
+  return out;
+}
+
+/**
  * Pull a translations[] array out of model text — full JSON, fenced, or truncated.
  */
 function extractTranslationsArray(text, expectedLen) {
@@ -528,13 +594,18 @@ async function translateParagraphBatch({
   const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(batchText), glossaryTerms);
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
 
+  // Swap doNotTranslate terms for opaque tokens per-paragraph, BEFORE the model ever sees them —
+  // see protectDoNotTranslateTerms() above for why (instruction-only enforcement is non-deterministic).
+  const protectedParagraphs = paragraphs.map((p) => protectDoNotTranslateTerms(p, glossaryTermsMerged));
+  const hasProtectedTerms = protectedParagraphs.some((pp) => pp.tokens.length > 0);
+
   const system = `You are a professional document translator.
 Translate each numbered paragraph into ${langName(targetLanguage)}.
 Preserve sentence type (statement vs question), polarity (affirmative vs negative), and meaning.
 Obey the glossary exactly. Maintain terminology consistency with the running glossary.
 ${translatorHardRules(batchText)}
 ${policy ? `\n${policy}\n` : ''}
-Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token into your translation EXACTLY as it appears, unchanged, in the same position. Never translate, alter, or omit a ⁣DNTn⁣ token.\n' : ''}Return ONLY valid JSON: { "translations": ["...", "..."] } with exactly ${paragraphs.length} strings, same order.
 No markdown fences. No commentary.`;
 
   const prompt = [
@@ -554,7 +625,7 @@ No markdown fences. No commentary.`;
       : '(none yet)',
     '',
     'Paragraphs to translate:',
-    paragraphs.map((p, i) => `[${i + 1}] ${p}`).join('\n\n'),
+    protectedParagraphs.map((pp, i) => `[${i + 1}] ${pp.text}`).join('\n\n'),
   ].join('\n');
 
   const maxTokens = translationMaxTokens(paragraphs);
@@ -586,7 +657,10 @@ No markdown fences. No commentary.`;
   let translations = extractTranslationsArray(rawText, paragraphs.length);
 
   if (translations && translations.length === paragraphs.length) {
-    return translations.map((t, i) => finalizeTranslation(paragraphs[i], t));
+    return translations.map((t, i) => finalizeTranslation(
+      paragraphs[i],
+      restoreDoNotTranslateTerms(t, protectedParagraphs[i].tokens),
+    ));
   }
 
   // Partial recovery: keep good prefix, retry the rest
@@ -607,7 +681,10 @@ No markdown fences. No commentary.`;
       onProgress,
     });
     return [
-      ...translations.map((t, i) => finalizeTranslation(paragraphs[i], t)),
+      ...translations.map((t, i) => finalizeTranslation(
+        paragraphs[i],
+        restoreDoNotTranslateTerms(t, protectedParagraphs[i].tokens),
+      )),
       ...rest,
     ];
   }
@@ -653,15 +730,18 @@ async function translateOneParagraph({
   timeoutMs = TRANSLATE_CALL_TIMEOUT_MS,
 }) {
   const policy = languagePolicyBlock(targetLanguage, intakeAnswers);
+  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(paragraph), glossaryTerms);
+  const protectedParagraph = protectDoNotTranslateTerms(paragraph, glossaryTermsMerged);
+  const hasProtectedTerms = protectedParagraph.tokens.length > 0;
+
   const system = `You are a professional document translator.
 Translate the paragraph into ${langName(targetLanguage)}.
 Preserve meaning, polarity, and sentence type. Obey the glossary.
 ${translatorHardRules(paragraph)}
 ${policy ? `\n${policy}\n` : ''}
-Return ONLY valid JSON: { "translation": "..." }
+${hasProtectedTerms ? 'Some text is replaced by tokens shaped ⁣DNTn⁣ (invisible characters around DNT and a number) — copy each such token into your translation EXACTLY as it appears, unchanged, in the same position. Never translate, alter, or omit a ⁣DNTn⁣ token.\n' : ''}Return ONLY valid JSON: { "translation": "..." }
 No markdown fences.`;
 
-  const glossaryTermsMerged = mergeGlossaryTerms(lockedDoNotTranslateTerms(paragraph), glossaryTerms);
   const prompt = [
     `Source language: ${sourceLanguage || 'auto'}`,
     `Target language: ${langName(targetLanguage)} (${targetLanguage})`,
@@ -676,7 +756,7 @@ No markdown fences.`;
       : '(none)',
     '',
     'Paragraph:',
-    paragraph,
+    protectedParagraph.text,
   ].join('\n');
 
   const maxTokens = translationMaxTokens([paragraph]);
@@ -691,18 +771,19 @@ No markdown fences.`;
         feature: 'translate_one',
       }).catch(() => {});
     }
+    const restore = (t) => restoreDoNotTranslateTerms(t, protectedParagraph.tokens);
     const parsed = parseModelJson(res.text);
     if (parsed?.translation && String(parsed.translation).trim()) {
-      return finalizeTranslation(paragraph, parsed.translation);
+      return finalizeTranslation(paragraph, restore(parsed.translation));
     }
     const arr = extractTranslationsArray(res.text, 1);
-    if (arr?.[0]?.trim()) return finalizeTranslation(paragraph, arr[0]);
+    if (arr?.[0]?.trim()) return finalizeTranslation(paragraph, restore(arr[0]));
     const cleaned = String(res.text || '')
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
     if (cleaned && !cleaned.startsWith('{') && cleaned.length > 0) {
-      return finalizeTranslation(paragraph, cleaned);
+      return finalizeTranslation(paragraph, restore(cleaned));
     }
     console.warn('[translate] single paragraph empty/unparsed', {
       textLen: String(res.text || '').length,
@@ -1085,6 +1166,8 @@ module.exports = {
   reportGlossaryDrift,
   autoFixGlossaryDrift,
   autoFixPartialReoTermDrift,
+  protectDoNotTranslateTerms,
+  restoreDoNotTranslateTerms,
   translateParagraphBatch,
   reviewTranslation,
   applyGlossarySubstitutions,
