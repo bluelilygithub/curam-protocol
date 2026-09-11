@@ -627,6 +627,14 @@ export default function PdfPage() {
   const [fillBusy, setFillBusy] = useState(false);
   const [fillResult, setFillResult] = useState(null);
   const [fillError, setFillError] = useState('');
+  // Flattened-text fill: stamp typed values directly into the page instead of
+  // an AcroForm field, so the chosen font actually renders in every viewer
+  // (see field designer notes — live form fields substitute a default font
+  // in Chrome/Edge/Adobe Reader regardless of what's embedded).
+  const [fillFlatten, setFillFlatten] = useState(true);
+  const [fillFont, setFillFont] = useState('Helvetica');
+  const [fillFontSize, setFillFontSize] = useState(11);
+  const [fillColor, setFillColor] = useState('#000000');
 
   // Flatten
   const [flatFile, setFlatFile] = useState(null);
@@ -1353,7 +1361,10 @@ export default function PdfPage() {
     startProcessing('Filling Form…', fillFile.name);
     setFillBusy(true); setFillError(''); setFillResult(null);
     try {
-      const res = await api.post('/api/pdf/fill', { dataUrl: fillFile.dataUrl, fields: fillValues });
+      const res = await api.post('/api/pdf/fill', {
+        dataUrl: fillFile.dataUrl, fields: fillValues,
+        flatten: fillFlatten, fontFamily: fillFont, fontSize: fillFontSize, color: fillColor,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setFillResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, filled: data.filled });
@@ -1945,6 +1956,51 @@ export default function PdfPage() {
                   {fillBusy && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Reading form fields…</p>}
                   {fillAvailable.length > 0 && (
                     <div className="mt-3 space-y-2">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={fillFlatten} onChange={e => setFillFlatten(e.target.checked)} className="w-3.5 h-3.5" />
+                        Save as flattened text (recommended — guarantees the chosen font renders correctly in every PDF viewer; fields become static, not re-editable)
+                      </label>
+                      {fillFlatten && (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={fillFont}
+                            onChange={e => setFillFont(e.target.value)}
+                            className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                            title="Font"
+                          >
+                            {Object.entries(STANDARD_FONT_GROUPS).map(([group, fonts]) => (
+                              <optgroup key={group} label={group}>
+                                {fonts.map(font => {
+                                  const css = standardFontCss(font);
+                                  return (
+                                    <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
+                                      {STANDARD_FONT_LABELS[font] || font}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={fillFontSize}
+                            min={6} max={72}
+                            onChange={e => setFillFontSize(Number(e.target.value))}
+                            className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                            title="Font size (pt)"
+                          />
+                          <input
+                            type="color"
+                            value={fillColor}
+                            onChange={e => setFillColor(e.target.value)}
+                            className="w-8 h-7 rounded cursor-pointer p-0.5 border"
+                            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                            title="Text color"
+                          />
+                        </div>
+                      )}
                       <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Form fields</p>
                       {fillAvailable.map(f => (
                         <div key={f.name}>

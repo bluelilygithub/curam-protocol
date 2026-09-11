@@ -427,27 +427,62 @@ router.post('/fill', async (req, res) => {
     const fieldsData = req.body?.fields || {};
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
     const form = doc.getForm();
-    // Re-embed each field's designer font on fill — pdf-lib regenerates the
-    // appearance stream on save and defaults to Helvetica unless a font is
-    // passed explicitly, which loses the field designer's chosen typeface.
+
+    // Default path: stamp typed values as static page text instead of live
+    // AcroForm values, using a chosen standard font — sidesteps Chrome/Edge/
+    // Adobe Reader all substituting a default font for a form field's value
+    // at render/edit time regardless of what's embedded (see field designer
+    // notes). The field's widget rectangle gives the stamp position, then the
+    // field itself is removed so nothing editable is left behind.
+    const flatten = req.body?.flatten !== false;
+    const fontCache = {};
+    const stampFont = flatten ? await resolveStandardFont(doc, fontCache, req.body?.fontFamily || 'Helvetica') : null;
+    const stampSize = Math.max(4, Number(req.body?.fontSize) || 11);
+    const [sr, sg, sb] = hexToRgb01(req.body?.color || '#000000');
+
+    // Legacy path (flatten:false): write into the live field and re-embed
+    // whatever font the field designer stashed on it, if any.
     const fillFontCache = {};
     async function resolveFillFont(field) {
       const family = getCuramFontMarker(field);
       if (!family) return null;
       return resolveStandardFont(doc, fillFontCache, family);
     }
+
+    function stampFieldText(field, text) {
+      const widget = field.acroField.getWidgets()[0];
+      if (!widget) return false;
+      const page = form.findWidgetPage(widget);
+      const rect = widget.getRectangle();
+      page.drawText(String(text), {
+        x: rect.x + 4,
+        y: rect.y + (rect.height - stampSize) / 2 + stampSize * 0.15,
+        size: stampSize,
+        font: stampFont,
+        color: rgb(sr, sg, sb),
+      });
+      form.removeField(field);
+      return true;
+    }
+
     let filled = 0;
     for (const [name, value] of Object.entries(fieldsData)) {
       try {
         const field = form.getField(name);
         const type = field.constructor.name.replace('PDF', '');
         if (type === 'TextField') {
+          if (flatten && String(value).trim()) {
+            if (stampFieldText(field, value)) { filled++; continue; }
+          }
           field.setText(String(value));
           const font = await resolveFillFont(field);
           if (font) try { field.updateAppearances(font); } catch {}
           filled++;
         } else if (type === 'CheckBox') { (String(value) === 'true' || value === true) ? field.check() : field.uncheck(); filled++; }
         else if (type === 'Dropdown') {
+          if (flatten && String(value).trim()) {
+            if (stampFieldText(field, value)) { filled++; continue; }
+          }
           field.select(String(value));
           const font = await resolveFillFont(field);
           if (font) try { field.updateAppearances(font); } catch {}
