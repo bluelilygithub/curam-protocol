@@ -494,13 +494,16 @@ router.post('/flatten', async (req, res) => {
 // In-memory font cache: family name → Buffer of TTF bytes
 const _fontCache = new Map();
 
-// Fetch a Google Font's TTF bytes. Uses an old User-Agent so Google Fonts
-// returns a TTF URL instead of woff2 (which pdf-lib cannot parse).
+// Fetch a Google Font's TTF bytes. Google's legacy CSS endpoint serves a
+// format matched to the requesting User-Agent — an old IE6 UA gets EOT
+// (Embedded OpenType, which fontkit can't parse either), so we spoof an old
+// Android browser instead: pre-4.4 Android has no woff/woff2/EOT support,
+// so Google falls back to plain TTF, which is what pdf-lib/fontkit need.
 async function fetchGoogleFontBytes(family) {
   if (_fontCache.has(family)) return _fontCache.get(family);
   const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(family)}:400`;
   const cssResp = await fetch(cssUrl, {
-    headers: { 'User-Agent': 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (Linux; U; Android 2.3.6; en-us; Nexus S Build/GRK39F) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1' },
   });
   if (!cssResp.ok) throw new Error(`Google Fonts CSS fetch failed: ${family} (${cssResp.status})`);
   const css = await cssResp.text();
