@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
-const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString } = require('pdf-lib');
 const sharp = require('sharp');
 const path = require('path');
 const { google } = require('googleapis');
@@ -427,15 +427,40 @@ router.post('/fill', async (req, res) => {
     const fieldsData = req.body?.fields || {};
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
     const form = doc.getForm();
+    // Re-embed each field's designer font on fill — pdf-lib regenerates the
+    // appearance stream on save and defaults to Helvetica unless a font is
+    // passed explicitly, which loses the field designer's chosen typeface.
+    const fillFontCache = {};
+    async function resolveFillFont(field) {
+      const family = getCuramFontMarker(field);
+      if (!family) return null;
+      if (fillFontCache[family] !== undefined) return fillFontCache[family];
+      try {
+        const bytes = await fetchGoogleFontBytes(family);
+        fillFontCache[family] = await doc.embedFont(bytes);
+      } catch (err) {
+        console.warn(`PDF fill: font embed failed for "${family}", falling back to Helvetica:`, err.message);
+        fillFontCache[family] = null;
+      }
+      return fillFontCache[family];
+    }
     let filled = 0;
     for (const [name, value] of Object.entries(fieldsData)) {
       try {
         const field = form.getField(name);
         const type = field.constructor.name.replace('PDF', '');
-        if (type === 'TextField') { field.setText(String(value)); filled++; }
-        else if (type === 'CheckBox') { (String(value) === 'true' || value === true) ? field.check() : field.uncheck(); filled++; }
-        else if (type === 'Dropdown') { field.select(String(value)); filled++; }
-        else if (type === 'RadioGroup') { field.select(String(value)); filled++; }
+        if (type === 'TextField') {
+          field.setText(String(value));
+          const font = await resolveFillFont(field);
+          if (font) try { field.updateAppearances(font); } catch {}
+          filled++;
+        } else if (type === 'CheckBox') { (String(value) === 'true' || value === true) ? field.check() : field.uncheck(); filled++; }
+        else if (type === 'Dropdown') {
+          field.select(String(value));
+          const font = await resolveFillFont(field);
+          if (font) try { field.updateAppearances(font); } catch {}
+          filled++;
+        } else if (type === 'RadioGroup') { field.select(String(value)); filled++; }
       } catch {}
     }
     const bytes = await doc.save();
@@ -508,6 +533,25 @@ function applyFieldTypography(field, def) {
       field.acroField.setDefaultAppearance(newDa.trim());
     } catch {}
   }
+}
+
+// pdf-lib regenerates a form field's appearance stream on every save (e.g. the
+// /fill route calling setText()), defaulting to Helvetica unless the *current*
+// font is passed to field.updateAppearances() at that time. Since the field
+// itself carries no standard "what font is this" property, stash the Google
+// Font family as a non-standard dict entry when the field is created so /fill
+// can re-embed the same face and keep filled-in text consistent with the
+// field designer's choice.
+const CURAM_FONT_KEY = 'CuramFont';
+function setCuramFontMarker(field, family) {
+  if (!family) return;
+  try { field.acroField.dict.set(PDFName.of(CURAM_FONT_KEY), PDFString.of(family)); } catch {}
+}
+function getCuramFontMarker(field) {
+  try {
+    const val = field.acroField.dict.lookup(PDFName.of(CURAM_FONT_KEY));
+    return val ? val.decodeText() : null;
+  } catch { return null; }
 }
 
 router.post('/addfields', async (req, res) => {
@@ -584,6 +628,7 @@ router.post('/addfields', async (req, res) => {
             const fontD = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
             if (fontD) try { f.updateAppearances(fontD); } catch {}
             applyFieldTypography(f, def);
+            setCuramFontMarker(f, def.fontFamily || 'Roboto');
             break;
           }
           case 'text':
@@ -595,6 +640,7 @@ router.post('/addfields', async (req, res) => {
             const fontT = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
             if (fontT) try { f.updateAppearances(fontT); } catch {}
             applyFieldTypography(f, def);
+            setCuramFontMarker(f, def.fontFamily || 'Roboto');
             break;
           }
         }

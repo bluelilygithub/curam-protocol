@@ -52,6 +52,8 @@ Client renders the PDF page to a canvas (`pdfjs-dist`), user drags a box to plac
 
 **Other field options:** border on/off + colour + width, required flag, multiline (text), options list (dropdown).
 
+**Font survives `/fill`:** pdf-lib regenerates a field's appearance stream whenever its value changes (`setText`/`select`), defaulting to Helvetica unless the *current* font is passed to `field.updateAppearances(font)` at that exact call site — the font baked in at `addfields` time doesn't carry forward automatically. `addfields` stashes the chosen family as a non-standard `CuramFont` dict entry on the field (`setCuramFontMarker()`); `/fill` reads it back (`getCuramFontMarker()`), re-embeds the same Google Font, and calls `updateAppearances()` after `setText`/`select` so filled-in text matches the field designer's typeface. Per-request font cache (`fillFontCache`) avoids re-embedding the same family per field. Fields without the marker (plain/legacy PDFs) fall back to pdf-lib's default (Helvetica) as before. `/flatten` is unaffected — it only regenerates fields whose `needsAppearancesUpdate()` is true, and a freshly-designed field's appearance stream is already current.
+
 ---
 
 ## Google Drive integration
