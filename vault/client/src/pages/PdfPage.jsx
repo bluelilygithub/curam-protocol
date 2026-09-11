@@ -7,29 +7,38 @@ import useProcessingStore from '../store/processingStore';
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// ─── Google Fonts available in the field designer, grouped for the picker ──────
-const GOOGLE_FONT_GROUPS = {
-  'Script': ['Lobster', 'Pacifico', 'Dancing Script'],
-  'Sans Serif': [
-    'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter',
-    'Nunito', 'Raleway', 'Ubuntu', 'Oswald', 'Source Sans 3',
-    'Josefin Sans', 'Bebas Neue',
-    'Roboto Mono', 'Source Code Pro', 'Inconsolata', 'JetBrains Mono',
-  ],
-  'Serif': ['Merriweather', 'Playfair Display', 'Lora', 'EB Garamond', 'Libre Baskerville'],
+// ─── Fonts available in the field designer, grouped for the picker ─────────────
+// pdf-lib's 14 built-in "standard" PDF fonts only — no fetching, no embedding,
+// no fontkit. These are guaranteed present in every PDF viewer (they're part
+// of the PDF spec) and render identically everywhere. Google Fonts were tried
+// here previously and abandoned: correctly embedding a custom TTF still hit
+// three separate dead ends — Chrome/Edge/Adobe Reader all substitute a
+// default font for a *form field's* embedded custom font at render/edit time
+// regardless of correct embedding, and fontkit itself threw a hard
+// "Offset is outside the bounds of the DataView" parse crash on certain
+// Google Font files. Standard fonts have none of these failure modes.
+const STANDARD_FONT_GROUPS = {
+  'Sans Serif': ['Helvetica', 'HelveticaBold', 'HelveticaOblique', 'HelveticaBoldOblique'],
+  'Serif': ['TimesRoman', 'TimesRomanBold', 'TimesRomanItalic', 'TimesRomanBoldItalic'],
+  'Monospace': ['Courier', 'CourierBold', 'CourierOblique', 'CourierBoldOblique'],
 };
-const GOOGLE_FONTS = Object.values(GOOGLE_FONT_GROUPS).flat();
-
-// Injects a Google Fonts <link> for a family (once) so the browser can
-// render it in the <select> options and on the field-designer canvas.
-const _loadedFontLinks = new Set();
-function ensureGoogleFontLoaded(family) {
-  if (!family || _loadedFontLinks.has(family)) return;
-  _loadedFontLinks.add(family);
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@400&display=swap`;
-  document.head.appendChild(link);
+const STANDARD_FONT_LABELS = {
+  Helvetica: 'Helvetica', HelveticaBold: 'Helvetica Bold', HelveticaOblique: 'Helvetica Italic', HelveticaBoldOblique: 'Helvetica Bold Italic',
+  TimesRoman: 'Times Roman', TimesRomanBold: 'Times Roman Bold', TimesRomanItalic: 'Times Roman Italic', TimesRomanBoldItalic: 'Times Roman Bold Italic',
+  Courier: 'Courier', CourierBold: 'Courier Bold', CourierOblique: 'Courier Italic', CourierBoldOblique: 'Courier Bold Italic',
+};
+// Best-effort CSS approximation so the canvas preview and <option> text look
+// close to the real font — these are system/web-safe fonts, no loading needed.
+const STANDARD_FONT_CSS = {
+  Helvetica: 'Helvetica, Arial, sans-serif',
+  TimesRoman: '"Times New Roman", Times, serif',
+  Courier: '"Courier New", Courier, monospace',
+};
+function standardFontCss(family) {
+  const base = family.replace(/(Bold|Oblique|Italic)/g, '');
+  const style = /Oblique|Italic/.test(family) ? 'italic ' : '';
+  const weight = /Bold/.test(family) ? 'bold ' : '';
+  return { fontFamily: STANDARD_FONT_CSS[base] || 'sans-serif', fontStyle: /Oblique|Italic/.test(family) ? 'italic' : 'normal', fontWeight: /Bold/.test(family) ? 'bold' : 'normal' };
 }
 
 // ─── Tool catalogue ────────────────────────────────────────────────────────────
@@ -769,9 +778,10 @@ export default function PdfPage() {
       // content that gets baked into the page. Otherwise a ghosted
       // placeholder previews what a fillable field's value would look like.
       if (f.type !== 'checkbox') {
-        const family = f.fontFamily || 'Roboto';
+        const family = f.fontFamily || 'Helvetica';
+        const css = standardFontCss(family);
         const sampleSize = Math.max(6, (f.fontSize || 11)) * dims.renderScale;
-        ctx.font = `${sampleSize}px "${family}", sans-serif`;
+        ctx.font = `${css.fontStyle === 'italic' ? 'italic ' : ''}${css.fontWeight === 'bold' ? 'bold ' : ''}${sampleSize}px ${css.fontFamily}`;
         ctx.fillStyle = f.color || '#000000';
         const isStamp = f.type === 'text' && f.value;
         ctx.globalAlpha = isStamp ? 1 : 0.55;
@@ -824,17 +834,6 @@ export default function PdfPage() {
 
   // Re-draw overlay when field list changes (e.g., name edits, removals)
   useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
-
-  // Preload every picker font once so the <select> and canvas sample text can
-  // render in the real face; re-draw the overlay as each face finishes loading.
-  useEffect(() => {
-    GOOGLE_FONTS.forEach(ensureGoogleFontLoaded);
-    if (document.fonts?.addEventListener) {
-      const onLoaded = () => redrawFdOverlay();
-      document.fonts.addEventListener('loadingdone', onLoaded);
-      return () => document.fonts.removeEventListener('loadingdone', onLoaded);
-    }
-  }, [redrawFdOverlay]);
 
   const fdCanvasCoords = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -947,7 +946,7 @@ export default function PdfPage() {
       required: false,
       multiline: false,
       options: [],
-      fontFamily: 'Roboto',
+      fontFamily: 'Helvetica',
       fontSize: 11,
       color: '#000000',
       borderEnabled: true,
@@ -2412,19 +2411,22 @@ export default function PdfPage() {
                           {f.type !== 'checkbox' && (
                             <div className="flex items-center gap-1 mb-1.5">
                               <select
-                                value={f.fontFamily || 'Roboto'}
+                                value={f.fontFamily || 'Helvetica'}
                                 onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
                                 className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
                                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                title="Font family (Google Font)"
+                                title="Font (PDF standard font — always renders correctly in every viewer)"
                               >
-                                {Object.entries(GOOGLE_FONT_GROUPS).map(([group, fonts]) => (
+                                {Object.entries(STANDARD_FONT_GROUPS).map(([group, fonts]) => (
                                   <optgroup key={group} label={group}>
-                                    {fonts.map(font => (
-                                      <option key={font} value={font} style={{ fontFamily: `"${font}", ${group === 'Serif' ? 'serif' : group === 'Script' ? 'cursive' : 'sans-serif'}` }}>
-                                        {font}
-                                      </option>
-                                    ))}
+                                    {fonts.map(font => {
+                                      const css = standardFontCss(font);
+                                      return (
+                                        <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
+                                          {STANDARD_FONT_LABELS[font] || font}
+                                        </option>
+                                      );
+                                    })}
                                   </optgroup>
                                 ))}
                               </select>

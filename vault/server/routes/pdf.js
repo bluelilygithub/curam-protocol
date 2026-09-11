@@ -5,7 +5,6 @@ const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString } = require('pdf-lib');
-const fontkit = require('fontkit');
 const sharp = require('sharp');
 const path = require('path');
 const { google } = require('googleapis');
@@ -427,7 +426,6 @@ router.post('/fill', async (req, res) => {
     if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
     const fieldsData = req.body?.fields || {};
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
-    doc.registerFontkit(fontkit); // required for embedFont() with a non-standard (TTF) font
     const form = doc.getForm();
     // Re-embed each field's designer font on fill — pdf-lib regenerates the
     // appearance stream on save and defaults to Helvetica unless a font is
@@ -436,15 +434,7 @@ router.post('/fill', async (req, res) => {
     async function resolveFillFont(field) {
       const family = getCuramFontMarker(field);
       if (!family) return null;
-      if (fillFontCache[family] !== undefined) return fillFontCache[family];
-      try {
-        const bytes = await fetchGoogleFontBytes(family);
-        fillFontCache[family] = await doc.embedFont(bytes);
-      } catch (err) {
-        console.warn(`PDF fill: font embed failed for "${family}", falling back to Helvetica:`, err.message);
-        fillFontCache[family] = null;
-      }
-      return fillFontCache[family];
+      return resolveStandardFont(doc, fillFontCache, family);
     }
     let filled = 0;
     for (const [name, value] of Object.entries(fieldsData)) {
@@ -491,29 +481,21 @@ router.post('/flatten', async (req, res) => {
 // ── Add Form Fields ────────────────────────────────────────────────────────────
 // Receives field definitions with PDF-point coordinates (bottom-left origin)
 // and embeds them as interactive AcroForm fields using pdf-lib.
-// In-memory font cache: family name → Buffer of TTF bytes
-const _fontCache = new Map();
-
-// Fetch a Google Font's TTF bytes. Google's legacy CSS endpoint serves a
-// format matched to the requesting User-Agent — an old IE6 UA gets EOT
-// (Embedded OpenType, which fontkit can't parse either), so we spoof an old
-// Android browser instead: pre-4.4 Android has no woff/woff2/EOT support,
-// so Google falls back to plain TTF, which is what pdf-lib/fontkit need.
-async function fetchGoogleFontBytes(family) {
-  if (_fontCache.has(family)) return _fontCache.get(family);
-  const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(family)}:400`;
-  const cssResp = await fetch(cssUrl, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (Linux; U; Android 2.3.6; en-us; Nexus S Build/GRK39F) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1' },
-  });
-  if (!cssResp.ok) throw new Error(`Google Fonts CSS fetch failed: ${family} (${cssResp.status})`);
-  const css = await cssResp.text();
-  const urlMatch = css.match(/url\((https?:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
-  if (!urlMatch) throw new Error(`No font URL in CSS response for: ${family}`);
-  const fontResp = await fetch(urlMatch[1]);
-  if (!fontResp.ok) throw new Error(`Font file fetch failed for: ${family}`);
-  const bytes = Buffer.from(await fontResp.arrayBuffer());
-  _fontCache.set(family, bytes);
-  return bytes;
+//
+// Font choice is restricted to pdf-lib's 14 built-in "standard" PDF fonts
+// (StandardFonts) — no fetching, no custom TTF embedding, no fontkit. Google
+// Fonts were tried here previously and abandoned after three separate dead
+// ends: registerFontkit was missing, the IE6 UA trick returned EOT instead of
+// TTF, and once both were fixed, Chrome/Edge/Adobe Reader all still
+// substituted a default font for a form field's embedded custom font at
+// render/edit time regardless — plus fontkit itself hard-crashed
+// ("Offset is outside the bounds of the DataView") parsing certain Google
+// Font files. Standard fonts are part of the PDF spec and guaranteed present
+// in every viewer with none of those failure modes.
+async function resolveStandardFont(doc, fontCache, family) {
+  const key = StandardFonts[family] ? family : 'Helvetica';
+  if (!fontCache[key]) fontCache[key] = await doc.embedFont(StandardFonts[key]);
+  return fontCache[key];
 }
 
 // Parse a #rrggbb hex colour to [r, g, b] in 0-1 range
@@ -543,9 +525,9 @@ function applyFieldTypography(field, def) {
 // pdf-lib regenerates a form field's appearance stream on every save (e.g. the
 // /fill route calling setText()), defaulting to Helvetica unless the *current*
 // font is passed to field.updateAppearances() at that time. Since the field
-// itself carries no standard "what font is this" property, stash the Google
-// Font family as a non-standard dict entry when the field is created so /fill
-// can re-embed the same face and keep filled-in text consistent with the
+// itself carries no standard "what font is this" property, stash the chosen
+// standard-font key as a non-standard dict entry when the field is created so
+// /fill can re-embed the same one and keep filled-in text consistent with the
 // field designer's choice.
 const CURAM_FONT_KEY = 'CuramFont';
 function setCuramFontMarker(field, family) {
@@ -568,21 +550,14 @@ router.post('/addfields', async (req, res) => {
       return res.status(400).json({ error: 'At least one field definition is required' });
 
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
-    doc.registerFontkit(fontkit); // required for embedFont() with a non-standard (TTF) font
     const form = doc.getForm();
     const pages = doc.getPages();
 
-    // Pre-embed fonts that are needed (Google Fonts fetched on demand, Helvetica as fallback)
+    // Pre-embed the standard fonts actually used (cheap — built into pdf-lib, no I/O)
     const embeddedFonts = {};
-    const neededFonts = new Set(fieldDefs.filter(d => d.type !== 'checkbox').map(d => d.fontFamily || 'Roboto'));
+    const neededFonts = new Set(fieldDefs.filter(d => d.type !== 'checkbox').map(d => d.fontFamily || 'Helvetica'));
     for (const fname of neededFonts) {
-      try {
-        const fontBytes = await fetchGoogleFontBytes(fname);
-        embeddedFonts[fname] = await doc.embedFont(fontBytes);
-      } catch (err) {
-        console.warn(`Google Font embed failed for "${fname}", falling back to Helvetica:`, err.message);
-        try { embeddedFonts[fname] = await doc.embedFont(StandardFonts.Helvetica); } catch {}
-      }
+      embeddedFonts[fname] = await resolveStandardFont(doc, embeddedFonts, fname);
     }
 
     // Ensure field names are unique within this batch + any existing fields.
@@ -612,7 +587,7 @@ router.post('/addfields', async (req, res) => {
       // by the viewer at display/edit time.
       if (def.type === 'text' && String(def.value || '').trim()) {
         try {
-          const font = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+          const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
           const [tr, tg, tb] = hexToRgb01(def.color || '#000000');
           const fontSize = Math.max(4, Number(def.fontSize) || 11);
           const x = Number(def.x) || 0;
@@ -661,10 +636,10 @@ router.post('/addfields', async (req, res) => {
             if (def.required) f.enableRequired();
             // updateAppearances first (bakes font family into AP stream),
             // then applyFieldTypography to lock font size + colour in DA last.
-            const fontD = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+            const fontD = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
             if (fontD) try { f.updateAppearances(fontD); } catch {}
             applyFieldTypography(f, def);
-            setCuramFontMarker(f, def.fontFamily || 'Roboto');
+            setCuramFontMarker(f, def.fontFamily || 'Helvetica');
             break;
           }
           case 'text':
@@ -673,10 +648,10 @@ router.post('/addfields', async (req, res) => {
             f.addToPage(page, opts);
             if (def.multiline) f.enableMultiline();
             if (def.required) f.enableRequired();
-            const fontT = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+            const fontT = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
             if (fontT) try { f.updateAppearances(fontT); } catch {}
             applyFieldTypography(f, def);
-            setCuramFontMarker(f, def.fontFamily || 'Roboto');
+            setCuramFontMarker(f, def.fontFamily || 'Helvetica');
             break;
           }
         }
