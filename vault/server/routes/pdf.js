@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString } = require('pdf-lib');
+const fontkit = require('fontkit');
 const sharp = require('sharp');
 const path = require('path');
 const { google } = require('googleapis');
@@ -426,6 +427,7 @@ router.post('/fill', async (req, res) => {
     if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
     const fieldsData = req.body?.fields || {};
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    doc.registerFontkit(fontkit); // required for embedFont() with a non-standard (TTF) font
     const form = doc.getForm();
     // Re-embed each field's designer font on fill — pdf-lib regenerates the
     // appearance stream on save and defaults to Helvetica unless a font is
@@ -563,6 +565,7 @@ router.post('/addfields', async (req, res) => {
       return res.status(400).json({ error: 'At least one field definition is required' });
 
     const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    doc.registerFontkit(fontkit); // required for embedFont() with a non-standard (TTF) font
     const form = doc.getForm();
     const pages = doc.getPages();
 
