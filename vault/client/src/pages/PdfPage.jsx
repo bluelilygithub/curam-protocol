@@ -41,6 +41,38 @@ function standardFontCss(family) {
   return { fontFamily: STANDARD_FONT_CSS[base] || 'sans-serif', fontStyle: /Oblique|Italic/.test(family) ? 'italic' : 'normal', fontWeight: /Bold/.test(family) ? 'bold' : 'normal' };
 }
 
+// Script/decorative Google Fonts — allowed ONLY where the server stamps the
+// value as static page text (page.drawText), never on a live AcroForm field
+// (Fill Form's flatten mode, and a field-designer "text" field with a value
+// typed in). Chrome/Edge/Adobe Reader substitute a default font for a form
+// field's embedded custom font regardless of correct embedding, so these
+// aren't offered for dropdown fields or an empty fillable text field —
+// picking one there falls back to Helvetica server-side. List matches
+// server/routes/pdf.js SCRIPT_FONTS exactly — each entry manually verified
+// against a real page.drawText() call; Dancing Script was tested and
+// excluded (fontkit hard-crashes parsing its TTF regardless of what's drawn).
+const SCRIPT_FONTS = ['Pacifico', 'Lobster', 'Great Vibes', 'Sacramento', 'Alex Brush', 'Allura', 'Satisfy', 'Kalam', 'Caveat', 'Homemade Apple'];
+const STAMP_FONT_GROUPS = { Script: SCRIPT_FONTS, ...STANDARD_FONT_GROUPS };
+// Client-side CSS approximation for the picker/canvas preview only — the
+// actual embedded font is fetched server-side at generation time. Loads a
+// Google Fonts <link> lazily, once per family, purely for this preview.
+const _loadedFontLinks = new Set();
+function ensureGoogleFontLoaded(family) {
+  if (!family || _loadedFontLinks.has(family)) return;
+  _loadedFontLinks.add(family);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@400&display=swap`;
+  document.head.appendChild(link);
+}
+function fontCss(family) {
+  if (SCRIPT_FONTS.includes(family)) {
+    ensureGoogleFontLoaded(family);
+    return { fontFamily: `"${family}", cursive`, fontStyle: 'normal', fontWeight: 'normal' };
+  }
+  return standardFontCss(family);
+}
+
 // ─── Tool catalogue ────────────────────────────────────────────────────────────
 
 const TOOL_HELP = {
@@ -787,7 +819,7 @@ export default function PdfPage() {
       // placeholder previews what a fillable field's value would look like.
       if (f.type !== 'checkbox') {
         const family = f.fontFamily || 'Helvetica';
-        const css = standardFontCss(family);
+        const css = fontCss(family);
         const sampleSize = Math.max(6, (f.fontSize || 11)) * dims.renderScale;
         ctx.font = `${css.fontStyle === 'italic' ? 'italic ' : ''}${css.fontWeight === 'bold' ? 'bold ' : ''}${sampleSize}px ${css.fontFamily}`;
         ctx.fillStyle = f.color || '#000000';
@@ -842,6 +874,15 @@ export default function PdfPage() {
 
   // Re-draw overlay when field list changes (e.g., name edits, removals)
   useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
+
+  // Re-draw once a lazily-loaded script font finishes downloading, so the
+  // sample text preview updates from its fallback (cursive) to the real face.
+  useEffect(() => {
+    if (!document.fonts?.addEventListener) return;
+    const onLoaded = () => redrawFdOverlay();
+    document.fonts.addEventListener('loadingdone', onLoaded);
+    return () => document.fonts.removeEventListener('loadingdone', onLoaded);
+  }, [redrawFdOverlay]);
 
   const fdCanvasCoords = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -1969,10 +2010,10 @@ export default function PdfPage() {
                             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                             title="Font"
                           >
-                            {Object.entries(STANDARD_FONT_GROUPS).map(([group, fonts]) => (
+                            {Object.entries(STAMP_FONT_GROUPS).map(([group, fonts]) => (
                               <optgroup key={group} label={group}>
                                 {fonts.map(font => {
-                                  const css = standardFontCss(font);
+                                  const css = fontCss(font);
                                   return (
                                     <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
                                       {STANDARD_FONT_LABELS[font] || font}
@@ -2471,12 +2512,18 @@ export default function PdfPage() {
                                 onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
                                 className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
                                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                title="Font (PDF standard font — always renders correctly in every viewer)"
+                                title={f.type === 'text'
+                                  ? 'Font — Script only applies if you type text below to stamp; an empty field falls back to Helvetica'
+                                  : 'Font (PDF standard font — dropdown fields stay editable, so only standard fonts render reliably)'}
                               >
-                                {Object.entries(STANDARD_FONT_GROUPS).map(([group, fonts]) => (
+                                {/* Script fonts only ever render correctly via the static-text stamp
+                                    (a "text" field with a value typed above) — a dropdown is always a
+                                    live AcroForm field, where a script font would silently fall back
+                                    to Helvetica server-side, so it's not offered here. */}
+                                {Object.entries(f.type === 'text' ? STAMP_FONT_GROUPS : STANDARD_FONT_GROUPS).map(([group, fonts]) => (
                                   <optgroup key={group} label={group}>
                                     {fonts.map(font => {
-                                      const css = standardFontCss(font);
+                                      const css = fontCss(font);
                                       return (
                                         <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
                                           {STANDARD_FONT_LABELS[font] || font}

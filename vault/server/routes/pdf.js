@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString } = require('pdf-lib');
+const fontkit = require('fontkit');
 const sharp = require('sharp');
 const path = require('path');
 const { google } = require('googleapis');
@@ -436,7 +437,7 @@ router.post('/fill', async (req, res) => {
     // field itself is removed so nothing editable is left behind.
     const flatten = req.body?.flatten !== false;
     const fontCache = {};
-    const stampFont = flatten ? await resolveStandardFont(doc, fontCache, req.body?.fontFamily || 'Helvetica') : null;
+    const stampFont = flatten ? await resolveStampFont(doc, fontCache, req.body?.fontFamily || 'Helvetica') : null;
     const stampSize = Math.max(4, Number(req.body?.fontSize) || 11);
     const [sr, sg, sb] = hexToRgb01(req.body?.color || '#000000');
 
@@ -517,20 +518,68 @@ router.post('/flatten', async (req, res) => {
 // Receives field definitions with PDF-point coordinates (bottom-left origin)
 // and embeds them as interactive AcroForm fields using pdf-lib.
 //
-// Font choice is restricted to pdf-lib's 14 built-in "standard" PDF fonts
-// (StandardFonts) — no fetching, no custom TTF embedding, no fontkit. Google
-// Fonts were tried here previously and abandoned after three separate dead
-// ends: registerFontkit was missing, the IE6 UA trick returned EOT instead of
-// TTF, and once both were fixed, Chrome/Edge/Adobe Reader all still
-// substituted a default font for a form field's embedded custom font at
-// render/edit time regardless — plus fontkit itself hard-crashed
-// ("Offset is outside the bounds of the DataView") parsing certain Google
-// Font files. Standard fonts are part of the PDF spec and guaranteed present
-// in every viewer with none of those failure modes.
+// Interactive AcroForm fields (live text fields, dropdowns, and any empty
+// fillable field) are restricted to pdf-lib's 14 built-in "standard" PDF
+// fonts (StandardFonts) — no fetching, no custom TTF embedding, no fontkit.
+// Google Fonts were tried on this path previously and abandoned: Chrome/
+// Edge/Adobe Reader all substitute a default font for a *form field's*
+// embedded custom font at render/edit time regardless of correct embedding —
+// an inherent viewer limitation with live AcroForm appearance regeneration,
+// not fixable from here. Standard fonts are part of the PDF spec and
+// guaranteed present in every viewer with none of that failure mode.
 async function resolveStandardFont(doc, fontCache, family) {
   const key = StandardFonts[family] ? family : 'Helvetica';
   if (!fontCache[key]) fontCache[key] = await doc.embedFont(StandardFonts[key]);
   return fontCache[key];
+}
+
+// Static text stamped straight into a page's content stream (via
+// page.drawText — never through AcroForm's field.updateAppearances) is a
+// completely different, much safer code path: it isn't re-rendered by the
+// viewer the way a form-field annotation is, so a real embedded font
+// actually renders correctly everywhere. Script/decorative Google Fonts are
+// allowed here, restricted to a manually-verified list — Dancing Script was
+// tested and excluded: fontkit hard-crashes ("Offset is outside the bounds
+// of the DataView") parsing its particular TTF regardless of what's drawn.
+const SCRIPT_FONTS = new Set(['Pacifico', 'Lobster', 'Great Vibes', 'Sacramento', 'Alex Brush', 'Allura', 'Satisfy', 'Kalam', 'Caveat', 'Homemade Apple']);
+const _stampFontCache = new Map(); // family -> Buffer of TTF bytes, shared across requests
+async function fetchScriptFontBytes(family) {
+  if (_stampFontCache.has(family)) return _stampFontCache.get(family);
+  const cssUrl = `https://fonts.googleapis.com/css?family=${encodeURIComponent(family)}:400`;
+  // Google's legacy CSS endpoint serves a font format matched to the
+  // requesting User-Agent. An old pre-4.4 Android browser has no woff/
+  // woff2/EOT support, so Google falls back to plain TTF, which is what
+  // pdf-lib/fontkit need (a modern UA gets woff2, which pdf-lib can't parse;
+  // an old-IE UA gets EOT, which fontkit can't parse either).
+  const cssResp = await fetch(cssUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Linux; U; Android 2.3.6; en-us; Nexus S Build/GRK39F) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1' },
+  });
+  if (!cssResp.ok) throw new Error(`Google Fonts CSS fetch failed: ${family} (${cssResp.status})`);
+  const css = await cssResp.text();
+  const urlMatch = css.match(/url\((https?:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
+  if (!urlMatch) throw new Error(`No font URL in CSS response for: ${family}`);
+  const fontResp = await fetch(urlMatch[1]);
+  if (!fontResp.ok) throw new Error(`Font file fetch failed for: ${family}`);
+  const bytes = Buffer.from(await fontResp.arrayBuffer());
+  _stampFontCache.set(family, bytes);
+  return bytes;
+}
+const _fontkitRegisteredDocs = new WeakSet(); // registerFontkit is per-PDFDocument, not global
+// Resolve a font for a page.drawText() stamp only — never pass the result to
+// field.updateAppearances()/an AcroForm field. Falls back to Helvetica on
+// any embed failure so an unexpected bad font file can't fail the request.
+async function resolveStampFont(doc, fontCache, family) {
+  if (!SCRIPT_FONTS.has(family)) return resolveStandardFont(doc, fontCache, family);
+  if (fontCache[family]) return fontCache[family];
+  try {
+    if (!_fontkitRegisteredDocs.has(doc)) { doc.registerFontkit(fontkit); _fontkitRegisteredDocs.add(doc); }
+    const bytes = await fetchScriptFontBytes(family);
+    fontCache[family] = await doc.embedFont(bytes);
+  } catch (err) {
+    console.warn(`Script font embed failed for "${family}", falling back to Helvetica:`, err.message);
+    fontCache[family] = await resolveStandardFont(doc, fontCache, 'Helvetica');
+  }
+  return fontCache[family];
 }
 
 // Parse a #rrggbb hex colour to [r, g, b] in 0-1 range
@@ -588,12 +637,14 @@ router.post('/addfields', async (req, res) => {
     const form = doc.getForm();
     const pages = doc.getPages();
 
-    // Pre-embed the standard fonts actually used (cheap — built into pdf-lib, no I/O)
-    const embeddedFonts = {};
-    const neededFonts = new Set(fieldDefs.filter(d => d.type !== 'checkbox').map(d => d.fontFamily || 'Helvetica'));
-    for (const fname of neededFonts) {
-      embeddedFonts[fname] = await resolveStandardFont(doc, embeddedFonts, fname);
-    }
+    // Two separate font caches, deliberately never shared: stampFonts may
+    // hold a script/custom font (only ever used with page.drawText below —
+    // never an AcroForm appearance stream); acroFormFonts is restricted to
+    // standard fonts for every live field (dropdown, or an empty fillable
+    // text field). Keeping them apart means a script font picked for one
+    // stamp field can never leak into a dropdown/live-field's font resolve.
+    const stampFonts = {};
+    const acroFormFonts = {};
 
     // Ensure field names are unique within this batch + any existing fields.
     const existingNames = new Set(form.getFields().map(f => f.getName()));
@@ -622,7 +673,7 @@ router.post('/addfields', async (req, res) => {
       // by the viewer at display/edit time.
       if (def.type === 'text' && String(def.value || '').trim()) {
         try {
-          const font = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
+          const font = await resolveStampFont(doc, stampFonts, def.fontFamily || 'Helvetica');
           const [tr, tg, tb] = hexToRgb01(def.color || '#000000');
           const fontSize = Math.max(4, Number(def.fontSize) || 11);
           const x = Number(def.x) || 0;
@@ -671,7 +722,7 @@ router.post('/addfields', async (req, res) => {
             if (def.required) f.enableRequired();
             // updateAppearances first (bakes font family into AP stream),
             // then applyFieldTypography to lock font size + colour in DA last.
-            const fontD = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
+            const fontD = await resolveStandardFont(doc, acroFormFonts, def.fontFamily || 'Helvetica');
             if (fontD) try { f.updateAppearances(fontD); } catch {}
             applyFieldTypography(f, def);
             setCuramFontMarker(f, def.fontFamily || 'Helvetica');
@@ -683,7 +734,7 @@ router.post('/addfields', async (req, res) => {
             f.addToPage(page, opts);
             if (def.multiline) f.enableMultiline();
             if (def.required) f.enableRequired();
-            const fontT = embeddedFonts[def.fontFamily] || embeddedFonts['Helvetica'];
+            const fontT = await resolveStandardFont(doc, acroFormFonts, def.fontFamily || 'Helvetica');
             if (fontT) try { f.updateAppearances(fontT); } catch {}
             applyFieldTypography(f, def);
             setCuramFontMarker(f, def.fontFamily || 'Helvetica');
