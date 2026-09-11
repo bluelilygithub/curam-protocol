@@ -25,7 +25,7 @@ Not currently gated by a feature flag and not listed in `FEATURE_ACCESS_KEYS` �
 | `POST /watermark` | Diagonal text watermark (size/opacity/colour/angle) |
 | `POST /pagenumbers` | Stamp `{n}`/`{total}` page numbers, 6 positions |
 | `POST /inspect` | List AcroForm fields (name/type/value/required/readOnly) |
-| `POST /fill` | Set values on existing AcroForm fields |
+| `POST /fill` | Fill AcroForm fields. Default (`flatten: true`): stamps each TextField/Dropdown value as static page text at the field's position with a chosen standard font/size/colour, then removes the field — immune to viewer font-substitution, output not re-editable. `flatten: false`: legacy live-field fill (`setText`/`select`) |
 | `POST /flatten` | Bake form fields into static content |
 | `POST /addfields` | Draw new AcroForm fields (text/checkbox/dropdown) at PDF-point coordinates — see **Field designer** below |
 | `POST /metadata` | Read/write Title/Author/Subject/Keywords/Creator |
