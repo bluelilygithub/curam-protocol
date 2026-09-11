@@ -740,8 +740,8 @@ function buildLessonCandidates(qa) {
 function SeverityBadge({ severity }) {
   if (!severity) return null;
   return (
-    <span className="text-xs font-medium px-1.5 py-0.5 rounded shrink-0"
-      style={{ color: severity.color, border: `1px solid ${severity.color}`, opacity: 0.9 }}>
+    <span className="text-xs font-semibold px-1.5 py-0.5 rounded shrink-0"
+      style={{ color: '#fff', background: severity.color }}>
       {severity.level}
     </span>
   );
@@ -750,8 +750,9 @@ function SeverityBadge({ severity }) {
 function DispositionTag({ text }) {
   if (!text) return null;
   return (
-    <span className="text-xs font-medium shrink-0" style={{ color: 'var(--color-primary)' }}>
-      [{text}]
+    <span className="text-xs font-medium px-1.5 py-0.5 rounded shrink-0"
+      style={{ color: 'var(--color-primary)', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      {text}
     </span>
   );
 }
@@ -770,12 +771,25 @@ function FrequencyBadge({ count }) {
   );
 }
 
+const SNIPPET_TRUNCATE_AT = 140;
+
 function Snippet({ snippet }) {
+  const [expanded, setExpanded] = useState(false);
   if (!snippet || (!snippet.source && !snippet.target)) return null;
+  const long = (snippet.source && snippet.source.length > SNIPPET_TRUNCATE_AT)
+    || (snippet.target && snippet.target.length > SNIPPET_TRUNCATE_AT);
+  const clip = (s) => (s && !expanded && s.length > SNIPPET_TRUNCATE_AT) ? `${s.slice(0, SNIPPET_TRUNCATE_AT)}…` : s;
   return (
     <div className="text-xs mt-0.5 pl-2 border-l-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-      {snippet.source && <div>SRC: {snippet.source}</div>}
-      {snippet.target && <div>TGT: {snippet.target}</div>}
+      {snippet.source && <div>SRC: {clip(snippet.source)}</div>}
+      {snippet.target && <div>TGT: {clip(snippet.target)}</div>}
+      {long && (
+        <button onClick={() => setExpanded(v => !v)}
+          className="text-xs font-medium hover:opacity-70 mt-0.5"
+          style={{ color: 'var(--color-primary)' }}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
     </div>
   );
 }
@@ -859,6 +873,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
     && alreadyStandard.length === 0 && style.length === 0;
   const nothingChecked = checkedGlobal.size === 0 && checkedDnt.size === 0
     && checkedLock.size === 0 && checkedStyle.size === 0;
+  const selectedCount = checkedGlobal.size + checkedDnt.size + checkedLock.size + checkedStyle.size;
 
   const apply = async () => {
     setApplying(true);
@@ -1128,16 +1143,23 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
               </details>
             )}
 
-            <div className="flex justify-end">
-              <button onClick={apply} disabled={applying || nothingChecked}
-                className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                {applying ? 'Applying…' : 'Apply selected'}
-              </button>
-            </div>
+            <div className="h-14" />
           </>
         )}
       </div>
+      {!nothingToShow && (
+        <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-2.5 flex items-center justify-between gap-3 border-t"
+          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {selectedCount === 0 ? 'Nothing selected' : `${selectedCount} item${selectedCount === 1 ? '' : 's'} selected`}
+          </span>
+          <button onClick={apply} disabled={applying || nothingChecked}
+            className="text-sm px-4 py-2 rounded-lg font-medium hover:opacity-90 disabled:opacity-50"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}>
+            {applying ? 'Applying…' : 'Apply selected'}
+          </button>
+        </div>
+      )}
       {logOpen && <LessonsLogModal defaultLanguage={job?.targetLanguage} onClose={() => setLogOpen(false)} />}
     </Modal>
   );
