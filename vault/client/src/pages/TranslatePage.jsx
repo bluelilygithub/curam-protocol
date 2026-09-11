@@ -933,7 +933,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
             {dnt.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold">Do-not-translate rules — {dnt.length}</p>
+                  <p className="text-xs font-semibold" title="A locked term leaked into the translation instead of staying untranslated. Checking one adds a doNotTranslate glossary rule so it's blocked everywhere, not just this row.">Do-not-translate rules — {dnt.length}</p>
                   <button onClick={() => selectAll(setCheckedDnt, dnt)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
                     {checkedDnt.size === dnt.length ? 'Clear' : 'Select all'}
                   </button>
@@ -969,7 +969,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">Global suggestions (instruction prompt) — {global.length}</p>
+                <p className="text-xs font-semibold" title="Style/consistency issues, not tied to one term. Checking one appends a bullet line to the shared instruction prompt (Settings → Translate agent → custom instructions) — applies to every future job, every language.">Global suggestions (instruction prompt) — {global.length}</p>
                 {global.length > 0 && (
                   <button onClick={() => selectAll(setCheckedGlobal, global)} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
                     {checkedGlobal.size === global.length ? 'Clear' : 'Select all'}
@@ -995,7 +995,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">
+                <p className="text-xs font-semibold" title="The model already proposed a correct rendering for this term but didn't apply it consistently. Checking one saves that rendering into this job's target-language glossary so future jobs use it from the first chunk.">
                   Lock into glossary ({job?.targetLanguage || '—'}) — {lock.length}
                 </p>
                 {lock.length > 0 && (
@@ -1028,7 +1028,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">
+                <p className="text-xs font-semibold" title="A regional/dialectal wording the model deliberately chose (not an error). Checking one saves it into the glossary as the preferred rendering going forward.">
                   Regional/style choices to lock ({job?.targetLanguage || '—'}) — {style.length}
                 </p>
                 {style.length > 0 && (
@@ -1061,7 +1061,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             {driftEnforcement.length > 0 && (
               <details>
-                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
+                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none" title="The term is already locked in the glossary — some rows just didn't apply it. No checkbox: there's nothing to add, this is a pipeline consistency issue for engineering to investigate.">
                   Enforcement gap — engineering ({driftEnforcement.length}) — term already locked, not a glossary edit
                 </summary>
                 {driftFreq && (
@@ -1086,7 +1086,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             {driftLinguistic.length > 0 && (
               <div>
-                <p className="text-xs font-semibold mb-2">
+                <p className="text-xs font-semibold mb-2" title="Genuine ambiguity the model flagged but couldn't resolve on its own — no proposed rendering exists. Needs a human who knows the target language to type the correct term and confirm it before it can be locked.">
                   Needs linguistic decision ({driftLinguistic.length}) — no confirmed correction yet
                 </p>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
@@ -1126,7 +1126,7 @@ function LessonsLearntModal({ qa, job, appVersion, onClose }) {
 
             {alreadyStandard.length > 0 && (
               <details>
-                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none">
+                <summary className="text-xs font-semibold mb-2 cursor-pointer select-none" title="The model flagged this as an issue, but the correct rendering was already glossary-mandated — a false positive, not a real finding. Listed for transparency only, nothing to apply.">
                   Already in glossary ({alreadyStandard.length}) — no action needed
                 </summary>
                 <ul className="space-y-1.5">
