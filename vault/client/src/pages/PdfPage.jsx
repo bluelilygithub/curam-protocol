@@ -7,18 +7,30 @@ import useProcessingStore from '../store/processingStore';
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// ─── Google Fonts available in the field designer ──────────────────────────────
-const GOOGLE_FONTS = [
-  // Sans-serif
-  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter',
-  'Nunito', 'Raleway', 'Ubuntu', 'Oswald', 'Source Sans 3',
-  // Serif
-  'Merriweather', 'Playfair Display', 'Lora', 'EB Garamond', 'Libre Baskerville',
-  // Monospace
-  'Roboto Mono', 'Source Code Pro', 'Inconsolata', 'JetBrains Mono',
-  // Display / Decorative
-  'Lobster', 'Pacifico', 'Dancing Script', 'Josefin Sans', 'Bebas Neue',
-];
+// ─── Google Fonts available in the field designer, grouped for the picker ──────
+const GOOGLE_FONT_GROUPS = {
+  'Script': ['Lobster', 'Pacifico', 'Dancing Script'],
+  'Sans Serif': [
+    'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Inter',
+    'Nunito', 'Raleway', 'Ubuntu', 'Oswald', 'Source Sans 3',
+    'Josefin Sans', 'Bebas Neue',
+    'Roboto Mono', 'Source Code Pro', 'Inconsolata', 'JetBrains Mono',
+  ],
+  'Serif': ['Merriweather', 'Playfair Display', 'Lora', 'EB Garamond', 'Libre Baskerville'],
+};
+const GOOGLE_FONTS = Object.values(GOOGLE_FONT_GROUPS).flat();
+
+// Injects a Google Fonts <link> for a family (once) so the browser can
+// render it in the <select> options and on the field-designer canvas.
+const _loadedFontLinks = new Set();
+function ensureGoogleFontLoaded(family) {
+  if (!family || _loadedFontLinks.has(family)) return;
+  _loadedFontLinks.add(family);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@400&display=swap`;
+  document.head.appendChild(link);
+}
 
 // ─── Tool catalogue ────────────────────────────────────────────────────────────
 
@@ -752,6 +764,18 @@ export default function PdfPage() {
       ctx.fillStyle = isSel ? 'rgb(234,88,12)' : 'rgb(99,102,241)';
       ctx.font = `bold 10px system-ui,sans-serif`;
       ctx.fillText(`${f.name} (${f.type})`, cx + 3, cy + 12);
+      // Sample text in the field's actual font/size/colour — text/dropdown only,
+      // sits inside the box like a placeholder the user will overwrite.
+      if (f.type !== 'checkbox') {
+        const family = f.fontFamily || 'Roboto';
+        const sampleSize = Math.max(6, (f.fontSize || 11)) * dims.renderScale;
+        ctx.font = `${sampleSize}px "${family}", sans-serif`;
+        ctx.fillStyle = f.color || '#000000';
+        ctx.globalAlpha = 0.55;
+        const sampleText = f.type === 'dropdown' && f.options?.[0] ? f.options[0] : 'Sample text';
+        ctx.fillText(sampleText, cx + 4, cy + ch / 2 + sampleSize * 0.35, cw - 8);
+        ctx.globalAlpha = 1;
+      }
       // Corner handles when selected
       if (isSel) {
         const hs = 7;
@@ -797,6 +821,17 @@ export default function PdfPage() {
 
   // Re-draw overlay when field list changes (e.g., name edits, removals)
   useEffect(() => { redrawFdOverlay(); }, [fdFields, redrawFdOverlay]);
+
+  // Preload every picker font once so the <select> and canvas sample text can
+  // render in the real face; re-draw the overlay as each face finishes loading.
+  useEffect(() => {
+    GOOGLE_FONTS.forEach(ensureGoogleFontLoaded);
+    if (document.fonts?.addEventListener) {
+      const onLoaded = () => redrawFdOverlay();
+      document.fonts.addEventListener('loadingdone', onLoaded);
+      return () => document.fonts.removeEventListener('loadingdone', onLoaded);
+    }
+  }, [redrawFdOverlay]);
 
   const fdCanvasCoords = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -2365,8 +2400,14 @@ export default function PdfPage() {
                                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                                 title="Font family (Google Font)"
                               >
-                                {GOOGLE_FONTS.map(font => (
-                                  <option key={font} value={font}>{font}</option>
+                                {Object.entries(GOOGLE_FONT_GROUPS).map(([group, fonts]) => (
+                                  <optgroup key={group} label={group}>
+                                    {fonts.map(font => (
+                                      <option key={font} value={font} style={{ fontFamily: `"${font}", ${group === 'Serif' ? 'serif' : group === 'Script' ? 'cursive' : 'sans-serif'}` }}>
+                                        {font}
+                                      </option>
+                                    ))}
+                                  </optgroup>
                                 ))}
                               </select>
                               <input
