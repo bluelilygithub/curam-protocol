@@ -764,15 +764,18 @@ export default function PdfPage() {
       ctx.fillStyle = isSel ? 'rgb(234,88,12)' : 'rgb(99,102,241)';
       ctx.font = `bold 10px system-ui,sans-serif`;
       ctx.fillText(`${f.name} (${f.type})`, cx + 3, cy + 12);
-      // Sample text in the field's actual font/size/colour — text/dropdown only,
-      // sits inside the box like a placeholder the user will overwrite.
+      // Sample/stamp text in the field's actual font/size/colour. A typed
+      // f.value (text type) previews at full opacity — that's the real
+      // content that gets baked into the page. Otherwise a ghosted
+      // placeholder previews what a fillable field's value would look like.
       if (f.type !== 'checkbox') {
         const family = f.fontFamily || 'Roboto';
         const sampleSize = Math.max(6, (f.fontSize || 11)) * dims.renderScale;
         ctx.font = `${sampleSize}px "${family}", sans-serif`;
         ctx.fillStyle = f.color || '#000000';
-        ctx.globalAlpha = 0.55;
-        const sampleText = f.type === 'dropdown' && f.options?.[0] ? f.options[0] : 'Sample text';
+        const isStamp = f.type === 'text' && f.value;
+        ctx.globalAlpha = isStamp ? 1 : 0.55;
+        const sampleText = isStamp ? f.value : (f.type === 'dropdown' && f.options?.[0] ? f.options[0] : 'Sample text');
         ctx.fillText(sampleText, cx + 4, cy + ch / 2 + sampleSize * 0.35, cw - 8);
         ctx.globalAlpha = 1;
       }
@@ -2389,6 +2392,21 @@ export default function PdfPage() {
                             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                             placeholder="Field name"
                           />
+
+                          {/* Static text stamp: type it here, baked into the page in the
+                              chosen font — sidesteps PDF viewers substituting a default font
+                              for custom fonts on interactive form fields. Leave blank to
+                              create an ordinary fillable AcroForm text field instead. */}
+                          {f.type === 'text' && (
+                            <input
+                              type="text"
+                              value={f.value || ''}
+                              onChange={e => updateFdField(f.id, { value: e.target.value })}
+                              className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              placeholder="Text to stamp here (leave blank for a fillable field)"
+                            />
+                          )}
 
                           {/* Typography: font / size / color */}
                           {f.type !== 'checkbox' && (

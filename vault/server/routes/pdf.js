@@ -602,6 +602,36 @@ router.post('/addfields', async (req, res) => {
       const pageIdx = Math.max(0, (Number(def.page) || 1) - 1);
       if (pageIdx >= pages.length) continue;
       const page = pages[pageIdx];
+
+      // A "text" field with a value typed in the designer is stamped directly
+      // into the page's content stream instead of becoming an AcroForm field.
+      // PDF viewers (Chrome/Edge's PDFium, Adobe Reader) substitute a default
+      // font for live-rendered form-field text regardless of the embedded
+      // font in the field's DA/DR — baking it into the page like a watermark
+      // sidesteps that entirely, since it's drawn once, here, not re-rendered
+      // by the viewer at display/edit time.
+      if (def.type === 'text' && String(def.value || '').trim()) {
+        try {
+          const font = embeddedFonts[def.fontFamily] || embeddedFonts['Roboto'];
+          const [tr, tg, tb] = hexToRgb01(def.color || '#000000');
+          const fontSize = Math.max(4, Number(def.fontSize) || 11);
+          const x = Number(def.x) || 0;
+          const y = Number(def.y) || 0;
+          const height = Math.max(5, Number(def.height) || 20);
+          page.drawText(String(def.value), {
+            x: x + 4,
+            y: y + (height - fontSize) / 2 + fontSize * 0.15,
+            size: fontSize,
+            font,
+            color: rgb(tr, tg, tb),
+          });
+          added++;
+        } catch (fieldErr) {
+          console.warn('addfields stamp skip:', def.name, fieldErr.message);
+        }
+        continue;
+      }
+
       const name = uniqueName(def.name);
       const hasBorder = def.borderEnabled !== false;
       const [br, bg, bb] = hexToRgb01(def.borderColor || '#4d4dcf');
