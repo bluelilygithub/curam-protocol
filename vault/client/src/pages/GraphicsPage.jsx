@@ -169,6 +169,8 @@ const MODES = [
   { id: 'pipeline', label: 'Pipeline', icon: 'workflow' },
   { id: 'annotate', label: 'Annotate', icon: 'pen-line' },
   { id: 'watermark', label: 'Watermark', icon: 'droplets' },
+  { id: 'textoverlay', label: 'Text Overlay', icon: 'text' },
+  { id: 'composite', label: 'Composite', icon: 'combine' },
   { id: 'batchtext', label: 'Batch Text', icon: 'text' },
   { id: 'collage', label: 'Collage', icon: 'grid' },
   { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
@@ -224,7 +226,7 @@ const MODE_GROUPS = [
   { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'pdf2img', 'printready', 'autoenhance'] },
   { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
-  { label: 'Compose', ids: ['annotate', 'watermark', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
+  { label: 'Compose', ids: ['annotate', 'watermark', 'textoverlay', 'composite', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
   { label: 'Retouch', ids: ['background', 'extract', 'recolor', 'eraser', 'redact', 'inpaint'] },
   { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
@@ -511,7 +513,7 @@ const TOOL_HELP = {
   batch: {
     title: 'Batch',
     what: 'Apply one operation to many images at once.',
-    features: ['Modes: Convert format, Resize, Strip metadata', 'Per-file result with individual downloads', '"Download all" button for the full set'],
+    features: ['Modes: Convert format, Resize, Watermark, Compress, Strip metadata', 'Convert/Resize/Watermark/Compress run in a single server round-trip (up to 25 images)', 'Per-file result with individual downloads', '"Download all" button for the full set', 'One bad file never stops the rest of the batch'],
   },
   pdf2img: {
     title: 'PDF → Images',
@@ -673,6 +675,16 @@ const TOOL_HELP = {
     what: 'Paint a mask over the element you want to keep; the rest is removed to transparency.',
     features: ['Paint brush marks the area to keep (shown as green overlay)', 'Erase brush removes paint strokes (shown in red) for fine adjustments', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
   },
+  textoverlay: {
+    title: 'Text Overlay',
+    what: 'Stamp a real headline or caption onto an image — bigger and more flexible than the Watermark tool\'s text mode.',
+    features: ['Word-wraps automatically to a max-width % of the image', 'Optional background pill/box behind the text', 'Optional outline stroke for legibility over busy photos', 'Align left / center / right within its text box', 'Bold or normal weight, any hex colour', 'Position: 9 anchor points (corners, edges, centre)'],
+  },
+  composite: {
+    title: 'Composite',
+    what: 'Stack several text and/or logo layers onto a base image in one server round-trip.',
+    features: ['Add any mix of text layers and logo/image layers', 'Up to 8 layers per composite', 'Each layer has its own position, opacity and (for images) scale', 'Layers stack in the order you add them — first added sits at the bottom', 'One-shot render — not a saved/reusable layer stack'],
+  },
 };
 
 export default function GraphicsPage() {
@@ -766,6 +778,7 @@ export default function GraphicsPage() {
   const [crWidth, setCrWidth] = useState('');
   const [crHeight, setCrHeight] = useState('');
   const [crFit, setCrFit] = useState('inside');
+  const [crPresetId, setCrPresetId] = useState('');
   const [crAspect, setCrAspect] = useState('free');
   const [crBusy, setCrBusy] = useState(false);
   const [crResult, setCrResult] = useState(null);
@@ -834,6 +847,34 @@ export default function GraphicsPage() {
   const [wmBusy, setWmBusy] = useState(false);
   const [wmResult, setWmResult] = useState(null);
   const [wmError, setWmError] = useState('');
+  // Text overlay (headline/caption) — distinct from watermark's small text mode.
+  const [txSource, setTxSource] = useState(null);
+  const [txText, setTxText] = useState('Your headline here');
+  const [txFontSize, setTxFontSize] = useState('');
+  const [txColor, setTxColor] = useState('#ffffff');
+  const [txBackground, setTxBackground] = useState('');
+  const [txAlign, setTxAlign] = useState('center');
+  const [txFontWeight, setTxFontWeight] = useState('bold');
+  const [txMaxWidth, setTxMaxWidth] = useState('90');
+  const [txStrokeColor, setTxStrokeColor] = useState('');
+  const [txStrokeWidth, setTxStrokeWidth] = useState('2');
+  const [txPosition, setTxPosition] = useState('center');
+  const [txBusy, setTxBusy] = useState(false);
+  const [txResult, setTxResult] = useState(null);
+  const [txError, setTxError] = useState('');
+  // Composite (multi-layer: base image + ordered text/logo overlays).
+  const [cmSource, setCmSource] = useState(null);
+  const [cmLayers, setCmLayers] = useState([]);
+  const [cmBusy, setCmBusy] = useState(false);
+  const [cmResult, setCmResult] = useState(null);
+  const [cmError, setCmError] = useState('');
+  // Batch (extended): watermark / compress param panels + social presets list.
+  const [batchWmText, setBatchWmText] = useState('© My Brand');
+  const [batchWmColor, setBatchWmColor] = useState('#ffffff');
+  const [batchWmPosition, setBatchWmPosition] = useState('bottom-right');
+  const [batchWmOpacity, setBatchWmOpacity] = useState('0.5');
+  const [batchCompressQuality, setBatchCompressQuality] = useState('75');
+  const [socialPresets, setSocialPresets] = useState([]);
   const [collageFiles, setCollageFiles] = useState([]);
   const [collageColumns, setCollageColumns] = useState('2');
   const [collageSpacing, setCollageSpacing] = useState('12');
@@ -1054,6 +1095,12 @@ export default function GraphicsPage() {
       .then(r => r.json())
       .then(info => {
         if (Array.isArray(info?.formats) && info.formats.length) setConvertFormats(info.formats);
+      })
+      .catch(() => {});
+    api.get('/api/graphics/social-presets')
+      .then(r => r.json())
+      .then(info => {
+        if (Array.isArray(info?.presets)) setSocialPresets(info.presets);
       })
       .catch(() => {});
     loadGallery();
@@ -1278,40 +1325,64 @@ export default function GraphicsPage() {
   const removeBatchFile = (id) => setBatchFiles(prev => prev.filter(f => f.id !== id));
   const clearBatchFiles = () => setBatchFiles([]);
 
-  const batchOne = async (item) => {
-    let endpoint = '/api/graphics/convert';
-    let body = { imageDataUrl: item.imageDataUrl };
-    if (batchOp === 'convert') {
-      body.format = batchFormat;
-      body.quality = Number(batchQuality);
-    } else if (batchOp === 'resize') {
-      endpoint = '/api/graphics/resize';
-      body.op = 'resize';
-      if (batchWidth) body.width = Number(batchWidth);
-      if (batchHeight) body.height = Number(batchHeight);
-      body.fit = batchFit;
-    } else if (batchOp === 'strip') {
-      endpoint = '/api/graphics/strip-metadata';
+  // Params for the ops that go through the single-call POST /api/graphics/batch
+  // endpoint (convert/resize/watermark/compress). 'strip' has no server batch
+  // support yet, so it still loops per-file below.
+  const buildBatchParams = () => {
+    if (batchOp === 'convert') return { format: batchFormat, quality: Number(batchQuality) };
+    if (batchOp === 'resize') {
+      const params = { op: 'resize', fit: batchFit };
+      if (batchWidth) params.width = Number(batchWidth);
+      if (batchHeight) params.height = Number(batchHeight);
+      return params;
     }
-    const res = await api.post(endpoint, body);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Operation failed');
-    return data;
+    if (batchOp === 'watermark') {
+      return { type: 'text', text: batchWmText, color: batchWmColor, position: batchWmPosition, opacity: Number(batchWmOpacity) };
+    }
+    if (batchOp === 'compress') return { quality: Number(batchCompressQuality) };
+    return {};
   };
 
   const runBatchAll = async () => {
     const pending = batchFiles.filter(f => f.imageDataUrl && f.status !== 'done');
     if (!pending.length) return;
     if (batchOp === 'resize' && !batchWidth && !batchHeight) return;
+    if (batchOp === 'watermark' && !batchWmText.trim()) return;
     setBatchRunning(true);
-    for (const item of pending) {
-      setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'working', error: '' } : f));
-      try {
-        const data = await batchOne(item);
-        setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done', result: data } : f));
-      } catch (err) {
-        setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: err.message || 'Operation failed' } : f));
+    setBatchFiles(prev => prev.map(f => (pending.some(p => p.id === f.id) ? { ...f, status: 'working', error: '' } : f)));
+
+    if (batchOp === 'strip') {
+      for (const item of pending) {
+        try {
+          const res = await api.post('/api/graphics/strip-metadata', { imageDataUrl: item.imageDataUrl }); // eslint-disable-line no-await-in-loop
+          const data = await res.json(); // eslint-disable-line no-await-in-loop
+          if (!res.ok) throw new Error(data.error || 'Operation failed');
+          setBatchFiles(prev => prev.map(f => (f.id === item.id ? { ...f, status: 'done', result: data } : f)));
+        } catch (err) {
+          setBatchFiles(prev => prev.map(f => (f.id === item.id ? { ...f, status: 'error', error: err.message || 'Operation failed' } : f)));
+        }
       }
+      setBatchRunning(false);
+      return;
+    }
+
+    try {
+      const res = await api.post('/api/graphics/batch', {
+        op: batchOp,
+        items: pending.map(item => ({ imageDataUrl: item.imageDataUrl })),
+        params: buildBatchParams(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Batch operation failed');
+      setBatchFiles(prev => prev.map(f => {
+        const idx = pending.findIndex(p => p.id === f.id);
+        if (idx === -1) return f;
+        const itemResult = data.results?.[idx];
+        if (!itemResult || itemResult.error) return { ...f, status: 'error', error: itemResult?.error || 'Operation failed' };
+        return { ...f, status: 'done', result: itemResult };
+      }));
+    } catch (err) {
+      setBatchFiles(prev => prev.map(f => (pending.some(p => p.id === f.id) ? { ...f, status: 'error', error: err.message || 'Batch operation failed' } : f)));
     }
     setBatchRunning(false);
   };
@@ -1320,7 +1391,8 @@ export default function GraphicsPage() {
     if (!item?.result?.imageDataUrl) return;
     const base = item.name.replace(/\.[^.]+$/, '');
     const ext = item.result.ext || item.result.format || 'img';
-    const suffix = batchOp === 'convert' ? '' : (batchOp === 'resize' ? '-resized' : '-clean');
+    const suffixes = { convert: '', resize: '-resized', watermark: '-watermarked', compress: '-compressed', strip: '-clean' };
+    const suffix = suffixes[batchOp] ?? '-clean';
     const a = document.createElement('a');
     a.href = item.result.imageDataUrl;
     a.download = `${base}${suffix}.${ext}`;
@@ -2405,6 +2477,7 @@ export default function GraphicsPage() {
     { mode: 'effects', label: 'Effects' },
     { mode: 'adjust', label: 'Adjust' },
     { mode: 'watermark', label: 'Watermark' },
+    { mode: 'textoverlay', label: 'Text Overlay' },
     { mode: 'background', label: 'Background' },
     { mode: 'recolor', label: 'Recolour' },
     { mode: 'convert', label: 'Convert' },
@@ -2423,6 +2496,7 @@ export default function GraphicsPage() {
       case 'effects': setEfResult(null); setEfError(''); setEfSource(src); break;
       case 'adjust': setAdjResult(null); setAdjError(''); setAdjSource(src); break;
       case 'watermark': setWmResult(null); setWmError(''); setWmSource(src); break;
+      case 'textoverlay': setTxResult(null); setTxError(''); setTxSource(src); break;
       case 'background': setBgResult(null); setBgError(''); setBgSource(src); break;
       case 'recolor': setRecolorResult(null); setRecolorError(''); setRecolorSource(src); break;
       case 'convert': setConvertResult(null); setConvertError(''); setConvertSource(src); break;
@@ -2494,9 +2568,13 @@ export default function GraphicsPage() {
     try {
       const body = { imageDataUrl: crSource.imageDataUrl, op: crOp };
       if (crOp === 'resize') {
-        body.width = crWidth ? Number(crWidth) : undefined;
-        body.height = crHeight ? Number(crHeight) : undefined;
-        body.fit = crFit;
+        if (crPresetId) {
+          body.preset = crPresetId;
+        } else {
+          body.width = crWidth ? Number(crWidth) : undefined;
+          body.height = crHeight ? Number(crHeight) : undefined;
+          body.fit = crFit;
+        }
       } else {
         if (!crNat) throw new Error('Image is still loading');
         body.rect = {
@@ -2622,6 +2700,100 @@ export default function GraphicsPage() {
       setWmError(err.message || 'Watermark failed');
     } finally {
       setWmBusy(false);
+    }
+  };
+
+  const runTextOverlay = async () => {
+    if (!txSource?.imageDataUrl || !txText.trim()) return;
+    setTxBusy(true);
+    setTxError('');
+    try {
+      const body = {
+        imageDataUrl: txSource.imageDataUrl,
+        text: txText,
+        color: txColor,
+        backgroundColor: txBackground ? txBackground : 'transparent',
+        align: txAlign,
+        fontWeight: txFontWeight,
+        maxWidth: Number(txMaxWidth),
+        position: txPosition,
+      };
+      if (txFontSize) body.fontSize = Number(txFontSize);
+      if (txStrokeColor) { body.strokeColor = txStrokeColor; body.strokeWidth = Number(txStrokeWidth); }
+      const res = await api.post('/api/graphics/text', body);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Text overlay failed');
+      setTxResult(data);
+    } catch (err) {
+      setTxError(err.message || 'Text overlay failed');
+    } finally {
+      setTxBusy(false);
+    }
+  };
+
+  // Composite: a small, fixed v1 layer stack — one text layer and one logo/image
+  // layer, each with its own position — rather than a full reorderable editor.
+  const addCmTextLayer = () => setCmLayers(prev => ([...prev, {
+    id: `layer-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: 'text',
+    text: 'New text layer',
+    color: '#ffffff',
+    backgroundColor: '',
+    fontWeight: 'bold',
+    align: 'center',
+    maxWidth: 90,
+    position: 'center',
+    opacity: 1,
+  }]));
+  const addCmImageLayer = () => setCmLayers(prev => ([...prev, {
+    id: `layer-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: 'image',
+    imageDataUrl: null,
+    scale: 25,
+    position: 'bottom-right',
+    opacity: 1,
+  }]));
+  const updateCmLayer = (id, patch) => setCmLayers(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  const removeCmLayer = (id) => setCmLayers(prev => prev.filter(l => l.id !== id));
+
+  const runComposite = async () => {
+    if (!cmSource?.imageDataUrl || !cmLayers.length) return;
+    setCmBusy(true);
+    setCmError('');
+    try {
+      const overlays = cmLayers.map(l => {
+        if (l.type === 'text') {
+          return {
+            type: 'text',
+            text: l.text,
+            color: l.color,
+            backgroundColor: l.backgroundColor || 'transparent',
+            fontWeight: l.fontWeight,
+            align: l.align,
+            maxWidth: Number(l.maxWidth) || 90,
+            position: l.position,
+            opacity: Number(l.opacity),
+          };
+        }
+        return {
+          type: 'image',
+          imageDataUrl: l.imageDataUrl,
+          scale: Number(l.scale) || 25,
+          position: l.position,
+          opacity: Number(l.opacity),
+        };
+      });
+      if (overlays.some(o => o.type === 'image' && !o.imageDataUrl)) {
+        throw new Error('Add an image for every logo/image layer');
+      }
+      const res = await api.post('/api/graphics/composite', { imageDataUrl: cmSource.imageDataUrl, overlays });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Composite failed');
+      setCmResult(data);
+    } catch (err) {
+      setCmError(err.message || 'Composite failed');
+    } finally {
+      setCmBusy(false);
     }
   };
 
@@ -3576,6 +3748,8 @@ export default function GraphicsPage() {
     [crBusy, 'Processing image…'],
     [metaBusy, 'Stripping metadata…'],
     [wmBusy, 'Applying watermark…'],
+    [txBusy, 'Applying text overlay…'],
+    [cmBusy, 'Building composite…'],
     [collageBusy, 'Building collage…'],
     [efBusy, 'Applying effect…'],
     [extBusy, 'Extending canvas…'],
@@ -3615,6 +3789,8 @@ export default function GraphicsPage() {
             {mode === 'cropresize' && 'Resize by dimensions, or drag the box to crop exactly what you want.'}
             {mode === 'metadata' && 'Strip GPS, camera and timestamp metadata before sharing.'}
             {mode === 'watermark' && 'Add a text or image watermark.'}
+            {mode === 'textoverlay' && 'Add wrapped headline or caption text, with an optional background pill and outline.'}
+            {mode === 'composite' && 'Stack multiple text and logo layers onto a base image in one pass.'}
             {mode === 'collage' && 'Arrange several images into a grid.'}
             {mode === 'extend' && 'Add padding around the image (white, a colour, or transparent).'}
             {mode === 'annotate' && 'Click to type text right on the image, draw arrows/boxes/freehand, move anything, then save a PNG.'}
@@ -3708,6 +3884,7 @@ export default function GraphicsPage() {
                       <button
                         key={m.id}
                         type="button"
+                        title={TOOL_HELP[m.id]?.what || m.label}
                         onClick={() => setMode(m.id)}
                         onMouseEnter={() => setHoveredTool(m.id)}
                         onMouseLeave={() => setHoveredTool(prev => (prev === m.id ? null : prev))}
@@ -4497,6 +4674,8 @@ export default function GraphicsPage() {
               >
                 <option value="convert">Convert format</option>
                 <option value="resize">Resize</option>
+                <option value="watermark">Add text watermark</option>
+                <option value="compress">Compress</option>
                 <option value="strip">Strip metadata</option>
               </select>
             </div>
@@ -4546,6 +4725,42 @@ export default function GraphicsPage() {
             </div>
           )}
 
+          {batchOp === 'watermark' && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark text</label>
+                <input type="text" value={batchWmText} onChange={e => setBatchWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+              <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
+                  <input type="color" value={batchWmColor} onChange={e => setBatchWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
+                  <select value={batchWmPosition} onChange={e => setBatchWmPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="bottom-right">Bottom right</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="top-right">Top right</option>
+                    <option value="top-left">Top left</option>
+                    <option value="center">Centre</option>
+                  </select>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(batchWmOpacity) * 100)}%</label>
+                <input type="range" min="0" max="1" step="0.05" value={batchWmOpacity} onChange={e => setBatchWmOpacity(e.target.value)} className="w-full" />
+              </div>
+            </div>
+          )}
+
+          {batchOp === 'compress' && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality: {batchCompressQuality}</label>
+              <input type="range" min="1" max="100" value={batchCompressQuality} onChange={e => setBatchCompressQuality(e.target.value)} className="w-full" />
+            </div>
+          )}
+
           {batchOp === 'strip' && (
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Removes EXIF, GPS, XMP, IPTC and ICC data from every image. Format and dimensions are preserved.</p>
           )}
@@ -4554,7 +4769,7 @@ export default function GraphicsPage() {
             <button
               type="button"
               onClick={runBatchAll}
-              disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight)}
+              disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight) || (batchOp === 'watermark' && !batchWmText.trim())}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
             >
@@ -4987,7 +5202,15 @@ export default function GraphicsPage() {
                 value=""
                 onChange={(e) => {
                   if (!e.target.value) return;
+                  if (e.target.value.startsWith('server:')) {
+                    setCrPresetId(e.target.value.slice('server:'.length));
+                    setCrWidth('');
+                    setCrHeight('');
+                    e.target.value = '';
+                    return;
+                  }
                   const [w, h] = e.target.value.split('x');
+                  setCrPresetId('');
                   setCrWidth(w);
                   setCrHeight(h);
                   setCrFit('cover');
@@ -5001,16 +5224,27 @@ export default function GraphicsPage() {
                     {g.items.map(it => <option key={it.label} value={`${it.w}x${it.h}`}>{it.label}</option>)}
                   </optgroup>
                 ))}
+                {socialPresets.length > 0 && (
+                  <optgroup label="Social & ad platforms (smart crop)">
+                    {socialPresets.map(p => <option key={p.id} value={`server:${p.id}`}>{p.label}</option>)}
+                  </optgroup>
+                )}
               </select>
+              {crPresetId && (
+                <p className="text-[11px] mt-1" style={{ color: 'var(--color-primary)' }}>
+                  Using preset “{socialPresets.find(p => p.id === crPresetId)?.label || crPresetId}” — content-aware cover crop to its exact size.{' '}
+                  <button type="button" onClick={() => setCrPresetId('')} className="underline hover:opacity-70">Clear</button>
+                </p>
+              )}
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
-                <input type="number" value={crWidth} onChange={e => setCrWidth(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <input type="number" value={crWidth} onChange={e => { setCrPresetId(''); setCrWidth(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
-                <input type="number" value={crHeight} onChange={e => setCrHeight(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <input type="number" value={crHeight} onChange={e => { setCrPresetId(''); setCrHeight(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fit</label>
@@ -5346,6 +5580,230 @@ export default function GraphicsPage() {
               {wmResult?.imageDataUrl ? (
                 renderResultMedia(wmSource?.imageDataUrl, wmResult, { alt: 'result' })
               ) : <ResultPlaceholder src={wmSource?.imageDataUrl} message="Your watermarked image will appear here." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'textoverlay' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Text overlay</h2>
+            <button type="button" onClick={() => setHelpTool('textoverlay')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={e => { setTxResult(null); setTxError(''); loadImageInto(setTxSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            </div>
+            {txSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={txSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Headline / caption text</label>
+              <textarea value={txText} onChange={e => setTxText(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text colour</label>
+                <input type="color" value={txColor} onChange={e => setTxColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background pill</label>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={!!txBackground} onChange={e => setTxBackground(e.target.checked ? '#000000' : '')} />
+                  <input type="color" value={txBackground || '#000000'} disabled={!txBackground} onChange={e => setTxBackground(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font size (px)</label>
+                <input type="number" min="8" max="600" value={txFontSize} onChange={e => setTxFontSize(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Align</label>
+                <select value={txAlign} onChange={e => setTxAlign(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="left">Left</option>
+                  <option value="center">Centre</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Weight</label>
+                <select value={txFontWeight} onChange={e => setTxFontWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="bold">Bold</option>
+                  <option value="normal">Normal</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Max width: {txMaxWidth}%</label>
+                <input type="range" min="10" max="100" value={txMaxWidth} onChange={e => setTxMaxWidth(e.target.value)} className="w-full" />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
+                <select value={txPosition} onChange={e => setTxPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="center">Centre</option>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="top-left">Top left</option>
+                  <option value="top-right">Top right</option>
+                  <option value="bottom-left">Bottom left</option>
+                  <option value="bottom-right">Bottom right</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Outline colour</label>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={!!txStrokeColor} onChange={e => setTxStrokeColor(e.target.checked ? '#000000' : '')} />
+                  <input type="color" value={txStrokeColor || '#000000'} disabled={!txStrokeColor} onChange={e => setTxStrokeColor(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Outline width</label>
+                <input type="number" min="1" max="40" disabled={!txStrokeColor} value={txStrokeWidth} onChange={e => setTxStrokeWidth(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+            </div>
+            {txError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{txError}</div>}
+            <button type="button" onClick={runTextOverlay} disabled={txBusy || !txSource?.imageDataUrl || !txText.trim()} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {txBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('text', { size: 15 })}
+              {txBusy ? 'Applying...' : 'Add text'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {txResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(txSource?.imageDataUrl, txResult?.imageDataUrl)}
+                  {renderSendTo(txResult.imageDataUrl, `text-overlay.${txResult.format}`, 'textoverlay')}
+                  {renderExport(txResult.imageDataUrl, 'text-overlay')}
+                  <button onClick={() => downloadDataUrl(txResult.imageDataUrl, `text-overlay-${Date.now()}.${txResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {txResult?.imageDataUrl ? (
+                renderResultMedia(txSource?.imageDataUrl, txResult, { alt: 'result' })
+              ) : <ResultPlaceholder src={txSource?.imageDataUrl} message="Your image with the text overlay will appear here." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'composite' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Composite</h2>
+            <button type="button" onClick={() => setHelpTool('composite')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Base image</label>
+              <input type="file" accept="image/*" onChange={e => { setCmResult(null); setCmError(''); loadImageInto(setCmSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            </div>
+            {cmSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={cmSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={addCmTextLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Text layer</button>
+              <button type="button" onClick={addCmImageLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Logo / image layer</button>
+              <span className="text-[11px] self-center" style={{ color: 'var(--color-muted)' }}>{cmLayers.length}/8 layers</span>
+            </div>
+
+            {cmLayers.length === 0 ? (
+              <div className="rounded-xl border px-4 py-6 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                Add a text or logo layer to build your composite.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cmLayers.map((layer, idx) => (
+                  <div key={layer.id} className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                        Layer {idx + 1} · {layer.type === 'text' ? 'Text' : 'Logo / image'}
+                      </span>
+                      <button type="button" onClick={() => removeCmLayer(layer.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Remove</button>
+                    </div>
+                    {layer.type === 'text' ? (
+                      <>
+                        <input type="text" value={layer.text} onChange={e => updateCmLayer(layer.id, { text: e.target.value })} placeholder="Layer text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="color" value={layer.color} onChange={e => updateCmLayer(layer.id, { color: e.target.value })} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                          <select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            <option value="bold">Bold</option>
+                            <option value="normal">Normal</option>
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input type="file" accept="image/*" onChange={e => loadImageInto((src) => updateCmLayer(layer.id, { imageDataUrl: src?.imageDataUrl || null }))(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+                        <div>
+                          <label className="block text-[11px] mb-1" style={{ color: 'var(--color-muted)' }}>Size: {layer.scale}% of image width</label>
+                          <input type="range" min="5" max="100" value={layer.scale} onChange={e => updateCmLayer(layer.id, { scale: e.target.value })} className="w-full" />
+                        </div>
+                      </>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <select value={layer.position} onChange={e => updateCmLayer(layer.id, { position: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                        <option value="center">Centre</option>
+                        <option value="top">Top</option>
+                        <option value="bottom">Bottom</option>
+                        <option value="top-left">Top left</option>
+                        <option value="top-right">Top right</option>
+                        <option value="bottom-left">Bottom left</option>
+                        <option value="bottom-right">Bottom right</option>
+                      </select>
+                      <div>
+                        <label className="block text-[11px] mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(layer.opacity) * 100)}%</label>
+                        <input type="range" min="0" max="1" step="0.05" value={layer.opacity} onChange={e => updateCmLayer(layer.id, { opacity: e.target.value })} className="w-full" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {cmError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{cmError}</div>}
+            <button type="button" onClick={runComposite} disabled={cmBusy || !cmSource?.imageDataUrl || !cmLayers.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {cmBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('combine', { size: 15 })}
+              {cmBusy ? 'Compositing...' : 'Build composite'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {cmResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(cmSource?.imageDataUrl, cmResult?.imageDataUrl)}
+                  {renderExport(cmResult.imageDataUrl, 'composite')}
+                  <button onClick={() => downloadDataUrl(cmResult.imageDataUrl, `composite-${Date.now()}.${cmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {cmResult?.imageDataUrl ? (
+                renderResultMedia(cmSource?.imageDataUrl, cmResult, { alt: 'result' })
+              ) : <ResultPlaceholder src={cmSource?.imageDataUrl} message="Your composited image will appear here." />}
             </div>
           </div>
         </div>

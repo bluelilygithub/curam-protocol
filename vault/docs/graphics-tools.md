@@ -1,6 +1,6 @@
 # Graphics Tools
 
-The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles thirty-six tools behind a grouped, searchable left sidebar; the active tool fills the main area.
+The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles thirty-eight tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
 **Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
@@ -30,7 +30,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 | **Optimise** | Upscale, Convert, Compress, Batch, PDF → Images, Auto-enhance |
 | **Transform** | Crop / Resize, Canvas Extend, Perspective Correct, Smart Crop |
 | **Enhance** | Effects, Adjust, Color Grading, Pipeline |
-| **Compose** | Annotate, Watermark, Batch Text, Collage, Favicon / Icons, Vectorize (SVG), AI Icon Library |
+| **Compose** | Annotate, Text Overlay, Composite, Watermark, Batch Text, Collage, Favicon / Icons, Vectorize (SVG), AI Icon Library |
 | **Retouch** | Background, Recolor, Redact, Inpaint |
 | **Analyse** | Picker, Histogram, Contrast (WCAG), Palette, Extract Text, Blur Detection, Image Diff, Remove Meta, File Info |
 
@@ -48,7 +48,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 - **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`. (The one hosted/paid tool in this otherwise-local group.)
 - **Convert** — change format between PNG, JPG, WebP, GIF, AVIF, TIFF or a multi-resolution **ICO** (16–256px, packed by hand), with a quality slider for lossy formats. Accepts **HEIC/HEIF** input where the server's libvips supports it (clear message otherwise). Also offers an **import-by-URL** row. `GET /api/graphics/convert/info`, `POST /api/graphics/convert`.
 - **Compress** — batch re-encode at a chosen quality keeping each file's format; shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
-- **Batch** — apply one operation across many images at once: **Convert format** (with quality), **Resize** (width/height + fit), or **Strip metadata**. Per-file results with individual downloads plus **Download all**. Reuses `POST /api/graphics/convert`, `/resize` and `/strip-metadata` per file (no new route).
+- **Batch** — apply one operation across many images (up to 25) at once: **Watermark**, **Resize** (width/height, fit, or a social-size preset), **Convert format** (with quality), **Compress**, or **Strip metadata**. Per-file results with individual downloads plus **Download all**; one bad file doesn't abort the run. Watermark/resize/convert/compress go through `POST /api/graphics/batch` (`{ op, items, params }`, each item's error isolated); strip-metadata still loops `POST /api/graphics/strip-metadata` client-side since there's no server batch path for it yet.
 - **PDF → Images** — render each page of a PDF to a PNG entirely in the browser via `pdfjs-dist` (CDN worker), with a resolution selector (1×–4×), click-to-zoom, per-page and "download all". Nothing is uploaded.
 - **Auto-enhance** — one-click brightness/contrast/saturation correction driven by histogram analysis (5th/95th percentile per channel). Shows applied multipliers with before/after compare. `POST /api/graphics/auto-enhance`.
 
@@ -56,7 +56,7 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 
 ### Transform
 
-- **Crop / Resize** — numeric resize (fit modes) **or** an interactive cropper: large pane, draggable/resizable selection with visible handles, rule-of-thirds guides, optional locked aspect ratio, and a live pixel-size readout. `POST /api/graphics/resize`.
+- **Crop / Resize** — numeric resize (fit modes) **or** an interactive cropper: large pane, draggable/resizable selection with visible handles, rule-of-thirds guides, optional locked aspect ratio, and a live pixel-size readout. A **social size preset** dropdown (Instagram Post/Story/Portrait, Facebook Post/Cover, LinkedIn Post/Banner, X Post, YouTube Thumbnail, Pinterest Pin) fills in width/height and applies the same smart cover-crop. `GET /api/graphics/social-presets`, `POST /api/graphics/resize` (accepts `preset` to override `width`/`height`).
 - **Canvas Extend** — add padding *around* an image with linked or independent top/right/bottom/left amounts and a white, custom-colour, or transparent fill. `POST /api/graphics/extend`.
 - **Perspective Correct** — fix keystone / trapezoid distortion with horizontal and vertical shear sliders (−50…+50). Applied via sharp `affine()` with `nohalo` interpolation. Corner fill: transparent PNG, white, black, or a custom colour. `POST /api/graphics/perspective`.
 - **Smart Crop** — crop to a target size or aspect ratio with a configurable focus strategy: **Attention** (saliency detection, default), **Entropy** (highest-detail region), or a cardinal direction. Width/height optional when aspect ratio given. `POST /api/graphics/smart-crop`.
@@ -71,6 +71,8 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 ### Compose
 
 - **Annotate** — browser-only mark-up: arrows, boxes, freehand pen, text labels with Google Fonts support. Select/Move tool, undo/redo (20-step), flatten-to-PNG.
+- **Text Overlay** — a real headline/caption, not a watermark: word-wrapped text (server-side width estimate, no live font metrics), size, colour, bold/normal, left/center/right align, optional background pill and stroke outline, position via the standard 9-point grid, max-width as a % of the image. `POST /api/graphics/text`.
+- **Composite** — stack up to 8 text and/or logo/image layers onto a base image in one pass (first added = bottom, later = on top; add-order only, no drag-to-reposition or reordering in this first version). Each layer gets its own position (9-point grid or an `{x,y}` offset) and opacity. `POST /api/graphics/composite`.
 - **Watermark** — text (colour, position, opacity) or image watermark (scale, opacity), with optional tiling. `POST /api/graphics/watermark`.
 - **Batch Text** — stamp a templated text label (`{filename}`, `{index}`, `{n}`, `{date}`) onto up to 20 images at once. Controls: position, font size, text colour, opacity, optional backing rectangle. Per-image download. `POST /api/graphics/batch-text`.
 - **Collage** — arrange 2–9 images into a grid with columns, spacing and background colour. `POST /api/graphics/collage`.
@@ -109,6 +111,7 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **Import by URL** — Convert, Crop/Resize, Adjust, Effects and Background each offer a "…or paste an image URL" row backed by `POST /api/graphics/fetch-url` (server-side fetch sidesteps browser CORS).
 - **Export…** — client-side re-encode to PNG/JPG/WebP/AVIF with quality, max-side, target-KB, and JPG background controls.
 - **Keyboard shortcuts** — `/` focuses the tool search, `Esc` closes the full-screen preview (or clears the search), and `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` undo/redo in Annotate and Redact.
+- **Tooltips** — every sidebar tool button carries a one-line native `title` tooltip describing what it does; there's no dedicated Tooltip component in the app yet, so this uses the plain HTML attribute rather than a new UI dependency.
 
 ---
 
@@ -127,5 +130,6 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **Import by URL** uses Node's global `fetch` with a basic SSRF guard (blocks localhost/private hosts), an image-only content-type check, a 25MB cap and a 15s timeout.
 - The Express JSON body limit is raised to `30mb` to accommodate multi-image collage uploads.
 - Optional env: `REPLICATE_BG_MODEL`, `REPLICATE_BG_COST_USD` (hosted background removal).
+- **Route/logic split:** Watermark, Resize, Convert and Compress are each implemented once as a plain `run*` function (`runWatermark`/`runResize`/`runConvert`/`runCompress`); their single-image routes are thin wrappers over these, and `POST /api/graphics/batch` calls the same functions per item — no duplicated logic between the single-file and batch paths.
 
 See `CHANGELOG.md` (entries dated 2026-06-26 to 2026-06-28) for the full build history.
