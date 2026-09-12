@@ -204,20 +204,6 @@ router.post('/score/compare', handle(async (req) => {
   return domscanPost('/score/compare', { names });
 }));
 
-// Typosquatting variants for a domain
-router.get('/typos', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/typos', { domain });
-}));
-
-// Domain availability across TLDs
-router.get('/availability', handle(async (req) => {
-  const { name, tlds } = req.query;
-  if (!name) throw new Error('name is required.');
-  return domscan('/status', { name, tlds: tlds || 'com,io,ai,co,app,net,org,dev' });
-}));
-
 // ── Research ────────────────────────────────────────────────────────────────
 
 // Full domain overview: WHOIS + lifecycle + reputation + DNS in one call
@@ -225,20 +211,6 @@ router.get('/overview', handle(async (req) => {
   const { domain } = req.query;
   if (!domain) throw new Error('domain is required.');
   return domscan('/overview', { domain });
-}));
-
-// Competitor infrastructure analysis
-router.get('/competitor', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/recipes/competitor-intel', { domain });
-}));
-
-// Domain market valuation
-router.get('/value', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/value', { domain });
 }));
 
 // ── Launch Readiness ─────────────────────────────────────────────────────────
@@ -250,13 +222,6 @@ router.get('/social', handle(async (req) => {
   return domscan('/social', { handle: username });
 }));
 
-// Brand launch readiness bundle (domain + social + health + typos combined)
-router.get('/brand-launch', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/recipes/brand-launch', { domain });
-}));
-
 // Compare registrar prices for a domain
 router.get('/pricing', handle(async (req) => {
   const { domain } = req.query;
@@ -265,49 +230,5 @@ router.get('/pricing', handle(async (req) => {
   const tld = tldParts.join('.');
   return domscan('/prices/compare', { tld: tld || 'com' });
 }));
-
-// ── Monitor ──────────────────────────────────────────────────────────────────
-
-// Get current watchlist
-router.get('/watchlist', handle(async () => domscan('/watchlist')));
-
-// Add a domain to the watchlist
-router.post('/watchlist', handle(async (req) => {
-  const { domain } = req.body;
-  if (!domain) throw new Error('domain is required.');
-  return domscanPost('/watchlist', { domain });
-}));
-
-// Remove from watchlist
-router.delete('/watchlist', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  const res = await fetch(`${DOMSCAN_BASE}/watchlist?domain=${encodeURIComponent(domain)}`, {
-    method: 'DELETE',
-    headers: { 'X-API-Key': key() },
-  });
-  const body = await res.json().catch(() => ({}));
-  return body;
-}));
-
-// Get expiring watched domains
-router.get('/watchlist/expiring', handle(async () => domscan('/watchlist/expiring')));
-
-// Trigger a brand monitor scan (copycat / typosquatting threats)
-router.get('/brand-monitor/scan', handle(async (req) => {
-  const { domain } = req.query;
-  if (!domain) throw new Error('domain is required.');
-  return domscan('/brand-monitor/scan', { domain });
-}));
-
-// Create a brand monitor
-router.post('/brand-monitor', handle(async (req) => {
-  const { domain } = req.body;
-  if (!domain) throw new Error('domain is required.');
-  return domscanPost('/brand-monitor', { domain });
-}));
-
-// List active brand monitors
-router.get('/brand-monitor', handle(async () => domscan('/brand-monitor')));
 
 module.exports = router;

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
+import Tooltip from '../components/Tooltip';
 
 // ── Tool metadata ─────────────────────────────────────────────────────────────
 
@@ -21,55 +22,20 @@ const TOOL_HELP = {
     description: 'Enter 2–5 brand name candidates and rank them head-to-head across all scoring dimensions. Useful for shortlisting from a brainstorm.',
     features: ['Side-by-side scoring of up to 5 names', 'Ranked leaderboard output', 'Per-dimension breakdown', 'Exportable for stakeholder review'],
   },
-  typos: {
-    title: 'Typo Variants',
-    description: 'Given your chosen domain, find all typo variants that exist — misspellings, missing letters, transpositions, and homoglyphs. See which are registered (brand protection risk) and which are available.',
-    features: ['Common keyboard typos', 'Missing / doubled letters', 'Transposition variants', 'Availability status for each variant', 'Flags registered variants as risk'],
-  },
-  availability: {
-    title: 'Availability Check',
-    description: 'Check a name across multiple TLDs simultaneously. Useful when you\'re settled on a name and want to see the full TLD landscape.',
-    features: ['Checks 1,500+ TLDs', 'Shows price per TLD', 'Highlights premium domains', 'Available for registration links'],
-  },
   overview: {
     title: 'Domain Profile',
     description: 'Full intelligence report on any existing domain — registration history, WHOIS data, lifecycle phase, domain age, reputation signals, and DNS snapshot.',
     features: ['WHOIS registration details', 'Domain age and creation date', 'Lifecycle phase (active, expiring, redemption…)', 'Reputation and trust signals', 'Historical WHOIS changes'],
-  },
-  competitor: {
-    title: 'Competitor Intel',
-    description: 'Enter a competitor\'s domain and see their infrastructure — other domains they own, TLD strategy, hosting provider, tech stack, subdomains, and when they registered.',
-    features: ['Associated domains and TLD strategy', 'Hosting and CDN detection', 'Tech stack fingerprint', 'Subdomain discovery', 'Registration timeline'],
-  },
-  value: {
-    title: 'Domain Valuation',
-    description: 'Estimate the aftermarket value of any domain algorithmically — useful if you\'re considering buying a premium or expired domain and want a price anchor.',
-    features: ['Algorithmic market value estimate', 'Value drivers explained (length, TLD, keywords)', 'Comparable sales context', 'Aftermarket listing detection'],
   },
   social: {
     title: 'Social Handles',
     description: 'Check if your brand name is free on Instagram, X (Twitter), TikTok, LinkedIn, YouTube, GitHub, and more — all in one call.',
     features: ['Checks 10+ major platforms simultaneously', 'Available / taken / unknown status per platform', 'Username normalisation (handles special chars)', 'Results in seconds'],
   },
-  brandlaunch: {
-    title: 'Brand Launch Bundle',
-    description: 'A pre-flight checklist that combines domain availability, social handles, typo threats, and health checks into one comprehensive report. Run this before you launch.',
-    features: ['Domain availability across key TLDs', 'Social handle availability', 'Typosquatting threat scan', 'Domain health and DNS check', 'Single credit-efficient API call'],
-  },
   pricing: {
     title: 'Registrar Pricing',
     description: 'Compare registration and renewal prices for a TLD across major registrars — Namecheap, GoDaddy, Cloudflare, Google Domains, and more.',
     features: ['Registration vs renewal price comparison', 'Lists all major registrars', 'Highlights cheapest renewal (renewal trap check)', 'ICANN fee breakdown'],
-  },
-  watchlist: {
-    title: 'Expiry Watcher',
-    description: 'Add domains to your watchlist and monitor when they\'re about to expire or become available. Useful for catching a competitor\'s lapsed domain or one you\'ve been eyeing.',
-    features: ['Add / remove domains from watchlist', 'View expiring domains at a glance', 'Alerts when a watched domain becomes available', 'Tracks registration renewal dates'],
-  },
-  brandmonitor: {
-    title: 'Copycat Detector',
-    description: 'Monitor for newly registered domains that look like yours — typosquatters, phishing lookalikes, and brand impersonators. Run a scan or set up ongoing monitoring.',
-    features: ['Scans for lookalike domain registrations', 'Detects typosquatting and homoglyph attacks', 'Ongoing brand monitor (set and forget)', 'Returns threat severity per variant'],
   },
 };
 
@@ -77,22 +43,17 @@ const MODE_GROUPS = [
   {
     label: 'Discover',
     icon: 'sparkles',
-    modes: ['suggest', 'score', 'compare', 'typos', 'availability'],
+    modes: ['suggest', 'score', 'compare'],
   },
   {
     label: 'Research',
     icon: 'search',
-    modes: ['overview', 'competitor', 'value'],
+    modes: ['overview'],
   },
   {
     label: 'Launch Readiness',
     icon: 'shield-check',
-    modes: ['social', 'brandlaunch', 'pricing'],
-  },
-  {
-    label: 'Monitor',
-    icon: 'eye',
-    modes: ['watchlist', 'brandmonitor'],
+    modes: ['social', 'pricing'],
   },
 ];
 
@@ -100,16 +61,9 @@ const MODE_LABELS = {
   suggest: 'Name Generator',
   score: 'Name Scorer',
   compare: 'Compare Names',
-  typos: 'Typo Variants',
-  availability: 'Availability Check',
   overview: 'Domain Profile',
-  competitor: 'Competitor Intel',
-  value: 'Domain Valuation',
   social: 'Social Handles',
-  brandlaunch: 'Brand Launch Bundle',
   pricing: 'Registrar Pricing',
-  watchlist: 'Expiry Watcher',
-  brandmonitor: 'Copycat Detector',
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -323,92 +277,6 @@ function SmartResult({ mode, data }) {
     }
   }
 
-  // Availability — response: { name, results[{domain, tld, available, source}], meta }
-  if (mode === 'availability' && data.results) {
-    const available = data.results.filter(r => r.available === true);
-    const taken = data.results.filter(r => r.available !== true);
-    return (
-      <div className="mt-4 space-y-3">
-        {available.length > 0 && (
-          <div>
-            <p className="text-xs font-medium mb-1.5" style={{ color: '#16a34a' }}>Available ({available.length})</p>
-            <div className="space-y-1">
-              {available.map((r, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                  <span className="font-mono text-sm font-medium" style={{ color: '#15803d' }}>{r.domain}</span>
-                  <span className="text-xs" style={{ color: '#16a34a' }}>Available</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {taken.length > 0 && (
-          <div>
-            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Taken ({taken.length})</p>
-            <div className="space-y-1">
-              {taken.map((r, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-                  <span className="font-mono text-sm" style={{ color: 'var(--color-muted)' }}>{r.domain}</span>
-                  <span className="text-xs" style={{ color: '#dc2626' }}>Taken</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {data.meta && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{data.meta.available_count ?? available.length} of {data.results.length} TLDs available</p>}
-      </div>
-    );
-  }
-
-  // Typos — response: { domain, registered_typos[{domain,type,risk,registered}], threat_level, risk_summary }
-  if (mode === 'typos') {
-    const registered = data.registered_typos || [];
-    const threatLevel = data.threat_level;
-    const summary = data.risk_summary || {};
-    const riskColor = { critical: '#dc2626', high: '#f59e0b', medium: '#3b82f6', low: '#16a34a' };
-    return (
-      <div className="mt-4 space-y-3">
-        {threatLevel && (
-          <div className="flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <div>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Threat level</p>
-              <p className="font-bold capitalize" style={{ color: riskColor[threatLevel] || 'var(--color-text)' }}>{threatLevel}</p>
-            </div>
-            <div className="flex gap-3 text-xs">
-              {Object.entries(summary).map(([level, count]) => count > 0 && (
-                <div key={level} className="text-center">
-                  <div className="font-bold" style={{ color: riskColor[level] || 'var(--color-muted)' }}>{count}</div>
-                  <div style={{ color: 'var(--color-muted)' }} className="capitalize">{level}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {registered.length > 0 ? (
-          <div>
-            <p className="text-xs font-medium mb-2" style={{ color: '#dc2626' }}>⚠ Registered variants ({registered.length}) — brand protection risks</p>
-            <div className="space-y-1.5">
-              {registered.map((v, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-                  <span className="text-sm font-mono" style={{ color: '#dc2626' }}>{v.domain}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>{v.type?.replace(/_/g,' ')}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: riskColor[v.risk] || '#888', color: '#fff' }}>{v.risk}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm" style={{ color: '#16a34a' }}>✓ No registered typo variants found — your brand looks clean.</p>
-        )}
-        {data.permutations_generated > 0 && (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{data.permutations_generated} permutations checked · {data.available_typos ?? 0} available</p>
-        )}
-      </div>
-    );
-  }
-
   // Social handles — response: { handle, availability:{github:{available,profile_url,...},...}, summary }
   if (mode === 'social' && data.availability) {
     const entries = Object.entries(data.availability).map(([platform, info]) => ({ platform, ...info }));
@@ -443,24 +311,6 @@ function SmartResult({ mode, data }) {
     );
   }
 
-  // Watchlist
-  if (mode === 'watchlist' && (data.domains || data.items || data.watchlist)) {
-    const items = data.domains || data.items || data.watchlist || [];
-    if (items.length === 0) {
-      return <p className="mt-4 text-sm" style={{ color: 'var(--color-muted)' }}>Your watchlist is empty. Add domains below.</p>;
-    }
-    return (
-      <div className="mt-4 space-y-2">
-        {items.map((d, i) => (
-          <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-            <span className="text-sm font-mono" style={{ color: 'var(--color-text)' }}>{d.domain || d}</span>
-            {d.expiry && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Expires {d.expiry}</span>}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   // Fallback: raw JSON
   return <ResultCard data={data} />;
 }
@@ -490,16 +340,20 @@ function SuggestPanel() {
     <div className="space-y-3">
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Describe your business or paste keywords</label>
-        <textarea
-          rows={3}
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder="e.g. We design and install bespoke wine fridges for luxury hotels and high-net-worth individuals"
-          className="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
+        <Tooltip text="Plain English works best — the AI turns this description into 16 brand-name candidates.">
+          <textarea
+            rows={3}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="e.g. We design and install bespoke wine fridges for luxury hotels and high-net-worth individuals"
+            className="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </Tooltip>
       </div>
-      <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim()} />
+      <Tooltip text="Generate 16 names and check their availability across 6 common TLDs.">
+        <RunBtn onClick={run} busy={busy} label="Generate Names" disabled={!q.trim()} />
+      </Tooltip>
       <ErrMsg msg={err} />
       <SmartResult mode="suggest" data={result} />
     </div>
@@ -527,8 +381,12 @@ function ScorePanel() {
 
   return (
     <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Brand name (with or without TLD)" placeholder="e.g. launchpad or launchpad.io" />
-      <RunBtn onClick={run} busy={busy} label="Score Name" disabled={!domain.trim()} />
+      <Tooltip text="The name you're considering — a TLD like .com is optional, it's stripped before scoring.">
+        <div><DomainInput value={domain} onChange={setDomain} label="Brand name (with or without TLD)" placeholder="e.g. launchpad or launchpad.io" /></div>
+      </Tooltip>
+      <Tooltip text="Get a memorability, spelling-difficulty, and brandability score for this name.">
+        <RunBtn onClick={run} busy={busy} label="Score Name" disabled={!domain.trim()} />
+      </Tooltip>
       <ErrMsg msg={err} />
       <SmartResult mode="score" data={result} />
     </div>
@@ -562,95 +420,31 @@ function ComparePanel() {
     <div className="space-y-3">
       <label className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Brand name candidates (2–5)</label>
       {names.map((n, i) => (
-        <input
-          key={i}
-          type="text"
-          value={n}
-          onChange={e => setName(i, e.target.value)}
-          placeholder={`Name ${i + 1}`}
-          className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
+        <Tooltip key={i} text="Enter a candidate name to include in the head-to-head comparison.">
+          <input
+            type="text"
+            value={n}
+            onChange={e => setName(i, e.target.value)}
+            placeholder={`Name ${i + 1}`}
+            className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </Tooltip>
       ))}
       <div className="flex items-center gap-2">
         {names.length < 5 && (
-          <button onClick={addName} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-            + Add name
-          </button>
+          <Tooltip text="Add another candidate name (up to 5 total).">
+            <button onClick={addName} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+              + Add name
+            </button>
+          </Tooltip>
         )}
-        <RunBtn onClick={run} busy={busy} label="Compare" />
+        <Tooltip text="Rank all entered names side-by-side across every scoring dimension.">
+          <RunBtn onClick={run} busy={busy} label="Compare" />
+        </Tooltip>
       </div>
       <ErrMsg msg={err} />
       <SmartResult mode="compare" data={result} />
-    </div>
-  );
-}
-
-function TyposPanel() {
-  const [domain, setDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const run = useCallback(async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Scanning typo variants…', 'This checks availability for every variant.');
-    try {
-      const res = await api.get(`/api/domains/typos?domain=${encodeURIComponent(domain.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [domain]);
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Your domain" placeholder="e.g. mybrand.com" />
-      <RunBtn onClick={run} busy={busy} label="Find Typos" disabled={!domain.trim()} />
-      <ErrMsg msg={err} />
-      <SmartResult mode="typos" data={result} />
-    </div>
-  );
-}
-
-function AvailabilityPanel() {
-  const [name, setName] = useState('');
-  const [tlds, setTlds] = useState('com,com.au,io,ai,co,app,net,net.au,org,org.au,dev');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const run = useCallback(async () => {
-    if (!name.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Checking availability…');
-    try {
-      const res = await api.get(`/api/domains/availability?name=${encodeURIComponent(name.trim())}&tlds=${encodeURIComponent(tlds)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [name, tlds]);
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={name} onChange={setName} label="Name (without TLD)" placeholder="e.g. launchpad" />
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>TLDs to check (comma-separated)</label>
-        <input
-          type="text"
-          value={tlds}
-          onChange={e => setTlds(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
-      </div>
-      <RunBtn onClick={run} busy={busy} label="Check Availability" disabled={!name.trim()} />
-      <ErrMsg msg={err} />
-      <SmartResult mode="availability" data={result} />
     </div>
   );
 }
@@ -676,76 +470,14 @@ function OverviewPanel() {
 
   return (
     <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Domain to research" placeholder="e.g. competitor.com" />
-      <RunBtn onClick={run} busy={busy} label="Get Profile" disabled={!domain.trim()} />
+      <Tooltip text="Any registered domain — get its WHOIS history, age, lifecycle phase, and reputation signals.">
+        <div><DomainInput value={domain} onChange={setDomain} label="Domain to research" placeholder="e.g. competitor.com" /></div>
+      </Tooltip>
+      <Tooltip text="Pull the full WHOIS, lifecycle, and reputation report for this domain.">
+        <RunBtn onClick={run} busy={busy} label="Get Profile" disabled={!domain.trim()} />
+      </Tooltip>
       <ErrMsg msg={err} />
       <ResultCard data={result} />
-    </div>
-  );
-}
-
-function CompetitorPanel() {
-  const [domain, setDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const run = useCallback(async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Running competitor analysis…', 'Discovering infrastructure, tech stack, and associated domains.');
-    try {
-      const res = await api.get(`/api/domains/competitor?domain=${encodeURIComponent(domain.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [domain]);
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Competitor domain" placeholder="e.g. competitor.com" />
-      <RunBtn onClick={run} busy={busy} label="Analyse Competitor" disabled={!domain.trim()} />
-      <ErrMsg msg={err} />
-      <ResultCard data={result} />
-    </div>
-  );
-}
-
-function ValuePanel() {
-  const [domain, setDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const run = useCallback(async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Estimating domain value…');
-    try {
-      const res = await api.get(`/api/domains/value?domain=${encodeURIComponent(domain.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [domain]);
-
-  const val = result?.value || result?.estimate || result?.estimated_value;
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Domain to value" placeholder="e.g. bestbrand.com" />
-      <RunBtn onClick={run} busy={busy} label="Estimate Value" disabled={!domain.trim()} />
-      <ErrMsg msg={err} />
-      {result && val && (
-        <div className="mt-3 px-4 py-3 rounded-xl" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-          <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Estimated market value</p>
-          <p className="text-3xl font-bold" style={{ color: 'var(--color-primary)' }}>{typeof val === 'number' ? `$${val.toLocaleString()}` : val}</p>
-        </div>
-      )}
-      {result && <ResultCard data={result} />}
     </div>
   );
 }
@@ -771,39 +503,14 @@ function SocialPanel() {
 
   return (
     <div className="space-y-3">
-      <DomainInput value={username} onChange={setUsername} label="Brand / username to check" placeholder="e.g. mybrand" />
-      <RunBtn onClick={run} busy={busy} label="Check Handles" disabled={!username.trim()} />
+      <Tooltip text="The handle you'd use across social platforms — checked against Instagram, X, TikTok, LinkedIn, YouTube, GitHub and more.">
+        <div><DomainInput value={username} onChange={setUsername} label="Brand / username to check" placeholder="e.g. mybrand" /></div>
+      </Tooltip>
+      <Tooltip text="Check this handle's availability across every supported platform at once.">
+        <RunBtn onClick={run} busy={busy} label="Check Handles" disabled={!username.trim()} />
+      </Tooltip>
       <ErrMsg msg={err} />
       <SmartResult mode="social" data={result} />
-    </div>
-  );
-}
-
-function BrandLaunchPanel() {
-  const [domain, setDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const run = useCallback(async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Running brand launch checklist…', 'Combining domain, social, typo, and health checks.');
-    try {
-      const res = await api.get(`/api/domains/brand-launch?domain=${encodeURIComponent(domain.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  }, [domain]);
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Your domain" placeholder="e.g. mybrand.com" />
-      <RunBtn onClick={run} busy={busy} label="Run Pre-Launch Check" disabled={!domain.trim()} />
-      <ErrMsg msg={err} />
-      <ResultCard data={result} />
     </div>
   );
 }
@@ -829,168 +536,13 @@ function PricingPanel() {
 
   return (
     <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Domain (used to detect TLD)" placeholder="e.g. mybrand.io" />
-      <RunBtn onClick={run} busy={busy} label="Compare Prices" disabled={!domain.trim()} />
+      <Tooltip text="Only the TLD (e.g. .io) is used — prices are compared for that extension across registrars.">
+        <div><DomainInput value={domain} onChange={setDomain} label="Domain (used to detect TLD)" placeholder="e.g. mybrand.io" /></div>
+      </Tooltip>
+      <Tooltip text="Compare registration and renewal prices across major registrars for this TLD.">
+        <RunBtn onClick={run} busy={busy} label="Compare Prices" disabled={!domain.trim()} />
+      </Tooltip>
       <ErrMsg msg={err} />
-      <ResultCard data={result} />
-    </div>
-  );
-}
-
-function WatchlistPanel() {
-  const [list, setList] = useState(null);
-  const [expiring, setExpiring] = useState(null);
-  const [addDomain, setAddDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-
-  const load = useCallback(async () => {
-    try {
-      const [r1, r2] = await Promise.all([
-        api.get('/api/domains/watchlist'),
-        api.get('/api/domains/watchlist/expiring'),
-      ]);
-      const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-      setList(d1);
-      setExpiring(d2);
-    } catch (e) { setErr(e.message); }
-  }, []);
-
-  React.useEffect(() => { load(); }, []);
-
-  const add = async () => {
-    if (!addDomain.trim()) return;
-    setBusy(true); setErr('');
-    try {
-      const res = await api.post('/api/domains/watchlist', { domain: addDomain.trim() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setAddDomain('');
-      load();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-
-  const remove = async (domain) => {
-    try {
-      await api.delete(`/api/domains/watchlist?domain=${encodeURIComponent(domain)}`);
-      load();
-    } catch (e) { setErr(e.message); }
-  };
-
-  const items = list?.domains || list?.items || list?.watchlist || [];
-  const expiringItems = expiring?.domains || expiring?.items || [];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={addDomain}
-          onChange={e => setAddDomain(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && add()}
-          placeholder="Add domain to watch…"
-          className="flex-1 px-3 py-2 rounded-lg text-sm border outline-none"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
-        <RunBtn onClick={add} busy={busy} label="Add" disabled={!addDomain.trim()} />
-      </div>
-      <ErrMsg msg={err} />
-      {expiringItems.length > 0 && (
-        <div>
-          <p className="text-xs font-medium mb-2" style={{ color: '#f59e0b' }}>⏰ Expiring soon</p>
-          {expiringItems.map((d, i) => (
-            <div key={i} className="flex justify-between items-center px-3 py-2 rounded-lg mb-1" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-              <span className="text-sm font-mono">{d.domain || d}</span>
-              {d.expiry && <span className="text-xs" style={{ color: '#92400e' }}>{d.expiry}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-      {items.length > 0 ? (
-        <div>
-          <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>Watched domains ({items.length})</p>
-          <div className="space-y-1">
-            {items.map((d, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-                <span className="text-sm font-mono" style={{ color: 'var(--color-text)' }}>{d.domain || d}</span>
-                <button onClick={() => remove(d.domain || d)} className="text-xs hover:opacity-60 transition-opacity" style={{ color: '#ef4444' }}>Remove</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No domains in your watchlist yet.</p>
-      )}
-    </div>
-  );
-}
-
-function BrandMonitorPanel() {
-  const [domain, setDomain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [monitors, setMonitors] = useState(null);
-  const [err, setErr] = useState('');
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const loadMonitors = useCallback(async () => {
-    try {
-      const res = await api.get('/api/domains/brand-monitor');
-      const data = await res.json();
-      setMonitors(data);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => { loadMonitors(); }, []);
-
-  const scan = async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr(''); setResult(null);
-    startProcessing('Scanning for copycats…', 'Looking for lookalike and typosquatting domains.');
-    try {
-      const res = await api.get(`/api/domains/brand-monitor/scan?domain=${encodeURIComponent(domain.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); stopProcessing(); }
-  };
-
-  const createMonitor = async () => {
-    if (!domain.trim()) return;
-    setBusy(true); setErr('');
-    try {
-      const res = await api.post('/api/domains/brand-monitor', { domain: domain.trim() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      loadMonitors();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="space-y-3">
-      <DomainInput value={domain} onChange={setDomain} label="Your domain to protect" placeholder="e.g. mybrand.com" />
-      <div className="flex gap-2">
-        <RunBtn onClick={scan} busy={busy} label="Scan Now" disabled={!domain.trim()} />
-        <button
-          onClick={createMonitor}
-          disabled={busy || !domain.trim()}
-          className="px-4 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-60"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', opacity: busy || !domain.trim() ? 0.4 : 1 }}
-        >
-          Add Monitor
-        </button>
-      </div>
-      <ErrMsg msg={err} />
-      {monitors && (monitors.monitors || monitors.items || []).length > 0 && (
-        <div>
-          <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>Active monitors</p>
-          {(monitors.monitors || monitors.items).map((m, i) => (
-            <div key={i} className="px-3 py-2 rounded-lg text-sm font-mono mb-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-              {m.domain || m}
-            </div>
-          ))}
-        </div>
-      )}
       <ResultCard data={result} />
     </div>
   );
@@ -1002,16 +554,9 @@ const PANELS = {
   suggest: SuggestPanel,
   score: ScorePanel,
   compare: ComparePanel,
-  typos: TyposPanel,
-  availability: AvailabilityPanel,
   overview: OverviewPanel,
-  competitor: CompetitorPanel,
-  value: ValuePanel,
   social: SocialPanel,
-  brandlaunch: BrandLaunchPanel,
   pricing: PricingPanel,
-  watchlist: WatchlistPanel,
-  brandmonitor: BrandMonitorPanel,
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -1043,39 +588,44 @@ export default function DomainsPage() {
                 <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
                   {group.label}
                 </span>
-                <button
-                  onClick={() => {
-                    const first = group.modes[0];
-                    if (TOOL_HELP[first]) setHelpTool(first);
-                    else setHelpTool(group.modes.find(m => TOOL_HELP[m]));
-                  }}
-                  className="text-xs hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-muted)' }}
-                  data-tip={`About ${group.label}`}
-                >
-                  ?
-                </button>
-              </div>
-              {group.modes.map(m => (
-                <div key={m} className="flex items-center group">
+                <Tooltip text={`About the ${group.label} tools.`}>
                   <button
-                    onClick={() => setMode(m)}
-                    className="flex-1 text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-                    style={{
-                      background: mode === m ? 'var(--color-bg)' : 'transparent',
-                      color: mode === m ? 'var(--color-primary)' : 'var(--color-text)',
-                      fontWeight: mode === m ? 500 : 400,
+                    onClick={() => {
+                      const first = group.modes[0];
+                      if (TOOL_HELP[first]) setHelpTool(first);
+                      else setHelpTool(group.modes.find(m => TOOL_HELP[m]));
                     }}
-                  >
-                    {MODE_LABELS[m]}
-                  </button>
-                  <button
-                    onClick={() => setHelpTool(m)}
-                    className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity text-xs w-5 h-5 flex items-center justify-center rounded"
+                    className="text-xs hover:opacity-60 transition-opacity"
                     style={{ color: 'var(--color-muted)' }}
                   >
                     ?
                   </button>
+                </Tooltip>
+              </div>
+              {group.modes.map(m => (
+                <div key={m} className="flex items-center group">
+                  <Tooltip text={TOOL_HELP[m]?.description || MODE_LABELS[m]}>
+                    <button
+                      onClick={() => setMode(m)}
+                      className="flex-1 text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                      style={{
+                        background: mode === m ? 'var(--color-bg)' : 'transparent',
+                        color: mode === m ? 'var(--color-primary)' : 'var(--color-text)',
+                        fontWeight: mode === m ? 500 : 400,
+                      }}
+                    >
+                      {MODE_LABELS[m]}
+                    </button>
+                  </Tooltip>
+                  <Tooltip text={`See what ${MODE_LABELS[m]} does.`}>
+                    <button
+                      onClick={() => setHelpTool(m)}
+                      className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity text-xs w-5 h-5 flex items-center justify-center rounded"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      ?
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>
@@ -1090,13 +640,15 @@ export default function DomainsPage() {
             <h1 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
               {MODE_LABELS[mode]}
             </h1>
-            <button
-              onClick={() => setHelpTool(mode)}
-              className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              ?
-            </button>
+            <Tooltip text={`See the full feature list for ${MODE_LABELS[mode]}.`}>
+              <button
+                onClick={() => setHelpTool(mode)}
+                className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                ?
+              </button>
+            </Tooltip>
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {TOOL_HELP[mode]?.description}

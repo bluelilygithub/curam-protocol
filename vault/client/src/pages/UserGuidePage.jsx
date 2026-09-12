@@ -1791,9 +1791,13 @@ function UserGuidePage() {
 
         <SubHeading>Domain</SubHeading>
         <P>
-          Domain and brand research: name suggestions, availability and typo-squat checks, a domain scoring/compare
-          tool, competitor and brand-launch overviews, pricing lookups, and a watchlist plus brand-monitor scan for
-          domains you want to keep an eye on.
+          Domain and brand research, trimmed to the tools that pull real weight: an AI name generator that checks
+          availability across six TLDs, a name scorer and head-to-head comparer for shortlisting, a full WHOIS/domain
+          profile lookup, social-handle availability across major platforms, and registrar price comparison to avoid
+          the renewal-price trap. Typo-squat scanning, competitor infrastructure fingerprinting, domain valuation, a
+          bundled pre-launch checklist, an expiry watchlist, and copycat monitoring were removed — they overlapped
+          with the tools above, served a narrower audience than this app's other users, or (the watchlist) implied an
+          alert mechanism that was never actually wired up.
         </P>
 
         <SubHeading>Lighthouse (HTML)</SubHeading>
