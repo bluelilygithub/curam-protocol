@@ -226,6 +226,7 @@ export default function IconLibraryGenerator({ getIcon }) {
             placeholder="e.g. finance, healthcare, social media"
             className="grow px-3 py-2 rounded-xl border text-sm"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            title="The theme or topic the icon set should represent."
           />
           <button
             type="button"
@@ -233,6 +234,7 @@ export default function IconLibraryGenerator({ getIcon }) {
             disabled={refsLoading || !subject.trim()}
             className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
             style={{ background: 'var(--color-primary)' }}
+            title="Look up existing icons related to this subject to use as a style reference."
           >
             {refsLoading ? spin('loader') : ic('search')}
             {refsLoading ? 'Finding…' : 'Find references'}
@@ -260,36 +262,36 @@ export default function IconLibraryGenerator({ getIcon }) {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Count: {count}</label>
-              <input type="range" min="5" max="20" value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full" />
+              <input type="range" min="5" max="20" value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-full" title="How many icons to generate in this set." />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
               <div className="flex items-center gap-2">
-                <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
-                <input type="text" value={color} onChange={(e) => setColor(e.target.value)} className="w-24 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour applied to every generated icon." />
+                <input type="text" value={color} onChange={(e) => setColor(e.target.value)} className="w-24 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Hex code of the icon colour." />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Stroke weight</label>
-              <select value={strokeWeight} onChange={(e) => setStrokeWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={strokeWeight} onChange={(e) => setStrokeWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How thick the icon outlines are.">
                 {STROKE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fill style</label>
-              <select value={fillStyle} onChange={(e) => setFillStyle(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={fillStyle} onChange={(e) => setFillStyle(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Whether icons are line-only, solid, or a two-tone duotone style.">
                 {FILL_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Corners</label>
-              <select value={corners} onChange={(e) => setCorners(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={corners} onChange={(e) => setCorners(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How sharp or rounded the icon corners are.">
                 {CORNER_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Detail level</label>
-              <select value={detail} onChange={(e) => setDetail(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={detail} onChange={(e) => setDetail(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How much visual detail each icon includes.">
                 {DETAIL_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
@@ -301,6 +303,7 @@ export default function IconLibraryGenerator({ getIcon }) {
             disabled={generating}
             className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
             style={{ background: 'var(--color-primary)' }}
+            title="Generate the icon set using the selected references and style settings."
           >
             {generating ? spin('loader') : ic('sparkles')}
             {generating ? 'Generating…' : `Generate ${count} icons`}
@@ -316,10 +319,10 @@ export default function IconLibraryGenerator({ getIcon }) {
               3 · {generated.length} icons · {selectedIcons.size} selected
             </label>
             <div className="flex gap-2">
-              <button type="button" onClick={downloadSelected} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>
+              <button type="button" onClick={downloadSelected} className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Download the icons you've selected (or all of them if none are selected) as separate SVG files.">
                 Download selected
               </button>
-              <button type="button" onClick={downloadAll} className="text-xs px-3 py-1.5 rounded-lg text-white hover:opacity-90" style={{ background: 'var(--color-primary)' }}>
+              <button type="button" onClick={downloadAll} className="text-xs px-3 py-1.5 rounded-lg text-white hover:opacity-90" style={{ background: 'var(--color-primary)' }} title="Download every generated icon as a separate SVG file.">
                 Download all
               </button>
             </div>
@@ -366,16 +369,17 @@ export default function IconLibraryGenerator({ getIcon }) {
               placeholder="What's missing or what should change? e.g. add a 'mobile payment' and a 'savings' icon; make them a touch more rounded (optional)"
               className="w-full px-3 py-2 rounded-xl border text-sm"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              title="Optional notes on what to add or change in the next batch of icons."
             />
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={addMore} onChange={(e) => setAddMore(e.target.checked)} />
+                <input type="checkbox" checked={addMore} onChange={(e) => setAddMore(e.target.checked)} title="Enable generating another batch of icons in the same style." />
                 <span className="text-xs" style={{ color: 'var(--color-text)' }}>Generate additional icons</span>
               </label>
               {addMore && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs" style={{ color: 'var(--color-muted)' }}>How many:</span>
-                  <input type="number" min="1" max="20" value={moreCount} onChange={(e) => setMoreCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 px-2 py-1.5 rounded-lg border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  <input type="number" min="1" max="20" value={moreCount} onChange={(e) => setMoreCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} className="w-16 px-2 py-1.5 rounded-lg border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How many additional icons to generate." />
                 </div>
               )}
               <button

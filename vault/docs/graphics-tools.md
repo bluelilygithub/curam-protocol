@@ -111,7 +111,7 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **Import by URL** — Convert, Crop/Resize, Adjust, Effects and Background each offer a "…or paste an image URL" row backed by `POST /api/graphics/fetch-url` (server-side fetch sidesteps browser CORS).
 - **Export…** — client-side re-encode to PNG/JPG/WebP/AVIF with quality, max-side, target-KB, and JPG background controls.
 - **Keyboard shortcuts** — `/` focuses the tool search, `Esc` closes the full-screen preview (or clears the search), and `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` undo/redo in Annotate and Redact.
-- **Tooltips** — every sidebar tool button carries a one-line native `title` tooltip describing what it does; there's no dedicated Tooltip component in the app yet, so this uses the plain HTML attribute rather than a new UI dependency.
+- **Tooltips** — every sidebar tool button, and every in-panel option (sliders, dropdowns, checkboxes, position pickers, colour pickers, action buttons — ~325 controls across all 38 tools plus AI Icon Library's own component) carries a one-line native `title` tooltip explaining what it does. There's no dedicated Tooltip component in the app yet, so this uses the plain HTML attribute rather than a new UI dependency. Three undocumented mode blocks in the code (`printready`, `eraser`, `extract`) aren't wired into the sidebar or covered here — left as-is pending a decision on whether to finish or drop them.
 
 ---
 
