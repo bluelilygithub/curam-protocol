@@ -213,9 +213,101 @@ function FavCard({ fav, onPlay, onRemove }) {
   );
 }
 
+// ── Transcript panel ──────────────────────────────────────────────────────────
+
+function TranscriptPanel({ video, onClose }) {
+  const addToast = useToastStore((s) => s.addToast);
+  const [loading, setLoading] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [error, setError] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [summary, setSummary] = useState('');
+  const [showSummary, setShowSummary] = useState(false);
+
+  async function loadTranscript(summarize) {
+    if (summarize) setSummarizing(true); else setLoading(true);
+    setError('');
+    try {
+      const data = await api.post('/api/youtube/transcript', { videoId: video.id, summarize }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setTranscript(data.transcript || '');
+      if (data.summary) { setSummary(data.summary); setShowSummary(true); }
+    } catch (err) {
+      setError(err.message || 'Could not load the transcript.');
+    } finally {
+      setLoading(false);
+      setSummarizing(false);
+    }
+  }
+
+  useEffect(() => { loadTranscript(false); }, [video.id]);
+
+  function copyText(text) {
+    navigator.clipboard?.writeText(text).then(
+      () => addToast({ type: 'success', message: 'Copied to clipboard.' }),
+      () => addToast({ type: 'error', message: 'Could not copy.' })
+    );
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '0.9rem 1.1rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)', flex: 1, minWidth: 0 }}>{video.title}</p>
+          <Tooltip text="Close this panel.">
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', fontSize: '1rem' }}>✕</button>
+          </Tooltip>
+        </div>
+
+        <div style={{ padding: '0.75rem 1.1rem', display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--color-border)' }}>
+          <Tooltip text="Show the full transcript text.">
+            <button
+              onClick={() => setShowSummary(false)}
+              disabled={loading}
+              style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: !showSummary ? 'var(--color-primary)' : 'var(--color-bg)', color: !showSummary ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            >
+              Transcript
+            </button>
+          </Tooltip>
+          <Tooltip text="Ask the AI for a short summary of this transcript instead of the full text.">
+            <button
+              onClick={() => summary ? setShowSummary(true) : loadTranscript(true)}
+              disabled={loading || summarizing || !transcript}
+              style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: showSummary ? 'var(--color-primary)' : 'var(--color-bg)', color: showSummary ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)', opacity: (loading || summarizing || !transcript) ? 0.6 : 1 }}
+            >
+              {summarizing ? 'Summarizing…' : 'Summarize'}
+            </button>
+          </Tooltip>
+          <Tooltip text="Copy the text shown below to your clipboard.">
+            <button
+              onClick={() => copyText(showSummary ? summary : transcript)}
+              disabled={loading || (!transcript && !summary)}
+              style={{ ...btnBase, marginLeft: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Copy
+            </button>
+          </Tooltip>
+        </div>
+
+        <div style={{ padding: '1rem 1.1rem', overflowY: 'auto', flex: 1 }}>
+          {loading && <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>Fetching transcript…</p>}
+          {!loading && error && <p style={{ color: '#b91c1c', fontSize: '0.85rem' }}>{error}</p>}
+          {!loading && !error && (
+            <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)', margin: 0 }}>
+              {showSummary ? summary : transcript}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
-function VideoModal({ video, isFav, onClose, onToggleFav }) {
+function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
+  const [showTranscript, setShowTranscript] = useState(false);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -242,7 +334,19 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
               {video.channel}{video.viewCount ? ` · ${fmtViews(video.viewCount)}` : ''}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <Tooltip text="Fetch the caption transcript for this video, or an AI summary of it.">
+              <button onClick={() => setShowTranscript(true)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                Transcript
+              </button>
+            </Tooltip>
+            {video.channelId && onMoreFromChannel && (
+              <Tooltip text="See other videos from this same channel.">
+                <button onClick={() => onMoreFromChannel(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  More from this channel
+                </button>
+              </Tooltip>
+            )}
             <Tooltip text={isFav ? 'Remove this video from your saved favourites.' : 'Save this video to your favourites for quick access later.'}>
               <button onClick={() => onToggleFav(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFav ? '#fee2e2' : 'var(--color-bg)', border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`, color: isFav ? '#ef4444' : 'var(--color-muted)' }}>
                 {isFav ? '♥ Saved' : '♡ Save'}
@@ -261,6 +365,7 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
           </div>
         </div>
       </div>
+      {showTranscript && <TranscriptPanel video={video} onClose={() => setShowTranscript(false)} />}
     </div>
   );
 }
@@ -296,6 +401,16 @@ export default function YoutubePage() {
 
   const [activeVideo, setActiveVideo] = useState(null);
 
+  // Channel view — "More from this channel" swaps the results grid to a channel feed
+  const [channelView,  setChannelView]  = useState(null); // { channelId, channelName }
+  const [channelVideos, setChannelVideos] = useState([]);
+  const [channelLoading, setChannelLoading] = useState(false);
+
+  // Saved lists
+  const [lists,        setLists]        = useState([]);
+  const [openList,     setOpenList]     = useState(null); // { id, title, videos }
+  const [listLoading,  setListLoading]  = useState(false);
+
   useEffect(() => {
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
@@ -304,6 +419,7 @@ export default function YoutubePage() {
     }).catch(() => {});
     loadFavs();
     loadHistory();
+    loadLists();
   }, []);
 
   // When mic finishes, populate query and auto-search
@@ -326,6 +442,69 @@ export default function YoutubePage() {
     api.get('/api/youtube/history').then(r => r.json()).then((rows) => {
       setHistory(Array.isArray(rows) ? rows : []);
     }).catch(() => {});
+  }
+
+  function loadLists() {
+    api.get('/api/youtube/lists').then(r => r.json()).then((rows) => {
+      setLists(Array.isArray(rows) ? rows : []);
+    }).catch(() => {});
+  }
+
+  async function openMoreFromChannel(video) {
+    if (!video.channelId) return;
+    setActiveVideo(null);
+    setChannelView({ channelId: video.channelId, channelName: video.channel });
+    setChannelLoading(true);
+    setChannelVideos([]);
+    setTab('search');
+    try {
+      const data = await api.get(`/api/youtube/channel/${encodeURIComponent(video.channelId)}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setChannelVideos(data.videos ?? []);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Could not load this channel.' });
+    } finally {
+      setChannelLoading(false);
+    }
+  }
+
+  function backToSearch() {
+    setChannelView(null);
+    setChannelVideos([]);
+  }
+
+  async function saveCurrentSearchAsList() {
+    const source = channelView ? channelVideos : videos;
+    if (!source.length) return;
+    const title = window.prompt('Name this list:', channelView ? `${channelView.channelName} videos` : query);
+    if (!title?.trim()) return;
+    try {
+      await api.post('/api/youtube/lists', { title: title.trim(), videos: source });
+      addToast({ type: 'success', message: 'Saved as a list.' });
+      loadLists();
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Could not save this list.' });
+    }
+  }
+
+  async function openSavedList(list) {
+    setListLoading(true);
+    setOpenList(null);
+    try {
+      const data = await api.get(`/api/youtube/lists/${list.id}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setOpenList(data);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Could not load this list.' });
+    } finally {
+      setListLoading(false);
+    }
+  }
+
+  async function deleteSavedList(id) {
+    await api.delete(`/api/youtube/lists/${id}`).catch(() => {});
+    setLists((l) => l.filter((x) => x.id !== id));
+    setOpenList((o) => (o && o.id === id ? null : o));
   }
 
   async function runSearch(rawInput, overrideParams = null) {
@@ -439,6 +618,7 @@ export default function YoutubePage() {
     search: 'This search\'s results.',
     favourites: 'Videos you\'ve saved for quick access.',
     history: 'Your past searches — click Re-run to search again.',
+    lists: 'Named lists of results you\'ve saved to come back to later.',
   };
 
   const tabBtn = (key, label, badge) => (
@@ -588,6 +768,7 @@ export default function YoutubePage() {
         {tabBtn('search',     'Results',    videos.length)}
         {tabBtn('favourites', 'Favourites', favs.length)}
         {tabBtn('history',    'History',    history.length)}
+        {tabBtn('lists',      'Lists',      lists.length)}
       </div>
 
       {/* Error */}
@@ -600,12 +781,25 @@ export default function YoutubePage() {
       {/* ── Search Results ─────────────────────────────────────────────────── */}
       {tab === 'search' && (
         <div>
-          {isBusy && (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-              {parsing ? 'Understanding your request…' : 'Searching YouTube…'}
+          {channelView && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <Tooltip text="Go back to your search results.">
+                <button onClick={backToSearch} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  ← Back to search
+                </button>
+              </Tooltip>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', margin: 0 }}>
+                Videos from <strong style={{ color: 'var(--color-text)' }}>{channelView.channelName}</strong>
+              </p>
             </div>
           )}
-          {!isBusy && videos.length === 0 && (
+
+          {(channelView ? channelLoading : isBusy) && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
+              {channelView ? 'Loading channel videos…' : (parsing ? 'Understanding your request…' : 'Searching YouTube…')}
+            </div>
+          )}
+          {!channelView && !isBusy && videos.length === 0 && (
             <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="#d1d5db" style={{ margin: '0 auto 1rem' }}>
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
@@ -615,13 +809,27 @@ export default function YoutubePage() {
               </p>
             </div>
           )}
-          {!isBusy && videos.length > 0 && (
+          {channelView && !channelLoading && channelVideos.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
+              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No videos found for this channel.</p>
+            </div>
+          )}
+          {((channelView && !channelLoading && channelVideos.length > 0) || (!channelView && !isBusy && videos.length > 0)) && (
             <>
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.75rem' }}>
-                Showing {videos.length} of ~{totalResults.toLocaleString()} results
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: 0 }}>
+                  {channelView
+                    ? `Showing ${channelVideos.length} videos`
+                    : `Showing ${videos.length} of ~${totalResults.toLocaleString()} results`}
+                </p>
+                <Tooltip text="Save this whole set of results as a named list you can come back to later.">
+                  <button onClick={saveCurrentSearchAsList} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                    Save this search as a list
+                  </button>
+                </Tooltip>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-                {videos.map((v) => (
+                {(channelView ? channelVideos : videos).map((v) => (
                   <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
                 ))}
               </div>
@@ -701,6 +909,67 @@ export default function YoutubePage() {
         </div>
       )}
 
+      {/* ── Lists ──────────────────────────────────────────────────────────── */}
+      {tab === 'lists' && (
+        <div>
+          {openList ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Tooltip text="Go back to your saved lists.">
+                  <button onClick={() => setOpenList(null)} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                    ← Back to lists
+                  </button>
+                </Tooltip>
+                <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', margin: 0 }}>{openList.title}</p>
+                <Tooltip text="Permanently delete this saved list.">
+                  <button onClick={() => deleteSavedList(openList.id)} style={{ ...btnBase, marginLeft: 'auto', padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: '#fee2e2', border: '1px solid #fca5a5', color: '#ef4444' }}>
+                    Delete list
+                  </button>
+                </Tooltip>
+              </div>
+              {openList.videos.length === 0 ? (
+                <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>This list has no videos.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                  {openList.videos.map((v) => (
+                    <VideoCard
+                      key={v.videoId}
+                      video={{ id: v.videoId, title: v.title, channel: v.channel, thumbnail: v.thumbnail, duration: v.duration, viewCount: v.viewCount, publishedAt: v.publishedAt }}
+                      isFav={favSet.has(v.videoId)}
+                      onPlay={setActiveVideo}
+                      onToggleFav={toggleFav}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : listLoading ? (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Loading list…</div>
+          ) : lists.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
+              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No saved lists yet. Run a search, then use "Save this search as a list".</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {lists.map((l) => (
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>{l.title}</p>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: '2px 0 0' }}>{l.itemCount} video{l.itemCount === 1 ? '' : 's'} · {timeAgo(l.createdAt)}</p>
+                  </div>
+                  <Tooltip text="Open this list's videos.">
+                    <button onClick={() => openSavedList(l)} style={{ fontSize: '0.75rem', fontWeight: 600, padding: '4px 10px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontFamily: 'inherit' }}>Open</button>
+                  </Tooltip>
+                  <Tooltip text="Permanently delete this saved list.">
+                    <button onClick={() => deleteSavedList(l.id)} style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Video Modal */}
       {activeVideo && (
         <VideoModal
@@ -708,6 +977,7 @@ export default function YoutubePage() {
           isFav={favSet.has(activeVideo.id)}
           onClose={() => setActiveVideo(null)}
           onToggleFav={toggleFav}
+          onMoreFromChannel={openMoreFromChannel}
         />
       )}
 

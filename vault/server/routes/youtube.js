@@ -21,6 +21,7 @@ const { requireAuth } = require('../middleware/auth');
 const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { logUsage } = require('../utils/logUsage');
+const { fetchYoutubeTranscript } = require('../services/youtubeTranscript');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -111,6 +112,43 @@ router.post('/parse-query', async (req, res) => {
   }
 });
 
+// ── Shared video mapping/enrichment ────────────────────────────────────────────
+
+// Given YouTube search.list items, fetch contentDetails/statistics and map into
+// this app's video shape. Reused by /search and /channel/:channelId.
+async function enrichAndMapItems(items, key) {
+  if (!items.length) return [];
+
+  const videoIds = items.map((i) => i.id.videoId).filter(Boolean).join(',');
+  const detailsData = await ytGet(`/youtube/v3/videos?part=contentDetails,statistics&id=${encodeURIComponent(videoIds)}&key=${encodeURIComponent(key)}`);
+
+  const detailsMap = {};
+  for (const v of (detailsData.items ?? [])) {
+    detailsMap[v.id] = {
+      duration:  v.contentDetails?.duration,
+      viewCount: v.statistics?.viewCount,
+    };
+  }
+
+  return items
+    .filter((i) => i.id?.videoId)
+    .map((item) => {
+      const id = item.id.videoId;
+      const s  = item.snippet;
+      return {
+        id,
+        title:       s.title,
+        description: s.description,
+        channel:     s.channelTitle,
+        channelId:   s.channelId,
+        publishedAt: s.publishedAt,
+        thumbnail:   s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
+        duration:    detailsMap[id]?.duration,
+        viewCount:   detailsMap[id]?.viewCount,
+      };
+    });
+}
+
 // ── Search ────────────────────────────────────────────────────────────────────
 
 router.get('/search', async (req, res) => {
@@ -145,33 +183,7 @@ router.get('/search', async (req, res) => {
       return res.json({ videos: [], totalResults: 0 });
     }
 
-    const videoIds = items.map((i) => i.id.videoId).filter(Boolean).join(',');
-    const detailsData = await ytGet(`/youtube/v3/videos?part=contentDetails,statistics&id=${encodeURIComponent(videoIds)}&key=${encodeURIComponent(key)}`);
-
-    const detailsMap = {};
-    for (const v of (detailsData.items ?? [])) {
-      detailsMap[v.id] = {
-        duration:  v.contentDetails?.duration,
-        viewCount: v.statistics?.viewCount,
-      };
-    }
-
-    const videos = items
-      .filter((i) => i.id?.videoId)
-      .map((item) => {
-        const id = item.id.videoId;
-        const s  = item.snippet;
-        return {
-          id,
-          title:       s.title,
-          description: s.description,
-          channel:     s.channelTitle,
-          publishedAt: s.publishedAt,
-          thumbnail:   s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
-          duration:    detailsMap[id]?.duration,
-          viewCount:   detailsMap[id]?.viewCount,
-        };
-      });
+    const videos = await enrichAndMapItems(items, key);
 
     await pool.query(
       `INSERT INTO youtube_search_history ("userId", query, filters, "resultCount") VALUES ($1,$2,$3,$4)`,
@@ -182,6 +194,72 @@ router.get('/search', async (req, res) => {
   } catch (err) {
     console.error('[youtube/search]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Channel ───────────────────────────────────────────────────────────────────
+
+router.get('/channel/:channelId', async (req, res) => {
+  const { channelId } = req.params;
+  if (!channelId?.trim()) return res.status(400).json({ error: 'channelId is required.' });
+
+  let key;
+  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try {
+    const searchParams = new URLSearchParams({
+      part: 'snippet',
+      channelId: channelId.trim(),
+      type: 'video',
+      order: 'date',
+      maxResults: '20',
+      safeSearch: 'moderate',
+      videoEmbeddable: 'true',
+      key,
+    });
+
+    const searchData = await ytGet(`/youtube/v3/search?${searchParams}`);
+    const items = searchData.items ?? [];
+    const videos = await enrichAndMapItems(items, key);
+
+    res.json({ videos, totalResults: searchData.pageInfo?.totalResults ?? videos.length });
+  } catch (err) {
+    console.error('[youtube/channel]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Transcript / summary ────────────────────────────────────────────────────────
+
+const SUMMARY_SYSTEM = `You summarize YouTube video transcripts. Write a concise summary in a few sentences covering what the video is about and its key points. Do not re-transcribe the video or list timestamps — just the gist, in plain prose.`;
+
+router.post('/transcript', async (req, res) => {
+  const { videoId, summarize } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId required.' });
+
+  try {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const { title, content } = await fetchYoutubeTranscript(url);
+
+    if (!summarize) {
+      return res.json({ title, transcript: content });
+    }
+
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const result = await callModel(lightModel, content, {
+      maxTokens: 400,
+      system: SUMMARY_SYSTEM,
+      returnUsage: true,
+    });
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+
+    res.json({ title, transcript: content, summary: result.text });
+  } catch (err) {
+    console.error('[youtube/transcript]', err.message);
+    if (/no captions available/i.test(err.message || '')) {
+      return res.status(404).json({ error: 'No captions are available for this video.' });
+    }
+    res.status(500).json({ error: 'Could not fetch a transcript for this video.' });
   }
 });
 
@@ -254,6 +332,106 @@ router.delete('/favourites/:videoId', async (req, res) => {
     await pool.query(
       'DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = $2',
       [req.user.id, req.params.videoId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Saved lists ───────────────────────────────────────────────────────────────
+
+router.get('/lists', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT l.id, l.title, l."createdAt", COUNT(i.id)::int AS "itemCount"
+       FROM youtube_saved_lists l
+       LEFT JOIN youtube_saved_list_items i ON i."listId" = l.id
+       WHERE l."userId" = $1
+       GROUP BY l.id
+       ORDER BY l."createdAt" DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/lists', async (req, res) => {
+  const { title, videos } = req.body;
+  if (!title?.trim()) return res.status(400).json({ error: 'title required.' });
+  if (!Array.isArray(videos) || videos.length === 0) return res.status(400).json({ error: 'videos array required.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO youtube_saved_lists ("userId", title) VALUES ($1,$2) RETURNING id, title, "createdAt"`,
+      [req.user.id, title.trim()]
+    );
+    const list = rows[0];
+
+    let position = 0;
+    for (const v of videos) {
+      if (!v?.id && !v?.videoId) continue;
+      await client.query(
+        `INSERT INTO youtube_saved_list_items ("listId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", position)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [list.id, v.id || v.videoId, v.title, v.channel || null, v.thumbnail || null, v.duration || null, v.viewCount || null, v.publishedAt || null, position++]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, id: list.id });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/lists/:id', async (req, res) => {
+  try {
+    const { rows: listRows } = await pool.query(
+      `SELECT id, title, "createdAt" FROM youtube_saved_lists WHERE id = $1 AND "userId" = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!listRows.length) return res.status(404).json({ error: 'List not found.' });
+
+    const { rows: items } = await pool.query(
+      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt"
+       FROM youtube_saved_list_items
+       WHERE "listId" = $1
+       ORDER BY position ASC`,
+      [req.params.id]
+    );
+
+    res.json({ ...listRows[0], videos: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/lists/:id', async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM youtube_saved_lists WHERE id = $1 AND "userId" = $2',
+      [req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/lists/:id/items/:videoId', async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM youtube_saved_list_items
+       WHERE "videoId" = $1 AND "listId" IN (SELECT id FROM youtube_saved_lists WHERE id = $2 AND "userId" = $3)`,
+      [req.params.videoId, req.params.id, req.user.id]
     );
     res.json({ ok: true });
   } catch (err) {
