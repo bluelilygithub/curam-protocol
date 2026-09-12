@@ -2038,6 +2038,52 @@ router.post('/favicon', async (req, res) => {
   }
 });
 
+// Export for Social: one source image -> a ZIP of platform-size crops, each
+// produced via the same smart-crop `runResize` preset path used by /resize.
+router.post('/export-social', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    if (!dataUrlToBuffer(imageDataUrl) || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+    const presetIds = Array.isArray(req.body?.presets) ? req.body.presets.map((p) => String(p)) : [];
+    const presets = SOCIAL_PRESETS.filter((p) => presetIds.includes(p.id));
+    if (!presets.length) {
+      return res.status(400).json({ error: 'Select at least one preset to export' });
+    }
+
+    const files = [];
+    for (const preset of presets) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await runResize({ imageDataUrl, preset: preset.id });
+      const buf = dataUrlToBuffer(result.imageDataUrl);
+      const ext = result.format === 'jpeg' ? 'jpg' : result.format;
+      files.push({ name: `${preset.id}-${result.width}x${result.height}.${ext}`, buf });
+    }
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const chunks = [];
+    archive.on('data', (c) => chunks.push(c));
+    const done = new Promise((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+    });
+    files.forEach((f) => archive.append(f.buf, { name: f.name }));
+    await archive.finalize();
+    await done;
+
+    const zip = Buffer.concat(chunks);
+    res.json({
+      ok: true,
+      count: files.length,
+      bytes: zip.length,
+      zipDataUrl: `data:application/zip;base64,${zip.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Export failed' });
+  }
+});
+
 // Raster -> SVG vectorisation (tracing). Best for logos, icons and flat
 // clipart; photos become stylised. Uses imagetracerjs over sharp-decoded
 // pixels; the image is capped in size first so tracing stays fast.

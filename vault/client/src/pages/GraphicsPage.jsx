@@ -175,6 +175,7 @@ const MODES = [
   { id: 'batchtext', label: 'Batch Text', icon: 'text' },
   { id: 'collage', label: 'Collage', icon: 'grid' },
   { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
+  { id: 'exportsocial', label: 'Export for Social', icon: 'share-2' },
   { id: 'svg', label: 'Vectorize (SVG)', icon: 'shapes' },
   { id: 'iconlib', label: 'AI Icon Library', icon: 'layout-grid' },
   { id: 'background', label: 'Background', icon: 'scissors' },
@@ -224,7 +225,7 @@ const SIZE_PRESETS = [
 
 const MODE_GROUPS = [
   { label: 'Create', ids: ['generate', 'animate'] },
-  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'pdf2img', 'printready', 'autoenhance'] },
+  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'exportsocial', 'pdf2img', 'printready', 'autoenhance'] },
   { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
   { label: 'Compose', ids: ['annotate', 'watermark', 'textoverlay', 'composite', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
@@ -243,6 +244,107 @@ const loadImageEl = (src) => new Promise((resolve, reject) => {
 const canvasToBlob = (canvas, type, quality) => new Promise((resolve) => {
   canvas.toBlob((b) => resolve(b), type, quality);
 });
+
+// Shared magic-wand flood-fill selection, used by the "Magic wand" mode in
+// Inpaint, Eraser and Extract Element as an alternative to hand-painting a
+// mask. Samples the clicked pixel from `img`, then flood-fills all
+// 4-connected pixels within `tolerancePct` (0-100, checked as an RGB
+// Euclidean distance) of that colour. Computed on a capped working buffer
+// (long edge <= 1200px) for performance, then scaled up to `outW`x`outH` so
+// it lines up with a tool's own display/mask canvas size. Returns a canvas
+// with the selection painted opaque white, transparent everywhere else —
+// each tool composites this onto its own mask/display canvases to match its
+// own convention (see `tintSelectionCanvas` below).
+function magicWandSelectionCanvas(img, outW, outH, clickX, clickY, tolerancePct) {
+  const cap = 1200;
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  let w = iw;
+  let h = ih;
+  if (Math.max(w, h) > cap) { const s = cap / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+  const src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  const sctx = src.getContext('2d');
+  sctx.drawImage(img, 0, 0, w, h);
+  const { data } = sctx.getImageData(0, 0, w, h);
+  const sx = Math.min(w - 1, Math.max(0, Math.round((clickX / outW) * w)));
+  const sy = Math.min(h - 1, Math.max(0, Math.round((clickY / outH) * h)));
+  const seedIdx = (sy * w + sx) * 4;
+  const r0 = data[seedIdx];
+  const g0 = data[seedIdx + 1];
+  const b0 = data[seedIdx + 2];
+  const thresh = (Math.max(0, Math.min(100, Number(tolerancePct) || 0)) / 100) * 441.67; // max RGB distance
+  const visited = new Uint8Array(w * h);
+  const selected = new Uint8Array(w * h);
+  const stack = [sy * w + sx];
+  visited[sy * w + sx] = 1;
+  while (stack.length) {
+    const p = stack.pop();
+    const px = p % w;
+    const i = p * 4;
+    const dr = data[i] - r0;
+    const dg = data[i + 1] - g0;
+    const db = data[i + 2] - b0;
+    if (Math.sqrt(dr * dr + dg * dg + db * db) > thresh) continue;
+    selected[p] = 1;
+    const candidates = [p - 1, p + 1, p - w, p + w];
+    for (let k = 0; k < candidates.length; k++) {
+      const n = candidates[k];
+      if (n < 0 || n >= w * h) continue;
+      if (px === 0 && n === p - 1) continue;
+      if (px === w - 1 && n === p + 1) continue;
+      if (visited[n]) continue;
+      visited[n] = 1;
+      stack.push(n);
+    }
+  }
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const octx = out.getContext('2d');
+  const imgData = octx.createImageData(w, h);
+  for (let p = 0; p < w * h; p++) {
+    if (selected[p]) {
+      imgData.data[p * 4] = 255;
+      imgData.data[p * 4 + 1] = 255;
+      imgData.data[p * 4 + 2] = 255;
+      imgData.data[p * 4 + 3] = 255;
+    }
+  }
+  octx.putImageData(imgData, 0, 0);
+  if (w === outW && h === outH) return out;
+  const scaled = document.createElement('canvas');
+  scaled.width = outW; scaled.height = outH;
+  scaled.getContext('2d').drawImage(out, 0, 0, outW, outH);
+  return scaled;
+}
+
+// Recolours a white-selection canvas (from `magicWandSelectionCanvas`) to a
+// solid rgba tint, keeping only the selected pixels opaque — used to paint a
+// wand selection onto a display canvas with the same overlay colour/opacity
+// each tool's brush already uses.
+function tintSelectionCanvas(selCanvas, rgba) {
+  const c = document.createElement('canvas');
+  c.width = selCanvas.width; c.height = selCanvas.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(selCanvas, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = rgba;
+  ctx.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+// Draws the source image, but only where the given selection canvas is
+// opaque — used to "restore" original pixels within a wand selection
+// (Eraser's restore mode, Extract's erase-mask mode).
+function restoreWithinSelection(img, selCanvas, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(selCanvas, 0, 0);
+  return c;
+}
 
 async function renderToCanvas(dataUrl, { maxDim, bg, type }) {
   const img = await loadImageEl(dataUrl);
@@ -591,6 +693,11 @@ const TOOL_HELP = {
     what: 'Generate a complete app icon set from one image.',
     features: ['Sizes: 16, 32, 48, 64, 180 (Apple), 192, 256, 512 px', 'Includes an apple-touch-icon.png', 'site.webmanifest with correct icon references', 'Paste-ready <head> HTML snippet', 'All files bundled into a single ZIP download'],
   },
+  exportsocial: {
+    title: 'Export for Social',
+    what: 'Crop one image to every platform size you need, in one go.',
+    features: ['Uses the same social presets as Crop/Resize (Instagram, Facebook, LinkedIn, X/Twitter, YouTube, Pinterest)', 'Smart-crop keeps the interesting part of the image in frame at each size', 'Tick the sizes you need, or select all', 'All crops bundled into a single ZIP download'],
+  },
   svg: {
     title: 'Vectorize (SVG)',
     what: 'Trace a raster image into scalable SVG paths.',
@@ -619,7 +726,7 @@ const TOOL_HELP = {
   inpaint: {
     title: 'Inpaint / Remove',
     what: 'Paint a mask over an area and let AI fill or replace it.',
-    features: ['Paint a white mask with an adjustable brush', 'Describe what should fill the masked area', 'Object removal tip: describe the background behind the object', 'Powered by FAL (fal-ai/flux-lora/inpainting by default)', 'Model overridable via GRAPHICS_INPAINT_MODEL env var', 'Cost logged like image generation'],
+    features: ['Paint a white mask with an adjustable brush', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider', 'Describe what should fill the masked area', 'Object removal tip: describe the background behind the object', 'Powered by FAL (fal-ai/flux-lora/inpainting by default)', 'Model overridable via GRAPHICS_INPAINT_MODEL env var', 'Cost logged like image generation'],
   },
   picker: {
     title: 'Colour Picker',
@@ -674,12 +781,12 @@ const TOOL_HELP = {
   eraser: {
     title: 'Eraser',
     what: 'Paint over parts of an image to erase them to transparency — entirely in your browser.',
-    features: ['Circular brush with adjustable size (5–120 px)', 'Erase mode: removes pixels to full transparency', 'Restore mode: paints original pixels back — useful if you overshoot', 'Smooth stroke interpolation between mouse positions', 'Undo/redo stack — up to 20 snapshots (Cmd/Ctrl+Z supported)', 'Reset: restore the image to its original state', 'Output is always a PNG with an alpha channel', 'Nothing is uploaded — fully client-side'],
+    features: ['Circular brush with adjustable size (5–120 px)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'Erase mode: removes pixels to full transparency', 'Restore mode: paints original pixels back — useful if you overshoot', 'Smooth stroke interpolation between mouse positions', 'Undo/redo stack — up to 20 snapshots (Cmd/Ctrl+Z supported)', 'Reset: restore the image to its original state', 'Output is always a PNG with an alpha channel', 'Nothing is uploaded — fully client-side'],
   },
   extract: {
     title: 'Extract Element',
     what: 'Paint a mask over the element you want to keep; the rest is removed to transparency.',
-    features: ['Paint brush marks the area to keep (shown as green overlay)', 'Erase brush removes paint strokes (shown in red) for fine adjustments', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
+    features: ['Paint brush marks the area to keep (shown as green overlay)', 'Magic wand mode: click a spot to select connected similar-colour pixels instead of painting, with a tolerance slider — click again to add more to the selection', 'Erase brush removes paint strokes (shown in red) for fine adjustments — works with either selection mode', 'Adjustable brush size (5–120 px)', 'Feather slider (0–30 px) blurs the mask edge for soft extraction', 'Clear mask button resets all painted strokes', 'Server applies the mask: painted area is kept, everything else removed', 'Result is a transparent PNG — export or feed into other tools', 'Runs locally on the server — no external AI needed'],
   },
   textoverlay: {
     title: 'Text Overlay',
@@ -703,6 +810,10 @@ export default function GraphicsPage() {
   const [hoveredTool, setHoveredTool] = useState(null);
   const [toolSearch, setToolSearch] = useState('');
   const toolSearchRef = useRef(null);
+  const [brandKitOpen, setBrandKitOpen] = useState(false);
+  const [brandKit, setBrandKit] = useState(null); // { logoDataUrl, colors: [], fontFamily } | null
+  const [brandKitDraft, setBrandKitDraft] = useState({ logoDataUrl: '', colors: ['', '', ''], fontFamily: '' });
+  const [brandKitSaving, setBrandKitSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('editorial');
@@ -738,6 +849,12 @@ export default function GraphicsPage() {
   const [favBusy, setFavBusy] = useState(false);
   const [favResult, setFavResult] = useState(null);
   const [favError, setFavError] = useState('');
+
+  const [xsSource, setXsSource] = useState(null);
+  const [xsSelected, setXsSelected] = useState([]);
+  const [xsBusy, setXsBusy] = useState(false);
+  const [xsResult, setXsResult] = useState(null);
+  const [xsError, setXsError] = useState('');
   const [svgSource, setSvgSource] = useState(null);
   const [svgColors, setSvgColors] = useState('16');
   const [svgDetail, setSvgDetail] = useState('medium');
@@ -837,6 +954,8 @@ export default function GraphicsPage() {
   const inpaintImgRef = useRef(null);
   const inpaintDrawing = useRef(false);
   const [inpaintHasMask, setInpaintHasMask] = useState(false);
+  const [inpaintSelectMode, setInpaintSelectMode] = useState('paint'); // 'paint' | 'wand'
+  const [inpaintTolerance, setInpaintTolerance] = useState(30);
   const [adjPresets, setAdjPresets] = useState(() => {
     try { return JSON.parse(localStorage.getItem('graphics.adjustPresets') || '[]'); } catch { return []; }
   });
@@ -1049,6 +1168,8 @@ export default function GraphicsPage() {
   const [eraserSource, setEraserSource] = useState(null);
   const [eraserBrush, setEraserBrush] = useState(30);
   const [eraserMode, setEraserMode] = useState('erase'); // 'erase' | 'restore'
+  const [eraserSelectMode, setEraserSelectMode] = useState('paint'); // 'paint' | 'wand'
+  const [eraserTolerance, setEraserTolerance] = useState(30);
   const [eraserCanUndo, setEraserCanUndo] = useState(false);
   const [eraserCanRedo, setEraserCanRedo] = useState(false);
   const eraserCanvasRef = useRef(null);
@@ -1062,6 +1183,8 @@ export default function GraphicsPage() {
   const [extractBrush, setExtractBrush] = useState(30);
   const [extractErasing, setExtractErasing] = useState(false);
   const [extractFeather, setExtractFeather] = useState(5);
+  const [extractSelectMode, setExtractSelectMode] = useState('paint'); // 'paint' | 'wand'
+  const [extractTolerance, setExtractTolerance] = useState(30);
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractResult, setExtractResult] = useState(null);
   const [extractError, setExtractError] = useState('');
@@ -1109,8 +1232,55 @@ export default function GraphicsPage() {
         if (Array.isArray(info?.presets)) setSocialPresets(info.presets);
       })
       .catch(() => {});
+    api.get('/api/settings')
+      .then(r => r.json())
+      .then(settings => {
+        const raw = settings?.graphics_brand_kit;
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          setBrandKit(parsed);
+          setBrandKitDraft({
+            logoDataUrl: parsed.logoDataUrl || '',
+            colors: [0, 1, 2].map(i => parsed.colors?.[i] || ''),
+            fontFamily: parsed.fontFamily || '',
+          });
+        } catch { /* ignore malformed stored value */ }
+      })
+      .catch(() => {});
     loadGallery();
   }, []);
+
+  const saveBrandKit = async () => {
+    setBrandKitSaving(true);
+    try {
+      const kit = {
+        logoDataUrl: brandKitDraft.logoDataUrl || '',
+        colors: brandKitDraft.colors.filter(Boolean).slice(0, 3),
+        fontFamily: brandKitDraft.fontFamily.trim(),
+      };
+      const res = await api.post('/api/settings', { key: 'graphics_brand_kit', value: JSON.stringify(kit) });
+      if (!res.ok) throw new Error('Failed to save Brand Kit');
+      setBrandKit(kit);
+      setBrandKitOpen(false);
+    } catch (err) {
+      // Simple inline failure — Brand Kit is a small convenience panel, not a full form.
+      window.alert(err.message || 'Failed to save Brand Kit');
+    } finally {
+      setBrandKitSaving(false);
+    }
+  };
+
+  const clearBrandKit = async () => {
+    setBrandKitSaving(true);
+    try {
+      await api.post('/api/settings', { key: 'graphics_brand_kit', value: '' });
+      setBrandKit(null);
+      setBrandKitDraft({ logoDataUrl: '', colors: ['', '', ''], fontFamily: '' });
+    } catch { /* best-effort */ } finally {
+      setBrandKitSaving(false);
+    }
+  };
 
   const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1236,6 +1406,26 @@ export default function GraphicsPage() {
       setFavError(err.message || 'Favicon generation failed');
     } finally {
       setFavBusy(false);
+    }
+  };
+
+  const toggleXsPreset = (id) => {
+    setXsSelected(prev => (prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]));
+  };
+
+  const runExportSocial = async () => {
+    if (!xsSource?.imageDataUrl || !xsSelected.length) return;
+    setXsBusy(true);
+    setXsError('');
+    try {
+      const res = await api.post('/api/graphics/export-social', { imageDataUrl: xsSource.imageDataUrl, presets: xsSelected });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Export failed');
+      setXsResult(data);
+    } catch (err) {
+      setXsError(err.message || 'Export failed');
+    } finally {
+      setXsBusy(false);
     }
   };
 
@@ -2176,6 +2366,21 @@ export default function GraphicsPage() {
     }
     ctx.restore();
   };
+  const eraserWandAt = (x, y) => {
+    const canvas = eraserCanvasRef.current;
+    const img = eraserImgRef.current;
+    if (!canvas || !img) return;
+    const sel = magicWandSelectionCanvas(img, canvas.width, canvas.height, x, y, eraserTolerance);
+    const ctx = canvas.getContext('2d');
+    if (eraserMode === 'restore') {
+      ctx.drawImage(restoreWithinSelection(img, sel, canvas.width, canvas.height), 0, 0);
+    } else {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.drawImage(sel, 0, 0);
+      ctx.restore();
+    }
+  };
   const onEraserDown = (e) => {
     const p = eraserPos(e);
     if (!p) return;
@@ -2188,12 +2393,13 @@ export default function GraphicsPage() {
       setEraserCanUndo(true);
       setEraserCanRedo(false);
     }
+    if (eraserSelectMode === 'wand') { eraserWandAt(p.x, p.y); return; }
     eraserIsDrawingRef.current = true;
     eraserLastRef.current = p;
     eraserApplyDot(null, p);
   };
   const onEraserMove = (e) => {
-    if (!eraserIsDrawingRef.current) return;
+    if (eraserSelectMode === 'wand' || !eraserIsDrawingRef.current) return;
     const p = eraserPos(e);
     if (!p) return;
     eraserApplyDot(eraserLastRef.current, p);
@@ -2302,8 +2508,30 @@ export default function GraphicsPage() {
       mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill();
     }
   };
-  const onExtractDown = (e) => { extractIsDrawingRef.current = true; const p = extractPos(e); if (p) extractPaint(p.x, p.y); };
-  const onExtractMove = (e) => { if (!extractIsDrawingRef.current) return; const p = extractPos(e); if (p) extractPaint(p.x, p.y); };
+  const extractWandAt = (x, y) => {
+    const disp = extractCanvasRef.current;
+    const mask = extractMaskRef.current;
+    const img = extractImgRef.current;
+    if (!disp || !mask || !img) return;
+    const sel = magicWandSelectionCanvas(img, disp.width, disp.height, x, y, extractTolerance);
+    const dctx = disp.getContext('2d');
+    const mctx = mask.getContext('2d');
+    if (extractErasing) {
+      dctx.drawImage(restoreWithinSelection(img, sel, disp.width, disp.height), 0, 0);
+      dctx.drawImage(tintSelectionCanvas(sel, 'rgba(239,68,68,0.25)'), 0, 0);
+      mctx.drawImage(tintSelectionCanvas(sel, '#000'), 0, 0);
+    } else {
+      dctx.drawImage(tintSelectionCanvas(sel, 'rgba(34,197,94,0.45)'), 0, 0);
+      mctx.drawImage(sel, 0, 0);
+    }
+  };
+  const onExtractDown = (e) => {
+    const p = extractPos(e);
+    if (!p) return;
+    if (extractSelectMode === 'wand') { extractWandAt(p.x, p.y); return; }
+    extractIsDrawingRef.current = true; extractPaint(p.x, p.y);
+  };
+  const onExtractMove = (e) => { if (extractSelectMode === 'wand' || !extractIsDrawingRef.current) return; const p = extractPos(e); if (p) extractPaint(p.x, p.y); };
   const onExtractUp = () => { extractIsDrawingRef.current = false; };
   const clearExtractMask = () => drawExtractBase();
   const runExtract = async () => {
@@ -2369,8 +2597,22 @@ export default function GraphicsPage() {
     mctx.fillStyle = '#fff';
     mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill();
   };
-  const onInpaintDown = (e) => { inpaintDrawing.current = true; const { x, y } = inpaintPos(e); inpaintPaint(x, y); setInpaintHasMask(true); };
-  const onInpaintMove = (e) => { if (!inpaintDrawing.current) return; const { x, y } = inpaintPos(e); inpaintPaint(x, y); };
+  const inpaintWandAt = (x, y) => {
+    const disp = inpaintCanvasRef.current;
+    const mask = inpaintMaskRef.current;
+    const img = inpaintImgRef.current;
+    if (!disp || !mask || !img) return;
+    const sel = magicWandSelectionCanvas(img, disp.width, disp.height, x, y, inpaintTolerance);
+    mask.getContext('2d').drawImage(sel, 0, 0);
+    disp.getContext('2d').drawImage(tintSelectionCanvas(sel, 'rgba(239,68,68,0.5)'), 0, 0);
+    setInpaintHasMask(true);
+  };
+  const onInpaintDown = (e) => {
+    const { x, y } = inpaintPos(e);
+    if (inpaintSelectMode === 'wand') { inpaintWandAt(x, y); return; }
+    inpaintDrawing.current = true; inpaintPaint(x, y); setInpaintHasMask(true);
+  };
+  const onInpaintMove = (e) => { if (inpaintSelectMode === 'wand' || !inpaintDrawing.current) return; const { x, y } = inpaintPos(e); inpaintPaint(x, y); };
   const onInpaintUp = () => { inpaintDrawing.current = false; };
   const clearInpaintMask = () => drawInpaintBase();
 
@@ -2759,6 +3001,14 @@ export default function GraphicsPage() {
     opacity: 1,
   }]));
   const updateCmLayer = (id, patch) => setCmLayers(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  const addCmBrandLogoLayer = () => brandKit?.logoDataUrl && setCmLayers(prev => ([...prev, {
+    id: `layer-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: 'image',
+    imageDataUrl: brandKit.logoDataUrl,
+    scale: 25,
+    position: 'bottom-right',
+    opacity: 1,
+  }]));
   const removeCmLayer = (id) => setCmLayers(prev => prev.filter(l => l.id !== id));
 
   const runComposite = async () => {
@@ -3741,6 +3991,7 @@ export default function GraphicsPage() {
     [upscaling, 'Upscaling…'],
     [converting, 'Converting…'],
     [favBusy, 'Building icon set…'],
+    [xsBusy, 'Exporting social sizes…'],
     [svgBusy, 'Tracing to SVG…'],
     [compressing, 'Compressing…'],
     [batchRunning, 'Processing batch…'],
@@ -3785,6 +4036,7 @@ export default function GraphicsPage() {
             {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}
             {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF, TIFF or ICO (HEIC input supported where available).'}
             {mode === 'favicon' && 'Generate a full favicon / app-icon set with manifest from one image.'}
+            {mode === 'exportsocial' && 'Crop one image to every platform size you need, bundled as a ZIP.'}
             {mode === 'svg' && 'Trace a raster image into a scalable SVG — best for logos, icons and clipart.'}
             {mode === 'iconlib' && 'Generate a cohesive set of custom SVG icons from a subject and reference styles.'}
             {mode === 'compress' && 'Reduce image file sizes and see the savings.'}
@@ -3837,6 +4089,17 @@ export default function GraphicsPage() {
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         <aside className="w-full md:w-52 md:shrink-0 md:sticky md:top-6">
+          <Tooltip text="Save a logo, up to 3 brand colours and a font name once, then reuse them in Text Overlay, Composite and Watermark.">
+            <button
+              type="button"
+              onClick={() => setBrandKitOpen(true)}
+              className="w-full mb-2 flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            >
+              {getIcon('briefcase', { size: 13 })}
+              Brand Kit{brandKit ? ' (saved)' : ''}
+            </button>
+          </Tooltip>
           <div className="relative mb-3">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-muted)' }}>
               {getIcon('search', { size: 14 })}
@@ -4440,6 +4703,74 @@ export default function GraphicsPage() {
                 </div>
               ) : (
                 <ResultPlaceholder src={favSource?.imageDataUrl} message="Your icon set will appear here." />
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'exportsocial' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Export for social</h2>
+            <button type="button" onClick={() => setHelpTool('exportsocial')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <Tooltip text="Choose the image to crop into every selected platform size."><input type="file" accept="image/*" onChange={e => { setXsResult(null); setXsError(''); loadImageInto(setXsSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
+            </div>
+            {xsSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={xsSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Sizes to export</label>
+                <Tooltip text="Tick or untick every platform size at once.">
+                  <button type="button" onClick={() => setXsSelected(prev => (prev.length === socialPresets.length ? [] : socialPresets.map(p => p.id)))} className="text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+                    {xsSelected.length === socialPresets.length && socialPresets.length > 0 ? 'Deselect all' : 'Select all'}
+                  </button>
+                </Tooltip>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                {socialPresets.map(p => (
+                  <Tooltip key={p.id} text={`Include a ${p.label} crop in the export.`}>
+                    <label className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg border cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      <input type="checkbox" checked={xsSelected.includes(p.id)} onChange={() => toggleXsPreset(p.id)} />
+                      {p.label}
+                    </label>
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Each size uses the same smart, content-aware crop as Crop/Resize — the important part of the image stays in frame. All crops are bundled into a single ZIP.
+            </p>
+            {xsError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{xsError}</div>}
+            <Tooltip text="Generate a crop for every ticked size and download them as one ZIP."><button type="button" onClick={runExportSocial} disabled={xsBusy || !xsSource?.imageDataUrl || !xsSelected.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {xsBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('share-2', { size: 15 })}
+              {xsBusy ? 'Exporting…' : 'Export ZIP'}
+            </button></Tooltip>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Export result</span>
+              {xsResult?.zipDataUrl && (
+                <Tooltip text="Download the ZIP containing every exported crop."><button onClick={() => downloadDataUrl(xsResult.zipDataUrl, 'social-export.zip')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download ZIP</button></Tooltip>
+              )}
+            </div>
+            <div className="p-4">
+              {xsResult?.zipDataUrl ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{xsResult.count} crops · {formatBytes(xsResult.bytes)} ZIP</p>
+              ) : (
+                <ResultPlaceholder src={xsSource?.imageDataUrl} message="Your exported crops will appear here." />
               )}
             </div>
           </div>
@@ -5526,7 +5857,14 @@ export default function GraphicsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
-                  <Tooltip text="Colour of the watermark text."><input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                  <div className="flex items-center gap-1.5">
+                    <Tooltip text="Colour of the watermark text."><input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                    {brandKit?.colors?.map((c, i) => (
+                      <Tooltip key={i} text={`Use brand colour ${i + 1}.`}>
+                        <button type="button" onClick={() => setWmColor(c)} className="h-6 w-6 rounded-full border flex-shrink-0" style={{ background: c, borderColor: 'var(--color-border)' }} />
+                      </Tooltip>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -5617,7 +5955,14 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text colour</label>
-                <Tooltip text="Colour of the overlay text."><input type="color" value={txColor} onChange={e => setTxColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                <div className="flex items-center gap-1.5">
+                  <Tooltip text="Colour of the overlay text."><input type="color" value={txColor} onChange={e => setTxColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                  {brandKit?.colors?.map((c, i) => (
+                    <Tooltip key={i} text={`Use brand colour ${i + 1}.`}>
+                      <button type="button" onClick={() => setTxColor(c)} className="h-6 w-6 rounded-full border flex-shrink-0" style={{ background: c, borderColor: 'var(--color-border)' }} />
+                    </Tooltip>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background pill</label>
@@ -5730,6 +6075,13 @@ export default function GraphicsPage() {
             <div className="flex gap-2">
               <Tooltip text="Add a new text layer on top of the base image (up to 8 layers total)."><button type="button" onClick={addCmTextLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Text layer</button></Tooltip>
               <Tooltip text="Add a new logo or image layer on top of the base image (up to 8 layers total)."><button type="button" onClick={addCmImageLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Logo / image layer</button></Tooltip>
+              {brandKit?.logoDataUrl && (
+                <Tooltip text="Add your saved Brand Kit logo as a new layer.">
+                  <button type="button" onClick={addCmBrandLogoLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40 inline-flex items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                    {getIcon('briefcase', { size: 12 })} + Logo from Brand Kit
+                  </button>
+                </Tooltip>
+              )}
               <span className="text-[11px] self-center" style={{ color: 'var(--color-muted)' }}>{cmLayers.length}/8 layers</span>
             </div>
 
@@ -5751,7 +6103,14 @@ export default function GraphicsPage() {
                       <>
                         <Tooltip text="Text to show for this layer."><input type="text" value={layer.text} onChange={e => updateCmLayer(layer.id, { text: e.target.value })} placeholder="Layer text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                         <div className="grid grid-cols-2 gap-2">
-                          <Tooltip text="Colour of this text layer."><input type="color" value={layer.color} onChange={e => updateCmLayer(layer.id, { color: e.target.value })} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                          <div className="flex items-center gap-1.5">
+                            <Tooltip text="Colour of this text layer."><input type="color" value={layer.color} onChange={e => updateCmLayer(layer.id, { color: e.target.value })} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                            {brandKit?.colors?.map((c, i) => (
+                              <Tooltip key={i} text={`Use brand colour ${i + 1}.`}>
+                                <button type="button" onClick={() => updateCmLayer(layer.id, { color: c })} className="h-6 w-6 rounded-full border flex-shrink-0" style={{ background: c, borderColor: 'var(--color-border)' }} />
+                              </Tooltip>
+                            ))}
+                          </div>
                           <Tooltip text="How bold this text layer appears."><select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                             <option value="bold">Bold</option>
                             <option value="normal">Normal</option>
@@ -7629,17 +7988,28 @@ export default function GraphicsPage() {
                 <button key={m} type="button" onClick={() => setEraserMode(m)} className="px-3 py-1.5 rounded-lg text-xs font-medium border capitalize" style={{ background: eraserMode === m ? 'var(--color-primary)' : 'transparent', color: eraserMode === m ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>{m === 'erase' ? 'Erase' : 'Restore'}</button>
               ))}
             </div>
-            <div className="flex-1 min-w-[160px]">
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush size: {eraserBrush}px</label>
-              <input type="range" min="5" max="120" value={eraserBrush} onChange={e => setEraserBrush(Number(e.target.value))} className="w-full" />
+            <div className="flex gap-2">
+              <Tooltip text="Paint mode: drag the brush over the area you want to erase or restore."><button type="button" onClick={() => setEraserSelectMode('paint')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: eraserSelectMode === 'paint' ? 'var(--color-primary)' : 'transparent', color: eraserSelectMode === 'paint' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Paint</button></Tooltip>
+              <Tooltip text="Magic wand mode: click a spot and every connected pixel of a similar colour is selected automatically."><button type="button" onClick={() => setEraserSelectMode('wand')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: eraserSelectMode === 'wand' ? 'var(--color-primary)' : 'transparent', color: eraserSelectMode === 'wand' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Magic wand</button></Tooltip>
             </div>
+            {eraserSelectMode === 'paint' ? (
+              <div className="flex-1 min-w-[160px]">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush size: {eraserBrush}px</label>
+                <Tooltip text="How large an area each click/drag erases or restores."><input type="range" min="5" max="120" value={eraserBrush} onChange={e => setEraserBrush(Number(e.target.value))} className="w-full" /></Tooltip>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-[160px]">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Tolerance: {eraserTolerance}</label>
+                <Tooltip text="How similar neighbouring pixels must be to get selected. Higher picks up a wider range of colours; click again to add more to the selection."><input type="range" min="0" max="100" value={eraserTolerance} onChange={e => setEraserTolerance(Number(e.target.value))} className="w-full" /></Tooltip>
+              </div>
+            )}
             <div className="flex gap-2 flex-wrap">
-              <button type="button" onClick={undoEraser} disabled={!eraserCanUndo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
-              <button type="button" onClick={redoEraser} disabled={!eraserCanRedo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button>
-              <button type="button" onClick={resetEraser} disabled={!eraserSource?.imageDataUrl} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button>
-              <button type="button" onClick={exportEraser} disabled={!eraserSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              <Tooltip text="Undo the last change."><button type="button" onClick={undoEraser} disabled={!eraserCanUndo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button></Tooltip>
+              <Tooltip text="Redo the last undone change."><button type="button" onClick={redoEraser} disabled={!eraserCanRedo} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button></Tooltip>
+              <Tooltip text="Start over from the original image."><button type="button" onClick={resetEraser} disabled={!eraserSource?.imageDataUrl} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button></Tooltip>
+              <Tooltip text="Download the current result as a PNG with transparency."><button type="button" onClick={exportEraser} disabled={!eraserSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
                 {getIcon('download', { size: 15 })} Export PNG
-              </button>
+              </button></Tooltip>
             </div>
           </div>
         </div>
@@ -7655,7 +8025,7 @@ export default function GraphicsPage() {
               onMouseMove={onEraserMove}
               onMouseUp={onEraserUp}
               onMouseLeave={onEraserUp}
-              style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: eraserMode === 'erase' ? 'cell' : 'copy', touchAction: 'none' }}
+              style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: eraserSelectMode === 'wand' ? 'crosshair' : (eraserMode === 'erase' ? 'cell' : 'copy'), touchAction: 'none' }}
             />
           </div>
         )}
@@ -7690,20 +8060,31 @@ export default function GraphicsPage() {
                     onMouseUp={onExtractUp}
                     onMouseLeave={onExtractUp}
                     className="w-full rounded-lg"
-                    style={{ display: 'block', cursor: extractErasing ? 'crosshair' : 'cell', touchAction: 'none' }}
+                    style={{ display: 'block', cursor: extractSelectMode === 'wand' ? 'crosshair' : (extractErasing ? 'crosshair' : 'cell'), touchAction: 'none' }}
                   />
                   <canvas ref={extractMaskRef} style={{ display: 'none' }} />
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setExtractErasing(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: !extractErasing ? 'var(--color-primary)' : 'transparent', color: !extractErasing ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Paint</button>
+                    <button type="button" onClick={() => setExtractErasing(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: !extractErasing ? 'var(--color-primary)' : 'transparent', color: !extractErasing ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Keep</button>
                     <button type="button" onClick={() => setExtractErasing(true)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: extractErasing ? 'var(--color-primary)' : 'transparent', color: extractErasing ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Erase</button>
                   </div>
-                  <div className="flex-1 min-w-[140px]">
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush: {extractBrush}px</label>
-                    <input type="range" min="5" max="120" step="1" value={extractBrush} onChange={e => setExtractBrush(Number(e.target.value))} className="w-full" />
+                  <div className="flex gap-2">
+                    <Tooltip text="Paint mode: drag the brush to mark the element to keep (or erase mask strokes)."><button type="button" onClick={() => setExtractSelectMode('paint')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: extractSelectMode === 'paint' ? 'var(--color-primary)' : 'transparent', color: extractSelectMode === 'paint' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Paint</button></Tooltip>
+                    <Tooltip text="Magic wand mode: click a spot and every connected pixel of a similar colour is selected automatically."><button type="button" onClick={() => setExtractSelectMode('wand')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: extractSelectMode === 'wand' ? 'var(--color-primary)' : 'transparent', color: extractSelectMode === 'wand' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Magic wand</button></Tooltip>
                   </div>
-                  <button type="button" onClick={clearExtractMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button>
+                  {extractSelectMode === 'paint' ? (
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brush: {extractBrush}px</label>
+                      <Tooltip text="How large an area each click/drag paints into or out of the mask."><input type="range" min="5" max="120" step="1" value={extractBrush} onChange={e => setExtractBrush(Number(e.target.value))} className="w-full" /></Tooltip>
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Tolerance: {extractTolerance}</label>
+                      <Tooltip text="How similar neighbouring pixels must be to get selected. Higher picks up a wider range of colours; click again to add more to the selection."><input type="range" min="0" max="100" value={extractTolerance} onChange={e => setExtractTolerance(Number(e.target.value))} className="w-full" /></Tooltip>
+                    </div>
+                  )}
+                  <Tooltip text="Clear the mask and start over."><button type="button" onClick={clearExtractMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Feather edges: {extractFeather}px</label>
@@ -7773,12 +8154,24 @@ export default function GraphicsPage() {
                   /></Tooltip>
                   <canvas ref={inpaintMaskRef} style={{ display: 'none' }} />
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Brush</span>
-                  <Tooltip text="Size of the paint brush used to mark the area to repaint."><input type="range" min="6" max="120" step="2" value={inpaintBrush} onChange={e => setInpaintBrush(e.target.value)} className="flex-1" /></Tooltip>
-                  <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintBrush}</span>
-                  <Tooltip text="Erase the painted mask and start over."><button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear mask</button></Tooltip>
+                <div className="flex items-center gap-2">
+                  <Tooltip text="Paint mode: drag the brush over the area to repaint."><button type="button" onClick={() => setInpaintSelectMode('paint')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: inpaintSelectMode === 'paint' ? 'var(--color-primary)' : 'transparent', color: inpaintSelectMode === 'paint' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Paint</button></Tooltip>
+                  <Tooltip text="Magic wand mode: click a spot and every connected pixel of a similar colour is selected automatically."><button type="button" onClick={() => setInpaintSelectMode('wand')} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: inpaintSelectMode === 'wand' ? 'var(--color-primary)' : 'transparent', color: inpaintSelectMode === 'wand' ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>Magic wand</button></Tooltip>
                 </div>
+                {inpaintSelectMode === 'paint' ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Brush</span>
+                    <Tooltip text="Size of the paint brush used to mark the area to repaint."><input type="range" min="6" max="120" step="2" value={inpaintBrush} onChange={e => setInpaintBrush(e.target.value)} className="flex-1" /></Tooltip>
+                    <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintBrush}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Tolerance</span>
+                    <Tooltip text="How similar neighbouring pixels must be to get selected. Higher picks up a wider range of colours; click again to add more to the selection."><input type="range" min="0" max="100" value={inpaintTolerance} onChange={e => setInpaintTolerance(Number(e.target.value))} className="flex-1" /></Tooltip>
+                    <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintTolerance}</span>
+                  </div>
+                )}
+                <Tooltip text="Erase the painted mask and start over."><button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear mask</button></Tooltip>
               </div>
             )}
             <div>
@@ -7939,6 +8332,90 @@ export default function GraphicsPage() {
               <p className="text-xs mt-3 whitespace-pre-wrap" style={{ color: 'var(--color-muted)' }}>
                 {previewImage.refinedPrompt || previewImage.prompt}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {brandKitOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={() => setBrandKitOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex items-start justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Brand Kit</h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>Save a logo, colours and a font once — reuse them across Text Overlay, Composite and Watermark.</p>
+              </div>
+              <button type="button" onClick={() => setBrandKitOpen(false)} className="flex-shrink-0 hover:opacity-60 mt-0.5" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 16 })}</button>
+            </div>
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Logo</label>
+                <Tooltip text="Upload a logo image to reuse as a quick-add layer in Composite.">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const dataUrl = await readFileAsDataUrl(file);
+                      setBrandKitDraft(d => ({ ...d, logoDataUrl: dataUrl }));
+                    }}
+                    className="block w-full text-xs"
+                    style={{ color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
+                {brandKitDraft.logoDataUrl && (
+                  <div className="mt-2 rounded-xl border p-2 flex items-center justify-between gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <img src={brandKitDraft.logoDataUrl} alt="logo" className="max-h-16 rounded" />
+                    <Tooltip text="Remove the saved logo."><button type="button" onClick={() => setBrandKitDraft(d => ({ ...d, logoDataUrl: '' }))} className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Remove</button></Tooltip>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brand colours (up to 3)</label>
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <Tooltip key={i} text={`Brand colour ${i + 1}.`}>
+                      <input
+                        type="color"
+                        value={brandKitDraft.colors[i] || '#888888'}
+                        onChange={e => setBrandKitDraft(d => ({ ...d, colors: d.colors.map((c, ci) => (ci === i ? e.target.value : c)) }))}
+                        className="h-9 w-12 rounded border"
+                        style={{ borderColor: 'var(--color-border)', background: 'transparent' }}
+                      />
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font family</label>
+                <Tooltip text="Type the font family name used in your brand (e.g. a Google Font already used in Text Overlay/Annotate). Plain text only — no preview.">
+                  <input
+                    type="text"
+                    value={brandKitDraft.fontFamily}
+                    onChange={e => setBrandKitDraft(d => ({ ...d, fontFamily: e.target.value }))}
+                    placeholder="e.g. Montserrat"
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <Tooltip text="Clear the saved Brand Kit."><button type="button" onClick={clearBrandKit} disabled={brandKitSaving || !brandKit} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-muted)' }}>Clear</button></Tooltip>
+                <Tooltip text="Save this Brand Kit for reuse across tools.">
+                  <button type="button" onClick={saveBrandKit} disabled={brandKitSaving} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90" style={{ background: 'var(--color-primary)' }}>
+                    {brandKitSaving ? 'Saving…' : 'Save Brand Kit'}
+                  </button>
+                </Tooltip>
+              </div>
             </div>
           </div>
         </div>
