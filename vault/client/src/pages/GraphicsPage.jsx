@@ -852,6 +852,7 @@ export default function GraphicsPage() {
 
   const [xsSource, setXsSource] = useState(null);
   const [xsSelected, setXsSelected] = useState([]);
+  const [xsStrategies, setXsStrategies] = useState({});
   const [xsBusy, setXsBusy] = useState(false);
   const [xsResult, setXsResult] = useState(null);
   const [xsError, setXsError] = useState('');
@@ -1413,12 +1414,18 @@ export default function GraphicsPage() {
     setXsSelected(prev => (prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]));
   };
 
+  const setXsStrategyFor = (id, strategy) => {
+    setXsStrategies(prev => ({ ...prev, [id]: strategy }));
+  };
+
   const runExportSocial = async () => {
     if (!xsSource?.imageDataUrl || !xsSelected.length) return;
     setXsBusy(true);
     setXsError('');
     try {
-      const res = await api.post('/api/graphics/export-social', { imageDataUrl: xsSource.imageDataUrl, presets: xsSelected });
+      const options = {};
+      xsSelected.forEach(id => { if (xsStrategies[id]) options[id] = { strategy: xsStrategies[id] }; });
+      const res = await api.post('/api/graphics/export-social', { imageDataUrl: xsSource.imageDataUrl, presets: xsSelected, options });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Export failed');
       setXsResult(data);
@@ -4739,19 +4746,41 @@ export default function GraphicsPage() {
                   </button>
                 </Tooltip>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                 {socialPresets.map(p => (
-                  <Tooltip key={p.id} text={`Include a ${p.label} crop in the export.`}>
-                    <label className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg border cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                      <input type="checkbox" checked={xsSelected.includes(p.id)} onChange={() => toggleXsPreset(p.id)} />
-                      {p.label}
-                    </label>
-                  </Tooltip>
+                  <div key={p.id} className="rounded-lg border px-2 py-1.5" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <Tooltip text={`Include a ${p.label} crop in the export.`}>
+                        <label className="flex items-center gap-2 text-xs cursor-pointer flex-1" style={{ color: 'var(--color-text)' }}>
+                          <input type="checkbox" checked={xsSelected.includes(p.id)} onChange={() => toggleXsPreset(p.id)} />
+                          {p.label}{p.width && p.height ? <span style={{ color: 'var(--color-muted)' }}> · {p.width}×{p.height}</span> : null}
+                        </label>
+                      </Tooltip>
+                      {xsSelected.includes(p.id) && (
+                        <Tooltip text="Which part of the image to keep for this size — different aspect ratios often need a different focus point.">
+                          <select
+                            value={xsStrategies[p.id] || 'smart'}
+                            onChange={e => setXsStrategyFor(p.id, e.target.value)}
+                            className="text-xs px-1.5 py-1 rounded-lg border flex-shrink-0"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            <option value="smart">Auto (attention)</option>
+                            <option value="entropy">Most detail</option>
+                            <option value="center">Center</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Each size uses the same smart, content-aware crop as Crop/Resize — the important part of the image stays in frame. All crops are bundled into a single ZIP.
+              Each size defaults to a smart, content-aware crop — the important part of the image stays in frame. Pick a different focus per size above if the auto crop cuts off something you need. All crops are bundled into one ZIP, and you'll get a preview of every crop before you download.
             </p>
             {xsError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{xsError}</div>}
             <Tooltip text="Generate a crop for every ticked size and download them as one ZIP."><button type="button" onClick={runExportSocial} disabled={xsBusy || !xsSource?.imageDataUrl || !xsSelected.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
@@ -4768,7 +4797,30 @@ export default function GraphicsPage() {
             </div>
             <div className="p-4">
               {xsResult?.zipDataUrl ? (
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{xsResult.count} crops · {formatBytes(xsResult.bytes)} ZIP</p>
+                <div className="space-y-3">
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{xsResult.count} crops · {formatBytes(xsResult.bytes)} ZIP</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
+                    {(xsResult.items || []).map(item => (
+                      <div key={item.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                        <div className="flex items-center justify-center p-2" style={{ minHeight: 90 }}>
+                          <img src={item.imageDataUrl} alt={item.label} className="max-h-24 max-w-full rounded-lg" />
+                        </div>
+                        <div className="px-2 py-1.5 border-t flex items-center justify-between gap-1" style={{ borderColor: 'var(--color-border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.label}</p>
+                            <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{item.width}×{item.height}</p>
+                          </div>
+                          <Tooltip text={`Download just the ${item.label} crop.`}>
+                            <button onClick={() => downloadDataUrl(item.imageDataUrl, item.fileName)} className="flex-shrink-0 hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+                              {getIcon('download', { size: 14 })}
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Not happy with a crop? Change its focus on the left and hit Export ZIP again.</p>
+                </div>
               ) : (
                 <ResultPlaceholder src={xsSource?.imageDataUrl} message="Your exported crops will appear here." />
               )}

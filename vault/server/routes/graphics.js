@@ -1913,8 +1913,15 @@ async function runResize(params) {
 
   if (preset) {
     // Same 'cover' smart-crop logic as the aspect-ratio crop branch below,
-    // applied directly to the preset's exact target dimensions.
-    pipeline = pipeline.resize(preset.width, preset.height, { fit: 'cover', position: sharp.strategy.attention });
+    // applied directly to the preset's exact target dimensions. `strategy`
+    // lets the caller override the focus point per preset — different
+    // platform aspect ratios often need different framing of the same source.
+    const strat = String(params?.strategy || 'smart');
+    let position;
+    if (strat === 'smart') position = sharp.strategy.attention;
+    else if (strat === 'entropy') position = sharp.strategy.entropy;
+    else position = GRAVITY_MAP[strat] || sharp.strategy.attention;
+    pipeline = pipeline.resize(preset.width, preset.height, { fit: 'cover', position });
   } else if (op === 'resize') {
     const width = clampInt(params?.width, 1, 12000, undefined);
     const height = clampInt(params?.height, 1, 12000, undefined);
@@ -2052,13 +2059,27 @@ router.post('/export-social', async (req, res) => {
       return res.status(400).json({ error: 'Select at least one preset to export' });
     }
 
+    const options = req.body?.options && typeof req.body.options === 'object' ? req.body.options : {};
     const files = [];
+    const items = [];
     for (const preset of presets) {
+      const strategy = String(options[preset.id]?.strategy || 'smart');
       // eslint-disable-next-line no-await-in-loop
-      const result = await runResize({ imageDataUrl, preset: preset.id });
+      const result = await runResize({ imageDataUrl, preset: preset.id, strategy });
       const buf = dataUrlToBuffer(result.imageDataUrl);
       const ext = result.format === 'jpeg' ? 'jpg' : result.format;
-      files.push({ name: `${preset.id}-${result.width}x${result.height}.${ext}`, buf });
+      const name = `${preset.id}-${result.width}x${result.height}.${ext}`;
+      files.push({ name, buf });
+      items.push({
+        id: preset.id,
+        label: preset.label,
+        strategy,
+        width: result.width,
+        height: result.height,
+        bytes: buf.length,
+        fileName: name,
+        imageDataUrl: result.imageDataUrl,
+      });
     }
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -2078,6 +2099,7 @@ router.post('/export-social', async (req, res) => {
       count: files.length,
       bytes: zip.length,
       zipDataUrl: `data:application/zip;base64,${zip.toString('base64')}`,
+      items,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Export failed' });
