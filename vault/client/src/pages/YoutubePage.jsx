@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useVoice } from '../hooks/useVoice';
+import Tooltip from '../components/Tooltip';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,10 +47,6 @@ function looksLikeNLP(text) {
 
 function youtubeUrl(videoId) {
   return `https://www.youtube.com/watch?v=${videoId}`;
-}
-
-function downloadUrl(videoId) {
-  return `https://cobalt.tools/#${encodeURIComponent(youtubeUrl(videoId))}`;
 }
 
 // ── Filter options ────────────────────────────────────────────────────────────
@@ -155,28 +152,16 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
             {[views, ago].filter(Boolean).join(' · ')}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <a
-              href={downloadUrl(video.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title="Download via cobalt.tools"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--color-primary)', fontSize: '0.68rem', fontWeight: 600, textDecoration: 'none' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/>
-              </svg>
-              Download
-            </a>
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleFav(video); }}
-              title={isFav ? 'Remove from favourites' : 'Save to favourites'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: isFav ? '#ef4444' : 'var(--color-muted)' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-            </button>
+            <Tooltip text={isFav ? 'Remove from favourites' : 'Save to favourites'}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFav(video); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: isFav ? '#ef4444' : 'var(--color-muted)' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -219,18 +204,11 @@ function FavCard({ fav, onPlay, onRemove }) {
           {fav.channel}{views ? ` · ${views}` : ''}
         </p>
       </div>
-      <a
-        href={downloadUrl(videoId)}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Download via cobalt.tools"
-        style={{ ...btnBase, padding: '0.3rem 0.65rem', fontSize: '0.7rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-primary)', textDecoration: 'none', flexShrink: 0 }}
-      >
-        Download
-      </a>
-      <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }} title="Remove">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <Tooltip text="Remove this video from your saved favourites.">
+        <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -265,18 +243,21 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-            <button onClick={() => onToggleFav(video)} title={isFav ? 'Remove from favourites' : 'Save to favourites'} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFav ? '#fee2e2' : 'var(--color-bg)', border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`, color: isFav ? '#ef4444' : 'var(--color-muted)' }}>
-              {isFav ? '♥ Saved' : '♡ Save'}
-            </button>
-            <a href={downloadUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-primary)', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-              Download
-            </a>
-            <a href={youtubeUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-              Open on YouTube
-            </a>
-            <button onClick={onClose} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-              Close
-            </button>
+            <Tooltip text={isFav ? 'Remove this video from your saved favourites.' : 'Save this video to your favourites for quick access later.'}>
+              <button onClick={() => onToggleFav(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFav ? '#fee2e2' : 'var(--color-bg)', border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`, color: isFav ? '#ef4444' : 'var(--color-muted)' }}>
+                {isFav ? '♥ Saved' : '♡ Save'}
+              </button>
+            </Tooltip>
+            <Tooltip text="Open this video directly on YouTube in a new tab.">
+              <a href={youtubeUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                Open on YouTube
+              </a>
+            </Tooltip>
+            <Tooltip text="Close this preview.">
+              <button onClick={onClose} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                Close
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -454,9 +435,15 @@ export default function YoutubePage() {
     await runSearch(q, { q, order: ord, duration: dur, publishedKey: '' });
   }
 
+  const TAB_TOOLTIPS = {
+    search: 'This search\'s results.',
+    favourites: 'Videos you\'ve saved for quick access.',
+    history: 'Your past searches — click Re-run to search again.',
+  };
+
   const tabBtn = (key, label, badge) => (
+    <Tooltip key={key} text={TAB_TOOLTIPS[key]}>
     <button
-      key={key}
       onClick={() => setTab(key)}
       style={{
         padding: '0.35rem 0.85rem', fontSize: '0.8rem', fontWeight: 500,
@@ -472,6 +459,7 @@ export default function YoutubePage() {
         </span>
       )}
     </button>
+    </Tooltip>
   );
 
   if (!canUse) return <Navigate to="/" replace />;
@@ -490,7 +478,7 @@ export default function YoutubePage() {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>YouTube</h1>
         </div>
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-          Search YouTube videos, download where permitted, save favourites, and replay past searches.
+          Search YouTube videos, save favourites, and replay past searches.
         </p>
       </div>
 
@@ -498,67 +486,78 @@ export default function YoutubePage() {
       <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 240px', minWidth: 200, position: 'relative' }}>
-            <input
-              type="text"
-              value={isListening ? (interimText || query) : query}
-              onChange={(e) => { setQuery(e.target.value); setInterpreted(null); }}
-              placeholder={isListening ? 'Listening…' : 'Search or describe what you want…'}
-              style={{
-                width: '100%', padding: '0.5rem 2.5rem 0.5rem 0.75rem',
-                borderRadius: '0.5rem', border: `2px solid ${isListening ? '#ef4444' : 'var(--color-border)'}`,
-                background: 'var(--color-bg)', color: 'var(--color-text)',
-                fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none',
-                boxSizing: 'border-box',
-              }}
-              onFocus={(e)  => { if (!isListening) e.target.style.borderColor = 'var(--color-primary)'; }}
-              onBlur={(e)   => { if (!isListening) e.target.style.borderColor = 'var(--color-border)'; }}
-              readOnly={isListening}
-            />
+            <Tooltip text="Type a topic, or describe what you want in plain language — filters like duration or date get picked up automatically.">
+              <input
+                type="text"
+                value={isListening ? (interimText || query) : query}
+                onChange={(e) => { setQuery(e.target.value); setInterpreted(null); }}
+                placeholder={isListening ? 'Listening…' : 'Search or describe what you want…'}
+                style={{
+                  width: '100%', padding: '0.5rem 2.5rem 0.5rem 0.75rem',
+                  borderRadius: '0.5rem', border: `2px solid ${isListening ? '#ef4444' : 'var(--color-border)'}`,
+                  background: 'var(--color-bg)', color: 'var(--color-text)',
+                  fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+                onFocus={(e)  => { if (!isListening) e.target.style.borderColor = 'var(--color-primary)'; }}
+                onBlur={(e)   => { if (!isListening) e.target.style.borderColor = 'var(--color-border)'; }}
+                readOnly={isListening}
+              />
+            </Tooltip>
             {/* Mic button inside input */}
             {isSTTAvailable && (
-              <button
-                type="button"
-                onClick={() => isListening ? stopListening() : startListening()}
-                title={isListening ? 'Stop recording' : 'Search by voice'}
-                style={{
-                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-                  color: isListening ? '#ef4444' : 'var(--color-muted)',
-                  animation: isListening ? 'pulse 1s infinite' : 'none',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={isListening ? '#ef4444' : 'currentColor'}>
-                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12h2z"/>
-                </svg>
-              </button>
+              <Tooltip text={isListening ? 'Stop recording.' : 'Search by speaking instead of typing.'}>
+                <button
+                  type="button"
+                  onClick={() => isListening ? stopListening() : startListening()}
+                  style={{
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                    color: isListening ? '#ef4444' : 'var(--color-muted)',
+                    animation: isListening ? 'pulse 1s infinite' : 'none',
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill={isListening ? '#ef4444' : 'currentColor'}>
+                    <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12h2z"/>
+                  </svg>
+                </button>
+              </Tooltip>
             )}
           </div>
 
-          <select value={order}        onChange={(e) => setOrder(e.target.value)}        style={selectStyle}>
-            {ORDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <Tooltip text="How to sort the results — relevance, newest first, most viewed, or highest rated.">
+            <select value={order}        onChange={(e) => setOrder(e.target.value)}        style={selectStyle}>
+              {ORDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </Tooltip>
 
-          <select value={duration}     onChange={(e) => setDuration(e.target.value)}     style={selectStyle}>
-            {DURATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <Tooltip text="Only show videos of roughly this length.">
+            <select value={duration}     onChange={(e) => setDuration(e.target.value)}     style={selectStyle}>
+              {DURATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </Tooltip>
 
-          <select value={publishedKey} onChange={(e) => setPublishedKey(e.target.value)} style={selectStyle}>
-            {PUBLISHED_AFTER_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
+          <Tooltip text="Only show videos published within this time window.">
+            <select value={publishedKey} onChange={(e) => setPublishedKey(e.target.value)} style={selectStyle}>
+              {PUBLISHED_AFTER_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </Tooltip>
 
-          <button
-            type="submit"
-            disabled={isBusy || !query.trim()}
-            style={{
-              ...btnBase,
-              padding: '0.5rem 1.25rem',
-              background: isBusy || !query.trim() ? 'var(--color-border)' : '#ef4444',
-              color: '#fff',
-              cursor: isBusy || !query.trim() ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {parsing ? 'Thinking…' : loading ? 'Searching…' : 'Search'}
-          </button>
+          <Tooltip text="Run the search with the query and filters above.">
+            <button
+              type="submit"
+              disabled={isBusy || !query.trim()}
+              style={{
+                ...btnBase,
+                padding: '0.5rem 1.25rem',
+                background: isBusy || !query.trim() ? 'var(--color-border)' : '#ef4444',
+                color: '#fff',
+                cursor: isBusy || !query.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {parsing ? 'Thinking…' : loading ? 'Searching…' : 'Search'}
+            </button>
+          </Tooltip>
         </div>
       </form>
 
@@ -578,7 +577,9 @@ export default function YoutubePage() {
             {interpreted.publishedKey && <> · <strong style={{ color: 'var(--color-text)' }}>{PUBLISHED_LABEL[interpreted.publishedKey]}</strong></>}
             {interpreted.reasoning && <> — <em>{interpreted.reasoning}</em></>}
           </span>
-          <button onClick={() => setInterpreted(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
+          <Tooltip text="Dismiss this — it doesn't change your search.">
+            <button onClick={() => setInterpreted(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
+          </Tooltip>
         </div>
       )}
 
@@ -684,8 +685,12 @@ export default function YoutubePage() {
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>{row.resultCount ?? row.result_count}</td>
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{timeAgo(row.createdAt || row.created_at)}</td>
                       <td style={{ padding: '0.6rem 0.9rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button onClick={() => replaySearch(row)} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: 6, fontFamily: 'inherit' }}>Re-run</button>
-                        <button onClick={() => deleteHistory(row.id)} style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                        <Tooltip text="Run this search again with the same query and filters.">
+                          <button onClick={() => replaySearch(row)} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: 6, fontFamily: 'inherit' }}>Re-run</button>
+                        </Tooltip>
+                        <Tooltip text="Remove this entry from your search history.">
+                          <button onClick={() => deleteHistory(row.id)} style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                        </Tooltip>
                       </td>
                     </tr>
                   );
