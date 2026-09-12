@@ -123,11 +123,9 @@ function parseCaptionXml(xml) {
   return segments.join(' ');
 }
 
-async function fetchYoutubeTranscript(url) {
-  const videoId = extractVideoId(url);
-  if (!videoId) throw new Error('Not a valid YouTube URL');
-
-  // Step 1: get caption track list via InnerTube
+// Fetch the raw caption track list for a video via InnerTube (shared by
+// fetchYoutubeTranscript and fetchYoutubeCaptionLanguages).
+async function fetchCaptionTracks(videoId) {
   let captionTracks;
   try {
     const data = await httpsPost(
@@ -145,9 +143,33 @@ async function fetchYoutubeTranscript(url) {
   if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
     throw new Error('No captions available for this video');
   }
+  return captionTracks;
+}
 
-  // Prefer English, fall back to first available
-  const track = captionTracks.find(t => t.languageCode === 'en') || captionTracks[0];
+// List available caption languages for a video, without fetching the transcript text.
+async function fetchYoutubeCaptionLanguages(url) {
+  const videoId = extractVideoId(url);
+  if (!videoId) throw new Error('Not a valid YouTube URL');
+
+  const captionTracks = await fetchCaptionTracks(videoId);
+  return captionTracks.map(t => ({
+    languageCode: t.languageCode,
+    name:         t.name?.simpleText || t.languageCode,
+    isDefault:    t.languageCode === 'en',
+  }));
+}
+
+async function fetchYoutubeTranscript(url, languageCode) {
+  const videoId = extractVideoId(url);
+  if (!videoId) throw new Error('Not a valid YouTube URL');
+
+  // Step 1: get caption track list via InnerTube
+  const captionTracks = await fetchCaptionTracks(videoId);
+
+  // Requested language, else prefer English, else fall back to first available
+  const track = (languageCode && captionTracks.find(t => t.languageCode === languageCode))
+    || captionTracks.find(t => t.languageCode === 'en')
+    || captionTracks[0];
   const trackUrl = track.baseUrl;
 
   // Safety: ensure track URL is from youtube.com
@@ -207,4 +229,4 @@ async function fetchYoutubeReference(url) {
   };
 }
 
-module.exports = { isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference };
+module.exports = { isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference, fetchYoutubeCaptionLanguages };

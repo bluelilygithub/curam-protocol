@@ -21,7 +21,7 @@ const { requireAuth } = require('../middleware/auth');
 const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { logUsage } = require('../utils/logUsage');
-const { fetchYoutubeTranscript } = require('../services/youtubeTranscript');
+const { fetchYoutubeTranscript, fetchYoutubeCaptionLanguages } = require('../services/youtubeTranscript');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -114,12 +114,18 @@ router.post('/parse-query', async (req, res) => {
 
 // ── Shared video mapping/enrichment ────────────────────────────────────────────
 
-// Given YouTube search.list items, fetch contentDetails/statistics and map into
-// this app's video shape. Reused by /search and /channel/:channelId.
+// Extract the video id from either a search.list item (id.videoId) or a
+// playlistItems.list item (snippet.resourceId.videoId).
+function itemVideoId(item) {
+  return item.id?.videoId || item.snippet?.resourceId?.videoId || null;
+}
+
+// Given YouTube search.list (or playlistItems.list) items, fetch contentDetails/statistics
+// and map into this app's video shape. Reused by /search, /channel/:channelId, /playlist/:playlistId.
 async function enrichAndMapItems(items, key) {
   if (!items.length) return [];
 
-  const videoIds = items.map((i) => i.id.videoId).filter(Boolean).join(',');
+  const videoIds = items.map(itemVideoId).filter(Boolean).join(',');
   const detailsData = await ytGet(`/youtube/v3/videos?part=contentDetails,statistics&id=${encodeURIComponent(videoIds)}&key=${encodeURIComponent(key)}`);
 
   const detailsMap = {};
@@ -131,9 +137,9 @@ async function enrichAndMapItems(items, key) {
   }
 
   return items
-    .filter((i) => i.id?.videoId)
+    .filter((i) => itemVideoId(i))
     .map((item) => {
-      const id = item.id.videoId;
+      const id = itemVideoId(item);
       const s  = item.snippet;
       return {
         id,
@@ -149,10 +155,25 @@ async function enrichAndMapItems(items, key) {
     });
 }
 
+// Extract a playlist id from a full YouTube playlist URL, mirroring the video-id
+// extraction pattern in youtubeTranscript.js. Also accepts a bare playlist id.
+function extractPlaylistId(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const list = parsed.searchParams.get('list');
+    if (list) return list;
+  } catch { /* not a URL — fall through */ }
+  // Bare id (YouTube playlist ids start with PL/UU/LL/FL/RD etc.)
+  if (/^[A-Za-z0-9_-]{10,}$/.test(raw)) return raw;
+  return null;
+}
+
 // ── Search ────────────────────────────────────────────────────────────────────
 
 router.get('/search', async (req, res) => {
-  const { q, order = 'relevance', duration = 'any', publishedAfter } = req.query;
+  const { q, order = 'relevance', duration = 'any', publishedAfter, eventType } = req.query;
   if (!q?.trim()) return res.status(400).json({ error: 'Query is required.' });
 
   let key;
@@ -171,6 +192,8 @@ router.get('/search', async (req, res) => {
     });
     if (duration && duration !== 'any') searchParams.set('videoDuration', duration);
     if (publishedAfter) searchParams.set('publishedAfter', publishedAfter);
+    // eventType=live is only valid alongside type=video, which is already hardcoded above.
+    if (eventType === 'live') searchParams.set('eventType', 'live');
 
     const searchData = await ytGet(`/youtube/v3/search?${searchParams}`);
     const items = searchData.items ?? [];
@@ -178,7 +201,7 @@ router.get('/search', async (req, res) => {
     if (!items.length) {
       await pool.query(
         `INSERT INTO youtube_search_history ("userId", query, filters, "resultCount") VALUES ($1,$2,$3,$4)`,
-        [req.user.id, q.trim(), JSON.stringify({ order, duration, publishedAfter: publishedAfter || null }), 0]
+        [req.user.id, q.trim(), JSON.stringify({ order, duration, publishedAfter: publishedAfter || null, eventType: eventType || null }), 0]
       );
       return res.json({ videos: [], totalResults: 0 });
     }
@@ -187,12 +210,102 @@ router.get('/search', async (req, res) => {
 
     await pool.query(
       `INSERT INTO youtube_search_history ("userId", query, filters, "resultCount") VALUES ($1,$2,$3,$4)`,
-      [req.user.id, q.trim(), JSON.stringify({ order, duration, publishedAfter: publishedAfter || null }), videos.length]
+      [req.user.id, q.trim(), JSON.stringify({ order, duration, publishedAfter: publishedAfter || null, eventType: eventType || null }), videos.length]
     );
 
     res.json({ videos, totalResults: searchData.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/search]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Playlist ──────────────────────────────────────────────────────────────────
+
+router.get('/playlist/:playlistId', async (req, res) => {
+  const playlistId = extractPlaylistId(req.params.playlistId);
+  if (!playlistId) return res.status(400).json({ error: 'A valid playlist URL or id is required.' });
+
+  let key;
+  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try {
+    const searchParams = new URLSearchParams({
+      part: 'snippet',
+      playlistId,
+      maxResults: '50',
+      key,
+    });
+    const listData = await ytGet(`/youtube/v3/playlistItems?${searchParams}`);
+    const items = listData.items ?? [];
+    const videos = await enrichAndMapItems(items, key);
+
+    res.json({ videos, totalResults: listData.pageInfo?.totalResults ?? videos.length });
+  } catch (err) {
+    console.error('[youtube/playlist]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Trending ──────────────────────────────────────────────────────────────────
+
+router.get('/trending', async (req, res) => {
+  const { regionCode = 'US', categoryId } = req.query;
+
+  let key;
+  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try {
+    const searchParams = new URLSearchParams({
+      part: 'snippet,contentDetails,statistics',
+      chart: 'mostPopular',
+      regionCode,
+      maxResults: '20',
+      key,
+    });
+    if (categoryId) searchParams.set('videoCategoryId', categoryId);
+
+    const data = await ytGet(`/youtube/v3/videos?${searchParams}`);
+    const items = data.items ?? [];
+
+    // videos.list(chart=mostPopular) already returns duration/viewCount in one call — no enrichment call needed.
+    const videos = items.map((v) => ({
+      id:          v.id,
+      title:       v.snippet?.title,
+      description: v.snippet?.description,
+      channel:     v.snippet?.channelTitle,
+      channelId:   v.snippet?.channelId,
+      publishedAt: v.snippet?.publishedAt,
+      thumbnail:   v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url,
+      duration:    v.contentDetails?.duration,
+      viewCount:   v.statistics?.viewCount,
+    }));
+
+    res.json({ videos, totalResults: data.pageInfo?.totalResults ?? videos.length });
+  } catch (err) {
+    console.error('[youtube/trending]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Categories ────────────────────────────────────────────────────────────────
+
+router.get('/categories', async (req, res) => {
+  const { regionCode = 'US' } = req.query;
+
+  let key;
+  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try {
+    const searchParams = new URLSearchParams({ part: 'snippet', regionCode, key });
+    const data = await ytGet(`/youtube/v3/videoCategories?${searchParams}`);
+    const categories = (data.items ?? [])
+      .filter((c) => c.snippet?.assignable)
+      .map((c) => ({ id: c.id, title: c.snippet?.title }));
+
+    res.json({ categories });
+  } catch (err) {
+    console.error('[youtube/categories]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -233,13 +346,30 @@ router.get('/channel/:channelId', async (req, res) => {
 
 const SUMMARY_SYSTEM = `You summarize YouTube video transcripts. Write a concise summary in a few sentences covering what the video is about and its key points. Do not re-transcribe the video or list timestamps — just the gist, in plain prose.`;
 
-router.post('/transcript', async (req, res) => {
-  const { videoId, summarize } = req.body;
+router.get('/transcript-languages/:videoId', async (req, res) => {
+  const { videoId } = req.params;
   if (!videoId) return res.status(400).json({ error: 'videoId required.' });
 
   try {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const { title, content } = await fetchYoutubeTranscript(url);
+    const languages = await fetchYoutubeCaptionLanguages(url);
+    res.json({ languages });
+  } catch (err) {
+    console.error('[youtube/transcript-languages]', err.message);
+    if (/no captions available/i.test(err.message || '')) {
+      return res.status(404).json({ error: 'No captions are available for this video.' });
+    }
+    res.status(500).json({ error: 'Could not fetch caption languages for this video.' });
+  }
+});
+
+router.post('/transcript', async (req, res) => {
+  const { videoId, summarize, languageCode } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId required.' });
+
+  try {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const { title, content } = await fetchYoutubeTranscript(url, languageCode);
 
     if (!summarize) {
       return res.json({ title, transcript: content });
@@ -260,6 +390,52 @@ router.post('/transcript', async (req, res) => {
       return res.status(404).json({ error: 'No captions are available for this video.' });
     }
     res.status(500).json({ error: 'Could not fetch a transcript for this video.' });
+  }
+});
+
+// ── Comments (read-only) ─────────────────────────────────────────────────────
+
+router.get('/comments/:videoId', async (req, res) => {
+  const { videoId } = req.params;
+  const { pageToken } = req.query;
+  if (!videoId) return res.status(400).json({ error: 'videoId required.' });
+
+  let key;
+  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try {
+    const searchParams = new URLSearchParams({
+      part: 'snippet',
+      videoId,
+      order: 'relevance',
+      maxResults: '20',
+      textFormat: 'plainText',
+      key,
+    });
+    if (pageToken) searchParams.set('pageToken', pageToken);
+
+    const data = await ytGet(`/youtube/v3/commentThreads?${searchParams}`);
+    const comments = (data.items ?? []).map((item) => {
+      const s = item.snippet?.topLevelComment?.snippet;
+      return {
+        id:          item.id,
+        author:      s?.authorDisplayName,
+        authorImage: s?.authorProfileImageUrl,
+        text:        s?.textDisplay,
+        likeCount:   s?.likeCount,
+        publishedAt: s?.publishedAt,
+      };
+    });
+
+    res.json({ comments, nextPageToken: data.nextPageToken || null });
+  } catch (err) {
+    console.error('[youtube/comments]', err.message);
+    // YouTube returns a 403 with reason "commentsDisabled" when a video's owner has turned off comments —
+    // the surfaced error message text reads like "...has disabled comments for this video."
+    if (/commentsDisabled|disabled comments/i.test(err.message || '')) {
+      return res.status(404).json({ error: 'Comments are disabled for this video.' });
+    }
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -331,6 +507,61 @@ router.delete('/favourites/:videoId', async (req, res) => {
   try {
     await pool.query(
       'DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = $2',
+      [req.user.id, req.params.videoId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Watch history ─────────────────────────────────────────────────────────────
+
+router.get('/watch-history', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "watchedAt"
+       FROM youtube_watch_history
+       WHERE "userId" = $1
+       ORDER BY "watchedAt" DESC
+       LIMIT 30`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/watch-history', async (req, res) => {
+  const { videoId, title, channel, thumbnail, duration, viewCount, publishedAt } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId required.' });
+  try {
+    await pool.query(
+      `INSERT INTO youtube_watch_history ("userId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "watchedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+       ON CONFLICT ("userId", "videoId") DO UPDATE SET "watchedAt" = NOW()`,
+      [req.user.id, videoId, title || 'YouTube video', channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/watch-history/all', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM youtube_watch_history WHERE "userId" = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/watch-history/:videoId', async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM youtube_watch_history WHERE "userId" = $1 AND "videoId" = $2',
       [req.user.id, req.params.videoId]
     );
     res.json({ ok: true });

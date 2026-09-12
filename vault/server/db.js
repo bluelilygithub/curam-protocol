@@ -1605,6 +1605,28 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_youtube_saved_list_items_list
       ON youtube_saved_list_items ("listId", position)
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_watch_history (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"     TEXT NOT NULL,
+      title         TEXT NOT NULL,
+      channel       TEXT,
+      thumbnail     TEXT,
+      duration      TEXT,
+      "viewCount"   TEXT,
+      "publishedAt" TIMESTAMPTZ,
+      "watchedAt"   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_youtube_watch_history_user_video
+      ON youtube_watch_history ("userId", "videoId")
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_youtube_watch_history_user
+      ON youtube_watch_history ("userId", "watchedAt" DESC)
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gmail_classifications (

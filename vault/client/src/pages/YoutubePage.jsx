@@ -78,6 +78,15 @@ const PUBLISHED_LABEL = Object.fromEntries(PUBLISHED_AFTER_OPTIONS.map(o => [o.k
 const DURATION_LABEL  = Object.fromEntries(DURATION_OPTIONS.map(o => [o.value, o.label]));
 const ORDER_LABEL     = Object.fromEntries(ORDER_OPTIONS.map(o => [o.value, o.label]));
 
+// A short curated list of YouTube's supported regionCode ISO values — not exhaustive.
+const REGION_OPTIONS = [
+  { label: 'United States', value: 'US' },
+  { label: 'United Kingdom', value: 'GB' },
+  { label: 'Australia',      value: 'AU' },
+  { label: 'Canada',         value: 'CA' },
+  { label: 'India',          value: 'IN' },
+];
+
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const selectStyle = {
@@ -223,15 +232,22 @@ function TranscriptPanel({ video, onClose }) {
   const [transcript, setTranscript] = useState('');
   const [summary, setSummary] = useState('');
   const [showSummary, setShowSummary] = useState(false);
+  const [languages, setLanguages] = useState([]);
+  const [languageCode, setLanguageCode] = useState('');
 
-  async function loadTranscript(summarize) {
+  async function loadTranscript(summarize, langOverride) {
     if (summarize) setSummarizing(true); else setLoading(true);
     setError('');
     try {
-      const data = await api.post('/api/youtube/transcript', { videoId: video.id, summarize }).then(r => r.json());
+      const data = await api.post('/api/youtube/transcript', {
+        videoId: video.id,
+        summarize,
+        languageCode: langOverride ?? languageCode ?? undefined,
+      }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       setTranscript(data.transcript || '');
       if (data.summary) { setSummary(data.summary); setShowSummary(true); }
+      else if (!summarize) { setSummary(''); setShowSummary(false); }
     } catch (err) {
       setError(err.message || 'Could not load the transcript.');
     } finally {
@@ -240,7 +256,20 @@ function TranscriptPanel({ video, onClose }) {
     }
   }
 
-  useEffect(() => { loadTranscript(false); }, [video.id]);
+  useEffect(() => {
+    loadTranscript(false);
+    api.get(`/api/youtube/transcript-languages/${video.id}`).then(r => r.json()).then((data) => {
+      const langs = Array.isArray(data.languages) ? data.languages : [];
+      setLanguages(langs);
+      const def = langs.find((l) => l.isDefault) || langs[0];
+      if (def) setLanguageCode(def.languageCode);
+    }).catch(() => {});
+  }, [video.id]);
+
+  function changeLanguage(code) {
+    setLanguageCode(code);
+    loadTranscript(false, code);
+  }
 
   function copyText(text) {
     navigator.clipboard?.writeText(text).then(
@@ -259,7 +288,19 @@ function TranscriptPanel({ video, onClose }) {
           </Tooltip>
         </div>
 
-        <div style={{ padding: '0.75rem 1.1rem', display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ padding: '0.75rem 1.1rem', display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+          {languages.length > 1 && (
+            <Tooltip text="Choose which caption language to fetch the transcript in.">
+              <select
+                value={languageCode}
+                onChange={(e) => changeLanguage(e.target.value)}
+                disabled={loading}
+                style={{ ...selectStyle, padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+              >
+                {languages.map((l) => <option key={l.languageCode} value={l.languageCode}>{l.name}</option>)}
+              </select>
+            </Tooltip>
+          )}
           <Tooltip text="Show the full transcript text.">
             <button
               onClick={() => setShowSummary(false)}
@@ -303,16 +344,105 @@ function TranscriptPanel({ video, onClose }) {
   );
 }
 
+// ── Comments panel ────────────────────────────────────────────────────────────
+
+function CommentsPanel({ video, onClose }) {
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [comments, setComments] = useState([]);
+  const [nextPageToken, setNextPageToken] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  async function load(pageToken) {
+    if (pageToken) setLoadingMore(true); else setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      if (pageToken) params.set('pageToken', pageToken);
+      const data = await api.get(`/api/youtube/comments/${video.id}?${params}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setComments((prev) => pageToken ? [...prev, ...(data.comments || [])] : (data.comments || []));
+      setNextPageToken(data.nextPageToken || null);
+    } catch (err) {
+      setError(err.message || 'Could not load comments.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }
+
+  useEffect(() => { load(null); }, [video.id]);
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '0.9rem 1.1rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)', flex: 1, minWidth: 0 }}>Comments — {video.title}</p>
+          <Tooltip text="Close this panel.">
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', fontSize: '1rem' }}>✕</button>
+          </Tooltip>
+        </div>
+        <div style={{ padding: '1rem 1.1rem', overflowY: 'auto', flex: 1 }}>
+          {loading && <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>Loading comments…</p>}
+          {!loading && error && <p style={{ color: '#b91c1c', fontSize: '0.85rem' }}>{error}</p>}
+          {!loading && !error && comments.length === 0 && (
+            <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>No comments found.</p>
+          )}
+          {!loading && !error && comments.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+              {comments.map((c) => (
+                <div key={c.id} style={{ display: 'flex', gap: '0.6rem' }}>
+                  {c.authorImage && <img src={c.authorImage} alt={c.author} style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0 }} />}
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                      {c.author} <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}>· {timeAgo(c.publishedAt)}{c.likeCount ? ` · ${c.likeCount} likes` : ''}</span>
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--color-text)', whiteSpace: 'pre-wrap' }}>{c.text}</p>
+                  </div>
+                </div>
+              ))}
+              {nextPageToken && (
+                <Tooltip text="Load the next page of comments.">
+                  <button
+                    onClick={() => load(nextPageToken)}
+                    disabled={loadingMore}
+                    style={{ ...btnBase, alignSelf: 'center', padding: '0.35rem 0.9rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                  >
+                    {loadingMore ? 'Loading…' : 'Load more'}
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
 function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showComments, setShowComments]     = useState(false);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    api.post('/api/youtube/watch-history', {
+      videoId:     video.id,
+      title:       video.title,
+      channel:     video.channel,
+      thumbnail:   video.thumbnail,
+      duration:    video.duration,
+      viewCount:   video.viewCount,
+      publishedAt: video.publishedAt,
+    }).catch(() => {});
+  }, [video.id]);
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
@@ -338,6 +468,11 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
             <Tooltip text="Fetch the caption transcript for this video, or an AI summary of it.">
               <button onClick={() => setShowTranscript(true)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                 Transcript
+              </button>
+            </Tooltip>
+            <Tooltip text="See this video's top-level public comments.">
+              <button onClick={() => setShowComments(true)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                Comments
               </button>
             </Tooltip>
             {video.channelId && onMoreFromChannel && (
@@ -366,6 +501,7 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
         </div>
       </div>
       {showTranscript && <TranscriptPanel video={video} onClose={() => setShowTranscript(false)} />}
+      {showComments && <CommentsPanel video={video} onClose={() => setShowComments(false)} />}
     </div>
   );
 }
@@ -388,6 +524,7 @@ export default function YoutubePage() {
   const [order,        setOrder]        = useState('relevance');
   const [duration,     setDuration]     = useState('any');
   const [publishedKey, setPublishedKey] = useState('');
+  const [liveOnly,     setLiveOnly]     = useState(false);
   const [parsing,      setParsing]      = useState(false);
   const [interpreted,  setInterpreted]  = useState(null); // { q, order, duration, publishedKey, reasoning }
   const [loading,      setLoading]      = useState(false);
@@ -398,6 +535,8 @@ export default function YoutubePage() {
   const [favs,    setFavs]    = useState([]);
   const [favSet,  setFavSet]  = useState(new Set());
   const [history, setHistory] = useState([]);
+  const [watchHistory, setWatchHistory] = useState([]);
+  const [showWatchHistory, setShowWatchHistory] = useState(false);
 
   const [activeVideo, setActiveVideo] = useState(null);
 
@@ -406,10 +545,24 @@ export default function YoutubePage() {
   const [channelVideos, setChannelVideos] = useState([]);
   const [channelLoading, setChannelLoading] = useState(false);
 
+  // Playlist view — open a playlist URL/id as an ordered set, same grid + back affordance
+  const [playlistInput,   setPlaylistInput]   = useState('');
+  const [playlistView,    setPlaylistView]    = useState(null); // { title }
+  const [playlistVideos,  setPlaylistVideos]  = useState([]);
+  const [playlistLoading, setPlaylistLoading] = useState(false);
+
   // Saved lists
   const [lists,        setLists]        = useState([]);
   const [openList,     setOpenList]     = useState(null); // { id, title, videos }
   const [listLoading,  setListLoading]  = useState(false);
+
+  // Trending
+  const [trendingRegion,   setTrendingRegion]   = useState('US');
+  const [trendingCategory, setTrendingCategory] = useState('');
+  const [categories,       setCategories]       = useState([]);
+  const [trendingVideos,   setTrendingVideos]   = useState([]);
+  const [trendingLoading,  setTrendingLoading]  = useState(false);
+  const [trendingLoaded,   setTrendingLoaded]   = useState(false);
 
   useEffect(() => {
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
@@ -420,6 +573,8 @@ export default function YoutubePage() {
     loadFavs();
     loadHistory();
     loadLists();
+    loadWatchHistory();
+    loadCategories('US');
   }, []);
 
   // When mic finishes, populate query and auto-search
@@ -450,9 +605,82 @@ export default function YoutubePage() {
     }).catch(() => {});
   }
 
+  function loadWatchHistory() {
+    api.get('/api/youtube/watch-history').then(r => r.json()).then((rows) => {
+      setWatchHistory(Array.isArray(rows) ? rows : []);
+    }).catch(() => {});
+  }
+
+  function loadCategories(regionCode) {
+    api.get(`/api/youtube/categories?regionCode=${encodeURIComponent(regionCode)}`).then(r => r.json()).then((data) => {
+      setCategories(Array.isArray(data.categories) ? data.categories : []);
+    }).catch(() => {});
+  }
+
+  async function loadTrending(regionCode = trendingRegion, categoryId = trendingCategory) {
+    setTrendingLoading(true);
+    setTrendingLoaded(true);
+    try {
+      const params = new URLSearchParams({ regionCode });
+      if (categoryId) params.set('categoryId', categoryId);
+      const data = await api.get(`/api/youtube/trending?${params}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setTrendingVideos(data.videos ?? []);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Could not load trending videos.' });
+    } finally {
+      setTrendingLoading(false);
+    }
+  }
+
+  function openTrendingTab() {
+    setTab('trending');
+    if (!trendingLoaded) loadTrending();
+  }
+
+  function changeTrendingRegion(regionCode) {
+    setTrendingRegion(regionCode);
+    setTrendingCategory('');
+    loadCategories(regionCode);
+    loadTrending(regionCode, '');
+  }
+
+  function changeTrendingCategory(categoryId) {
+    setTrendingCategory(categoryId);
+    loadTrending(trendingRegion, categoryId);
+  }
+
+  async function openPlaylist(rawInput) {
+    const input = (rawInput ?? playlistInput).trim();
+    if (!input) return;
+    setActiveVideo(null);
+    setChannelView(null);
+    setPlaylistView({ title: 'Playlist' });
+    setPlaylistLoading(true);
+    setPlaylistVideos([]);
+    setTab('search');
+    try {
+      const data = await api.get(`/api/youtube/playlist/${encodeURIComponent(input)}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      setPlaylistVideos(data.videos ?? []);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Could not open this playlist.' });
+      setPlaylistView(null);
+    } finally {
+      setPlaylistLoading(false);
+    }
+  }
+
+  function backFromPlaylist() {
+    setPlaylistView(null);
+    setPlaylistVideos([]);
+  }
+
   async function openMoreFromChannel(video) {
     if (!video.channelId) return;
     setActiveVideo(null);
+    setPlaylistView(null);
+    setPlaylistVideos([]);
     setChannelView({ channelId: video.channelId, channelName: video.channel });
     setChannelLoading(true);
     setChannelVideos([]);
@@ -474,9 +702,9 @@ export default function YoutubePage() {
   }
 
   async function saveCurrentSearchAsList() {
-    const source = channelView ? channelVideos : videos;
+    const source = channelView ? channelVideos : (playlistView ? playlistVideos : videos);
     if (!source.length) return;
-    const title = window.prompt('Name this list:', channelView ? `${channelView.channelName} videos` : query);
+    const title = window.prompt('Name this list:', channelView ? `${channelView.channelName} videos` : (playlistView ? 'Playlist videos' : query));
     if (!title?.trim()) return;
     try {
       await api.post('/api/youtube/lists', { title: title.trim(), videos: source });
@@ -550,6 +778,7 @@ export default function YoutubePage() {
       const publishedAfter = pub?.getIso ? pub.getIso() : '';
       const params = new URLSearchParams({ q: searchQ, order: searchOrder, duration: searchDuration });
       if (publishedAfter) params.set('publishedAfter', publishedAfter);
+      if (liveOnly) params.set('eventType', 'live');
 
       const data = await api.get(`/api/youtube/search?${params}`).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -616,15 +845,16 @@ export default function YoutubePage() {
 
   const TAB_TOOLTIPS = {
     search: 'This search\'s results.',
+    trending: 'What\'s popular right now, by region and category.',
     favourites: 'Videos you\'ve saved for quick access.',
     history: 'Your past searches — click Re-run to search again.',
     lists: 'Named lists of results you\'ve saved to come back to later.',
   };
 
-  const tabBtn = (key, label, badge) => (
+  const tabBtn = (key, label, badge, onClick) => (
     <Tooltip key={key} text={TAB_TOOLTIPS[key]}>
     <button
-      onClick={() => setTab(key)}
+      onClick={onClick || (() => setTab(key))}
       style={{
         padding: '0.35rem 0.85rem', fontSize: '0.8rem', fontWeight: 500,
         fontFamily: 'inherit', borderRadius: '0.5rem', cursor: 'pointer', border: 'none',
@@ -723,6 +953,13 @@ export default function YoutubePage() {
             </select>
           </Tooltip>
 
+          <Tooltip text="Only show streams that are currently broadcasting live, matching your query.">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: 'var(--color-muted)', cursor: 'pointer', padding: '0.4rem 0.2rem' }}>
+              <input type="checkbox" checked={liveOnly} onChange={(e) => setLiveOnly(e.target.checked)} />
+              Live now
+            </label>
+          </Tooltip>
+
           <Tooltip text="Run the search with the query and filters above.">
             <button
               type="submit"
@@ -740,6 +977,29 @@ export default function YoutubePage() {
           </Tooltip>
         </div>
       </form>
+
+      {/* Playlist entry */}
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <Tooltip text="Paste a full YouTube playlist URL, or just its playlist id, to open it as an ordered set of videos.">
+          <input
+            type="text"
+            value={playlistInput}
+            onChange={(e) => setPlaylistInput(e.target.value)}
+            placeholder="Paste a YouTube playlist URL or id…"
+            style={{ flex: '1 1 260px', minWidth: 200, padding: '0.4rem 0.6rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: '0.8rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </Tooltip>
+        <Tooltip text="Open this playlist's videos.">
+          <button
+            type="button"
+            onClick={() => openPlaylist()}
+            disabled={!playlistInput.trim()}
+            style={{ ...btnBase, padding: '0.4rem 0.9rem', fontSize: '0.8rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', opacity: !playlistInput.trim() ? 0.6 : 1 }}
+          >
+            Open playlist
+          </button>
+        </Tooltip>
+      </div>
 
       {/* Interpreted strip */}
       {interpreted && !isBusy && (
@@ -766,6 +1026,7 @@ export default function YoutubePage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem' }}>
         {tabBtn('search',     'Results',    videos.length)}
+        {tabBtn('trending',   'Trending',   0, openTrendingTab)}
         {tabBtn('favourites', 'Favourites', favs.length)}
         {tabBtn('history',    'History',    history.length)}
         {tabBtn('lists',      'Lists',      lists.length)}
@@ -779,27 +1040,34 @@ export default function YoutubePage() {
       )}
 
       {/* ── Search Results ─────────────────────────────────────────────────── */}
-      {tab === 'search' && (
+      {tab === 'search' && (() => {
+        const inChannel  = !!channelView;
+        const inPlaylist = !!playlistView && !inChannel;
+        const extraView  = inChannel || inPlaylist;
+        const extraLoading = inChannel ? channelLoading : (inPlaylist ? playlistLoading : false);
+        const extraVideos  = inChannel ? channelVideos  : (inPlaylist ? playlistVideos  : []);
+        const extraBack    = inChannel ? backToSearch   : backFromPlaylist;
+        const extraLabel   = inChannel ? <>Videos from <strong style={{ color: 'var(--color-text)' }}>{channelView.channelName}</strong></> : 'Playlist videos';
+
+        return (
         <div>
-          {channelView && (
+          {extraView && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
               <Tooltip text="Go back to your search results.">
-                <button onClick={backToSearch} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                <button onClick={extraBack} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                   ← Back to search
                 </button>
               </Tooltip>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', margin: 0 }}>
-                Videos from <strong style={{ color: 'var(--color-text)' }}>{channelView.channelName}</strong>
-              </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', margin: 0 }}>{extraLabel}</p>
             </div>
           )}
 
-          {(channelView ? channelLoading : isBusy) && (
+          {(extraView ? extraLoading : isBusy) && (
             <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-              {channelView ? 'Loading channel videos…' : (parsing ? 'Understanding your request…' : 'Searching YouTube…')}
+              {inChannel ? 'Loading channel videos…' : inPlaylist ? 'Loading playlist videos…' : (parsing ? 'Understanding your request…' : 'Searching YouTube…')}
             </div>
           )}
-          {!channelView && !isBusy && videos.length === 0 && (
+          {!extraView && !isBusy && videos.length === 0 && (
             <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="#d1d5db" style={{ margin: '0 auto 1rem' }}>
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
@@ -809,17 +1077,17 @@ export default function YoutubePage() {
               </p>
             </div>
           )}
-          {channelView && !channelLoading && channelVideos.length === 0 && (
+          {extraView && !extraLoading && extraVideos.length === 0 && (
             <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
-              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No videos found for this channel.</p>
+              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>{inChannel ? 'No videos found for this channel.' : 'No videos found in this playlist.'}</p>
             </div>
           )}
-          {((channelView && !channelLoading && channelVideos.length > 0) || (!channelView && !isBusy && videos.length > 0)) && (
+          {((extraView && !extraLoading && extraVideos.length > 0) || (!extraView && !isBusy && videos.length > 0)) && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: 0 }}>
-                  {channelView
-                    ? `Showing ${channelVideos.length} videos`
+                  {extraView
+                    ? `Showing ${extraVideos.length} videos`
                     : `Showing ${videos.length} of ~${totalResults.toLocaleString()} results`}
                 </p>
                 <Tooltip text="Save this whole set of results as a named list you can come back to later.">
@@ -829,11 +1097,47 @@ export default function YoutubePage() {
                 </Tooltip>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-                {(channelView ? channelVideos : videos).map((v) => (
+                {(extraView ? extraVideos : videos).map((v) => (
                   <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
                 ))}
               </div>
             </>
+          )}
+        </div>
+        );
+      })()}
+
+      {/* ── Trending ───────────────────────────────────────────────────────── */}
+      {tab === 'trending' && (
+        <div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <Tooltip text="Show what's popular in this region.">
+              <select value={trendingRegion} onChange={(e) => changeTrendingRegion(e.target.value)} style={selectStyle}>
+                {REGION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Tooltip>
+            <Tooltip text="Only show trending videos in this category.">
+              <select value={trendingCategory} onChange={(e) => changeTrendingCategory(e.target.value)} style={selectStyle}>
+                <option value="">All categories</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            </Tooltip>
+          </div>
+
+          {trendingLoading && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Loading trending videos…</div>
+          )}
+          {!trendingLoading && trendingVideos.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
+              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No trending videos found for this region/category.</p>
+            </div>
+          )}
+          {!trendingLoading && trendingVideos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+              {trendingVideos.map((v) => (
+                <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -866,6 +1170,49 @@ export default function YoutubePage() {
 
       {/* ── History ────────────────────────────────────────────────────────── */}
       {tab === 'history' && (
+        <div>
+          <div style={{ marginBottom: '1rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', overflow: 'hidden' }}>
+            <Tooltip text="Videos you've opened recently, most recent first.">
+              <button
+                onClick={() => setShowWatchHistory((s) => !s)}
+                style={{ ...btnBase, width: '100%', textAlign: 'left', padding: '0.75rem 1rem', background: 'none', color: 'var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <span>Recently watched {watchHistory.length > 0 && `(${watchHistory.length})`}</span>
+                <span style={{ color: 'var(--color-muted)', fontSize: '0.75rem' }}>{showWatchHistory ? '▲ Hide' : '▼ Show'}</span>
+              </button>
+            </Tooltip>
+            {showWatchHistory && (
+              <div style={{ borderTop: '1px solid var(--color-border)', padding: '0.75rem 1rem' }}>
+                {watchHistory.length === 0 ? (
+                  <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem', margin: 0 }}>Nothing watched yet — opening a video records it here.</p>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                      <Tooltip text="Remove every entry from your watch history.">
+                        <button
+                          onClick={async () => { await api.delete('/api/youtube/watch-history/all').catch(() => {}); setWatchHistory([]); }}
+                          style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          Clear all
+                        </button>
+                      </Tooltip>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                      {watchHistory.map((v) => (
+                        <VideoCard
+                          key={v.videoId}
+                          video={{ id: v.videoId, title: v.title, channel: v.channel, thumbnail: v.thumbnail, duration: v.duration, viewCount: v.viewCount, publishedAt: v.publishedAt }}
+                          isFav={favSet.has(v.videoId)}
+                          onPlay={setActiveVideo}
+                          onToggleFav={toggleFav}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', overflow: 'hidden' }}>
           {history.length === 0 ? (
             <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-muted)', fontSize: '0.875rem' }}>No search history yet.</p>
@@ -906,6 +1253,7 @@ export default function YoutubePage() {
               </tbody>
             </table>
           )}
+        </div>
         </div>
       )}
 
