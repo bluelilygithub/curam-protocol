@@ -1010,6 +1010,39 @@ export default function VideosPage() {
     }
   };
 
+  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson, forTool }) => {
+    startProcessing(label, 'Processing on the server with ffmpeg.');
+    try {
+      const res = await api.postForm(`/api/videos/${endpoint}`, formData);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Request failed');
+      }
+      if (isJson) {
+        const data = await res.json();
+        return data;
+      }
+      const blob = await res.blob();
+      setResultFromBlob(blob, resultFilename, forTool ?? tool);
+      setLastTransaction({ tool: forTool ?? endpoint });
+      addToast('Done', 'success');
+      return blob;
+    } catch (err) {
+      addToast(err.message, 'error');
+      throw err;
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, setResultFromBlob, addToast, tool]);
+
+  const requireFile = () => {
+    if (!sourceFile) {
+      addToast('Choose a video file first', 'error');
+      return false;
+    }
+    return true;
+  };
+
   const handleToGif = useCallback(async () => {
     if (!requireFile()) return;
     const fd = new FormData();
@@ -1173,39 +1206,6 @@ export default function VideosPage() {
       addToast('Could not load result as source', 'error');
     }
   }, [resultName, addToast]);
-
-  const runFormVideo = useCallback(async (endpoint, formData, { label, resultFilename, isJson, forTool }) => {
-    startProcessing(label, 'Processing on the server with ffmpeg.');
-    try {
-      const res = await api.postForm(`/api/videos/${endpoint}`, formData);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Request failed');
-      }
-      if (isJson) {
-        const data = await res.json();
-        return data;
-      }
-      const blob = await res.blob();
-      setResultFromBlob(blob, resultFilename, forTool ?? tool);
-      setLastTransaction({ tool: forTool ?? endpoint });
-      addToast('Done', 'success');
-      return blob;
-    } catch (err) {
-      addToast(err.message, 'error');
-      throw err;
-    } finally {
-      stopProcessing();
-    }
-  }, [startProcessing, stopProcessing, setResultFromBlob, addToast, tool]);
-
-  const requireFile = () => {
-    if (!sourceFile) {
-      addToast('Choose a video file first', 'error');
-      return false;
-    }
-    return true;
-  };
 
   const handleProbe = async () => {
     if (!requireFile()) return;
