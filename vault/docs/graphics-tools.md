@@ -1,6 +1,6 @@
 # Graphics Tools
 
-The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles thirty-eight tools behind a grouped, searchable left sidebar; the active tool fills the main area.
+The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles forty-one tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
 **Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
@@ -15,8 +15,8 @@ Most tools run **locally and free** via [`sharp`](https://sharp.pixelplumbing.co
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate, Upscale, Background (production), Inpaint | ComfyUI locally, Replicate/FAL hosted; cost + token usage is logged and shown |
-| Local (sharp) | Convert, Compress, Batch, Animate, Pipeline, Recolor, Crop/Resize, Canvas Extend, Effects, Adjust, Watermark, Collage, Remove Meta, Image Diff, Background (local), Perspective Correct, Smart Crop, Color Grading, Batch Text, Auto-enhance, Blur Detection | CPU-bound, no network |
-| Browser-only | Annotate, Redact, Picker, Histogram, Contrast, Palette, Extract Text (OCR), File Info, PDF → Images | Canvas work; nothing uploaded (OCR fetches its language model from a CDN on first use) |
+| Local (sharp) | Convert, Compress, Batch, Animate, Pipeline, Recolor, Crop/Resize, Canvas Extend, Effects, Adjust, Watermark, Collage, Remove Meta, Image Diff, Background (local), Perspective Correct, Smart Crop, Color Grading, Batch Text, Auto-enhance, Blur Detection, Print Ready, Extract Element | CPU-bound, no network |
+| Browser-only | Annotate, Redact, Eraser, Picker, Histogram, Contrast, Palette, Extract Text (OCR), File Info, PDF → Images | Canvas work; nothing uploaded (OCR fetches its language model from a CDN on first use) |
 
 ---
 
@@ -27,11 +27,11 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 | Group | Tools |
 |---|---|
 | **Create** | Generate, Animate |
-| **Optimise** | Upscale, Convert, Compress, Batch, PDF → Images, Auto-enhance |
+| **Optimise** | Upscale, Convert, Compress, Batch, PDF → Images, Print Ready, Auto-enhance |
 | **Transform** | Crop / Resize, Canvas Extend, Perspective Correct, Smart Crop |
 | **Enhance** | Effects, Adjust, Color Grading, Pipeline |
 | **Compose** | Annotate, Text Overlay, Composite, Watermark, Batch Text, Collage, Favicon / Icons, Vectorize (SVG), AI Icon Library |
-| **Retouch** | Background, Recolor, Redact, Inpaint |
+| **Retouch** | Background, Extract Element, Recolor, Eraser, Redact, Inpaint |
 | **Analyse** | Picker, Histogram, Contrast (WCAG), Palette, Extract Text, Blur Detection, Image Diff, Remove Meta, File Info |
 
 ---
@@ -51,6 +51,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 - **Batch** — apply one operation across many images (up to 25) at once: **Watermark**, **Resize** (width/height, fit, or a social-size preset), **Convert format** (with quality), **Compress**, or **Strip metadata**. Per-file results with individual downloads plus **Download all**; one bad file doesn't abort the run. Watermark/resize/convert/compress go through `POST /api/graphics/batch` (`{ op, items, params }`, each item's error isolated); strip-metadata still loops `POST /api/graphics/strip-metadata` client-side since there's no server batch path for it yet.
 - **PDF → Images** — render each page of a PDF to a PNG entirely in the browser via `pdfjs-dist` (CDN worker), with a resolution selector (1×–4×), click-to-zoom, per-page and "download all". Nothing is uploaded.
 - **Auto-enhance** — one-click brightness/contrast/saturation correction driven by histogram analysis (5th/95th percentile per channel). Shows applied multipliers with before/after compare. `POST /api/graphics/auto-enhance`.
+- **Print Ready** — prepare any image for professional printing: sets the target DPI (150/300/600) in file metadata, optionally flattens transparency to white, adds a bleed margin (0–25mm), and outputs as TIFF/sRGB, TIFF/CMYK (offset print, mathematical RGB→CMYK conversion), PDF or PNG. `POST /api/graphics/print-ready`.
 
 Every Graphics tool shows a **processing modal** (spinner + tool-specific label) while its operation runs. There is a single `ProcessingModal` instance rendered in `App.jsx` driven by `useProcessingStore`; Graphics (and the AI Icon Library) call `startProcessing`/`stopProcessing` rather than rendering their own overlay.
 
@@ -83,7 +84,9 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 ### Retouch
 
 - **Background** — AI cut-out (local ONNX or Replicate), then transparent, solid colour, gradient or image background. `POST /api/graphics/background`.
+- **Extract Element** — paint a mask (green) over the element to keep; the rest is removed to transparency. Erase brush cleans up paint strokes, feather slider (0–30px) softens the mask edge. Server applies the mask deterministically — no AI. `POST /api/graphics/extract`.
 - **Recolor** — change the colour of a specific item via zoomable eyedropper, tolerance, and shading mode. `POST /api/graphics/recolor`.
+- **Eraser** — paint over parts of an image to erase them to full transparency, entirely in the browser; Restore mode paints original pixels back, undo/redo (20-step, Cmd/Ctrl+Z). Browser-only, always exports a PNG with alpha.
 - **Redact** — drag boxes to blur or pixelate faces, plates or sensitive text. Browser-only, undo/redo.
 - **Inpaint / Remove** — paint a mask and describe the fill; FAL mask-based inpainting. `POST /api/graphics/inpaint`.
 
@@ -111,7 +114,7 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **Import by URL** — Convert, Crop/Resize, Adjust, Effects and Background each offer a "…or paste an image URL" row backed by `POST /api/graphics/fetch-url` (server-side fetch sidesteps browser CORS).
 - **Export…** — client-side re-encode to PNG/JPG/WebP/AVIF with quality, max-side, target-KB, and JPG background controls.
 - **Keyboard shortcuts** — `/` focuses the tool search, `Esc` closes the full-screen preview (or clears the search), and `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` undo/redo in Annotate and Redact.
-- **Tooltips** — every sidebar tool button, and every in-panel option (sliders, dropdowns, checkboxes, position pickers, colour pickers, action buttons — ~325 controls across all 38 tools plus AI Icon Library's own component) carries a one-line native `title` tooltip explaining what it does. There's no dedicated Tooltip component in the app yet, so this uses the plain HTML attribute rather than a new UI dependency. Three undocumented mode blocks in the code (`printready`, `eraser`, `extract`) aren't wired into the sidebar or covered here — left as-is pending a decision on whether to finish or drop them.
+- **Tooltips** — every sidebar tool button, and every in-panel option (sliders, dropdowns, checkboxes, position pickers, colour pickers, action buttons — over 300 controls across all 41 tools plus AI Icon Library's own component) shows a themed hover popover explaining what it does, via the shared `client/src/components/Tooltip.jsx` component (`<Tooltip text="…">{control}</Tooltip>`). It clones the wrapped control and attaches hover/focus handlers + a ref directly to it (no extra wrapper DOM node, so it never affects layout/width/flex), and portals a small `position: fixed` card to `<body>` on hover, flipping above/below to stay in the viewport. 200ms fade, theme-aware colours (`var(--color-surface)`/`var(--color-border)`/`var(--color-text)`), `z-index: 30` (above dropdowns' `z-20`, below modals' `z-50`). Hover-only — it simply doesn't appear on touch devices, no dedicated tap variant. No external tooltip library.
 
 ---
 

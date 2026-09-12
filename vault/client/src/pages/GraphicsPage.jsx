@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import IconLibraryGenerator from '../components/IconLibraryGenerator';
+import Tooltip from '../components/Tooltip';
 import useProcessingStore from '../store/processingStore';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -292,7 +293,7 @@ function UrlImportRow({ onImport, importing }) {
   const go = () => { const u = url.trim(); if (u) onImport(u); };
   return (
     <div className="flex items-center gap-2">
-      <input
+      <Tooltip text="Web address of an image to load directly, instead of uploading a file."><input
         type="url"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
@@ -300,18 +301,16 @@ function UrlImportRow({ onImport, importing }) {
         placeholder="…or paste an image URL"
         className="flex-1 min-w-0 px-3 py-2 rounded-xl border text-sm"
         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        title="Web address of an image to load directly, instead of uploading a file."
-      />
-      <button
+      /></Tooltip>
+      <Tooltip text="Fetch the image from that URL and use it as the source."><button
         type="button"
         onClick={go}
         disabled={importing || !url.trim()}
         className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80 whitespace-nowrap"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'transparent' }}
-        title="Fetch the image from that URL and use it as the source."
       >
         {importing ? 'Importing…' : 'Import'}
-      </button>
+      </button></Tooltip>
     </div>
   );
 }
@@ -366,43 +365,43 @@ function ExportMenu({ dataUrl, baseName = 'image' }) {
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen(o => !o)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Re-encode this image to a different format, size or file size before downloading.">Export…</button>
+      <Tooltip text="Re-encode this image to a different format, size or file size before downloading."><button type="button" onClick={() => setOpen(o => !o)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Export…</button></Tooltip>
       {open && (
         <div className="absolute right-0 mt-1 z-20 w-60 rounded-xl border p-3 space-y-2 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div>
             <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Format</label>
-            <select value={format} onChange={e => setFormat(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="File format to save the exported image as.">
+            <Tooltip text="File format to save the exported image as."><select value={format} onChange={e => setFormat(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
               <option value="image/png">PNG (lossless)</option>
               <option value="image/jpeg">JPG</option>
               <option value="image/webp">WebP</option>
               <option value="image/avif">AVIF</option>
-            </select>
+            </select></Tooltip>
           </div>
           {lossy && !targetKb && (
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality: {quality}</label>
-              <input type="range" min="10" max="100" value={quality} onChange={e => setQuality(Number(e.target.value))} className="w-full" title="Compression quality — lower makes a smaller file but adds visible artifacts." />
+              <Tooltip text="Compression quality — lower makes a smaller file but adds visible artifacts."><input type="range" min="10" max="100" value={quality} onChange={e => setQuality(Number(e.target.value))} className="w-full" /></Tooltip>
             </div>
           )}
           <div className="flex gap-2">
             <div className="grow">
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Max side (px)</label>
-              <input type="number" min="1" placeholder="orig" value={maxDim} onChange={e => setMaxDim(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Shrink the image so its longer edge doesn't exceed this many pixels. Leave blank to keep the original size." />
+              <Tooltip text="Shrink the image so its longer edge doesn't exceed this many pixels. Leave blank to keep the original size."><input type="number" min="1" placeholder="orig" value={maxDim} onChange={e => setMaxDim(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
             </div>
             <div className="grow">
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Target (KB)</label>
-              <input type="number" min="1" placeholder={lossy ? 'auto' : 'n/a'} disabled={!lossy} value={targetKb} onChange={e => setTargetKb(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Automatically adjust quality to land close to this file size in kilobytes." />
+              <Tooltip text="Automatically adjust quality to land close to this file size in kilobytes."><input type="number" min="1" placeholder={lossy ? 'auto' : 'n/a'} disabled={!lossy} value={targetKb} onChange={e => setTargetKb(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
             </div>
           </div>
           {format === 'image/jpeg' && (
             <div className="flex items-center gap-2">
               <label className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Background</label>
-              <input type="color" value={bg} onChange={e => setBg(e.target.value)} className="h-7 w-9 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour used to fill any transparent areas, since JPG doesn't support transparency." />
+              <Tooltip text="Colour used to fill any transparent areas, since JPG doesn't support transparency."><input type="color" value={bg} onChange={e => setBg(e.target.value)} className="h-7 w-9 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
               <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>(fills transparency)</span>
             </div>
           )}
           {err && <p className="text-[11px]" style={{ color: '#b91c1c' }}>{err}</p>}
-          <button type="button" onClick={doExport} disabled={busy} className="w-full text-xs px-2 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: 'var(--color-primary)' }} title="Export the image with these settings and download it.">{busy ? 'Exporting…' : 'Download'}</button>
+          <Tooltip text="Export the image with these settings and download it."><button type="button" onClick={doExport} disabled={busy} className="w-full text-xs px-2 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{busy ? 'Exporting…' : 'Download'}</button></Tooltip>
         </div>
       )}
     </div>
@@ -446,13 +445,12 @@ function BeforeAfter({ before, after, transparent }) {
   } : {};
 
   return (
-    <div
+    <Tooltip text="Drag left or right to reveal more of the before or after image."><div
       ref={ref}
       className="relative w-full overflow-hidden rounded-xl border select-none"
       style={{ borderColor: 'var(--color-border)', cursor: 'ew-resize', ...checker }}
       onMouseDown={(e) => { dragging.current = true; moveTo(e.clientX); }}
       onTouchStart={(e) => { dragging.current = true; moveTo(e.touches[0].clientX); }}
-      title="Drag left or right to reveal more of the before or after image."
     >
       <img src={before} alt="before" draggable={false} className="block w-full" />
       <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
@@ -462,7 +460,7 @@ function BeforeAfter({ before, after, transparent }) {
       <div className="absolute flex items-center justify-center rounded-full" style={{ left: `${pos}%`, top: '50%', width: 28, height: 28, transform: 'translate(-50%,-50%)', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.4)', fontSize: 12, color: '#333' }}>⟺</div>
       <span className="absolute top-2 left-2 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>Before</span>
       <span className="absolute top-2 right-2 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>After</span>
-    </div>
+    </div></Tooltip>
   );
 }
 
@@ -667,6 +665,11 @@ const TOOL_HELP = {
     title: 'File Info',
     what: 'Inspect an image file\'s technical details without uploading it.',
     features: ['Name, MIME type, format', 'File size: human-readable and exact bytes', 'Pixel dimensions, aspect ratio, megapixels', 'Last-modified date', 'Image preview', 'Nothing is uploaded — fully browser-side'],
+  },
+  printready: {
+    title: 'Print Ready',
+    what: 'Prepare any image for professional printing — set target DPI, flatten transparency, add bleed, and export as TIFF, PDF or PNG.',
+    features: ['Output as TIFF/sRGB, TIFF/CMYK (offset print), PDF or PNG', 'DPI presets: 150 (large format), 300 (standard), 600 (high detail)', 'Flatten transparency to white, or keep it', 'Bleed margin slider (0–25mm) pads the canvas for edge-to-edge artwork', 'CMYK conversion is mathematical RGB→CMYK — for colour-critical offset work, an ICC profile-based conversion is more accurate', 'Runs locally on the server — nothing sent to a third party'],
   },
   eraser: {
     title: 'Eraser',
@@ -2514,18 +2517,17 @@ export default function GraphicsPage() {
 
   // Compact "Use result in…" dropdown shown in a result header.
   const renderSendTo = (dataUrl, name, excludeMode) => (
-    <select
+    <Tooltip text="Continue editing this result in another tool"><select
       value=""
       onChange={(e) => { if (e.target.value) sendImageTo(e.target.value, dataUrl, name); e.target.value = ''; }}
       className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 cursor-pointer"
       style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'transparent' }}
-      title="Continue editing this result in another tool"
     >
       <option value="">Use in…</option>
       {SEND_TARGETS.filter(t => t.mode !== excludeMode).map(t => (
         <option key={t.mode} value={t.mode}>{t.label}</option>
       ))}
-    </select>
+    </select></Tooltip>
   );
 
   const renderExport = (dataUrl, baseName) => (dataUrl ? <ExportMenu dataUrl={dataUrl} baseName={baseName} /> : null);
@@ -2534,15 +2536,14 @@ export default function GraphicsPage() {
   const renderCompareToggle = (hasSource, hasResult) => {
     if (!hasSource || !hasResult) return null;
     return (
-      <button
+      <Tooltip text="Drag a slider to compare the original and edited image side by side."><button
         type="button"
         onClick={() => setCompareOn(v => !v)}
         className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
         style={{ color: compareOn ? '#fff' : 'var(--color-primary)', background: compareOn ? 'var(--color-primary)' : 'transparent', borderColor: 'var(--color-border)' }}
-        title="Drag a slider to compare the original and edited image side by side."
       >
         {compareOn ? 'Result' : 'Compare'}
-      </button>
+      </button></Tooltip>
     );
   };
 
@@ -3923,38 +3924,35 @@ export default function GraphicsPage() {
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
               Image prompt
             </label>
-            <textarea
+            <Tooltip text="Describe what you want the image to show — the AI turns this description into a picture."><textarea
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               rows={7}
               placeholder="Describe the image you want for the story or article..."
               className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              title="Describe what you want the image to show — the AI turns this description into a picture."
-            />
+            /></Tooltip>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Style</label>
-              <select
+              <Tooltip text="Sets the overall artistic look applied to the generated image."><select
                 value={style}
                 onChange={e => setStyle(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Sets the overall artistic look applied to the generated image."
               >
                 {STYLE_PRESETS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
+              </select></Tooltip>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Size</label>
-              <select
+              <Tooltip text="Sets the pixel dimensions and shape (square, landscape or portrait) of the generated image."><select
                 value={size}
                 onChange={e => setSize(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Sets the pixel dimensions and shape (square, landscape or portrait) of the generated image."
               >
                 <option value="512x512">Square · 512 × 512 (fastest)</option>
                 <option value="768x768">Square · 768 × 768</option>
@@ -3962,7 +3960,7 @@ export default function GraphicsPage() {
                 <option value="768x1024">Portrait 4:3 · 768 × 1024</option>
                 <option value="1024x576">Landscape 16:9 · 1024 × 576</option>
                 <option value="576x1024">Portrait 9:16 · 576 × 1024</option>
-              </select>
+              </select></Tooltip>
             </div>
           </div>
 
@@ -3978,26 +3976,24 @@ export default function GraphicsPage() {
             </div>
           )}
 
-          <button
+          <Tooltip text="Send the prompt to the image model and create a new image."><button
             type="submit"
             disabled={generating || !prompt.trim() || status?.ok === false}
             className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 transition-opacity inline-flex items-center gap-2"
             style={{ background: 'var(--color-primary)' }}
-            title="Send the prompt to the image model and create a new image."
           >
             {generating ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('sparkles', { size: 15 })}
             {generating ? 'Refining + generating...' : 'Generate Image'}
-          </button>
-          <button
+          </button></Tooltip>
+          <Tooltip text="Preview the improved version of your prompt the AI will actually use, without generating an image yet."><button
             type="button"
             onClick={refinePrompt}
             disabled={refining || generating || !prompt.trim()}
             className="ml-2 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80 transition-opacity"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}
-            title="Preview the improved version of your prompt the AI will actually use, without generating an image yet."
           >
             {refining ? 'Refining...' : 'Refine Prompt'}
-          </button>
+          </button></Tooltip>
 
           <div className="rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
             <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Refined prompt sent to image model</p>
@@ -4012,23 +4008,21 @@ export default function GraphicsPage() {
             <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
             {result?.imageDataUrl && (
               <div className="flex gap-2">
-                <button
+                <Tooltip text="Keep this generated image in your Graphics gallery for later."><button
                   onClick={saveToGallery}
                   disabled={saving}
                   className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 disabled:opacity-50"
                   style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                  title="Keep this generated image in your Graphics gallery for later."
                 >
                   {saving ? 'Saving...' : 'Save'}
-                </button>
-                <button
+                </button></Tooltip>
+                <Tooltip text="Save this image to your device."><button
                   onClick={downloadImage}
                   className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                   style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                  title="Save this image to your device."
                 >
                   Download
-                </button>
+                </button></Tooltip>
               </div>
             )}
           </div>
@@ -4067,39 +4061,36 @@ export default function GraphicsPage() {
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
                         Augment this image
                       </label>
-                      <textarea
+                      <Tooltip text="Describe how you want this image changed — the AI creates a new variation based on your current image plus this description."><textarea
                         value={augmentPrompt}
                         onChange={e => setAugmentPrompt(e.target.value)}
                         rows={3}
                         placeholder="e.g. make it more photographic, add sunset lighting, change background..."
                         className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
                         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        title="Describe how you want this image changed — the AI creates a new variation based on your current image plus this description."
-                      />
+                      /></Tooltip>
                     </div>
                     <div className="flex items-center gap-3">
                       <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Change strength</label>
-                      <select
+                      <Tooltip text="How far the new version can drift from the original image — higher makes bigger changes."><select
                         value={denoise}
                         onChange={e => setDenoise(e.target.value)}
                         className="px-2 py-1 rounded-lg border text-xs"
                         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        title="How far the new version can drift from the original image — higher makes bigger changes."
                       >
                         <option value="0.3">Subtle</option>
                         <option value="0.45">Medium</option>
                         <option value="0.65">Strong</option>
-                      </select>
-                      <button
+                      </select></Tooltip>
+                      <Tooltip text="Generate a new variation of this image using the description above."><button
                         type="button"
                         onClick={augmentImage}
                         disabled={augmenting || !augmentPrompt.trim()}
                         className="ml-auto text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
                         style={{ background: 'var(--color-primary)' }}
-                        title="Generate a new variation of this image using the description above."
                       >
                         {augmenting ? 'Augmenting...' : 'Augment'}
-                      </button>
+                      </button></Tooltip>
                     </div>
                   </div>
                 )}
@@ -4134,24 +4125,22 @@ export default function GraphicsPage() {
             </p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input
+              <Tooltip text="Choose the image file to enlarge."><input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={e => handleUpscaleFile(e.target.files?.[0])}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose the image file to enlarge."
-              />
+              /></Tooltip>
               {result?.imageDataUrl && (
-                <button
+                <Tooltip text="Use the image just generated on the Generate tab as the source to upscale."><button
                   type="button"
                   onClick={useResultForUpscale}
                   className="mt-2 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                   style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                  title="Use the image just generated on the Generate tab as the source to upscale."
                 >
                   Use current result
-                </button>
+                </button></Tooltip>
               )}
             </div>
 
@@ -4165,15 +4154,14 @@ export default function GraphicsPage() {
             {(upscaleInfo?.models?.length > 1) && (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Model</label>
-                <select
+                <Tooltip text="Which upscaling engine to use — faithful models just sharpen, enhanced models can invent extra detail."><select
                   value={upscaleModel}
                   onChange={e => setUpscaleModel(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  title="Which upscaling engine to use — faithful models just sharpen, enhanced models can invent extra detail."
                 >
                   {upscaleInfo.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
+                </select></Tooltip>
                 <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>
                   Faithful models only sharpen; enhanced models add invented detail.
                 </p>
@@ -4183,30 +4171,28 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Scale</label>
-                <select
+                <Tooltip text="How many times larger to make the image, e.g. 2x doubles its width and height."><select
                   value={upscaleScale}
                   onChange={e => setUpscaleScale(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  title="How many times larger to make the image, e.g. 2x doubles its width and height."
                 >
                   {(upscaleInfo?.scales || [2, 4]).map(s => <option key={s} value={s}>{s}x</option>)}
-                </select>
+                </select></Tooltip>
               </div>
               {/clarity/i.test(upscaleModel) && (
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fidelity</label>
-                  <select
+                  <Tooltip text="How closely the result should stick to the original image versus adding invented detail."><select
                     value={upscaleFidelity}
                     onChange={e => setUpscaleFidelity(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border text-sm"
                     style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    title="How closely the result should stick to the original image versus adding invented detail."
                   >
                     <option value="-8">Maximum fidelity</option>
                     <option value="0">Balanced</option>
                     <option value="5">Add detail</option>
-                  </select>
+                  </select></Tooltip>
                 </div>
               )}
             </div>
@@ -4222,17 +4208,16 @@ export default function GraphicsPage() {
               </div>
             )}
 
-            <button
+            <Tooltip text="Run the upscale with the settings above."><button
               type="button"
               onClick={runUpscale}
               disabled={upscaling || !upscaleSource?.imageDataUrl || upscaleInfo?.configured === false}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Run the upscale with the settings above."
             >
               {upscaling ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('sparkles', { size: 15 })}
               {upscaling ? 'Upscaling...' : 'Upscale image'}
-            </button>
+            </button></Tooltip>
           </div>
 
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4243,14 +4228,13 @@ export default function GraphicsPage() {
                   {renderCompareToggle(upscaleSource?.imageDataUrl, upscaleResult?.imageDataUrl)}
                   {renderSendTo(upscaleResult.imageDataUrl, 'upscaled.png', 'upscale')}
                   {renderExport(upscaleResult.imageDataUrl, 'upscaled')}
-                  <button
+                  <Tooltip text="Save the upscaled image to your device."><button
                     onClick={downloadUpscaled}
                     className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                     style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                    title="Save the upscaled image to your device."
                   >
                     Download
-                  </button>
+                  </button></Tooltip>
                 </div>
               )}
             </div>
@@ -4292,25 +4276,23 @@ export default function GraphicsPage() {
             </p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input
+              <Tooltip text="Choose the image file to convert."><input
                 type="file"
                 accept="image/*,.heic,.heif"
                 onChange={e => handleConvertFile(e.target.files?.[0])}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose the image file to convert."
-              />
+              /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setConvertError(err); } else { setConvertResult(null); setConvertError(''); setConvertSource(src); } })} />
               {result?.imageDataUrl && (
-                <button
+                <Tooltip text="Use the image just generated on the Generate tab as the source to convert."><button
                   type="button"
                   onClick={useResultForConvert}
                   className="mt-1 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                   style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                  title="Use the image just generated on the Generate tab as the source to convert."
                 >
                   Use current result
-                </button>
+                </button></Tooltip>
               )}
             </div>
 
@@ -4324,31 +4306,29 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Convert to</label>
-                <select
+                <Tooltip text="File format the converted image will be saved as."><select
                   value={convertFormat}
                   onChange={e => setConvertFormat(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  title="File format the converted image will be saved as."
                 >
                   {convertFormats.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-                </select>
+                </select></Tooltip>
               </div>
               {activeConvertFormat?.lossy && (
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality</label>
-                  <select
+                  <Tooltip text="Compression level for this format — lower gives a smaller file but reduces image quality."><select
                     value={convertQuality}
                     onChange={e => setConvertQuality(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border text-sm"
                     style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    title="Compression level for this format — lower gives a smaller file but reduces image quality."
                   >
                     <option value="100">Maximum (100)</option>
                     <option value="90">High (90)</option>
                     <option value="80">Balanced (80)</option>
                     <option value="60">Smaller file (60)</option>
-                  </select>
+                  </select></Tooltip>
                 </div>
               )}
             </div>
@@ -4359,17 +4339,16 @@ export default function GraphicsPage() {
               </div>
             )}
 
-            <button
+            <Tooltip text="Convert the image with the settings above."><button
               type="button"
               onClick={runConvert}
               disabled={converting || !convertSource?.imageDataUrl}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Convert the image with the settings above."
             >
               {converting ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('refresh-cw', { size: 15 })}
               {converting ? 'Converting...' : 'Convert image'}
-            </button>
+            </button></Tooltip>
           </div>
 
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4380,14 +4359,13 @@ export default function GraphicsPage() {
                   {renderCompareToggle(convertSource?.imageDataUrl, convertResult?.imageDataUrl)}
                   {renderSendTo(convertResult.imageDataUrl, `converted.${convertResult.format || 'png'}`, 'convert')}
                   {renderExport(convertResult.imageDataUrl, 'converted')}
-                  <button
+                  <Tooltip text="Save the converted image to your device."><button
                     onClick={downloadConverted}
                     className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                     style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                    title="Save the converted image to your device."
                   >
                     Download
-                  </button>
+                  </button></Tooltip>
                 </div>
               )}
             </div>
@@ -4424,7 +4402,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image (square works best)</label>
-              <input type="file" accept="image/*" onChange={e => { setFavResult(null); setFavError(''); loadImageInto(setFavSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose a square image to generate the full icon set from." />
+              <Tooltip text="Choose a square image to generate the full icon set from."><input type="file" accept="image/*" onChange={e => { setFavResult(null); setFavError(''); loadImageInto(setFavSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {favSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -4435,16 +4413,16 @@ export default function GraphicsPage() {
               Generates PNG icons at 16, 32, 48, 64, 180, 192, 256 and 512 px, an <strong>apple-touch-icon</strong>, a <strong>site.webmanifest</strong> and a ready-to-paste <strong>&lt;head&gt;</strong> snippet — bundled as a ZIP.
             </p>
             {favError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{favError}</div>}
-            <button type="button" onClick={runFavicon} disabled={favBusy || !favSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Generate the full icon set, manifest and head snippet as a downloadable ZIP.">
+            <Tooltip text="Generate the full icon set, manifest and head snippet as a downloadable ZIP."><button type="button" onClick={runFavicon} disabled={favBusy || !favSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {favBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('app-window', { size: 15 })}
               {favBusy ? 'Generating…' : 'Generate icon set'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Icon set</span>
               {favResult?.zipDataUrl && (
-                <button onClick={() => downloadDataUrl(favResult.zipDataUrl, 'favicons.zip')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Download the ZIP containing every icon size, the manifest and the head snippet.">Download ZIP</button>
+                <Tooltip text="Download the ZIP containing every icon size, the manifest and the head snippet."><button onClick={() => downloadDataUrl(favResult.zipDataUrl, 'favicons.zip')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download ZIP</button></Tooltip>
               )}
             </div>
             <div className="p-4">
@@ -4482,7 +4460,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setSvgResult(null); setSvgError(''); loadImageInto(setSvgSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to trace into an SVG." />
+              <Tooltip text="Choose the image to trace into an SVG."><input type="file" accept="image/*" onChange={e => { setSvgResult(null); setSvgError(''); loadImageInto(setSvgSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {svgSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -4492,29 +4470,29 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colours: {svgColors}</label>
-                <input type="range" min="2" max="64" value={svgColors} onChange={e => setSvgColors(e.target.value)} className="w-full" title="How many distinct colours the traced SVG can use — more colours captures more shading but adds complexity." />
+                <Tooltip text="How many distinct colours the traced SVG can use — more colours captures more shading but adds complexity."><input type="range" min="2" max="64" value={svgColors} onChange={e => setSvgColors(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Detail</label>
-                <select value={svgDetail} onChange={e => setSvgDetail(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How closely the vector shapes follow the original edges — more detail means more anchor points and a larger file.">
+                <Tooltip text="How closely the vector shapes follow the original edges — more detail means more anchor points and a larger file."><select value={svgDetail} onChange={e => setSvgDetail(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="smooth">Smooth (fewer points)</option>
                   <option value="medium">Medium</option>
                   <option value="detailed">Detailed (more points)</option>
-                </select>
+                </select></Tooltip>
               </div>
             </div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Traces the image into scalable vector paths. Best for logos, icons and flat clipart — photos become a stylised, posterised look. Large images are scaled down before tracing for speed.</p>
             {svgError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{svgError}</div>}
-            <button type="button" onClick={runVectorize} disabled={svgBusy || !svgSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Trace the image into an SVG with the settings above.">
+            <Tooltip text="Trace the image into an SVG with the settings above."><button type="button" onClick={runVectorize} disabled={svgBusy || !svgSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {svgBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('shapes', { size: 15 })}
               {svgBusy ? 'Tracing…' : 'Convert to SVG'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>SVG result</span>
               {svgResult?.imageDataUrl && (
-                <button onClick={() => downloadDataUrl(svgResult.imageDataUrl, 'vectorized.svg')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the traced SVG file to your device.">Download SVG</button>
+                <Tooltip text="Save the traced SVG file to your device."><button onClick={() => downloadDataUrl(svgResult.imageDataUrl, 'vectorized.svg')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download SVG</button></Tooltip>
               )}
             </div>
             <div className="p-4">
@@ -4555,56 +4533,52 @@ export default function GraphicsPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Add images</label>
-              <input
+              <Tooltip text="Choose one or more image files to compress."><input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={e => { handleCompressFiles(e.target.files); e.target.value = ''; }}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose one or more image files to compress."
-              />
+              /></Tooltip>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality</label>
-              <select
+              <Tooltip text="How much to compress — lower quality gives a smaller file but more visible loss of detail."><select
                 value={compressQuality}
                 onChange={e => setCompressQuality(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="How much to compress — lower quality gives a smaller file but more visible loss of detail."
               >
                 <option value="90">High (90)</option>
                 <option value="75">Balanced (75)</option>
                 <option value="60">Small (60)</option>
                 <option value="40">Smallest (40)</option>
-              </select>
+              </select></Tooltip>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Tooltip text="Compress every added image that hasn't been compressed yet."><button
               type="button"
               onClick={runCompressAll}
               disabled={compressing || !compressFiles.some(f => f.imageDataUrl && f.status !== 'done')}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Compress every added image that hasn't been compressed yet."
             >
               {compressing ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('archive', { size: 15 })}
               {compressing ? 'Compressing...' : 'Compress all'}
-            </button>
+            </button></Tooltip>
             {compressFiles.length > 0 && (
-              <button
+              <Tooltip text="Remove all added images from this list."><button
                 type="button"
                 onClick={clearCompressFiles}
                 disabled={compressing}
                 className="px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}
-                title="Remove all added images from this list."
               >
                 Clear
-              </button>
+              </button></Tooltip>
             )}
             {compressTotalSavedPct != null && (
               <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)' }}>
@@ -4643,26 +4617,24 @@ export default function GraphicsPage() {
                     </p>
                   </div>
                   {item.status === 'done' && item.result?.imageDataUrl && (
-                    <button
+                    <Tooltip text="Save this compressed image to your device."><button
                       type="button"
                       onClick={() => downloadCompressed(item)}
                       className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 flex-shrink-0"
                       style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                      title="Save this compressed image to your device."
                     >
                       Download
-                    </button>
+                    </button></Tooltip>
                   )}
-                  <button
+                  <Tooltip text="Remove this image from the list."><button
                     type="button"
                     onClick={() => removeCompressFile(item.id)}
                     disabled={compressing}
                     className="text-xs hover:opacity-70 flex-shrink-0 disabled:opacity-40"
                     style={{ color: '#ef4444' }}
-                    title="Remove this image from the list."
                   >
                     Remove
-                  </button>
+                  </button></Tooltip>
                 </div>
               ))}
             </div>
@@ -4688,31 +4660,29 @@ export default function GraphicsPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Add images</label>
-              <input
+              <Tooltip text="Choose up to 25 image files to process together."><input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={e => { handleBatchFiles(e.target.files); e.target.value = ''; }}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose up to 25 image files to process together."
-              />
+              /></Tooltip>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Operation</label>
-              <select
+              <Tooltip text="Which edit to apply to every image in this batch."><select
                 value={batchOp}
                 onChange={e => setBatchOp(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Which edit to apply to every image in this batch."
               >
                 <option value="convert">Convert format</option>
                 <option value="resize">Resize</option>
                 <option value="watermark">Add text watermark</option>
                 <option value="compress">Compress</option>
                 <option value="strip">Strip metadata</option>
-              </select>
+              </select></Tooltip>
             </div>
           </div>
 
@@ -4720,7 +4690,7 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Target format</label>
-                <select value={batchFormat} onChange={e => setBatchFormat(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="File format every image in the batch will be converted to.">
+                <Tooltip text="File format every image in the batch will be converted to."><select value={batchFormat} onChange={e => setBatchFormat(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="png">PNG</option>
                   <option value="jpeg">JPG / JPEG</option>
                   <option value="webp">WebP</option>
@@ -4728,11 +4698,11 @@ export default function GraphicsPage() {
                   <option value="avif">AVIF</option>
                   <option value="tiff">TIFF</option>
                   <option value="ico">ICO (favicon)</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality (lossy formats): {batchQuality}</label>
-                <input type="range" min="1" max="100" value={batchQuality} onChange={e => setBatchQuality(e.target.value)} className="w-full" title="Compression quality for formats that support it — lower gives smaller files but reduces image quality." />
+                <Tooltip text="Compression quality for formats that support it — lower gives smaller files but reduces image quality."><input type="range" min="1" max="100" value={batchQuality} onChange={e => setBatchQuality(e.target.value)} className="w-full" /></Tooltip>
               </div>
             </div>
           )}
@@ -4741,21 +4711,21 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
-                <input type="number" min="1" value={batchWidth} onChange={e => setBatchWidth(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Target width in pixels for every image. Leave blank to size automatically from the height." />
+                <Tooltip text="Target width in pixels for every image. Leave blank to size automatically from the height."><input type="number" min="1" value={batchWidth} onChange={e => setBatchWidth(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
-                <input type="number" min="1" value={batchHeight} onChange={e => setBatchHeight(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Target height in pixels for every image. Leave blank to size automatically from the width." />
+                <Tooltip text="Target height in pixels for every image. Leave blank to size automatically from the width."><input type="number" min="1" value={batchHeight} onChange={e => setBatchHeight(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fit</label>
-                <select value={batchFit} onChange={e => setBatchFit(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How each image should be fitted into the target size when its proportions don't match.">
+                <Tooltip text="How each image should be fitted into the target size when its proportions don't match."><select value={batchFit} onChange={e => setBatchFit(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="inside">Inside (fit within)</option>
                   <option value="cover">Cover (fill + crop)</option>
                   <option value="contain">Contain (letterbox)</option>
                   <option value="fill">Fill (stretch)</option>
                   <option value="outside">Outside (cover area)</option>
-                </select>
+                </select></Tooltip>
               </div>
             </div>
           )}
@@ -4764,27 +4734,27 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark text</label>
-                <input type="text" value={batchWmText} onChange={e => setBatchWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Text to stamp onto every image in the batch." />
+                <Tooltip text="Text to stamp onto every image in the batch."><input type="text" value={batchWmText} onChange={e => setBatchWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
-                  <input type="color" value={batchWmColor} onChange={e => setBatchWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the watermark text." />
+                  <Tooltip text="Colour of the watermark text."><input type="color" value={batchWmColor} onChange={e => setBatchWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
-                  <select value={batchWmPosition} onChange={e => setBatchWmPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Where the watermark text sits on each image.">
+                  <Tooltip text="Where the watermark text sits on each image."><select value={batchWmPosition} onChange={e => setBatchWmPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                     <option value="bottom-right">Bottom right</option>
                     <option value="bottom-left">Bottom left</option>
                     <option value="top-right">Top right</option>
                     <option value="top-left">Top left</option>
                     <option value="center">Centre</option>
-                  </select>
+                  </select></Tooltip>
                 </div>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(batchWmOpacity) * 100)}%</label>
-                <input type="range" min="0" max="1" step="0.05" value={batchWmOpacity} onChange={e => setBatchWmOpacity(e.target.value)} className="w-full" title="How see-through the watermark text is." />
+                <Tooltip text="How see-through the watermark text is."><input type="range" min="0" max="1" step="0.05" value={batchWmOpacity} onChange={e => setBatchWmOpacity(e.target.value)} className="w-full" /></Tooltip>
               </div>
             </div>
           )}
@@ -4792,7 +4762,7 @@ export default function GraphicsPage() {
           {batchOp === 'compress' && (
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality: {batchCompressQuality}</label>
-              <input type="range" min="1" max="100" value={batchCompressQuality} onChange={e => setBatchCompressQuality(e.target.value)} className="w-full" title="How much to compress every image — lower gives smaller files but more visible loss of detail." />
+              <Tooltip text="How much to compress every image — lower gives smaller files but more visible loss of detail."><input type="range" min="1" max="100" value={batchCompressQuality} onChange={e => setBatchCompressQuality(e.target.value)} className="w-full" /></Tooltip>
             </div>
           )}
 
@@ -4801,40 +4771,37 @@ export default function GraphicsPage() {
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Tooltip text="Apply the chosen operation to every added image that hasn't been processed yet."><button
               type="button"
               onClick={runBatchAll}
               disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight) || (batchOp === 'watermark' && !batchWmText.trim())}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Apply the chosen operation to every added image that hasn't been processed yet."
             >
               {batchRunning ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('file-stack', { size: 15 })}
               {batchRunning ? 'Processing...' : 'Process all'}
-            </button>
+            </button></Tooltip>
             {batchFiles.some(f => f.result?.imageDataUrl) && (
-              <button
+              <Tooltip text="Download every processed result at once."><button
                 type="button"
                 onClick={downloadBatchAll}
                 disabled={batchRunning}
                 className="px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'transparent' }}
-                title="Download every processed result at once."
               >
                 Download all
-              </button>
+              </button></Tooltip>
             )}
             {batchFiles.length > 0 && (
-              <button
+              <Tooltip text="Remove all added images from this list."><button
                 type="button"
                 onClick={clearBatchFiles}
                 disabled={batchRunning}
                 className="px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}
-                title="Remove all added images from this list."
               >
                 Clear
-              </button>
+              </button></Tooltip>
             )}
           </div>
 
@@ -4862,26 +4829,24 @@ export default function GraphicsPage() {
                     </p>
                   </div>
                   {item.status === 'done' && item.result?.imageDataUrl && (
-                    <button
+                    <Tooltip text="Save this processed image to your device."><button
                       type="button"
                       onClick={() => downloadBatchItem(item)}
                       className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 flex-shrink-0"
                       style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                      title="Save this processed image to your device."
                     >
                       Download
-                    </button>
+                    </button></Tooltip>
                   )}
-                  <button
+                  <Tooltip text="Remove this image from the list."><button
                     type="button"
                     onClick={() => removeBatchFile(item.id)}
                     disabled={batchRunning}
                     className="text-xs hover:opacity-70 flex-shrink-0 disabled:opacity-40"
                     style={{ color: '#ef4444' }}
-                    title="Remove this image from the list."
                   >
                     Remove
-                  </button>
+                  </button></Tooltip>
                 </div>
               ))}
             </div>
@@ -4906,14 +4871,13 @@ export default function GraphicsPage() {
             </p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input
+              <Tooltip text="Choose the image whose background you want to remove or replace."><input
                 type="file"
                 accept="image/*"
                 onChange={e => handleBgFile(e.target.files?.[0])}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose the image whose background you want to remove or replace."
-              />
+              /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setBgError(err); } else { setBgResult(null); setBgError(''); setBgSource(src); } })} />
             </div>
 
@@ -4927,29 +4891,27 @@ export default function GraphicsPage() {
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background</label>
               <div className="flex items-center gap-3">
-                <select
+                <Tooltip text="What to put behind the cut-out subject once the background is removed."><select
                   value={bgMode}
                   onChange={e => setBgMode(e.target.value)}
                   className="px-3 py-2 rounded-xl border text-sm"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  title="What to put behind the cut-out subject once the background is removed."
                 >
                   <option value="transparent">Transparent</option>
                   <option value="color">Solid colour</option>
                   <option value="gradient">Blended colours</option>
                   <option value="image">Image</option>
-                </select>
+                </select></Tooltip>
                 {bgMode === 'color' && (
                   <>
-                    <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Pick the solid background colour." />
-                    <input
+                    <Tooltip text="Pick the solid background colour."><input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                    <Tooltip text="Type the background colour as a hex code."><input
                       type="text"
                       value={bgColor}
                       onChange={e => setBgColor(e.target.value)}
                       className="w-24 px-2 py-2 rounded-xl border text-sm"
                       style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                      title="Type the background colour as a hex code."
-                    />
+                    /></Tooltip>
                   </>
                 )}
               </div>
@@ -4958,18 +4920,17 @@ export default function GraphicsPage() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>From</span>
-                      <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Starting colour of the background gradient." />
+                      <Tooltip text="Starting colour of the background gradient."><input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>To</span>
-                      <input type="color" value={bgColor2} onChange={e => setBgColor2(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Ending colour of the background gradient." />
+                      <Tooltip text="Ending colour of the background gradient."><input type="color" value={bgColor2} onChange={e => setBgColor2(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                     </div>
-                    <select
+                    <Tooltip text="Direction the gradient blends between the two colours."><select
                       value={bgGradientDir}
                       onChange={e => setBgGradientDir(e.target.value)}
                       className="px-3 py-2 rounded-xl border text-sm"
                       style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                      title="Direction the gradient blends between the two colours."
                     >
                       <option value="to-bottom">Top → bottom</option>
                       <option value="to-top">Bottom → top</option>
@@ -4978,7 +4939,7 @@ export default function GraphicsPage() {
                       <option value="to-bottom-right">Diagonal ↘</option>
                       <option value="to-bottom-left">Diagonal ↙</option>
                       <option value="radial">Radial</option>
-                    </select>
+                    </select></Tooltip>
                   </div>
                   <div
                     className="h-12 rounded-xl border"
@@ -4993,7 +4954,7 @@ export default function GraphicsPage() {
               )}
               {bgMode === 'image' && (
                 <div className="mt-2 space-y-2">
-                  <input type="file" accept="image/*" onChange={e => { setBgError(''); loadImageInto(setBgImage)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to use as the new background, scaled to cover the subject." />
+                  <Tooltip text="Choose the image to use as the new background, scaled to cover the subject."><input type="file" accept="image/*" onChange={e => { setBgError(''); loadImageInto(setBgImage)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
                   {bgImage?.imageDataUrl && (
                     <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                       <img src={bgImage.imageDataUrl} alt="background" className="max-h-28 mx-auto rounded-lg" />
@@ -5008,19 +4969,18 @@ export default function GraphicsPage() {
               <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{bgError}</div>
             )}
 
-            <button
+            <Tooltip text="Cut out the subject and apply the chosen background."><button
               type="button"
               onClick={runRemoveBg}
               disabled={bgProcessing || !bgSource?.imageDataUrl}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Cut out the subject and apply the chosen background."
             >
               {bgProcessing ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon(bgMode === 'transparent' ? 'scissors' : 'refresh-cw', { size: 15 })}
               {bgProcessing
                 ? (bgMode === 'transparent' ? 'Removing...' : 'Updating...')
                 : (bgMode === 'transparent' ? 'Remove background' : 'Update background')}
-            </button>
+            </button></Tooltip>
           </div>
 
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -5031,7 +4991,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(bgSource?.imageDataUrl, bgResult?.imageDataUrl)}
                   {renderSendTo(bgResult.imageDataUrl, 'cutout.png', 'background')}
                   {renderExport(bgResult.imageDataUrl, 'cutout')}
-                  <button onClick={downloadBg} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save this cut-out image to your device.">Download</button>
+                  <Tooltip text="Save this cut-out image to your device."><button onClick={downloadBg} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5072,21 +5032,20 @@ export default function GraphicsPage() {
             </p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input
+              <Tooltip text="Choose the image containing the item you want to recolour."><input
                 type="file"
                 accept="image/*"
                 onChange={e => handleRecolorFile(e.target.files?.[0])}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
-                title="Choose the image containing the item you want to recolour."
-              />
+              /></Tooltip>
             </div>
 
             {recolorSource?.imageDataUrl && (
               <div className="rounded-xl border p-2 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Zoom</span>
-                  <input type="range" min="1" max="6" step="1" value={recolorZoom} onChange={e => setRecolorZoom(e.target.value)} className="flex-1 min-w-[80px]" title="Magnify the image so you can click precisely on the colour to change." />
+                  <Tooltip text="Magnify the image so you can click precisely on the colour to change."><input type="range" min="1" max="6" step="1" value={recolorZoom} onChange={e => setRecolorZoom(e.target.value)} className="flex-1 min-w-[80px]" /></Tooltip>
                   <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-muted)' }}>{recolorZoom}x</span>
                   <span className="inline-flex items-center gap-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
                     <span className="inline-block h-4 w-4 rounded border" style={{ background: recolorHoverHex || 'transparent', borderColor: 'var(--color-border)' }} />
@@ -5094,7 +5053,7 @@ export default function GraphicsPage() {
                   </span>
                 </div>
                 <div ref={recolorScrollRef} style={{ overflow: 'auto', maxHeight: 360 }}>
-                  <canvas
+                  <Tooltip text="Click a pixel to pick it as the colour to change; drag to pan when zoomed in."><canvas
                     ref={recolorCanvasRef}
                     onMouseDown={handleRecolorMouseDown}
                     onMouseMove={handleRecolorMouseMove}
@@ -5102,8 +5061,7 @@ export default function GraphicsPage() {
                     onMouseLeave={handleRecolorMouseLeave}
                     className="rounded-lg"
                     style={{ display: 'block', width: `${Number(recolorZoom) * 100}%`, imageRendering: Number(recolorZoom) > 1 ? 'pixelated' : 'auto', cursor: Number(recolorZoom) > 1 ? 'grab' : 'crosshair' }}
-                    title="Click a pixel to pick it as the colour to change; drag to pan when zoomed in."
-                  />
+                  /></Tooltip>
                 </div>
                 <div className="flex items-center gap-3">
                   <canvas
@@ -5129,31 +5087,30 @@ export default function GraphicsPage() {
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour to change</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={recolorSrcColor} onChange={e => setRecolorSrcColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="The colour in the image that will be replaced (or click the image above to sample it)." />
-                  <input type="text" value={recolorSrcColor} onChange={e => setRecolorSrcColor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Hex code of the colour that will be replaced." />
+                  <Tooltip text="The colour in the image that will be replaced (or click the image above to sample it)."><input type="color" value={recolorSrcColor} onChange={e => setRecolorSrcColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                  <Tooltip text="Hex code of the colour that will be replaced."><input type="text" value={recolorSrcColor} onChange={e => setRecolorSrcColor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>New colour</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={recolorTargetColor} onChange={e => setRecolorTargetColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="The colour the matched pixels will be changed to." />
-                  <input type="text" value={recolorTargetColor} onChange={e => setRecolorTargetColor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Hex code of the new colour." />
+                  <Tooltip text="The colour the matched pixels will be changed to."><input type="color" value={recolorTargetColor} onChange={e => setRecolorTargetColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                  <Tooltip text="Hex code of the new colour."><input type="text" value={recolorTargetColor} onChange={e => setRecolorTargetColor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Replacement style</label>
-              <select
+              <Tooltip text="Whether to shift brightness toward the new colour, or only change hue and keep the original shading."><select
                 value={recolorMode}
                 onChange={e => setRecolorMode(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Whether to shift brightness toward the new colour, or only change hue and keep the original shading."
               >
                 <option value="match">Match new colour (brighten / darken to target)</option>
                 <option value="preserve">Preserve original shading (hue only)</option>
-              </select>
+              </select></Tooltip>
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>
                 {recolorMode === 'match'
                   ? 'Shifts brightness toward the new colour so dark items can become light. Keeps relative shading.'
@@ -5163,7 +5120,7 @@ export default function GraphicsPage() {
 
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Match tolerance: {recolorTolerance}</label>
-              <input type="range" min="0" max="100" value={recolorTolerance} onChange={e => setRecolorTolerance(e.target.value)} className="w-full" title="How close a pixel's colour must be to the source colour to get recoloured — higher picks up more shades." />
+              <Tooltip text="How close a pixel's colour must be to the source colour to get recoloured — higher picks up more shades."><input type="range" min="0" max="100" value={recolorTolerance} onChange={e => setRecolorTolerance(e.target.value)} className="w-full" /></Tooltip>
               <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Higher = recolours a wider range of similar colours.</p>
             </div>
 
@@ -5171,17 +5128,16 @@ export default function GraphicsPage() {
               <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{recolorError}</div>
             )}
 
-            <button
+            <Tooltip text="Apply the recolour with the settings above."><button
               type="button"
               onClick={runRecolor}
               disabled={recoloring || !recolorSource?.imageDataUrl}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
-              title="Apply the recolour with the settings above."
             >
               {recoloring ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('palette', { size: 15 })}
               {recoloring ? 'Recolouring...' : 'Apply recolour'}
-            </button>
+            </button></Tooltip>
           </div>
 
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -5192,7 +5148,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(recolorSource?.imageDataUrl, recolorResult?.imageDataUrl)}
                   {renderSendTo(recolorResult.imageDataUrl, 'recoloured.png', 'recolor')}
                   {renderExport(recolorResult.imageDataUrl, 'recoloured')}
-                  <button onClick={downloadRecolor} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the recoloured image to your device.">Download</button>
+                  <Tooltip text="Save the recoloured image to your device."><button onClick={downloadRecolor} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5225,7 +5181,7 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[220px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setCrResult(null); setCrError(''); setCrNat(null); loadImageInto(setCrSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to resize or crop." />
+            <Tooltip text="Choose the image to resize or crop."><input type="file" accept="image/*" onChange={e => { setCrResult(null); setCrError(''); setCrNat(null); loadImageInto(setCrSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setCrError(err); } else { setCrResult(null); setCrError(''); setCrNat(null); setCrSource(src); } })} /></div>
           </div>
           <div className="flex gap-2 self-end">
@@ -5247,7 +5203,7 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Preset size</label>
-              <select
+              <Tooltip text="Pick a ready-made size for a social network or ad platform — fills in width, height and fit automatically."><select
                 value=""
                 onChange={(e) => {
                   if (!e.target.value) return;
@@ -5266,7 +5222,6 @@ export default function GraphicsPage() {
                   e.target.value = '';
                 }}
                 className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Pick a ready-made size for a social network or ad platform — fills in width, height and fit automatically."
               >
                 <option value="">Choose a social / web size…</option>
                 {SIZE_PRESETS.map(g => (
@@ -5279,38 +5234,38 @@ export default function GraphicsPage() {
                     {socialPresets.map(p => <option key={p.id} value={`server:${p.id}`}>{p.label}</option>)}
                   </optgroup>
                 )}
-              </select>
+              </select></Tooltip>
               {crPresetId && (
                 <p className="text-[11px] mt-1" style={{ color: 'var(--color-primary)' }}>
                   Using preset “{socialPresets.find(p => p.id === crPresetId)?.label || crPresetId}” — content-aware cover crop to its exact size.{' '}
-                  <button type="button" onClick={() => setCrPresetId('')} className="underline hover:opacity-70" title="Stop using this preset and enter width/height manually.">Clear</button>
+                  <Tooltip text="Stop using this preset and enter width/height manually."><button type="button" onClick={() => setCrPresetId('')} className="underline hover:opacity-70">Clear</button></Tooltip>
                 </p>
               )}
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
-                <input type="number" value={crWidth} onChange={e => { setCrPresetId(''); setCrWidth(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Target width in pixels. Leave blank to size automatically from the height." />
+                <Tooltip text="Target width in pixels. Leave blank to size automatically from the height."><input type="number" value={crWidth} onChange={e => { setCrPresetId(''); setCrWidth(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
-                <input type="number" value={crHeight} onChange={e => { setCrPresetId(''); setCrHeight(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Target height in pixels. Leave blank to size automatically from the width." />
+                <Tooltip text="Target height in pixels. Leave blank to size automatically from the width."><input type="number" value={crHeight} onChange={e => { setCrPresetId(''); setCrHeight(e.target.value); }} placeholder="auto" disabled={!!crPresetId} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fit</label>
-                <select value={crFit} onChange={e => setCrFit(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How the image should be fitted into the target size when its proportions don't match.">
+                <Tooltip text="How the image should be fitted into the target size when its proportions don't match."><select value={crFit} onChange={e => setCrFit(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="inside">Inside (keep aspect)</option>
                   <option value="cover">Cover (fill, crop)</option>
                   <option value="contain">Contain (letterbox)</option>
                   <option value="fill">Fill (stretch)</option>
-                </select>
+                </select></Tooltip>
               </div>
             </div>
             {crError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{crError}</div>}
-            <button type="button" onClick={runCropResize} disabled={crBusy || !crSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Resize the image with the settings above.">
+            <Tooltip text="Resize the image with the settings above."><button type="button" onClick={runCropResize} disabled={crBusy || !crSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {crBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('crop', { size: 15 })}
               {crBusy ? 'Working...' : 'Resize image'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -5319,7 +5274,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderSendTo(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
                   {renderExport(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}`)}
-                  <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the resized image to your device.">Download</button>
+                  <Tooltip text="Save the resized image to your device."><button onClick={() => downloadDataUrl(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5342,20 +5297,20 @@ export default function GraphicsPage() {
               <div className="rounded-2xl border p-3 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Lock ratio</label>
-                  <select value={crAspect} onChange={e => onCrAspectChange(e.target.value)} className="px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Constrain the crop box to a fixed width:height ratio, or leave it free to drag any shape.">
+                  <Tooltip text="Constrain the crop box to a fixed width:height ratio, or leave it free to drag any shape."><select value={crAspect} onChange={e => onCrAspectChange(e.target.value)} className="px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                     {CR_ASPECTS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                  </select>
+                  </select></Tooltip>
                 </div>
-                <button type="button" onClick={() => onCrAspectChange(crAspect)} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Reset the crop box back to a centred default selection.">Reset selection</button>
+                <Tooltip text="Reset the crop box back to a centred default selection."><button type="button" onClick={() => onCrAspectChange(crAspect)} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset selection</button></Tooltip>
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                   Selection: {crNat ? `${Math.round(crCrop.w * crNat.w)} × ${Math.round(crCrop.h * crNat.h)} px` : '…'}
                 </span>
                 <div className="grow" />
                 {crError && <span className="text-xs" style={{ color: '#dc2626' }}>{crError}</span>}
-                <button type="button" onClick={runCropResize} disabled={crBusy || !crNat} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Crop the image to the current selection box.">
+                <Tooltip text="Crop the image to the current selection box."><button type="button" onClick={runCropResize} disabled={crBusy || !crNat} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
                   {crBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('crop', { size: 15 })}
                   {crBusy ? 'Cropping...' : 'Crop image'}
-                </button>
+                </button></Tooltip>
               </div>
 
               <div className="rounded-2xl border p-4 flex justify-center" style={{ borderColor: 'var(--color-border)', background: '#1e1e1e' }}>
@@ -5374,7 +5329,7 @@ export default function GraphicsPage() {
                   <div style={{ position: 'absolute', left: 0, top: `${crCrop.y * 100}%`, width: `${crCrop.x * 100}%`, height: `${crCrop.h * 100}%`, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
                   <div style={{ position: 'absolute', left: `${(crCrop.x + crCrop.w) * 100}%`, top: `${crCrop.y * 100}%`, right: 0, height: `${crCrop.h * 100}%`, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
                   {/* Selection box */}
-                  <div
+                  <Tooltip text="Drag to move the crop selection."><div
                     onMouseDown={beginCrDrag('move')}
                     style={{
                       position: 'absolute',
@@ -5387,7 +5342,6 @@ export default function GraphicsPage() {
                       cursor: 'move',
                       boxSizing: 'border-box',
                     }}
-                    title="Drag to move the crop selection."
                   >
                     {/* rule-of-thirds guides */}
                     <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }} />
@@ -5398,8 +5352,7 @@ export default function GraphicsPage() {
                       const left = hn.includes('w') ? '0%' : hn.includes('e') ? '100%' : '50%';
                       const top = hn.includes('n') ? '0%' : hn.includes('s') ? '100%' : '50%';
                       return (
-                        <div
-                          key={hn}
+                        <Tooltip key={hn} text="Drag to resize the crop selection from this edge or corner."><div
                           onMouseDown={beginCrDrag(hn)}
                           style={{
                             position: 'absolute',
@@ -5414,11 +5367,10 @@ export default function GraphicsPage() {
                             boxShadow: '0 1px 3px rgba(0,0,0,0.6)',
                             cursor: CR_CURSOR[hn],
                           }}
-                          title="Drag to resize the crop selection from this edge or corner."
-                        />
+                        /></Tooltip>
                       );
                     })}
-                  </div>
+                  </div></Tooltip>
                 </div>
               </div>
 
@@ -5429,7 +5381,7 @@ export default function GraphicsPage() {
                     <div className="flex items-center gap-2">
                       {renderSendTo(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
                       {renderExport(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}`)}
-                      <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the cropped image to your device.">Download</button>
+                      <Tooltip text="Save the cropped image to your device."><button onClick={() => downloadDataUrl(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                     </div>
                   </div>
                   <div className="p-4">
@@ -5458,7 +5410,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Strips EXIF, GPS location, camera info, timestamps and colour profiles. Orientation is baked in so the image still displays correctly.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => {
+              <Tooltip text="Choose the image to check and clean of hidden metadata."><input type="file" accept="image/*" onChange={async e => {
                 const file = e.target.files?.[0];
                 setMetaResult(null); setMetaError(''); setMetaInfo(null);
                 if (!file) return;
@@ -5466,7 +5418,7 @@ export default function GraphicsPage() {
                 if (!dataUrl) { setMetaError('Could not read that image file.'); return; }
                 setMetaSource({ imageDataUrl: dataUrl, name: file.name });
                 loadMetaInfo(dataUrl);
-              }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to check and clean of hidden metadata." />
+              }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {metaSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -5501,10 +5453,10 @@ export default function GraphicsPage() {
               </div>
             )}
             {metaError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{metaError}</div>}
-            <button type="button" onClick={runStripMetadata} disabled={metaBusy || !metaSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Strip all hidden metadata (EXIF, GPS, camera info, colour profile) from this image.">
+            <Tooltip text="Strip all hidden metadata (EXIF, GPS, camera info, colour profile) from this image."><button type="button" onClick={runStripMetadata} disabled={metaBusy || !metaSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {metaBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('shield', { size: 15 })}
               {metaBusy ? 'Cleaning...' : 'Remove metadata'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -5514,7 +5466,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(metaSource?.imageDataUrl, metaResult?.imageDataUrl)}
                   {renderSendTo(metaResult.imageDataUrl, `clean.${metaResult.format}`, 'metadata')}
                   {renderExport(metaResult.imageDataUrl, 'clean')}
-                  <button onClick={() => downloadDataUrl(metaResult.imageDataUrl, `clean-${Date.now()}.${metaResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the cleaned image to your device.">Download</button>
+                  <Tooltip text="Save the cleaned image to your device."><button onClick={() => downloadDataUrl(metaResult.imageDataUrl, `clean-${Date.now()}.${metaResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5552,7 +5504,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setWmResult(null); setWmError(''); loadImageInto(setWmSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to add a watermark to." />
+              <Tooltip text="Choose the image to add a watermark to."><input type="file" accept="image/*" onChange={e => { setWmResult(null); setWmError(''); loadImageInto(setWmSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {wmSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -5570,29 +5522,29 @@ export default function GraphicsPage() {
               <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark text</label>
-                  <input type="text" value={wmText} onChange={e => setWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Text to stamp onto the image, e.g. a name or copyright notice." />
+                  <Tooltip text="Text to stamp onto the image, e.g. a name or copyright notice."><input type="text" value={wmText} onChange={e => setWmText(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
-                  <input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the watermark text." />
+                  <Tooltip text="Colour of the watermark text."><input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Watermark image (PNG)</label>
-                  <input type="file" accept="image/*" onChange={e => loadImageInto(setWmImage)(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose a logo or image to stamp onto the source image." />
+                  <Tooltip text="Choose a logo or image to stamp onto the source image."><input type="file" accept="image/*" onChange={e => loadImageInto(setWmImage)(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Size: {wmScale}% of width</label>
-                  <input type="range" min="5" max="100" value={wmScale} onChange={e => setWmScale(e.target.value)} className="w-full" title="How large the watermark image is, as a percentage of the source image's width." />
+                  <Tooltip text="How large the watermark image is, as a percentage of the source image's width."><input type="range" min="5" max="100" value={wmScale} onChange={e => setWmScale(e.target.value)} className="w-full" /></Tooltip>
                 </div>
               </div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
-                <select value={wmPosition} onChange={e => setWmPosition(e.target.value)} disabled={wmTile} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Where the watermark sits on the image.">
+                <Tooltip text="Where the watermark sits on the image."><select value={wmPosition} onChange={e => setWmPosition(e.target.value)} disabled={wmTile} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-50" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="bottom-right">Bottom right</option>
                   <option value="bottom-left">Bottom left</option>
                   <option value="top-right">Top right</option>
@@ -5600,21 +5552,21 @@ export default function GraphicsPage() {
                   <option value="center">Centre</option>
                   <option value="bottom">Bottom</option>
                   <option value="top">Top</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(wmOpacity) * 100)}%</label>
-                <input type="range" min="0" max="1" step="0.05" value={wmOpacity} onChange={e => setWmOpacity(e.target.value)} className="w-full" title="How see-through the watermark is." />
+                <Tooltip text="How see-through the watermark is."><input type="range" min="0" max="1" step="0.05" value={wmOpacity} onChange={e => setWmOpacity(e.target.value)} className="w-full" /></Tooltip>
               </div>
             </div>
             <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={wmTile} onChange={e => setWmTile(e.target.checked)} title="Repeat the watermark in a grid across the whole image instead of placing it once." /> Tile across the whole image
+              <Tooltip text="Repeat the watermark in a grid across the whole image instead of placing it once."><input type="checkbox" checked={wmTile} onChange={e => setWmTile(e.target.checked)} /></Tooltip> Tile across the whole image
             </label>
             {wmError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{wmError}</div>}
-            <button type="button" onClick={runWatermark} disabled={wmBusy || !wmSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply the watermark with the settings above.">
+            <Tooltip text="Apply the watermark with the settings above."><button type="button" onClick={runWatermark} disabled={wmBusy || !wmSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {wmBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('droplets', { size: 15 })}
               {wmBusy ? 'Applying...' : 'Add watermark'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -5624,7 +5576,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(wmSource?.imageDataUrl, wmResult?.imageDataUrl)}
                   {renderSendTo(wmResult.imageDataUrl, `watermarked.${wmResult.format}`, 'watermark')}
                   {renderExport(wmResult.imageDataUrl, 'watermarked')}
-                  <button onClick={() => downloadDataUrl(wmResult.imageDataUrl, `watermarked-${Date.now()}.${wmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the watermarked image to your device.">Download</button>
+                  <Tooltip text="Save the watermarked image to your device."><button onClick={() => downloadDataUrl(wmResult.imageDataUrl, `watermarked-${Date.now()}.${wmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5651,7 +5603,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setTxResult(null); setTxError(''); loadImageInto(setTxSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to add headline or caption text to." />
+              <Tooltip text="Choose the image to add headline or caption text to."><input type="file" accept="image/*" onChange={e => { setTxResult(null); setTxError(''); loadImageInto(setTxSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {txSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -5660,50 +5612,50 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Headline / caption text</label>
-              <textarea value={txText} onChange={e => setTxText(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="The text to overlay on the image — it wraps automatically to fit the max width." />
+              <Tooltip text="The text to overlay on the image — it wraps automatically to fit the max width."><textarea value={txText} onChange={e => setTxText(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text colour</label>
-                <input type="color" value={txColor} onChange={e => setTxColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the overlay text." />
+                <Tooltip text="Colour of the overlay text."><input type="color" value={txColor} onChange={e => setTxColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background pill</label>
                 <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!txBackground} onChange={e => setTxBackground(e.target.checked ? '#000000' : '')} title="Add a solid colour panel behind the text so it stays readable over busy images." />
-                  <input type="color" value={txBackground || '#000000'} disabled={!txBackground} onChange={e => setTxBackground(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the background panel behind the text." />
+                  <Tooltip text="Add a solid colour panel behind the text so it stays readable over busy images."><input type="checkbox" checked={!!txBackground} onChange={e => setTxBackground(e.target.checked ? '#000000' : '')} /></Tooltip>
+                  <Tooltip text="Colour of the background panel behind the text."><input type="color" value={txBackground || '#000000'} disabled={!txBackground} onChange={e => setTxBackground(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font size (px)</label>
-                <input type="number" min="8" max="600" value={txFontSize} onChange={e => setTxFontSize(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Text size in pixels. Leave blank to size it automatically to fit." />
+                <Tooltip text="Text size in pixels. Leave blank to size it automatically to fit."><input type="number" min="8" max="600" value={txFontSize} onChange={e => setTxFontSize(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Align</label>
-                <select value={txAlign} onChange={e => setTxAlign(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How the text lines are aligned within their block.">
+                <Tooltip text="How the text lines are aligned within their block."><select value={txAlign} onChange={e => setTxAlign(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="left">Left</option>
                   <option value="center">Centre</option>
                   <option value="right">Right</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Weight</label>
-                <select value={txFontWeight} onChange={e => setTxFontWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How bold the overlay text appears.">
+                <Tooltip text="How bold the overlay text appears."><select value={txFontWeight} onChange={e => setTxFontWeight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="bold">Bold</option>
                   <option value="normal">Normal</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Max width: {txMaxWidth}%</label>
-                <input type="range" min="10" max="100" value={txMaxWidth} onChange={e => setTxMaxWidth(e.target.value)} className="w-full" title="How wide the text block can grow before wrapping, as a percentage of the image width." />
+                <Tooltip text="How wide the text block can grow before wrapping, as a percentage of the image width."><input type="range" min="10" max="100" value={txMaxWidth} onChange={e => setTxMaxWidth(e.target.value)} className="w-full" /></Tooltip>
               </div>
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
-                <select value={txPosition} onChange={e => setTxPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Where on the image the text block is placed.">
+                <Tooltip text="Where on the image the text block is placed."><select value={txPosition} onChange={e => setTxPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="center">Centre</option>
                   <option value="top">Top</option>
                   <option value="bottom">Bottom</option>
@@ -5713,25 +5665,25 @@ export default function GraphicsPage() {
                   <option value="bottom-right">Bottom right</option>
                   <option value="left">Left</option>
                   <option value="right">Right</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Outline colour</label>
                 <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!txStrokeColor} onChange={e => setTxStrokeColor(e.target.checked ? '#000000' : '')} title="Add an outline around the text so it stands out against the image behind it." />
-                  <input type="color" value={txStrokeColor || '#000000'} disabled={!txStrokeColor} onChange={e => setTxStrokeColor(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the text outline." />
+                  <Tooltip text="Add an outline around the text so it stands out against the image behind it."><input type="checkbox" checked={!!txStrokeColor} onChange={e => setTxStrokeColor(e.target.checked ? '#000000' : '')} /></Tooltip>
+                  <Tooltip text="Colour of the text outline."><input type="color" value={txStrokeColor || '#000000'} disabled={!txStrokeColor} onChange={e => setTxStrokeColor(e.target.value)} className="h-9 w-full rounded border disabled:opacity-40" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Outline width</label>
-                <input type="number" min="1" max="40" disabled={!txStrokeColor} value={txStrokeWidth} onChange={e => setTxStrokeWidth(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Thickness of the text outline in pixels." />
+                <Tooltip text="Thickness of the text outline in pixels."><input type="number" min="1" max="40" disabled={!txStrokeColor} value={txStrokeWidth} onChange={e => setTxStrokeWidth(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
             </div>
             {txError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{txError}</div>}
-            <button type="button" onClick={runTextOverlay} disabled={txBusy || !txSource?.imageDataUrl || !txText.trim()} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply the text overlay with the settings above.">
+            <Tooltip text="Apply the text overlay with the settings above."><button type="button" onClick={runTextOverlay} disabled={txBusy || !txSource?.imageDataUrl || !txText.trim()} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {txBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('text', { size: 15 })}
               {txBusy ? 'Applying...' : 'Add text'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -5741,7 +5693,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(txSource?.imageDataUrl, txResult?.imageDataUrl)}
                   {renderSendTo(txResult.imageDataUrl, `text-overlay.${txResult.format}`, 'textoverlay')}
                   {renderExport(txResult.imageDataUrl, 'text-overlay')}
-                  <button onClick={() => downloadDataUrl(txResult.imageDataUrl, `text-overlay-${Date.now()}.${txResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the image with the text overlay to your device.">Download</button>
+                  <Tooltip text="Save the image with the text overlay to your device."><button onClick={() => downloadDataUrl(txResult.imageDataUrl, `text-overlay-${Date.now()}.${txResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5768,7 +5720,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Base image</label>
-              <input type="file" accept="image/*" onChange={e => { setCmResult(null); setCmError(''); loadImageInto(setCmSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the base image that all layers will be stacked on top of." />
+              <Tooltip text="Choose the base image that all layers will be stacked on top of."><input type="file" accept="image/*" onChange={e => { setCmResult(null); setCmError(''); loadImageInto(setCmSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {cmSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -5776,8 +5728,8 @@ export default function GraphicsPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <button type="button" onClick={addCmTextLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }} title="Add a new text layer on top of the base image (up to 8 layers total).">+ Text layer</button>
-              <button type="button" onClick={addCmImageLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }} title="Add a new logo or image layer on top of the base image (up to 8 layers total).">+ Logo / image layer</button>
+              <Tooltip text="Add a new text layer on top of the base image (up to 8 layers total)."><button type="button" onClick={addCmTextLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Text layer</button></Tooltip>
+              <Tooltip text="Add a new logo or image layer on top of the base image (up to 8 layers total)."><button type="button" onClick={addCmImageLayer} disabled={cmLayers.length >= 8} className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Logo / image layer</button></Tooltip>
               <span className="text-[11px] self-center" style={{ color: 'var(--color-muted)' }}>{cmLayers.length}/8 layers</span>
             </div>
 
@@ -5793,30 +5745,30 @@ export default function GraphicsPage() {
                       <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
                         Layer {idx + 1} · {layer.type === 'text' ? 'Text' : 'Logo / image'}
                       </span>
-                      <button type="button" onClick={() => removeCmLayer(layer.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }} title="Remove this layer from the composite.">Remove</button>
+                      <Tooltip text="Remove this layer from the composite."><button type="button" onClick={() => removeCmLayer(layer.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Remove</button></Tooltip>
                     </div>
                     {layer.type === 'text' ? (
                       <>
-                        <input type="text" value={layer.text} onChange={e => updateCmLayer(layer.id, { text: e.target.value })} placeholder="Layer text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Text to show for this layer." />
+                        <Tooltip text="Text to show for this layer."><input type="text" value={layer.text} onChange={e => updateCmLayer(layer.id, { text: e.target.value })} placeholder="Layer text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                         <div className="grid grid-cols-2 gap-2">
-                          <input type="color" value={layer.color} onChange={e => updateCmLayer(layer.id, { color: e.target.value })} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of this text layer." />
-                          <select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How bold this text layer appears.">
+                          <Tooltip text="Colour of this text layer."><input type="color" value={layer.color} onChange={e => updateCmLayer(layer.id, { color: e.target.value })} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                          <Tooltip text="How bold this text layer appears."><select value={layer.fontWeight} onChange={e => updateCmLayer(layer.id, { fontWeight: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                             <option value="bold">Bold</option>
                             <option value="normal">Normal</option>
-                          </select>
+                          </select></Tooltip>
                         </div>
                       </>
                     ) : (
                       <>
-                        <input type="file" accept="image/*" onChange={e => loadImageInto((src) => updateCmLayer(layer.id, { imageDataUrl: src?.imageDataUrl || null }))(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the logo or image for this layer." />
+                        <Tooltip text="Choose the logo or image for this layer."><input type="file" accept="image/*" onChange={e => loadImageInto((src) => updateCmLayer(layer.id, { imageDataUrl: src?.imageDataUrl || null }))(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
                         <div>
                           <label className="block text-[11px] mb-1" style={{ color: 'var(--color-muted)' }}>Size: {layer.scale}% of image width</label>
-                          <input type="range" min="5" max="100" value={layer.scale} onChange={e => updateCmLayer(layer.id, { scale: e.target.value })} className="w-full" title="How large this layer's image is, as a percentage of the base image's width." />
+                          <Tooltip text="How large this layer's image is, as a percentage of the base image's width."><input type="range" min="5" max="100" value={layer.scale} onChange={e => updateCmLayer(layer.id, { scale: e.target.value })} className="w-full" /></Tooltip>
                         </div>
                       </>
                     )}
                     <div className="grid grid-cols-2 gap-2">
-                      <select value={layer.position} onChange={e => updateCmLayer(layer.id, { position: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Where this layer sits on the base image.">
+                      <Tooltip text="Where this layer sits on the base image."><select value={layer.position} onChange={e => updateCmLayer(layer.id, { position: e.target.value })} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                         <option value="center">Centre</option>
                         <option value="top">Top</option>
                         <option value="bottom">Bottom</option>
@@ -5824,10 +5776,10 @@ export default function GraphicsPage() {
                         <option value="top-right">Top right</option>
                         <option value="bottom-left">Bottom left</option>
                         <option value="bottom-right">Bottom right</option>
-                      </select>
+                      </select></Tooltip>
                       <div>
                         <label className="block text-[11px] mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(layer.opacity) * 100)}%</label>
-                        <input type="range" min="0" max="1" step="0.05" value={layer.opacity} onChange={e => updateCmLayer(layer.id, { opacity: e.target.value })} className="w-full" title="How see-through this layer is." />
+                        <Tooltip text="How see-through this layer is."><input type="range" min="0" max="1" step="0.05" value={layer.opacity} onChange={e => updateCmLayer(layer.id, { opacity: e.target.value })} className="w-full" /></Tooltip>
                       </div>
                     </div>
                   </div>
@@ -5836,10 +5788,10 @@ export default function GraphicsPage() {
             )}
 
             {cmError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{cmError}</div>}
-            <button type="button" onClick={runComposite} disabled={cmBusy || !cmSource?.imageDataUrl || !cmLayers.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Render all layers onto the base image.">
+            <Tooltip text="Render all layers onto the base image."><button type="button" onClick={runComposite} disabled={cmBusy || !cmSource?.imageDataUrl || !cmLayers.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {cmBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('combine', { size: 15 })}
               {cmBusy ? 'Compositing...' : 'Build composite'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -5848,7 +5800,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(cmSource?.imageDataUrl, cmResult?.imageDataUrl)}
                   {renderExport(cmResult.imageDataUrl, 'composite')}
-                  <button onClick={() => downloadDataUrl(cmResult.imageDataUrl, `composite-${Date.now()}.${cmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the composited image to your device.">Download</button>
+                  <Tooltip text="Save the composited image to your device."><button onClick={() => downloadDataUrl(cmResult.imageDataUrl, `composite-${Date.now()}.${cmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -5875,14 +5827,14 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Images (2–9)</label>
-              <input type="file" accept="image/*" multiple onChange={e => { setCollageResult(null); setCollageError(''); handleCollageFiles(e.target.files); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose 2 to 9 images to arrange into a grid." />
+              <Tooltip text="Choose 2 to 9 images to arrange into a grid."><input type="file" accept="image/*" multiple onChange={e => { setCollageResult(null); setCollageError(''); handleCollageFiles(e.target.files); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {collageFiles.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {collageFiles.map(f => (
                   <div key={f.id} className="relative">
                     <img src={f.imageDataUrl} alt="" className="h-14 w-14 rounded object-cover border" style={{ borderColor: 'var(--color-border)' }} />
-                    <button type="button" onClick={() => setCollageFiles(prev => prev.filter(x => x.id !== f.id))} className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full text-[10px] leading-none text-white" style={{ background: '#ef4444' }} title="Remove this image from the collage.">×</button>
+                    <Tooltip text="Remove this image from the collage."><button type="button" onClick={() => setCollageFiles(prev => prev.filter(x => x.id !== f.id))} className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full text-[10px] leading-none text-white" style={{ background: '#ef4444' }}>×</button></Tooltip>
                   </div>
                 ))}
               </div>
@@ -5890,29 +5842,29 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Columns</label>
-                <select value={collageColumns} onChange={e => setCollageColumns(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How many images to place per row in the grid.">
+                <Tooltip text="How many images to place per row in the grid."><select value={collageColumns} onChange={e => setCollageColumns(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   {[1, 2, 3, 4, 5].map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Spacing: {collageSpacing}px</label>
-                <input type="range" min="0" max="60" value={collageSpacing} onChange={e => setCollageSpacing(e.target.value)} className="w-full" title="Gap between images in the grid, in pixels." />
+                <Tooltip text="Gap between images in the grid, in pixels."><input type="range" min="0" max="60" value={collageSpacing} onChange={e => setCollageSpacing(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background</label>
-                <input type="color" value={collageBg} onChange={e => setCollageBg(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour that fills the gaps and any empty space between images." />
+                <Tooltip text="Colour that fills the gaps and any empty space between images."><input type="color" value={collageBg} onChange={e => setCollageBg(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
               </div>
             </div>
             {collageError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{collageError}</div>}
-            <button type="button" onClick={runCollage} disabled={collageBusy || collageFiles.length < 2} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Arrange the added images into a grid with these settings.">
+            <Tooltip text="Arrange the added images into a grid with these settings."><button type="button" onClick={runCollage} disabled={collageBusy || collageFiles.length < 2} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {collageBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('grid', { size: 15 })}
               {collageBusy ? 'Building...' : 'Make collage'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {collageResult?.imageDataUrl && <button onClick={() => downloadDataUrl(collageResult.imageDataUrl, `collage-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the collage to your device.">Download</button>}
+              {collageResult?.imageDataUrl && <Tooltip text="Save the collage to your device."><button onClick={() => downloadDataUrl(collageResult.imageDataUrl, `collage-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>}
             </div>
             <div className="p-4">
               {collageResult?.imageDataUrl ? (
@@ -5939,7 +5891,7 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); setAnnPast([]); setAnnFuture([]); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to mark up." />
+            <Tooltip text="Choose the image to mark up."><input type="file" accept="image/*" onChange={e => { setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); setAnnPast([]); setAnnFuture([]); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
           </div>
           <div className="flex gap-2 self-end">
             {[['select', 'Select / Move'], ['text', 'Text'], ['arrow', 'Arrow'], ['rect', 'Box'], ['pen', 'Pen']].map(([t, label]) => (
@@ -5948,11 +5900,11 @@ export default function GraphicsPage() {
           </div>
           <div className="flex items-center gap-2 self-end">
             <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</label>
-            <input type="color" value={annColor} onChange={e => { setAnnColor(e.target.value); setAnnEditing(cur => (cur ? { ...cur, color: e.target.value } : cur)); if (annSelected != null) setAnnShapes(prev => prev.map((s, i) => (i === annSelected ? { ...s, color: e.target.value } : s))); }} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour for new marks, or the currently selected item." />
+            <Tooltip text="Colour for new marks, or the currently selected item."><input type="color" value={annColor} onChange={e => { setAnnColor(e.target.value); setAnnEditing(cur => (cur ? { ...cur, color: e.target.value } : cur)); if (annSelected != null) setAnnShapes(prev => prev.map((s, i) => (i === annSelected ? { ...s, color: e.target.value } : s))); }} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
           </div>
           <div className="self-end min-w-[160px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
-            <select
+            <Tooltip text="Font used for text labels."><select
               value={annFont}
               onChange={e => {
                 const fam = e.target.value;
@@ -5964,25 +5916,24 @@ export default function GraphicsPage() {
               }}
               className="w-full px-3 py-2 rounded-xl border text-sm"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', fontFamily: annFont ? `"${annFont}", sans-serif` : undefined }}
-              title="Font used for text labels."
             >
               {ANN_GOOGLE_FONTS.map(f => (
                 <option key={f.family} value={f.family}>{f.label}</option>
               ))}
-            </select>
+            </select></Tooltip>
           </div>
           <div className="self-end min-w-[140px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>{annTool === 'text' ? 'Text size' : 'Thickness'}: {annWidth}</label>
             <input type="range" min="1" max="24" value={annWidth} onChange={e => setAnnWidth(Number(e.target.value))} className="w-full" title={annTool === 'text' ? 'Size of new text labels.' : 'Line thickness for new arrows, boxes and pen strokes.'} />
           </div>
           <div className="flex gap-2 self-end">
-            <button type="button" onClick={deleteAnnSelected} disabled={annSelected == null} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Delete the currently selected item.">Delete</button>
-            <button type="button" onClick={undoAnn} disabled={!annPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Undo the last change.">Undo</button>
-            <button type="button" onClick={redoAnn} disabled={!annFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Redo the last undone change.">Redo</button>
-            <button type="button" onClick={() => { if (!annShapes.length) return; recordAnn(annShapesRef.current); setAnnShapes([]); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Remove every mark from the image.">Clear</button>
-            <button type="button" onClick={exportAnnotate} disabled={!annSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Flatten all marks onto the image and save it as a PNG.">
+            <Tooltip text="Delete the currently selected item."><button type="button" onClick={deleteAnnSelected} disabled={annSelected == null} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Delete</button></Tooltip>
+            <Tooltip text="Undo the last change."><button type="button" onClick={undoAnn} disabled={!annPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button></Tooltip>
+            <Tooltip text="Redo the last undone change."><button type="button" onClick={redoAnn} disabled={!annFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button></Tooltip>
+            <Tooltip text="Remove every mark from the image."><button type="button" onClick={() => { if (!annShapes.length) return; recordAnn(annShapesRef.current); setAnnShapes([]); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button></Tooltip>
+            <Tooltip text="Flatten all marks onto the image and save it as a PNG."><button type="button" onClick={exportAnnotate} disabled={!annSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {getIcon('download', { size: 15 })} Save PNG
-            </button>
+            </button></Tooltip>
           </div>
         </div>
         {!annSource?.imageDataUrl ? (
@@ -5990,13 +5941,12 @@ export default function GraphicsPage() {
         ) : (
           <div className="rounded-2xl border p-4 flex justify-center" style={{ borderColor: 'var(--color-border)', background: '#1e1e1e' }}>
             <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', lineHeight: 0 }}>
-              <canvas
+              <Tooltip text="Click or drag to use the selected tool on the image."><canvas
                 ref={annCanvasRef}
                 onMouseDown={onAnnDown}
                 onDoubleClick={onAnnDoubleClick}
                 style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: annTool === 'text' ? 'text' : annTool === 'select' ? 'move' : 'crosshair', touchAction: 'none' }}
-                title="Click or drag to use the selected tool on the image."
-              />
+              /></Tooltip>
               {annEditing && (
                 <textarea
                   ref={annInputRef}
@@ -6056,7 +6006,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setExtResult(null); setExtError(''); loadImageInto(setExtSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to add padding around." />
+              <Tooltip text="Choose the image to add padding around."><input type="file" accept="image/*" onChange={e => { setExtResult(null); setExtError(''); loadImageInto(setExtSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {extSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -6064,51 +6014,51 @@ export default function GraphicsPage() {
               </div>
             )}
             <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={extLink} onChange={e => setExtLink(e.target.checked)} title="Use one padding amount for all four sides instead of setting each separately." />
+              <Tooltip text="Use one padding amount for all four sides instead of setting each separately."><input type="checkbox" checked={extLink} onChange={e => setExtLink(e.target.checked)} /></Tooltip>
               Same padding on all sides
             </label>
             {extLink ? (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Padding (all sides): {extTop}px</label>
-                <input type="range" min="0" max="400" value={extTop} onChange={e => setExtAll(e.target.value)} className="w-full" title="How many pixels of padding to add around every edge of the image." />
+                <Tooltip text="How many pixels of padding to add around every edge of the image."><input type="range" min="0" max="400" value={extTop} onChange={e => setExtAll(e.target.value)} className="w-full" /></Tooltip>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Top (px)</label>
-                  <input type="number" min="0" value={extTop} onChange={e => setExtTop(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Padding to add above the image, in pixels." />
+                  <Tooltip text="Padding to add above the image, in pixels."><input type="number" min="0" value={extTop} onChange={e => setExtTop(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Right (px)</label>
-                  <input type="number" min="0" value={extRight} onChange={e => setExtRight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Padding to add to the right of the image, in pixels." />
+                  <Tooltip text="Padding to add to the right of the image, in pixels."><input type="number" min="0" value={extRight} onChange={e => setExtRight(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Bottom (px)</label>
-                  <input type="number" min="0" value={extBottom} onChange={e => setExtBottom(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Padding to add below the image, in pixels." />
+                  <Tooltip text="Padding to add below the image, in pixels."><input type="number" min="0" value={extBottom} onChange={e => setExtBottom(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Left (px)</label>
-                  <input type="number" min="0" value={extLeft} onChange={e => setExtLeft(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Padding to add to the left of the image, in pixels." />
+                  <Tooltip text="Padding to add to the left of the image, in pixels."><input type="number" min="0" value={extLeft} onChange={e => setExtLeft(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
               </div>
             )}
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
-                <input type="checkbox" checked={extTransparent} onChange={e => setExtTransparent(e.target.checked)} title="Make the new padding transparent instead of a solid colour (saves as PNG)." />
+                <Tooltip text="Make the new padding transparent instead of a solid colour (saves as PNG)."><input type="checkbox" checked={extTransparent} onChange={e => setExtTransparent(e.target.checked)} /></Tooltip>
                 Transparent padding (PNG)
               </label>
               {!extTransparent && (
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Fill colour</label>
-                  <input type="color" value={extColor} onChange={e => setExtColor(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour used to fill the new padding." />
+                  <Tooltip text="Colour used to fill the new padding."><input type="color" value={extColor} onChange={e => setExtColor(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               )}
             </div>
             {extError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{extError}</div>}
-            <button type="button" onClick={runExtend} disabled={extBusy || !extSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Add the padding with the settings above.">
+            <Tooltip text="Add the padding with the settings above."><button type="button" onClick={runExtend} disabled={extBusy || !extSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {extBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('frame', { size: 15 })}
               {extBusy ? 'Working...' : 'Add padding'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -6117,7 +6067,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderSendTo(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`, 'extend')}
                   {renderExport(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}`)}
-                  <button onClick={() => downloadDataUrl(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the padded image to your device.">Download</button>
+                  <Tooltip text="Save the padded image to your device."><button onClick={() => downloadDataUrl(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -6149,7 +6099,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setEfResult(null); setEfError(''); loadImageInto(setEfSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to apply an effect to." />
+              <Tooltip text="Choose the image to apply an effect to."><input type="file" accept="image/*" onChange={e => { setEfResult(null); setEfError(''); loadImageInto(setEfSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setEfError(err); } else { setEfResult(null); setEfError(''); setEfSource(src); } })} /></div>
             </div>
             {efSource?.imageDataUrl && (
@@ -6159,7 +6109,7 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Effect</label>
-              <select value={efEffect} onChange={e => setEfEffect(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Which transformation or filter to apply to the image.">
+              <Tooltip text="Which transformation or filter to apply to the image."><select value={efEffect} onChange={e => setEfEffect(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 <option value="flip-h">Mirror (flip horizontal)</option>
                 <option value="flip-v">Flip vertical</option>
                 <option value="rotate-90">Rotate 90° right</option>
@@ -6173,22 +6123,22 @@ export default function GraphicsPage() {
                 <option value="sepia">Sepia</option>
                 <option value="invert">Invert colours</option>
                 <option value="duotone">Duotone</option>
-              </select>
+              </select></Tooltip>
             </div>
             {efEffect === 'rotate-free' && (
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Angle: {efAngle}°</label>
-                  <input type="range" min="-180" max="180" step="1" value={efAngle} onChange={e => setEfAngle(e.target.value)} className="w-full" title="Rotate the image by this many degrees — negative values rotate left." />
+                  <Tooltip text="Rotate the image by this many degrees — negative values rotate left."><input type="range" min="-180" max="180" step="1" value={efAngle} onChange={e => setEfAngle(e.target.value)} className="w-full" /></Tooltip>
                 </div>
                 <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                  <input type="checkbox" checked={efRotateTransparent} onChange={e => setEfRotateTransparent(e.target.checked)} title="Leave the corners exposed by rotation transparent instead of filling them with a colour." />
+                  <Tooltip text="Leave the corners exposed by rotation transparent instead of filling them with a colour."><input type="checkbox" checked={efRotateTransparent} onChange={e => setEfRotateTransparent(e.target.checked)} /></Tooltip>
                   Transparent corners (PNG)
                 </label>
                 {!efRotateTransparent && (
                   <div className="flex items-center gap-2">
                     <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Corner fill</label>
-                    <input type="color" value={efRotateBg} onChange={e => setEfRotateBg(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour used to fill the corners exposed by rotation." />
+                    <Tooltip text="Colour used to fill the corners exposed by rotation."><input type="color" value={efRotateBg} onChange={e => setEfRotateBg(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                   </div>
                 )}
               </div>
@@ -6197,18 +6147,18 @@ export default function GraphicsPage() {
               <div className="grid sm:grid-cols-2 gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Border width: {efBorderWidth}px</label>
-                  <input type="range" min="1" max="200" value={efBorderWidth} onChange={e => setEfBorderWidth(e.target.value)} className="w-full" title="Thickness of the border in pixels." />
+                  <Tooltip text="Thickness of the border in pixels."><input type="range" min="1" max="200" value={efBorderWidth} onChange={e => setEfBorderWidth(e.target.value)} className="w-full" /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Colour</label>
-                  <input type="color" value={efBorderColor} onChange={e => setEfBorderColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the border." />
+                  <Tooltip text="Colour of the border."><input type="color" value={efBorderColor} onChange={e => setEfBorderColor(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
             )}
             {efEffect === 'round' && (
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Corner radius: {efRadius}px</label>
-                <input type="range" min="0" max="300" value={efRadius} onChange={e => setEfRadius(e.target.value)} className="w-full" title="How rounded the image's corners are, in pixels." />
+                <Tooltip text="How rounded the image's corners are, in pixels."><input type="range" min="0" max="300" value={efRadius} onChange={e => setEfRadius(e.target.value)} className="w-full" /></Tooltip>
                 <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Exports a PNG with transparent corners.</p>
               </div>
             )}
@@ -6217,24 +6167,24 @@ export default function GraphicsPage() {
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Blur: {efBlur}px</label>
-                    <input type="range" min="0" max="120" value={efBlur} onChange={e => setEfBlur(e.target.value)} className="w-full" title="How soft/spread-out the shadow's edge is." />
+                    <Tooltip text="How soft/spread-out the shadow's edge is."><input type="range" min="0" max="120" value={efBlur} onChange={e => setEfBlur(e.target.value)} className="w-full" /></Tooltip>
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(Number(efShadowOpacity) * 100)}%</label>
-                    <input type="range" min="0" max="1" step="0.05" value={efShadowOpacity} onChange={e => setEfShadowOpacity(e.target.value)} className="w-full" title="How dark/visible the shadow is." />
+                    <Tooltip text="How dark/visible the shadow is."><input type="range" min="0" max="1" step="0.05" value={efShadowOpacity} onChange={e => setEfShadowOpacity(e.target.value)} className="w-full" /></Tooltip>
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Offset X: {efOffsetX}px</label>
-                    <input type="range" min="-100" max="100" value={efOffsetX} onChange={e => setEfOffsetX(e.target.value)} className="w-full" title="Horizontal distance the shadow is cast, in pixels." />
+                    <Tooltip text="Horizontal distance the shadow is cast, in pixels."><input type="range" min="-100" max="100" value={efOffsetX} onChange={e => setEfOffsetX(e.target.value)} className="w-full" /></Tooltip>
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Offset Y: {efOffsetY}px</label>
-                    <input type="range" min="-100" max="100" value={efOffsetY} onChange={e => setEfOffsetY(e.target.value)} className="w-full" title="Vertical distance the shadow is cast, in pixels." />
+                    <Tooltip text="Vertical distance the shadow is cast, in pixels."><input type="range" min="-100" max="100" value={efOffsetY} onChange={e => setEfOffsetY(e.target.value)} className="w-full" /></Tooltip>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Shadow colour</label>
-                  <input type="color" value={efShadowColor} onChange={e => setEfShadowColor(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour of the drop shadow." />
+                  <Tooltip text="Colour of the drop shadow."><input type="color" value={efShadowColor} onChange={e => setEfShadowColor(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
             )}
@@ -6242,19 +6192,19 @@ export default function GraphicsPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Shadow colour</label>
-                  <input type="color" value={efDuoShadow} onChange={e => setEfDuoShadow(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour mapped onto the darkest parts of the image." />
+                  <Tooltip text="Colour mapped onto the darkest parts of the image."><input type="color" value={efDuoShadow} onChange={e => setEfDuoShadow(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Highlight colour</label>
-                  <input type="color" value={efDuoHighlight} onChange={e => setEfDuoHighlight(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour mapped onto the lightest parts of the image." />
+                  <Tooltip text="Colour mapped onto the lightest parts of the image."><input type="color" value={efDuoHighlight} onChange={e => setEfDuoHighlight(e.target.value)} className="h-9 w-full rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                 </div>
               </div>
             )}
             {efError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{efError}</div>}
-            <button type="button" onClick={runEffect} disabled={efBusy || !efSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply the selected effect with the settings above.">
+            <Tooltip text="Apply the selected effect with the settings above."><button type="button" onClick={runEffect} disabled={efBusy || !efSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {efBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('wand', { size: 15 })}
               {efBusy ? 'Applying...' : 'Apply effect'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -6264,7 +6214,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(efSource?.imageDataUrl, efResult?.imageDataUrl)}
                   {renderSendTo(efResult.imageDataUrl, `effect.${efResult.format}`, 'effects')}
                   {renderExport(efResult.imageDataUrl, 'effect')}
-                  <button onClick={() => downloadDataUrl(efResult.imageDataUrl, `effect-${Date.now()}.${efResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the result to your device.">Download</button>
+                  <Tooltip text="Save the result to your device."><button onClick={() => downloadDataUrl(efResult.imageDataUrl, `effect-${Date.now()}.${efResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -6294,7 +6244,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setAdjResult(null); setAdjError(''); loadImageInto(setAdjSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to adjust." />
+              <Tooltip text="Choose the image to adjust."><input type="file" accept="image/*" onChange={e => { setAdjResult(null); setAdjError(''); loadImageInto(setAdjSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setAdjError(err); } else { setAdjResult(null); setAdjError(''); setAdjSource(src); } })} /></div>
             </div>
             {adjSource?.imageDataUrl && (
@@ -6305,74 +6255,74 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Brightness: {Number(adjBrightness).toFixed(2)}</label>
-                <input type="range" min="0.3" max="2" step="0.01" value={adjBrightness} onChange={e => setAdjBrightness(e.target.value)} className="w-full" title="Makes the whole image lighter or darker." />
+                <Tooltip text="Makes the whole image lighter or darker."><input type="range" min="0.3" max="2" step="0.01" value={adjBrightness} onChange={e => setAdjBrightness(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Contrast: {Number(adjContrast).toFixed(2)}</label>
-                <input type="range" min="0.3" max="2" step="0.01" value={adjContrast} onChange={e => setAdjContrast(e.target.value)} className="w-full" title="Increases or decreases the difference between light and dark areas." />
+                <Tooltip text="Increases or decreases the difference between light and dark areas."><input type="range" min="0.3" max="2" step="0.01" value={adjContrast} onChange={e => setAdjContrast(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Saturation: {Number(adjSaturation).toFixed(2)}</label>
-                <input type="range" min="0" max="2" step="0.01" value={adjSaturation} onChange={e => setAdjSaturation(e.target.value)} className="w-full" title="Makes colours more vivid (higher) or more muted/grey (lower)." />
+                <Tooltip text="Makes colours more vivid (higher) or more muted/grey (lower)."><input type="range" min="0" max="2" step="0.01" value={adjSaturation} onChange={e => setAdjSaturation(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Hue shift: {adjHue}°</label>
-                <input type="range" min="0" max="360" step="1" value={adjHue} onChange={e => setAdjHue(e.target.value)} className="w-full" title="Rotates every colour around the colour wheel by this many degrees." />
+                <Tooltip text="Rotates every colour around the colour wheel by this many degrees."><input type="range" min="0" max="360" step="1" value={adjHue} onChange={e => setAdjHue(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Sharpness: {Number(adjSharpness).toFixed(1)}</label>
-                <input type="range" min="0" max="10" step="0.1" value={adjSharpness} onChange={e => setAdjSharpness(e.target.value)} className="w-full" title="Increases edge definition to make details look crisper." />
+                <Tooltip text="Increases edge definition to make details look crisper."><input type="range" min="0" max="10" step="0.1" value={adjSharpness} onChange={e => setAdjSharpness(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Temperature: {adjTemperature > 0 ? `+${adjTemperature}` : adjTemperature}</label>
-                <input type="range" min="-100" max="100" step="1" value={adjTemperature} onChange={e => setAdjTemperature(e.target.value)} className="w-full" title="Shifts the overall colour warmer (orange) or cooler (blue)." />
+                <Tooltip text="Shifts the overall colour warmer (orange) or cooler (blue)."><input type="range" min="-100" max="100" step="1" value={adjTemperature} onChange={e => setAdjTemperature(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Vignette: {adjVignette}%</label>
-                <input type="range" min="0" max="100" step="1" value={adjVignette} onChange={e => setAdjVignette(e.target.value)} className="w-full" title="Darkens the corners of the image to draw attention to the centre." />
+                <Tooltip text="Darkens the corners of the image to draw attention to the centre."><input type="range" min="0" max="100" step="1" value={adjVignette} onChange={e => setAdjVignette(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div className="pt-2 mt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
                 <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Levels</p>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Black point: {adjBlackPoint}</label>
-                <input type="range" min="0" max="254" step="1" value={adjBlackPoint} onChange={e => setAdjBlackPoint(e.target.value)} className="w-full" title="Any pixel darker than this becomes pure black — raises shadow contrast." />
+                <Tooltip text="Any pixel darker than this becomes pure black — raises shadow contrast."><input type="range" min="0" max="254" step="1" value={adjBlackPoint} onChange={e => setAdjBlackPoint(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>White point: {adjWhitePoint}</label>
-                <input type="range" min="1" max="255" step="1" value={adjWhitePoint} onChange={e => setAdjWhitePoint(e.target.value)} className="w-full" title="Any pixel lighter than this becomes pure white — raises highlight contrast." />
+                <Tooltip text="Any pixel lighter than this becomes pure white — raises highlight contrast."><input type="range" min="1" max="255" step="1" value={adjWhitePoint} onChange={e => setAdjWhitePoint(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Gamma (midtones): {Number(adjGamma).toFixed(2)}</label>
-                <input type="range" min="1" max="3" step="0.01" value={adjGamma} onChange={e => setAdjGamma(e.target.value)} className="w-full" title="Brightens or darkens the mid-tones without affecting pure black or white." />
+                <Tooltip text="Brightens or darkens the mid-tones without affecting pure black or white."><input type="range" min="1" max="3" step="0.01" value={adjGamma} onChange={e => setAdjGamma(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Blur: {Number(adjBlur).toFixed(1)}</label>
-                <input type="range" min="0" max="30" step="0.5" value={adjBlur} onChange={e => setAdjBlur(e.target.value)} className="w-full" title="Softens the whole image." />
+                <Tooltip text="Softens the whole image."><input type="range" min="0" max="30" step="0.5" value={adjBlur} onChange={e => setAdjBlur(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Noise reduction: {adjDenoise > 0 ? `${adjDenoise % 2 === 0 ? Number(adjDenoise) + 1 : adjDenoise}px` : 'off'}</label>
-                <input type="range" min="0" max="13" step="1" value={adjDenoise} onChange={e => setAdjDenoise(e.target.value)} className="w-full" title="Smooths out grain and speckling, especially in low-light photos." />
+                <Tooltip text="Smooths out grain and speckling, especially in low-light photos."><input type="range" min="0" max="13" step="1" value={adjDenoise} onChange={e => setAdjDenoise(e.target.value)} className="w-full" /></Tooltip>
               </div>
             </div>
             {adjError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{adjError}</div>}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={runAdjust} disabled={adjBusy || !adjSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply all the adjustments above to the image.">
+              <Tooltip text="Apply all the adjustments above to the image."><button type="button" onClick={runAdjust} disabled={adjBusy || !adjSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
                 {adjBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('sliders', { size: 15 })}
                 {adjBusy ? 'Applying...' : 'Apply adjustments'}
-              </button>
-              <button type="button" onClick={resetAdjust} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Reset every slider back to its default value.">Reset</button>
+              </button></Tooltip>
+              <Tooltip text="Reset every slider back to its default value."><button type="button" onClick={resetAdjust} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button></Tooltip>
             </div>
             <div className="pt-3 mt-1 border-t space-y-2" style={{ borderColor: 'var(--color-border)' }}>
               <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Presets</p>
               <div className="flex items-center gap-2">
-                <input type="text" value={adjPresetName} onChange={e => setAdjPresetName(e.target.value)} placeholder="Preset name" className="flex-1 min-w-0 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Name to save the current slider settings under." />
-                <button type="button" onClick={saveAdjPreset} disabled={!adjPresetName.trim()} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }} title="Save the current slider settings under this name for reuse later.">Save current</button>
+                <Tooltip text="Name to save the current slider settings under."><input type="text" value={adjPresetName} onChange={e => setAdjPresetName(e.target.value)} placeholder="Preset name" className="flex-1 min-w-0 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
+                <Tooltip text="Save the current slider settings under this name for reuse later."><button type="button" onClick={saveAdjPreset} disabled={!adjPresetName.trim()} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Save current</button></Tooltip>
               </div>
               {adjPresets.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {adjPresets.map(p => (
                     <span key={p.name} className="inline-flex items-center gap-1 rounded-lg border text-xs" style={{ borderColor: 'var(--color-border)' }}>
-                      <button type="button" onClick={() => applyAdjPreset(p.name)} className="pl-2 py-1 hover:opacity-70" style={{ color: 'var(--color-text)' }} title="Load this saved preset into the sliders above.">{p.name}</button>
-                      <button type="button" onClick={() => deleteAdjPreset(p.name)} className="px-1.5 py-1 hover:opacity-70" style={{ color: '#ef4444' }} title="Delete this saved preset.">×</button>
+                      <Tooltip text="Load this saved preset into the sliders above."><button type="button" onClick={() => applyAdjPreset(p.name)} className="pl-2 py-1 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{p.name}</button></Tooltip>
+                      <Tooltip text="Delete this saved preset."><button type="button" onClick={() => deleteAdjPreset(p.name)} className="px-1.5 py-1 hover:opacity-70" style={{ color: '#ef4444' }}>×</button></Tooltip>
                     </span>
                   ))}
                 </div>
@@ -6387,7 +6337,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(adjSource?.imageDataUrl, adjResult?.imageDataUrl)}
                   {renderSendTo(adjResult.imageDataUrl, `adjusted.${adjResult.format}`, 'adjust')}
                   {renderExport(adjResult.imageDataUrl, 'adjusted')}
-                  <button onClick={() => downloadDataUrl(adjResult.imageDataUrl, `adjusted-${Date.now()}.${adjResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the adjusted image to your device.">Download</button>
+                  <Tooltip text="Save the adjusted image to your device."><button onClick={() => downloadDataUrl(adjResult.imageDataUrl, `adjusted-${Date.now()}.${adjResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -6416,7 +6366,7 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setRedactRects([]); setRedactExport(null); setRedactPast([]); setRedactFuture([]); redactImgRef.current = null; loadImageInto(setRedactSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to redact." />
+            <Tooltip text="Choose the image to redact."><input type="file" accept="image/*" onChange={e => { setRedactRects([]); setRedactExport(null); setRedactPast([]); setRedactFuture([]); redactImgRef.current = null; loadImageInto(setRedactSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
           </div>
           <div className="flex gap-2 self-end">
             {['pixelate', 'blur'].map(m => (
@@ -6428,24 +6378,23 @@ export default function GraphicsPage() {
             <input type="range" min="4" max="60" value={redactStrength} onChange={e => setRedactStrength(Number(e.target.value))} className="w-full" title={redactMode === 'blur' ? 'How strong the blur is over each redacted box.' : 'Size of the mosaic blocks over each redacted box — bigger hides more detail.'} />
           </div>
           <div className="flex gap-2 self-end">
-            <button type="button" onClick={undoRedact} disabled={!redactPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Undo the last box you drew.">Undo</button>
-            <button type="button" onClick={redoRedact} disabled={!redactFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Redo the last undone box.">Redo</button>
-            <button type="button" onClick={() => { if (!redactRects.length) return; recordRedact(redactRectsRef.current); setRedactRects([]); }} disabled={!redactRects.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Remove every redaction box.">Clear</button>
-            <button type="button" onClick={exportRedact} disabled={!redactSource?.imageDataUrl || !redactRects.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Flatten the redaction boxes onto the image and save it as a PNG.">
+            <Tooltip text="Undo the last box you drew."><button type="button" onClick={undoRedact} disabled={!redactPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button></Tooltip>
+            <Tooltip text="Redo the last undone box."><button type="button" onClick={redoRedact} disabled={!redactFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button></Tooltip>
+            <Tooltip text="Remove every redaction box."><button type="button" onClick={() => { if (!redactRects.length) return; recordRedact(redactRectsRef.current); setRedactRects([]); }} disabled={!redactRects.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button></Tooltip>
+            <Tooltip text="Flatten the redaction boxes onto the image and save it as a PNG."><button type="button" onClick={exportRedact} disabled={!redactSource?.imageDataUrl || !redactRects.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {getIcon('download', { size: 15 })} Export PNG
-            </button>
+            </button></Tooltip>
           </div>
         </div>
         {!redactSource?.imageDataUrl ? (
           <div className="rounded-2xl border flex items-center justify-center text-sm text-center px-6 py-20" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose an image, then drag boxes over anything you want to hide.</div>
         ) : (
           <div className="rounded-2xl border p-4 flex justify-center" style={{ borderColor: 'var(--color-border)', background: '#1e1e1e' }}>
-            <canvas
+            <Tooltip text="Drag to draw a box over anything you want to hide."><canvas
               ref={redactCanvasRef}
               onMouseDown={onRedactDown}
               style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: 'crosshair', touchAction: 'none' }}
-              title="Drag to draw a box over anything you want to hide."
-            />
+            /></Tooltip>
           </div>
         )}
         <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Drag to add a box. Switch between pixelate and blur and adjust strength at any time — all boxes update live. Everything is processed in your browser.</p>
@@ -6465,7 +6414,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setOcrText(''); setOcrError(''); loadImageInto(setOcrSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the screenshot, scan or photo to read text from." />
+              <Tooltip text="Choose the screenshot, scan or photo to read text from."><input type="file" accept="image/*" onChange={e => { setOcrText(''); setOcrError(''); loadImageInto(setOcrSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {ocrSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -6474,34 +6423,34 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Language</label>
-              <select value={ocrLang} onChange={e => setOcrLang(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Language of the text in the image — picking the right one improves accuracy.">
+              <Tooltip text="Language of the text in the image — picking the right one improves accuracy."><select value={ocrLang} onChange={e => setOcrLang(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 <option value="eng">English</option>
                 <option value="fra">French</option>
                 <option value="spa">Spanish</option>
                 <option value="deu">German</option>
                 <option value="ita">Italian</option>
                 <option value="por">Portuguese</option>
-              </select>
+              </select></Tooltip>
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>The language model (a few MB) downloads once on first use.</p>
             </div>
             {ocrError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{ocrError}</div>}
-            <button type="button" onClick={runOcr} disabled={ocrBusy || !ocrSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Read the text out of the image.">
+            <Tooltip text="Read the text out of the image."><button type="button" onClick={runOcr} disabled={ocrBusy || !ocrSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {ocrBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('type', { size: 15 })}
               {ocrBusy ? (ocrProgress ? `Reading... ${ocrProgress}%` : 'Loading...') : 'Extract text'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden flex flex-col" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Extracted text</span>
               {ocrText && (
                 <div className="flex gap-2">
-                  <button onClick={copyOcr} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Copy the extracted text to your clipboard.">{ocrCopied ? 'Copied' : 'Copy'}</button>
-                  <button onClick={downloadOcr} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the extracted text as a .txt file.">.txt</button>
+                  <Tooltip text="Copy the extracted text to your clipboard."><button onClick={copyOcr} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>{ocrCopied ? 'Copied' : 'Copy'}</button></Tooltip>
+                  <Tooltip text="Save the extracted text as a .txt file."><button onClick={downloadOcr} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>.txt</button></Tooltip>
                 </div>
               )}
             </div>
             <div className="p-4 grow">
-              <textarea value={ocrText} onChange={e => setOcrText(e.target.value)} placeholder="Extracted text will appear here. You can edit it before copying." className="w-full h-72 px-3 py-2 rounded-xl border text-sm resize-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Extracted text — you can edit it here before copying or downloading." />
+              <Tooltip text="Extracted text — you can edit it here before copying or downloading."><textarea value={ocrText} onChange={e => setOcrText(e.target.value)} placeholder="Extracted text will appear here. You can edit it before copying." className="w-full h-72 px-3 py-2 rounded-xl border text-sm resize-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
             </div>
           </div>
         </div>
@@ -6521,7 +6470,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setPalColors([]); setPalError(''); loadImageInto(setPalSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to pull dominant colours from." />
+              <Tooltip text="Choose the image to pull dominant colours from."><input type="file" accept="image/*" onChange={e => { setPalColors([]); setPalError(''); loadImageInto(setPalSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {palSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -6530,18 +6479,18 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Number of colours</label>
-              <select value={palCount} onChange={e => setPalCount(Number(e.target.value))} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How many dominant colours to extract from the image.">
+              <Tooltip text="How many dominant colours to extract from the image."><select value={palCount} onChange={e => setPalCount(Number(e.target.value))} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 <option value={5}>5</option>
                 <option value={8}>8</option>
                 <option value={10}>10</option>
                 <option value={12}>12</option>
-              </select>
+              </select></Tooltip>
             </div>
             {palError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{palError}</div>}
-            <button type="button" onClick={runPalette} disabled={palBusy || !palSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Analyse the image and extract its dominant colours.">
+            <Tooltip text="Analyse the image and extract its dominant colours."><button type="button" onClick={runPalette} disabled={palBusy || !palSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {palBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('swatch', { size: 15 })}
               {palBusy ? 'Extracting...' : 'Extract palette'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -6558,8 +6507,8 @@ export default function GraphicsPage() {
                         <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>rgb({c.r}, {c.g}, {c.b}) · {c.pct}%</span>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <button type="button" onClick={() => copyPalette(c.hex)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Copy this colour's hex code.">{palCopied === c.hex ? 'Copied' : 'HEX'}</button>
-                        <button type="button" onClick={() => copyPalette(`rgb(${c.r}, ${c.g}, ${c.b})`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Copy this colour's RGB value.">{palCopied === `rgb(${c.r}, ${c.g}, ${c.b})` ? 'Copied' : 'RGB'}</button>
+                        <Tooltip text="Copy this colour's hex code."><button type="button" onClick={() => copyPalette(c.hex)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>{palCopied === c.hex ? 'Copied' : 'HEX'}</button></Tooltip>
+                        <Tooltip text="Copy this colour's RGB value."><button type="button" onClick={() => copyPalette(`rgb(${c.r}, ${c.g}, ${c.b})`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>{palCopied === `rgb(${c.r}, ${c.g}, ${c.b})` ? 'Copied' : 'RGB'}</button></Tooltip>
                       </div>
                     </div>
                   ))}
@@ -6586,30 +6535,30 @@ export default function GraphicsPage() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Image A (base)</label>
-                <input type="file" accept="image/*" onChange={e => { setDiffResult(null); setDiffError(''); loadImageInto(setDiffA)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the original / reference image." />
+                <Tooltip text="Choose the original / reference image."><input type="file" accept="image/*" onChange={e => { setDiffResult(null); setDiffError(''); loadImageInto(setDiffA)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
                 {diffA?.imageDataUrl && <img src={diffA.imageDataUrl} alt="A" className="mt-2 max-h-28 rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />}
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Image B (compare)</label>
-                <input type="file" accept="image/*" onChange={e => { setDiffResult(null); setDiffError(''); loadImageInto(setDiffB)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to compare against image A." />
+                <Tooltip text="Choose the image to compare against image A."><input type="file" accept="image/*" onChange={e => { setDiffResult(null); setDiffError(''); loadImageInto(setDiffB)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
                 {diffB?.imageDataUrl && <img src={diffB.imageDataUrl} alt="B" className="mt-2 max-h-28 rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />}
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Sensitivity (threshold): {diffThreshold}</label>
-              <input type="range" min="0" max="100" value={diffThreshold} onChange={e => setDiffThreshold(e.target.value)} className="w-full" title="How different two pixels must be before they're flagged as changed." />
+              <Tooltip text="How different two pixels must be before they're flagged as changed."><input type="range" min="0" max="100" value={diffThreshold} onChange={e => setDiffThreshold(e.target.value)} className="w-full" /></Tooltip>
               <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Lower = more sensitive (flags smaller changes).</p>
             </div>
             {diffError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{diffError}</div>}
-            <button type="button" onClick={runDiff} disabled={diffBusy || !diffA?.imageDataUrl || !diffB?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Compare the two images and highlight what changed.">
+            <Tooltip text="Compare the two images and highlight what changed."><button type="button" onClick={runDiff} disabled={diffBusy || !diffA?.imageDataUrl || !diffB?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {diffBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('layers', { size: 15 })}
               {diffBusy ? 'Comparing...' : 'Compare images'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Difference</span>
-              {diffResult?.imageDataUrl && <button onClick={() => downloadDataUrl(diffResult.imageDataUrl, `diff-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the difference map to your device.">Download</button>}
+              {diffResult?.imageDataUrl && <Tooltip text="Save the difference map to your device."><button onClick={() => downloadDataUrl(diffResult.imageDataUrl, `diff-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>}
             </div>
             <div className="p-4">
               {diffResult?.imageDataUrl ? (
@@ -6639,25 +6588,24 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Image</label>
-              <input type="file" accept="image/*" onChange={e => { setPickerHex(null); loadImageInto(setPickerSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to sample a colour from." />
+              <Tooltip text="Choose the image to sample a colour from."><input type="file" accept="image/*" onChange={e => { setPickerHex(null); loadImageInto(setPickerSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {pickerSource?.imageDataUrl && (
               <div className="rounded-xl border p-2 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Zoom</span>
-                  <input type="range" min="1" max="6" step="1" value={pickerZoom} onChange={e => setPickerZoom(e.target.value)} className="flex-1" title="Magnify the image so you can click a precise pixel." />
+                  <Tooltip text="Magnify the image so you can click a precise pixel."><input type="range" min="1" max="6" step="1" value={pickerZoom} onChange={e => setPickerZoom(e.target.value)} className="flex-1" /></Tooltip>
                   <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{pickerZoom}x</span>
                 </div>
                 <div ref={pickerScrollRef} style={{ overflow: 'auto', maxHeight: 360 }}>
-                  <canvas
+                  <Tooltip text="Click to read this pixel's colour; drag to pan when zoomed in."><canvas
                     ref={pickerCanvasRef}
                     onMouseDown={handlePickerMouseDown}
                     onMouseMove={handlePickerMouseMove}
                     onMouseUp={handlePickerMouseUp}
                     className="rounded-lg"
                     style={{ display: 'block', width: `${Number(pickerZoom) * 100}%`, imageRendering: Number(pickerZoom) > 1 ? 'pixelated' : 'auto', cursor: Number(pickerZoom) > 1 ? 'grab' : 'crosshair' }}
-                    title="Click to read this pixel's colour; drag to pan when zoomed in."
-                  />
+                  /></Tooltip>
                 </div>
                 <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Click to sample a colour. When zoomed, drag to pan.</p>
               </div>
@@ -6674,11 +6622,11 @@ export default function GraphicsPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <code className="text-sm" style={{ color: 'var(--color-text)' }}>{pickerHex.hex}</code>
-                      <button type="button" onClick={() => copyPicker(pickerHex.hex, 'hex')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Copy the hex code.">{pickerCopied === 'hex' ? 'Copied' : 'Copy'}</button>
+                      <Tooltip text="Copy the hex code."><button type="button" onClick={() => copyPicker(pickerHex.hex, 'hex')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>{pickerCopied === 'hex' ? 'Copied' : 'Copy'}</button></Tooltip>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <code className="text-sm" style={{ color: 'var(--color-text)' }}>rgb({pickerHex.r}, {pickerHex.g}, {pickerHex.b})</code>
-                      <button type="button" onClick={() => copyPicker(`rgb(${pickerHex.r}, ${pickerHex.g}, ${pickerHex.b})`, 'rgb')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Copy the RGB value.">{pickerCopied === 'rgb' ? 'Copied' : 'Copy'}</button>
+                      <Tooltip text="Copy the RGB value."><button type="button" onClick={() => copyPicker(`rgb(${pickerHex.r}, ${pickerHex.g}, ${pickerHex.b})`, 'rgb')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>{pickerCopied === 'rgb' ? 'Copied' : 'Copy'}</button></Tooltip>
                     </div>
                   </div>
                 </div>
@@ -6703,7 +6651,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Inspect a file’s size, type, dimensions and other details. Nothing is uploaded — everything is read in your browser.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Choose file</label>
-              <input type="file" accept="image/*" onChange={e => inspectFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose an image file to inspect its details." />
+              <Tooltip text="Choose an image file to inspect its details."><input type="file" accept="image/*" onChange={e => inspectFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             {fileInfo?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -6756,7 +6704,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Analyse image sharpness using Laplacian edge detection. Nothing is uploaded — analysis happens in your browser.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => handleBlurFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to check for sharpness." />
+              <Tooltip text="Choose the image to check for sharpness."><input type="file" accept="image/*" onChange={async e => handleBlurFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setBlurError(err); } else { setBlurSource(src); } })} />
             </div>
             {blurSource?.imageDataUrl && (
@@ -6765,7 +6713,7 @@ export default function GraphicsPage() {
               </div>
             )}
             {blurError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{blurError}</div>}
-            <button type="button" onClick={runBlurDetect} disabled={blurBusy || !blurSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }} title="Analyse the image's sharpness and classify it as Sharp, Soft or Blurry.">{blurBusy ? 'Analysing…' : 'Analyse'}</button>
+            <Tooltip text="Analyse the image's sharpness and classify it as Sharp, Soft or Blurry."><button type="button" onClick={runBlurDetect} disabled={blurBusy || !blurSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{blurBusy ? 'Analysing…' : 'Analyse'}</button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -6804,14 +6752,14 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>One-click intelligent brightness, contrast and saturation adjustments based on image analysis.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => handleAeFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to auto-enhance." />
+              <Tooltip text="Choose the image to auto-enhance."><input type="file" accept="image/*" onChange={async e => handleAeFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setAeError(err); } else { setAeSource(src); } })} />
             </div>
             {aeSource?.imageDataUrl && (
               <ResultPlaceholder src={aeSource.imageDataUrl} message={aeBusy ? 'Enhancing…' : 'Ready to enhance'} />
             )}
             {aeError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{aeError}</div>}
-            <button type="button" onClick={runAutoEnhance} disabled={aeBusy || !aeSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }} title="Automatically fix brightness, contrast and saturation based on the image's histogram.">{aeBusy ? 'Enhancing…' : 'Enhance'}</button>
+            <Tooltip text="Automatically fix brightness, contrast and saturation based on the image's histogram."><button type="button" onClick={runAutoEnhance} disabled={aeBusy || !aeSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{aeBusy ? 'Enhancing…' : 'Enhance'}</button></Tooltip>
           </div>
           {aeResult && (
             <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -6853,6 +6801,7 @@ export default function GraphicsPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Print Ready</h2>
+            <button type="button" onClick={() => setHelpTool('printready')} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('help-circle', { size: 13 })}</button>
           </div>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
         </div>
@@ -6995,7 +6944,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Fix keystone / trapezoid distortion by adjusting horizontal and vertical shear. Best for whiteboards, documents and architecture shots taken at an angle.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => { setPersError(''); setPersResult(null); loadImageInto(setPersSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to correct for keystone / trapezoid distortion." />
+              <Tooltip text="Choose the image to correct for keystone / trapezoid distortion."><input type="file" accept="image/*" onChange={async e => { setPersError(''); setPersResult(null); loadImageInto(setPersSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setPersError(err); } else { setPersResult(null); setPersError(''); setPersSource(src); } })} />
             </div>
             {persSource?.imageDataUrl && (
@@ -7006,38 +6955,38 @@ export default function GraphicsPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Horizontal skew: {persHSkew > 0 ? `+${persHSkew}` : persHSkew}</label>
-                <input type="range" min="-50" max="50" step="1" value={persHSkew} onChange={e => setPersHSkew(Number(e.target.value))} className="w-full" title="Corrects left/right lean, e.g. from a photo taken at an angle to a whiteboard or document." />
+                <Tooltip text="Corrects left/right lean, e.g. from a photo taken at an angle to a whiteboard or document."><input type="range" min="-50" max="50" step="1" value={persHSkew} onChange={e => setPersHSkew(Number(e.target.value))} className="w-full" /></Tooltip>
                 <div className="flex justify-between text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}><span>Left lean</span><span>0</span><span>Right lean</span></div>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Vertical skew: {persVSkew > 0 ? `+${persVSkew}` : persVSkew}</label>
-                <input type="range" min="-50" max="50" step="1" value={persVSkew} onChange={e => setPersVSkew(Number(e.target.value))} className="w-full" title="Corrects top/bottom lean, e.g. from a photo taken from above or below." />
+                <Tooltip text="Corrects top/bottom lean, e.g. from a photo taken from above or below."><input type="range" min="-50" max="50" step="1" value={persVSkew} onChange={e => setPersVSkew(Number(e.target.value))} className="w-full" /></Tooltip>
                 <div className="flex justify-between text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}><span>Top lean</span><span>0</span><span>Bottom lean</span></div>
               </div>
               <div className="flex items-center gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Corner fill</label>
-                  <select value={persBg} onChange={e => setPersBg(e.target.value)} className="px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="What to fill the empty corners created by the correction with.">
+                  <Tooltip text="What to fill the empty corners created by the correction with."><select value={persBg} onChange={e => setPersBg(e.target.value)} className="px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                     <option value="transparent">Transparent (PNG)</option>
                     <option value="#ffffff">White</option>
                     <option value="#000000">Black</option>
-                  </select>
+                  </select></Tooltip>
                 </div>
                 {persBg !== 'transparent' && (
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Custom colour</label>
-                    <input type="color" value={persBg.startsWith('#') ? persBg : '#ffffff'} onChange={e => setPersBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} title="Colour used to fill the empty corners." />
+                    <Tooltip text="Colour used to fill the empty corners."><input type="color" value={persBg.startsWith('#') ? persBg : '#ffffff'} onChange={e => setPersBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} /></Tooltip>
                   </div>
                 )}
               </div>
             </div>
             {persError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{persError}</div>}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={runPerspective} disabled={persBusy || !persSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply the perspective correction with the settings above.">
+              <Tooltip text="Apply the perspective correction with the settings above."><button type="button" onClick={runPerspective} disabled={persBusy || !persSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
                 {persBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('trapezoid', { size: 15 })}
                 {persBusy ? 'Correcting…' : 'Apply correction'}
-              </button>
-              <button type="button" onClick={() => { setPersHSkew(0); setPersVSkew(0); }} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} title="Reset both skew sliders to zero.">Reset</button>
+              </button></Tooltip>
+              <Tooltip text="Reset both skew sliders to zero."><button type="button" onClick={() => { setPersHSkew(0); setPersVSkew(0); }} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button></Tooltip>
             </div>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -7048,7 +6997,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(persSource?.imageDataUrl, persResult?.imageDataUrl)}
                   {renderSendTo(persResult.imageDataUrl, 'corrected.png', 'perspective')}
                   {renderExport(persResult.imageDataUrl, 'corrected')}
-                  <button onClick={() => downloadDataUrl(persResult.imageDataUrl, `perspective-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the corrected image to your device.">Download</button>
+                  <Tooltip text="Save the corrected image to your device."><button onClick={() => downloadDataUrl(persResult.imageDataUrl, `perspective-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -7079,7 +7028,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Crop to a target size or aspect ratio. The focus strategy determines which part of the image is kept — <strong>Attention</strong> uses saliency detection, <strong>Entropy</strong> keeps the region with the most visual detail.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => { setScError(''); setScResult(null); loadImageInto(setScSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to crop." />
+              <Tooltip text="Choose the image to crop."><input type="file" accept="image/*" onChange={async e => { setScError(''); setScResult(null); loadImageInto(setScSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setScError(err); } else { setScResult(null); setScError(''); setScSource(src); } })} />
             </div>
             {scSource?.imageDataUrl && (
@@ -7090,7 +7039,7 @@ export default function GraphicsPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Focus strategy</label>
-                <select value={scFocus} onChange={e => setScFocus(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Which part of the image to keep when cropping — Attention finds the main subject automatically.">
+                <Tooltip text="Which part of the image to keep when cropping — Attention finds the main subject automatically."><select value={scFocus} onChange={e => setScFocus(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="attention">Attention (saliency — recommended)</option>
                   <option value="entropy">Entropy (highest detail region)</option>
                   <option value="centre">Centre</option>
@@ -7098,28 +7047,28 @@ export default function GraphicsPage() {
                   <option value="south">Bottom</option>
                   <option value="west">Left</option>
                   <option value="east">Right</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Aspect ratio (e.g. 16:9, 1:1, 4:5)</label>
-                <input type="text" value={scAspect} onChange={e => setScAspect(e.target.value)} placeholder="Leave blank to use width × height" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Crop to this width:height ratio instead of an exact pixel size." />
+                <Tooltip text="Crop to this width:height ratio instead of an exact pixel size."><input type="text" value={scAspect} onChange={e => setScAspect(e.target.value)} placeholder="Leave blank to use width × height" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
-                  <input type="number" min="1" max="8000" value={scWidth} onChange={e => setScWidth(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Exact target width in pixels." />
+                  <Tooltip text="Exact target width in pixels."><input type="number" min="1" max="8000" value={scWidth} onChange={e => setScWidth(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
-                  <input type="number" min="1" max="8000" value={scHeight} onChange={e => setScHeight(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Exact target height in pixels." />
+                  <Tooltip text="Exact target height in pixels."><input type="number" min="1" max="8000" value={scHeight} onChange={e => setScHeight(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                 </div>
               </div>
             </div>
             {scError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{scError}</div>}
-            <button type="button" onClick={runSmartCrop} disabled={scBusy || !scSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Crop the image with the settings above.">
+            <Tooltip text="Crop the image with the settings above."><button type="button" onClick={runSmartCrop} disabled={scBusy || !scSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {scBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('aim', { size: 15 })}
               {scBusy ? 'Cropping…' : 'Smart crop'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -7128,7 +7077,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderSendTo(scResult.imageDataUrl, `cropped.${scResult.format}`, 'smartcrop')}
                   {renderExport(scResult.imageDataUrl, 'cropped')}
-                  <button onClick={() => downloadDataUrl(scResult.imageDataUrl, `smartcrop-${Date.now()}.${scResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the cropped image to your device.">Download</button>
+                  <Tooltip text="Save the cropped image to your device."><button onClick={() => downloadDataUrl(scResult.imageDataUrl, `smartcrop-${Date.now()}.${scResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -7159,7 +7108,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Apply a cinematic colour look via channel recombination and tone mapping. Non-destructive — re-run with a different preset any time.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => { setCgError(''); setCgResult(null); loadImageInto(setCgSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to apply a colour grade to." />
+              <Tooltip text="Choose the image to apply a colour grade to."><input type="file" accept="image/*" onChange={async e => { setCgError(''); setCgResult(null); loadImageInto(setCgSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setCgError(err); } else { setCgResult(null); setCgError(''); setCgSource(src); } })} />
             </div>
             {cgSource?.imageDataUrl && (
@@ -7189,10 +7138,10 @@ export default function GraphicsPage() {
               </div>
             </div>
             {cgError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{cgError}</div>}
-            <button type="button" onClick={runColorGrade} disabled={cgBusy || !cgSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Apply the selected colour grade to the image.">
+            <Tooltip text="Apply the selected colour grade to the image."><button type="button" onClick={runColorGrade} disabled={cgBusy || !cgSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {cgBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('palette-2', { size: 15 })}
               {cgBusy ? 'Grading…' : 'Apply grade'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -7202,7 +7151,7 @@ export default function GraphicsPage() {
                   {renderCompareToggle(cgSource?.imageDataUrl, cgResult?.imageDataUrl)}
                   {renderSendTo(cgResult.imageDataUrl, `graded.${cgResult.format}`, 'colorgrade')}
                   {renderExport(cgResult.imageDataUrl, 'graded')}
-                  <button onClick={() => downloadDataUrl(cgResult.imageDataUrl, `graded-${Date.now()}.${cgResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the graded image to your device.">Download</button>
+                  <Tooltip text="Save the graded image to your device."><button onClick={() => downloadDataUrl(cgResult.imageDataUrl, `graded-${Date.now()}.${cgResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>
                 </div>
               )}
             </div>
@@ -7233,27 +7182,27 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Stamp a text label onto many images at once. Use <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{filename}'}</code>, <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{index}'}</code>, <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{n}'}</code> or <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{date}'}</code> as template variables.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Images (up to 20)</label>
-              <input type="file" accept="image/*" multiple onChange={e => addBtImages(e.target.files)} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose up to 20 images to stamp the same text label onto." />
+              <Tooltip text="Choose up to 20 images to stamp the same text label onto."><input type="file" accept="image/*" multiple onChange={e => addBtImages(e.target.files)} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               {btImages.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {btImages.map((img, i) => (
                     <div key={i} className="relative group">
                       <img src={img.imageDataUrl} alt={img.name} className="h-12 w-12 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} title={img.name} />
-                      <button type="button" onClick={() => setBtImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: '#ef4444', color: '#fff' }} title="Remove this image from the batch.">×</button>
+                      <Tooltip text="Remove this image from the batch."><button type="button" onClick={() => setBtImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: '#ef4444', color: '#fff' }}>×</button></Tooltip>
                     </div>
                   ))}
-                  <button type="button" onClick={() => setBtImages([])} className="text-xs px-2 py-1 rounded-lg border self-center hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }} title="Remove all added images.">Clear all</button>
+                  <Tooltip text="Remove all added images."><button type="button" onClick={() => setBtImages([])} className="text-xs px-2 py-1 rounded-lg border self-center hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }}>Clear all</button></Tooltip>
                 </div>
               )}
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text template</label>
-              <input type="text" value={btText} onChange={e => setBtText(e.target.value)} placeholder="{filename}" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Text to stamp on every image — use {filename}, {index}, {n} or {date} to insert per-image values." />
+              <Tooltip text="Text to stamp on every image — use {filename}, {index}, {n} or {date} to insert per-image values."><input type="text" value={btText} onChange={e => setBtText(e.target.value)} placeholder="{filename}" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
-                <select value={btPosition} onChange={e => setBtPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Where the label sits on each image.">
+                <Tooltip text="Where the label sits on each image."><select value={btPosition} onChange={e => setBtPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="bottom-right">Bottom right</option>
                   <option value="bottom-left">Bottom left</option>
                   <option value="top-right">Top right</option>
@@ -7261,33 +7210,33 @@ export default function GraphicsPage() {
                   <option value="center">Centre</option>
                   <option value="bottom">Bottom centre</option>
                   <option value="top">Top centre</option>
-                </select>
+                </select></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font size: {btFontSize}px</label>
-                <input type="range" min="8" max="120" step="2" value={btFontSize} onChange={e => setBtFontSize(Number(e.target.value))} className="w-full" title="Size of the label text." />
+                <Tooltip text="Size of the label text."><input type="range" min="8" max="120" step="2" value={btFontSize} onChange={e => setBtFontSize(Number(e.target.value))} className="w-full" /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text colour</label>
-                <input type="color" value={btColor} onChange={e => setBtColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} title="Colour of the label text." />
+                <Tooltip text="Colour of the label text."><input type="color" value={btColor} onChange={e => setBtColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} /></Tooltip>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(btOpacity * 100)}%</label>
-                <input type="range" min="0.1" max="1" step="0.05" value={btOpacity} onChange={e => setBtOpacity(Number(e.target.value))} className="w-full" title="How see-through the label is." />
+                <Tooltip text="How see-through the label is."><input type="range" min="0.1" max="1" step="0.05" value={btOpacity} onChange={e => setBtOpacity(Number(e.target.value))} className="w-full" /></Tooltip>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background colour (optional — adds a backing rectangle)</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={btBg || '#000000'} onChange={e => setBtBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} title="Colour of an optional solid panel behind the label, to keep it readable." />
-                  {btBg ? <button type="button" onClick={() => setBtBg('')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} title="Remove the background panel — show text only.">Remove</button> : <span className="text-xs" style={{ color: 'var(--color-muted)' }}>None (text only)</span>}
+                  <Tooltip text="Colour of an optional solid panel behind the label, to keep it readable."><input type="color" value={btBg || '#000000'} onChange={e => setBtBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} /></Tooltip>
+                  {btBg ? <Tooltip text="Remove the background panel — show text only."><button type="button" onClick={() => setBtBg('')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>Remove</button></Tooltip> : <span className="text-xs" style={{ color: 'var(--color-muted)' }}>None (text only)</span>}
                 </div>
               </div>
             </div>
             {btError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{btError}</div>}
-            <button type="button" onClick={runBatchText} disabled={btBusy || !btImages.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Stamp the text label onto every added image.">
+            <Tooltip text="Stamp the text label onto every added image."><button type="button" onClick={runBatchText} disabled={btBusy || !btImages.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {btBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('text', { size: 15 })}
               {btBusy ? `Processing ${btImages.length} image${btImages.length !== 1 ? 's' : ''}…` : `Apply to ${btImages.length || '0'} image${btImages.length !== 1 ? 's' : ''}`}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -7315,7 +7264,7 @@ export default function GraphicsPage() {
                         )}
                       </div>
                       {r.imageDataUrl && (
-                        <button onClick={() => downloadDataUrl(r.imageDataUrl, r.name)} className="text-xs px-2 py-1 rounded-lg border flex-shrink-0 hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save this labelled image to your device.">↓</button>
+                        <Tooltip text="Save this labelled image to your device."><button onClick={() => downloadDataUrl(r.imageDataUrl, r.name)} className="text-xs px-2 py-1 rounded-lg border flex-shrink-0 hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>↓</button></Tooltip>
                       )}
                     </div>
                   ))}
@@ -7345,7 +7294,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>See the tonal distribution of an image. Nothing is uploaded — pixels are read in your browser.</p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { const d = await readFileAsDataUrl(f); loadHistogram({ imageDataUrl: d, name: f.name }); } catch { setHistError('Could not read that image.'); } }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to analyse the tonal distribution of." />
+              <Tooltip text="Choose the image to analyse the tonal distribution of."><input type="file" accept="image/*" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { const d = await readFileAsDataUrl(f); loadHistogram({ imageDataUrl: d, name: f.name }); } catch { setHistError('Could not read that image.'); } }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setHistError(err); } else { loadHistogram(src); } })} />
             </div>
             {histSource?.imageDataUrl && (
@@ -7355,13 +7304,13 @@ export default function GraphicsPage() {
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Channel</label>
-              <select value={histChannel} onChange={e => setHistChannel(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Which colour channel (or combined/luminance) to graph.">
+              <Tooltip text="Which colour channel (or combined/luminance) to graph."><select value={histChannel} onChange={e => setHistChannel(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 <option value="rgb">RGB (combined)</option>
                 <option value="lum">Luminance</option>
                 <option value="r">Red</option>
                 <option value="g">Green</option>
                 <option value="b">Blue</option>
-              </select>
+              </select></Tooltip>
             </div>
             {histError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{histError}</div>}
           </div>
@@ -7413,19 +7362,19 @@ export default function GraphicsPage() {
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text / foreground</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Pick the text colour." />
-                    <input type="text" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Hex code of the text colour." />
+                    <Tooltip text="Pick the text colour."><input type="color" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                    <Tooltip text="Hex code of the text colour."><input type="text" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Pick the background colour." />
-                    <input type="text" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Hex code of the background colour." />
+                    <Tooltip text="Pick the background colour."><input type="color" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
+                    <Tooltip text="Hex code of the background colour."><input type="text" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
                   </div>
                 </div>
               </div>
-              <button type="button" onClick={() => { setContrastFg(contrastBg); setContrastBg(contrastFg); }} className="text-xs px-3 py-2 rounded-xl border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Swap the text and background colours.">Swap colours</button>
+              <Tooltip text="Swap the text and background colours."><button type="button" onClick={() => { setContrastFg(contrastBg); setContrastBg(contrastFg); }} className="text-xs px-3 py-2 rounded-xl border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Swap colours</button></Tooltip>
               <div className="rounded-xl border p-5 space-y-2" style={{ background: contrastBg, borderColor: 'var(--color-border)' }}>
                 <p style={{ color: contrastFg, fontSize: 24, fontWeight: 700, margin: 0 }}>Large text sample</p>
                 <p style={{ color: contrastFg, fontSize: 15, margin: 0 }}>Normal body text sample — the quick brown fox jumps over the lazy dog.</p>
@@ -7465,24 +7414,24 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Combine several images into an animated GIF. Frames play in the order shown (the first frame sets the size — others are cropped to fit).</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Add frames</label>
-              <input type="file" accept="image/*" multiple onChange={e => { handleAnimFrames(e.target.files); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose two or more images to combine into an animated GIF." />
+              <Tooltip text="Choose two or more images to combine into an animated GIF."><input type="file" accept="image/*" multiple onChange={e => { handleAnimFrames(e.target.files); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             <div className="grid sm:grid-cols-2 gap-3 items-end">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Frame delay: {animDelay}ms</label>
-                <input type="range" min="20" max="2000" step="10" value={animDelay} onChange={e => setAnimDelay(e.target.value)} className="w-full" title="How long each frame is shown before advancing to the next, in milliseconds." />
+                <Tooltip text="How long each frame is shown before advancing to the next, in milliseconds."><input type="range" min="20" max="2000" step="10" value={animDelay} onChange={e => setAnimDelay(e.target.value)} className="w-full" /></Tooltip>
               </div>
               <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                <input type="checkbox" checked={animLoop} onChange={e => setAnimLoop(e.target.checked)} title="Repeat the animation endlessly instead of playing once." /> Loop forever
+                <Tooltip text="Repeat the animation endlessly instead of playing once."><input type="checkbox" checked={animLoop} onChange={e => setAnimLoop(e.target.checked)} /></Tooltip> Loop forever
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={runAnimate} disabled={animBusy || animFrames.length < 2} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Combine the frames above into an animated GIF.">
+              <Tooltip text="Combine the frames above into an animated GIF."><button type="button" onClick={runAnimate} disabled={animBusy || animFrames.length < 2} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
                 {animBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('film', { size: 15 })}
                 {animBusy ? 'Building...' : 'Build GIF'}
-              </button>
+              </button></Tooltip>
               {animFrames.length > 0 && (
-                <button type="button" onClick={clearAnimFrames} disabled={animBusy} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Remove all added frames.">Clear</button>
+                <Tooltip text="Remove all added frames."><button type="button" onClick={clearAnimFrames} disabled={animBusy} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button></Tooltip>
               )}
             </div>
             {animError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{animError}</div>}
@@ -7495,9 +7444,9 @@ export default function GraphicsPage() {
                     <span className="text-[11px] w-5 text-center" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
                     <img src={item.imageDataUrl} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" style={{ border: '1px solid var(--color-border)' }} />
                     <p className="text-xs font-medium truncate flex-1 min-w-0" style={{ color: 'var(--color-text)' }}>{item.name}</p>
-                    <button type="button" onClick={() => moveAnimFrame(item.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Move this frame earlier in the sequence.">↑</button>
-                    <button type="button" onClick={() => moveAnimFrame(item.id, 1)} disabled={i === animFrames.length - 1} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Move this frame later in the sequence.">↓</button>
-                    <button type="button" onClick={() => removeAnimFrame(item.id)} disabled={animBusy} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: '#ef4444' }} title="Remove this frame.">Remove</button>
+                    <Tooltip text="Move this frame earlier in the sequence."><button type="button" onClick={() => moveAnimFrame(item.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↑</button></Tooltip>
+                    <Tooltip text="Move this frame later in the sequence."><button type="button" onClick={() => moveAnimFrame(item.id, 1)} disabled={i === animFrames.length - 1} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↓</button></Tooltip>
+                    <Tooltip text="Remove this frame."><button type="button" onClick={() => removeAnimFrame(item.id)} disabled={animBusy} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: '#ef4444' }}>Remove</button></Tooltip>
                   </div>
                 ))}
               </div>
@@ -7506,7 +7455,7 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {animResult?.imageDataUrl && <button onClick={() => downloadDataUrl(animResult.imageDataUrl, `animation-${Date.now()}.gif`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Save the animated GIF to your device.">Download</button>}
+              {animResult?.imageDataUrl && <Tooltip text="Save the animated GIF to your device."><button onClick={() => downloadDataUrl(animResult.imageDataUrl, `animation-${Date.now()}.gif`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button></Tooltip>}
             </div>
             <div className="p-4">
               {animResult?.imageDataUrl ? (
@@ -7535,22 +7484,22 @@ export default function GraphicsPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>PDF file</label>
-              <input type="file" accept="application/pdf,.pdf" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the PDF to render into images." />
+              <Tooltip text="Choose the PDF to render into images."><input type="file" accept="application/pdf,.pdf" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Resolution</label>
-              <select value={pdfScale} onChange={e => setPdfScale(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="How large and sharp the rendered page images are — higher takes longer.">
+              <Tooltip text="How large and sharp the rendered page images are — higher takes longer."><select value={pdfScale} onChange={e => setPdfScale(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 <option value="1">Screen (1×)</option>
                 <option value="2">High (2×)</option>
                 <option value="3">Very high (3×)</option>
                 <option value="4">Print (4×)</option>
-              </select>
+              </select></Tooltip>
             </div>
           </div>
           {pdfError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{pdfError}</div>}
           {pdfPages.length > 0 && (
             <div className="flex items-center gap-2">
-              <button type="button" onClick={downloadPdfAll} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }} title="Download every rendered page as separate image files.">Download all ({pdfPages.length})</button>
+              <Tooltip text="Download every rendered page as separate image files."><button type="button" onClick={downloadPdfAll} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Download all ({pdfPages.length})</button></Tooltip>
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{pdfBusy ? 'Rendering…' : `${pdfPages.length} page${pdfPages.length === 1 ? '' : 's'}`}</span>
             </div>
           )}
@@ -7563,7 +7512,7 @@ export default function GraphicsPage() {
                   <button type="button" onClick={() => setPreviewImage({ imageDataUrl: item.dataUrl })} className="block w-full"><img src={item.dataUrl} alt={`page ${item.page}`} className="w-full" /></button>
                   <div className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Page {item.page}</span>
-                    <button type="button" onClick={() => downloadPdfPage(item)} className="text-[11px] px-2 py-0.5 rounded border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }} title="Download this page as a PNG.">Save</button>
+                    <Tooltip text="Download this page as a PNG."><button type="button" onClick={() => downloadPdfPage(item)} className="text-[11px] px-2 py-0.5 rounded border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Save</button></Tooltip>
                   </div>
                 </div>
               ))}
@@ -7587,7 +7536,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Build a sequence of edits and apply them in order, in one pass. Up to 12 steps.</p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setPipeResult(null); setPipeError(''); loadImageInto(setPipeSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to run the pipeline of edits on." />
+              <Tooltip text="Choose the image to run the pipeline of edits on."><input type="file" accept="image/*" onChange={e => { setPipeResult(null); setPipeError(''); loadImageInto(setPipeSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setPipeError(err); } else { setPipeResult(null); setPipeError(''); setPipeSource(src); } })} />
             </div>
             {pipeSource?.imageDataUrl && (
@@ -7596,10 +7545,10 @@ export default function GraphicsPage() {
               </div>
             )}
             <div className="flex items-center gap-2">
-              <select value={pipeStepOp} onChange={e => setPipeStepOp(e.target.value)} className="flex-1 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Choose an edit to add to the pipeline.">
+              <Tooltip text="Choose an edit to add to the pipeline."><select value={pipeStepOp} onChange={e => setPipeStepOp(e.target.value)} className="flex-1 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 {Object.entries(PIPE_OP_DEFS).map(([id, d]) => <option key={id} value={id}>{d.label}</option>)}
-              </select>
-              <button type="button" onClick={addPipeStep} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }} title="Add the selected edit as the next step in the pipeline (up to 12 steps).">+ Add step</button>
+              </select></Tooltip>
+              <Tooltip text="Add the selected edit as the next step in the pipeline (up to 12 steps)."><button type="button" onClick={addPipeStep} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Add step</button></Tooltip>
             </div>
             {pipeSteps.length === 0 ? (
               <div className="rounded-xl border px-4 py-5 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>No steps yet — add one above.</div>
@@ -7612,9 +7561,9 @@ export default function GraphicsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] w-5 text-center" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
                         <span className="text-sm font-medium flex-1" style={{ color: 'var(--color-text)' }}>{def.label || s.op}</span>
-                        <button type="button" onClick={() => movePipeStep(s.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Move this step earlier in the sequence.">↑</button>
-                        <button type="button" onClick={() => movePipeStep(s.id, 1)} disabled={i === pipeSteps.length - 1} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Move this step later in the sequence.">↓</button>
-                        <button type="button" onClick={() => removePipeStep(s.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }} title="Remove this step from the pipeline.">Remove</button>
+                        <Tooltip text="Move this step earlier in the sequence."><button type="button" onClick={() => movePipeStep(s.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↑</button></Tooltip>
+                        <Tooltip text="Move this step later in the sequence."><button type="button" onClick={() => movePipeStep(s.id, 1)} disabled={i === pipeSteps.length - 1} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↓</button></Tooltip>
+                        <Tooltip text="Remove this step from the pipeline."><button type="button" onClick={() => removePipeStep(s.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Remove</button></Tooltip>
                       </div>
                       {def.param && (
                         <div className="flex items-center gap-2">
@@ -7623,7 +7572,7 @@ export default function GraphicsPage() {
                         </div>
                       )}
                       {def.color && (
-                        <input type="color" value={s.color} onChange={e => updatePipeStep(s.id, { color: e.target.value })} className="h-7 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} title="Colour used by this step." />
+                        <Tooltip text="Colour used by this step."><input type="color" value={s.color} onChange={e => updatePipeStep(s.id, { color: e.target.value })} className="h-7 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                       )}
                     </div>
                   );
@@ -7631,10 +7580,10 @@ export default function GraphicsPage() {
               </div>
             )}
             {pipeError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{pipeError}</div>}
-            <button type="button" onClick={runPipeline} disabled={pipeBusy || !pipeSource?.imageDataUrl || !pipeSteps.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Run every step in the pipeline on the image, in order.">
+            <Tooltip text="Run every step in the pipeline on the image, in order."><button type="button" onClick={runPipeline} disabled={pipeBusy || !pipeSource?.imageDataUrl || !pipeSteps.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {pipeBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('workflow', { size: 15 })}
               {pipeBusy ? 'Running...' : 'Run pipeline'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -7807,13 +7756,13 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint over an area, then describe what should be there. The model repaints just the masked region. Requires the FAL image provider.</p>
             <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => loadImageInto(loadInpaint)(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} title="Choose the image to paint a mask over." />
+              <Tooltip text="Choose the image to paint a mask over."><input type="file" accept="image/*" onChange={e => loadImageInto(loadInpaint)(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} /></Tooltip>
               <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setInpaintError(err); } else { loadInpaint(src); } })} />
             </div>
             {inpaintSource?.imageDataUrl && (
               <div className="space-y-2">
                 <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                  <canvas
+                  <Tooltip text="Paint over the area you want the AI to repaint."><canvas
                     ref={inpaintCanvasRef}
                     onMouseDown={onInpaintDown}
                     onMouseMove={onInpaintMove}
@@ -7821,28 +7770,27 @@ export default function GraphicsPage() {
                     onMouseLeave={onInpaintUp}
                     className="w-full rounded-lg"
                     style={{ display: 'block', cursor: 'crosshair', touchAction: 'none' }}
-                    title="Paint over the area you want the AI to repaint."
-                  />
+                  /></Tooltip>
                   <canvas ref={inpaintMaskRef} style={{ display: 'none' }} />
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Brush</span>
-                  <input type="range" min="6" max="120" step="2" value={inpaintBrush} onChange={e => setInpaintBrush(e.target.value)} className="flex-1" title="Size of the paint brush used to mark the area to repaint." />
+                  <Tooltip text="Size of the paint brush used to mark the area to repaint."><input type="range" min="6" max="120" step="2" value={inpaintBrush} onChange={e => setInpaintBrush(e.target.value)} className="flex-1" /></Tooltip>
                   <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintBrush}</span>
-                  <button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Erase the painted mask and start over.">Clear mask</button>
+                  <Tooltip text="Erase the painted mask and start over."><button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear mask</button></Tooltip>
                 </div>
               </div>
             )}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>What should fill the area?</label>
-              <textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)} rows={2} placeholder="e.g. empty grass, clear blue sky, a wooden table" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Describe what should appear in the masked (painted) area." />
+              <Tooltip text="Describe what should appear in the masked (painted) area."><textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)} rows={2} placeholder="e.g. empty grass, clear blue sky, a wooden table" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} /></Tooltip>
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>To remove an object, describe the background that should replace it.</p>
             </div>
             {inpaintError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{inpaintError}</div>}
-            <button type="button" onClick={runInpaint} disabled={inpaintBusy || !inpaintSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }} title="Send the mask and description to the AI to repaint the masked area.">
+            <Tooltip text="Send the mask and description to the AI to repaint the masked area."><button type="button" onClick={runInpaint} disabled={inpaintBusy || !inpaintSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {inpaintBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('eraser', { size: 15 })}
               {inpaintBusy ? 'Inpainting...' : 'Inpaint'}
-            </button>
+            </button></Tooltip>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
