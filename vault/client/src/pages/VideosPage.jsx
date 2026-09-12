@@ -82,23 +82,24 @@ function PositionGrid({ value, onChange, label = 'Position' }) {
         style={{ gridTemplateColumns: 'repeat(3, 2rem)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
       >
         {grid.map((pos) => (
-          <button
-            key={pos.id}
-            type="button"
-            title={pos.label}
-            aria-label={pos.label}
-            onClick={() => onChange(pos.id)}
-            className="w-8 h-8 rounded-lg border transition-opacity hover:opacity-70 flex items-center justify-center"
-            style={{
-              borderColor: value === pos.id ? 'var(--color-primary)' : 'var(--color-border)',
-              background: value === pos.id ? 'var(--color-surface)' : 'transparent',
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ background: value === pos.id ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            />
-          </button>
+          <Tooltip key={pos.id} text={`Place it in the ${pos.label.toLowerCase()} of the frame.`}>
+            <button
+              type="button"
+              title={pos.label}
+              aria-label={pos.label}
+              onClick={() => onChange(pos.id)}
+              className="w-8 h-8 rounded-lg border transition-opacity hover:opacity-70 flex items-center justify-center"
+              style={{
+                borderColor: value === pos.id ? 'var(--color-primary)' : 'var(--color-border)',
+                background: value === pos.id ? 'var(--color-surface)' : 'transparent',
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: value === pos.id ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              />
+            </button>
+          </Tooltip>
         ))}
       </div>
     </div>
@@ -181,20 +182,24 @@ function ClipTimeline({
             background: 'var(--color-primary)',
           }}
         />
-        <div
-          role="slider"
-          aria-label="Start marker"
-          className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
-          style={{ left: `${startPct}%`, background: 'var(--color-primary)' }}
-          onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'start'; e.currentTarget.setPointerCapture(e.pointerId); }}
-        />
-        <div
-          role="slider"
-          aria-label="End marker"
-          className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
-          style={{ left: `${endPct}%`, background: 'var(--color-primary)' }}
-          onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'end'; e.currentTarget.setPointerCapture(e.pointerId); }}
-        />
+        <Tooltip text="Drag to set where the exported clip starts.">
+          <div
+            role="slider"
+            aria-label="Start marker"
+            className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
+            style={{ left: `${startPct}%`, background: 'var(--color-primary)' }}
+            onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'start'; e.currentTarget.setPointerCapture(e.pointerId); }}
+          />
+        </Tooltip>
+        <Tooltip text="Drag to set where the exported clip ends.">
+          <div
+            role="slider"
+            aria-label="End marker"
+            className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
+            style={{ left: `${endPct}%`, background: 'var(--color-primary)' }}
+            onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'end'; e.currentTarget.setPointerCapture(e.pointerId); }}
+          />
+        </Tooltip>
       </div>
       <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Drag the markers or click the bar to set in/out points.</p>
     </div>
@@ -267,36 +272,48 @@ function TextStyleFields({
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="block space-y-1 sm:col-span-2">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Font (Google Fonts)</span>
-        <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {VIDEO_GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
+        <Tooltip text="The typeface burned into the video — fetched from Google Fonts on the server.">
+          <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            {VIDEO_GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </Tooltip>
       </label>
       <label className="block space-y-1">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Weight</span>
-        <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {FONT_WEIGHTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-        </select>
+        <Tooltip text="Regular or bold stroke weight for the text.">
+          <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            {FONT_WEIGHTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+        </Tooltip>
       </label>
       <label className="block space-y-1">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (px)</span>
-        <input type="number" min={12} max={72} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+        <Tooltip text="How large the text renders in the final video, in pixels.">
+          <input type="number" min={12} max={72} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+        </Tooltip>
       </label>
       <label className="block space-y-1">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Text colour</span>
-        <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+        <Tooltip text="Colour of the text itself.">
+          <input type="color" value={fontColor} onChange={(e) => setFontColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+        </Tooltip>
       </label>
-      <label className="flex items-center gap-2 text-xs cursor-pointer sm:col-span-2" style={{ color: 'var(--color-muted)' }}>
-        <input
-          type="checkbox"
-          checked={backgroundTransparent}
-          onChange={(e) => setBackgroundTransparent(e.target.checked)}
-        />
-        Transparent background (text outline only)
-      </label>
+      <Tooltip text="Drop the solid background box and keep only the text (with its outline) over the video.">
+        <label className="flex items-center gap-2 text-xs cursor-pointer sm:col-span-2" style={{ color: 'var(--color-muted)' }}>
+          <input
+            type="checkbox"
+            checked={backgroundTransparent}
+            onChange={(e) => setBackgroundTransparent(e.target.checked)}
+          />
+          Transparent background (text outline only)
+        </label>
+      </Tooltip>
       {!backgroundTransparent && (
         <label className="block space-y-1 sm:col-span-2">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background colour</span>
-          <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+          <Tooltip text="Colour of the solid box drawn behind the text for readability.">
+            <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+          </Tooltip>
         </label>
       )}
     </div>
@@ -326,27 +343,31 @@ function ImageReferenceUpload({ file, previewUrl, onFile, onClear }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
-          {file ? 'Change image' : 'Upload image'}
-        </button>
+        <Tooltip text="Pick a still image to seed the generated clip — animate it directly, or let the model describe its style.">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {file ? 'Change image' : 'Upload image'}
+          </button>
+        </Tooltip>
         {file && (
           <>
             <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
               {file.name} · {formatBytes(file.size)}
             </span>
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-xs transition-opacity hover:opacity-70"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              Remove
-            </button>
+            <Tooltip text="Remove the reference image.">
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-xs transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Remove
+              </button>
+            </Tooltip>
           </>
         )}
       </div>
@@ -370,14 +391,16 @@ function VideoUpload({ file, onFile, label = 'Video file' }) {
     <label className="block space-y-1">
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
-          {file ? 'Change file' : 'Choose video'}
-        </button>
+        <Tooltip text="Choose the video file this tool will process.">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {file ? 'Change file' : 'Choose video'}
+          </button>
+        </Tooltip>
         {file && (
           <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
             {file.name} · {formatBytes(file.size)}
@@ -410,23 +433,27 @@ function MultiVideoUpload({ files, onFiles, label = 'Video files (order = join o
     <div className="space-y-2">
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
-          {files.length ? 'Add more videos' : 'Choose videos'}
-        </button>
-        {files.length > 0 && (
+        <Tooltip text="Add video clips — they'll be joined in the order shown below.">
           <button
             type="button"
-            onClick={() => onFiles([])}
+            onClick={() => inputRef.current?.click()}
             className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
-            Clear all
+            {files.length ? 'Add more videos' : 'Choose videos'}
           </button>
+        </Tooltip>
+        {files.length > 0 && (
+          <Tooltip text="Remove every clip and start over.">
+            <button
+              type="button"
+              onClick={() => onFiles([])}
+              className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Clear all
+            </button>
+          </Tooltip>
         )}
       </div>
       <input
@@ -449,9 +476,9 @@ function MultiVideoUpload({ files, onFiles, label = 'Video files (order = join o
               <span className="shrink-0 w-5 text-center font-medium" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
               <span className="flex-1 truncate" style={{ color: 'var(--color-text)' }}>{f.name}</span>
               <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>{formatBytes(f.size)}</span>
-              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move up">↑</button>
-              <button type="button" onClick={() => move(i, 1)} disabled={i === files.length - 1} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move down">↓</button>
-              <button type="button" onClick={() => removeAt(i)} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }} aria-label="Remove">×</button>
+              <Tooltip text="Move this clip earlier in the join order."><button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move up">↑</button></Tooltip>
+              <Tooltip text="Move this clip later in the join order."><button type="button" onClick={() => move(i, 1)} disabled={i === files.length - 1} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move down">↓</button></Tooltip>
+              <Tooltip text="Remove this clip from the join."><button type="button" onClick={() => removeAt(i)} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }} aria-label="Remove">×</button></Tooltip>
             </li>
           ))}
         </ul>
@@ -547,43 +574,51 @@ function ResultVideo({
       {onSave && onSaveTitleChange && (
         <label className="block space-y-1">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Library title (optional)</span>
-          <input
-            value={saveTitle || ''}
-            onChange={(e) => onSaveTitleChange(e.target.value)}
-            placeholder="Defaults to tool name and date"
-            className="w-full px-3 py-2 rounded-xl border text-xs"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <Tooltip text="Name shown for this file in Saved media — leave blank to use the tool name and date.">
+            <input
+              value={saveTitle || ''}
+              onChange={(e) => onSaveTitleChange(e.target.value)}
+              placeholder="Defaults to tool name and date"
+              className="w-full px-3 py-2 rounded-xl border text-xs"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
         </label>
       )}
       <div className="flex flex-wrap gap-2">
-        <a
-          href={blobUrl}
-          download={downloadName}
-          className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          Download
-        </a>
-        {onSave && (
-          <button
-            type="button"
-            onClick={onSave}
-            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+        <Tooltip text="Save this result to your device.">
+          <a
+            href={blobUrl}
+            download={downloadName}
+            className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
           >
-            {saveLabel}
-          </button>
+            Download
+          </a>
+        </Tooltip>
+        {onSave && (
+          <Tooltip text="Store this result in your Saved media library for later.">
+            <button
+              type="button"
+              onClick={onSave}
+              className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+            >
+              {saveLabel}
+            </button>
+          </Tooltip>
         )}
         {onUse && (
-          <button
-            type="button"
-            onClick={onUse}
-            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-          >
-            Use in another tool
-          </button>
+          <Tooltip text="Carry this result over as the source file for another tool, without re-uploading.">
+            <button
+              type="button"
+              onClick={onUse}
+              className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Use in another tool
+            </button>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -1365,13 +1400,15 @@ export default function VideosPage() {
           <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Video Tools</h1>
         </div>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search tools…"
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
+        <Tooltip text="Filter the tool list below by name or description.">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tools…"
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </Tooltip>
 
         {filteredGroups.map((group) => (
           <div key={group.id}>
@@ -1428,14 +1465,16 @@ export default function VideosPage() {
             )}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
-              <textarea
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                rows={4}
-                placeholder="A calm product shot of wireless earbuds rotating on a marble surface… (optional if you provide an image or YouTube example)"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="Describe the shot in plain language — the workspace's light model expands this into a full video prompt.">
+                <textarea
+                  value={brief}
+                  onChange={(e) => setBrief(e.target.value)}
+                  rows={4}
+                  placeholder="A calm product shot of wireless earbuds rotating on a marble surface… (optional if you provide an image or YouTube example)"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
             <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -1448,34 +1487,37 @@ export default function VideosPage() {
               />
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Or paste image URL</span>
-                <input
-                  type="url"
-                  value={seedImageUrl}
-                  onChange={(e) => { setSeedImageUrl(e.target.value); if (e.target.value) setSeedImageFile(null); }}
-                  placeholder="https://…"
-                  className="w-full px-3 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
+                <Tooltip text="A public image URL to use instead of uploading a file.">
+                  <input
+                    type="url"
+                    value={seedImageUrl}
+                    onChange={(e) => { setSeedImageUrl(e.target.value); if (e.target.value) setSeedImageFile(null); }}
+                    placeholder="https://…"
+                    className="w-full px-3 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
               </label>
               {(seedImageFile || seedImageUrl.trim()) && (
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { id: 'animate', label: 'Animate this image' },
-                    { id: 'suggest', label: 'Style suggestion only' },
+                    { id: 'animate', label: 'Animate this image', tip: 'Use the image as the first frame and generate motion from it (image-to-video).' },
+                    { id: 'suggest', label: 'Style suggestion only', tip: "Describe the image's style with AI and weave that into the text prompt, without using it as a starting frame." },
                   ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setSeedImageMode(opt.id)}
-                      className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                      style={{
-                        borderColor: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
-                        color: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-muted)',
-                        background: seedImageMode === opt.id ? 'var(--color-surface)' : 'transparent',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
+                    <Tooltip key={opt.id} text={opt.tip}>
+                      <button
+                        type="button"
+                        onClick={() => setSeedImageMode(opt.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                        style={{
+                          borderColor: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
+                          color: seedImageMode === opt.id ? 'var(--color-primary)' : 'var(--color-muted)',
+                          background: seedImageMode === opt.id ? 'var(--color-surface)' : 'transparent',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    </Tooltip>
                   ))}
                 </div>
               )}
@@ -1484,23 +1526,27 @@ export default function VideosPage() {
             <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>YouTube example (optional)</p>
               <div className="flex flex-wrap gap-2">
-                <input
-                  type="url"
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=…"
-                  className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <button
-                  type="button"
-                  onClick={handleLoadYoutube}
-                  disabled={youtubeLoading}
-                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70 disabled:opacity-40"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  {youtubeLoading ? 'Loading…' : 'Load'}
-                </button>
+                <Tooltip text="A YouTube video whose title, transcript, or thumbnail can steer the generated clip's style.">
+                  <input
+                    type="url"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=…"
+                    className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
+                <Tooltip text="Fetch the video's title, transcript excerpt, and thumbnail for reference.">
+                  <button
+                    type="button"
+                    onClick={handleLoadYoutube}
+                    disabled={youtubeLoading}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {youtubeLoading ? 'Loading…' : 'Load'}
+                  </button>
+                </Tooltip>
               </div>
               {youtubePreview && (
                 <div className="space-y-2">
@@ -1516,14 +1562,16 @@ export default function VideosPage() {
                   {youtubePreview.transcriptExcerpt && (
                     <p className="text-[10px] line-clamp-3" style={{ color: 'var(--color-muted)' }}>{youtubePreview.transcriptExcerpt}</p>
                   )}
-                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                    <input
-                      type="checkbox"
-                      checked={useYoutubeThumbnailAsSeed}
-                      onChange={(e) => setUseYoutubeThumbnailAsSeed(e.target.checked)}
-                    />
-                    Use YouTube thumbnail as starting frame
-                  </label>
+                  <Tooltip text="Animate from this video's thumbnail image instead of generating from text alone.">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                      <input
+                        type="checkbox"
+                        checked={useYoutubeThumbnailAsSeed}
+                        onChange={(e) => setUseYoutubeThumbnailAsSeed(e.target.checked)}
+                      />
+                      Use YouTube thumbnail as starting frame
+                    </label>
+                  </Tooltip>
                 </div>
               )}
             </div>
@@ -1531,53 +1579,61 @@ export default function VideosPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Style</span>
-                <select
-                  value={style}
-                  onChange={(e) => setStyle(e.target.value)}
-                  className="w-full px-2 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="product b-roll">Product b-roll</option>
-                  <option value="abstract motion">Abstract motion</option>
-                  <option value="UGC social">UGC / social</option>
-                  <option value="cinematic">Cinematic</option>
-                </select>
+                <Tooltip text="A visual style hint that steers the expanded video prompt.">
+                  <select
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                    className="w-full px-2 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="product b-roll">Product b-roll</option>
+                    <option value="abstract motion">Abstract motion</option>
+                    <option value="UGC social">UGC / social</option>
+                    <option value="cinematic">Cinematic</option>
+                  </select>
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Aspect</span>
-                <select
-                  value={aspect}
-                  onChange={(e) => setAspect(e.target.value)}
-                  className="w-full px-2 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="16:9">16:9 landscape</option>
-                  <option value="9:16">9:16 story</option>
-                  <option value="1:1">1:1 square</option>
-                </select>
+                <Tooltip text="The frame shape of the generated clip.">
+                  <select
+                    value={aspect}
+                    onChange={(e) => setAspect(e.target.value)}
+                    className="w-full px-2 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="16:9">16:9 landscape</option>
+                    <option value="9:16">9:16 story</option>
+                    <option value="1:1">1:1 square</option>
+                  </select>
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Duration (s)</span>
-                <input
-                  type="number"
-                  min={3}
-                  max={10}
-                  value={durationSec}
-                  onChange={(e) => setDurationSec(Number(e.target.value))}
-                  className="w-full px-2 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
+                <Tooltip text="How many seconds of video to generate — short clips render faster and more reliably.">
+                  <input
+                    type="number"
+                    min={3}
+                    max={10}
+                    value={durationSec}
+                    onChange={(e) => setDurationSec(Number(e.target.value))}
+                    className="w-full px-2 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
               </label>
             </div>
-            <button
-              type="button"
-              disabled={!generateOk}
-              onClick={handleGenerate}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Generate clip
-            </button>
+            <Tooltip text="Submit the brief and references to the video model — rendering can take one to three minutes.">
+              <button
+                type="button"
+                disabled={!generateOk}
+                onClick={handleGenerate}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Generate clip
+              </button>
+            </Tooltip>
             {generateResult?.video_prompt && (
               <div className="rounded-xl border p-3 text-xs space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <p className="font-medium" style={{ color: 'var(--color-text)' }}>
@@ -1635,16 +1691,22 @@ export default function VideosPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
-                <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={startSec} onChange={(e) => setStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Where the exported clip begins — matches the start marker on the timeline above.">
+                  <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={startSec} onChange={(e) => setStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds)</span>
-                <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={endSec} onChange={(e) => setEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Where the exported clip stops — matches the end marker on the timeline above.">
+                  <input type="number" min={0} step={0.1} max={clipDuration || undefined} value={endSec} onChange={(e) => setEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
             </div>
-            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Export clip
-            </button>
+            <Tooltip text="Cut the video down to just the selected in/out range.">
+              <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Export clip
+              </button>
+            </Tooltip>
             {resultForTool === 'clip' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -1657,16 +1719,22 @@ export default function VideosPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35, lower = better)</span>
-                <input type="number" min={18} max={35} value={crf} onChange={(e) => setCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Controls the quality/file-size trade-off — lower numbers look better but produce larger files.">
+                  <input type="number" min={18} max={35} value={crf} onChange={(e) => setCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (optional)</span>
-                <input type="number" placeholder="1280" value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Shrink the video to this width if it's larger, keeping its aspect ratio. Leave blank to keep the original size.">
+                  <input type="number" placeholder="1280" value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
             </div>
-            <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('crf', String(crf)); if (maxWidth) fd.append('maxWidth', maxWidth); runFormVideo('convert', fd, { label: 'Converting…', resultFilename: 'converted.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Convert
-            </button>
+            <Tooltip text="Re-encode the video as an H.264 MP4 with these settings.">
+              <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('crf', String(crf)); if (maxWidth) fd.append('maxWidth', maxWidth); runFormVideo('convert', fd, { label: 'Converting…', resultFilename: 'converted.mp4' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Convert
+              </button>
+            </Tooltip>
             {resultForTool === 'convert' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -1676,9 +1744,11 @@ export default function VideosPage() {
         {tool === 'extract-audio' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Extract audio</h2>
-            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Export MP3
-            </button>
+            <Tooltip text="Pull the soundtrack out of the video and download it as an MP3 file.">
+              <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Export MP3
+              </button>
+            </Tooltip>
             {resultForTool === 'extract-audio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
             )}
@@ -1693,61 +1763,66 @@ export default function VideosPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'mute', label: 'Mute' },
-                { id: 'replace', label: 'Replace audio' },
+                { id: 'mute', label: 'Mute', tip: 'Remove the existing soundtrack entirely, leaving a silent video.' },
+                { id: 'replace', label: 'Replace audio', tip: 'Swap the existing soundtrack for a different audio file you upload.' },
               ].map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setAudioMode(m.id)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
-                  style={{
-                    borderColor: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
-                    background: 'var(--color-bg)',
-                  }}
-                >
-                  {m.label}
-                </button>
+                <Tooltip key={m.id} text={m.tip}>
+                  <button
+                    type="button"
+                    onClick={() => setAudioMode(m.id)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: audioMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                </Tooltip>
               ))}
             </div>
             {audioMode === 'replace' && (
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Audio file (mp3 / wav / m4a)</span>
-                <input
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.aac"
-                  onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                  className="block w-full text-xs"
-                  style={{ color: 'var(--color-text)' }}
-                />
+                <Tooltip text="The music or voice track to use as the new soundtrack — the shorter of video/audio length wins.">
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.aac"
+                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                    className="block w-full text-xs"
+                    style={{ color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
                 {audioFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{audioFile.name}</span>}
               </label>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (!requireFile()) return;
-                if (audioMode === 'replace' && !audioFile) {
-                  addToast('Choose an audio file to replace with', 'error');
-                  return;
-                }
-                const fd = new FormData();
-                fd.append('video', sourceFile);
-                fd.append('mode', audioMode);
-                if (audioMode === 'replace') fd.append('audio', audioFile);
-                runFormVideo('audio', fd, {
-                  label: audioMode === 'mute' ? 'Muting…' : 'Replacing audio…',
-                  resultFilename: audioMode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4',
-                  forTool: 'audio',
-                });
-              }}
-              disabled={!ffmpegOk}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              {audioMode === 'mute' ? 'Mute video' : 'Replace audio'}
-            </button>
+            <Tooltip text={audioMode === 'mute' ? 'Strip the soundtrack from the video.' : 'Replace the soundtrack with the uploaded audio file.'}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (audioMode === 'replace' && !audioFile) {
+                    addToast('Choose an audio file to replace with', 'error');
+                    return;
+                  }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('mode', audioMode);
+                  if (audioMode === 'replace') fd.append('audio', audioFile);
+                  runFormVideo('audio', fd, {
+                    label: audioMode === 'mute' ? 'Muting…' : 'Replacing audio…',
+                    resultFilename: audioMode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4',
+                    forTool: 'audio',
+                  });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {audioMode === 'mute' ? 'Mute video' : 'Replace audio'}
+              </button>
+            </Tooltip>
             {resultForTool === 'audio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -1985,70 +2060,76 @@ export default function VideosPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               {['9:16', '16:9', '1:1', '4:5'].map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => setReframeAspect(a)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
-                  style={{
-                    borderColor: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-text)',
-                    background: 'var(--color-bg)',
-                  }}
-                >
-                  {a}{a === '9:16' ? ' · Reels' : a === '1:1' ? ' · Square' : ''}
-                </button>
+                <Tooltip key={a} text={`Target frame shape: ${a}.`}>
+                  <button
+                    type="button"
+                    onClick={() => setReframeAspect(a)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: reframeAspect === a ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    {a}{a === '9:16' ? ' · Reels' : a === '1:1' ? ' · Square' : ''}
+                  </button>
+                </Tooltip>
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'crop', label: 'Crop (fill)' },
-                { id: 'pad', label: 'Pad (letterbox)' },
+                { id: 'crop', label: 'Crop (fill)', tip: 'Fill the whole new frame, trimming edges of the video that don\'t fit.' },
+                { id: 'pad', label: 'Pad (letterbox)', tip: 'Keep the entire original frame, adding black bars instead of cropping.' },
               ].map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setReframeMode(m.id)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
-                  style={{
-                    borderColor: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
-                    background: 'var(--color-bg)',
-                  }}
-                >
-                  {m.label}
-                </button>
+                <Tooltip key={m.id} text={m.tip}>
+                  <button
+                    type="button"
+                    onClick={() => setReframeMode(m.id)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: reframeMode === m.id ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                </Tooltip>
               ))}
             </div>
             {reframeMode === 'crop' && (
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crop focus</span>
-                <select value={reframeFocus} onChange={(e) => setReframeFocus(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                  <option value="center">Centre</option>
-                  <option value="top">Top</option>
-                  <option value="bottom">Bottom</option>
-                  <option value="left">Left</option>
-                  <option value="right">Right</option>
-                </select>
+                <Tooltip text="Which part of the original frame to keep centred when cropping to the new shape.">
+                  <select value={reframeFocus} onChange={(e) => setReframeFocus(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="center">Centre</option>
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </Tooltip>
               </label>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (!requireFile()) return;
-                const fd = new FormData();
-                fd.append('video', sourceFile);
-                fd.append('aspect', reframeAspect);
-                fd.append('mode', reframeMode);
-                fd.append('focus', reframeFocus);
-                runFormVideo('reframe', fd, { label: 'Reframing…', resultFilename: `reframed-${reframeAspect.replace(':', 'x')}.mp4`, forTool: 'reframe' });
-              }}
-              disabled={!ffmpegOk}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Reframe to {reframeAspect}
-            </button>
+            <Tooltip text="Render the video at the chosen aspect ratio and crop/pad mode.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('aspect', reframeAspect);
+                  fd.append('mode', reframeMode);
+                  fd.append('focus', reframeFocus);
+                  runFormVideo('reframe', fd, { label: 'Reframing…', resultFilename: `reframed-${reframeAspect.replace(':', 'x')}.mp4`, forTool: 'reframe' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Reframe to {reframeAspect}
+              </button>
+            </Tooltip>
             {resultForTool === 'reframe' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2063,45 +2144,50 @@ export default function VideosPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               {['0.5', '0.75', '1.25', '1.5', '2', '3'].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSpeedFactor(s)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
-                  style={{
-                    borderColor: speedFactor === s ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: speedFactor === s ? 'var(--color-primary)' : 'var(--color-text)',
-                    background: 'var(--color-bg)',
-                  }}
-                >
-                  {s}×
-                </button>
+                <Tooltip key={s} text={Number(s) < 1 ? `Slow the video down to ${s}× its original speed.` : `Speed the video up to ${s}× its original speed.`}>
+                  <button
+                    type="button"
+                    onClick={() => setSpeedFactor(s)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: speedFactor === s ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: speedFactor === s ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    {s}×
+                  </button>
+                </Tooltip>
               ))}
             </div>
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Custom speed (0.25–4)</span>
-              <input type="number" min={0.25} max={4} step={0.05} value={speedFactor} onChange={(e) => setSpeedFactor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <Tooltip text="How fast the video plays back — audio pitch and tempo adjust to match.">
+                <input type="number" min={0.25} max={4} step={0.05} value={speedFactor} onChange={(e) => setSpeedFactor(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </Tooltip>
             </label>
-            <button
-              type="button"
-              onClick={() => {
-                if (!requireFile()) return;
-                const s = Number(speedFactor);
-                if (!Number.isFinite(s) || s < 0.25 || s > 4) {
-                  addToast('Speed must be between 0.25 and 4', 'error');
-                  return;
-                }
-                const fd = new FormData();
-                fd.append('video', sourceFile);
-                fd.append('speed', String(s));
-                runFormVideo('speed', fd, { label: `Applying ${s}× speed…`, resultFilename: `speed-${s}x.mp4`, forTool: 'speed' });
-              }}
-              disabled={!ffmpegOk}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Apply {speedFactor || '?'}×
-            </button>
+            <Tooltip text="Re-encode the video at the chosen speed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const s = Number(speedFactor);
+                  if (!Number.isFinite(s) || s < 0.25 || s > 4) {
+                    addToast('Speed must be between 0.25 and 4', 'error');
+                    return;
+                  }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('speed', String(s));
+                  runFormVideo('speed', fd, { label: `Applying ${s}× speed…`, resultFilename: `speed-${s}x.mp4`, forTool: 'speed' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Apply {speedFactor || '?'}×
+              </button>
+            </Tooltip>
             {resultForTool === 'speed' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2112,7 +2198,9 @@ export default function VideosPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
-            <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            <Tooltip text="The text that gets burned into the video frame.">
+              <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </Tooltip>
             <PositionGrid value={textPosition} onChange={setTextPosition} label="Label position" />
             <TextStyleFields
               fontFamily={textFontFamily}
@@ -2142,9 +2230,11 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
-            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Apply label
-            </button>
+            <Tooltip text="Burn the styled text label into the video permanently.">
+              <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Apply label
+              </button>
+            </Tooltip>
             {resultForTool === 'annotate' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2163,48 +2253,56 @@ export default function VideosPage() {
             )}
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Overlay image (PNG / JPG)</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                onChange={(e) => setOverlayImageFile(e.target.files?.[0] || null)}
-                className="block w-full text-xs"
-                style={{ color: 'var(--color-text)' }}
-              />
+              <Tooltip text="The logo or image to place on top of the video — a transparent PNG blends in most cleanly.">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setOverlayImageFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs"
+                  style={{ color: 'var(--color-text)' }}
+                />
+              </Tooltip>
               {overlayImageFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{overlayImageFile.name}</span>}
             </label>
             <PositionGrid value={overlayPosition} onChange={setOverlayPosition} label="Overlay position" />
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Size (% of video width)</span>
-                <input type="number" min={5} max={80} value={overlayScale} onChange={(e) => setOverlayScale(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="How large the overlay image renders, as a percentage of the video's width.">
+                  <input type="number" min={5} max={80} value={overlayScale} onChange={(e) => setOverlayScale(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Opacity (0.05–1)</span>
-                <input type="number" min={0.05} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="How see-through the overlay is — lower values blend it more subtly into the video.">
+                  <input type="number" min={0.05} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (!requireFile()) return;
-                if (!overlayImageFile) {
-                  addToast('Choose an overlay image', 'error');
-                  return;
-                }
-                const fd = new FormData();
-                fd.append('video', sourceFile);
-                fd.append('image', overlayImageFile);
-                fd.append('position', overlayPosition);
-                fd.append('scalePct', String(overlayScale));
-                fd.append('opacity', String(overlayOpacity));
-                runFormVideo('overlay', fd, { label: 'Applying overlay…', resultFilename: 'overlay.mp4', forTool: 'overlay' });
-              }}
-              disabled={!ffmpegOk}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Apply overlay
-            </button>
+            <Tooltip text="Burn the overlay image onto the video at the chosen position, size, and opacity.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (!overlayImageFile) {
+                    addToast('Choose an overlay image', 'error');
+                    return;
+                  }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('image', overlayImageFile);
+                  fd.append('position', overlayPosition);
+                  fd.append('scalePct', String(overlayScale));
+                  fd.append('opacity', String(overlayOpacity));
+                  runFormVideo('overlay', fd, { label: 'Applying overlay…', resultFilename: 'overlay.mp4', forTool: 'overlay' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Apply overlay
+              </button>
+            </Tooltip>
             {resultForTool === 'overlay' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2221,42 +2319,50 @@ export default function VideosPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (output)</span>
-                <input type="number" min={320} max={3840} step={2} value={joinMaxWidth} onChange={(e) => setJoinMaxWidth(e.target.value)} placeholder="1280" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="All clips are normalized to this width before joining, so mixed resolutions still match.">
+                  <input type="number" min={320} max={3840} step={2} value={joinMaxWidth} onChange={(e) => setJoinMaxWidth(e.target.value)} placeholder="1280" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35)</span>
-                <input type="number" min={18} max={35} value={joinCrf} onChange={(e) => setJoinCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Controls the quality/file-size trade-off for the joined output — lower numbers look better but produce larger files.">
+                  <input type="number" min={18} max={35} value={joinCrf} onChange={(e) => setJoinCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
               <label className="block space-y-1 col-span-2">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crossfade (seconds) — 0 = hard cut</span>
-                <input type="number" min={0} max={5} step={0.1} value={joinCrossfade} onChange={(e) => setJoinCrossfade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <Tooltip text="Blend this many seconds between consecutive clips instead of cutting straight to the next one.">
+                  <input type="number" min={0} max={5} step={0.1} value={joinCrossfade} onChange={(e) => setJoinCrossfade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
               </label>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (joinFiles.length < 2) {
-                  addToast('Add at least two videos to join', 'error');
-                  return;
-                }
-                const fd = new FormData();
-                joinFiles.forEach((f) => fd.append('videos', f));
-                if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
-                fd.append('crf', String(joinCrf));
-                const xf = Number(joinCrossfade) || 0;
-                if (xf > 0) fd.append('crossfadeSec', String(xf));
-                runFormVideo('join', fd, {
-                  label: xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
-                  resultFilename: 'joined.mp4',
-                  forTool: 'join',
-                });
-              }}
-              disabled={!ffmpegOk || joinFiles.length < 2}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Join {joinFiles.length || 0} clips{Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : ''}
-            </button>
+            <Tooltip text="Normalize and concatenate the clips in the order shown above into one MP4.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (joinFiles.length < 2) {
+                    addToast('Add at least two videos to join', 'error');
+                    return;
+                  }
+                  const fd = new FormData();
+                  joinFiles.forEach((f) => fd.append('videos', f));
+                  if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
+                  fd.append('crf', String(joinCrf));
+                  const xf = Number(joinCrossfade) || 0;
+                  if (xf > 0) fd.append('crossfadeSec', String(xf));
+                  runFormVideo('join', fd, {
+                    label: xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
+                    resultFilename: 'joined.mp4',
+                    forTool: 'join',
+                  });
+                }}
+                disabled={!ffmpegOk || joinFiles.length < 2}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Join {joinFiles.length || 0} clips{Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : ''}
+              </button>
+            </Tooltip>
             {resultForTool === 'join' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2338,20 +2444,22 @@ export default function VideosPage() {
               <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Video source</p>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>From library (optional)</span>
-                <select
-                  value={captionLibraryId}
-                  onChange={(e) => {
-                    setCaptionLibraryId(e.target.value);
-                    if (e.target.value) setSourceFile(null);
-                  }}
-                  className="w-full px-2 py-2 rounded-xl border text-xs"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="">Upload a file instead</option>
-                  {libraryVideoItems.map((item) => (
-                    <option key={item.id} value={String(item.id)}>{item.title} · {item.tool || 'video'}</option>
-                  ))}
-                </select>
+                <Tooltip text="Pick a video already saved in your library instead of uploading a new file.">
+                  <select
+                    value={captionLibraryId}
+                    onChange={(e) => {
+                      setCaptionLibraryId(e.target.value);
+                      if (e.target.value) setSourceFile(null);
+                    }}
+                    className="w-full px-2 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">Upload a file instead</option>
+                    {libraryVideoItems.map((item) => (
+                      <option key={item.id} value={String(item.id)}>{item.title} · {item.tool || 'video'}</option>
+                    ))}
+                  </select>
+                </Tooltip>
               </label>
               {captionLibraryId && (
                 <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
@@ -2419,34 +2527,40 @@ export default function VideosPage() {
               {transcript && (
                 <textarea value={transcript} readOnly rows={3} className="w-full text-xs rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
               )}
-              <textarea
-                value={srtText}
-                onChange={(e) => setSrtText(e.target.value)}
-                rows={8}
-                placeholder="Paste SRT content here…"
-                className="w-full px-3 py-2 rounded-xl border text-xs font-mono"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="Timed subtitle text in SRT format — paste it here or use auto-transcribe above.">
+                <textarea
+                  value={srtText}
+                  onChange={(e) => setSrtText(e.target.value)}
+                  rows={8}
+                  placeholder="Paste SRT content here…"
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-mono"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </div>
 
-            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-              <input
-                type="checkbox"
-                checked={captionSaveToLibrary}
-                onChange={(e) => setCaptionSaveToLibrary(e.target.checked)}
-              />
-              Save captioned result to library
-            </label>
+            <Tooltip text="Automatically store the captioned video in Saved media once it's done.">
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                <input
+                  type="checkbox"
+                  checked={captionSaveToLibrary}
+                  onChange={(e) => setCaptionSaveToLibrary(e.target.checked)}
+                />
+                Save captioned result to library
+              </label>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={handleCaptionStudio}
-              disabled={!ffmpegOk || (!captionLibraryId && !sourceFile)}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Apply captions
-            </button>
+            <Tooltip text="Burn the styled subtitles into the video.">
+              <button
+                type="button"
+                onClick={handleCaptionStudio}
+                disabled={!ffmpegOk || (!captionLibraryId && !sourceFile)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Apply captions
+              </button>
+            </Tooltip>
             {resultForTool === 'caption-studio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
@@ -2462,15 +2576,17 @@ export default function VideosPage() {
                   Videos and images from tool runs — preview, delete, or open in Caption studio.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={loadLibrary}
-                disabled={libraryLoading}
-                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                {libraryLoading ? 'Refreshing…' : 'Refresh'}
-              </button>
+              <Tooltip text="Reload the saved media list from the server.">
+                <button
+                  type="button"
+                  onClick={loadLibrary}
+                  disabled={libraryLoading}
+                  className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                >
+                  {libraryLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </Tooltip>
             </div>
 
             {libraryLoading && libraryItems.length === 0 && (
@@ -2498,23 +2614,27 @@ export default function VideosPage() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => previewLibraryItem(item)}
-                        className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                      >
-                        Preview
-                      </button>
-                      {item.mediaType === 'video' && (
+                      <Tooltip text="Load this saved file below to view it.">
                         <button
                           type="button"
-                          onClick={() => openCaptionStudioFor(item)}
+                          onClick={() => previewLibraryItem(item)}
                           className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
-                          style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                         >
-                          Add captions
+                          Preview
                         </button>
+                      </Tooltip>
+                      {item.mediaType === 'video' && (
+                        <Tooltip text="Open Caption studio with this video pre-selected.">
+                          <button
+                            type="button"
+                            onClick={() => openCaptionStudioFor(item)}
+                            className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                          >
+                            Add captions
+                          </button>
+                        </Tooltip>
                       )}
                       {deleteConfirmId === item.id ? (
                         <span className="flex items-center gap-1.5 text-xs">
@@ -2523,14 +2643,16 @@ export default function VideosPage() {
                           <button type="button" onClick={() => setDeleteConfirmId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirmId(item.id)}
-                          className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70"
-                          style={{ color: '#ef4444' }}
-                        >
-                          Delete
-                        </button>
+                        <Tooltip text="Permanently remove this file from your library.">
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(item.id)}
+                            className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70"
+                            style={{ color: '#ef4444' }}
+                          >
+                            Delete
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -2561,9 +2683,11 @@ export default function VideosPage() {
         {tool === 'info' && (
           <section className="space-y-3">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>File info</h2>
-            <button type="button" onClick={handleProbe} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Analyse file
-            </button>
+            <Tooltip text="Read the video's duration, resolution, codec, and audio/container details with ffprobe.">
+              <button type="button" onClick={handleProbe} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Analyse file
+              </button>
+            </Tooltip>
             {probe && (
               <dl className="text-xs grid grid-cols-2 gap-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <dt style={{ color: 'var(--color-muted)' }}>Duration</dt><dd>{formatDuration(probe.duration)}</dd>
@@ -2582,27 +2706,35 @@ export default function VideosPage() {
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Thumbnail</h2>
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Frame at (seconds)</span>
-              <input type="number" min={0} step={0.1} value={thumbTime} onChange={(e) => setThumbTime(Number(e.target.value))} className="w-32 px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <Tooltip text="The timestamp in the video to capture as a still image.">
+                <input type="number" min={0} step={0.1} value={thumbTime} onChange={(e) => setThumbTime(Number(e.target.value))} className="w-32 px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </Tooltip>
             </label>
-            <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); thumbBlobRef.current = blob; if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-              Export JPG
-            </button>
+            <Tooltip text="Capture the frame at that timestamp as a JPG image.">
+              <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('timeSec', String(thumbTime)); startProcessing('Capturing frame…', ''); try { const res = await api.postForm('/api/videos/thumbnail', fd); if (!res.ok) { const e = await res.json(); throw new Error(e.error); } const blob = await res.blob(); thumbBlobRef.current = blob; if (thumbUrl) URL.revokeObjectURL(thumbUrl); setThumbUrl(URL.createObjectURL(blob)); addToast('Thumbnail ready', 'success'); } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); } }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+                Export JPG
+              </button>
+            </Tooltip>
             {thumbUrl && (
               <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
                 <img src={thumbUrl} alt="Thumbnail" className="max-w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
                 <div className="flex flex-wrap gap-2">
-                  <a href={thumbUrl} download="thumbnail.jpg" className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
-                    Download JPG
-                  </a>
-                  <button
-                    type="button"
-                    onClick={handleSaveThumbnail}
-                    className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
-                  >
-                    Save to library
-                  </button>
+                  <Tooltip text="Save this image to your device.">
+                    <a href={thumbUrl} download="thumbnail.jpg" className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
+                      Download JPG
+                    </a>
+                  </Tooltip>
+                  <Tooltip text="Store this thumbnail in your Saved media library.">
+                    <button
+                      type="button"
+                      onClick={handleSaveThumbnail}
+                      className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                    >
+                      Save to library
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )}

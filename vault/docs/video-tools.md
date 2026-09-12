@@ -34,7 +34,7 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
 
-Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** loads the result blob back as the source file for chaining.
+Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** loads the result blob back as the source file for chaining; every in-panel control across all 21 tools shows a themed hover popover explaining what it does, via the shared `client/src/components/Tooltip.jsx` component (same one used by Graphics and PDF Tools).
 
 ---
 
