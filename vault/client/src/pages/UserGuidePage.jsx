@@ -31,6 +31,17 @@ const SECTIONS = [
   { id: 'tasks',           label: 'Tasks' },
   { id: 'goals',           label: 'Goals' },
   { id: 'chains',          label: 'Prompt Chains' },
+  { id: 'pdf-tools',       label: 'PDF Tools' },
+  { id: 'video-tools',     label: 'Video Tools' },
+  { id: 'graphics',        label: 'Graphics' },
+  { id: 'translate',       label: 'Translate' },
+  { id: 'document-redaction', label: 'Document Redaction' },
+  { id: 'ai-tools-apps',   label: 'AI Tools' },
+  { id: 'more-content-tools', label: 'More Content Tools' },
+  { id: 'website-tools',   label: 'Website Tools' },
+  { id: 'money-data-apps', label: 'Money & Data' },
+  { id: 'personal-admin-apps', label: 'Personal & Admin' },
+  { id: 'student',         label: 'Student' },
 ];
 
 // ─── Micro-components ────────────────────────────────────────────────────────
@@ -1443,6 +1454,475 @@ function UserGuidePage() {
           Mix models within a chain — for example, use Claude Sonnet for complex reasoning steps and Claude Haiku for
           fast formatting or summarisation steps to keep costs low and speed high.
         </Callout>
+
+        <Divider />
+
+        {/* ── PDF Tools ── */}
+        <SectionHeading id="pdf-tools">PDF Tools</SectionHeading>
+        <P>
+          <strong>PDF Tools</strong> (<code>/pdf</code>) is a full PDF toolkit for anyone who needs to merge, mark up,
+          fill, sign, protect, or convert PDFs without leaving Vault. It is <strong>stateless</strong> — every tool
+          takes a file in and hands a finished file straight back. Nothing is saved server-side and there is no
+          document library; if you need the result later, download it.
+        </P>
+
+        <SubHeading>Organise &amp; convert</SubHeading>
+        <UL>
+          <LI><strong>Merge</strong> — combine two or more PDFs into one.</LI>
+          <LI><strong>Split</strong> — extract a page range (e.g. <code>1-3,5,7-9</code>).</LI>
+          <LI><strong>Rotate</strong> — rotate all or selected pages by any angle.</LI>
+          <LI><strong>Organize pages</strong> — drag-and-drop thumbnail grid to reorder, delete, or insert pages from a second PDF at any position.</LI>
+          <LI><strong>Office ↔ PDF</strong> — DOCX/XLSX/PPTX/ODT/RTF/CSV/TXT to PDF and back, via LibreOffice.</LI>
+          <LI><strong>Google Drive ↔ PDF</strong> — export a Google Doc/Sheet/Slide as PDF, or convert an Office file already in Drive, using your connected Drive account.</LI>
+          <LI><strong>Image ↔ PDF</strong> — JPEG/PNG images into one PDF, or the reverse.</LI>
+        </UL>
+
+        <SubHeading>Fill, sign &amp; design forms</SubHeading>
+        <P>
+          Three related but distinct tools cover everything to do with putting a value onto a PDF:
+        </P>
+        <UL>
+          <LI><strong>Fill Form</strong> — fills an existing PDF's fillable fields with the values you type.</LI>
+          <LI><strong>Fill &amp; Sign</strong> — stamps a signature, date, or initials anywhere on any PDF (form or not). Draw with your mouse/finger, type a name in a script font, or upload an image of a signature, then drag it into place.</LI>
+          <LI><strong>Field designer</strong> — for building a blank fillable form: render the PDF to a canvas, drag boxes to place text/checkbox/dropdown fields at exact positions, choose typography, and save.</LI>
+        </UL>
+        <Callout type="tip">
+          A custom Google Font on a live fillable field renders as plain Helvetica in Chrome, Edge, and Adobe
+          Reader — a viewer limitation, not a Vault bug. To guarantee a field looks exactly as designed everywhere,
+          type its value in at design time in the field designer (or use Fill Form's default behaviour) — this
+          "stamps" the text directly onto the page instead of creating a live field, which is immune to font
+          substitution. A wider set of decorative Script fonts is available only on this stamp path.
+        </Callout>
+
+        <SubHeading>Mark up &amp; annotate</SubHeading>
+        <UL>
+          <LI><strong>Watermark</strong> — diagonal text watermark with adjustable size, opacity, colour, and angle.</LI>
+          <LI><strong>Page numbers</strong> — stamp page numbers in any of 6 positions.</LI>
+          <LI><strong>Annotate</strong> — highlight, strikeout, freehand draw, sticky notes, and text boxes, with a Select/Move tool and 20-step undo/redo.</LI>
+          <LI><strong>Compare</strong> — a visual diff (pixel-level, highlighted in red) and a text diff (line-by-line) between two PDFs, useful for checking what changed between versions.</LI>
+        </UL>
+
+        <SubHeading>Protect &amp; optimise</SubHeading>
+        <UL>
+          <LI><strong>Password Protect</strong> / <strong>Remove Password</strong> — AES-256 encryption with separate user/owner passwords and permission flags (printing, copying, editing).</LI>
+          <LI><strong>Compress</strong> — shrinks file size losslessly by default, with an optional image-recompression pass; never returns a larger file than the original.</LI>
+          <LI><strong>Metadata</strong> — read or edit Title, Author, Subject, Keywords, and Creator.</LI>
+        </UL>
+
+        <SubHeading>Text &amp; chat</SubHeading>
+        <P>
+          <strong>Extract text</strong> pulls plain text out of a PDF, and you can open a chat session grounded in
+          any uploaded file's extracted text — ask questions about a contract or report without leaving the page.
+        </P>
+
+        <Callout type="info">
+          Every tool has two layers of help: a click-to-open help icon next to the tool's title explains what it
+          does and why you'd use it, and every individual control inside the panel shows a hover tooltip explaining
+          that specific option.
+        </Callout>
+
+        <Divider />
+
+        {/* ── Video Tools ── */}
+        <SectionHeading id="video-tools">Video Tools</SectionHeading>
+        <P>
+          <strong>Video Tools</strong> (<code>/videos</code>) is a video toolkit mirroring the layout of Graphics —
+          a grouped, searchable sidebar on the left with the active tool filling the main area. It covers
+          AI clip generation, ffmpeg-based editing, and a saved-media library.
+        </P>
+
+        <SubHeading>Sidebar groups</SubHeading>
+        <UL>
+          <LI><strong>Create</strong> — Generate clip.</LI>
+          <LI><strong>Optimise</strong> — Convert/compress, Extract audio, Mute/replace audio, Normalize audio, Video → GIF, Export for Social.</LI>
+          <LI><strong>Transform</strong> — Clip/trim, Crop/reframe, Speed.</LI>
+          <LI><strong>Compose</strong> — Annotate, Overlay/watermark, Join videos, Slideshow, Caption studio.</LI>
+          <LI><strong>Library</strong> — Saved media.</LI>
+          <LI><strong>Analyse</strong> — File info, Thumbnail.</LI>
+        </UL>
+
+        <SubHeading>Standout tools</SubHeading>
+        <UL>
+          <LI><strong>Generate clip</strong> — describe a short clip and Vault expands your brief with a fast model before calling Replicate or FAL to generate it. You can also seed it from a reference image (animate it, or use it only as a style hint) or a YouTube video's title/transcript/thumbnail.</LI>
+          <LI><strong>Export for Social</strong> — one source video in, an MP4 per platform preset out (Reels/TikTok/Shorts, Square, Landscape), each with its own thumbnail preview and download, plus a "download all" zip.</LI>
+          <LI><strong>Slideshow</strong> — turn 2–20 still images into a promo video with crossfades and an optional looping/trimmed background music track.</LI>
+          <LI><strong>Caption studio</strong> — upload a video or pick one from your saved library, paste an SRT file (or auto-transcribe), and burn in styled captions with a Google Font, weight, size, and colour.</LI>
+        </UL>
+
+        <Callout type="info">
+          Auto-transcribe works differently depending on where Vault is running. In local development it uses
+          <code> whisper-cli</code> to produce a plain transcript. On a hosted deployment without that binary
+          (e.g. Railway), Vault extracts the audio track and asks Gemini to produce an SRT transcript directly. If
+          neither is available, paste an SRT file manually.
+        </Callout>
+
+        <P>
+          As in PDF Tools and Graphics, every in-panel control shows a hover tooltip, and every tool's title has a
+          click-to-open help icon with its full description. Any result can be sent to <strong>Use in another
+          tool</strong> to chain operations without re-uploading, and results can be saved to your personal
+          <strong> Saved media</strong> library along with the settings used to produce them.
+        </P>
+
+        <Divider />
+
+        {/* ── Graphics ── */}
+        <SectionHeading id="graphics">Graphics</SectionHeading>
+        <P>
+          <strong>Graphics</strong> (<code>/graphics</code>) bundles forty-two image tools behind a grouped,
+          searchable sidebar. Most tools run locally and for free via server-side image processing or entirely in
+          your browser on a canvas; only a handful (Generate, Upscale, hosted Background removal, Inpaint) call a
+          paid AI provider, and their cost is shown before you commit.
+        </P>
+
+        <SubHeading>Sidebar groups</SubHeading>
+        <UL>
+          <LI><strong>Create</strong> — Generate, Animate (GIF).</LI>
+          <LI><strong>Optimise</strong> — Upscale, Convert, Compress, Batch, Export for Social, PDF → Images, Print Ready, Auto-enhance.</LI>
+          <LI><strong>Transform</strong> — Crop/Resize, Canvas Extend, Perspective Correct, Smart Crop.</LI>
+          <LI><strong>Enhance</strong> — Effects, Adjust, Color Grading, Pipeline.</LI>
+          <LI><strong>Compose</strong> — Annotate, Text Overlay, Composite, Watermark, Batch Text, Collage, Favicon/Icons, Vectorize (SVG), AI Icon Library.</LI>
+          <LI><strong>Retouch</strong> — Background, Extract Element, Recolor, Eraser, Redact, Inpaint.</LI>
+          <LI><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Blur Detection, Image Diff, Remove Meta, File Info.</LI>
+        </UL>
+
+        <SubHeading>Standout tools</SubHeading>
+        <UL>
+          <LI><strong>Generate</strong> — text-to-image with style presets and size options, plus a follow-up <strong>Augment</strong> step for image-to-image variation on supported providers.</LI>
+          <LI><strong>Background removal</strong> — AI cut-out, then place the subject on a transparent, solid colour, gradient, or image background.</LI>
+          <LI><strong>Upscale</strong> — enlarge artwork with a choice of faithful vs enhanced models.</LI>
+          <LI><strong>AI Icon Library</strong> — generate a cohesive set of custom SVG icons around one subject, with reference styles you can refine and extend.</LI>
+          <LI><strong>Export for Social</strong> — one image in, a preview and download for every platform crop out, each independently adjustable before you export a zip of the lot.</LI>
+          <LI><strong>Brand Kit</strong> — save a logo, up to three brand colours, and a font name once; Text Overlay, Watermark, and Composite then offer one-click brand swatches and a logo layer.</LI>
+          <LI><strong>Magic wand selection</strong> — click a pixel to select a connected same-colour region (with a tolerance slider) in Inpaint, Eraser, and Extract Element, instead of hand-painting a mask.</LI>
+        </UL>
+
+        <Callout type="tip">
+          Most image-to-image tools show a draggable before/after slider and an <strong>Original</strong> badge in
+          the result panel, plus a <strong>Use in…</strong> shortcut to send the result straight into another tool
+          without re-uploading.
+        </Callout>
+
+        <P>
+          Like PDF Tools and Video Tools, every sidebar tool button and every in-panel control (over 300 of them
+          across all 42 tools) shows a themed hover tooltip, and every tool has a click-to-open help icon
+          explaining its purpose in full.
+        </P>
+
+        <Divider />
+
+        {/* ── Translate ── */}
+        <SectionHeading id="translate">Translate</SectionHeading>
+        <P>
+          <strong>Translate</strong> (<code>/translate</code>) is a professional document translation pipeline for
+          whole files, not just snippets of chat text. Upload a source document, answer a short intake about
+          domain, audience, and tone, and Vault prepares a glossary, translates it in chunks, optionally reviews
+          its own output, and produces a finished PDF (plus a native Word/Excel file where possible).
+        </P>
+
+        <SubHeading>Uploading a document</SubHeading>
+        <UL>
+          <LI>Accepts <strong>PDF</strong> (including scanned pages via built-in OCR), <strong>Word</strong> (.docx), <strong>Excel</strong> (.xlsx/.xls), and <strong>plain text</strong> — or paste text directly instead of uploading a file.</LI>
+          <LI>Pick a <strong>target language</strong> from a dropdown seeded from the workspace default; languages flagged with a ⚠ have lower training-data coverage and lower expected quality.</LI>
+          <LI>Choose an engine: the <strong>Vault LLM</strong> for domain tone, glossaries, and QA review, or <strong>Google Translate</strong> for fast drafts in common languages.</LI>
+        </UL>
+
+        <SubHeading>Glossaries &amp; QA</SubHeading>
+        <P>
+          You can attach a saved glossary of must-keep terms, or let Vault use a language's auto-learned global
+          glossary (terms it has picked up from previous jobs, refined over time). After translation, an optional
+          review pass checks every segment for completeness, meaning-preserving accuracy, and consistency, and
+          produces a QA report with a heuristic confidence score (High/Medium/Low) shown on the job list.
+        </P>
+
+        <SubHeading>Output</SubHeading>
+        <UL>
+          <LI><strong>Side by side</strong>, <strong>separate translated document</strong>, or <strong>bilingual pages</strong> PDF layouts.</LI>
+          <LI>A native <strong>.docx</strong> or <strong>.xlsx</strong> download when the source was one of those formats and the structure lines up cleanly.</LI>
+          <LI>A plain-text export of the translation alone, and a downloadable QA report.</LI>
+          <LI><strong>Lessons learnt</strong> — turn a job's QA findings into checkable action items that either update a standing instruction for every future job, or lock a specific term's rendering into that language's glossary.</LI>
+        </UL>
+
+        <Callout type="info">
+          Translate also has an OCR mode for scanned PDF pages, built on a pool of background text-recognition
+          workers, so a scanned contract or form doesn't need to be re-typed before it can be translated.
+        </Callout>
+
+        <Divider />
+
+        {/* ── Document Redaction ── */}
+        <SectionHeading id="document-redaction">Document Redaction</SectionHeading>
+        <P>
+          <strong>Document Redaction</strong> (<code>/document-redaction</code>) privacy-scrubs a Word document
+          using natural language instructions instead of a fixed list of PII types — describe what you want
+          removed ("client names", "invoice amounts over $10,000", "internal project codenames") and a local model
+          proposes what to redact. You stay in control at every stage: nothing is applied without your approval.
+        </P>
+
+        <SubHeading>The workflow</SubHeading>
+        <UL>
+          <LI><strong>Upload &amp; brief</strong> — upload a <code>.docx</code> file and describe what to redact, including anything you explicitly want left alone.</LI>
+          <LI><strong>Review candidates</strong> — a scored list of proposed redactions appears. Approve, reject, edit the replacement text, or add anything the model missed.</LI>
+          <LI><strong>Apply</strong> — approved candidates are replaced with consistent, plausible synthetic values (the same real name always becomes the same fake name throughout the document) — or, if you prefer, plain <code>[REDACTED]</code> tokens or generalised ranges instead of specific fabricated values.</LI>
+          <LI><strong>Compare &amp; second review</strong> — a side-by-side view of the original and redacted document highlights every substitution, plus an automatic scan for any leftover real values that slipped through. You approve this pass before continuing.</LI>
+          <LI><strong>Frontier analysis</strong> — the sanitized PDF (never the original document) is sent to a frontier model for a residual-risk review — checking whether anything in the redacted document could still allow re-identification, and suggesting further redactions.</LI>
+          <LI><strong>Selective apply &amp; final approval</strong> — choose which frontier suggestions to accept, review a three-way compare (original / your redactions / frontier-informed final), and give final approval to export the finished document plus an internal-only audit trail of every decision made.</LI>
+        </UL>
+
+        <Callout type="warning">
+          <strong>The entity map — the table linking each real value to its synthetic replacement — never leaves
+          your machine.</strong> Only the fully sanitized PDF is ever sent to the frontier model for analysis; the
+          original document, the real values, and the mapping between them stay local at every stage.
+        </Callout>
+
+        <P>
+          The final export includes the redacted document and an <strong>INTERNAL-ONLY audit trail</strong> —
+          a gated download that may contain original values, intended for your own compliance records, not for
+          sharing alongside the redacted document itself.
+        </P>
+
+        <Divider />
+
+        {/* ── AI Tools (grouped) ── */}
+        <SectionHeading id="ai-tools-apps">AI Tools</SectionHeading>
+        <P>
+          A handful of specialised AI tools live under Apps → AI tools, alongside Prompt Chains and Document
+          Redaction covered above.
+        </P>
+
+        <SubHeading>Knowledge Graph</SubHeading>
+        <P>
+          Visualises the semantic relationships between your notes and chat sessions — nodes connected when their
+          content is similar enough to be meaningfully related (cosine similarity above a fixed threshold on their
+          embeddings). Useful for spotting recurring themes or duplicated thinking across projects that you
+          wouldn't otherwise notice were connected.
+        </P>
+
+        <SubHeading>Multi-Model Debate</SubHeading>
+        <P>
+          Pick a topic (or upload a document to extract one from), then have multiple models argue different
+          sides across several rounds, followed by a synthesised summary of the strongest points from each side.
+          Useful for stress-testing a decision or seeing an issue from angles you might not think to ask for
+          yourself.
+        </P>
+
+        <SubHeading>Document Compare</SubHeading>
+        <P>
+          Upload two documents and choose a comparison mode: a detailed <strong>diff</strong>, a <strong>summary</strong>
+          of key differences, a <strong>reconciled</strong> single version combining the best of both, or a list of
+          pure <strong>conflicts</strong> between them. Works with both Claude and Gemini models.
+        </P>
+
+        <Divider />
+
+        {/* ── More Content Tools (grouped) ── */}
+        <SectionHeading id="more-content-tools">More Content Tools</SectionHeading>
+        <P>
+          Additional content-focused tools sit alongside PDF Tools, Video Tools, Graphics, and Translate under
+          Apps → Content tools.
+        </P>
+
+        <SubHeading>Guitar</SubHeading>
+        <P>
+          Paste an Ultimate Guitar song URL to pull its chords, or upload an audio file for automatic chord/key/BPM
+          detection. Songs are saved to a personal library with their detected chord timeline, and you can build
+          practice loops over a section of a song, add or edit chord events manually, and browse chord-shape
+          diagrams by name.
+        </P>
+
+        <SubHeading>Recipes</SubHeading>
+        <P>
+          A cooking assistant with two starting points: list what's in your fridge for four AI-suggested leftover
+          dishes, or name a specific dish for Basic/Advanced/Master versions with accessible ingredient swaps.
+          Either way you get full steps, nutrition notes, an auto-generated dish photo, and web links. Under
+          <strong> Shop</strong>, get real Coles/Woolworths prices for a recipe's ingredients — sourced from live
+          product search, never guessed, with unmatched items honestly marked "Not found" rather than a fabricated
+          price.
+        </P>
+
+        <SubHeading>Amazon Search (Product Scout)</SubHeading>
+        <P>
+          An unbiased purchasing assistant: describe what you want to buy, and Vault searches Amazon, scores the
+          results by genuine value (not just price), and cross-checks against alternatives found via web search.
+          The <strong>Buy guide</strong> mode first builds a feature brief with category-specific specs before
+          comparing price tiers; <strong>Quick scout</strong> skips straight to a single comparison. Optional
+          filters for max price, free delivery, and delivery within two days.
+        </P>
+
+        <SubHeading>YouTube</SubHeading>
+        <P>
+          Search YouTube by keyword or a plain-language description, watch videos in an embedded player, and pull
+          a transcript or AI summary with a language picker. Also covers browsing a channel's other videos, opening
+          a full playlist, filtering to live streams, reading comments, browsing what's trending by region, saving
+          favourites and named result-set lists, and a recently-watched history. There is no download feature —
+          watching happens entirely through YouTube's own embed.
+        </P>
+
+        <Divider />
+
+        {/* ── Website Tools (grouped) ── */}
+        <SectionHeading id="website-tools">Website Tools</SectionHeading>
+        <P>
+          Seven tools for anyone running or marketing a website live under Apps → Website. Several sound similar —
+          each one covers a distinct slice of the work, so check the short description below before assuming two
+          tools overlap.
+        </P>
+
+        <SubHeading>SEO</SubHeading>
+        <P>
+          Crawls a public site (1–40 same-origin pages) for <strong>organic campaign</strong> work: indexation,
+          SERP title/description quality, thin or duplicate pages, schema, hreflang, sitemap gaps, and click depth.
+          Produces a copyable campaign brief. This is not a page-speed audit (that's Lighthouse) and not keyword
+          research (that's Adwords).
+        </P>
+
+        <SubHeading>Search (Search Console)</SubHeading>
+        <P>
+          Connects your Google Search Console account (OAuth) to pull real 28-day query and page performance —
+          what people actually searched to find your site, and which of your pages showed up — plus a
+          query/page cannibalisation shortlist.
+        </P>
+
+        <SubHeading>Adwords (Google Ads)</SubHeading>
+        <P>
+          Paste a site URL and describe what it sells; Vault scrapes the site and generates a starter Google Ads
+          Search campaign — 100 keywords, 100 negatives, and ad copy (either a full RSA set or a simple 10-headline/
+          10-description pack) — ready to copy or export as CSV for Ads Editor.
+        </P>
+
+        <SubHeading>Domain</SubHeading>
+        <P>
+          Domain and brand research: name suggestions, availability and typo-squat checks, a domain scoring/compare
+          tool, competitor and brand-launch overviews, pricing lookups, and a watchlist plus brand-monitor scan for
+          domains you want to keep an eye on.
+        </P>
+
+        <SubHeading>Lighthouse (HTML)</SubHeading>
+        <P>
+          Runs Google's PageSpeed Insights for both mobile and desktop and turns the result into a prioritised
+          work order (P0–P2 tickets a developer can action), alongside category scores, lab metrics, and specific
+          failed checks with selectors. This is page-speed and technical quality, not SEO content strategy.
+        </P>
+
+        <SubHeading>Web Extractor</SubHeading>
+        <P>
+          Pull content from any public URL in three modes: readable <strong>article text</strong> (ads/nav/footer
+          stripped), a deduplicated list of every <strong>image</strong> on the page for individual or bulk
+          download, or an <strong>exact scrape</strong> of the original HTML with asset URLs rewritten absolute,
+          rendered read-only in a sandboxed frame.
+        </P>
+
+        <SubHeading>WP Theme Builder</SubHeading>
+        <P>
+          A separate mini-app (mounted at <code>/tb</code>) for designing a WordPress theme: Stage 1 produces a
+          wireframe and homepage design from a brief, Stage 2 exports it as an installable WordPress theme.
+        </P>
+
+        <Divider />
+
+        {/* ── Money & Data (grouped) ── */}
+        <SectionHeading id="money-data-apps">Money &amp; Data</SectionHeading>
+        <P>
+          Financial and personal-data tools under Apps → Money &amp; data, alongside Shares (covered in full in
+          the main CLAUDE.md feature list and its own in-app pages).
+        </P>
+
+        <SubHeading>Finance</SubHeading>
+        <P>
+          A genuine small-business accounting suite: accounts, clients, and suppliers; invoices (create, send by
+          email, mark paid, convert between draft/final); expenses with receipt uploads and credit-card
+          reconciliation; wages; recurring transactions; a general journal; BAS (Business Activity Statement)
+          preparation with quarterly and annual views; a trial balance; and exports to MYOB, Xero, Excel, and
+          Google Sheets. This is a full bookkeeping tool, not a personal budget tracker.
+        </P>
+
+        <SubHeading>Property (Property Scenario)</SubHeading>
+        <P>
+          Describe a refinance, purchase, sale, or lender switch in plain English; Vault turns it into a structured
+          scenario and runs deterministic Australian calculations — stamp duty, LMI, CGT, refinance and early
+          payout costs, bridging finance. The flagship <strong>Qualification proforma</strong> runs strict
+          per-bank serviceability checks with live CDR interest rates. Document insights (lender T&amp;Cs/PDS Q&amp;A)
+          are always clearly quarantined from the scenario's actual numbers — they never silently change a total.
+        </P>
+
+        <SubHeading>Shares</SubHeading>
+        <P>
+          A personal share portfolio tracker across Portfolio, Trades, Cash, Charts, and News tabs — live quotes,
+          profit/loss, daily AI-written news briefings and portfolio notes, and observation-aligned charts
+          (benchmarks, movers, drawdowns, sector allocation, earnings timeline).
+        </P>
+
+        <SubHeading>Usage &amp; Cost</SubHeading>
+        <P>
+          A running log and summary of your AI usage across every feature in Vault — tokens and estimated cost,
+          filterable by period (today, this week, custom range), so you can see where your spend is actually
+          going.
+        </P>
+
+        <SubHeading>News Digest</SubHeading>
+        <P>
+          Define topics with keywords, and Vault aggregates and summarises recent news for each one on a schedule,
+          with a per-topic chat for asking follow-up questions about what it found.
+        </P>
+
+        <Divider />
+
+        {/* ── Personal & Admin (grouped) ── */}
+        <SectionHeading id="personal-admin-apps">Personal &amp; Admin</SectionHeading>
+        <P>
+          Personal wellbeing tools and workspace administration live under Apps → Personal and Apps → Admin.
+        </P>
+
+        <SubHeading>Mood</SubHeading>
+        <P>
+          Log a quick mood check-in, or start a guided <strong>emotional self-inquiry</strong> session — a
+          Claude-facilitated conversation that asks one reflective question at a time to help you understand your
+          own feelings more clearly, rather than offering advice or interpretation. Summaries and trends are
+          available across your sessions and per-project.
+        </P>
+
+        <SubHeading>Wellbeing Check</SubHeading>
+        <P>
+          A set of validated psychological questionnaires (including PANAS, ASRS-5, GAD-7, IPIP personality facets,
+          CERQ, and COPE) that you can take, review past attempts for, and export as a PDF — including a combined
+          profile PDF and a visual slideshow summary across assessments.
+        </P>
+
+        <SubHeading>Inbox Intel</SubHeading>
+        <P>
+          A read-only Gmail dashboard that fetches your last 50 inbox messages and classifies each one with Claude
+          into <strong>Urgent</strong>, <strong>Waiting</strong>, <strong>FYI</strong>, or <strong>Noise</strong>,
+          with metric cards, filters, and search — a fast way to triage a full inbox without opening every message.
+        </P>
+
+        <SubHeading>Clients</SubHeading>
+        <P>
+          A simple client directory that projects can be attached to, so you can see all projects, chats, and
+          activity for a given client in one place.
+        </P>
+
+        <SubHeading>Admin Dashboard</SubHeading>
+        <P>
+          <strong>Admin-only.</strong> Workspace-wide stats and a live monitor, user management, and per-user
+          Feature Access controls — an admin can narrow (never widen) which apps a specific member can use, on top
+          of the workspace-wide defaults.
+        </P>
+
+        <Divider />
+
+        {/* ── Student ── */}
+        <SectionHeading id="student">Student</SectionHeading>
+        <P>
+          <strong>Student</strong> (<code>/student/quiz</code>) is a study tool with three parts: a
+          <strong> Quiz Library</strong> of AI-generated question pools you can take and get marked automatically,
+          a <strong>Cards</strong> mode for flashcard-style study, and <strong>Saved decks</strong> for keeping sets
+          you want to revisit. Quiz generation and marking use the workspace's standard AI model tier, so quality
+          tracks whatever model your workspace has configured as its default.
+        </P>
+        <UL>
+          <LI><strong>Dashboard</strong> — overview of your quiz activity and saved decks.</LI>
+          <LI><strong>Quiz Library</strong> — generate a new quiz pool on any topic, then take it and see scored results.</LI>
+          <LI><strong>Results</strong> — review past attempts and how you scored.</LI>
+        </UL>
 
         <div className="h-16" /> {/* Bottom padding */}
       </main>
