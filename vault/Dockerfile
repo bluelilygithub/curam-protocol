@@ -1,12 +1,13 @@
 FROM node:20-slim
 
-# System deps — LibreOffice, ffmpeg, Python3 for guitar audio pipeline
+# System deps — LibreOffice, ffmpeg, qpdf (PDF Tools password protect/remove), Python3 for guitar audio pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libreoffice \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
+    qpdf \
     fonts-liberation \
     fonts-dejavu-core \
     fontconfig \

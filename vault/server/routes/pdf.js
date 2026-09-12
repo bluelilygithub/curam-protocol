@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
-const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFString, PDFRawStream, PDFNumber } = require('pdf-lib');
 const fontkit = require('fontkit');
 const sharp = require('sharp');
 const path = require('path');
@@ -12,6 +12,7 @@ const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
 const { generateTextPdf } = require('../services/textToPdf');
+const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -883,6 +884,463 @@ router.post('/google-to-pdf', async (req, res) => {
     if (code === 403)
       return res.status(403).json({ error: 'Access denied. Go to Settings → Gmail / Drive, disconnect, then reconnect.', needsReconnect: true });
     res.status(500).json({ error: msg });
+  }
+});
+
+// ── Organize Pages — reorder, delete, insert-from-another-PDF, extract ──────
+// `pages` describes the final page order as a flat list of
+// { source: 'primary'|'inserted', index } — 0-based index into the primary
+// doc and/or a second uploaded doc (`insertedDataUrl`). Deleting a page is
+// just omitting it from the list; extracting a single page is a `pages`
+// array with one entry. Copies each page individually via copyPages() (the
+// same primitive /merge uses) so the same source page can appear more than
+// once (e.g. duplicated into two places) without index collisions.
+router.post('/organize', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const pageList = req.body?.pages;
+    if (!Array.isArray(pageList) || !pageList.length)
+      return res.status(400).json({ error: 'No pages specified' });
+
+    const primary = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const insertedBuf = pdfBufFromDataUrl(req.body?.insertedDataUrl);
+    const inserted = insertedBuf ? await PDFDocument.load(insertedBuf, { ignoreEncryption: true }) : null;
+
+    const out = await PDFDocument.create();
+    for (const p of pageList) {
+      const srcDoc = p?.source === 'inserted' ? inserted : primary;
+      if (!srcDoc) continue;
+      const idx = Number(p?.index);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= srcDoc.getPageCount()) continue;
+      const [copied] = await out.copyPages(srcDoc, [idx]);
+      out.addPage(copied);
+    }
+    if (!out.getPageCount())
+      return res.status(400).json({ error: 'No valid pages resolved from the request' });
+
+    const bytes = await out.save();
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: out.getPageCount() });
+  } catch (err) {
+    console.error('PDF organize:', err);
+    res.status(500).json({ error: err.message || 'Organize failed' });
+  }
+});
+
+// ── Fill & Sign — stamp a signature/date/initials directly onto page content ──
+// Distinct from /fill (AcroForm values only) and /addfields (empty fields for
+// someone else to fill later): this burns a signature into the page content
+// stream at a chosen position, like a stamp — works on any PDF, form or not.
+// `type: 'draw'|'image'` sends a PNG/JPEG data URL (canvas strokes or an
+// uploaded photo) embedded with embedJpg/embedPng, same image-type branching
+// /img2pdf uses. `type: 'type'` reuses resolveStampFont() (the same
+// script-font stamping mechanism as /fill's flatten mode and /addfields'
+// stamped text fields) and page.drawText() — so typed signatures, dates, and
+// initials are all immune to the viewer font-substitution that affects live
+// AcroForm fields, for the same reason those paths already are.
+router.post('/sign', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const sigs = req.body?.signatures;
+    if (!Array.isArray(sigs) || !sigs.length)
+      return res.status(400).json({ error: 'At least one signature placement is required' });
+
+    const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const pages = doc.getPages();
+    const fontCache = {};
+    const imgCache = new Map();
+    let placed = 0;
+
+    for (const sig of sigs) {
+      try {
+        const pageIdx = Math.max(0, (Number(sig.page) || 1) - 1);
+        if (pageIdx >= pages.length) continue;
+        const page = pages[pageIdx];
+        const x = Number(sig.x) || 0;
+        const y = Number(sig.y) || 0;
+        const width = Math.max(5, Number(sig.width) || 150);
+        const height = Math.max(5, Number(sig.height) || 50);
+
+        if (sig.type === 'type') {
+          const text = String(sig.text || '').trim();
+          if (!text) continue;
+          const font = await resolveStampFont(doc, fontCache, sig.fontFamily || 'Great Vibes');
+          const fontSize = Math.max(8, Math.min(72, height * 0.65));
+          page.drawText(text, {
+            x: x + 2,
+            y: y + (height - fontSize) / 2 + fontSize * 0.1,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+          placed++;
+        } else {
+          // 'draw' (canvas strokes) or 'image' (uploaded file) — both arrive
+          // as a data URL; embed by mime the same way /img2pdf does.
+          if (!sig.dataUrl || !sig.dataUrl.includes(',')) continue;
+          const rawBuf = Buffer.from(sig.dataUrl.split(',')[1], 'base64');
+          const mime = (sig.dataUrl.split(';')[0].split(':')[1] || '').toLowerCase();
+          let embedded = imgCache.get(sig.dataUrl);
+          if (!embedded) {
+            embedded = (mime === 'image/jpeg' || mime === 'image/jpg')
+              ? await doc.embedJpg(rawBuf)
+              : await doc.embedPng(await sharp(rawBuf).png().toBuffer());
+            imgCache.set(sig.dataUrl, embedded);
+          }
+          page.drawImage(embedded, { x, y, width, height });
+          placed++;
+        }
+      } catch (sigErr) {
+        console.warn('PDF sign skip:', sigErr.message);
+      }
+    }
+
+    const bytes = await doc.save();
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), placed });
+  } catch (err) {
+    console.error('PDF sign:', err);
+    res.status(500).json({ error: err.message || 'Sign failed' });
+  }
+});
+
+// ── Compress ───────────────────────────────────────────────────────────────
+// Baseline pass (`useObjectStreams: true` on save) always runs — zero
+// quality loss. "Recompress images" is opt-in and deliberately conservative:
+// it only touches Image XObjects that are already JPEG-encoded (DCTDecode)
+// with a plain DeviceRGB/DeviceGray/CalRGB/CalGray color space — CMYK,
+// Indexed, ICCBased, and Separation are left byte-for-byte untouched, since
+// blindly re-encoding those through sharp risks a color-space mismatch that
+// corrupts the image. Anything it does touch is re-encoded through sharp at
+// a quality/max-dimension chosen by level, and only kept if it's actually
+// smaller — otherwise the original bytes are left in place.
+const COMPRESS_LEVELS = {
+  low:    { jpegQuality: 35, maxDim: 1000 },
+  medium: { jpegQuality: 55, maxDim: 1500 },
+  high:   { jpegQuality: 75, maxDim: 2000 },
+};
+
+async function recompressPdfImages(doc, quality) {
+  const { jpegQuality, maxDim } = COMPRESS_LEVELS[quality] || COMPRESS_LEVELS.medium;
+  let count = 0;
+  for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFRawStream)) continue;
+    try {
+      const dict = obj.dict;
+      const subtype = dict.lookup(PDFName.of('Subtype'));
+      if (!subtype || subtype.toString() !== '/Image') continue;
+      const filter = dict.lookup(PDFName.of('Filter'));
+      const filterStr = filter ? filter.toString() : '';
+      if (!filterStr.includes('DCTDecode')) continue; // only re-encode existing JPEGs
+
+      const colorSpace = dict.lookup(PDFName.of('ColorSpace'));
+      const csStr = colorSpace ? colorSpace.toString() : '';
+      if (csStr && !/DeviceRGB|DeviceGray|CalRGB|CalGray/.test(csStr)) continue;
+
+      const original = obj.contents;
+      let img = sharp(Buffer.from(original));
+      const meta = await img.metadata();
+      if (!meta.width || !meta.height) continue;
+      if (meta.width > maxDim || meta.height > maxDim) {
+        img = img.resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true });
+      }
+      const outBuf = await img.jpeg({ quality: jpegQuality }).toBuffer();
+      if (outBuf.length >= original.length) continue; // no benefit — keep original
+
+      const outMeta = await sharp(outBuf).metadata();
+      obj.contents = outBuf;
+      dict.set(PDFName.of('Width'), PDFNumber.of(outMeta.width));
+      dict.set(PDFName.of('Height'), PDFNumber.of(outMeta.height));
+      dict.set(PDFName.of('Length'), PDFNumber.of(outBuf.length));
+      count++;
+    } catch (imgErr) {
+      console.warn('PDF compress: skipping one image —', imgErr.message);
+    }
+  }
+  return count;
+}
+
+router.post('/compress', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const recompressImages = !!req.body?.recompressImages;
+    const quality = String(req.body?.quality || 'medium');
+    const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+
+    const imagesRecompressed = recompressImages ? await recompressPdfImages(doc, quality) : 0;
+
+    const bytes = await doc.save({ useObjectStreams: true });
+    const originalSize = buf.length;
+    const compressedSize = bytes.length;
+    const savedPercent = originalSize > 0
+      ? Math.max(0, Math.round((1 - compressedSize / originalSize) * 1000) / 10)
+      : 0;
+    res.json({
+      dataUrl: pdfDataUrl(bytes),
+      pageCount: doc.getPageCount(),
+      originalSize,
+      compressedSize,
+      savedPercent,
+      imagesRecompressed,
+    });
+  } catch (err) {
+    console.error('PDF compress:', err);
+    res.status(500).json({ error: err.message || 'Compress failed' });
+  }
+});
+
+// ── Annotate / Markup ─────────────────────────────────────────────────────
+// Client renders each page to canvas (pdfjs-dist, same technique used
+// elsewhere in this file) and lets the user draw highlights/strikeouts/
+// freehand ink/sticky notes/text boxes over it in PDF-point coordinates.
+// This route burns the final annotation list into the actual PDF content
+// stream, one page at a time — same drawRectangle/drawLine/drawText
+// primitives already used by watermark/page-numbers/addfields/sign.
+//
+// Sticky notes are the one type that isn't stamped: addStickyNoteAnnotation()
+// creates a real PDF `/Text` annotation dict (native "comment" icon in
+// Adobe/Preview/most viewers) via pdf-lib's low-level context.obj()/register()
+// API, appended to the page's /Annots array. If that ever throws for a given
+// PDF, the note falls back to a stamped visible icon + text box instead of
+// failing the whole request.
+function addStickyNoteAnnotation(doc, page, { x, y, text, color }) {
+  const { context } = doc;
+  const [cr, cg, cb] = hexToRgb01(color || '#ffeb3b');
+  const size = 18;
+  const annotDict = context.obj({
+    Type: PDFName.of('Annot'),
+    Subtype: PDFName.of('Text'),
+    Rect: [x, y, x + size, y + size],
+    Contents: PDFString.of(String(text || '')),
+    Name: PDFName.of('Comment'),
+    C: [cr, cg, cb],
+    Open: false,
+    F: 4, // Print flag — visible when printed, not just on-screen
+  });
+  const annotRef = context.register(annotDict);
+  const existing = page.node.lookup(PDFName.of('Annots'));
+  if (existing && typeof existing.push === 'function') {
+    existing.push(annotRef);
+  } else {
+    page.node.set(PDFName.of('Annots'), context.obj([annotRef]));
+  }
+}
+
+// Stamped fallback for a sticky note (or the primary rendering when a real
+// annotation dict can't be created for some PDF): a small filled square
+// "icon" plus the note text in a rounded-corner-free box beside it.
+function stampNoteFallback(page, font, { x, y, text, color, fontSize = 9 }) {
+  const [cr, cg, cb] = hexToRgb01(color || '#ffeb3b');
+  const iconSize = 16;
+  page.drawRectangle({ x, y, width: iconSize, height: iconSize, color: rgb(cr, cg, cb), borderColor: rgb(0.4, 0.35, 0), borderWidth: 1 });
+  const lines = wrapText(String(text || ''), font, fontSize, 220);
+  const boxH = Math.max(iconSize, lines.length * (fontSize + 3) + 6);
+  page.drawRectangle({ x: x + iconSize + 4, y: y + iconSize - boxH, width: 226, height: boxH, color: rgb(1, 1, 0.85), borderColor: rgb(0.7, 0.6, 0), borderWidth: 1 });
+  lines.forEach((line, i) => {
+    page.drawText(line, { x: x + iconSize + 8, y: y + iconSize - boxH + boxH - (i + 1) * (fontSize + 3) + 2, size: fontSize, font, color: rgb(0, 0, 0) });
+  });
+}
+
+// Greedy word-wrap using the font's actual measured width — used by the
+// sticky-note fallback box and the text-box annotation type.
+function wrapText(text, font, fontSize, maxWidth) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, fontSize) > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [''];
+}
+
+router.post('/annotate', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const annotations = req.body?.annotations;
+    if (!Array.isArray(annotations) || !annotations.length)
+      return res.status(400).json({ error: 'At least one annotation is required' });
+
+    const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+    const pages = doc.getPages();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    let applied = 0;
+    let notesFallenBack = 0;
+
+    for (const a of annotations) {
+      try {
+        const pageIdx = Math.max(0, (Number(a.page) || 1) - 1);
+        if (pageIdx >= pages.length) continue;
+        const page = pages[pageIdx];
+        const [cr, cg, cb] = hexToRgb01(a.color || '#ffff00');
+
+        if (a.type === 'highlight') {
+          const width = Math.max(1, Number(a.width) || 0);
+          const height = Math.max(1, Number(a.height) || 0);
+          page.drawRectangle({
+            x: Number(a.x) || 0, y: Number(a.y) || 0, width, height,
+            color: rgb(cr, cg, cb),
+            opacity: Math.min(1, Math.max(0.05, Number(a.opacity) || 0.4)),
+          });
+          applied++;
+        } else if (a.type === 'strikeout') {
+          const width = Math.max(1, Number(a.width) || 0);
+          const height = Math.max(1, Number(a.height) || 0);
+          const y = (Number(a.y) || 0) + height / 2;
+          page.drawLine({
+            start: { x: Number(a.x) || 0, y },
+            end: { x: (Number(a.x) || 0) + width, y },
+            thickness: Math.max(1, Number(a.strokeWidth) || 1.5),
+            color: rgb(cr, cg, cb),
+          });
+          applied++;
+        } else if (a.type === 'draw') {
+          const points = Array.isArray(a.points) ? a.points : [];
+          const thickness = Math.max(0.5, Number(a.strokeWidth) || 2);
+          for (let i = 1; i < points.length; i++) {
+            const p0 = points[i - 1], p1 = points[i];
+            if (!p0 || !p1) continue;
+            page.drawLine({
+              start: { x: Number(p0.x) || 0, y: Number(p0.y) || 0 },
+              end: { x: Number(p1.x) || 0, y: Number(p1.y) || 0 },
+              thickness, color: rgb(cr, cg, cb),
+              lineCap: 1, // round cap — smoother freehand strokes
+            });
+          }
+          if (points.length) applied++;
+        } else if (a.type === 'note') {
+          try {
+            addStickyNoteAnnotation(doc, page, { x: Number(a.x) || 0, y: Number(a.y) || 0, text: a.text, color: a.color });
+          } catch (noteErr) {
+            console.warn('PDF annotate: sticky note annotation failed, stamping fallback —', noteErr.message);
+            stampNoteFallback(page, font, { x: Number(a.x) || 0, y: Number(a.y) || 0, text: a.text, color: a.color });
+            notesFallenBack++;
+          }
+          applied++;
+        } else if (a.type === 'textbox') {
+          const width = Math.max(20, Number(a.width) || 150);
+          const height = Math.max(14, Number(a.height) || 40);
+          const x = Number(a.x) || 0, y = Number(a.y) || 0;
+          const fontSize = Math.max(6, Number(a.fontSize) || 11);
+          if (a.background) {
+            const [br, bg, bb] = hexToRgb01(a.background);
+            page.drawRectangle({ x, y, width, height, color: rgb(br, bg, bb), opacity: 0.9, borderColor: rgb(cr, cg, cb), borderWidth: 1 });
+          }
+          const lines = wrapText(a.text, font, fontSize, width - 8);
+          lines.forEach((line, i) => {
+            const ly = y + height - (i + 1) * (fontSize + 2) - 2;
+            if (ly < y) return; // clip overflow rather than spilling past the box
+            page.drawText(line, { x: x + 4, y: ly, size: fontSize, font, color: rgb(cr, cg, cb) });
+          });
+          applied++;
+        }
+      } catch (annErr) {
+        console.warn('PDF annotate: skipped one annotation —', annErr.message);
+      }
+    }
+
+    const bytes = await doc.save();
+    res.json({ dataUrl: pdfDataUrl(bytes), pageCount: doc.getPageCount(), applied, notesFallenBack });
+  } catch (err) {
+    console.error('PDF annotate:', err);
+    res.status(500).json({ error: err.message || 'Annotate failed' });
+  }
+});
+
+// ── Compare — text extraction for the text-diff tab ───────────────────────
+// The visual pixel-diff tab is entirely client-side (pdfjs-dist renders both
+// PDFs to canvas at matching scale, then a browser canvas ImageData compare —
+// same concept as Graphics' Image Diff route, done in-browser here rather
+// than round-tripping image bytes through the server since no PDF-specific
+// server processing is needed for that path).
+//
+// The text-diff tab does need server-side extraction (pdf-parse is a
+// dependency already used by Translate's extractFromPdf for exactly this —
+// per-page text via `pagerender`), so this route exists to serve that one
+// tab. Returns each PDF's per-page plain text; the actual line-diff
+// (LCS-based) runs client-side.
+async function extractPdfPageTexts(buf) {
+  const pdfParse = require('pdf-parse');
+  const pages = [];
+  await pdfParse(buf, {
+    pagerender: (pageData) => pageData.getTextContent().then((tc) => {
+      const items = tc.items.map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5] }));
+      const sorted = [...items].sort((a, b) => (b.y - a.y) || (a.x - b.x));
+      const lines = [];
+      for (const it of sorted) {
+        if (!it.str.trim()) continue;
+        const line = lines.find((l) => Math.abs(l.y - it.y) <= 3);
+        if (line) line.parts.push(it.str);
+        else lines.push({ y: it.y, parts: [it.str] });
+      }
+      pages[pageData.pageNumber - 1] = lines.map((l) => l.parts.join(' ').trim()).filter(Boolean).join('\n');
+      return '';
+    }),
+  });
+  return pages.map((p) => p || '');
+}
+
+router.post('/compare-text', async (req, res) => {
+  try {
+    const bufA = pdfBufFromDataUrl(req.body?.dataUrlA);
+    const bufB = pdfBufFromDataUrl(req.body?.dataUrlB);
+    if (!bufA || !bufB) return res.status(400).json({ error: 'Two valid PDFs are required' });
+    const [textA, textB] = await Promise.all([extractPdfPageTexts(bufA), extractPdfPageTexts(bufB)]);
+    res.json({ textA, textB, pageCountA: textA.length, pageCountB: textB.length });
+  } catch (err) {
+    console.error('PDF compare-text:', err);
+    res.status(500).json({ error: err.message || 'Text extraction failed' });
+  }
+});
+
+// ── Password protect / remove ─────────────────────────────────────────────
+// pdf-lib cannot write encrypted PDFs (confirmed against its README/issue
+// tracker — no encryption-on-save support exists). This shells out to qpdf,
+// the same architectural pattern officeConvert.js uses for LibreOffice:
+// temp-file in, native binary, temp-file out, ENOENT-friendly error if the
+// binary isn't installed on the server image. See server/services/pdfCrypto.js.
+router.post('/protect', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const password = String(req.body?.password || '');
+    if (!password) return res.status(400).json({ error: 'A password is required' });
+    const outBuf = await protectPdf(buf, {
+      userPassword: password,
+      ownerPassword: req.body?.ownerPassword ? String(req.body.ownerPassword) : undefined,
+      permissions: req.body?.permissions || {},
+    });
+    res.json({ dataUrl: pdfDataUrl(outBuf) });
+  } catch (err) {
+    console.error('PDF protect:', err);
+    if (err.code === 'ENOENT')
+      return res.status(500).json({ error: 'Password protection requires qpdf, which is not available on this server. The server image may still be deploying — please try again in a few minutes.' });
+    res.status(500).json({ error: err.message || 'Protect failed' });
+  }
+});
+
+router.post('/unprotect', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const password = String(req.body?.password || '');
+    const outBuf = await unprotectPdf(buf, password);
+    res.json({ dataUrl: pdfDataUrl(outBuf) });
+  } catch (err) {
+    console.error('PDF unprotect:', err);
+    if (err.code === 'ENOENT')
+      return res.status(500).json({ error: 'Password removal requires qpdf, which is not available on this server. Please try again after the next deploy.' });
+    if (err.wrongPassword)
+      return res.status(400).json({ error: 'Incorrect password.' });
+    res.status(500).json({ error: err.message || 'Unprotect failed. The file may not be password-protected, or may use an unsupported encryption scheme.' });
   }
 });
 

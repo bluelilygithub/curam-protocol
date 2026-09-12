@@ -172,6 +172,16 @@ const semanticMap = {
   mood: { lucide: 'Heart' },
   news: { lucide: 'Newspaper' },
   play: { lucide: 'Play' },
+  'pen-tool': { lucide: 'PenTool' },
+  'highlighter': { lucide: 'Highlighter' },
+  'lock': { lucide: 'Lock' },
+  'unlock': { lucide: 'Unlock' },
+  'sticky-note': { lucide: 'StickyNote' },
+  'strikethrough': { lucide: 'Strikethrough' },
+  'pencil-line': { lucide: 'PenLine' },
+  'square': { lucide: 'Square' },
+  'mouse-pointer': { lucide: 'MousePointer2' },
+  'move': { lucide: 'Move' },
 };
 
 const IconContext = createContext(null);

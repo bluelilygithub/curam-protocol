@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
+import Tooltip from '../components/Tooltip';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -257,12 +258,91 @@ const TOOL_HELP = {
       'Note: if you recently connected Google, you may need to reconnect to grant Drive read access',
     ],
   },
+  organize: {
+    title: 'Organize Pages',
+    what: 'Reorder, delete, insert, or extract pages from a PDF using page thumbnails.',
+    features: [
+      'Renders every page as a thumbnail in your browser',
+      'Drag thumbnails to reorder pages',
+      'Delete a page with an inline Yes/No confirm',
+      'Insert all pages from a second PDF by dragging its thumbnails into the list',
+      'Extract any single page as its own PDF with one click',
+      'Apply once to download the reorganized document',
+    ],
+  },
+  sign: {
+    title: 'Fill & Sign',
+    what: 'Place a signature, date, or initials directly onto any PDF page — no form fields required.',
+    features: [
+      'Draw a signature with your mouse or finger on a small pad',
+      'Type your name and render it in a cursive font',
+      'Upload a photo of a wet signature',
+      "Add a one-click today's-date stamp or initials",
+      'Drag to position and resize each signature on the page',
+      'Signatures are burned into the page content — immune to viewer font substitution',
+    ],
+  },
+  annotate: {
+    title: 'Annotate / Markup',
+    what: 'Mark up a PDF with highlights, strikeouts, freehand drawing, sticky notes, and text boxes — then burn everything into the page.',
+    features: [
+      'Highlight — semi-transparent coloured box over text or any area',
+      'Strikeout — a line through selected text',
+      'Freehand draw — pen tool with adjustable colour and width',
+      'Sticky note — a small icon that opens to show a text comment (a real PDF comment where supported)',
+      'Text box — a typed comment placed directly on the page',
+      'Undo/redo up to 20 steps, per page',
+      'Navigate multi-page PDFs — annotations persist per page as you go',
+      'Apply once to burn every mark into the PDF and download it',
+    ],
+  },
+  compare: {
+    title: 'Compare PDFs',
+    what: 'Highlight the differences between two PDFs, page by page.',
+    features: [
+      'Visual diff — renders both PDFs to canvas and highlights changed regions in red',
+      'Text diff — extracts text from both PDFs and shows added/removed lines',
+      'Page-by-page navigation for both tabs',
+      'Adjustable sensitivity for the visual diff',
+      'Nothing about either file is stored — the comparison happens per request',
+    ],
+  },
+  protect: {
+    title: 'Password Protect',
+    what: 'Encrypt a PDF with a password so it can only be opened with that password.',
+    features: [
+      'Set the password required to open the file',
+      'Optional separate owner password (defaults to the same password)',
+      'Optional restrictions: allow/disallow printing, copying, and editing',
+      '256-bit AES encryption via qpdf',
+    ],
+  },
+  unprotect: {
+    title: 'Remove Password',
+    what: 'Decrypt a password-protected PDF once you know its password.',
+    features: [
+      'Enter the current password to unlock the file',
+      'Clear error if the password is wrong',
+      'Download the same PDF with encryption removed',
+    ],
+  },
+  compress: {
+    title: 'Compress PDF',
+    what: "Shrink a PDF's file size with a safe structural pass, plus an optional deeper image recompression.",
+    features: [
+      'Baseline pass reorganizes internal PDF structure with zero quality loss',
+      'Optional "Recompress images" re-encodes JPEG images at Low/Medium/High quality',
+      'Only re-encodes images it can safely handle — anything risky is left untouched',
+      'Shows original size, new size, and % saved before you download',
+    ],
+  },
 };
 
 const MODES = [
   { id: 'merge',        label: 'Merge',           icon: 'combine'     },
   { id: 'split',        label: 'Split',            icon: 'scissors'    },
   { id: 'rotate',       label: 'Rotate Pages',     icon: 'rotate-cw'   },
+  { id: 'organize',     label: 'Organize Pages',   icon: 'layout-grid' },
   { id: 'img2pdf',      label: 'Images → PDF',     icon: 'file-image'  },
   { id: 'text2pdf',     label: 'Text → PDF',       icon: 'file-text'   },
   { id: 'extracttext',  label: 'Extract Text',     icon: 'type'        },
@@ -271,20 +351,26 @@ const MODES = [
   { id: 'googletopdf',  label: 'Google Drive → PDF', icon: 'cloud'     },
   { id: 'watermark',    label: 'Watermark',        icon: 'droplets'    },
   { id: 'pagenumbers',  label: 'Page Numbers',     icon: 'hash'        },
+  { id: 'compress',     label: 'Compress',         icon: 'compress'    },
   { id: 'inspect',      label: 'Inspect Fields',   icon: 'list'        },
   { id: 'fill',         label: 'Fill Form',        icon: 'file-pen'    },
+  { id: 'sign',         label: 'Fill & Sign',      icon: 'pen-tool'    },
+  { id: 'annotate',     label: 'Annotate',         icon: 'highlighter' },
   { id: 'flatten',      label: 'Flatten',          icon: 'layers'      },
   { id: 'fielddesigner', label: 'Add Fields',      icon: 'pen-line'    },
+  { id: 'compare',      label: 'Compare',          icon: 'columns'     },
+  { id: 'protect',      label: 'Password Protect', icon: 'lock'        },
+  { id: 'unprotect',    label: 'Remove Password',  icon: 'unlock'      },
   { id: 'metadata',     label: 'Metadata',         icon: 'info'        },
   { id: 'fileinfo',     label: 'File Info',        icon: 'file-text'   },
 ];
 
 const MODE_GROUPS = [
-  { label: 'Organise', ids: ['merge', 'split', 'rotate'] },
+  { label: 'Organise', ids: ['merge', 'split', 'rotate', 'organize'] },
   { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf'] },
-  { label: 'Edit',     ids: ['watermark', 'pagenumbers'] },
-  { label: 'Forms',    ids: ['inspect', 'fill', 'flatten', 'fielddesigner'] },
-  { label: 'Analyse',  ids: ['metadata', 'fileinfo']     },
+  { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'compress', 'protect', 'unprotect'] },
+  { label: 'Forms',    ids: ['inspect', 'fill', 'sign', 'annotate', 'flatten', 'fielddesigner'] },
+  { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
 ];
 
 // ─── Utilities ─────────────────────────────────────────────────────────────────
@@ -338,6 +424,38 @@ async function getPdfPageCount(dataUrl) {
   } catch {
     return null;
   }
+}
+
+// Renders every page of a PDF to a small PNG thumbnail — used by Organize Pages.
+// Same pdfjs-dist render-to-canvas technique as the field designer / preview,
+// just at thumbnail scale and run once per page up front.
+async function renderPdfThumbnails(dataUrl, maxWidth = 110) {
+  const pdfjsLib = await import('pdfjs-dist');
+  await initPdfjsWorker(pdfjsLib);
+  const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+  const thumbs = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const baseVp = page.getViewport({ scale: 1 });
+    const scale = maxWidth / baseVp.width;
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.floor(vp.width));
+    canvas.height = Math.max(1, Math.floor(vp.height));
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    thumbs.push(canvas.toDataURL('image/png'));
+  }
+  return thumbs;
+}
+
+// True if a canvas has no non-transparent pixels — used to stop an empty
+// signature pad being submitted as a stamp.
+function isCanvasBlank(canvas) {
+  if (!canvas) return true;
+  const ctx = canvas.getContext('2d');
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
+  return true;
 }
 
 // ─── Shared sub-components ─────────────────────────────────────────────────────
@@ -710,6 +828,150 @@ export default function PdfPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState('');
 
+  // Organize Pages
+  const [orgPrimary, setOrgPrimary] = useState(null); // { name, dataUrl, size }
+  const [orgPages, setOrgPages] = useState([]); // [{ id, source: 'primary'|'inserted', index, thumb }]
+  const [orgInsertFile, setOrgInsertFile] = useState(null); // { name, dataUrl }
+  const [orgInsertThumbs, setOrgInsertThumbs] = useState([]); // [{ id, index, thumb }]
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgBusy, setOrgBusy] = useState(false);
+  const [orgResult, setOrgResult] = useState(null);
+  const [orgError, setOrgError] = useState('');
+  const [orgConfirmDelete, setOrgConfirmDelete] = useState(null);
+  const [orgExtracting, setOrgExtracting] = useState(null);
+  const orgDragId = useRef(null);
+
+  // Fill & Sign
+  const [signFile, setSignFile] = useState(null);
+  const [signPageCount, setSignPageCount] = useState(0);
+  const [signCurrentPage, setSignCurrentPage] = useState(1);
+  const [signPageDims, setSignPageDims] = useState(null);
+  const [signPlaced, setSignPlaced] = useState([]);
+  const [signSelectedId, setSignSelectedId] = useState(null);
+  const [signMode, setSignMode] = useState('draw'); // 'draw'|'type'|'image'
+  const [signTypeText, setSignTypeText] = useState('');
+  const [signFont, setSignFont] = useState('Great Vibes');
+  const [signImageDataUrl, setSignImageDataUrl] = useState(null);
+  const [signLoading, setSignLoading] = useState(false);
+  const [signBusy, setSignBusy] = useState(false);
+  const [signResult, setSignResult] = useState(null);
+  const [signError, setSignError] = useState('');
+  const signPdfCanvasRef = useRef(null);
+  const signUiCanvasRef = useRef(null);
+  const signPadCanvasRef = useRef(null);
+  const signPdfDocRef = useRef(null);
+  const signIsDrawingRef = useRef(false);
+  const signStartRef = useRef(null);
+  const signMoveRef = useRef(null);
+  const signCurrentPageRef = useRef(1);
+  const signPageDimsRef = useRef(null);
+  const signPlacedRef = useRef([]);
+  const signSelectedIdRef = useRef(null);
+  const signPadDrawingRef = useRef(false);
+  const signModeRef = useRef('draw');
+  const signTypeTextRef = useRef('');
+  const signFontRef = useRef('Great Vibes');
+  const signImageDataUrlRef = useRef(null);
+
+  useEffect(() => { signCurrentPageRef.current = signCurrentPage; }, [signCurrentPage]);
+  useEffect(() => { signPageDimsRef.current = signPageDims; }, [signPageDims]);
+  useEffect(() => { signPlacedRef.current = signPlaced; }, [signPlaced]);
+  useEffect(() => { signSelectedIdRef.current = signSelectedId; }, [signSelectedId]);
+  useEffect(() => { signModeRef.current = signMode; }, [signMode]);
+  useEffect(() => { signTypeTextRef.current = signTypeText; }, [signTypeText]);
+  useEffect(() => { signFontRef.current = signFont; }, [signFont]);
+  useEffect(() => { signImageDataUrlRef.current = signImageDataUrl; }, [signImageDataUrl]);
+
+  // Compress
+  const [cmpFile, setCmpFile] = useState(null);
+  const [cmpRecompress, setCmpRecompress] = useState(false);
+  const [cmpQuality, setCmpQuality] = useState('medium');
+  const [cmpBusy, setCmpBusy] = useState(false);
+  const [cmpResult, setCmpResult] = useState(null);
+  const [cmpError, setCmpError] = useState('');
+
+  // Password Protect / Remove Password
+  const [pwFile, setPwFile] = useState(null);
+  const [pwPassword, setPwPassword] = useState('');
+  const [pwOwnerPassword, setPwOwnerPassword] = useState('');
+  const [pwPermPrint, setPwPermPrint] = useState(true);
+  const [pwPermCopy, setPwPermCopy] = useState(true);
+  const [pwPermModify, setPwPermModify] = useState(true);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwResult, setPwResult] = useState(null);
+  const [pwError, setPwError] = useState('');
+  const [unpwFile, setUnpwFile] = useState(null);
+  const [unpwPassword, setUnpwPassword] = useState('');
+  const [unpwBusy, setUnpwBusy] = useState(false);
+  const [unpwResult, setUnpwResult] = useState(null);
+  const [unpwError, setUnpwError] = useState('');
+
+  // Compare
+  const [cmprAFile, setCmprAFile] = useState(null);
+  const [cmprBFile, setCmprBFile] = useState(null);
+  const [cmprTab, setCmprTab] = useState('visual'); // 'visual'|'text'
+  const [cmprPage, setCmprPage] = useState(1);
+  const [cmprPageCount, setCmprPageCount] = useState(0);
+  const [cmprSensitivity, setCmprSensitivity] = useState(30);
+  const [cmprLoading, setCmprLoading] = useState(false);
+  const [cmprDiffPct, setCmprDiffPct] = useState(null);
+  const [cmprError, setCmprError] = useState('');
+  const [cmprTextA, setCmprTextA] = useState([]);
+  const [cmprTextB, setCmprTextB] = useState([]);
+  const [cmprTextBusy, setCmprTextBusy] = useState(false);
+  const [cmprTextError, setCmprTextError] = useState('');
+  const cmprCanvasARef = useRef(null);
+  const cmprCanvasBRef = useRef(null);
+  const cmprCanvasDiffRef = useRef(null);
+  const cmprDocARef = useRef(null);
+  const cmprDocBRef = useRef(null);
+
+  // Annotate / Markup
+  const [annFile, setAnnFile] = useState(null);
+  const [annPageCount, setAnnPageCount] = useState(0);
+  const [annCurrentPage, setAnnCurrentPage] = useState(1);
+  const [annPageDims, setAnnPageDims] = useState(null);
+  const [annShapes, setAnnShapes] = useState([]); // all pages' annotations, flat
+  const [annTool, setAnnTool] = useState('highlight'); // 'select'|'highlight'|'strikeout'|'draw'|'note'|'textbox'
+  const [annColor, setAnnColor] = useState('#ffeb3b');
+  const [annStrokeWidth, setAnnStrokeWidth] = useState(3);
+  const [annOpacity, setAnnOpacity] = useState(0.4);
+  const [annFontSize, setAnnFontSize] = useState(11);
+  const [annSelectedId, setAnnSelectedId] = useState(null);
+  const [annNoteEditor, setAnnNoteEditor] = useState(null); // { id, x, y, text } — open editor popover
+  const [annPast, setAnnPast] = useState([]);
+  const [annFuture, setAnnFuture] = useState([]);
+  const [annLoading, setAnnLoading] = useState(false);
+  const [annBusy, setAnnBusy] = useState(false);
+  const [annResult, setAnnResult] = useState(null);
+  const [annError, setAnnError] = useState('');
+  const annPdfCanvasRef = useRef(null);
+  const annUiCanvasRef = useRef(null);
+  const annPdfDocRef = useRef(null);
+  const annDrawingRef = useRef(false);
+  const annStartRef = useRef(null);
+  const annMoveRef = useRef(null);
+  const annStrokeRef = useRef(null); // in-progress freehand points (canvas coords)
+  const annCurrentPageRef = useRef(1);
+  const annPageDimsRef = useRef(null);
+  const annShapesRef = useRef([]);
+  const annToolRef = useRef('highlight');
+  const annColorRef = useRef('#ffeb3b');
+  const annStrokeWidthRef = useRef(3);
+  const annOpacityRef = useRef(0.4);
+  const annFontSizeRef = useRef(11);
+  const annSelectedIdRef = useRef(null);
+
+  useEffect(() => { annCurrentPageRef.current = annCurrentPage; }, [annCurrentPage]);
+  useEffect(() => { annPageDimsRef.current = annPageDims; }, [annPageDims]);
+  useEffect(() => { annShapesRef.current = annShapes; }, [annShapes]);
+  useEffect(() => { annToolRef.current = annTool; }, [annTool]);
+  useEffect(() => { annColorRef.current = annColor; }, [annColor]);
+  useEffect(() => { annStrokeWidthRef.current = annStrokeWidth; }, [annStrokeWidth]);
+  useEffect(() => { annOpacityRef.current = annOpacity; }, [annOpacity]);
+  useEffect(() => { annFontSizeRef.current = annFontSize; }, [annFontSize]);
+  useEffect(() => { annSelectedIdRef.current = annSelectedId; }, [annSelectedId]);
+
   // Deep-link from Document Redaction (and others): /pdf?tool=officetopdf&seed=1
   useEffect(() => {
     if (seedHandled.current) return undefined;
@@ -1080,6 +1342,530 @@ export default function PdfPage() {
       setFdError(err.message || 'Add fields failed');
     } finally {
       stopProcessing(); setFdBusy(false);
+    }
+  };
+
+  // ── Annotate / Markup ────────────────────────────────────────────────────
+  // Same two-canvas technique as the field designer / Fill & Sign: a bottom
+  // canvas renders the PDF page (pdfjs-dist), a transparent canvas on top
+  // draws the in-progress/placed shapes and reacts to mouse events. Shapes
+  // are stored in PDF-point coordinates (bottom-left origin), same convention
+  // as every other coordinate-based tool in this file.
+  const annCanvasCoords = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+  };
+  const annToPdf = (cx, cy, dims) => ({ x: cx / dims.renderScale, y: dims.pdfH - cy / dims.renderScale });
+  const annToCanvas = (x, y, dims) => ({ x: x * dims.renderScale, y: dims.canvasH - y * dims.renderScale });
+
+  const redrawAnnOverlay = useCallback(() => {
+    const canvas = annUiCanvasRef.current;
+    if (!canvas) return;
+    const dims = annPageDimsRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!dims) return;
+    const onPage = annShapesRef.current.filter(s => s.page === annCurrentPageRef.current);
+    for (const s of onPage) {
+      const isSel = s.id === annSelectedIdRef.current;
+      if (s.type === 'draw') {
+        if (!s.points?.length) continue;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = Math.max(1, s.strokeWidth * dims.renderScale);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        s.points.forEach((p, i) => {
+          const c = annToCanvas(p.x, p.y, dims);
+          if (i === 0) ctx.moveTo(c.x, c.y); else ctx.lineTo(c.x, c.y);
+        });
+        ctx.stroke();
+        continue;
+      }
+      const c1 = annToCanvas(s.x, s.y + s.height, dims);
+      const cw = s.width * dims.renderScale;
+      const ch = s.height * dims.renderScale;
+      if (s.type === 'highlight') {
+        ctx.globalAlpha = s.opacity ?? 0.4;
+        ctx.fillStyle = s.color;
+        ctx.fillRect(c1.x, c1.y, cw, ch);
+        ctx.globalAlpha = 1;
+      } else if (s.type === 'strikeout') {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = Math.max(1, (s.strokeWidth || 1.5) * dims.renderScale);
+        ctx.beginPath();
+        ctx.moveTo(c1.x, c1.y + ch / 2);
+        ctx.lineTo(c1.x + cw, c1.y + ch / 2);
+        ctx.stroke();
+      } else if (s.type === 'textbox') {
+        if (s.background) { ctx.fillStyle = s.background; ctx.globalAlpha = 0.9; ctx.fillRect(c1.x, c1.y, cw, ch); ctx.globalAlpha = 1; }
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c1.x, c1.y, cw, ch);
+        ctx.fillStyle = s.color;
+        ctx.font = `${Math.max(8, (s.fontSize || 11) * dims.renderScale)}px system-ui,sans-serif`;
+        ctx.fillText(s.text || '', c1.x + 4, c1.y + 14, cw - 8);
+      } else if (s.type === 'note') {
+        const nc = annToCanvas(s.x, s.y, dims);
+        ctx.fillStyle = s.color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(nc.x, nc.y - 18, 18, 18);
+        ctx.strokeRect(nc.x, nc.y - 18, 18, 18);
+      }
+      if (isSel) {
+        ctx.strokeStyle = 'rgb(234,88,12)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        if (s.type === 'note') { const nc = annToCanvas(s.x, s.y, dims); ctx.strokeRect(nc.x - 2, nc.y - 20, 22, 22); }
+        else ctx.strokeRect(c1.x - 2, c1.y - 2, cw + 4, ch + 4);
+        ctx.setLineDash([]);
+      }
+    }
+  }, []);
+
+  const renderAnnPage = useCallback(async (pageNum) => {
+    const pdfCanvas = annPdfCanvasRef.current;
+    const uiCanvas = annUiCanvasRef.current;
+    if (!pdfCanvas || !uiCanvas || !annPdfDocRef.current) return;
+    const page = await annPdfDocRef.current.getPage(pageNum);
+    const origVp = page.getViewport({ scale: 1 });
+    const maxW = Math.min(580, (window.innerWidth || 1200) * 0.52);
+    const rs = Math.min(maxW / origVp.width, 1.8);
+    const vp = page.getViewport({ scale: rs });
+    pdfCanvas.width = Math.floor(vp.width);
+    pdfCanvas.height = Math.floor(vp.height);
+    uiCanvas.width = Math.floor(vp.width);
+    uiCanvas.height = Math.floor(vp.height);
+    const dims = { pdfW: origVp.width, pdfH: origVp.height, renderScale: rs, canvasW: Math.floor(vp.width), canvasH: Math.floor(vp.height) };
+    annPageDimsRef.current = dims;
+    setAnnPageDims(dims);
+    await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp }).promise;
+    redrawAnnOverlay();
+  }, [redrawAnnOverlay]);
+
+  useEffect(() => { if (annFile && annPdfDocRef.current) renderAnnPage(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [annFile]);
+  useEffect(() => { if (annPdfDocRef.current && annCurrentPage) renderAnnPage(annCurrentPage); }, [annCurrentPage, renderAnnPage]);
+  useEffect(() => { redrawAnnOverlay(); }, [annShapes, annSelectedId, redrawAnnOverlay]);
+
+  const onAnnFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setAnnShapes([]); annShapesRef.current = [];
+    setAnnPast([]); setAnnFuture([]);
+    setAnnSelectedId(null); setAnnResult(null); setAnnError('');
+    setAnnCurrentPage(1); annCurrentPageRef.current = 1;
+    setAnnLoading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const pdfjsLib = await import('pdfjs-dist');
+      await initPdfjsWorker(pdfjsLib);
+      const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+      annPdfDocRef.current = doc;
+      setAnnPageCount(doc.numPages);
+      setAnnFile({ name: file.name, dataUrl, size: file.size });
+    } finally {
+      setAnnLoading(false);
+    }
+  };
+  const changeAnnPage = (n) => { if (n >= 1 && n <= annPageCount) setAnnCurrentPage(n); };
+
+  // Undo/redo — snapshot the whole shapes array on every committed change,
+  // same convention as Graphics' Annotate tool (annPast/annFuture, 20-step cap).
+  const pushAnnHistory = useCallback((prevShapes) => {
+    setAnnPast(p => [...p, prevShapes].slice(-20));
+    setAnnFuture([]);
+  }, []);
+  const commitAnnShapes = useCallback((next) => {
+    pushAnnHistory(annShapesRef.current);
+    annShapesRef.current = next;
+    setAnnShapes(next);
+  }, [pushAnnHistory]);
+  const undoAnn = () => {
+    setAnnPast(past => {
+      if (!past.length) return past;
+      const prev = past[past.length - 1];
+      setAnnFuture(f => [annShapesRef.current, ...f].slice(0, 20));
+      annShapesRef.current = prev;
+      setAnnShapes(prev);
+      return past.slice(0, -1);
+    });
+  };
+  const redoAnn = () => {
+    setAnnFuture(future => {
+      if (!future.length) return future;
+      const next = future[0];
+      setAnnPast(p => [...p, annShapesRef.current].slice(-20));
+      annShapesRef.current = next;
+      setAnnShapes(next);
+      return future.slice(1);
+    });
+  };
+
+  const hitTestAnnShapes = useCallback((cx, cy, dims) => {
+    const onPage = [...annShapesRef.current].filter(s => s.page === annCurrentPageRef.current).reverse();
+    for (const s of onPage) {
+      if (s.type === 'draw') continue; // freehand strokes aren't select/move targets
+      const c1 = s.type === 'note' ? annToCanvas(s.x, s.y, dims) : annToCanvas(s.x, s.y + s.height, dims);
+      const w = s.type === 'note' ? 18 : s.width * dims.renderScale;
+      const h = s.type === 'note' ? 18 : s.height * dims.renderScale;
+      const top = s.type === 'note' ? c1.y - 18 : c1.y;
+      if (cx >= c1.x && cx <= c1.x + w && cy >= top && cy <= top + h) return s.id;
+    }
+    return null;
+  }, []);
+
+  const onAnnDown = useCallback((e) => {
+    const dims = annPageDimsRef.current;
+    if (!dims) return;
+    const pos = annCanvasCoords(e, annUiCanvasRef.current);
+    const tool = annToolRef.current;
+
+    if (tool === 'select') {
+      const hitId = hitTestAnnShapes(pos.x, pos.y, dims);
+      setAnnSelectedId(hitId); annSelectedIdRef.current = hitId;
+      if (hitId) {
+        const shape = annShapesRef.current.find(s => s.id === hitId);
+        annMoveRef.current = { id: hitId, startX: pos.x, startY: pos.y, origX: shape.x, origY: shape.y };
+      }
+      redrawAnnOverlay();
+      return;
+    }
+    if (tool === 'note') {
+      const p = annToPdf(pos.x, pos.y, dims);
+      const id = `ann_${Date.now()}`;
+      setAnnNoteEditor({ id, page: annCurrentPageRef.current, x: p.x, y: p.y, text: '', screenX: e.clientX, screenY: e.clientY });
+      return;
+    }
+    if (tool === 'draw') {
+      annDrawingRef.current = true;
+      const p = annToPdf(pos.x, pos.y, dims);
+      annStrokeRef.current = [p];
+      return;
+    }
+    // highlight / strikeout / textbox — drag a box
+    annDrawingRef.current = true;
+    annStartRef.current = pos;
+  }, [hitTestAnnShapes, redrawAnnOverlay]);
+
+  const onAnnMove = useCallback((e) => {
+    const dims = annPageDimsRef.current;
+    const canvas = annUiCanvasRef.current;
+    if (!canvas || !dims) return;
+    const cur = annCanvasCoords(e, canvas);
+    const tool = annToolRef.current;
+
+    if (annMoveRef.current) {
+      const { id, startX, startY, origX, origY } = annMoveRef.current;
+      const rs = dims.renderScale;
+      const next = annShapesRef.current.map(s => s.id === id
+        ? { ...s, x: origX + (cur.x - startX) / rs, y: origY - (cur.y - startY) / rs }
+        : s);
+      annShapesRef.current = next;
+      setAnnShapes(next);
+      redrawAnnOverlay();
+      return;
+    }
+    if (tool === 'draw' && annDrawingRef.current) {
+      const p = annToPdf(cur.x, cur.y, dims);
+      annStrokeRef.current = [...(annStrokeRef.current || []), p];
+      redrawAnnOverlay();
+      const ctx = canvas.getContext('2d');
+      ctx.strokeStyle = annColorRef.current;
+      ctx.lineWidth = Math.max(1, annStrokeWidthRef.current * dims.renderScale);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      annStrokeRef.current.forEach((p2, i) => {
+        const c = annToCanvas(p2.x, p2.y, dims);
+        if (i === 0) ctx.moveTo(c.x, c.y); else ctx.lineTo(c.x, c.y);
+      });
+      ctx.stroke();
+      return;
+    }
+    if (annDrawingRef.current && annStartRef.current && ['highlight', 'strikeout', 'textbox'].includes(tool)) {
+      const { x: sx, y: sy } = annStartRef.current;
+      const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+      const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+      redrawAnnOverlay();
+      const ctx = canvas.getContext('2d');
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = 'rgba(99,102,241,0.9)';
+      ctx.fillStyle = 'rgba(99,102,241,0.1)';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+    }
+  }, [redrawAnnOverlay]);
+
+  const onAnnUp = useCallback((e) => {
+    const dims = annPageDimsRef.current;
+    if (annMoveRef.current) {
+      annMoveRef.current = null;
+      commitAnnShapes(annShapesRef.current);
+      return;
+    }
+    const tool = annToolRef.current;
+    if (tool === 'draw') {
+      if (!annDrawingRef.current) return;
+      annDrawingRef.current = false;
+      const points = annStrokeRef.current || [];
+      annStrokeRef.current = null;
+      if (points.length < 2) { redrawAnnOverlay(); return; }
+      const shape = { id: `ann_${Date.now()}`, page: annCurrentPageRef.current, type: 'draw', points, color: annColorRef.current, strokeWidth: annStrokeWidthRef.current };
+      commitAnnShapes([...annShapesRef.current, shape]);
+      return;
+    }
+    if (!annDrawingRef.current || !annStartRef.current || !dims) return;
+    annDrawingRef.current = false;
+    const cur = annCanvasCoords(e, annUiCanvasRef.current);
+    const { x: sx, y: sy } = annStartRef.current;
+    annStartRef.current = null;
+    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    if (bw < 8 || bh < 6) { redrawAnnOverlay(); return; }
+    const p = annToPdf(bx, by + bh, dims);
+    const shape = {
+      id: `ann_${Date.now()}`,
+      page: annCurrentPageRef.current,
+      type: tool,
+      x: p.x, y: p.y,
+      width: bw / dims.renderScale,
+      height: bh / dims.renderScale,
+      color: annColorRef.current,
+      opacity: annOpacityRef.current,
+      strokeWidth: annStrokeWidthRef.current,
+      fontSize: annFontSizeRef.current,
+      text: tool === 'textbox' ? 'Comment' : undefined,
+    };
+    commitAnnShapes([...annShapesRef.current, shape]);
+    if (tool === 'textbox') { setAnnSelectedId(shape.id); annSelectedIdRef.current = shape.id; }
+  }, [commitAnnShapes, redrawAnnOverlay]);
+
+  const onAnnLeave = useCallback(() => {
+    if (annMoveRef.current) { annMoveRef.current = null; redrawAnnOverlay(); }
+    if (annDrawingRef.current) { annDrawingRef.current = false; annStartRef.current = null; annStrokeRef.current = null; redrawAnnOverlay(); }
+  }, [redrawAnnOverlay]);
+
+  const saveAnnNote = () => {
+    if (!annNoteEditor) return;
+    const { id, page, x, y, text } = annNoteEditor;
+    if (text.trim()) {
+      const shape = { id, page, type: 'note', x, y, text: text.trim(), color: annColorRef.current };
+      commitAnnShapes([...annShapesRef.current, shape]);
+    }
+    setAnnNoteEditor(null);
+  };
+
+  const updateAnnShapeText = (id, text) => {
+    const next = annShapesRef.current.map(s => s.id === id ? { ...s, text } : s);
+    annShapesRef.current = next;
+    setAnnShapes(next);
+  };
+  const removeAnnShape = (id) => {
+    commitAnnShapes(annShapesRef.current.filter(s => s.id !== id));
+    if (annSelectedIdRef.current === id) { setAnnSelectedId(null); annSelectedIdRef.current = null; }
+  };
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (!annSelectedIdRef.current) return;
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      removeAnnShape(annSelectedIdRef.current);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const runAnnotateApply = async () => {
+    if (!annFile || !annShapes.length) return;
+    startProcessing('Applying annotations…', `${annShapes.length} mark${annShapes.length !== 1 ? 's' : ''} · ${annFile.name}`);
+    setAnnBusy(true); setAnnError(''); setAnnResult(null);
+    try {
+      const payload = annShapes.map(s => ({ ...s, id: undefined }));
+      const res = await api.post('/api/pdf/annotate', { dataUrl: annFile.dataUrl, annotations: payload });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAnnResult({ dataUrl: data.dataUrl, pageCount: data.pageCount, applied: data.applied });
+      setResultModal({ dataUrl: data.dataUrl, filename: `${annFile.name.replace('.pdf', '')}-annotated.pdf`, meta: `${data.applied} mark${data.applied !== 1 ? 's' : ''} applied${data.notesFallenBack ? ` · ${data.notesFallenBack} note stamped as a visible box (native annotation unavailable)` : ''}` });
+    } catch (err) {
+      setAnnError(err.message || 'Annotate failed');
+    } finally {
+      stopProcessing(); setAnnBusy(false);
+    }
+  };
+
+  // ── Compare ───────────────────────────────────────────────────────────────
+  const onCmprFileChange = (which) => async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    const pdfjsLib = await import('pdfjs-dist');
+    await initPdfjsWorker(pdfjsLib);
+    const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+    const obj = { name: file.name, dataUrl, size: file.size, numPages: doc.numPages };
+    setCmprDiffPct(null); setCmprError(''); setCmprTextA([]); setCmprTextB([]); setCmprTextError('');
+    if (which === 'a') { cmprDocARef.current = doc; setCmprAFile(obj); } else { cmprDocBRef.current = doc; setCmprBFile(obj); }
+    setCmprPage(1);
+  };
+
+  const renderCmprVisualDiff = useCallback(async () => {
+    const docA = cmprDocARef.current, docB = cmprDocBRef.current;
+    const canvasA = cmprCanvasARef.current, canvasB = cmprCanvasBRef.current, canvasDiff = cmprCanvasDiffRef.current;
+    if (!docA || !docB || !canvasA || !canvasB || !canvasDiff) return;
+    const page = Math.min(cmprPage, docA.numPages, docB.numPages);
+    if (page < 1) return;
+    setCmprLoading(true); setCmprError('');
+    try {
+      const pa = await docA.getPage(page);
+      const pb = await docB.getPage(page);
+      const baseVp = pa.getViewport({ scale: 1 });
+      const maxW = Math.min(560, (window.innerWidth || 1200) * 0.4);
+      const rs = Math.min(maxW / baseVp.width, 1.6);
+      const vpA = pa.getViewport({ scale: rs });
+      const vpB = pb.getViewport({ scale: rs });
+      const W = Math.floor(vpA.width), H = Math.floor(vpA.height);
+      canvasA.width = W; canvasA.height = H;
+      canvasB.width = Math.floor(vpB.width); canvasB.height = Math.floor(vpB.height);
+      await pa.render({ canvasContext: canvasA.getContext('2d'), viewport: vpA }).promise;
+      await pb.render({ canvasContext: canvasB.getContext('2d'), viewport: vpB }).promise;
+
+      // Pixel diff, same concept as Graphics' Image Diff route (server/routes/
+      // graphics.js /diff) but done client-side in canvas — no PDF-specific
+      // server work is needed here, just two already-rendered ImageDatas.
+      canvasDiff.width = W; canvasDiff.height = H;
+      const ctxA = canvasA.getContext('2d');
+      const ctxBsrc = canvasB.getContext('2d');
+      const dataA = ctxA.getImageData(0, 0, W, H).data;
+      // Draw B scaled into a same-size offscreen canvas for a fair pixel compare
+      const off = document.createElement('canvas'); off.width = W; off.height = H;
+      off.getContext('2d').drawImage(canvasB, 0, 0, canvasB.width, canvasB.height, 0, 0, W, H);
+      const dataB = off.getContext('2d').getImageData(0, 0, W, H).data;
+      const out = new Uint8ClampedArray(W * H * 4);
+      const threshold = 255 - Math.round((cmprSensitivity / 100) * 250); // higher sensitivity → lower threshold
+      let diffCount = 0;
+      for (let i = 0; i < dataA.length; i += 4) {
+        const maxd = Math.max(Math.abs(dataA[i] - dataB[i]), Math.abs(dataA[i + 1] - dataB[i + 1]), Math.abs(dataA[i + 2] - dataB[i + 2]));
+        if (maxd > threshold) {
+          out[i] = 239; out[i + 1] = 16; out[i + 2] = 64; out[i + 3] = 255;
+          diffCount++;
+        } else {
+          const gray = (dataA[i] + dataA[i + 1] + dataA[i + 2]) / 3;
+          const dim = Math.round(gray * 0.4 + 140);
+          out[i] = dim; out[i + 1] = dim; out[i + 2] = dim; out[i + 3] = 255;
+        }
+      }
+      canvasDiff.getContext('2d').putImageData(new ImageData(out, W, H), 0, 0);
+      setCmprDiffPct(Number(((diffCount / (W * H)) * 100).toFixed(2)));
+    } catch (err) {
+      setCmprError(err.message || 'Visual diff failed');
+    } finally {
+      setCmprLoading(false);
+    }
+  }, [cmprPage, cmprSensitivity]);
+
+  useEffect(() => {
+    if (cmprTab === 'visual' && cmprAFile && cmprBFile) renderCmprVisualDiff();
+  }, [cmprTab, cmprAFile, cmprBFile, cmprPage, cmprSensitivity, renderCmprVisualDiff]);
+
+  useEffect(() => {
+    if (cmprAFile && cmprBFile) setCmprPageCount(Math.max(cmprAFile.numPages, cmprBFile.numPages));
+  }, [cmprAFile, cmprBFile]);
+
+  // Small LCS-based line diff for the text tab — no dependency needed for a
+  // page-at-a-time comparison of already-short text blocks.
+  function diffLines(a, b) {
+    const la = a.split('\n'), lb = b.split('\n');
+    const n = la.length, m = lb.length;
+    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = la[i] === lb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const out = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (la[i] === lb[j]) { out.push({ type: 'same', text: la[i] }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ type: 'removed', text: la[i] }); i++; }
+      else { out.push({ type: 'added', text: lb[j] }); j++; }
+    }
+    while (i < n) { out.push({ type: 'removed', text: la[i] }); i++; }
+    while (j < m) { out.push({ type: 'added', text: lb[j] }); j++; }
+    return out;
+  }
+
+  const runCompareText = async () => {
+    if (!cmprAFile || !cmprBFile) return;
+    setCmprTextBusy(true); setCmprTextError('');
+    try {
+      const res = await api.post('/api/pdf/compare-text', { dataUrlA: cmprAFile.dataUrl, dataUrlB: cmprBFile.dataUrl });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCmprTextA(data.textA || []);
+      setCmprTextB(data.textB || []);
+    } catch (err) {
+      setCmprTextError(err.message || 'Text extraction failed');
+    } finally {
+      setCmprTextBusy(false);
+    }
+  };
+
+  // ── Password Protect / Remove Password ──────────────────────────────────
+  const onPwFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setPwResult(null); setPwError('');
+    await loadSinglePdf(file, setPwFile);
+  };
+  const runProtect = async () => {
+    if (!pwFile || !pwPassword) return;
+    startProcessing('Encrypting PDF…', pwFile.name);
+    setPwBusy(true); setPwError(''); setPwResult(null);
+    try {
+      const res = await api.post('/api/pdf/protect', {
+        dataUrl: pwFile.dataUrl,
+        password: pwPassword,
+        ownerPassword: pwOwnerPassword || undefined,
+        permissions: { printing: pwPermPrint, copying: pwPermCopy, modify: pwPermModify },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPwResult({ dataUrl: data.dataUrl });
+      setResultModal({ dataUrl: data.dataUrl, filename: `${pwFile.name.replace('.pdf', '')}-protected.pdf`, meta: 'Password protected (AES-256)' });
+    } catch (err) {
+      setPwError(err.message || 'Protect failed');
+    } finally {
+      stopProcessing(); setPwBusy(false);
+    }
+  };
+
+  const onUnpwFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setUnpwResult(null); setUnpwError('');
+    await loadSinglePdf(file, setUnpwFile);
+  };
+  const runUnprotect = async () => {
+    if (!unpwFile) return;
+    startProcessing('Removing password…', unpwFile.name);
+    setUnpwBusy(true); setUnpwError(''); setUnpwResult(null);
+    try {
+      const res = await api.post('/api/pdf/unprotect', { dataUrl: unpwFile.dataUrl, password: unpwPassword });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUnpwResult({ dataUrl: data.dataUrl });
+      setResultModal({ dataUrl: data.dataUrl, filename: `${unpwFile.name.replace('.pdf', '')}-unlocked.pdf`, meta: 'Password removed' });
+    } catch (err) {
+      setUnpwError(err.message || 'Unprotect failed');
+    } finally {
+      stopProcessing(); setUnpwBusy(false);
     }
   };
 
@@ -1512,6 +2298,482 @@ export default function PdfPage() {
     finally { stopProcessing(); setGoogleBusy(false); }
   };
 
+  // ── Organize Pages ───────────────────────────────────────────────────────────
+  const onOrgFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setOrgError(''); setOrgResult(null);
+    setOrgLoading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const thumbs = await renderPdfThumbnails(dataUrl);
+      setOrgPrimary({ name: file.name, dataUrl, size: file.size });
+      setOrgPages(thumbs.map((thumb, i) => ({ id: `p_${i}_${Date.now()}`, source: 'primary', index: i, thumb })));
+      setOrgInsertFile(null); setOrgInsertThumbs([]);
+    } catch (err) {
+      setOrgError(err?.message || 'Failed to load PDF.');
+    } finally {
+      setOrgLoading(false);
+    }
+  };
+
+  const onOrgInsertFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setOrgLoading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const thumbs = await renderPdfThumbnails(dataUrl);
+      setOrgInsertFile({ name: file.name, dataUrl });
+      setOrgInsertThumbs(thumbs.map((thumb, i) => ({ id: `i_${i}_${Date.now()}`, index: i, thumb })));
+    } catch (err) {
+      setOrgError(err?.message || 'Failed to load PDF.');
+    } finally {
+      setOrgLoading(false);
+    }
+  };
+
+  const orgResetAll = () => {
+    setOrgPrimary(null); setOrgPages([]);
+    setOrgInsertFile(null); setOrgInsertThumbs([]);
+    setOrgResult(null); setOrgError('');
+  };
+
+  const orgRemovePage = (id) => {
+    setOrgPages(prev => prev.filter(p => p.id !== id));
+    setOrgConfirmDelete(null);
+  };
+
+  // Plain HTML5 drag-and-drop — no drag library exists elsewhere in the
+  // client, so this keeps the same "no new dependency" approach as the field
+  // designer's canvas interactions.
+  const onOrgDragStart = (id) => { orgDragId.current = id; };
+  const onOrgDragOverPage = (e) => { e.preventDefault(); };
+
+  const onOrgDropOnPage = (targetId) => {
+    const dragId = orgDragId.current;
+    orgDragId.current = null;
+    if (!dragId || dragId === targetId) return;
+    const fromInsert = orgInsertThumbs.find(p => p.id === dragId);
+    if (fromInsert) {
+      setOrgPages(prev => {
+        const toIdx = prev.findIndex(p => p.id === targetId);
+        const next = [...prev];
+        next.splice(toIdx === -1 ? next.length : toIdx, 0, {
+          id: `ins_${fromInsert.id}_${Date.now()}`, source: 'inserted', index: fromInsert.index, thumb: fromInsert.thumb,
+        });
+        return next;
+      });
+      return;
+    }
+    setOrgPages(prev => {
+      const next = [...prev];
+      const fromIdx = next.findIndex(p => p.id === dragId);
+      const toIdx = next.findIndex(p => p.id === targetId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  };
+
+  const onOrgDropAtEnd = () => {
+    const dragId = orgDragId.current;
+    orgDragId.current = null;
+    if (!dragId) return;
+    const fromInsert = orgInsertThumbs.find(p => p.id === dragId);
+    if (fromInsert) {
+      setOrgPages(prev => [...prev, { id: `ins_${fromInsert.id}_${Date.now()}`, source: 'inserted', index: fromInsert.index, thumb: fromInsert.thumb }]);
+      return;
+    }
+    setOrgPages(prev => {
+      const fromIdx = prev.findIndex(p => p.id === dragId);
+      if (fromIdx === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.push(moved);
+      return next;
+    });
+  };
+
+  const runOrgExtract = async (page) => {
+    const srcDataUrl = page.source === 'inserted' ? orgInsertFile?.dataUrl : orgPrimary?.dataUrl;
+    if (!srcDataUrl) return;
+    setOrgExtracting(page.id); setOrgError('');
+    try {
+      const res = await api.post('/api/pdf/split', { dataUrl: srcDataUrl, pages: String(page.index + 1) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Extract failed.');
+      downloadFile(data.dataUrl, `page-${page.index + 1}.pdf`);
+    } catch (err) {
+      setOrgError(err.message || 'Extract failed.');
+    } finally {
+      setOrgExtracting(null);
+    }
+  };
+
+  const runOrganize = async () => {
+    if (!orgPrimary || !orgPages.length) return;
+    startProcessing('Reorganizing PDF…', `${orgPages.length} page${orgPages.length !== 1 ? 's' : ''}`);
+    setOrgBusy(true); setOrgError(''); setOrgResult(null);
+    try {
+      const body = {
+        dataUrl: orgPrimary.dataUrl,
+        pages: orgPages.map(p => ({ source: p.source, index: p.index })),
+      };
+      if (orgInsertFile && orgPages.some(p => p.source === 'inserted')) body.insertedDataUrl = orgInsertFile.dataUrl;
+      const res = await api.post('/api/pdf/organize', body);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Organize failed.');
+      setOrgResult({ dataUrl: data.dataUrl, pageCount: data.pageCount });
+      setResultModal({
+        dataUrl: data.dataUrl,
+        filename: `${orgPrimary.name.replace('.pdf', '')}-organized.pdf`,
+        meta: `${data.pageCount} page${data.pageCount !== 1 ? 's' : ''}`,
+      });
+    } catch (err) {
+      setOrgError(err.message || 'Organize failed.');
+    } finally {
+      stopProcessing(); setOrgBusy(false);
+    }
+  };
+
+  // ── Fill & Sign ───────────────────────────────────────────────────────────────
+  const redrawSignOverlay = useCallback(() => {
+    const canvas = signUiCanvasRef.current;
+    if (!canvas) return;
+    const dims = signPageDimsRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!dims) return;
+    for (const s of signPlacedRef.current.filter(s => s.page === signCurrentPageRef.current)) {
+      const cx = s.x * dims.renderScale;
+      const cy = dims.canvasH - (s.y + s.height) * dims.renderScale;
+      const cw = s.width * dims.renderScale;
+      const ch = s.height * dims.renderScale;
+      const isSel = s.id === signSelectedIdRef.current;
+      ctx.save();
+      ctx.strokeStyle = isSel ? 'rgb(234,88,12)' : 'rgb(99,102,241)';
+      ctx.lineWidth = isSel ? 2 : 1.5;
+      ctx.setLineDash(isSel ? [] : [4, 3]);
+      ctx.strokeRect(cx, cy, cw, ch);
+      ctx.restore();
+      if (s.type === 'type') {
+        const css = fontCss(s.fontFamily || 'Great Vibes');
+        const fontSize = Math.max(8, Math.min(48, ch * 0.6));
+        ctx.font = `${fontSize}px ${css.fontFamily}`;
+        ctx.fillStyle = '#000';
+        ctx.fillText(s.text || '', cx + 3, cy + ch / 2 + fontSize * 0.35, cw - 6);
+      } else if (s.previewImg) {
+        ctx.drawImage(s.previewImg, cx, cy, cw, ch);
+      }
+      if (isSel) {
+        const hs = 7;
+        ctx.fillStyle = 'rgb(234,88,12)';
+        [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([hx, hy]) => {
+          ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        });
+      }
+    }
+  }, []);
+
+  const renderSignPage = useCallback(async (pageNum) => {
+    const pdfCanvas = signPdfCanvasRef.current;
+    const uiCanvas = signUiCanvasRef.current;
+    if (!pdfCanvas || !uiCanvas || !signPdfDocRef.current) return;
+    const page = await signPdfDocRef.current.getPage(pageNum);
+    const origVp = page.getViewport({ scale: 1 });
+    const maxW = Math.min(580, (window.innerWidth || 1200) * 0.52);
+    const rs = Math.min(maxW / origVp.width, 1.8);
+    const vp = page.getViewport({ scale: rs });
+    pdfCanvas.width = Math.floor(vp.width);
+    pdfCanvas.height = Math.floor(vp.height);
+    uiCanvas.width = Math.floor(vp.width);
+    uiCanvas.height = Math.floor(vp.height);
+    const dims = { pdfW: origVp.width, pdfH: origVp.height, renderScale: rs, canvasW: Math.floor(vp.width), canvasH: Math.floor(vp.height) };
+    signPageDimsRef.current = dims;
+    setSignPageDims(dims);
+    await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp }).promise;
+    redrawSignOverlay();
+  }, [redrawSignOverlay]);
+
+  useEffect(() => {
+    if (signFile && signPdfDocRef.current) renderSignPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signFile]);
+
+  useEffect(() => {
+    if (signPdfDocRef.current && signCurrentPage) renderSignPage(signCurrentPage);
+  }, [signCurrentPage, renderSignPage]);
+
+  useEffect(() => { redrawSignOverlay(); }, [signPlaced, redrawSignOverlay]);
+
+  const signCanvasCoords = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+  };
+
+  const hitTestSignPlacements = useCallback((cx, cy, dims) => {
+    const onPage = [...signPlacedRef.current].filter(s => s.page === signCurrentPageRef.current).reverse();
+    for (const s of onPage) {
+      const fx = s.x * dims.renderScale;
+      const fy = dims.canvasH - (s.y + s.height) * dims.renderScale;
+      const fw = s.width * dims.renderScale;
+      const fh = s.height * dims.renderScale;
+      if (cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh) return s.id;
+    }
+    return null;
+  }, []);
+
+  const onSignDown = useCallback((e) => {
+    const dims = signPageDimsRef.current;
+    if (!dims) return;
+    const pos = signCanvasCoords(e, signUiCanvasRef.current);
+    const hitId = hitTestSignPlacements(pos.x, pos.y, dims);
+    if (hitId) {
+      setSignSelectedId(hitId);
+      signSelectedIdRef.current = hitId;
+      const item = signPlacedRef.current.find(s => s.id === hitId);
+      signMoveRef.current = { id: hitId, startX: pos.x, startY: pos.y, origX: item.x, origY: item.y, w: item.width, h: item.height };
+      signIsDrawingRef.current = false;
+    } else {
+      setSignSelectedId(null);
+      signSelectedIdRef.current = null;
+      signMoveRef.current = null;
+      signIsDrawingRef.current = true;
+      signStartRef.current = pos;
+    }
+  }, [hitTestSignPlacements]);
+
+  const onSignMove = useCallback((e) => {
+    const dims = signPageDimsRef.current;
+    const canvas = signUiCanvasRef.current;
+    if (!canvas) return;
+    const cur = signCanvasCoords(e, canvas);
+
+    if (!signIsDrawingRef.current && !signMoveRef.current && dims) {
+      canvas.style.cursor = hitTestSignPlacements(cur.x, cur.y, dims) ? 'move' : 'crosshair';
+    }
+
+    if (signMoveRef.current) {
+      const { id, startX, startY, origX, origY, w, h } = signMoveRef.current;
+      const rs = dims.renderScale;
+      const newX = Math.max(0, Math.min(dims.pdfW - w, origX + (cur.x - startX) / rs));
+      const newY = Math.max(0, Math.min(dims.pdfH - h, origY - (cur.y - startY) / rs));
+      const next = signPlacedRef.current.map(s => s.id === id ? { ...s, x: newX, y: newY } : s);
+      signPlacedRef.current = next;
+      setSignPlaced(next);
+      redrawSignOverlay();
+      return;
+    }
+
+    if (!signIsDrawingRef.current || !signStartRef.current) return;
+    const { x: sx, y: sy } = signStartRef.current;
+    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    redrawSignOverlay();
+    const ctx = canvas.getContext('2d');
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(239,68,68,0.9)';
+    ctx.fillStyle = 'rgba(239,68,68,0.08)';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+  }, [redrawSignOverlay, hitTestSignPlacements]);
+
+  const onSignUp = useCallback((e) => {
+    if (signMoveRef.current) { signMoveRef.current = null; redrawSignOverlay(); return; }
+    if (!signIsDrawingRef.current || !signStartRef.current || !signPageDimsRef.current) return;
+    signIsDrawingRef.current = false;
+    const cur = signCanvasCoords(e, signUiCanvasRef.current);
+    const { x: sx, y: sy } = signStartRef.current;
+    signStartRef.current = null;
+    const bx = Math.min(sx, cur.x), by = Math.min(sy, cur.y);
+    const bw = Math.abs(cur.x - sx), bh = Math.abs(cur.y - sy);
+    if (bw < 15 || bh < 10) { redrawSignOverlay(); return; }
+    const dims = signPageDimsRef.current;
+
+    const mode = signModeRef.current;
+    let content = null;
+    if (mode === 'type') {
+      if (!signTypeTextRef.current.trim()) { setSignError('Type something first.'); redrawSignOverlay(); return; }
+      content = { type: 'type', text: signTypeTextRef.current.trim(), fontFamily: signFontRef.current };
+    } else if (mode === 'image') {
+      if (!signImageDataUrlRef.current) { setSignError('Upload an image first.'); redrawSignOverlay(); return; }
+      content = { type: 'image', dataUrl: signImageDataUrlRef.current };
+    } else {
+      const padCanvas = signPadCanvasRef.current;
+      if (!padCanvas || isCanvasBlank(padCanvas)) { setSignError('Draw your signature first.'); redrawSignOverlay(); return; }
+      content = { type: 'draw', dataUrl: padCanvas.toDataURL('image/png') };
+    }
+
+    const newPlacement = {
+      id: `sig_${Date.now()}`,
+      page: signCurrentPageRef.current,
+      x: bx / dims.renderScale,
+      y: dims.pdfH - (by + bh) / dims.renderScale,
+      width: bw / dims.renderScale,
+      height: bh / dims.renderScale,
+      ...content,
+    };
+    if (newPlacement.type !== 'type') {
+      const img = new Image();
+      img.onload = () => { newPlacement.previewImg = img; redrawSignOverlay(); };
+      img.src = newPlacement.dataUrl;
+    }
+    const next = [...signPlacedRef.current, newPlacement];
+    signPlacedRef.current = next;
+    setSignPlaced(next);
+    setSignSelectedId(newPlacement.id);
+    signSelectedIdRef.current = newPlacement.id;
+    setSignError('');
+  }, [redrawSignOverlay]);
+
+  const onSignLeave = useCallback(() => {
+    if (signMoveRef.current) { signMoveRef.current = null; redrawSignOverlay(); }
+    if (signIsDrawingRef.current) { signIsDrawingRef.current = false; signStartRef.current = null; redrawSignOverlay(); }
+  }, [redrawSignOverlay]);
+
+  const removeSignPlacement = useCallback((id) => {
+    setSignPlaced(prev => prev.filter(s => s.id !== id));
+    setSignSelectedId(null);
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (!signSelectedIdRef.current) return;
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      removeSignPlacement(signSelectedIdRef.current);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [removeSignPlacement]);
+
+  const onSignFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setSignPlaced([]); signPlacedRef.current = [];
+    setSignResult(null); setSignError('');
+    setSignCurrentPage(1); signCurrentPageRef.current = 1;
+    setSignLoading(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const pdfjsLib = await import('pdfjs-dist');
+      await initPdfjsWorker(pdfjsLib);
+      const doc = await pdfjsLib.getDocument({ data: dataUrlToUint8Array(dataUrl) }).promise;
+      signPdfDocRef.current = doc;
+      setSignPageCount(doc.numPages);
+      setSignFile({ name: file.name, dataUrl, size: file.size });
+    } finally {
+      setSignLoading(false);
+    }
+  };
+
+  const changeSignPage = (n) => {
+    if (n < 1 || n > signPageCount) return;
+    setSignCurrentPage(n);
+  };
+
+  const onSignImageUpload = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setSignImageDataUrl(await readFileAsDataUrl(file));
+  };
+
+  // Drawing pad — plain mouse/touch strokes on a small canvas, used as the
+  // "draw" signature source. No new dependency; same technique as any basic
+  // HTML5 canvas signature pad.
+  const padPointerPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    return {
+      x: (p.clientX - rect.left) * (canvas.width / rect.width),
+      y: (p.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+  const onPadStart = (e) => {
+    e.preventDefault();
+    signPadDrawingRef.current = true;
+    const canvas = signPadCanvasRef.current;
+    const pos = padPointerPos(e, canvas);
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  };
+  const onPadMove = (e) => {
+    if (!signPadDrawingRef.current) return;
+    e.preventDefault();
+    const canvas = signPadCanvasRef.current;
+    const pos = padPointerPos(e, canvas);
+    const ctx = canvas.getContext('2d');
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  };
+  const onPadEnd = () => { signPadDrawingRef.current = false; };
+  const clearPad = () => {
+    const canvas = signPadCanvasRef.current;
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const runSign = async () => {
+    if (!signFile || !signPlaced.length) return;
+    startProcessing('Applying signatures…', `${signPlaced.length} placement${signPlaced.length !== 1 ? 's' : ''} · ${signFile.name}`);
+    setSignBusy(true); setSignError(''); setSignResult(null);
+    try {
+      const signatures = signPlaced.map(s => ({
+        page: s.page, x: s.x, y: s.y, width: s.width, height: s.height,
+        type: s.type, dataUrl: s.dataUrl, text: s.text, fontFamily: s.fontFamily,
+      }));
+      const res = await api.post('/api/pdf/sign', { dataUrl: signFile.dataUrl, signatures });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sign failed.');
+      setSignResult({ dataUrl: data.dataUrl, placed: data.placed });
+      setResultModal({
+        dataUrl: data.dataUrl,
+        filename: `${signFile.name.replace('.pdf', '')}-signed.pdf`,
+        meta: `${data.placed} signature${data.placed !== 1 ? 's' : ''} applied`,
+      });
+    } catch (err) {
+      setSignError(err.message || 'Sign failed.');
+    } finally {
+      stopProcessing(); setSignBusy(false);
+    }
+  };
+
+  // ── Compress ───────────────────────────────────────────────────────────────
+  const onCmpFileChange = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    setCmpFile({ name: file.name, dataUrl, size: file.size });
+    setCmpResult(null); setCmpError('');
+  };
+
+  const runCompress = async () => {
+    if (!cmpFile) return;
+    startProcessing('Compressing PDF…', cmpFile.name);
+    setCmpBusy(true); setCmpError(''); setCmpResult(null);
+    try {
+      const res = await api.post('/api/pdf/compress', { dataUrl: cmpFile.dataUrl, recompressImages: cmpRecompress, quality: cmpQuality });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Compress failed.');
+      setCmpResult(data);
+    } catch (err) {
+      setCmpError(err.message || 'Compress failed.');
+    } finally {
+      stopProcessing(); setCmpBusy(false);
+    }
+  };
+
   // ── Shared label styles ────────────────────────────────────────────────────
 
   const lbl = 'block text-xs font-medium mb-1';
@@ -1537,6 +2799,9 @@ export default function PdfPage() {
     officetopdf: 'Convert Word, Excel or PowerPoint to PDF.',
     pdftooffice: 'Convert a PDF to an editable Word document.',
     googletopdf: 'Export a Google Doc, Sheet or Slide as PDF.',
+    organize: 'Reorder, delete, insert, and extract pages.',
+    sign: 'Draw, type, or upload a signature onto any PDF.',
+    compress: "Shrink a PDF's file size.",
   };
 
   return (
@@ -2657,6 +3922,672 @@ export default function PdfPage() {
                   </div>
                 </div>
               )}
+            </section>
+          )}
+
+          {/* ═══ Organize Pages ═════════════════════════════════════════ */}
+          {mode === 'organize' && (
+            <section>
+              <ToolHeader id="organize" label="Organize Pages" onHelp={setHelpTool} getIcon={getIcon}
+                badge={orgPages.length ? `${orgPages.length} page${orgPages.length !== 1 ? 's' : ''}` : undefined} />
+
+              {!orgPrimary ? (
+                <Tooltip text="Upload the PDF you want to reorder, delete pages from, or insert pages into.">
+                  <div><PdfUpload label="PDF to organize" onChange={onOrgFileChange} /></div>
+                </Tooltip>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs truncate mr-2" style={{ color: 'var(--color-muted)' }}>{orgPrimary.name} · {orgPages.length} pages</p>
+                    <Tooltip text="Start over with a different PDF.">
+                      <button type="button" onClick={orgResetAll} className="text-xs underline hover:opacity-70 transition-opacity flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                        Change file
+                      </button>
+                    </Tooltip>
+                  </div>
+
+                  {orgLoading && <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Rendering page thumbnails…</p>}
+
+                  <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}>
+                    {orgPages.map((p, i) => (
+                      <div
+                        key={p.id}
+                        draggable
+                        onDragStart={() => onOrgDragStart(p.id)}
+                        onDragOver={onOrgDragOverPage}
+                        onDrop={() => onOrgDropOnPage(p.id)}
+                        className="rounded-lg border overflow-hidden relative"
+                        style={{ borderColor: 'var(--color-border)', background: '#fff', cursor: 'grab' }}
+                      >
+                        <img src={p.thumb} alt={`Page ${i + 1}`} className="w-full block" draggable={false} />
+                        <div className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                          {i + 1}{p.source === 'inserted' ? ' · inserted' : ''}
+                        </div>
+                        <div className="absolute bottom-1 right-1 flex gap-1">
+                          <Tooltip text="Download just this page as its own PDF.">
+                            <button
+                              type="button"
+                              onClick={() => runOrgExtract(p)}
+                              disabled={orgExtracting === p.id}
+                              className="p-1 rounded hover:opacity-70 transition-opacity disabled:opacity-40"
+                              style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                            >
+                              {getIcon('download', { size: 12 })}
+                            </button>
+                          </Tooltip>
+                          {orgConfirmDelete === p.id ? (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded" style={{ background: 'var(--color-surface)' }}>
+                              <button type="button" onClick={() => orgRemovePage(p.id)} className="font-semibold hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
+                              <button type="button" onClick={() => setOrgConfirmDelete(null)} className="hover:opacity-70 transition-opacity" style={{ color: 'var(--color-muted)' }}>No</button>
+                            </span>
+                          ) : (
+                            <Tooltip text="Remove this page from the final document.">
+                              <button
+                                type="button"
+                                onClick={() => setOrgConfirmDelete(p.id)}
+                                className="p-1 rounded hover:opacity-70 transition-opacity"
+                                style={{ background: 'var(--color-surface)', color: '#ef4444' }}
+                              >
+                                {getIcon('x', { size: 12 })}
+                              </button>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div
+                      onDragOver={onOrgDragOverPage}
+                      onDrop={onOrgDropAtEnd}
+                      className="rounded-lg border-2 border-dashed flex items-center justify-center text-center text-xs px-2"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', minHeight: 90 }}
+                    >
+                      Drop here to move to end
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <Tooltip text="Upload a second PDF, then drag its pages into the list above to splice them in at any position.">
+                      <div><PdfUpload label="Insert pages from another PDF" onChange={onOrgInsertFileChange} /></div>
+                    </Tooltip>
+                    {orgInsertFile && orgInsertThumbs.length > 0 && (
+                      <div className="mt-2 p-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                        <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Drag a page from "{orgInsertFile.name}" into the list above to insert it there.</p>
+                        <div className="flex flex-wrap gap-2">
+                          {orgInsertThumbs.map((t, i) => (
+                            <Tooltip key={t.id} text="Drag this page into the list above.">
+                              <img
+                                src={t.thumb}
+                                alt={`Insert page ${i + 1}`}
+                                draggable
+                                onDragStart={() => onOrgDragStart(t.id)}
+                                className="rounded border"
+                                style={{ width: 70, borderColor: 'var(--color-border)', cursor: 'grab' }}
+                              />
+                            </Tooltip>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <ErrMsg msg={orgError} />
+                  <RunBtn onClick={runOrganize} busy={orgBusy} disabled={!orgPages.length} label="Apply & Download" getIcon={getIcon} />
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ═══ Fill & Sign ═════════════════════════════════════════════ */}
+          {mode === 'sign' && (
+            <section>
+              <ToolHeader id="sign" label="Fill & Sign" onHelp={setHelpTool} getIcon={getIcon}
+                badge={signPlaced.length ? `${signPlaced.length} placed` : undefined} />
+
+              {!signFile ? (
+                <Tooltip text="Upload any PDF — with or without form fields — to stamp a signature onto it.">
+                  <div><PdfUpload label="PDF to sign" onChange={onSignFileChange} /></div>
+                </Tooltip>
+              ) : signLoading ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading PDF…</p>
+              ) : (
+                <div className="grid lg:grid-cols-[1fr_320px] gap-6">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs truncate mr-2" style={{ color: 'var(--color-muted)' }}>{signFile.name}</p>
+                      {signPageCount > 1 && (
+                        <div className="flex items-center gap-2 text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                          <button type="button" onClick={() => changeSignPage(signCurrentPage - 1)} disabled={signCurrentPage <= 1} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">◀</button>
+                          Page {signCurrentPage} of {signPageCount}
+                          <button type="button" onClick={() => changeSignPage(signCurrentPage + 1)} disabled={signCurrentPage >= signPageCount} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">▶</button>
+                        </div>
+                      )}
+                    </div>
+                    <Tooltip text="Drag a rectangle to place your current signature/date/initials here. Click a placed one to select it, drag to move, Delete key to remove.">
+                      <div className="relative inline-block rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                        <canvas ref={signPdfCanvasRef} className="block" />
+                        <canvas
+                          ref={signUiCanvasRef}
+                          className="absolute top-0 left-0"
+                          style={{ cursor: 'crosshair' }}
+                          onMouseDown={onSignDown}
+                          onMouseMove={onSignMove}
+                          onMouseUp={onSignUp}
+                          onMouseLeave={onSignLeave}
+                        />
+                      </div>
+                    </Tooltip>
+                    {signSelectedId && (
+                      <div className="mt-2">
+                        <Tooltip text="Remove the selected signature placement.">
+                          <button type="button" onClick={() => removeSignPlacement(signSelectedId)} className="text-xs underline hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>
+                            Remove selected placement
+                          </button>
+                        </Tooltip>
+                      </div>
+                    )}
+                    <ErrMsg msg={signError} />
+                    <RunBtn onClick={runSign} busy={signBusy} disabled={!signPlaced.length} label={`Apply ${signPlaced.length || ''} Signature${signPlaced.length !== 1 ? 's' : ''} & Download`} getIcon={getIcon} />
+                  </div>
+
+                  <div className="rounded-xl border p-4" style={cardStyle}>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Create a signature</p>
+                    <div className="flex gap-1 mb-3 p-1 rounded-lg" style={{ background: 'var(--color-bg)' }}>
+                      {['draw', 'type', 'image'].map(m => (
+                        <Tooltip key={m} text={m === 'draw' ? 'Draw with your mouse or finger.' : m === 'type' ? 'Type your name in a cursive font.' : 'Upload a photo of a signature.'}>
+                          <button
+                            type="button"
+                            onClick={() => setSignMode(m)}
+                            className="flex-1 py-1.5 rounded-md text-xs font-medium capitalize transition-opacity hover:opacity-80"
+                            style={{ background: signMode === m ? 'var(--color-primary)' : 'transparent', color: signMode === m ? '#fff' : 'var(--color-text)' }}
+                          >
+                            {m}
+                          </button>
+                        </Tooltip>
+                      ))}
+                    </div>
+
+                    {signMode === 'draw' && (
+                      <div>
+                        <Tooltip text="Draw your signature here, then drag a box on the PDF to place it.">
+                          <canvas
+                            ref={signPadCanvasRef}
+                            width={280}
+                            height={110}
+                            className="w-full rounded-lg border touch-none"
+                            style={{ borderColor: 'var(--color-border)', background: '#fff' }}
+                            onMouseDown={onPadStart}
+                            onMouseMove={onPadMove}
+                            onMouseUp={onPadEnd}
+                            onMouseLeave={onPadEnd}
+                            onTouchStart={onPadStart}
+                            onTouchMove={onPadMove}
+                            onTouchEnd={onPadEnd}
+                          />
+                        </Tooltip>
+                        <Tooltip text="Erase the drawing pad.">
+                          <button type="button" onClick={clearPad} className="mt-2 text-xs underline hover:opacity-70 transition-opacity" style={{ color: 'var(--color-muted)' }}>Clear</button>
+                        </Tooltip>
+                      </div>
+                    )}
+
+                    {signMode === 'type' && (
+                      <div className="space-y-2">
+                        <Tooltip text="Type the name or text to render as your signature.">
+                          <input
+                            type="text"
+                            className={inp}
+                            style={inpStyle}
+                            placeholder="Your name"
+                            value={signTypeText}
+                            onChange={e => setSignTypeText(e.target.value)}
+                          />
+                        </Tooltip>
+                        <Tooltip text="Font used to render your typed signature.">
+                          <select className={inp} style={inpStyle} value={signFont} onChange={e => setSignFont(e.target.value)}>
+                            {Object.entries(STAMP_FONT_GROUPS).map(([group, fonts]) => (
+                              <optgroup key={group} label={group}>
+                                {fonts.map(f => <option key={f} value={f}>{STANDARD_FONT_LABELS[f] || f}</option>)}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </Tooltip>
+                        <div className="flex gap-2">
+                          <Tooltip text="Insert today's date as a lighter-weight stamp.">
+                            <button type="button" onClick={() => { setSignTypeText(new Date().toLocaleDateString()); setSignFont('Helvetica'); }} className="flex-1 py-1.5 rounded-lg text-xs border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              Today's date
+                            </button>
+                          </Tooltip>
+                          <Tooltip text="Switch to initials — type them above, then place like a signature.">
+                            <button type="button" onClick={() => { setSignTypeText(''); setSignFont('Helvetica'); }} className="flex-1 py-1.5 rounded-lg text-xs border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              Initials
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    )}
+
+                    {signMode === 'image' && (
+                      <div>
+                        <Tooltip text="Upload a photo or scan of a signature.">
+                          <div><PdfUpload label="" accept="image/*" onChange={onSignImageUpload} /></div>
+                        </Tooltip>
+                        {signImageDataUrl && (
+                          <img src={signImageDataUrl} alt="Signature upload" className="mt-2 rounded border" style={{ maxHeight: 80, borderColor: 'var(--color-border)' }} />
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-4 pt-3 border-t text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                      Drag a rectangle on the PDF to place the current signature. Repeat for additional signatures, dates, or initials.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ═══ Annotate / Markup ═══════════════════════════════════════ */}
+          {mode === 'annotate' && (
+            <section>
+              <ToolHeader id="annotate" label="Annotate / Markup" onHelp={setHelpTool} getIcon={getIcon}
+                badge={annShapes.length ? `${annShapes.length} mark${annShapes.length !== 1 ? 's' : ''}` : undefined} />
+
+              {!annFile ? (
+                <Tooltip text="Upload the PDF you want to mark up.">
+                  <div><PdfUpload label="PDF to annotate" onChange={onAnnFileChange} /></div>
+                </Tooltip>
+              ) : annLoading ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading PDF…</p>
+              ) : (
+                <div className="grid lg:grid-cols-[1fr_260px] gap-6">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs truncate mr-2" style={{ color: 'var(--color-muted)' }}>{annFile.name}</p>
+                      {annPageCount > 1 && (
+                        <Tooltip text="Move between pages — your marks on each page are kept as you navigate.">
+                          <div className="flex items-center gap-2 text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                            <button type="button" onClick={() => changeAnnPage(annCurrentPage - 1)} disabled={annCurrentPage <= 1} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">◀</button>
+                            Page {annCurrentPage} of {annPageCount}
+                            <button type="button" onClick={() => changeAnnPage(annCurrentPage + 1)} disabled={annCurrentPage >= annPageCount} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">▶</button>
+                          </div>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <Tooltip text="Drag to draw a highlight/strikeout/text box, drag freely to draw with the pen, click once to drop a sticky note, or switch to Select to move/delete a mark.">
+                      <div className="relative inline-block rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                        <canvas ref={annPdfCanvasRef} className="block" />
+                        <canvas
+                          ref={annUiCanvasRef}
+                          className="absolute top-0 left-0"
+                          style={{ cursor: annTool === 'select' ? 'default' : 'crosshair' }}
+                          onMouseDown={onAnnDown}
+                          onMouseMove={onAnnMove}
+                          onMouseUp={onAnnUp}
+                          onMouseLeave={onAnnLeave}
+                        />
+                        {annNoteEditor && (
+                          <div
+                            className="absolute z-10 rounded-lg border shadow-lg p-2"
+                            style={{ left: Math.max(0, (annNoteEditor.x) * (annPageDims?.renderScale || 1)), top: Math.max(0, annPageDims ? annPageDims.canvasH - annNoteEditor.y * annPageDims.renderScale : 0), background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: 200 }}
+                          >
+                            <textarea
+                              autoFocus
+                              rows={3}
+                              className="w-full text-xs rounded border p-1.5 outline-none"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              placeholder="Comment text…"
+                              value={annNoteEditor.text}
+                              onChange={e => setAnnNoteEditor(prev => ({ ...prev, text: e.target.value }))}
+                            />
+                            <div className="flex gap-1.5 mt-1.5">
+                              <button type="button" onClick={saveAnnNote} className="flex-1 text-xs py-1 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>Save</button>
+                              <button type="button" onClick={() => setAnnNoteEditor(null)} className="flex-1 text-xs py-1 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Tooltip>
+
+                    {annSelectedId && (() => {
+                      const sel = annShapes.find(s => s.id === annSelectedId);
+                      if (!sel) return null;
+                      return (
+                        <div className="mt-2 flex items-center gap-3 flex-wrap">
+                          {(sel.type === 'note' || sel.type === 'textbox') && (
+                            <Tooltip text="Edit this mark's text.">
+                              <input
+                                type="text"
+                                className={inp}
+                                style={{ ...inpStyle, width: 220 }}
+                                value={sel.text || ''}
+                                onChange={e => updateAnnShapeText(sel.id, e.target.value)}
+                              />
+                            </Tooltip>
+                          )}
+                          <Tooltip text="Delete this mark (or press Delete/Backspace).">
+                            <button type="button" onClick={() => removeAnnShape(sel.id)} className="text-xs underline hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>
+                              Remove selected mark
+                            </button>
+                          </Tooltip>
+                        </div>
+                      );
+                    })()}
+
+                    <ErrMsg msg={annError} />
+                    <RunBtn onClick={runAnnotateApply} busy={annBusy} disabled={!annShapes.length} label={`Apply ${annShapes.length || ''} Mark${annShapes.length !== 1 ? 's' : ''} & Download`} getIcon={getIcon} />
+                  </div>
+
+                  <div className="rounded-xl border p-4 space-y-3" style={cardStyle}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Tool</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'select', label: 'Select', icon: 'mouse-pointer' },
+                        { id: 'highlight', label: 'Highlight', icon: 'highlighter' },
+                        { id: 'strikeout', label: 'Strikeout', icon: 'strikethrough' },
+                        { id: 'draw', label: 'Draw', icon: 'pencil-line' },
+                        { id: 'note', label: 'Note', icon: 'sticky-note' },
+                        { id: 'textbox', label: 'Text box', icon: 'type' },
+                      ].map(t => (
+                        <Tooltip key={t.id} text={
+                          t.id === 'select' ? 'Select, move, or delete an existing mark.'
+                          : t.id === 'highlight' ? 'Drag a semi-transparent highlight box.'
+                          : t.id === 'strikeout' ? 'Drag a line through text or an area.'
+                          : t.id === 'draw' ? 'Freehand pen — drag to draw.'
+                          : t.id === 'note' ? 'Click once to drop a sticky note and type a comment.'
+                          : 'Drag a box and type a comment directly on the page.'
+                        }>
+                          <button
+                            type="button"
+                            onClick={() => { setAnnTool(t.id); setAnnSelectedId(null); }}
+                            className="flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-medium transition-opacity hover:opacity-80"
+                            style={{ background: annTool === t.id ? 'var(--color-primary)' : 'var(--color-bg)', color: annTool === t.id ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                          >
+                            {getIcon(t.icon, { size: 15 })}
+                            {t.label}
+                          </button>
+                        </Tooltip>
+                      ))}
+                    </div>
+
+                    <Tooltip text="Colour used for the next mark you draw.">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</span>
+                        <input type="color" value={annColor} onChange={e => setAnnColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer" />
+                      </div>
+                    </Tooltip>
+
+                    {(annTool === 'draw' || annTool === 'strikeout') && (
+                      <Tooltip text="Line thickness.">
+                        <div>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Stroke width: {annStrokeWidth}px</span>
+                          <input type="range" min={1} max={12} value={annStrokeWidth} onChange={e => setAnnStrokeWidth(Number(e.target.value))} className="w-full" />
+                        </div>
+                      </Tooltip>
+                    )}
+                    {annTool === 'highlight' && (
+                      <Tooltip text="How see-through the highlight is.">
+                        <div>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(annOpacity * 100)}%</span>
+                          <input type="range" min={10} max={90} value={Math.round(annOpacity * 100)} onChange={e => setAnnOpacity(Number(e.target.value) / 100)} className="w-full" />
+                        </div>
+                      </Tooltip>
+                    )}
+                    {annTool === 'textbox' && (
+                      <Tooltip text="Font size for new text boxes.">
+                        <div>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Font size: {annFontSize}pt</span>
+                          <input type="range" min={8} max={28} value={annFontSize} onChange={e => setAnnFontSize(Number(e.target.value))} className="w-full" />
+                        </div>
+                      </Tooltip>
+                    )}
+
+                    <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <Tooltip text="Undo the last change."><button type="button" onClick={undoAnn} disabled={!annPast.length} className="flex-1 text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button></Tooltip>
+                      <Tooltip text="Redo the last undone change."><button type="button" onClick={redoAnn} disabled={!annFuture.length} className="flex-1 text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button></Tooltip>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ═══ Compare ═════════════════════════════════════════════════ */}
+          {mode === 'compare' && (
+            <section>
+              <ToolHeader id="compare" label="Compare PDFs" onHelp={setHelpTool} getIcon={getIcon} />
+
+              <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                <Tooltip text="The original / older version.">
+                  <div><PdfUpload label="PDF A" onChange={onCmprFileChange('a')} files={cmprAFile ? [cmprAFile] : []} onRemove={() => setCmprAFile(null)} /></div>
+                </Tooltip>
+                <Tooltip text="The revised / newer version to compare against A.">
+                  <div><PdfUpload label="PDF B" onChange={onCmprFileChange('b')} files={cmprBFile ? [cmprBFile] : []} onRemove={() => setCmprBFile(null)} /></div>
+                </Tooltip>
+              </div>
+
+              {cmprAFile && cmprBFile && (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface)' }}>
+                      {['visual', 'text'].map(t => (
+                        <Tooltip key={t} text={t === 'visual' ? 'Render both PDFs and highlight changed pixels in red.' : 'Extract text from both PDFs and show added/removed lines.'}>
+                          <button
+                            type="button"
+                            onClick={() => setCmprTab(t)}
+                            className="px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-opacity hover:opacity-80"
+                            style={{ background: cmprTab === t ? 'var(--color-primary)' : 'transparent', color: cmprTab === t ? '#fff' : 'var(--color-text)' }}
+                          >
+                            {t} diff
+                          </button>
+                        </Tooltip>
+                      ))}
+                    </div>
+                    {cmprTab === 'visual' && cmprPageCount > 1 && (
+                      <Tooltip text="Move between pages — the higher of the two page counts is shown.">
+                        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          <button type="button" onClick={() => setCmprPage(p => Math.max(1, p - 1))} disabled={cmprPage <= 1} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">◀</button>
+                          Page {cmprPage} of {cmprPageCount}
+                          <button type="button" onClick={() => setCmprPage(p => Math.min(cmprPageCount, p + 1))} disabled={cmprPage >= cmprPageCount} className="px-1.5 disabled:opacity-30 hover:opacity-60 transition-opacity">▶</button>
+                        </div>
+                      </Tooltip>
+                    )}
+                  </div>
+
+                  {cmprTab === 'visual' ? (
+                    <div>
+                      <Tooltip text="How different two pixels must be before they're flagged as changed. Higher = more sensitive (flags smaller differences).">
+                        <div className="mb-3 max-w-xs">
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Sensitivity: {cmprSensitivity}%</span>
+                          <input type="range" min={5} max={95} value={cmprSensitivity} onChange={e => setCmprSensitivity(Number(e.target.value))} className="w-full" />
+                        </div>
+                      </Tooltip>
+                      <ErrMsg msg={cmprError} />
+                      {cmprLoading && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Rendering diff…</p>}
+                      {cmprDiffPct !== null && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Changed pixels on this page: <strong style={{ color: 'var(--color-primary)' }}>{cmprDiffPct}%</strong></p>}
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>A</p>
+                          <canvas ref={cmprCanvasARef} className="rounded-lg border w-full" style={{ borderColor: 'var(--color-border)' }} />
+                        </div>
+                        <div>
+                          <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>B</p>
+                          <canvas ref={cmprCanvasBRef} className="rounded-lg border w-full" style={{ borderColor: 'var(--color-border)' }} />
+                        </div>
+                        <div>
+                          <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Differences</p>
+                          <canvas ref={cmprCanvasDiffRef} className="rounded-lg border w-full" style={{ borderColor: 'var(--color-border)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {!cmprTextA.length && !cmprTextB.length ? (
+                        <RunBtn onClick={runCompareText} busy={cmprTextBusy} disabled={false} label="Extract & Compare Text" getIcon={getIcon} />
+                      ) : (
+                        <Tooltip text="Re-run text extraction if you swapped files.">
+                          <button type="button" onClick={runCompareText} disabled={cmprTextBusy} className="text-xs underline hover:opacity-70 transition-opacity mb-3" style={{ color: 'var(--color-muted)' }}>
+                            {cmprTextBusy ? 'Extracting…' : 'Re-extract text'}
+                          </button>
+                        </Tooltip>
+                      )}
+                      <ErrMsg msg={cmprTextError} />
+                      {cmprTextA.length > 0 && (
+                        <div className="mt-3 max-h-[520px] overflow-y-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                          {Array.from({ length: Math.max(cmprTextA.length, cmprTextB.length) }).map((_, i) => {
+                            const diff = diffLines(cmprTextA[i] || '', cmprTextB[i] || '');
+                            return (
+                              <div key={i} className="border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+                                <p className="text-xs font-semibold px-3 py-1.5" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>Page {i + 1}</p>
+                                <div className="px-3 py-2 text-xs font-mono space-y-0.5">
+                                  {diff.filter(d => d.type !== 'same').length === 0 ? (
+                                    <p style={{ color: 'var(--color-muted)' }}>No differences</p>
+                                  ) : diff.map((d, j) => d.type === 'same' ? null : (
+                                    <p key={j} style={{ background: d.type === 'added' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: 'var(--color-text)' }}>
+                                      {d.type === 'added' ? '+ ' : '− '}{d.text}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {/* ═══ Password Protect ═══════════════════════════════════════ */}
+          {mode === 'protect' && (
+            <section>
+              <ToolHeader id="protect" label="Password Protect" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  <Tooltip text="Upload the PDF you want to lock with a password.">
+                    <div><PdfUpload onChange={onPwFileChange} files={pwFile ? [pwFile] : []} onRemove={() => { setPwFile(null); setPwResult(null); }} /></div>
+                  </Tooltip>
+
+                  <div className="mt-3 space-y-2">
+                    <Tooltip text="Required to open the file in any PDF viewer.">
+                      <input type="password" className={inp} style={inpStyle} placeholder="Password to open the file" value={pwPassword} onChange={e => setPwPassword(e.target.value)} />
+                    </Tooltip>
+                    <Tooltip text="Optional — a separate password that can change permissions/remove protection. Defaults to the same password if left blank.">
+                      <input type="password" className={inp} style={inpStyle} placeholder="Owner password (optional)" value={pwOwnerPassword} onChange={e => setPwOwnerPassword(e.target.value)} />
+                    </Tooltip>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5">
+                    <Tooltip text="Uncheck to block printing the file.">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={pwPermPrint} onChange={e => setPwPermPrint(e.target.checked)} className="w-3.5 h-3.5" />
+                        Allow printing
+                      </label>
+                    </Tooltip>
+                    <Tooltip text="Uncheck to block copying text/images out of the file.">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={pwPermCopy} onChange={e => setPwPermCopy(e.target.checked)} className="w-3.5 h-3.5" />
+                        Allow copying text/images
+                      </label>
+                    </Tooltip>
+                    <Tooltip text="Uncheck to block editing/annotating the file.">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={pwPermModify} onChange={e => setPwPermModify(e.target.checked)} className="w-3.5 h-3.5" />
+                        Allow editing
+                      </label>
+                    </Tooltip>
+                  </div>
+
+                  <ErrMsg msg={pwError} />
+                  <RunBtn onClick={runProtect} busy={pwBusy} disabled={!pwFile || !pwPassword} label="Protect & Download" getIcon={getIcon} />
+                </div>
+                <div>
+                  <PdfPagePreview dataUrl={pwFile?.dataUrl} />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Remove Password ════════════════════════════════════════ */}
+          {mode === 'unprotect' && (
+            <section>
+              <ToolHeader id="unprotect" label="Remove Password" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="max-w-md">
+                <Tooltip text="Upload the password-protected PDF.">
+                  <div><PdfUpload onChange={onUnpwFileChange} files={unpwFile ? [unpwFile] : []} onRemove={() => { setUnpwFile(null); setUnpwResult(null); }} /></div>
+                </Tooltip>
+                <Tooltip text="The password currently required to open this file.">
+                  <input type="password" className={`${inp} mt-3`} style={inpStyle} placeholder="Current password" value={unpwPassword} onChange={e => setUnpwPassword(e.target.value)} />
+                </Tooltip>
+                <ErrMsg msg={unpwError} />
+                <RunBtn onClick={runUnprotect} busy={unpwBusy} disabled={!unpwFile} label="Remove Password & Download" getIcon={getIcon} />
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Compress ═══════════════════════════════════════════════ */}
+          {mode === 'compress' && (
+            <section>
+              <ToolHeader id="compress" label="Compress PDF" onHelp={setHelpTool} getIcon={getIcon} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div>
+                  <Tooltip text="Upload the PDF you want to shrink.">
+                    <div><PdfUpload onChange={onCmpFileChange} files={cmpFile ? [cmpFile] : []} onRemove={() => { setCmpFile(null); setCmpResult(null); }} /></div>
+                  </Tooltip>
+
+                  <div className="mt-3 space-y-2">
+                    <Tooltip text="Also re-encode embedded photos/scans at a lower quality for a bigger size reduction. Safe images only — anything risky is left untouched.">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="checkbox" checked={cmpRecompress} onChange={e => setCmpRecompress(e.target.checked)} className="w-3.5 h-3.5" />
+                        Recompress images (deeper, may affect image quality)
+                      </label>
+                    </Tooltip>
+                    {cmpRecompress && (
+                      <Tooltip text="Lower quality shrinks the file more but images look softer.">
+                        <select className={inp} style={inpStyle} value={cmpQuality} onChange={e => setCmpQuality(e.target.value)}>
+                          <option value="low">Low quality (smallest file)</option>
+                          <option value="medium">Medium quality</option>
+                          <option value="high">High quality (largest of the three)</option>
+                        </select>
+                      </Tooltip>
+                    )}
+                  </div>
+
+                  <ErrMsg msg={cmpError} />
+                  <RunBtn onClick={runCompress} busy={cmpBusy} disabled={!cmpFile} label="Compress" getIcon={getIcon} />
+
+                  {cmpResult && (
+                    <div className="mt-3 space-y-2">
+                      <div className="rounded-lg px-3 py-2.5 text-xs space-y-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                        <p style={{ color: 'var(--color-muted)' }}>Original: <strong style={{ color: 'var(--color-text)' }}>{formatBytes(cmpResult.originalSize)}</strong></p>
+                        <p style={{ color: 'var(--color-muted)' }}>Compressed: <strong style={{ color: 'var(--color-text)' }}>{formatBytes(cmpResult.compressedSize)}</strong></p>
+                        <p style={{ color: 'var(--color-muted)' }}>Saved: <strong style={{ color: 'var(--color-primary)' }}>{cmpResult.savedPercent}%</strong></p>
+                        {cmpRecompress && <p style={{ color: 'var(--color-muted)' }}>{cmpResult.imagesRecompressed} image{cmpResult.imagesRecompressed !== 1 ? 's' : ''} recompressed</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setResultModal({ dataUrl: cmpResult.dataUrl, filename: cmpFile ? `${cmpFile.name.replace('.pdf', '')}-compressed.pdf` : 'compressed.pdf', meta: `${cmpResult.savedPercent}% smaller` })}
+                          className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}
+                        >
+                          View Result
+                        </button>
+                        <button
+                          onClick={() => downloadFile(cmpResult.dataUrl, cmpFile ? `${cmpFile.name.replace('.pdf', '')}-compressed.pdf` : 'compressed.pdf')}
+                          className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          {getIcon('download', { size: 14 })}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <PdfPagePreview dataUrl={cmpFile?.dataUrl} />
+                </div>
+              </div>
             </section>
           )}
 
