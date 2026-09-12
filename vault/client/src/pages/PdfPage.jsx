@@ -2956,13 +2956,17 @@ export default function PdfPage() {
                 badge={mergeFiles.length ? `${mergeFiles.length} file${mergeFiles.length !== 1 ? 's' : ''}` : undefined} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload
-                    label="PDFs to merge (in order)"
-                    multiple
-                    onChange={onMergeFilesChange}
-                    files={mergeFiles}
-                    onRemove={i => setMergeFiles(prev => prev.filter((_, idx) => idx !== i))}
-                  />
+                  <Tooltip text="Upload the PDFs to combine, in the order you want them merged.">
+                    <div>
+                      <PdfUpload
+                        label="PDFs to merge (in order)"
+                        multiple
+                        onChange={onMergeFilesChange}
+                        files={mergeFiles}
+                        onRemove={i => setMergeFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      />
+                    </div>
+                  </Tooltip>
                   {mergeFiles.length > 1 && (
                     <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                       Files will be merged in the order shown above. Remove to reorder.
@@ -2985,19 +2989,23 @@ export default function PdfPage() {
                 badge={splitFile?.pageCount ? `${splitFile.pageCount}pp source` : undefined} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onSplitFileChange} files={splitFile ? [splitFile] : []} onRemove={() => { setSplitFile(null); setSplitResult(null); }} />
+                  <Tooltip text="Upload the PDF you want to pull pages out of.">
+                    <div><PdfUpload onChange={onSplitFileChange} files={splitFile ? [splitFile] : []} onRemove={() => { setSplitFile(null); setSplitResult(null); }} /></div>
+                  </Tooltip>
                   <div className="mt-3">
                     <label className={lbl} style={{ color: 'var(--color-muted)' }}>
                       Pages to extract {splitFile?.pageCount ? `(PDF has ${splitFile.pageCount} pages)` : ''}
                     </label>
-                    <input
-                      type="text"
-                      className={inp}
-                      style={inpStyle}
-                      placeholder="e.g. 1-3, 5, 7-9"
-                      value={splitPages}
-                      onChange={e => setSplitPages(e.target.value)}
-                    />
+                    <Tooltip text="Which pages to keep, like 1-3,5,7-9 — everything else is dropped.">
+                      <input
+                        type="text"
+                        className={inp}
+                        style={inpStyle}
+                        placeholder="e.g. 1-3, 5, 7-9"
+                        value={splitPages}
+                        onChange={e => setSplitPages(e.target.value)}
+                      />
+                    </Tooltip>
                     <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Ranges (1-3) and individual pages (5) can be mixed.</p>
                   </div>
                   <ErrMsg msg={splitError} />
@@ -3017,19 +3025,25 @@ export default function PdfPage() {
                 badge={rotateFile?.pageCount ? `${rotateFile.pageCount}pp` : undefined} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onRotateFileChange} files={rotateFile ? [rotateFile] : []} onRemove={() => { setRotateFile(null); setRotateResult(null); }} />
+                  <Tooltip text="Upload the PDF whose pages you want to rotate.">
+                    <div><PdfUpload onChange={onRotateFileChange} files={rotateFile ? [rotateFile] : []} onRemove={() => { setRotateFile(null); setRotateResult(null); }} /></div>
+                  </Tooltip>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Rotation</label>
-                      <select className={inp} style={inpStyle} value={rotateAngle} onChange={e => setRotateAngle(Number(e.target.value))}>
-                        <option value={90}>90° clockwise</option>
-                        <option value={180}>180°</option>
-                        <option value={270}>270° (90° CCW)</option>
-                      </select>
+                      <Tooltip text="How far to turn the selected pages, clockwise.">
+                        <select className={inp} style={inpStyle} value={rotateAngle} onChange={e => setRotateAngle(Number(e.target.value))}>
+                          <option value={90}>90° clockwise</option>
+                          <option value={180}>180°</option>
+                          <option value={270}>270° (90° CCW)</option>
+                        </select>
+                      </Tooltip>
                     </div>
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Pages</label>
-                      <input type="text" className={inp} style={inpStyle} placeholder="all or 1,3,5-7" value={rotatePages} onChange={e => setRotatePages(e.target.value)} />
+                      <Tooltip text="Which pages to rotate — leave as 'all' or list pages/ranges like 1,3,5-7.">
+                        <input type="text" className={inp} style={inpStyle} placeholder="all or 1,3,5-7" value={rotatePages} onChange={e => setRotatePages(e.target.value)} />
+                      </Tooltip>
                     </div>
                   </div>
                   <ErrMsg msg={rotateError} />
@@ -3049,28 +3063,36 @@ export default function PdfPage() {
                 badge={imgFiles.length ? `${imgFiles.length} image${imgFiles.length !== 1 ? 's' : ''}` : undefined} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload
-                    label="Images (each becomes a page)"
-                    accept="image/*"
-                    multiple
-                    onChange={onImgFilesChange}
-                    files={imgFiles}
-                    onRemove={i => setImgFiles(prev => prev.filter((_, idx) => idx !== i))}
-                  />
+                  <Tooltip text="Upload the images to pack into the PDF — each one becomes its own page, in the order added.">
+                    <div>
+                      <PdfUpload
+                        label="Images (each becomes a page)"
+                        accept="image/*"
+                        multiple
+                        onChange={onImgFilesChange}
+                        files={imgFiles}
+                        onRemove={i => setImgFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      />
+                    </div>
+                  </Tooltip>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Page size</label>
-                      <select className={inp} style={inpStyle} value={imgPageSize} onChange={e => setImgPageSize(e.target.value)}>
-                        <option value="A4">A4</option>
-                        <option value="A3">A3</option>
-                        <option value="Letter">Letter</option>
-                        <option value="Legal">Legal</option>
-                        <option value="fit">Fit to image</option>
-                      </select>
+                      <Tooltip text="The page size each image is placed on. Fit to image sizes the page to match the image instead of a standard paper size.">
+                        <select className={inp} style={inpStyle} value={imgPageSize} onChange={e => setImgPageSize(e.target.value)}>
+                          <option value="A4">A4</option>
+                          <option value="A3">A3</option>
+                          <option value="Letter">Letter</option>
+                          <option value="Legal">Legal</option>
+                          <option value="fit">Fit to image</option>
+                        </select>
+                      </Tooltip>
                     </div>
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Margin (pt) — {imgMargin}pt</label>
-                      <input type="range" min={0} max={72} value={imgMargin} onChange={e => setImgMargin(Number(e.target.value))} className="w-full mt-2" />
+                      <Tooltip text="Blank space left around each image on its page.">
+                        <input type="range" min={0} max={72} value={imgMargin} onChange={e => setImgMargin(Number(e.target.value))} className="w-full mt-2" />
+                      </Tooltip>
                     </div>
                   </div>
                   <ErrMsg msg={imgError} />
@@ -3093,7 +3115,9 @@ export default function PdfPage() {
               <ToolHeader id="extracttext" label="Extract Text" onHelp={setHelpTool} getIcon={getIcon} badge="Client-side" />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onEtFileChange} files={etFile ? [etFile] : []} onRemove={() => { setEtFile(null); setEtText(''); }} />
+                  <Tooltip text="Upload the PDF you want to pull plain text out of.">
+                    <div><PdfUpload onChange={onEtFileChange} files={etFile ? [etFile] : []} onRemove={() => { setEtFile(null); setEtText(''); }} /></div>
+                  </Tooltip>
                   <ErrMsg msg={etError} />
                   <RunBtn onClick={runExtractText} busy={etBusy} disabled={!etFile} label="Extract Text" getIcon={getIcon} />
                   <div className="mt-4">
@@ -3106,28 +3130,32 @@ export default function PdfPage() {
                       <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                         <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Extracted text</span>
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(etText)}
-                            className="text-xs hover:opacity-60 transition-opacity"
-                            style={{ color: 'var(--color-primary)' }}
-                          >
-                            Copy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const blob = new Blob([etText], { type: 'text/plain' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url; a.download = (etFile?.name.replace('.pdf', '') || 'extracted') + '.txt'; a.click();
-                              URL.revokeObjectURL(url);
-                            }}
-                            className="text-xs hover:opacity-60 transition-opacity"
-                            style={{ color: 'var(--color-primary)' }}
-                          >
-                            Save .txt
-                          </button>
+                          <Tooltip text="Copy the extracted text to your clipboard.">
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard.writeText(etText)}
+                              className="text-xs hover:opacity-60 transition-opacity"
+                              style={{ color: 'var(--color-primary)' }}
+                            >
+                              Copy
+                            </button>
+                          </Tooltip>
+                          <Tooltip text="Download the extracted text as a .txt file.">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const blob = new Blob([etText], { type: 'text/plain' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url; a.download = (etFile?.name.replace('.pdf', '') || 'extracted') + '.txt'; a.click();
+                                URL.revokeObjectURL(url);
+                              }}
+                              className="text-xs hover:opacity-60 transition-opacity"
+                              style={{ color: 'var(--color-primary)' }}
+                            >
+                              Save .txt
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
                       <textarea
@@ -3149,30 +3177,42 @@ export default function PdfPage() {
               <ToolHeader id="watermark" label="Watermark" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onWmFileChange} files={wmFile ? [wmFile] : []} onRemove={() => { setWmFile(null); setWmResult(null); }} />
+                  <Tooltip text="Upload the PDF to stamp a watermark onto.">
+                    <div><PdfUpload onChange={onWmFileChange} files={wmFile ? [wmFile] : []} onRemove={() => { setWmFile(null); setWmResult(null); }} /></div>
+                  </Tooltip>
                   <div className="mt-3 space-y-3">
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Watermark text</label>
-                      <input type="text" className={inp} style={inpStyle} value={wmText} onChange={e => setWmText(e.target.value)} placeholder="CONFIDENTIAL" />
+                      <Tooltip text="The text stamped diagonally across every page.">
+                        <input type="text" className={inp} style={inpStyle} value={wmText} onChange={e => setWmText(e.target.value)} placeholder="CONFIDENTIAL" />
+                      </Tooltip>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Font size — {wmFontSize}pt</label>
-                        <input type="range" min={12} max={150} value={wmFontSize} onChange={e => setWmFontSize(Number(e.target.value))} className="w-full mt-2" />
+                        <Tooltip text="How large the watermark text is.">
+                          <input type="range" min={12} max={150} value={wmFontSize} onChange={e => setWmFontSize(Number(e.target.value))} className="w-full mt-2" />
+                        </Tooltip>
                       </div>
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Opacity — {Math.round(wmOpacity * 100)}%</label>
-                        <input type="range" min={1} max={100} value={Math.round(wmOpacity * 100)} onChange={e => setWmOpacity(e.target.value / 100)} className="w-full mt-2" />
+                        <Tooltip text="How see-through the watermark is — lower keeps the page content easier to read.">
+                          <input type="range" min={1} max={100} value={Math.round(wmOpacity * 100)} onChange={e => setWmOpacity(e.target.value / 100)} className="w-full mt-2" />
+                        </Tooltip>
                       </div>
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Angle — {wmAngle}°</label>
-                        <input type="range" min={-90} max={90} value={wmAngle} onChange={e => setWmAngle(Number(e.target.value))} className="w-full mt-2" />
+                        <Tooltip text="The diagonal tilt of the watermark text.">
+                          <input type="range" min={-90} max={90} value={wmAngle} onChange={e => setWmAngle(Number(e.target.value))} className="w-full mt-2" />
+                        </Tooltip>
                       </div>
                     </div>
                     <div>
                       <label className={lbl} style={{ color: 'var(--color-muted)' }}>Colour</label>
                       <div className="flex items-center gap-2">
-                        <input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="w-10 h-8 rounded border cursor-pointer" style={{ borderColor: 'var(--color-border)' }} />
+                        <Tooltip text="The colour of the watermark text.">
+                          <input type="color" value={wmColor} onChange={e => setWmColor(e.target.value)} className="w-10 h-8 rounded border cursor-pointer" style={{ borderColor: 'var(--color-border)' }} />
+                        </Tooltip>
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{wmColor}</span>
                       </div>
                     </div>
@@ -3193,38 +3233,48 @@ export default function PdfPage() {
               <ToolHeader id="pagenumbers" label="Page Numbers" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onPnFileChange} files={pnFile ? [pnFile] : []} onRemove={() => { setPnFile(null); setPnResult(null); }} />
+                  <Tooltip text="Upload the PDF to add page numbers to.">
+                    <div><PdfUpload onChange={onPnFileChange} files={pnFile ? [pnFile] : []} onRemove={() => { setPnFile(null); setPnResult(null); }} /></div>
+                  </Tooltip>
                   <div className="mt-3 space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Format</label>
-                        <select className={inp} style={inpStyle} value={pnFormat} onChange={e => setPnFormat(e.target.value)}>
-                          <option value="{n}">{'{n}'}</option>
-                          <option value="Page {n}">Page {'{n}'}</option>
-                          <option value="{n} of {total}">{'{n}'} of {'{total}'}</option>
-                          <option value="Page {n} of {total}">Page {'{n}'} of {'{total}'}</option>
-                        </select>
+                        <Tooltip text="How the page number is displayed on each page.">
+                          <select className={inp} style={inpStyle} value={pnFormat} onChange={e => setPnFormat(e.target.value)}>
+                            <option value="{n}">{'{n}'}</option>
+                            <option value="Page {n}">Page {'{n}'}</option>
+                            <option value="{n} of {total}">{'{n}'} of {'{total}'}</option>
+                            <option value="Page {n} of {total}">Page {'{n}'} of {'{total}'}</option>
+                          </select>
+                        </Tooltip>
                       </div>
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Position</label>
-                        <select className={inp} style={inpStyle} value={pnPosition} onChange={e => setPnPosition(e.target.value)}>
-                          <option value="bottom-center">Bottom Centre</option>
-                          <option value="bottom-right">Bottom Right</option>
-                          <option value="bottom-left">Bottom Left</option>
-                          <option value="top-center">Top Centre</option>
-                          <option value="top-right">Top Right</option>
-                          <option value="top-left">Top Left</option>
-                        </select>
+                        <Tooltip text="Where on the page the number is stamped.">
+                          <select className={inp} style={inpStyle} value={pnPosition} onChange={e => setPnPosition(e.target.value)}>
+                            <option value="bottom-center">Bottom Centre</option>
+                            <option value="bottom-right">Bottom Right</option>
+                            <option value="bottom-left">Bottom Left</option>
+                            <option value="top-center">Top Centre</option>
+                            <option value="top-right">Top Right</option>
+                            <option value="top-left">Top Left</option>
+                          </select>
+                        </Tooltip>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Font size — {pnFontSize}pt</label>
-                        <input type="range" min={6} max={24} value={pnFontSize} onChange={e => setPnFontSize(Number(e.target.value))} className="w-full mt-2" />
+                        <Tooltip text="How large the page number text is.">
+                          <input type="range" min={6} max={24} value={pnFontSize} onChange={e => setPnFontSize(Number(e.target.value))} className="w-full mt-2" />
+                        </Tooltip>
                       </div>
                       <div>
                         <label className={lbl} style={{ color: 'var(--color-muted)' }}>Start at</label>
-                        <input type="number" min={1} className={inp} style={inpStyle} value={pnStartAt} onChange={e => setPnStartAt(Math.max(1, Number(e.target.value)))} />
+                        <Tooltip text="The number to print on the first page — later pages count up from here.">
+                          <input type="number" min={1} className={inp} style={inpStyle} value={pnStartAt} onChange={e => setPnStartAt(Math.max(1, Number(e.target.value)))} />
+                        </Tooltip>
                       </div>
                     </div>
                   </div>
@@ -3244,7 +3294,9 @@ export default function PdfPage() {
               <ToolHeader id="inspect" label="Inspect Form Fields" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onInspectFileChange} files={inspectFile ? [inspectFile] : []} onRemove={() => { setInspectFile(null); setInspectFields(null); }} />
+                  <Tooltip text="Upload the PDF to list its interactive form fields.">
+                    <div><PdfUpload onChange={onInspectFileChange} files={inspectFile ? [inspectFile] : []} onRemove={() => { setInspectFile(null); setInspectFields(null); }} /></div>
+                  </Tooltip>
                   <ErrMsg msg={inspectError} />
                   <RunBtn onClick={runInspect} busy={inspectBusy} disabled={!inspectFile} label="Inspect Fields" getIcon={getIcon} />
                   <div className="mt-4">
@@ -3302,53 +3354,63 @@ export default function PdfPage() {
                 badge={fillAvailable.length ? `${fillAvailable.length} field${fillAvailable.length !== 1 ? 's' : ''}` : undefined} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onFillFileChange} files={fillFile ? [fillFile] : []} onRemove={() => { setFillFile(null); setFillAvailable([]); setFillValues({}); setFillResult(null); }} />
+                  <Tooltip text="Upload a PDF that has fillable form fields.">
+                    <div><PdfUpload onChange={onFillFileChange} files={fillFile ? [fillFile] : []} onRemove={() => { setFillFile(null); setFillAvailable([]); setFillValues({}); setFillResult(null); }} /></div>
+                  </Tooltip>
                   {fillBusy && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Reading form fields…</p>}
                   {fillAvailable.length > 0 && (
                     <div className="mt-3 space-y-2">
-                      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
-                        <input type="checkbox" checked={fillFlatten} onChange={e => setFillFlatten(e.target.checked)} className="w-3.5 h-3.5" />
-                        Save as flattened text (recommended — guarantees the chosen font renders correctly in every PDF viewer; fields become static, not re-editable)
-                      </label>
+                      <Tooltip text="Recommended — bakes each value in as page text so it displays correctly everywhere; uncheck only if you need the fields to stay live and re-editable.">
+                        <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                          <input type="checkbox" checked={fillFlatten} onChange={e => setFillFlatten(e.target.checked)} className="w-3.5 h-3.5" />
+                          Save as flattened text (recommended — guarantees the chosen font renders correctly in every PDF viewer; fields become static, not re-editable)
+                        </label>
+                      </Tooltip>
                       {fillFlatten && (
                         <div className="flex items-center gap-1.5">
-                          <select
-                            value={fillFont}
-                            onChange={e => setFillFont(e.target.value)}
-                            className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
-                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                            title="Font"
-                          >
-                            {Object.entries(STAMP_FONT_GROUPS).map(([group, fonts]) => (
-                              <optgroup key={group} label={group}>
-                                {fonts.map(font => {
-                                  const css = fontCss(font);
-                                  return (
-                                    <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
-                                      {STANDARD_FONT_LABELS[font] || font}
-                                    </option>
-                                  );
-                                })}
-                              </optgroup>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            value={fillFontSize}
-                            min={6} max={72}
-                            onChange={e => setFillFontSize(Number(e.target.value))}
-                            className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
-                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                            title="Font size (pt)"
-                          />
-                          <input
-                            type="color"
-                            value={fillColor}
-                            onChange={e => setFillColor(e.target.value)}
-                            className="w-8 h-7 rounded cursor-pointer p-0.5 border"
-                            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-                            title="Text color"
-                          />
+                          <Tooltip text="Font used to stamp the filled-in values.">
+                            <select
+                              value={fillFont}
+                              onChange={e => setFillFont(e.target.value)}
+                              className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              title="Font"
+                            >
+                              {Object.entries(STAMP_FONT_GROUPS).map(([group, fonts]) => (
+                                <optgroup key={group} label={group}>
+                                  {fonts.map(font => {
+                                    const css = fontCss(font);
+                                    return (
+                                      <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
+                                        {STANDARD_FONT_LABELS[font] || font}
+                                      </option>
+                                    );
+                                  })}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </Tooltip>
+                          <Tooltip text="Font size (pt) for the stamped values.">
+                            <input
+                              type="number"
+                              value={fillFontSize}
+                              min={6} max={72}
+                              onChange={e => setFillFontSize(Number(e.target.value))}
+                              className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              title="Font size (pt)"
+                            />
+                          </Tooltip>
+                          <Tooltip text="Text colour for the stamped values.">
+                            <input
+                              type="color"
+                              value={fillColor}
+                              onChange={e => setFillColor(e.target.value)}
+                              className="w-8 h-7 rounded cursor-pointer p-0.5 border"
+                              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                              title="Text color"
+                            />
+                          </Tooltip>
                         </div>
                       )}
                       <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Form fields</p>
@@ -3360,13 +3422,17 @@ export default function PdfPage() {
                             {f.required && <span className="ml-1 text-amber-600">*</span>}
                           </label>
                           {f.type === 'CheckBox' ? (
-                            <select className={inp} style={inpStyle} value={fillValues[f.name] || ''} onChange={e => setFillValues(prev => ({ ...prev, [f.name]: e.target.value }))}>
-                              <option value="">— unchanged —</option>
-                              <option value="true">Checked</option>
-                              <option value="false">Unchecked</option>
-                            </select>
+                            <Tooltip text="Leave as 'unchanged' to keep the field's current state.">
+                              <select className={inp} style={inpStyle} value={fillValues[f.name] || ''} onChange={e => setFillValues(prev => ({ ...prev, [f.name]: e.target.value }))}>
+                                <option value="">— unchanged —</option>
+                                <option value="true">Checked</option>
+                                <option value="false">Unchecked</option>
+                              </select>
+                            </Tooltip>
                           ) : (
-                            <input type="text" className={inp} style={inpStyle} placeholder={f.value || `Enter ${f.name}…`} value={fillValues[f.name] || ''} onChange={e => setFillValues(prev => ({ ...prev, [f.name]: e.target.value }))} />
+                            <Tooltip text="The value to fill into this field.">
+                              <input type="text" className={inp} style={inpStyle} placeholder={f.value || `Enter ${f.name}…`} value={fillValues[f.name] || ''} onChange={e => setFillValues(prev => ({ ...prev, [f.name]: e.target.value }))} />
+                            </Tooltip>
                           )}
                         </div>
                       ))}
@@ -3391,7 +3457,9 @@ export default function PdfPage() {
               <ToolHeader id="flatten" label="Flatten Form" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onFlatFileChange} files={flatFile ? [flatFile] : []} onRemove={() => { setFlatFile(null); setFlatResult(null); }} />
+                  <Tooltip text="Upload the PDF whose form fields you want to bake into static content.">
+                    <div><PdfUpload onChange={onFlatFileChange} files={flatFile ? [flatFile] : []} onRemove={() => { setFlatFile(null); setFlatResult(null); }} /></div>
+                  </Tooltip>
                   <div className="mt-3 rounded-xl border px-4 py-3 text-xs" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
                     Flattening converts all interactive form fields into static text — the values are preserved but the fields can no longer be edited. This is useful before distributing a completed form.
                   </div>
@@ -3411,7 +3479,9 @@ export default function PdfPage() {
               <ToolHeader id="metadata" label="Metadata" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onMetaFileChange} files={metaFile ? [metaFile] : []} onRemove={() => { setMetaFile(null); setMetaCurrent(null); setMetaResult(null); }} />
+                  <Tooltip text="Upload the PDF to read or edit its document properties.">
+                    <div><PdfUpload onChange={onMetaFileChange} files={metaFile ? [metaFile] : []} onRemove={() => { setMetaFile(null); setMetaCurrent(null); setMetaResult(null); }} /></div>
+                  </Tooltip>
                   {metaBusy && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Reading metadata…</p>}
                   {metaCurrent && (
                     <div className="mt-3 space-y-2">
@@ -3424,9 +3494,8 @@ export default function PdfPage() {
                         { key: 'producer', label: 'Producer', editable: false },
                         { key: 'creationDate',     label: 'Created',  editable: false },
                         { key: 'modificationDate', label: 'Modified', editable: false },
-                      ].map(({ key, label, editable }) => (
-                        <div key={key}>
-                          <label className={lbl} style={{ color: 'var(--color-muted)' }}>{label}</label>
+                      ].map(({ key, label, editable }) => {
+                        const field = (
                           <input
                             type="text"
                             className={inp}
@@ -3435,8 +3504,14 @@ export default function PdfPage() {
                             value={editable ? (metaEdit[key] ?? '') : (metaCurrent[key] || '—')}
                             onChange={editable ? e => setMetaEdit(prev => ({ ...prev, [key]: e.target.value })) : undefined}
                           />
-                        </div>
-                      ))}
+                        );
+                        return (
+                          <div key={key}>
+                            <label className={lbl} style={{ color: 'var(--color-muted)' }}>{label}</label>
+                            {editable ? <Tooltip text={`Edit the ${label.toLowerCase()} stored in this PDF's properties.`}>{field}</Tooltip> : field}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   <ErrMsg msg={metaError} />
@@ -3457,7 +3532,9 @@ export default function PdfPage() {
               <ToolHeader id="fileinfo" label="File Info" onHelp={setHelpTool} getIcon={getIcon} badge="Client-side" />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload onChange={onInfoFileChange} files={infoFile ? [{ name: infoFile.name, size: infoFile.size }] : []} onRemove={() => { setInfoFile(null); setInfoData(null); setInfoDataUrl(null); }} />
+                  <Tooltip text="Upload a PDF to see its file details — nothing leaves your browser.">
+                    <div><PdfUpload onChange={onInfoFileChange} files={infoFile ? [{ name: infoFile.name, size: infoFile.size }] : []} onRemove={() => { setInfoFile(null); setInfoData(null); setInfoDataUrl(null); }} /></div>
+                  </Tooltip>
                   {infoBusy && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Analysing…</p>}
                   <div className="mt-4">
                     <PdfPagePreview dataUrl={infoDataUrl} />
@@ -3494,21 +3571,25 @@ export default function PdfPage() {
               <ToolHeader id="text2pdf" label="Text → PDF" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="max-w-2xl">
                 <label className={lbl} style={{ color: 'var(--color-muted)' }}>Title (optional)</label>
-                <input
-                  className={inp} style={inpStyle}
-                  value={t2pTitle}
-                  onChange={(e) => setT2pTitle(e.target.value)}
-                  placeholder="Document title"
-                />
+                <Tooltip text="Sets the PDF's document title metadata — not printed on the page itself.">
+                  <input
+                    className={inp} style={inpStyle}
+                    value={t2pTitle}
+                    onChange={(e) => setT2pTitle(e.target.value)}
+                    placeholder="Document title"
+                  />
+                </Tooltip>
                 <label className={`${lbl} mt-4`} style={{ color: 'var(--color-muted)' }}>
                   Paste formatted content — # heading, **bold**, - bullet, blank line = new paragraph
                 </label>
-                <textarea
-                  className={inp} style={{ ...inpStyle, minHeight: 320, resize: 'vertical', fontFamily: 'inherit' }}
-                  value={t2pText}
-                  onChange={(e) => setT2pText(e.target.value)}
-                  placeholder={'# Heading\n\nPaste or type your content here. Use **bold** and\n- bullet points\nas needed.'}
-                />
+                <Tooltip text="The text that becomes the PDF's pages — use # for a heading, **text** for bold, - for a bullet, and a blank line to start a new paragraph.">
+                  <textarea
+                    className={inp} style={{ ...inpStyle, minHeight: 320, resize: 'vertical', fontFamily: 'inherit' }}
+                    value={t2pText}
+                    onChange={(e) => setT2pText(e.target.value)}
+                    placeholder={'# Heading\n\nPaste or type your content here. Use **bold** and\n- bullet points\nas needed.'}
+                  />
+                </Tooltip>
                 <ErrMsg msg={t2pError} />
                 <div className="mt-3">
                   <RunBtn onClick={runText2Pdf} busy={t2pBusy} disabled={!t2pText.trim()} label="Generate PDF" getIcon={getIcon} />
@@ -3523,19 +3604,23 @@ export default function PdfPage() {
               <ToolHeader id="officetopdf" label="Office → PDF" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0]; e.target.value = '';
-                      if (!f) return;
-                      setOfficeError('');
-                      const dataUrl = await readFileAsDataUrl(f);
-                      setOfficeFile({ name: f.name, size: f.size, dataUrl });
-                    }}
-                    files={officeFile ? [{ name: officeFile.name, size: officeFile.size }] : []}
-                    onRemove={() => setOfficeFile(null)}
-                    accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.txt"
-                    label="Upload an Office file"
-                  />
+                  <Tooltip text="Upload a Word, Excel, PowerPoint, or text file to convert to PDF.">
+                    <div>
+                      <PdfUpload
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]; e.target.value = '';
+                          if (!f) return;
+                          setOfficeError('');
+                          const dataUrl = await readFileAsDataUrl(f);
+                          setOfficeFile({ name: f.name, size: f.size, dataUrl });
+                        }}
+                        files={officeFile ? [{ name: officeFile.name, size: officeFile.size }] : []}
+                        onRemove={() => setOfficeFile(null)}
+                        accept=".docx,.doc,.odt,.rtf,.xlsx,.xls,.ods,.csv,.pptx,.ppt,.odp,.txt"
+                        label="Upload an Office file"
+                      />
+                    </div>
+                  </Tooltip>
                   <ErrMsg msg={officeError} />
                   <RunBtn onClick={runOfficeToPdf} busy={officeBusy} disabled={!officeFile} label="Convert to PDF" getIcon={getIcon} />
                 </div>
@@ -3561,24 +3646,30 @@ export default function PdfPage() {
               <ToolHeader id="pdftooffice" label="PDF → Word" onHelp={setHelpTool} getIcon={getIcon} />
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
-                  <PdfUpload
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0]; e.target.value = '';
-                      if (!f) return;
-                      setPtoError('');
-                      const dataUrl = await readFileAsDataUrl(f);
-                      setPtoFile({ name: f.name, size: f.size, dataUrl });
-                    }}
-                    files={pto_file ? [{ name: pto_file.name, size: pto_file.size }] : []}
-                    onRemove={() => { setPtoFile(null); setPtoError(''); }}
-                  />
+                  <Tooltip text="Upload the PDF you want to convert to an editable document.">
+                    <div>
+                      <PdfUpload
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]; e.target.value = '';
+                          if (!f) return;
+                          setPtoError('');
+                          const dataUrl = await readFileAsDataUrl(f);
+                          setPtoFile({ name: f.name, size: f.size, dataUrl });
+                        }}
+                        files={pto_file ? [{ name: pto_file.name, size: pto_file.size }] : []}
+                        onRemove={() => { setPtoFile(null); setPtoError(''); }}
+                      />
+                    </div>
+                  </Tooltip>
                   <div className="mt-3">
                     <label className={lbl} style={{ color: 'var(--color-muted)' }}>Output format</label>
-                    <select className={inp} style={inpStyle} value={pto_format} onChange={e => setPtoFormat(e.target.value)}>
-                      <option value="docx">Word (.docx)</option>
-                      <option value="odt">OpenDocument (.odt)</option>
-                      <option value="txt">Plain text (.txt)</option>
-                    </select>
+                    <Tooltip text="The file format the PDF is converted into.">
+                      <select className={inp} style={inpStyle} value={pto_format} onChange={e => setPtoFormat(e.target.value)}>
+                        <option value="docx">Word (.docx)</option>
+                        <option value="odt">OpenDocument (.odt)</option>
+                        <option value="txt">Plain text (.txt)</option>
+                      </select>
+                    </Tooltip>
                   </div>
                   <ErrMsg msg={pto_error} />
                   <RunBtn onClick={runPdfToOffice} busy={pto_busy} disabled={!pto_file} label="Convert" getIcon={getIcon} />
@@ -3603,20 +3694,22 @@ export default function PdfPage() {
               <div className="grid lg:grid-cols-2 gap-6">
                 <div>
                   <label className={lbl} style={{ color: 'var(--color-muted)' }}>Google Drive / Docs / Sheets / Slides URL</label>
-                  <input
-                    className={inp}
-                    style={inpStyle}
-                    type="url"
-                    placeholder="https://docs.google.com/document/d/…"
-                    value={googleUrl}
-                    onChange={e => { setGoogleUrl(e.target.value); setGoogleError(''); }}
-                    onDrop={e => {
-                      e.preventDefault();
-                      const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
-                      if (url) { setGoogleUrl(url.trim()); setGoogleError(''); }
-                    }}
-                    onDragOver={e => e.preventDefault()}
-                  />
+                  <Tooltip text="Paste or drag in the link to the Google file you want exported as a PDF.">
+                    <input
+                      className={inp}
+                      style={inpStyle}
+                      type="url"
+                      placeholder="https://docs.google.com/document/d/…"
+                      value={googleUrl}
+                      onChange={e => { setGoogleUrl(e.target.value); setGoogleError(''); }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                        if (url) { setGoogleUrl(url.trim()); setGoogleError(''); }
+                      }}
+                      onDragOver={e => e.preventDefault()}
+                    />
+                  </Tooltip>
                   <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
                     Paste or drag a Google Docs, Sheets, or Slides URL here. Requires Google account connected via Settings → Gmail / Drive.
                   </p>
@@ -3652,7 +3745,9 @@ export default function PdfPage() {
                 badge={fdFields.length ? `${fdFields.length} field${fdFields.length !== 1 ? 's' : ''}` : undefined} />
 
               {!fdFile && !fdLoading && (
-                <PdfUpload onChange={onFdFileChange} files={[]} />
+                <Tooltip text="Upload the PDF you want to add fillable fields to.">
+                  <div><PdfUpload onChange={onFdFileChange} files={[]} /></div>
+                </Tooltip>
               )}
               {fdLoading && (
                 <div className="flex items-center justify-center rounded-xl border-2 border-dashed" style={{ minHeight: 200, borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
@@ -3667,29 +3762,35 @@ export default function PdfPage() {
                   <div className="flex-1 min-w-0">
                     {/* Page navigation */}
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => changeFdPage(fdCurrentPage - 1)}
-                        disabled={fdCurrentPage <= 1}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                      >◀ Prev</button>
+                      <Tooltip text="Go to the previous page to draw fields there.">
+                        <button
+                          type="button"
+                          onClick={() => changeFdPage(fdCurrentPage - 1)}
+                          disabled={fdCurrentPage <= 1}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >◀ Prev</button>
+                      </Tooltip>
                       <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
                         Page <strong style={{ color: 'var(--color-text)' }}>{fdCurrentPage}</strong> of {fdPageCount}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => changeFdPage(fdCurrentPage + 1)}
-                        disabled={fdCurrentPage >= fdPageCount}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                      >Next ▶</button>
-                      <button
-                        type="button"
-                        onClick={() => { setFdFile(null); fdPdfDocRef.current = null; setFdFields([]); fdFieldsRef.current = []; setFdResult(null); }}
-                        className="ml-auto text-xs hover:opacity-60 transition-opacity"
-                        style={{ color: 'var(--color-muted)' }}
-                      >Change file</button>
+                      <Tooltip text="Go to the next page to draw fields there.">
+                        <button
+                          type="button"
+                          onClick={() => changeFdPage(fdCurrentPage + 1)}
+                          disabled={fdCurrentPage >= fdPageCount}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-30 hover:opacity-70 transition-opacity border"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >Next ▶</button>
+                      </Tooltip>
+                      <Tooltip text="Discard this PDF and upload a different one — any fields drawn so far are lost.">
+                        <button
+                          type="button"
+                          onClick={() => { setFdFile(null); fdPdfDocRef.current = null; setFdFields([]); fdFieldsRef.current = []; setFdResult(null); }}
+                          className="ml-auto text-xs hover:opacity-60 transition-opacity"
+                          style={{ color: 'var(--color-muted)' }}
+                        >Change file</button>
+                      </Tooltip>
                     </div>
 
                     {/* Interaction hint */}
@@ -3701,20 +3802,25 @@ export default function PdfPage() {
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Draw as:</span>
                       {['text', 'checkbox', 'dropdown'].map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setFdFieldType(t)}
-                          className="px-3 py-1 rounded-lg text-xs font-medium transition-colors capitalize"
-                          style={{
-                            background: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-surface)',
-                            color: fdFieldType === t ? '#fff' : 'var(--color-text)',
-                            border: '1px solid',
-                            borderColor: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-border)',
-                          }}
-                        >
-                          {t}
-                        </button>
+                        <Tooltip key={t} text={
+                          t === 'text' ? 'Draw a text field — type a value in its panel to stamp static text, or leave it blank for a fillable field.'
+                          : t === 'checkbox' ? 'Draw a checkbox field.'
+                          : 'Draw a dropdown field with a list of selectable options.'
+                        }>
+                          <button
+                            type="button"
+                            onClick={() => setFdFieldType(t)}
+                            className="px-3 py-1 rounded-lg text-xs font-medium transition-colors capitalize"
+                            style={{
+                              background: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-surface)',
+                              color: fdFieldType === t ? '#fff' : 'var(--color-text)',
+                              border: '1px solid',
+                              borderColor: fdFieldType === t ? 'var(--color-primary)' : 'var(--color-border)',
+                            }}
+                          >
+                            {t}
+                          </button>
+                        </Tooltip>
                       ))}
                     </div>
 
@@ -3750,14 +3856,16 @@ export default function PdfPage() {
                         </span>
                       </p>
                       {fdFields.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => { setFdFields([]); fdFieldsRef.current = []; }}
-                          className="text-xs hover:opacity-60 transition-opacity"
-                          style={{ color: '#ef4444' }}
-                        >
-                          Clear all
-                        </button>
+                        <Tooltip text="Remove every field drawn on this PDF — cannot be undone.">
+                          <button
+                            type="button"
+                            onClick={() => { setFdFields([]); fdFieldsRef.current = []; }}
+                            className="text-xs hover:opacity-60 transition-opacity"
+                            style={{ color: '#ef4444' }}
+                          >
+                            Clear all
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
 
@@ -3782,141 +3890,160 @@ export default function PdfPage() {
                             <span className="text-[10px] flex-1 truncate" style={{ color: 'var(--color-muted)' }}>
                               {Math.round(f.width)}×{Math.round(f.height)} pt
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => removeFdField(f.id)}
-                              className="hover:opacity-60 transition-opacity text-sm leading-none"
-                              style={{ color: 'var(--color-muted)' }}
-                            >×</button>
+                            <Tooltip text="Delete this field.">
+                              <button
+                                type="button"
+                                onClick={() => removeFdField(f.id)}
+                                className="hover:opacity-60 transition-opacity text-sm leading-none"
+                                style={{ color: 'var(--color-muted)' }}
+                              >×</button>
+                            </Tooltip>
                           </div>
-                          <input
-                            type="text"
-                            value={f.name}
-                            onChange={e => updateFdField(f.id, { name: e.target.value })}
-                            className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
-                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                            placeholder="Field name"
-                          />
+                          <Tooltip text="Internal name for this field — must be unique in the PDF.">
+                            <input
+                              type="text"
+                              value={f.name}
+                              onChange={e => updateFdField(f.id, { name: e.target.value })}
+                              className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              placeholder="Field name"
+                            />
+                          </Tooltip>
 
                           {/* Static text stamp: type it here, baked into the page in the
                               chosen font — sidesteps PDF viewers substituting a default font
                               for custom fonts on interactive form fields. Leave blank to
                               create an ordinary fillable AcroForm text field instead. */}
                           {f.type === 'text' && (
-                            <input
-                              type="text"
-                              value={f.value || ''}
-                              onChange={e => updateFdField(f.id, { value: e.target.value })}
-                              className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
-                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                              placeholder="Text to stamp here (leave blank for a fillable field)"
-                            />
+                            <Tooltip text="Type a value here to bake it into the page as static text (renders correctly everywhere); leave blank to make this an ordinary fillable field instead.">
+                              <input
+                                type="text"
+                                value={f.value || ''}
+                                onChange={e => updateFdField(f.id, { value: e.target.value })}
+                                className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none mb-1.5"
+                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                placeholder="Text to stamp here (leave blank for a fillable field)"
+                              />
+                            </Tooltip>
                           )}
 
                           {/* Typography: font / size / color */}
                           {f.type !== 'checkbox' && (
                             <div className="flex items-center gap-1 mb-1.5">
-                              <select
-                                value={f.fontFamily || 'Helvetica'}
-                                onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
-                                className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
-                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                title={f.type === 'text'
-                                  ? 'Font — Script only applies if you type text below to stamp; an empty field falls back to Helvetica'
-                                  : 'Font (PDF standard font — dropdown fields stay editable, so only standard fonts render reliably)'}
-                              >
-                                {/* Script fonts only ever render correctly via the static-text stamp
-                                    (a "text" field with a value typed above) — a dropdown is always a
-                                    live AcroForm field, where a script font would silently fall back
-                                    to Helvetica server-side, so it's not offered here. */}
-                                {Object.entries(f.type === 'text' ? STAMP_FONT_GROUPS : STANDARD_FONT_GROUPS).map(([group, fonts]) => (
-                                  <optgroup key={group} label={group}>
-                                    {fonts.map(font => {
-                                      const css = fontCss(font);
-                                      return (
-                                        <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
-                                          {STANDARD_FONT_LABELS[font] || font}
-                                        </option>
-                                      );
-                                    })}
-                                  </optgroup>
-                                ))}
-                              </select>
-                              <input
-                                type="number"
-                                value={f.fontSize ?? 11}
-                                min={6} max={72}
-                                onChange={e => updateFdField(f.id, { fontSize: Number(e.target.value) })}
-                                className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
-                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                title="Font size (pt)"
-                              />
-                              <input
-                                type="color"
-                                value={f.color || '#000000'}
-                                onChange={e => updateFdField(f.id, { color: e.target.value })}
-                                className="w-8 h-7 rounded cursor-pointer p-0.5 border"
-                                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-                                title="Text color"
-                              />
+                              <Tooltip text={f.type === 'text'
+                                ? 'Font — Script only applies if you type text above to stamp; an empty field falls back to Helvetica'
+                                : 'Font (PDF standard font — dropdown fields stay editable, so only standard fonts render reliably)'}>
+                                <select
+                                  value={f.fontFamily || 'Helvetica'}
+                                  onChange={e => updateFdField(f.id, { fontFamily: e.target.value })}
+                                  className="flex-1 text-xs px-1.5 py-1 rounded border outline-none"
+                                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                >
+                                  {/* Script fonts only ever render correctly via the static-text stamp
+                                      (a "text" field with a value typed above) — a dropdown is always a
+                                      live AcroForm field, where a script font would silently fall back
+                                      to Helvetica server-side, so it's not offered here. */}
+                                  {Object.entries(f.type === 'text' ? STAMP_FONT_GROUPS : STANDARD_FONT_GROUPS).map(([group, fonts]) => (
+                                    <optgroup key={group} label={group}>
+                                      {fonts.map(font => {
+                                        const css = fontCss(font);
+                                        return (
+                                          <option key={font} value={font} style={{ fontFamily: css.fontFamily, fontStyle: css.fontStyle, fontWeight: css.fontWeight }}>
+                                            {STANDARD_FONT_LABELS[font] || font}
+                                          </option>
+                                        );
+                                      })}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                              </Tooltip>
+                              <Tooltip text="Font size (pt).">
+                                <input
+                                  type="number"
+                                  value={f.fontSize ?? 11}
+                                  min={6} max={72}
+                                  onChange={e => updateFdField(f.id, { fontSize: Number(e.target.value) })}
+                                  className="w-14 text-xs px-1.5 py-1 rounded border outline-none text-center"
+                                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                />
+                              </Tooltip>
+                              <Tooltip text="Text colour.">
+                                <input
+                                  type="color"
+                                  value={f.color || '#000000'}
+                                  onChange={e => updateFdField(f.id, { color: e.target.value })}
+                                  className="w-8 h-7 rounded cursor-pointer p-0.5 border"
+                                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                                />
+                              </Tooltip>
                             </div>
                           )}
 
                           {/* Border controls */}
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <label className="flex items-center gap-1 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
-                              <input
-                                type="checkbox"
-                                checked={f.borderEnabled !== false}
-                                onChange={e => updateFdField(f.id, { borderEnabled: e.target.checked })}
-                                className="w-3 h-3"
-                              />
-                              Border
-                            </label>
+                            <Tooltip text="Draw a visible border around this field.">
+                              <label className="flex items-center gap-1 text-xs cursor-pointer flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={f.borderEnabled !== false}
+                                  onChange={e => updateFdField(f.id, { borderEnabled: e.target.checked })}
+                                  className="w-3 h-3"
+                                />
+                                Border
+                              </label>
+                            </Tooltip>
                             {f.borderEnabled !== false && (
                               <>
-                                <input
-                                  type="color"
-                                  value={f.borderColor || '#4d4dcf'}
-                                  onChange={e => updateFdField(f.id, { borderColor: e.target.value })}
-                                  className="w-8 h-6 rounded cursor-pointer p-0.5 border"
-                                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-                                  title="Border color"
-                                />
-                                <input
-                                  type="number"
-                                  value={f.borderWidth ?? 1}
-                                  min={0.5} max={10} step={0.5}
-                                  onChange={e => updateFdField(f.id, { borderWidth: Number(e.target.value) })}
-                                  className="w-14 text-xs px-1.5 py-0.5 rounded border outline-none text-center"
-                                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                                  title="Border width (pt)"
-                                />
+                                <Tooltip text="Border colour.">
+                                  <input
+                                    type="color"
+                                    value={f.borderColor || '#4d4dcf'}
+                                    onChange={e => updateFdField(f.id, { borderColor: e.target.value })}
+                                    className="w-8 h-6 rounded cursor-pointer p-0.5 border"
+                                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                                  />
+                                </Tooltip>
+                                <Tooltip text="Border thickness (pt).">
+                                  <input
+                                    type="number"
+                                    value={f.borderWidth ?? 1}
+                                    min={0.5} max={10} step={0.5}
+                                    onChange={e => updateFdField(f.id, { borderWidth: Number(e.target.value) })}
+                                    className="w-14 text-xs px-1.5 py-0.5 rounded border outline-none text-center"
+                                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                  />
+                                </Tooltip>
                                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>pt</span>
                               </>
                             )}
                           </div>
 
                           {f.type === 'dropdown' && (
-                            <textarea
-                              value={f.options.join('\n')}
-                              onChange={e => updateFdField(f.id, { options: e.target.value.split('\n').filter(Boolean) })}
-                              placeholder="One option per line"
-                              rows={3}
-                              className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none resize-none mb-1.5"
-                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                            />
+                            <Tooltip text="One selectable option per line.">
+                              <textarea
+                                value={f.options.join('\n')}
+                                onChange={e => updateFdField(f.id, { options: e.target.value.split('\n').filter(Boolean) })}
+                                placeholder="One option per line"
+                                rows={3}
+                                className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none resize-none mb-1.5"
+                                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                              />
+                            </Tooltip>
                           )}
                           <div className="flex gap-3 mt-1">
-                            <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                              <input type="checkbox" checked={f.required} onChange={e => updateFdField(f.id, { required: e.target.checked })} className="w-3 h-3" />
-                              Required
-                            </label>
-                            {f.type === 'text' && (
+                            <Tooltip text="Marks this field as required when someone fills the form.">
                               <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                                <input type="checkbox" checked={f.multiline} onChange={e => updateFdField(f.id, { multiline: e.target.checked })} className="w-3 h-3" />
-                                Multiline
+                                <input type="checkbox" checked={f.required} onChange={e => updateFdField(f.id, { required: e.target.checked })} className="w-3 h-3" />
+                                Required
                               </label>
+                            </Tooltip>
+                            {f.type === 'text' && (
+                              <Tooltip text="Allow multiple lines of text in this field.">
+                                <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                                  <input type="checkbox" checked={f.multiline} onChange={e => updateFdField(f.id, { multiline: e.target.checked })} className="w-3 h-3" />
+                                  Multiline
+                                </label>
+                              </Tooltip>
                             )}
                           </div>
                         </div>
@@ -3940,20 +4067,24 @@ export default function PdfPage() {
                     {fdResult && (
                       <div className="mt-3 space-y-2">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setResultModal({ dataUrl: fdResult.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${fdResult.added} AcroForm field${fdResult.added !== 1 ? 's' : ''} embedded` })}
-                            className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
-                            style={{ background: 'var(--color-primary)', color: '#fff' }}
-                          >
-                            View Result
-                          </button>
-                          <button
-                            onClick={() => downloadFile(fdResult.dataUrl, fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf')}
-                            className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                          >
-                            {getIcon('download', { size: 14 })}
-                          </button>
+                          <Tooltip text="Preview the PDF with the new fields embedded.">
+                            <button
+                              onClick={() => setResultModal({ dataUrl: fdResult.dataUrl, filename: fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf', meta: `${fdResult.added} AcroForm field${fdResult.added !== 1 ? 's' : ''} embedded` })}
+                              className="flex-1 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
+                              style={{ background: 'var(--color-primary)', color: '#fff' }}
+                            >
+                              View Result
+                            </button>
+                          </Tooltip>
+                          <Tooltip text="Download the PDF with the new fields embedded.">
+                            <button
+                              onClick={() => downloadFile(fdResult.dataUrl, fdFile ? `${fdFile.name.replace('.pdf','')}-fields.pdf` : 'with-fields.pdf')}
+                              className="py-2 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity border"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                            >
+                              {getIcon('download', { size: 14 })}
+                            </button>
+                          </Tooltip>
                         </div>
                         <div className="rounded-lg px-3 py-2.5 text-xs space-y-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                           <p className="font-semibold" style={{ color: 'var(--color-text)' }}>What to do next</p>

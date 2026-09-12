@@ -206,6 +206,175 @@ function ClipTimeline({
   );
 }
 
+const TOOL_HELP = {
+  generate: {
+    title: 'Generate clip',
+    what: 'Describe a short clip in plain language and generate an AI video (3–10 s) via Replicate or FAL.',
+    features: [
+      'Brief is expanded into a full video prompt by the workspace light model',
+      'Optional reference image — animate it directly, or use it as style inspiration only',
+      'Optional YouTube example — pulls title, transcript excerpt, and thumbnail for grounding',
+      'Choose aspect ratio and target duration',
+    ],
+  },
+  clip: {
+    title: 'Clip / trim',
+    what: 'Cut a video down to a specific start and end point.',
+    features: [
+      'Set in/out points numerically or by dragging handles on the visual timeline',
+      'Numeric fields and timeline handles stay in sync both ways',
+      'Optional end point — leave blank to trim only the start',
+      'Source file is never modified',
+    ],
+  },
+  convert: {
+    title: 'Convert / compress',
+    what: 'Re-encode a video as an H.264 MP4 with adjustable quality and size.',
+    features: [
+      'CRF slider (18–35) trades quality against file size',
+      'Optional max width — shrinks larger videos while preserving aspect ratio',
+      'Good for reducing upload size or fixing incompatible codecs',
+    ],
+  },
+  'extract-audio': {
+    title: 'Extract audio',
+    what: 'Pull the soundtrack out of a video and download it as an audio file.',
+    features: [
+      'Exports MP3 by default',
+      'WAV export available via the API',
+      'Useful for reusing a voiceover or music track elsewhere',
+    ],
+  },
+  audio: {
+    title: 'Mute / replace audio',
+    what: 'Strip a video\'s existing soundtrack, or swap it out for a new uploaded track.',
+    features: [
+      'Mute mode removes all audio entirely',
+      'Replace mode overlays an uploaded audio file in place of the original',
+      'Video length and picture are untouched',
+    ],
+  },
+  normalize: {
+    title: 'Normalize audio',
+    what: 'One-click loudness fix so a video\'s volume sits at a consistent level.',
+    features: [
+      'Presets: quiet / normal / loud — no raw ffmpeg parameters to configure',
+      'Uses ffmpeg\'s loudnorm filter, single-pass for speed',
+      'Good for a quick "fix my volume" pass on an occasional clip',
+    ],
+  },
+  togif: {
+    title: 'Video → GIF',
+    what: 'Convert a short section of video into a looping GIF.',
+    features: [
+      'Two-pass palette generation for cleaner colour than a naive conversion',
+      'Adjustable frame rate (1–30 fps, 10–20 typical) and max width',
+      'Optional start/end trim to select just the section you want',
+    ],
+  },
+  'export-social': {
+    title: 'Export for Social',
+    what: 'Turn one source video into ready-to-post files for multiple social formats in one pass.',
+    features: [
+      'Presets: Reels/TikTok/Shorts (9:16, trimmed to 60s), Square (1:1), Landscape/YouTube (16:9)',
+      'Shared crop focus (center/top/bottom/left/right) applied consistently across presets',
+      'Each result includes a poster-frame thumbnail and can be saved to the library individually',
+      'Download files one at a time or all together as a zip',
+    ],
+  },
+  reframe: {
+    title: 'Crop / reframe',
+    what: 'Change a video\'s aspect ratio by cropping or letterboxing it to a new target shape.',
+    features: [
+      'Target aspect: 9:16, 16:9, 1:1, or 4:5',
+      'Crop mode fills the frame; pad mode letterboxes without cropping',
+      'Crop focus (center/top/bottom/left/right) controls what stays in frame',
+    ],
+  },
+  speed: {
+    title: 'Speed',
+    what: 'Speed up or slow down a video, with audio pitch/tempo following automatically.',
+    features: [
+      'Range 0.25× (slow motion) to 4× (fast forward)',
+      'Audio tempo adjusts to match, so sound stays in sync',
+    ],
+  },
+  annotate: {
+    title: 'Annotate',
+    what: 'Burn a single styled text label onto a video.',
+    features: [
+      'Position: top, center, or bottom',
+      'Choose from 20 curated Google Fonts, plus text/background colour and weight',
+      'Optional fade in/out to ease the label on and off screen',
+    ],
+  },
+  overlay: {
+    title: 'Overlay / watermark',
+    what: 'Place a logo or image on top of a video for the full duration.',
+    features: [
+      'Position grid for precise placement',
+      'Adjustable scale and opacity',
+      'Good for branding, logos, or watermarking exported clips',
+    ],
+  },
+  join: {
+    title: 'Join videos',
+    what: 'Concatenate multiple clips into a single video.',
+    features: [
+      'Supports 2–12 clips, joined in the order shown',
+      'Each clip is normalized to a shared resolution, frame rate, and audio format first',
+      'Optional crossfade transition between clips, or a hard cut',
+      'Adjustable max output width and quality',
+    ],
+  },
+  slideshow: {
+    title: 'Slideshow',
+    what: 'Turn a set of still images into a promo video, with optional background music.',
+    features: [
+      'Supports 2–20 images, each shown for a set number of seconds',
+      'Letterboxed to your chosen aspect ratio (9:16, 16:9, 1:1, 4:5)',
+      'Optional crossfade between slides, or a hard cut',
+      'Optional audio track loops to fill or trims to match the total runtime',
+    ],
+  },
+  'caption-studio': {
+    title: 'Caption studio',
+    what: 'Burn styled subtitles onto a video, sourced from pasted SRT or auto-transcription.',
+    features: [
+      'Upload a video or pick one from Saved media',
+      'Auto-transcribe on upload (Gemini on hosted Vault, whisper-cli locally), or paste your own SRT',
+      'Same typography controls as Annotate — font, weight, size, text and background colour',
+      'Optionally save the captioned result straight to the library',
+    ],
+  },
+  'saved-library': {
+    title: 'Saved media',
+    what: 'Browse, preview, and manage videos and images you\'ve saved from other tools.',
+    features: [
+      'Each item stores the output file plus the settings used to create it',
+      'Preview or delete any saved item',
+      'Jump straight into Caption studio with a saved video pre-selected',
+    ],
+  },
+  info: {
+    title: 'File info',
+    what: 'Inspect a video\'s technical details without processing it.',
+    features: [
+      'Duration, resolution, and container format',
+      'Video and audio codec details',
+      'Useful for confirming a file before running it through another tool',
+    ],
+  },
+  thumbnail: {
+    title: 'Thumbnail',
+    what: 'Export a single still frame from a video as a JPG image.',
+    features: [
+      'Pick the exact timestamp to capture',
+      'Download the resulting JPG, or save it to the library',
+    ],
+  },
+};
+
 const TOOL_GROUPS = [
   {
     id: 'create',
@@ -625,6 +794,22 @@ function ResultVideo({
   );
 }
 
+function ToolHeader({ id, label, onHelp, getIcon }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{label}</h2>
+      <button
+        type="button"
+        onClick={() => onHelp(id)}
+        className="hover:opacity-60 transition-opacity flex-shrink-0"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {getIcon('help-circle', { size: 13 })}
+      </button>
+    </div>
+  );
+}
+
 export default function VideosPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -639,6 +824,7 @@ export default function VideosPage() {
   const [openGroup, setOpenGroup] = useState('create');
   const [tool, setTool] = useState('generate');
   const [search, setSearch] = useState('');
+  const [helpTool, setHelpTool] = useState(null);
 
   const [sourceFile, setSourceFile] = useState(null);
   const [resultBlob, setResultBlob] = useState(null);
@@ -1453,7 +1639,7 @@ export default function VideosPage() {
         {tool === 'generate' && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Generate clip</h2>
+              <ToolHeader id="generate" label="Generate clip" onHelp={setHelpTool} getIcon={getIcon} />
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                 Describe a short clip. Optionally upload a reference image (animate it or use as style inspiration) or paste a YouTube example.
               </p>
@@ -1686,7 +1872,7 @@ export default function VideosPage() {
 
         {tool === 'clip' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Clip / trim</h2>
+            <ToolHeader id="clip" label="Clip / trim" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Drag the timeline markers above, or fine-tune with seconds below.</p>
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
@@ -1715,7 +1901,7 @@ export default function VideosPage() {
 
         {tool === 'convert' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Convert / compress</h2>
+            <ToolHeader id="convert" label="Convert / compress" onHelp={setHelpTool} getIcon={getIcon} />
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Quality (CRF 18–35, lower = better)</span>
@@ -1743,7 +1929,7 @@ export default function VideosPage() {
 
         {tool === 'extract-audio' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Extract audio</h2>
+            <ToolHeader id="extract-audio" label="Extract audio" onHelp={setHelpTool} getIcon={getIcon} />
             <Tooltip text="Pull the soundtrack out of the video and download it as an MP3 file.">
               <button type="button" onClick={async () => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('format', 'mp3'); await runFormVideo('extract-audio', fd, { label: 'Extracting audio…', resultFilename: 'audio.mp3' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 Export MP3
@@ -1757,7 +1943,7 @@ export default function VideosPage() {
 
         {tool === 'audio' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Mute / replace audio</h2>
+            <ToolHeader id="audio" label="Mute / replace audio" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Strip the soundtrack, or replace it with a music / voice file. Replace uses the shorter of video and audio length.
             </p>
@@ -1831,7 +2017,7 @@ export default function VideosPage() {
 
         {tool === 'normalize' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Normalize audio</h2>
+            <ToolHeader id="normalize" label="Normalize audio" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Evens out volume so quiet and loud moments sit at a consistent, comfortable level. One click — no manual levels to set.
             </p>
@@ -1875,7 +2061,7 @@ export default function VideosPage() {
 
         {tool === 'togif' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Video → GIF</h2>
+            <ToolHeader id="togif" label="Video → GIF" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Exports a short looping GIF using ffmpeg's two-pass palette technique for cleaner colour than a naive conversion.
             </p>
@@ -1937,7 +2123,7 @@ export default function VideosPage() {
 
         {tool === 'export-social' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Export for Social</h2>
+            <ToolHeader id="export-social" label="Export for Social" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               One video in, one MP4 per selected preset out. Reels/TikTok/Shorts trims from the start when the source is longer than 60s; Square and Landscape keep the full length. All presets share the same crop focus.
             </p>
@@ -2054,7 +2240,7 @@ export default function VideosPage() {
 
         {tool === 'reframe' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Crop / reframe</h2>
+            <ToolHeader id="reframe" label="Crop / reframe" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Fit video to a social aspect ratio. Crop fills the frame (may trim edges); pad letterboxes without cutting.
             </p>
@@ -2138,7 +2324,7 @@ export default function VideosPage() {
 
         {tool === 'speed' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Speed</h2>
+            <ToolHeader id="speed" label="Speed" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Change playback speed from 0.25× (slow-mo) to 4×. Audio tempo follows when a soundtrack is present.
             </p>
@@ -2196,7 +2382,7 @@ export default function VideosPage() {
 
         {tool === 'annotate' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Annotate</h2>
+            <ToolHeader id="annotate" label="Annotate" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
             <Tooltip text="The text that gets burned into the video frame.">
               <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
@@ -2243,7 +2429,7 @@ export default function VideosPage() {
 
         {tool === 'overlay' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Overlay / watermark</h2>
+            <ToolHeader id="overlay" label="Overlay / watermark" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Place a logo or image on top of the video. PNG with transparency works best.
             </p>
@@ -2311,7 +2497,7 @@ export default function VideosPage() {
 
         {tool === 'join' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Join videos</h2>
+            <ToolHeader id="join" label="Join videos" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Concatenate two or more clips into one MP4. Clips are normalized to a common size and frame rate so mixed formats still join cleanly. Order in the list is the play order.
             </p>
@@ -2371,7 +2557,7 @@ export default function VideosPage() {
 
         {tool === 'slideshow' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Slideshow</h2>
+            <ToolHeader id="slideshow" label="Slideshow" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Turn product photos or other images into a promo video with background music — each image gets the same fitted aspect, one shared duration per slide.
             </p>
@@ -2434,7 +2620,7 @@ export default function VideosPage() {
         {tool === 'caption-studio' && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Caption studio</h2>
+              <ToolHeader id="caption-studio" label="Caption studio" onHelp={setHelpTool} getIcon={getIcon} />
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                 Pick a saved video or upload one, then burn styled SRT subtitles. Return later to add or update captions on library items.
               </p>
@@ -2571,7 +2757,7 @@ export default function VideosPage() {
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Saved media</h2>
+                <ToolHeader id="saved-library" label="Saved media" onHelp={setHelpTool} getIcon={getIcon} />
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                   Videos and images from tool runs — preview, delete, or open in Caption studio.
                 </p>
@@ -2682,7 +2868,7 @@ export default function VideosPage() {
 
         {tool === 'info' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>File info</h2>
+            <ToolHeader id="info" label="File info" onHelp={setHelpTool} getIcon={getIcon} />
             <Tooltip text="Read the video's duration, resolution, codec, and audio/container details with ffprobe.">
               <button type="button" onClick={handleProbe} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 Analyse file
@@ -2703,7 +2889,7 @@ export default function VideosPage() {
 
         {tool === 'thumbnail' && (
           <section className="space-y-3">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Thumbnail</h2>
+            <ToolHeader id="thumbnail" label="Thumbnail" onHelp={setHelpTool} getIcon={getIcon} />
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Frame at (seconds)</span>
               <Tooltip text="The timestamp in the video to capture as a still image.">
@@ -2741,6 +2927,41 @@ export default function VideosPage() {
           </section>
         )}
       </main>
+
+      {helpTool && TOOL_HELP[helpTool] && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setHelpTool(null)}
+        >
+          <div
+            className="rounded-2xl p-6 max-w-md w-full shadow-xl"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{TOOL_HELP[helpTool].title}</h3>
+              <button
+                type="button"
+                onClick={() => setHelpTool(null)}
+                className="hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {getIcon('x', { size: 18 })}
+              </button>
+            </div>
+            <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP[helpTool].what}</p>
+            <ul className="space-y-2">
+              {TOOL_HELP[helpTool].features.map((feat, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                  <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon('check', { size: 14 })}</span>
+                  {feat}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

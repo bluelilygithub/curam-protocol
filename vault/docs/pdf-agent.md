@@ -11,6 +11,8 @@ The PDF Tools page is a PDF toolkit mounted in Vault at **`/pdf`**. Stateless â€
 
 Not currently gated by a feature flag and not listed in `FEATURE_ACCESS_KEYS` â€” same known-gap pattern as `translate`/`guitar` (see **Feature access** in `vault/CLAUDE.md`).
 
+Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon (`ToolHeader`, `getIcon('help-circle')`) next to every tool's title opens a modal with that tool's full title/description/feature list (`TOOL_HELP`); every in-panel control across all 23 tools also shows a themed hover popover on its own, via the shared `client/src/components/Tooltip.jsx` component.
+
 ---
 
 ## Endpoints
