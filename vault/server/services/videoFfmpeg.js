@@ -496,6 +496,150 @@ async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}
   ], 900000);
 }
 
+const LOUDNESS_PRESETS = {
+  quiet: { i: -20, lra: 11, tp: -2 },
+  normal: { i: -16, lra: 11, tp: -1.5 },
+  loud: { i: -13, lra: 9, tp: -1 },
+};
+
+/**
+ * One-pass loudnorm — good enough for an occasional-user "fix my volume"
+ * tool. True two-pass (measure then apply exact I/LRA/TP) is more accurate
+ * but doubles encode time and requires parsing loudnorm's stderr JSON; for
+ * a single click on short clips one-pass is the right tradeoff here.
+ * @param {{ preset?: 'quiet'|'normal'|'loud', crf?: number }} [opts]
+ */
+async function normalizeAudioLoudness(inputPath, outputPath, opts = {}) {
+  const preset = LOUDNESS_PRESETS[opts.preset] || LOUDNESS_PRESETS.normal;
+  const probe = await probeVideo(inputPath);
+  if (!probe.hasAudio) throw new Error('Video has no audio track to normalize');
+  const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
+  const af = `loudnorm=I=${preset.i}:LRA=${preset.lra}:TP=${preset.tp}`;
+  try {
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath,
+      '-c:v', 'copy',
+      '-af', af,
+      '-c:a', 'aac', '-b:a', '192k',
+      '-movflags', '+faststart',
+      outputPath,
+    ], 600000);
+  } catch {
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', inputPath,
+      '-af', af,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:a', 'aac', '-b:a', '192k',
+      '-movflags', '+faststart',
+      outputPath,
+    ], 600000);
+  }
+}
+
+/**
+ * Two-pass palette GIF export (ffmpeg's standard high-quality GIF technique):
+ * pass 1 builds an optimized colour palette from the (trimmed, scaled) video,
+ * pass 2 applies it with dithering.
+ * @param {{ fps?: number, width?: number, startSec?: number, endSec?: number }} [opts]
+ */
+async function videoToGif(inputPath, outputPath, opts = {}) {
+  const fps = Math.min(30, Math.max(1, Math.round(Number(opts.fps) || 12)));
+  const width = opts.width ? Math.max(80, Math.min(1280, Math.round(Number(opts.width)))) : 480;
+  const startSec = Math.max(0, Number(opts.startSec) || 0);
+  const endSec = opts.endSec != null && opts.endSec !== '' ? Number(opts.endSec) : null;
+  const dir = path.dirname(outputPath);
+  const palettePath = path.join(dir, `gif_palette_${Date.now()}.png`);
+
+  const trimArgs = [];
+  if (startSec) trimArgs.push('-ss', String(startSec));
+  trimArgs.push('-i', inputPath);
+  if (endSec != null && Number.isFinite(endSec)) trimArgs.push('-to', String(endSec));
+
+  const vf = `fps=${fps},scale=${width}:-1:flags=lanczos`;
+
+  await execFileAsync(FFMPEG, ['-y', ...trimArgs, '-vf', `${vf},palettegen=stats_mode=diff`, palettePath], 300000);
+  await execFileAsync(FFMPEG, [
+    '-y', ...trimArgs, '-i', palettePath,
+    '-filter_complex', `${vf}[x];[x][1:v]paletteuse=dither=sierra2_4a`,
+    outputPath,
+  ], 300000);
+}
+
+const SLIDESHOW_DIMS = {
+  '9:16': [720, 1280],
+  '16:9': [1280, 720],
+  '1:1': [1080, 1080],
+  '4:5': [864, 1080],
+};
+
+function slideVf(tw, th, mode) {
+  if (mode === 'crop') {
+    return `scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th},setsar=1,format=yuv420p`;
+  }
+  return `scale=${tw}:${th}:force_original_aspect_ratio=decrease,pad=${tw}:${th}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+}
+
+/**
+ * Build a slideshow video from 2-20 still images, optional shared crossfade,
+ * and an optional background audio track.
+ *
+ * Audio behaviour: the track is always played with `-stream_loop -1` (loop
+ * forever) then the whole output is cut to the slideshow's total duration
+ * with `-t` — this loops short audio to fill the slideshow and trims long
+ * audio to match, in a single ffmpeg pass, no branching needed.
+ *
+ * @param {string[]} imagePaths
+ * @param {{ secondsPerSlide?: number, aspect?: string, mode?: 'crop'|'pad', crossfadeSec?: number, audioPath?: string|null, crf?: number }} [opts]
+ */
+async function buildSlideshow(imagePaths, outputPath, opts = {}) {
+  if (!Array.isArray(imagePaths) || imagePaths.length < 2) {
+    throw new Error('At least two images are required for a slideshow');
+  }
+  if (imagePaths.length > 20) {
+    throw new Error('Maximum 20 images per slideshow');
+  }
+  const aspect = opts.aspect || '9:16';
+  const dims = SLIDESHOW_DIMS[aspect];
+  if (!dims) throw new Error(`Unsupported aspect "${aspect}" — use 9:16, 16:9, 1:1, or 4:5`);
+  const [tw, th] = dims;
+  const mode = opts.mode === 'crop' ? 'crop' : 'pad';
+  const perSlide = Math.max(1, Math.min(30, Number(opts.secondsPerSlide) || 3));
+  const crossfadeSec = Math.max(0, Number(opts.crossfadeSec) || 0);
+  const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
+  const dir = path.dirname(outputPath);
+
+  const slidePaths = [];
+  for (let i = 0; i < imagePaths.length; i += 1) {
+    const slidePath = path.join(dir, `slide_${i}.mp4`);
+    await execFileAsync(FFMPEG, [
+      '-y', '-loop', '1', '-t', String(perSlide), '-i', imagePaths[i],
+      '-vf', `${slideVf(tw, th, mode)},fps=30`,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf), '-pix_fmt', 'yuv420p',
+      slidePath,
+    ], 300000);
+    slidePaths.push(slidePath);
+  }
+
+  const joinedPath = path.join(dir, 'slideshow_joined.mp4');
+  await joinVideosWithOptionalCrossfade(slidePaths, joinedPath, { maxWidth: tw, crf, crossfadeSec });
+
+  if (opts.audioPath) {
+    const joinedProbe = await probeVideo(joinedPath);
+    const totalDur = joinedProbe.duration || perSlide * imagePaths.length;
+    await execFileAsync(FFMPEG, [
+      '-y', '-i', joinedPath,
+      '-stream_loop', '-1', '-i', opts.audioPath,
+      '-map', '0:v:0', '-map', '1:a:0',
+      '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+      '-t', String(totalDur),
+      '-movflags', '+faststart',
+      outputPath,
+    ], 600000);
+  } else {
+    await fs.copyFile(joinedPath, outputPath);
+  }
+}
+
 async function extractAudio(inputPath, outputPath, format = 'mp3') {
   const codec = format === 'wav'
     ? ['-c:a', 'pcm_s16le']
@@ -669,6 +813,25 @@ function escapeFilterPath(filePath) {
   return String(filePath).replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
 }
 
+/**
+ * Build a drawtext `alpha` expression that fades the label in and/or out.
+ * Uses `min(1, t/fadeIn)` (ramps 0→1 over the fade-in window) and
+ * `min(1, (duration-t)/fadeOut)` (ramps 1→0 over the fade-out window),
+ * multiplied together when both are set — no nested if() needed, and only
+ * a bare comma-escape (drawtext options are comma-separated) is required.
+ * Returns null when neither fade is requested (default, additive-only).
+ */
+function buildFadeAlphaExpr(fadeInSec, fadeOutSec, duration) {
+  const fi = Math.max(0, Number(fadeInSec) || 0);
+  const fo = Math.max(0, Number(fadeOutSec) || 0);
+  if (!fi && !fo) return null;
+  const dur = Math.max(0, Number(duration) || 0);
+  const parts = [];
+  if (fi > 0) parts.push(`min(1\\,t/${fi})`);
+  if (fo > 0 && dur > 0) parts.push(`min(1\\,(${dur.toFixed(3)}-t)/${fo})`);
+  return parts.length ? parts.join('*') : null;
+}
+
 async function annotateVideo(inputPath, outputPath, {
   text,
   position = 'bottom-center',
@@ -679,6 +842,8 @@ async function annotateVideo(inputPath, outputPath, {
   backgroundColor = '#000000',
   backgroundTransparent = false,
   backgroundAlpha = 0.75,
+  fadeInSec = 0,
+  fadeOutSec = 0,
 }, workDir) {
   const escaped = escapeDrawtext(text);
   const fontfile = escapeFilterPath(await resolveFontFilePath(fontFamily, fontWeight, workDir));
@@ -687,7 +852,12 @@ async function annotateVideo(inputPath, outputPath, {
   const boxPart = backgroundTransparent
     ? 'box=0:borderw=2:bordercolor=black@0.75'
     : `box=1:boxcolor=${hexToDrawtextBoxColor(backgroundColor, backgroundAlpha)}:boxborderw=10`;
-  const vf = `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:${boxPart}:x=${x}:y=${y}`;
+  let vf = `drawtext=fontfile=${fontfile}:text='${escaped}':fontsize=${Math.min(96, Math.max(10, Number(fontSize) || 28))}:fontcolor=${color}:${boxPart}:x=${x}:y=${y}`;
+  if (Number(fadeInSec) > 0 || Number(fadeOutSec) > 0) {
+    const probe = await probeVideo(inputPath);
+    const alphaExpr = buildFadeAlphaExpr(fadeInSec, fadeOutSec, probe.duration);
+    if (alphaExpr) vf += `:alpha=${alphaExpr}`;
+  }
   await encodeWithVideoFilter(inputPath, outputPath, vf);
 }
 
@@ -745,4 +915,9 @@ module.exports = {
   withTempDir,
   readOutputFile,
   execFileAsync,
+  LOUDNESS_PRESETS,
+  normalizeAudioLoudness,
+  videoToGif,
+  SLIDESHOW_DIMS,
+  buildSlideshow,
 };

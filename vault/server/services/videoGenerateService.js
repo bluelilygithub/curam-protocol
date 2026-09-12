@@ -207,6 +207,60 @@ async function describeImageWithGemini(modelId, imageDataUrl, instruction) {
   return text;
 }
 
+const SRT_TRANSCRIBE_INSTRUCTION = `Transcribe the spoken audio in full. Return ONLY a valid SRT-formatted subtitle file — sequential cue numbers, "HH:MM:SS,mmm --> HH:MM:SS,mmm" timestamp lines, then the spoken text for that cue, separated by blank lines. Break into short cues (roughly one sentence or 5-8 seconds each). No markdown fences, no commentary, no extra text before or after the SRT content.`;
+
+/**
+ * Hosted transcription (Railway has no whisper-cli binary): send the
+ * extracted audio track to Gemini and ask for SRT-formatted output directly.
+ * Reuses the same GoogleGenerativeAI client setup as `describeImageWithGemini`.
+ */
+async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/mp3') {
+  const { gemini: modelId } = await getModelsForUser(userId);
+  if (!modelId) throw new Error('No Gemini model configured — add one in Settings to use hosted auto-transcribe');
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY is not configured — required for hosted auto-transcribe');
+
+  const genai = new GoogleGenerativeAI(key);
+  const gModel = genai.getGenerativeModel({
+    model: modelId,
+    generationConfig: { maxOutputTokens: 8192 },
+  });
+
+  const result = await gModel.generateContent([
+    { text: SRT_TRANSCRIBE_INSTRUCTION },
+    { inlineData: { mimeType, data: audioBase64 } },
+  ]);
+
+  let text = '';
+  try {
+    text = result.response.text().trim();
+  } catch {
+    const parts = result.response.candidates?.[0]?.content?.parts || [];
+    text = parts.map((p) => p.text || '').join('').trim();
+  }
+  if (!text) throw new Error('Gemini returned an empty transcript');
+
+  logUsage({
+    userId,
+    model: modelId,
+    inputTokens: 0,
+    outputTokens: 0,
+    feature: 'videos',
+  });
+  return text;
+}
+
+async function isGeminiTranscribeAvailable(userId) {
+  try {
+    if (!process.env.GEMINI_API_KEY) return false;
+    const { gemini: modelId } = await getModelsForUser(userId);
+    return Boolean(modelId);
+  } catch {
+    return false;
+  }
+}
+
 async function describeReferenceImage(userId, imageDataUrl, purpose = 'suggestion') {
   const { gemini: modelId } = await getModelsForUser(userId);
   if (!modelId) throw new Error('No Gemini model configured — add one in Settings to analyse reference images');
@@ -643,6 +697,8 @@ module.exports = {
   expandVideoPrompt,
   buildYoutubeContext,
   toImageDataUrl,
+  transcribeAudioWithGemini,
+  isGeminiTranscribeAvailable,
   DEFAULT_VIDEO_MODEL,
   DEFAULT_VIDEO_I2V_MODEL,
   DEFAULT_REPLICATE_VIDEO_MODEL,

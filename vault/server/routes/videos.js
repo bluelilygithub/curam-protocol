@@ -4,9 +4,14 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
+const crypto = require('crypto');
+const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
 const { saveAsset, listAssets, getAsset, deleteAsset } = require('../services/videoLibraryService');
-const { startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo } = require('../services/videoGenerateService');
+const {
+  startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
+  transcribeAudioWithGemini, isGeminiTranscribeAvailable,
+} = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
   MAX_VIDEO_BYTES,
@@ -27,7 +32,11 @@ const {
   withTempDir,
   readOutputFile,
   execFileAsync,
+  normalizeAudioLoudness,
+  videoToGif,
+  buildSlideshow,
 } = require('../services/videoFfmpeg');
+const { normalizeSrt } = require('../services/srtUtils');
 
 const router = express.Router();
 
@@ -51,6 +60,40 @@ function getVideoJob(requestId, userId) {
 
 function forgetVideoJob(requestId) {
   videoJobCache.delete(requestId);
+}
+
+// Export for Social — short-lived server-side cache of rendered per-preset
+// buffers so the client can download each file individually or as one zip
+// without re-uploading/re-encoding. Same TTL-map pattern as videoJobCache.
+const exportSocialCache = new Map();
+const EXPORT_SOCIAL_TTL_MS = 30 * 60 * 1000;
+
+const SOCIAL_EXPORT_PRESETS = {
+  reels: { label: 'Reels / TikTok / Shorts', aspect: '9:16', maxDurationSec: 60 },
+  square: { label: 'Square', aspect: '1:1', maxDurationSec: null },
+  landscape: { label: 'Landscape / YouTube', aspect: '16:9', maxDurationSec: null },
+};
+
+function rememberExportSocial(exportId, userId, items) {
+  exportSocialCache.set(exportId, { userId, items, at: Date.now() });
+}
+
+function getExportSocial(exportId, userId) {
+  const entry = exportSocialCache.get(exportId);
+  if (!entry) return null;
+  if (Date.now() - entry.at > EXPORT_SOCIAL_TTL_MS) {
+    exportSocialCache.delete(exportId);
+    return null;
+  }
+  if (entry.userId !== userId) return null;
+  return entry;
+}
+
+function pruneExportSocialCache() {
+  const now = Date.now();
+  for (const [id, entry] of exportSocialCache) {
+    if (now - entry.at > EXPORT_SOCIAL_TTL_MS) exportSocialCache.delete(id);
+  }
 }
 
 function parseJsonBodyField(val) {
@@ -139,16 +182,30 @@ async function writeUpload(dir, file) {
 router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();
   const generate = getVideoGenerateConfig();
+
+  let transcribe;
+  if (runtimeConfig.isLocal) {
+    transcribe = {
+      available: ffmpeg,
+      source: 'whisper-local',
+      note: 'Local whisper-cli when model is installed',
+    };
+  } else {
+    const geminiOk = ffmpeg && await isGeminiTranscribeAvailable(req.user.id);
+    transcribe = {
+      available: geminiOk,
+      source: geminiOk ? 'gemini' : null,
+      note: geminiOk
+        ? 'Hosted auto-transcribe via Gemini — extracts the audio track and returns SRT captions.'
+        : 'Add GEMINI_API_KEY and a Gemini model in Settings to enable hosted auto-transcribe, or paste an SRT file.',
+    };
+  }
+
   res.json({
     ffmpeg,
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
     generate,
-    transcribe: {
-      available: runtimeConfig.isLocal && ffmpeg,
-      note: runtimeConfig.isLocal
-        ? 'Local whisper-cli when model is installed'
-        : 'Paste SRT on hosted Vault — auto-transcribe is local-only for now',
-    },
+    transcribe,
   });
 });
 
@@ -659,6 +716,8 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
       const inputPath = await writeUpload(dir, req.file);
       const outputPath = path.join(dir, 'annotated.mp4');
       const style = captionStyleFromBody(req.body);
+      const fadeInSec = req.body?.fadeInSec != null && req.body.fadeInSec !== '' ? Number(req.body.fadeInSec) : 0;
+      const fadeOutSec = req.body?.fadeOutSec != null && req.body.fadeOutSec !== '' ? Number(req.body.fadeOutSec) : 0;
       await annotateVideo(inputPath, outputPath, {
         text,
         position: style.position || req.body?.position || 'bottom-center',
@@ -668,6 +727,8 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
         fontWeight: style.fontWeight,
         backgroundColor: style.backgroundColor,
         backgroundTransparent: style.backgroundTransparent,
+        fadeInSec: Number.isFinite(fadeInSec) ? Math.min(30, Math.max(0, fadeInSec)) : 0,
+        fadeOutSec: Number.isFinite(fadeOutSec) ? Math.min(30, Math.max(0, fadeOutSec)) : 0,
       }, dir);
       return readOutputFile(outputPath);
     });
@@ -679,25 +740,38 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
   }
 });
 
+const MAX_GEMINI_AUDIO_BYTES = 18 * 1024 * 1024;
+
 router.post('/transcribe', upload.single('video'), async (req, res) => {
   try {
-    if (!runtimeConfig.isLocal) {
-      return res.status(503).json({
-        error: 'Auto-transcribe is available in local dev with whisper-cli. On hosted Vault, paste an SRT file in Captions.',
-      });
-    }
-
     const ffmpeg = await checkFfmpeg();
     if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available' });
 
-    const text = await withTempDir(async (dir) => {
+    if (runtimeConfig.isLocal) {
+      const text = await withTempDir(async (dir) => {
+        const inputPath = await writeUpload(dir, req.file);
+        const wavPath = path.join(dir, 'audio.wav');
+        await extractWav16k(inputPath, wavPath);
+        return transcribeWav(wavPath);
+      });
+      return res.json({ text, source: 'whisper-local' });
+    }
+
+    // Hosted (e.g. Railway): no whisper-cli binary available — extract the
+    // audio track and use Gemini's audio understanding to return SRT directly.
+    const srt = await withTempDir(async (dir) => {
       const inputPath = await writeUpload(dir, req.file);
-      const wavPath = path.join(dir, 'audio.wav');
-      await extractWav16k(inputPath, wavPath);
-      return transcribeWav(wavPath);
+      const audioPath = path.join(dir, 'audio.mp3');
+      await extractAudio(inputPath, audioPath, 'mp3');
+      const buf = await fs.readFile(audioPath);
+      if (buf.length > MAX_GEMINI_AUDIO_BYTES) {
+        throw new Error('Video is too long for hosted transcription (audio track over ~18MB) — trim it first, or use local dev with whisper-cli.');
+      }
+      const raw = await transcribeAudioWithGemini(req.user.id, buf.toString('base64'), 'audio/mp3');
+      return normalizeSrt(raw);
     });
 
-    res.json({ text });
+    res.json({ srt, source: 'gemini' });
   } catch (err) {
     console.error('[videos/transcribe]', err.message);
     res.status(500).json({ error: err.message });
@@ -734,6 +808,231 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
   } catch (err) {
     console.error('[videos/burn-captions]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/normalize', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const preset = ['quiet', 'normal', 'loud'].includes(req.body?.preset) ? req.body.preset : 'normal';
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'normalized.mp4');
+      await normalizeAudioLoudness(inputPath, outputPath, { preset });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'normalized.mp4');
+  } catch (err) {
+    console.error('[videos/normalize]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/togif', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const fps = req.body?.fps ? Number(req.body.fps) : 12;
+    const width = req.body?.width ? Number(req.body.width) : 480;
+    const startSec = req.body?.startSec != null && req.body.startSec !== '' ? Number(req.body.startSec) : 0;
+    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const outputPath = path.join(dir, 'output.gif');
+      await videoToGif(inputPath, outputPath, { fps, width, startSec, endSec });
+      return readOutputFile(outputPath);
+    });
+
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Content-Disposition', 'inline; filename="output.gif"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (err) {
+    console.error('[videos/togif]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/slideshow', upload.fields([
+  { name: 'images', maxCount: 20 },
+  { name: 'audio', maxCount: 1 },
+]), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const images = req.files?.images || [];
+    if (images.length < 2) return res.status(400).json({ error: 'Upload at least two images (field name: images)' });
+    if (images.length > 20) return res.status(400).json({ error: 'Maximum 20 images' });
+
+    const secondsPerSlide = req.body?.secondsPerSlide ? Number(req.body.secondsPerSlide) : 3;
+    const aspect = req.body?.aspect || '9:16';
+    const mode = req.body?.mode === 'crop' ? 'crop' : 'pad';
+    const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== '' ? Number(req.body.crossfadeSec) : 0;
+    const audioFile = req.files?.audio?.[0] || null;
+
+    const buffer = await withTempDir(async (dir) => {
+      const imagePaths = [];
+      for (let i = 0; i < images.length; i += 1) {
+        const f = images[i];
+        if (!f?.buffer?.length) throw new Error(`Image #${i + 1} is empty`);
+        const ext = f.mimetype?.includes('png') ? '.png' : f.mimetype?.includes('webp') ? '.webp' : '.jpg';
+        const imgPath = path.join(dir, `slide_src_${i}${ext}`);
+        await fs.writeFile(imgPath, f.buffer);
+        imagePaths.push(imgPath);
+      }
+
+      let audioPath = null;
+      if (audioFile) {
+        const aext = audioFile.mimetype?.includes('wav') ? '.wav'
+          : audioFile.mimetype?.includes('mp4') || audioFile.mimetype?.includes('m4a') ? '.m4a'
+            : '.mp3';
+        audioPath = path.join(dir, `slideshow_audio${aext}`);
+        await fs.writeFile(audioPath, audioFile.buffer);
+      }
+
+      const outputPath = path.join(dir, 'slideshow.mp4');
+      await buildSlideshow(imagePaths, outputPath, {
+        secondsPerSlide, aspect, mode, crossfadeSec, audioPath,
+      });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'slideshow.mp4');
+  } catch (err) {
+    console.error('[videos/slideshow]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export for Social — one video in, N social-preset MP4s out. Reuses
+// Reframe's aspect-crop logic for each preset and Clip's trim-from-start
+// for presets with a sensible duration cap (Reels/TikTok/Shorts). Renders
+// are cached server-side (short TTL) so the client can download individual
+// files or a zip without re-uploading — mirrors the videoJobCache pattern
+// used by Generate.
+router.post('/export-social', upload.single('video'), async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const videoFile = req.file;
+    if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Video file is required' });
+
+    let presetIds = [];
+    try {
+      const parsed = JSON.parse(req.body?.presets || '[]');
+      if (Array.isArray(parsed)) presetIds = parsed.map((p) => String(p));
+    } catch {
+      presetIds = String(req.body?.presets || '').split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    presetIds = [...new Set(presetIds)].filter((id) => SOCIAL_EXPORT_PRESETS[id]);
+    if (!presetIds.length) return res.status(400).json({ error: 'Select at least one preset to export' });
+
+    const focus = ['center', 'top', 'bottom', 'left', 'right'].includes(req.body?.focus) ? req.body.focus : 'center';
+
+    const items = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, videoFile);
+      const probe = await probeVideo(inputPath);
+      const results = [];
+      for (let i = 0; i < presetIds.length; i += 1) {
+        const presetId = presetIds[i];
+        const preset = SOCIAL_EXPORT_PRESETS[presetId];
+
+        let workingPath = inputPath;
+        if (preset.maxDurationSec && probe.duration && probe.duration > preset.maxDurationSec) {
+          const trimmedPath = path.join(dir, `${presetId}_trimmed.mp4`);
+          // eslint-disable-next-line no-await-in-loop
+          await clipVideo(inputPath, trimmedPath, { startSec: 0, endSec: preset.maxDurationSec });
+          workingPath = trimmedPath;
+        }
+
+        const outPath = path.join(dir, `${presetId}.mp4`);
+        // eslint-disable-next-line no-await-in-loop
+        await reframeVideo(workingPath, outPath, { aspect: preset.aspect, mode: 'crop', focus });
+        // eslint-disable-next-line no-await-in-loop
+        const outProbe = await probeVideo(outPath);
+        // eslint-disable-next-line no-await-in-loop
+        const buffer = await readOutputFile(outPath);
+
+        const thumbPath = path.join(dir, `${presetId}_thumb.jpg`);
+        // eslint-disable-next-line no-await-in-loop
+        await captureThumbnail(outPath, thumbPath, Math.min(1, outProbe.duration || 0));
+        // eslint-disable-next-line no-await-in-loop
+        const thumbBuf = await readOutputFile(thumbPath);
+
+        results.push({
+          presetId,
+          label: preset.label,
+          aspect: preset.aspect,
+          width: outProbe.width,
+          height: outProbe.height,
+          durationSec: outProbe.duration,
+          bytes: buffer.length,
+          fileName: `${presetId}-${outProbe.width}x${outProbe.height}.mp4`,
+          buffer,
+          thumbnailDataUrl: `data:image/jpeg;base64,${thumbBuf.toString('base64')}`,
+        });
+      }
+      return results;
+    });
+
+    const exportId = crypto.randomBytes(8).toString('hex');
+    rememberExportSocial(exportId, req.user.id, items);
+    pruneExportSocialCache();
+
+    res.json({
+      exportId,
+      count: items.length,
+      items: items.map(({ buffer, ...rest }) => rest),
+    });
+  } catch (err) {
+    console.error('[videos/export-social]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/export-social/:exportId/file/:presetId', async (req, res) => {
+  try {
+    const entry = getExportSocial(req.params.exportId, req.user.id);
+    if (!entry) return res.status(404).json({ error: 'Export not found or expired — run export again' });
+    const item = entry.items.find((i) => i.presetId === req.params.presetId);
+    if (!item) return res.status(404).json({ error: 'Preset not found in this export' });
+    sendVideoBuffer(res, item.buffer, item.fileName);
+  } catch (err) {
+    console.error('[videos/export-social/file]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/export-social/:exportId/zip', async (req, res) => {
+  try {
+    const entry = getExportSocial(req.params.exportId, req.user.id);
+    if (!entry) return res.status(404).json({ error: 'Export not found or expired — run export again' });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="export-social.zip"');
+    res.setHeader('Cache-Control', 'no-store');
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      console.error('[videos/export-social/zip]', err.message);
+      if (!res.headersSent) res.status(500);
+      res.end();
+    });
+    archive.pipe(res);
+    entry.items.forEach((item) => archive.append(item.buffer, { name: item.fileName }));
+    await archive.finalize();
+  } catch (err) {
+    console.error('[videos/export-social/zip]', err.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+    else res.end();
   }
 });
 

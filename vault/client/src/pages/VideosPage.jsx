@@ -5,6 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
+import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 const VIDEO_GOOGLE_FONTS = [
@@ -28,6 +29,12 @@ const VIDEO_GOOGLE_FONTS = [
   'Caveat',
   'Roboto Mono',
   'Space Mono',
+];
+
+const SOCIAL_EXPORT_PRESETS = [
+  { id: 'reels', label: 'Reels / TikTok / Shorts', desc: '9:16 · trimmed to 60s if longer' },
+  { id: 'square', label: 'Square', desc: '1:1' },
+  { id: 'landscape', label: 'Landscape / YouTube', desc: '16:9' },
 ];
 
 const FONT_WEIGHTS = [
@@ -209,6 +216,9 @@ const TOOL_GROUPS = [
       { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
       { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
       { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
+      { id: 'normalize', label: 'Normalize audio', desc: 'One-click loudness consistency fix' },
+      { id: 'togif', label: 'Video → GIF', desc: 'Short looping GIF with an optimized palette' },
+      { id: 'export-social', label: 'Export for Social', desc: 'One video → Reels/Square/Landscape presets' },
     ],
   },
   {
@@ -227,6 +237,7 @@ const TOOL_GROUPS = [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
       { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
+      { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
     ],
   },
@@ -449,6 +460,75 @@ function MultiVideoUpload({ files, onFiles, label = 'Video files (order = join o
   );
 }
 
+function MultiImageUpload({ files, onFiles, label = 'Images (order = slide order, 2–20)' }) {
+  const inputRef = useRef(null);
+  const move = (index, dir) => {
+    const next = [...files];
+    const j = index + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[index], next[j]] = [next[j], next[index]];
+    onFiles(next);
+  };
+  const removeAt = (index) => onFiles(files.filter((_, i) => i !== index));
+
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Tooltip text="Add product photos or other still images — at least two, up to twenty.">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {files.length ? 'Add more images' : 'Choose images'}
+          </button>
+        </Tooltip>
+        {files.length > 0 && (
+          <Tooltip text="Remove every image and start over.">
+            <button
+              type="button"
+              onClick={() => onFiles([])}
+              className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Clear all
+            </button>
+          </Tooltip>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const picked = Array.from(e.target.files || []);
+          if (!picked.length) return;
+          onFiles([...files, ...picked].slice(0, 20));
+          e.target.value = '';
+        }}
+      />
+      {files.length > 0 && (
+        <ul className="space-y-1.5 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          {files.map((f, i) => (
+            <li key={`${f.name}-${f.size}-${i}`} className="flex items-center gap-2 text-xs">
+              <span className="shrink-0 w-5 text-center font-medium" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
+              <span className="flex-1 truncate" style={{ color: 'var(--color-text)' }}>{f.name}</span>
+              <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>{formatBytes(f.size)}</span>
+              <Tooltip text="Move this image earlier in the slideshow."><button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move up">↑</button></Tooltip>
+              <Tooltip text="Move this image later in the slideshow."><button type="button" onClick={() => move(i, 1)} disabled={i === files.length - 1} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70 disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} aria-label="Move down">↓</button></Tooltip>
+              <Tooltip text="Remove this image from the slideshow."><button type="button" onClick={() => removeAt(i)} className="px-1.5 py-0.5 rounded border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }} aria-label="Remove">×</button></Tooltip>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ResultVideo({
   blobUrl, downloadName, onUse, onSave, saveLabel = 'Save to library',
   saveTitle, onSaveTitleChange,
@@ -567,6 +647,24 @@ export default function VideosPage() {
   const [joinCrf, setJoinCrf] = useState(23);
   const [joinCrossfade, setJoinCrossfade] = useState('0');
 
+  // Normalize
+  const [normalizePreset, setNormalizePreset] = useState('normal');
+
+  // Video → GIF
+  const [gifFps, setGifFps] = useState(12);
+  const [gifWidth, setGifWidth] = useState(480);
+  const [gifStartSec, setGifStartSec] = useState(0);
+  const [gifEndSec, setGifEndSec] = useState('');
+  const [gifBlobUrl, setGifBlobUrl] = useState(null);
+  const gifBlobRef = useRef(null);
+
+  // Slideshow
+  const [slideImages, setSlideImages] = useState([]);
+  const [slideAudioFile, setSlideAudioFile] = useState(null);
+  const [slideSecondsPerSlide, setSlideSecondsPerSlide] = useState(3);
+  const [slideAspect, setSlideAspect] = useState('9:16');
+  const [slideCrossfade, setSlideCrossfade] = useState(false);
+
   // Reframe
   const [reframeAspect, setReframeAspect] = useState('9:16');
   const [reframeMode, setReframeMode] = useState('crop');
@@ -588,6 +686,14 @@ export default function VideosPage() {
   // Annotate
   const [overlayText, setOverlayText] = useState('');
   const [textPosition, setTextPosition] = useState('bottom-center');
+  const [fadeInSec, setFadeInSec] = useState(0);
+  const [fadeOutSec, setFadeOutSec] = useState(0);
+
+  // Export for Social
+  const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
+  const [exportFocus, setExportFocus] = useState('center');
+  const [exportItems, setExportItems] = useState([]);
+  const [exportId, setExportId] = useState(null);
 
   // Captions
   const [srtText, setSrtText] = useState('');
@@ -629,8 +735,9 @@ export default function VideosPage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (resultBlob) URL.revokeObjectURL(resultBlob);
     if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    if (gifBlobUrl) URL.revokeObjectURL(gifBlobUrl);
     if (seedImageFile && seedImagePreview?.startsWith('blob:')) URL.revokeObjectURL(seedImagePreview);
-  }, [previewUrl, resultBlob, thumbUrl, seedImageFile, seedImagePreview]);
+  }, [previewUrl, resultBlob, thumbUrl, gifBlobUrl, seedImageFile, seedImagePreview]);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -666,8 +773,13 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay') clearComposeResult();
+    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
+
+  useEffect(() => {
+    setExportItems([]);
+    setExportId(null);
+  }, [sourceFile]);
 
   useEffect(() => {
     if (!sourceFile || tool !== 'clip') return;
@@ -862,6 +974,155 @@ export default function VideosPage() {
       stopProcessing();
     }
   };
+
+  const handleToGif = useCallback(async () => {
+    if (!requireFile()) return;
+    const fd = new FormData();
+    fd.append('video', sourceFile);
+    fd.append('fps', String(gifFps));
+    fd.append('width', String(gifWidth));
+    fd.append('startSec', String(gifStartSec || 0));
+    if (gifEndSec !== '') fd.append('endSec', String(gifEndSec));
+    startProcessing('Creating GIF…', 'Building an optimized colour palette, then encoding with it — two ffmpeg passes.');
+    try {
+      const res = await api.postForm('/api/videos/togif', fd);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'GIF export failed');
+      }
+      const blob = await res.blob();
+      gifBlobRef.current = blob;
+      setGifBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setLastTransaction({ tool: 'togif', fps: gifFps, width: gifWidth, startSec: gifStartSec, endSec: gifEndSec });
+      addToast('GIF ready', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceFile, gifFps, gifWidth, gifStartSec, gifEndSec, startProcessing, stopProcessing, addToast]);
+
+  const handleSaveGif = useCallback(async () => {
+    if (!gifBlobRef.current) {
+      addToast('Nothing to save yet', 'error');
+      return;
+    }
+    await saveToLibrary({
+      title: saveTitle || 'Video GIF',
+      mediaType: 'image',
+      blob: gifBlobRef.current,
+      fileName: 'output.gif',
+      toolId: 'togif',
+      transaction: { tool: 'togif', fps: gifFps, width: gifWidth, startSec: gifStartSec, endSec: gifEndSec },
+    });
+  }, [saveTitle, saveToLibrary, gifFps, gifWidth, gifStartSec, gifEndSec, addToast]);
+
+  const handleSlideshow = useCallback(() => {
+    if (slideImages.length < 2) {
+      addToast('Add at least two images', 'error');
+      return;
+    }
+    const fd = new FormData();
+    slideImages.forEach((f) => fd.append('images', f));
+    if (slideAudioFile) fd.append('audio', slideAudioFile);
+    fd.append('secondsPerSlide', String(slideSecondsPerSlide));
+    fd.append('aspect', slideAspect);
+    if (slideCrossfade) fd.append('crossfadeSec', '0.6');
+    runFormVideo('slideshow', fd, {
+      label: 'Building slideshow…',
+      resultFilename: 'slideshow.mp4',
+      forTool: 'slideshow',
+    });
+  }, [slideImages, slideAudioFile, slideSecondsPerSlide, slideAspect, slideCrossfade, runFormVideo, addToast]);
+
+  const handleExportSocial = useCallback(async () => {
+    if (!sourceFile) {
+      addToast('Choose a video file first', 'error');
+      return;
+    }
+    if (!exportPresets.length) {
+      addToast('Select at least one preset', 'error');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('video', sourceFile);
+    fd.append('presets', JSON.stringify(exportPresets));
+    fd.append('focus', exportFocus);
+    startProcessing('Exporting for social…', 'Rendering each selected preset with ffmpeg (reframe + trim where needed).');
+    try {
+      const res = await api.postForm('/api/videos/export-social', fd);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Export failed');
+      setExportItems(data.items || []);
+      setExportId(data.exportId);
+      setLastTransaction({ tool: 'export-social', presets: exportPresets, focus: exportFocus });
+      addToast(`Exported ${data.count} preset${data.count === 1 ? '' : 's'}`, 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [sourceFile, exportPresets, exportFocus, startProcessing, stopProcessing, addToast]);
+
+  const downloadBlobUrl = (blob, fileName) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const downloadExportFile = useCallback(async (item) => {
+    if (!exportId) return;
+    try {
+      const res = await api.get(`/api/videos/export-social/${exportId}/file/${item.presetId}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      downloadBlobUrl(blob, item.fileName);
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  }, [exportId, addToast]);
+
+  const downloadExportZip = useCallback(async () => {
+    if (!exportId) return;
+    startProcessing('Preparing zip…', '');
+    try {
+      const res = await api.get(`/api/videos/export-social/${exportId}/zip`);
+      if (!res.ok) throw new Error('Zip download failed');
+      const blob = await res.blob();
+      downloadBlobUrl(blob, 'export-social.zip');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [exportId, startProcessing, stopProcessing, addToast]);
+
+  const saveExportItemToLibrary = useCallback(async (item) => {
+    if (!exportId) return;
+    try {
+      const res = await api.get(`/api/videos/export-social/${exportId}/file/${item.presetId}`);
+      if (!res.ok) throw new Error('Could not fetch file to save');
+      const blob = await res.blob();
+      await saveToLibrary({
+        title: saveTitle || `Export social · ${item.label}`,
+        blob,
+        fileName: item.fileName,
+        toolId: 'export-social',
+        transaction: { tool: 'export-social', presetId: item.presetId, aspect: item.aspect, focus: exportFocus },
+      });
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  }, [exportId, saveToLibrary, saveTitle, exportFocus, addToast]);
 
   const useResultAsSource = useCallback(async () => {
     const blob = resultBlobRef.current;
@@ -1342,11 +1603,11 @@ export default function VideosPage() {
           </section>
         )}
 
-        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && !(tool === 'caption-studio' && captionLibraryId) && (
+        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && (
           <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && (
+        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -1489,6 +1750,229 @@ export default function VideosPage() {
             </button>
             {resultForTool === 'audio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'normalize' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Normalize audio</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Evens out volume so quiet and loud moments sit at a consistent, comfortable level. One click — no manual levels to set.
+            </p>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Target loudness</span>
+              <Tooltip text="Quiet suits podcasts/voice, Normal suits most social clips, Loud pushes closer to broadcast/streaming levels.">
+                <select
+                  value={normalizePreset}
+                  onChange={(e) => setNormalizePreset(e.target.value)}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="quiet">Quiet</option>
+                  <option value="normal">Normal</option>
+                  <option value="loud">Loud</option>
+                </select>
+              </Tooltip>
+            </label>
+            <Tooltip text="Re-encode the audio track to the selected loudness target; video is copied unchanged when possible.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('preset', normalizePreset);
+                  runFormVideo('normalize', fd, { label: 'Normalizing audio…', resultFilename: 'normalized.mp4', forTool: 'normalize' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Normalize volume
+              </button>
+            </Tooltip>
+            {resultForTool === 'normalize' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'togif' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Video → GIF</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Exports a short looping GIF using ffmpeg's two-pass palette technique for cleaner colour than a naive conversion.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Frame rate (10–20 typical)</span>
+                <Tooltip text="Higher looks smoother but makes a larger file. 10-20 fps is the usual sweet spot for GIFs.">
+                  <input type="number" min={1} max={30} value={gifFps} onChange={(e) => setGifFps(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (px)</span>
+                <Tooltip text="The GIF is scaled to this width, keeping its original aspect ratio. Smaller widths make smaller files.">
+                  <input type="number" min={80} max={1280} value={gifWidth} onChange={(e) => setGifWidth(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
+                <Tooltip text="Where in the source video the GIF should start.">
+                  <input type="number" min={0} step={0.1} value={gifStartSec} onChange={(e) => setGifStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds, optional)</span>
+                <Tooltip text="Where the GIF should stop. Leave blank to use the rest of the video — keep GIFs short (a few seconds).">
+                  <input type="number" min={0} step={0.1} placeholder="end of video" value={gifEndSec} onChange={(e) => setGifEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <Tooltip text="Builds an optimized colour palette from this clip, then encodes the GIF using it — two ffmpeg passes for cleaner colour.">
+              <button
+                type="button"
+                onClick={handleToGif}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Create GIF
+              </button>
+            </Tooltip>
+            {gifBlobUrl && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+                <img src={gifBlobUrl} alt="Generated GIF" className="max-w-full rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+                <div className="flex flex-wrap gap-2">
+                  <a href={gifBlobUrl} download="output.gif" className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>
+                    Download GIF
+                  </a>
+                  <Tooltip text="Store this GIF in your Saved media library.">
+                    <button type="button" onClick={handleSaveGif} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
+                      Save to library
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {tool === 'export-social' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Export for Social</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              One video in, one MP4 per selected preset out. Reels/TikTok/Shorts trims from the start when the source is longer than 60s; Square and Landscape keep the full length. All presets share the same crop focus.
+            </p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Presets</span>
+                <Tooltip text="Tick or untick every preset in one click.">
+                  <button
+                    type="button"
+                    onClick={() => setExportPresets((prev) => (
+                      prev.length === SOCIAL_EXPORT_PRESETS.length ? [] : SOCIAL_EXPORT_PRESETS.map((p) => p.id)
+                    ))}
+                    className="text-xs transition-opacity hover:opacity-70"
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    {exportPresets.length === SOCIAL_EXPORT_PRESETS.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                </Tooltip>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {SOCIAL_EXPORT_PRESETS.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex items-start gap-2 text-xs rounded-xl border p-3 cursor-pointer"
+                    style={{
+                      borderColor: exportPresets.includes(p.id) ? 'var(--color-primary)' : 'var(--color-border)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={exportPresets.includes(p.id)}
+                      onChange={(e) => setExportPresets((prev) => (
+                        e.target.checked ? [...prev, p.id] : prev.filter((id) => id !== p.id)
+                      ))}
+                    />
+                    <span>
+                      <span className="block font-medium" style={{ color: 'var(--color-text)' }}>{p.label}</span>
+                      <span className="block mt-0.5" style={{ color: 'var(--color-muted)' }}>{p.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crop focus (shared across presets)</span>
+              <Tooltip text="When a preset's aspect ratio is narrower or wider than the source, this picks which part of the frame stays in view.">
+                <select value={exportFocus} onChange={(e) => setExportFocus(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="center">Centre</option>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </Tooltip>
+            </label>
+            <Tooltip text="Renders every ticked preset — this can take a while for longer videos or several presets.">
+              <button
+                type="button"
+                onClick={handleExportSocial}
+                disabled={!ffmpegOk || !exportPresets.length}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Export {exportPresets.length || 0} preset{exportPresets.length === 1 ? '' : 's'}
+              </button>
+            </Tooltip>
+
+            {exportItems.length > 0 && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Results</p>
+                  <Tooltip text="Download every rendered preset together in one .zip file.">
+                    <button
+                      type="button"
+                      onClick={downloadExportZip}
+                      className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
+                      style={{ background: 'var(--color-primary)' }}
+                    >
+                      Download all (zip)
+                    </button>
+                  </Tooltip>
+                </div>
+                <ul className="space-y-2">
+                  {exportItems.map((item) => (
+                    <li key={item.presetId} className="flex items-center gap-3 rounded-lg border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                      {item.thumbnailDataUrl && (
+                        <img src={item.thumbnailDataUrl} alt="" className="w-14 h-14 object-cover rounded-lg border shrink-0" style={{ borderColor: 'var(--color-border)' }} />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.label}</p>
+                        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{item.aspect} · {item.width}×{item.height} · {formatBytes(item.bytes)}</p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Tooltip text="Download just this preset's MP4.">
+                          <button type="button" onClick={() => downloadExportFile(item)} className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            Download
+                          </button>
+                        </Tooltip>
+                        <Tooltip text="Store this preset's video in your Saved media library.">
+                          <button type="button" onClick={() => saveExportItemToLibrary(item)} className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
+                            Save
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </section>
         )}
@@ -1644,7 +2128,21 @@ export default function VideosPage() {
               backgroundTransparent={textBackgroundTransparent}
               setBackgroundTransparent={setTextBackgroundTransparent}
             />
-            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade in (seconds)</span>
+                <Tooltip text="Label starts invisible and eases in over this many seconds. 0 = appears instantly (default).">
+                  <input type="number" min={0} max={30} step={0.1} value={fadeInSec} onChange={(e) => setFadeInSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade out (seconds)</span>
+                <Tooltip text="Label eases out over this many seconds before the clip ends. 0 = disappears instantly (default).">
+                  <input type="number" min={0} max={30} step={0.1} value={fadeOutSec} onChange={(e) => setFadeOutSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
               Apply label
             </button>
             {resultForTool === 'annotate' && (
@@ -1765,6 +2263,68 @@ export default function VideosPage() {
           </section>
         )}
 
+        {tool === 'slideshow' && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Slideshow</h2>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Turn product photos or other images into a promo video with background music — each image gets the same fitted aspect, one shared duration per slide.
+            </p>
+            <MultiImageUpload files={slideImages} onFiles={setSlideImages} />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds per slide</span>
+                <Tooltip text="How long each image stays on screen — the same duration is used for every slide.">
+                  <input type="number" min={1} max={30} value={slideSecondsPerSlide} onChange={(e) => setSlideSecondsPerSlide(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Aspect / resolution</span>
+                <Tooltip text="Output frame shape — each image is letterboxed to fit without cropping.">
+                  <select value={slideAspect} onChange={(e) => setSlideAspect(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="9:16">9:16 · Reels/Stories</option>
+                    <option value="16:9">16:9 · Landscape</option>
+                    <option value="1:1">1:1 · Square</option>
+                    <option value="4:5">4:5 · Portrait</option>
+                  </select>
+                </Tooltip>
+              </label>
+            </div>
+            <Tooltip text="Blend gently between slides instead of a hard cut.">
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                <input type="checkbox" checked={slideCrossfade} onChange={(e) => setSlideCrossfade(e.target.checked)} />
+                Crossfade between slides
+              </label>
+            </Tooltip>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background music (optional)</span>
+              <Tooltip text="A music or voice track to play under the slideshow. Short tracks loop to fill the video; long tracks are trimmed to match.">
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.aac"
+                  onChange={(e) => setSlideAudioFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs"
+                  style={{ color: 'var(--color-text)' }}
+                />
+              </Tooltip>
+              {slideAudioFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{slideAudioFile.name} — loops if shorter than the slideshow, trims if longer.</span>}
+            </label>
+            <Tooltip text="Render all slides, apply the transition and music, and produce one MP4.">
+              <button
+                type="button"
+                onClick={handleSlideshow}
+                disabled={!ffmpegOk || slideImages.length < 2}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Build slideshow{slideImages.length ? ` · ${slideImages.length} images` : ''}
+              </button>
+            </Tooltip>
+            {resultForTool === 'slideshow' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
         {tool === 'caption-studio' && (
           <section className="space-y-4">
             <div>
@@ -1824,30 +2384,37 @@ export default function VideosPage() {
                 {' '}Caption burn re-encodes once to embed text — audio is copied unchanged from your source.
               </p>
               {status?.transcribe?.available && !captionLibraryId && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!requireFile()) return;
-                    const fd = new FormData();
-                    fd.append('video', sourceFile);
-                    startProcessing('Transcribing…', '');
-                    try {
-                      const res = await api.postForm('/api/videos/transcribe', fd);
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-                      setTranscript(data.text || '');
-                      addToast('Transcript ready — convert to SRT or paste below', 'success');
-                    } catch (e) {
-                      addToast(e.message, 'error');
-                    } finally {
-                      stopProcessing();
-                    }
-                  }}
-                  className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
-                >
-                  Auto-transcribe (local)
-                </button>
+                <Tooltip text={status.transcribe.source === 'gemini' ? 'Extracts the audio track and asks Gemini to return ready-to-use SRT captions.' : 'Uses the local whisper-cli binary to transcribe speech (local dev only).'}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!requireFile()) return;
+                      const fd = new FormData();
+                      fd.append('video', sourceFile);
+                      startProcessing('Transcribing…', status.transcribe.source === 'gemini' ? 'Extracting audio and asking Gemini for SRT captions.' : '');
+                      try {
+                        const res = await api.postForm('/api/videos/transcribe', fd);
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error);
+                        if (data.srt) {
+                          setSrtText(data.srt);
+                          addToast('Transcript ready — SRT captions filled in below', 'success');
+                        } else {
+                          setTranscript(data.text || '');
+                          addToast('Transcript ready — convert to SRT or paste below', 'success');
+                        }
+                      } catch (e) {
+                        addToast(e.message, 'error');
+                      } finally {
+                        stopProcessing();
+                      }
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                  >
+                    {status.transcribe.source === 'gemini' ? 'Auto-transcribe (Gemini)' : 'Auto-transcribe (local)'}
+                  </button>
+                </Tooltip>
               )}
               {transcript && (
                 <textarea value={transcript} readOnly rows={3} className="w-full text-xs rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} />
