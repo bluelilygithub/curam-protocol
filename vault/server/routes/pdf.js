@@ -1332,6 +1332,7 @@ router.post('/unprotect', async (req, res) => {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);
     if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
     const password = String(req.body?.password || '');
+    if (!password) return res.status(400).json({ error: 'Enter the file\'s current password' });
     const outBuf = await unprotectPdf(buf, password);
     res.json({ dataUrl: pdfDataUrl(outBuf) });
   } catch (err) {

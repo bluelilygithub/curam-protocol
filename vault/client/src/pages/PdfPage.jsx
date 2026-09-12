@@ -537,7 +537,7 @@ function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
   const pdfDocRef = useRef(null);
   const [pg, setPg] = useState(1);
   const [total, setTotal] = useState(0);
-  const [status, setStatus] = useState('idle'); // 'idle'|'loading'|'ready'|'error'
+  const [status, setStatus] = useState('idle'); // 'idle'|'loading'|'ready'|'error'|'locked'
   const [errMsg, setErrMsg] = useState('');
 
   // Render a single page to the canvas.
@@ -577,9 +577,17 @@ function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
         if (!cancelled) setStatus('ready');
       } catch (e) {
         if (!cancelled) {
-          console.error('PdfPagePreview:', e);
-          setErrMsg(e?.message || String(e));
-          setStatus('error');
+          // pdfjs can't open an encrypted PDF without its password — that's an
+          // expected state here (previewing a just-protected or still-locked
+          // file), not a real failure, so it gets its own neutral message
+          // instead of the red "Preview failed" error state.
+          if (e?.name === 'PasswordException') {
+            setStatus('locked');
+          } else {
+            console.error('PdfPagePreview:', e);
+            setErrMsg(e?.message || String(e));
+            setStatus('error');
+          }
         }
       }
     })();
@@ -613,6 +621,13 @@ function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
           {errMsg && <span className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>{errMsg}</span>}
         </div>
       )}
+      {status === 'locked' && (
+        <div className="flex flex-col items-center justify-center gap-1 p-4" style={{ minHeight: 120, color: 'var(--color-muted)' }}>
+          <span style={{ opacity: 0.7 }}>🔒</span>
+          <span className="text-xs font-medium text-center">This PDF is password-protected</span>
+          <span className="text-xs text-center">No preview available until it's unlocked — you can still download it.</span>
+        </div>
+      )}
       {/* Canvas is always in the DOM once dataUrl is set so canvasRef stays valid.
           Hidden while loading/errored so a zero-size blank canvas isn't visible. */}
       <canvas
@@ -628,6 +643,35 @@ function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
       )}
     </div>
   );
+}
+
+// ── PasswordField — password input with a show/hide (eye) toggle ───────────────
+function PasswordField({ value, onChange, placeholder, className, style, getIcon, tooltipText }) {
+  const [show, setShow] = useState(false);
+  const field = (
+    <div className="relative">
+      <input
+        type={show ? 'text' : 'password'}
+        className={`${className} pr-9`}
+        style={style}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        autoComplete="new-password"
+      />
+      <button
+        type="button"
+        onClick={() => setShow(s => !s)}
+        tabIndex={-1}
+        className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-60"
+        style={{ color: 'var(--color-muted)' }}
+        aria-label={show ? 'Hide password' : 'Show password'}
+      >
+        {getIcon(show ? 'eye-off' : 'eye', { size: 15 })}
+      </button>
+    </div>
+  );
+  return tooltipText ? <Tooltip text={tooltipText}>{field}</Tooltip> : field;
 }
 
 // ── PdfResultModal — full-screen modal showing a rendered result PDF ────────────
@@ -4470,12 +4514,20 @@ export default function PdfPage() {
                   </Tooltip>
 
                   <div className="mt-3 space-y-2">
-                    <Tooltip text="Required to open the file in any PDF viewer.">
-                      <input type="password" className={inp} style={inpStyle} placeholder="Password to open the file" value={pwPassword} onChange={e => setPwPassword(e.target.value)} />
-                    </Tooltip>
-                    <Tooltip text="Optional — a separate password that can change permissions/remove protection. Defaults to the same password if left blank.">
-                      <input type="password" className={inp} style={inpStyle} placeholder="Owner password (optional)" value={pwOwnerPassword} onChange={e => setPwOwnerPassword(e.target.value)} />
-                    </Tooltip>
+                    <PasswordField
+                      getIcon={getIcon}
+                      className={inp} style={inpStyle}
+                      placeholder="Password to open the file"
+                      value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                      tooltipText="Required to open the file in any PDF viewer."
+                    />
+                    <PasswordField
+                      getIcon={getIcon}
+                      className={inp} style={inpStyle}
+                      placeholder="Owner password (optional)"
+                      value={pwOwnerPassword} onChange={e => setPwOwnerPassword(e.target.value)}
+                      tooltipText="Optional — a separate password that can change permissions/remove protection. Defaults to the same password if left blank."
+                    />
                   </div>
 
                   <div className="mt-3 space-y-1.5">
@@ -4517,11 +4569,17 @@ export default function PdfPage() {
                 <Tooltip text="Upload the password-protected PDF.">
                   <div><PdfUpload onChange={onUnpwFileChange} files={unpwFile ? [unpwFile] : []} onRemove={() => { setUnpwFile(null); setUnpwResult(null); }} /></div>
                 </Tooltip>
-                <Tooltip text="The password currently required to open this file.">
-                  <input type="password" className={`${inp} mt-3`} style={inpStyle} placeholder="Current password" value={unpwPassword} onChange={e => setUnpwPassword(e.target.value)} />
-                </Tooltip>
+                <div className="mt-3">
+                  <PasswordField
+                    getIcon={getIcon}
+                    className={inp} style={inpStyle}
+                    placeholder="Current password"
+                    value={unpwPassword} onChange={e => setUnpwPassword(e.target.value)}
+                    tooltipText="The password currently required to open this file."
+                  />
+                </div>
                 <ErrMsg msg={unpwError} />
-                <RunBtn onClick={runUnprotect} busy={unpwBusy} disabled={!unpwFile} label="Remove Password & Download" getIcon={getIcon} />
+                <RunBtn onClick={runUnprotect} busy={unpwBusy} disabled={!unpwFile || !unpwPassword} label="Remove Password & Download" getIcon={getIcon} />
               </div>
             </section>
           )}

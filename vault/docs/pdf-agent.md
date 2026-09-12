@@ -157,6 +157,8 @@ Request bodies:
 ```
 Client is two separate tools (**Password Protect** / **Remove Password**) rather than one toggle-mode tool — matches how Fill Form and Fill & Sign are already separate tools for related-but-distinct operations, rather than every related pair being collapsed into a mode switch.
 
+All three password fields (open password, owner password, remove-password) use a shared `PasswordField` component with a show/hide (eye icon) toggle rather than a plain `type="password"` input. Remove Password's submit button is disabled until both a file and a password are entered; the server also 400s an empty password on `/unprotect` up front rather than letting `qpdf` fail on it. `PdfPagePreview` (shared by every tool that shows a live PDF preview) treats pdfjs's `PasswordException` as an expected "🔒 This PDF is password-protected" state, not a red preview-failed error — this fires every time Password Protect's result modal tries to preview the file it just encrypted, and previously showed a raw "Preview failed / No password given".
+
 ---
 
 ## Google Drive integration
