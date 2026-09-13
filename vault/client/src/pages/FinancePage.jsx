@@ -2627,7 +2627,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 
   return (
     <div className="p-6 max-w-6xl flex flex-col gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* auto-fit/minmax, not a fixed breakpoint — fits all 3 cards on one row whenever
+          there's room, and only wraps once the available width genuinely can't fit them,
+          rather than snapping to 1-column below an arbitrary screen-width cutoff. */}
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
         {/* Vehicle */}
         <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense</h3>
