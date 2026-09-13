@@ -7,10 +7,24 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import Tooltip from '../components/Tooltip';
+import { scaleIngredients } from '../utils/recipeScaling';
 
 const RECIPE_TAG_OPTIONS = [
   'breakfast', 'lunch', 'dinner', 'snack', 'curry', 'pasta', 'rice', 'soup',
   'salad', 'fast', 'slow', 'vegetarian', 'vegan', 'leftovers', 'comfort', 'healthy',
+];
+
+// Fallback list — mirrors server/services/recipeDietary.js ids/labels so the
+// picker still renders before /api/recipes/status loads.
+const DIETARY_RESTRICTION_OPTIONS = [
+  { id: 'vegetarian', label: 'Vegetarian' },
+  { id: 'vegan', label: 'Vegan' },
+  { id: 'glutenFree', label: 'Gluten-free' },
+  { id: 'dairyFree', label: 'Dairy-free' },
+  { id: 'nutFree', label: 'Nut-free' },
+  { id: 'shellfishFree', label: 'Shellfish-free' },
+  { id: 'eggFree', label: 'Egg-free' },
 ];
 
 const TOOL_GROUPS = [
@@ -27,6 +41,7 @@ const TOOL_GROUPS = [
     label: 'Shop',
     tools: [
       { id: 'grocery-prices', label: 'Grocery prices', desc: 'Sourced Coles & Woolworths (AU)' },
+      { id: 'meal-plan', label: 'Meal plan', desc: 'Combine saved recipes into one shop' },
     ],
   },
   {
@@ -37,6 +52,153 @@ const TOOL_GROUPS = [
     ],
   },
 ];
+
+const TOOL_HELP = {
+  title: 'Recipes',
+  description: 'A cooking assistant that turns leftovers or a dish name into a full recipe, keeps a deterministic check on stated dietary restrictions, scales servings, and sources real Coles/Woolworths prices — for one recipe or a combined weekly plan.',
+  features: [
+    'Leftover recipes — list what you have, get four dish ideas, expand into full steps + nutrition + dish photo',
+    'Recipe by name — Basic / Advanced / Master tiers with accessible ingredient swaps',
+    'Dietary restrictions — a best-effort keyword filter checks the AI\'s own output and flags anything that slipped through',
+    'Serving-size stepper — scales ingredient amounts without a second AI call',
+    'Grocery prices — live-sourced Coles & Woolworths prices with a correction glossary that improves over time',
+    'Meal plan — combine several saved recipes into one merged, priced shopping list',
+  ],
+};
+
+function HelpModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{TOOL_HELP.title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+        </div>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP.description}</p>
+        <ul className="space-y-1.5">
+          {TOOL_HELP.features.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// Reused wherever nutrition info is shown — this app has no shared Callout
+// component (UserGuidePage.jsx's is local to that file), so a lightweight
+// equivalent matching its visual style lives here.
+function NutritionDisclaimer() {
+  return (
+    <div
+      className="flex gap-2.5 px-3 py-2.5 rounded-xl text-[11px] leading-relaxed"
+      style={{ background: 'rgba(217,119,6,0.08)', borderLeft: '3px solid #f59e0b', color: 'var(--color-text)' }}
+    >
+      <span className="flex-shrink-0 font-bold" style={{ color: '#f59e0b' }}>⚠</span>
+      <span className="opacity-85">
+        AI-estimated, not measured — for a real dietary need, verify with a nutrition label or dietitian.
+      </span>
+    </div>
+  );
+}
+
+function RestrictionPicker({ options, selected, onChange }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {(options?.length ? options : DIETARY_RESTRICTION_OPTIONS).map((r) => {
+          const on = selected.includes(r.id);
+          return (
+            <Tooltip key={r.id} text={`Exclude ${r.label.toLowerCase()} ingredients (best-effort keyword filter)`}>
+              <button
+                type="button"
+                onClick={() => onChange(on ? selected.filter((id) => id !== r.id) : [...selected, r.id])}
+                className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                style={{
+                  borderColor: on ? 'var(--color-primary)' : 'var(--color-border)',
+                  color: on ? 'var(--color-primary)' : 'var(--color-muted)',
+                  background: on ? 'var(--color-surface)' : 'transparent',
+                }}
+              >
+                {r.label}
+              </button>
+            </Tooltip>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          Best-effort keyword filter — always double-check labels for a real allergy.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RestrictionWarnings({ warnings }) {
+  if (!warnings?.length) return null;
+  return (
+    <div
+      className="flex gap-2.5 px-3 py-2.5 rounded-xl text-[11px] leading-relaxed"
+      style={{ background: 'rgba(239,68,68,0.08)', borderLeft: '3px solid #ef4444', color: 'var(--color-text)' }}
+    >
+      <span className="flex-shrink-0 font-bold" style={{ color: '#ef4444' }}>⚠</span>
+      <span className="opacity-90">
+        <span className="font-medium">Possible restriction conflict</span> — the AI may not have fully honoured your selection:
+        <ul className="mt-1 space-y-0.5">
+          {warnings.map((w, i) => (
+            <li key={i}>
+              <span className="capitalize">{w.restriction.replace(/([A-Z])/g, ' $1').trim()}</span>: “{w.ingredient}” matched “{w.matchedTerm}”
+            </li>
+          ))}
+        </ul>
+      </span>
+    </div>
+  );
+}
+
+function ServingsStepper({ servings, onChange }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Tooltip text="Fewer servings — ingredient amounts scale automatically">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(1, servings - 1))}
+          className="w-7 h-7 rounded-lg border flex items-center justify-center transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          aria-label="Fewer servings"
+        >
+          −
+        </button>
+      </Tooltip>
+      <span className="text-xs font-medium w-16 text-center" style={{ color: 'var(--color-text)' }}>
+        {servings} serving{servings === 1 ? '' : 's'}
+      </span>
+      <Tooltip text="More servings — ingredient amounts scale automatically">
+        <button
+          type="button"
+          onClick={() => onChange(servings + 1)}
+          className="w-7 h-7 rounded-lg border flex items-center justify-center transition-opacity hover:opacity-70"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          aria-label="More servings"
+        >
+          +
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
 
 function formatMinutes(m) {
   if (!Number.isFinite(m)) return '—';
@@ -489,6 +651,19 @@ function RecipeDetailPanel({
 }) {
   const imageRef = useRef(null);
   const imageSrc = dishImage || expanded?.imageDataUrl;
+  const [scaledServings, setScaledServings] = useState(null);
+
+  useEffect(() => {
+    setScaledServings(Number(expanded?.servings) || null);
+  }, [expanded?.title, expanded?.tier, expanded?.servings]);
+
+  const originalServings = Number(expanded?.servings) || null;
+  const effectiveServings = scaledServings || originalServings;
+  const scaleFactor = originalServings && effectiveServings ? effectiveServings / originalServings : 1;
+  const displayIngredients = useMemo(
+    () => scaleIngredients(expanded?.ingredients, scaleFactor),
+    [expanded?.ingredients, scaleFactor]
+  );
 
   const scrollToImage = useCallback(() => {
     imageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -508,9 +683,11 @@ function RecipeDetailPanel({
         <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{expanded.title}</h3>
         <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
           {expanded.tierLabel && <span className="font-medium">{expanded.tierLabel} · </span>}
-          Serves {expanded.servings || '—'} · prep {formatMinutes(expanded.prepMinutes)} · cook {formatMinutes(expanded.cookMinutes)}
+          prep {formatMinutes(expanded.prepMinutes)} · cook {formatMinutes(expanded.cookMinutes)}
         </p>
       </div>
+
+      <RestrictionWarnings warnings={expanded.restrictionWarnings} />
 
       <div ref={imageRef} className="scroll-mt-6">
         {imageSrc && (
@@ -524,10 +701,19 @@ function RecipeDetailPanel({
         )}
       </div>
 
+      {originalServings != null && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Servings</p>
+          <Tooltip text="Ingredient amounts scale automatically; adjust cooking times/steps by eye for large changes">
+            <span><ServingsStepper servings={effectiveServings} onChange={setScaledServings} /></span>
+          </Tooltip>
+        </div>
+      )}
+
       <div>
         <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Ingredients</p>
         <ul className="text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
-          {(expanded.ingredients || []).map((ing, i) => (
+          {(displayIngredients || []).map((ing, i) => (
             <li key={i}>
               {ing.amount ? `${ing.amount} ` : ''}{ing.item}
               {ing.accessibleAlternative && (
@@ -536,6 +722,11 @@ function RecipeDetailPanel({
             </li>
           ))}
         </ul>
+        {scaleFactor !== 1 && (
+          <p className="text-[10px] mt-1" style={{ color: 'var(--color-muted)' }}>
+            Ingredient amounts scale automatically; adjust cooking times/steps by eye for large changes.
+          </p>
+        )}
       </div>
 
       {(expanded.ingredientAlternatives || []).length > 0 && (
@@ -574,6 +765,7 @@ function RecipeDetailPanel({
           {expanded.nutrition.cautions?.length > 0 && (
             <p style={{ color: '#b45309' }}><span className="font-medium">Watch:</span> {expanded.nutrition.cautions.join(' · ')}</p>
           )}
+          <NutritionDisclaimer />
         </div>
       )}
 
@@ -603,14 +795,16 @@ function RecipeDetailPanel({
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{expanded.imageError}</p>
         )}
         {status?.imageGen && (
-          <button
-            type="button"
-            onClick={onRegenerateImage}
-            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            {imageSrc ? 'Regenerate photo' : 'Retry photo'}
-          </button>
+          <Tooltip text={imageSrc ? 'Generate a new dish photo with the current model' : 'Retry generating a dish photo'}>
+            <button
+              type="button"
+              onClick={onRegenerateImage}
+              className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {imageSrc ? 'Regenerate photo' : 'Retry photo'}
+            </button>
+          </Tooltip>
         )}
       </div>
 
@@ -620,21 +814,24 @@ function RecipeDetailPanel({
             <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Grocery prices</p>
             <p className="text-[10px] mb-2" style={{ color: 'var(--color-muted)' }}>
               Coles & Woolworths, sourced from live product search — check stores before you buy.
+              {scaleFactor !== 1 ? ' Uses your scaled serving amounts.' : ''}
             </p>
             {status && !status.webSearch && (
               <p className="text-[10px] mb-2" style={{ color: '#f59e0b' }}>
                 Add <code className="text-[10px]">SERPER_SEARCH_API_KEY</code> on Railway — add or edit the Shopping search model in Settings → AI & Chat → AI Models.
               </p>
             )}
-            <button
-              type="button"
-              onClick={onComparePrices}
-              disabled={groceryLoading || !status?.webSearch}
-              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              {groceryLoading ? 'Finding prices…' : groceryResult ? 'Refresh prices' : 'Get prices'}
-            </button>
+            <Tooltip text="Look up live Coles & Woolworths prices for these ingredients">
+              <button
+                type="button"
+                onClick={() => onComparePrices(displayIngredients, effectiveServings)}
+                disabled={groceryLoading || !status?.webSearch}
+                className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {groceryLoading ? 'Finding prices…' : groceryResult ? 'Refresh prices' : 'Get prices'}
+              </button>
+            </Tooltip>
           </div>
           {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={onGroceryResultChange} />}
         </div>
@@ -643,16 +840,188 @@ function RecipeDetailPanel({
       <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
         <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Categories</p>
         <TagPicker selected={saveTags} onChange={onSaveTagsChange} />
-        <button
-          type="button"
-          onClick={onSave}
-          className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          Save to my recipes
-        </button>
+        <Tooltip text="Save this recipe to your library">
+          <button
+            type="button"
+            onClick={onSave}
+            className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Save to my recipes
+          </button>
+        </Tooltip>
       </div>
     </div>
+  );
+}
+
+function MealPlanTool({
+  libraryItems,
+  loadLibrary,
+  mealPlans,
+  mealPlansLoading,
+  loadMealPlans,
+  mealPlanTitle,
+  setMealPlanTitle,
+  mealPlanSelection,
+  setMealPlanSelection,
+  onCreatePlan,
+  activeMealPlan,
+  onOpenPlan,
+  onDeletePlan,
+  onPricePlan,
+  mealPlanPricing,
+  mealPlanResult,
+  setMealPlanResult,
+}) {
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+  const toggleRecipe = (recipeId, defaultServings) => {
+    setMealPlanSelection((prev) => {
+      const next = { ...prev };
+      if (next[recipeId]) delete next[recipeId];
+      else next[recipeId] = defaultServings || 4;
+      return next;
+    });
+  };
+
+  const setRecipeServings = (recipeId, servings) => {
+    setMealPlanSelection((prev) => ({ ...prev, [recipeId]: Math.max(1, servings) }));
+  };
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Meal plan</h2>
+        <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+          Combine several saved recipes into one merged, priced shopping list — duplicate ingredients across recipes are combined into a single line.
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>New plan</p>
+          <Tooltip text="Reload your saved recipes to pick from">
+            <button type="button" onClick={loadLibrary} className="text-[10px] underline transition-opacity hover:opacity-70" style={{ color: 'var(--color-muted)' }}>
+              Refresh recipes
+            </button>
+          </Tooltip>
+        </div>
+
+        {libraryItems.length === 0 ? (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            No saved recipes yet — save a recipe from Leftover recipes or Recipe by name first.
+          </p>
+        ) : (
+          <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {libraryItems.map((item) => {
+              const checked = Boolean(mealPlanSelection[item.id]);
+              const originalServings = Number(item.payload?.servings) || 4;
+              return (
+                <li key={item.id} className="flex items-center justify-between gap-2 text-xs rounded-lg border p-2" style={{ borderColor: 'var(--color-border)' }}>
+                  <Tooltip text="Include this recipe in the plan">
+                    <label className="flex items-center gap-2 min-w-0 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRecipe(item.id, originalServings)}
+                      />
+                      <span className="truncate" style={{ color: 'var(--color-text)' }}>{item.title}</span>
+                    </label>
+                  </Tooltip>
+                  {checked && (
+                    <Tooltip text="Servings for this recipe in the plan">
+                      <span><ServingsStepper servings={mealPlanSelection[item.id]} onChange={(v) => setRecipeServings(item.id, v)} /></span>
+                    </Tooltip>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <label className="block space-y-1">
+          <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Plan name</span>
+          <Tooltip text="Give this meal plan a name, e.g. 'This week'">
+            <input
+              value={mealPlanTitle}
+              onChange={(e) => setMealPlanTitle(e.target.value)}
+              placeholder="This week"
+              className="w-full px-3 py-2 rounded-xl border text-sm"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
+        </label>
+
+        <Tooltip text="Save this selection as a named meal plan">
+          <button
+            type="button"
+            onClick={onCreatePlan}
+            className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Save plan
+          </button>
+        </Tooltip>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Saved plans</p>
+        {mealPlansLoading && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        {!mealPlansLoading && mealPlans.length === 0 && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No meal plans yet.</p>
+        )}
+        <ul className="space-y-1.5">
+          {mealPlans.map((plan) => (
+            <li key={plan.id} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-xs" style={{ borderColor: activeMealPlan?.id === plan.id ? 'var(--color-primary)' : 'var(--color-border)' }}>
+              <button type="button" onClick={() => onOpenPlan(plan)} className="text-left min-w-0">
+                <span className="font-medium" style={{ color: 'var(--color-text)' }}>{plan.title}</span>
+                <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{plan.itemCount} recipe{plan.itemCount === 1 ? '' : 's'}</span>
+              </button>
+              {deleteConfirmId === plan.id ? (
+                <span className="flex items-center gap-1 shrink-0">
+                  <span style={{ color: 'var(--color-muted)' }}>Delete?</span>
+                  <button type="button" onClick={() => { onDeletePlan(plan.id); setDeleteConfirmId(null); }} style={{ color: '#ef4444' }}>Yes</button>
+                  <button type="button" onClick={() => setDeleteConfirmId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
+                </span>
+              ) : (
+                <Tooltip text="Delete this meal plan">
+                  <button type="button" onClick={() => setDeleteConfirmId(plan.id)} className="shrink-0" style={{ color: '#ef4444' }}>Delete</button>
+                </Tooltip>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {activeMealPlan && (
+        <div className="space-y-3 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{activeMealPlan.title}</p>
+          <ul className="text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
+            {activeMealPlan.items.map((it) => (
+              <li key={it.id}>{it.title}{it.servings ? ` · ${it.servings} servings` : ''}</li>
+            ))}
+          </ul>
+          <Tooltip text="Merge ingredients across every recipe in this plan and price them once">
+            <button
+              type="button"
+              onClick={() => onPricePlan(activeMealPlan.id)}
+              disabled={mealPlanPricing}
+              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {mealPlanPricing ? 'Pricing…' : mealPlanResult ? 'Refresh plan prices' : 'Price this plan'}
+            </button>
+          </Tooltip>
+          {mealPlanResult?.missingRecipes?.length > 0 && (
+            <p className="text-[10px]" style={{ color: '#b45309' }}>
+              Skipped (no saved ingredients): {mealPlanResult.missingRecipes.join(', ')}
+            </p>
+          )}
+          {mealPlanResult && <GroceryPriceResults result={mealPlanResult} onResultChange={setMealPlanResult} />}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -679,6 +1048,7 @@ export default function RecipesPage() {
   const [expanded, setExpanded] = useState(null);
   const [dishImage, setDishImage] = useState(null);
   const [saveTags, setSaveTags] = useState([]);
+  const [restrictions, setRestrictions] = useState([]);
 
   const [dishName, setDishName] = useState('');
   const [nameNotes, setNameNotes] = useState('');
@@ -687,6 +1057,7 @@ export default function RecipesPage() {
   const [namedExpanded, setNamedExpanded] = useState(null);
   const [namedDishImage, setNamedDishImage] = useState(null);
   const [namedSaveTags, setNamedSaveTags] = useState([]);
+  const [namedRestrictions, setNamedRestrictions] = useState([]);
 
   const [expandingCardId, setExpandingCardId] = useState(null);
   const [expandingTierId, setExpandingTierId] = useState(null);
@@ -701,6 +1072,16 @@ export default function RecipesPage() {
   const [groceryResult, setGroceryResult] = useState(null);
   const [detailGroceryResult, setDetailGroceryResult] = useState(null);
   const [detailGroceryLoading, setDetailGroceryLoading] = useState(false);
+
+  const [showHelp, setShowHelp] = useState(false);
+
+  const [mealPlans, setMealPlans] = useState([]);
+  const [mealPlansLoading, setMealPlansLoading] = useState(false);
+  const [mealPlanTitle, setMealPlanTitle] = useState('');
+  const [mealPlanSelection, setMealPlanSelection] = useState({}); // { [recipeId]: servings }
+  const [activeMealPlan, setActiveMealPlan] = useState(null);
+  const [mealPlanPricing, setMealPlanPricing] = useState(false);
+  const [mealPlanResult, setMealPlanResult] = useState(null);
 
   const activeRecipeForShop = expanded || namedExpanded;
 
@@ -719,8 +1100,9 @@ export default function RecipesPage() {
     addToast('Ingredients copied to shopping list', 'success');
   }, [expanded, namedExpanded, addToast]);
 
-  const handleDetailGroceryPrice = useCallback(async (recipe) => {
-    if (!recipe?.ingredients?.length) {
+  const handleDetailGroceryPrice = useCallback(async (recipe, scaledIngredients, scaledServings) => {
+    const ingredientsToPrice = scaledIngredients?.length ? scaledIngredients : recipe?.ingredients;
+    if (!ingredientsToPrice?.length) {
       addToast('No ingredients to price', 'error');
       return;
     }
@@ -729,10 +1111,10 @@ export default function RecipesPage() {
     setDetailGroceryResult(null);
     try {
       const res = await api.post('/api/recipes/grocery/price', {
-        ingredients: recipeIngredientLines(recipe).join('\n'),
+        ingredients: recipeIngredientLines({ ingredients: ingredientsToPrice }).join('\n'),
         recipeTitle: recipe.title,
-        servings: recipe.servings,
-        recipeIngredients: recipe.ingredients,
+        servings: scaledServings || recipe.servings,
+        recipeIngredients: ingredientsToPrice,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Price check failed');
@@ -782,9 +1164,100 @@ export default function RecipesPage() {
   }, [libraryTagFilter, addToast]);
 
   useEffect(() => {
-    if (!canUse || tool !== 'saved') return;
+    if (!canUse || (tool !== 'saved' && tool !== 'meal-plan')) return;
     loadLibrary();
   }, [canUse, tool, loadLibrary]);
+
+  const loadMealPlans = useCallback(async () => {
+    setMealPlansLoading(true);
+    try {
+      const res = await api.get('/api/recipes/meal-plans');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load meal plans');
+      setMealPlans(Array.isArray(data) ? data : []);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setMealPlansLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    if (!canUse || tool !== 'meal-plan') return;
+    loadMealPlans();
+  }, [canUse, tool, loadMealPlans]);
+
+  const handleCreateMealPlan = async () => {
+    const items = Object.entries(mealPlanSelection)
+      .filter(([, servings]) => servings)
+      .map(([recipeId, servings]) => ({ recipeId: Number(recipeId), servings: Number(servings) }));
+    if (!items.length) {
+      addToast('Pick at least one recipe for the plan', 'error');
+      return;
+    }
+    startProcessing('Saving meal plan…', '');
+    try {
+      const res = await api.post('/api/recipes/meal-plans', {
+        title: mealPlanTitle || 'Untitled plan',
+        items,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save plan');
+      addToast('Meal plan saved', 'success');
+      setMealPlanTitle('');
+      setMealPlanSelection({});
+      setActiveMealPlan(data);
+      setMealPlanResult(null);
+      await loadMealPlans();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  const handleOpenMealPlan = async (planSummary) => {
+    try {
+      const res = await api.get(`/api/recipes/meal-plans/${planSummary.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load plan');
+      setActiveMealPlan(data);
+      setMealPlanResult(null);
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const handleDeleteMealPlan = async (planId) => {
+    try {
+      const res = await api.delete(`/api/recipes/meal-plans/${planId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (activeMealPlan?.id === planId) { setActiveMealPlan(null); setMealPlanResult(null); }
+      addToast('Meal plan deleted', 'success');
+      await loadMealPlans();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const handlePriceMealPlan = async (planId) => {
+    startProcessing('Pricing meal plan…', 'Merging ingredients across recipes and searching Coles & Woolworths.');
+    setMealPlanPricing(true);
+    setMealPlanResult(null);
+    try {
+      const res = await api.post(`/api/recipes/meal-plans/${planId}/price`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Price check failed');
+      setMealPlanResult(data);
+      addToast('Meal plan priced', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setMealPlanPricing(false);
+      stopProcessing();
+    }
+  };
 
   const handleSuggest = async () => {
     if (!ingredients.trim()) {
@@ -796,7 +1269,7 @@ export default function RecipesPage() {
     setExpanded(null);
     setDishImage(null);
     try {
-      const res = await api.post('/api/recipes/suggest', { ingredients, notes });
+      const res = await api.post('/api/recipes/suggest', { ingredients, notes, restrictions });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Suggest failed');
       setSuggestions(data);
@@ -820,6 +1293,7 @@ export default function RecipesPage() {
         recipe: card,
         ingredients: suggestions?.ingredients || ingredients,
         notes: suggestions?.notes || notes,
+        restrictions: suggestions?.restrictions || restrictions,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not expand recipe');
@@ -888,7 +1362,7 @@ export default function RecipesPage() {
     setNamedExpanded(null);
     setNamedDishImage(null);
     try {
-      const res = await api.post('/api/recipes/named/suggest', { name: dishName, notes: nameNotes });
+      const res = await api.post('/api/recipes/named/suggest', { name: dishName, notes: nameNotes, restrictions: namedRestrictions });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Suggest failed');
       setNameSuggestions(data);
@@ -913,6 +1387,7 @@ export default function RecipesPage() {
         tier: tierCard.id,
         recipe: tierCard,
         notes: nameSuggestions?.notes || nameNotes,
+        restrictions: nameSuggestions?.restrictions || namedRestrictions,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not build recipe');
@@ -988,6 +1463,15 @@ export default function RecipesPage() {
           >
             {getIcon('compass', { size: 13 })}
           </button>
+          <button
+            onClick={() => setShowHelp(true)}
+            title="What is Recipes?"
+            style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('help-circle', { size: 13 })}
+          </button>
         </div>
 
         <input
@@ -1055,35 +1539,46 @@ export default function RecipesPage() {
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Ingredients on hand</span>
-              <textarea
-                value={ingredients}
-                onChange={(e) => setIngredients(e.target.value)}
-                rows={4}
-                placeholder="canned tuna, mushrooms, pasta, milk, rice, eggplant…"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="List everything you have — one per item or comma-separated">
+                <textarea
+                  value={ingredients}
+                  onChange={(e) => setIngredients(e.target.value)}
+                  rows={4}
+                  placeholder="canned tuna, mushrooms, pasta, milk, rice, eggplant…"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Notes (optional)</span>
-              <input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. feeding two, prefer something warm, no oven"
-                className="w-full px-3 py-2 rounded-xl border text-sm"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="Free-text preferences — servings, equipment, style">
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. feeding two, prefer something warm, no oven"
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
-            <button
-              type="button"
-              onClick={handleSuggest}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Suggest four recipes
-            </button>
+            <div className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Dietary restrictions (optional)</span>
+              <RestrictionPicker options={status?.dietaryRestrictions} selected={restrictions} onChange={setRestrictions} />
+            </div>
+
+            <Tooltip text="Generate four dish ideas from your ingredients">
+              <button
+                type="button"
+                onClick={handleSuggest}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Suggest four recipes
+              </button>
+            </Tooltip>
 
             {suggestions?.recipes?.length > 0 && (
               <div className="space-y-3">
@@ -1119,7 +1614,7 @@ export default function RecipesPage() {
                 saveTags={saveTags}
                 onSaveTagsChange={setSaveTags}
                 onRegenerateImage={() => handleGenerateImage({ expanded, setImage: setDishImage })}
-                onComparePrices={() => handleDetailGroceryPrice(expanded)}
+                onComparePrices={(scaledIngredients, scaledServings) => handleDetailGroceryPrice(expanded, scaledIngredients, scaledServings)}
                 groceryLoading={detailGroceryLoading}
                 groceryResult={detailGroceryResult}
                 onGroceryResultChange={setDetailGroceryResult}
@@ -1150,34 +1645,45 @@ export default function RecipesPage() {
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Dish name</span>
-              <input
-                value={dishName}
-                onChange={(e) => setDishName(e.target.value)}
-                placeholder="Green Curry"
-                className="w-full px-3 py-2 rounded-xl border text-sm"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="The name of the dish you want to cook">
+                <input
+                  value={dishName}
+                  onChange={(e) => setDishName(e.target.value)}
+                  placeholder="Green Curry"
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Notes (optional)</span>
-              <input
-                value={nameNotes}
-                onChange={(e) => setNameNotes(e.target.value)}
-                placeholder="e.g. chicken, mild heat, serves 4"
-                className="w-full px-3 py-2 rounded-xl border text-sm"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="Free-text preferences — protein, spice level, servings">
+                <input
+                  value={nameNotes}
+                  onChange={(e) => setNameNotes(e.target.value)}
+                  placeholder="e.g. chicken, mild heat, serves 4"
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
-            <button
-              type="button"
-              onClick={handleNamedSuggest}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Show Basic / Advanced / Master
-            </button>
+            <div className="space-y-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Dietary restrictions (optional)</span>
+              <RestrictionPicker options={status?.dietaryRestrictions} selected={namedRestrictions} onChange={setNamedRestrictions} />
+            </div>
+
+            <Tooltip text="Generate Basic, Advanced, and Master versions of this dish">
+              <button
+                type="button"
+                onClick={handleNamedSuggest}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Show Basic / Advanced / Master
+              </button>
+            </Tooltip>
 
             {nameSuggestions?.tiers?.length > 0 && (
               <div className="space-y-3">
@@ -1213,7 +1719,7 @@ export default function RecipesPage() {
                 saveTags={namedSaveTags}
                 onSaveTagsChange={setNamedSaveTags}
                 onRegenerateImage={() => handleGenerateImage({ expanded: namedExpanded, setImage: setNamedDishImage })}
-                onComparePrices={() => handleDetailGroceryPrice(namedExpanded)}
+                onComparePrices={(scaledIngredients, scaledServings) => handleDetailGroceryPrice(namedExpanded, scaledIngredients, scaledServings)}
                 groceryLoading={detailGroceryLoading}
                 groceryResult={detailGroceryResult}
                 onGroceryResultChange={setDetailGroceryResult}
@@ -1250,40 +1756,68 @@ export default function RecipesPage() {
             )}
 
             {activeRecipeForShop?.ingredients?.length > 0 && (
-              <button
-                type="button"
-                onClick={copyRecipeToGroceryInput}
-                className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
-              >
-                Use ingredients from {activeRecipeForShop.title || 'current recipe'}
-              </button>
+              <Tooltip text="Copy the currently open recipe's ingredients into this list">
+                <button
+                  type="button"
+                  onClick={copyRecipeToGroceryInput}
+                  className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                >
+                  Use ingredients from {activeRecipeForShop.title || 'current recipe'}
+                </button>
+              </Tooltip>
             )}
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Shopping list</span>
-              <textarea
-                value={groceryInput}
-                onChange={(e) => setGroceryInput(e.target.value)}
-                rows={8}
-                placeholder={'500g chicken breast\n400ml coconut milk\n2 tbsp green curry paste\n…'}
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <Tooltip text="One ingredient per line, e.g. '500g chicken breast'">
+                <textarea
+                  value={groceryInput}
+                  onChange={(e) => setGroceryInput(e.target.value)}
+                  rows={8}
+                  placeholder={'500g chicken breast\n400ml coconut milk\n2 tbsp green curry paste\n…'}
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </Tooltip>
             </label>
 
-            <button
-              type="button"
-              onClick={handleGroceryPrice}
-              disabled={!status?.webSearch}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              {groceryResult ? 'Refresh prices' : 'Get prices'}
-            </button>
+            <Tooltip text="Look up live Coles & Woolworths prices for this list">
+              <button
+                type="button"
+                onClick={handleGroceryPrice}
+                disabled={!status?.webSearch}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {groceryResult ? 'Refresh prices' : 'Get prices'}
+              </button>
+            </Tooltip>
 
             {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={setGroceryResult} />}
           </section>
+        )}
+
+        {tool === 'meal-plan' && (
+          <MealPlanTool
+            libraryItems={libraryItems}
+            loadLibrary={loadLibrary}
+            mealPlans={mealPlans}
+            mealPlansLoading={mealPlansLoading}
+            loadMealPlans={loadMealPlans}
+            mealPlanTitle={mealPlanTitle}
+            setMealPlanTitle={setMealPlanTitle}
+            mealPlanSelection={mealPlanSelection}
+            setMealPlanSelection={setMealPlanSelection}
+            onCreatePlan={handleCreateMealPlan}
+            activeMealPlan={activeMealPlan}
+            onOpenPlan={handleOpenMealPlan}
+            onDeletePlan={handleDeleteMealPlan}
+            onPricePlan={handlePriceMealPlan}
+            mealPlanPricing={mealPlanPricing}
+            mealPlanResult={mealPlanResult}
+            setMealPlanResult={setMealPlanResult}
+          />
         )}
 
         {tool === 'saved' && (
@@ -1293,9 +1827,11 @@ export default function RecipesPage() {
                 <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>My recipes</h2>
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Favourites saved from leftovers or recipe by name.</p>
               </div>
-              <button type="button" onClick={loadLibrary} disabled={libraryLoading} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                {libraryLoading ? 'Refreshing…' : 'Refresh'}
-              </button>
+              <Tooltip text="Reload your saved recipes">
+                <button type="button" onClick={loadLibrary} disabled={libraryLoading} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  {libraryLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </Tooltip>
             </div>
 
             <div className="space-y-1">
@@ -1330,7 +1866,9 @@ export default function RecipesPage() {
                           <button type="button" onClick={() => setDeleteConfirmId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
                         </span>
                       ) : (
-                        <button type="button" onClick={() => setDeleteConfirmId(item.id)} className="text-xs" style={{ color: '#ef4444' }}>Delete</button>
+                        <Tooltip text="Delete this saved recipe">
+                          <button type="button" onClick={() => setDeleteConfirmId(item.id)} className="text-xs" style={{ color: '#ef4444' }}>Delete</button>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -1343,7 +1881,10 @@ export default function RecipesPage() {
                         {(item.payload.steps || []).map((s, i) => <li key={i}>{s}</li>)}
                       </ol>
                       {item.payload.nutrition?.summary && (
-                        <p style={{ color: 'var(--color-muted)' }}>{item.payload.nutrition.summary}</p>
+                        <>
+                          <p style={{ color: 'var(--color-muted)' }}>{item.payload.nutrition.summary}</p>
+                          <NutritionDisclaimer />
+                        </>
                       )}
                     </div>
                   )}
@@ -1353,6 +1894,8 @@ export default function RecipesPage() {
           </section>
         )}
       </main>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

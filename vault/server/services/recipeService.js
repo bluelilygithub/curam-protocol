@@ -7,6 +7,12 @@ const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { webSearch, isSearchConfigured } = require('./webSearchService');
 const { generateImage, getImageGenStatus } = require('./graphicsImageService');
+const {
+  DIETARY_RESTRICTIONS,
+  normalizeRestrictionIds,
+  buildRestrictionPromptBlock,
+  checkIngredientsAgainstRestrictions,
+} = require('./recipeDietary');
 
 const PANTRY_STAPLES = ['salt', 'pepper', 'olive oil'];
 
@@ -103,11 +109,12 @@ async function resolveRecipeTextModel(userId, { prefer = 'standard' } = {}) {
   return modelId;
 }
 
-function buildSuggestPrompt(ingredients, notes = '') {
+function buildSuggestPrompt(ingredients, notes = '', restrictionIds = []) {
   return `Ingredients on hand:
 ${ingredients.trim()}
 
 ${notes.trim() ? `Extra context: ${notes.trim()}\n` : ''}Assume ${PANTRY_STAPLES.join(', ')} are always available.
+${buildRestrictionPromptBlock(restrictionIds)}
 
 Return exactly 4 distinct recipe ideas as JSON:
 {
@@ -127,13 +134,14 @@ Return exactly 4 distinct recipe ideas as JSON:
 }`;
 }
 
-function buildExpandPrompt(recipe, ingredients, notes = '') {
+function buildExpandPrompt(recipe, ingredients, notes = '', restrictionIds = []) {
   return `Create a full recipe for:
 Title: ${recipe.title}
 Summary: ${recipe.summary || ''}
 Ingredients on hand: ${ingredients.trim()}
 ${notes.trim() ? `Context: ${notes.trim()}` : ''}
 Pantry staples: ${PANTRY_STAPLES.join(', ')}
+${buildRestrictionPromptBlock(restrictionIds)}
 
 Return JSON:
 {
@@ -154,9 +162,9 @@ Return JSON:
 }`;
 }
 
-function buildNamedSuggestPrompt(name, notes = '') {
+function buildNamedSuggestPrompt(name, notes = '', restrictionIds = []) {
   return `Dish name: ${name.trim()}
-${notes.trim() ? `Context: ${notes.trim()}\n` : ''}
+${notes.trim() ? `Context: ${notes.trim()}\n` : ''}${buildRestrictionPromptBlock(restrictionIds)}
 Return exactly 3 tiers as JSON:
 {
   "name": "${name.trim()}",
@@ -192,13 +200,14 @@ Return exactly 3 tiers as JSON:
 }`;
 }
 
-function buildNamedExpandPrompt(name, tier, recipe, notes = '') {
+function buildNamedExpandPrompt(name, tier, recipe, notes = '', restrictionIds = []) {
   const tierMeta = NAMED_TIERS.find((t) => t.id === tier) || { label: tier, blurb: '' };
   return `Dish: ${name.trim()}
 Skill tier: ${tierMeta.label} — ${tierMeta.blurb}
 Card summary: ${recipe?.summary || ''}
 ${notes.trim() ? `Context: ${notes.trim()}\n` : ''}
 Assume ${PANTRY_STAPLES.join(', ')} are available.
+${buildRestrictionPromptBlock(restrictionIds)}
 
 Return JSON:
 {
@@ -267,12 +276,13 @@ async function attachLinksAndImage(userId, parsed, recipe, searchTitle) {
   return { links, imageDataUrl, imageError };
 }
 
-async function suggestRecipes(userId, { ingredients, notes } = {}) {
+async function suggestRecipes(userId, { ingredients, notes, restrictions } = {}) {
   const text = String(ingredients || '').trim();
   if (!text) throw new Error('List at least one ingredient');
+  const restrictionIds = normalizeRestrictionIds(restrictions);
 
   const modelId = await resolveRecipeTextModel(userId, { prefer: 'light' });
-  const parsed = await callRecipeJson(userId, modelId, buildSuggestPrompt(text, notes), {
+  const parsed = await callRecipeJson(userId, modelId, buildSuggestPrompt(text, notes, restrictionIds), {
     system: SUGGEST_SYSTEM,
     maxTokens: 2500,
     feature: 'recipes_suggest',
@@ -296,14 +306,16 @@ async function suggestRecipes(userId, { ingredients, notes } = {}) {
     pantryStaples: PANTRY_STAPLES,
     ingredients: text,
     notes: String(notes || '').trim(),
+    restrictions: restrictionIds,
   };
 }
 
-async function expandRecipe(userId, { recipe, ingredients, notes } = {}) {
+async function expandRecipe(userId, { recipe, ingredients, notes, restrictions } = {}) {
   if (!recipe?.title) throw new Error('Recipe selection is required');
+  const restrictionIds = normalizeRestrictionIds(restrictions);
 
   const modelId = await resolveRecipeTextModel(userId, { prefer: 'standard' });
-  const parsed = await callRecipeJson(userId, modelId, buildExpandPrompt(recipe, ingredients, notes), {
+  const parsed = await callRecipeJson(userId, modelId, buildExpandPrompt(recipe, ingredients, notes, restrictionIds), {
     system: EXPAND_SYSTEM,
     maxTokens: 4000,
     feature: 'recipes_expand',
@@ -325,15 +337,18 @@ async function expandRecipe(userId, { recipe, ingredients, notes } = {}) {
     imageDataUrl,
     imageError,
     pantryStaples: PANTRY_STAPLES,
+    restrictions: restrictionIds,
+    restrictionWarnings: checkIngredientsAgainstRestrictions(parsed.ingredients, restrictionIds),
   };
 }
 
-async function suggestNamedRecipe(userId, { name, notes } = {}) {
+async function suggestNamedRecipe(userId, { name, notes, restrictions } = {}) {
   const dishName = String(name || '').trim();
   if (!dishName) throw new Error('Enter a dish name');
+  const restrictionIds = normalizeRestrictionIds(restrictions);
 
   const modelId = await resolveRecipeTextModel(userId, { prefer: 'light' });
-  const parsed = await callRecipeJson(userId, modelId, buildNamedSuggestPrompt(dishName, notes), {
+  const parsed = await callRecipeJson(userId, modelId, buildNamedSuggestPrompt(dishName, notes, restrictionIds), {
     system: NAMED_SUGGEST_SYSTEM,
     maxTokens: 2500,
     feature: 'recipes_named_suggest',
@@ -345,6 +360,7 @@ async function suggestNamedRecipe(userId, { name, notes } = {}) {
   return {
     name: dishName,
     notes: String(notes || '').trim(),
+    restrictions: restrictionIds,
     tiers: NAMED_TIERS.map((meta) => {
       const t = byId[meta.id] || {};
       return {
@@ -360,17 +376,18 @@ async function suggestNamedRecipe(userId, { name, notes } = {}) {
   };
 }
 
-async function expandNamedRecipe(userId, { name, tier, recipe, notes } = {}) {
+async function expandNamedRecipe(userId, { name, tier, recipe, notes, restrictions } = {}) {
   const dishName = String(name || '').trim();
   const tierId = String(tier || recipe?.id || '').toLowerCase();
   if (!dishName) throw new Error('Dish name is required');
   if (!NAMED_TIERS.some((t) => t.id === tierId)) throw new Error('Select Basic, Advanced, or Master');
+  const restrictionIds = normalizeRestrictionIds(restrictions);
 
   const modelId = await resolveRecipeTextModel(userId, { prefer: 'standard' });
   const parsed = await callRecipeJson(
     userId,
     modelId,
-    buildNamedExpandPrompt(dishName, tierId, recipe, notes),
+    buildNamedExpandPrompt(dishName, tierId, recipe, notes, restrictionIds),
     {
       system: NAMED_EXPAND_SYSTEM,
       maxTokens: 4500,
@@ -396,6 +413,8 @@ async function expandNamedRecipe(userId, { name, tier, recipe, notes } = {}) {
     links,
     imageDataUrl,
     imageError,
+    restrictions: restrictionIds,
+    restrictionWarnings: checkIngredientsAgainstRestrictions(parsed.ingredients, restrictionIds),
     ingredientAlternatives: Array.isArray(parsed.ingredientAlternatives)
       ? parsed.ingredientAlternatives.map((row) => ({
           ingredient: String(row.ingredient || '').trim(),
@@ -511,12 +530,14 @@ async function getStatus(userId) {
     imageError: image.error,
     webSearch: webSearchAvailable,
     pantryStaples: PANTRY_STAPLES,
+    dietaryRestrictions: DIETARY_RESTRICTIONS.map((r) => ({ id: r.id, label: r.label })),
   };
 }
 
 module.exports = {
   PANTRY_STAPLES,
   NAMED_TIERS,
+  DIETARY_RESTRICTIONS,
   getStatus,
   suggestRecipes,
   expandRecipe,

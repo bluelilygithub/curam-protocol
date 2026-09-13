@@ -20,6 +20,14 @@ const {
   deleteCorrection,
   learnFromFeedback,
 } = require('../services/recipeGroceryCorrections');
+const {
+  listMealPlans,
+  createMealPlan,
+  getMealPlan,
+  deleteMealPlan,
+  deleteMealPlanItem,
+  priceMealPlan,
+} = require('../services/recipeMealPlans');
 
 const router = express.Router();
 
@@ -36,6 +44,7 @@ router.post('/suggest', async (req, res) => {
     const result = await suggestRecipes(req.user.id, {
       ingredients: req.body?.ingredients,
       notes: req.body?.notes,
+      restrictions: req.body?.restrictions,
     });
     res.json(result);
   } catch (err) {
@@ -50,6 +59,7 @@ router.post('/expand', async (req, res) => {
       recipe: req.body?.recipe,
       ingredients: req.body?.ingredients,
       notes: req.body?.notes,
+      restrictions: req.body?.restrictions,
     });
     res.json(result);
   } catch (err) {
@@ -63,6 +73,7 @@ router.post('/named/suggest', async (req, res) => {
     const result = await suggestNamedRecipe(req.user.id, {
       name: req.body?.name,
       notes: req.body?.notes,
+      restrictions: req.body?.restrictions,
     });
     res.json(result);
   } catch (err) {
@@ -78,6 +89,7 @@ router.post('/named/expand', async (req, res) => {
       tier: req.body?.tier,
       recipe: req.body?.recipe,
       notes: req.body?.notes,
+      restrictions: req.body?.restrictions,
     });
     res.json(result);
   } catch (err) {
@@ -213,6 +225,73 @@ router.delete('/library/:id', async (req, res) => {
   } catch (err) {
     console.error('[recipes/library DELETE]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Meal plans — aggregate several saved recipes into one weekly shop.
+// See docs/recipes.md "Meal plans".
+router.get('/meal-plans', async (req, res) => {
+  try {
+    res.json(await listMealPlans(req.user.id));
+  } catch (err) {
+    console.error('[recipes/meal-plans GET]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/meal-plans', async (req, res) => {
+  try {
+    const plan = await createMealPlan(req.user.id, {
+      title: req.body?.title,
+      items: req.body?.items,
+    });
+    res.status(201).json(plan);
+  } catch (err) {
+    console.error('[recipes/meal-plans POST]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/meal-plans/:id', async (req, res) => {
+  try {
+    const plan = await getMealPlan(req.user.id, Number(req.params.id));
+    if (!plan) return res.status(404).json({ error: 'Not found' });
+    res.json(plan);
+  } catch (err) {
+    console.error('[recipes/meal-plans/:id GET]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/meal-plans/:id', async (req, res) => {
+  try {
+    const ok = await deleteMealPlan(req.user.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[recipes/meal-plans/:id DELETE]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/meal-plans/:id/items/:itemId', async (req, res) => {
+  try {
+    const ok = await deleteMealPlanItem(req.user.id, Number(req.params.id), Number(req.params.itemId));
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[recipes/meal-plans/:id/items/:itemId DELETE]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/meal-plans/:id/price', async (req, res) => {
+  try {
+    const result = await priceMealPlan(req.user.id, Number(req.params.id));
+    res.json(result);
+  } catch (err) {
+    console.error('[recipes/meal-plans/:id/price]', err.message);
+    res.status(400).json({ error: err.message });
   }
 });
 

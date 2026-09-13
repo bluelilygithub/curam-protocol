@@ -16,6 +16,7 @@ const semanticMap = {
   trash: { lucide: 'Trash2' },
   save: { lucide: 'Save' },
   plus: { lucide: 'Plus' },
+  minus: { lucide: 'Minus' },
   edit: { lucide: 'Pencil' },
   x: { lucide: 'X' },
   'rotate-ccw': { lucide: 'RotateCcw' },

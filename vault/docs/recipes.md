@@ -44,17 +44,47 @@ Requires **`SERPER_SEARCH_API_KEY`** on Railway (default provider **Serper**). A
 
 All long operations use the global **ProcessingModal**.
 
+### Nutrition disclaimer
+
+Every nutrition block (`estimatedCaloriesPerServing`, benefits/cautions/summary) is pure LLM output with **zero real nutritional-database backing**. A persistent disclaimer ("AI-estimated, not measured — for a real dietary need, verify with a nutrition label or dietitian.") is shown wherever nutrition is displayed — the expanded recipe panel and the saved-recipe viewer. Client component: `NutritionDisclaimer` in `RecipesPage.jsx` (this app has no shared `Callout` component — `UserGuidePage.jsx`'s is local to that file — so a lightweight equivalent matching its visual style lives here).
+
+### Dietary & allergy restrictions
+
+Unlike pantry staples, dietary restrictions previously existed only as free-text notes the model may or may not honor. A structured, deterministic system now backs the common cases:
+
+- `server/services/recipeDietary.js` — `DIETARY_RESTRICTIONS`: vegetarian, vegan, gluten-free, dairy-free, nut-free, shellfish-free, egg-free, each with a practical (not exhaustive) keyword/ingredient exclusion list.
+- **Prompt constraint** — `buildRestrictionPromptBlock()` injects the active restrictions as non-negotiable hard constraints into `buildSuggestPrompt`/`buildExpandPrompt`/`buildNamedSuggestPrompt`/`buildNamedExpandPrompt`.
+- **Deterministic safety check** — `checkIngredientsAgainstRestrictions()` scans the model's own returned ingredient list against the keyword sets *after* generation and returns a `restrictionWarnings` array (`[{ restriction, ingredient, matchedTerm }]`) on `expand`/`named/expand` responses — this is the actual safety value: catching cases where the AI didn't fully comply, not trusting it blindly. Shown in the client as a red `RestrictionWarnings` banner.
+- **Client** — `RestrictionPicker` renders a multi-select pill set (falls back to a hardcoded list mirroring the server ids/labels before `/api/recipes/status` loads) on both Leftover recipes and Recipe-by-name forms. Selected restrictions are sent as `restrictions: string[]` on `suggest`/`expand`/`named/suggest`/`named/expand` and round-tripped through the response so regenerating (selecting a card/tier) keeps them.
+- **Honesty framing**: this is a **best-effort keyword filter, not a certified allergen database** — copy throughout says so explicitly.
+
+### Serving-size scaling
+
+An expanded recipe shows a **+/− servings stepper** (`ServingsStepper`). Scaling is deterministic and client-side — no second AI call:
+
+- `client/src/utils/recipeScaling.js` — `scaleAmountString()`/`scaleIngredients()`, a lightweight leading-number-plus-unit parser (mixed numbers, fractions, decimals). Deliberately **not** a shared import of `recipeGroceryService.js`'s `parseQuantityFromLine`/`normalizeQuantity` — those exist to match ingredients against store product titles (normalizing to grams/ml for pricing); this only needs to scale a displayed amount.
+- Only the `ingredients` array's `amount` field scales; **steps/instructions text is left as-is** — the UI notes "Ingredient amounts scale automatically; adjust cooking times/steps by eye for large changes."
+- **Grocery pricing respects scaling**: `RecipeDetailPanel`'s "Get prices" button passes the currently-displayed (scaled) ingredients and serving count to `POST /api/recipes/grocery/price`, not the original AI-returned amounts.
+
+### Meal plans
+
+Combine several saved recipes into one merged, priced shopping list — previously grocery pricing only worked per single recipe or one ad-hoc list.
+
+- **Tables**: `recipe_meal_plans` (id, userId, title, createdAt, updatedAt) and `recipe_meal_plan_items` (planId FK cascade delete, recipeId FK to `recipes` nullable — survives the recipe being deleted, title snapshot, servings, position).
+- **Server**: `server/services/recipeMealPlans.js` — CRUD plus `priceMealPlan()`, which (a) scales each item's saved ingredients by `chosenServings / originalServings` (via `server/services/recipeQuantity.js`, a server-side twin of the client scaling util), (b) **merges duplicate ingredients across recipes** (`mergeIngredientLists()` — same-unit quantities sum into one line; mismatched units/qualifiers keep both amounts joined with `+` rather than guessing an equivalence), then (c) calls the existing `priceIngredients()` from `recipeGroceryService.js` **once** on the merged list — no forked pricing implementation.
+- **Client**: new **Meal plan** tool (Shop group) — checkbox-select saved recipes with a per-recipe servings stepper, name and save a plan, view/delete saved plans, and **Price this plan** reuses `GroceryPriceResults` (same component the single-recipe and ad-hoc flows use).
+
 ---
 
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/recipes/status` | AI, image gen, web search availability + pantry staples |
-| `POST` | `/api/recipes/suggest` | `{ ingredients, notes? }` → four cards |
-| `POST` | `/api/recipes/expand` | `{ recipe, ingredients, notes? }` → full recipe + links |
-| `POST` | `/api/recipes/named/suggest` | `{ name, notes? }` → Basic / Advanced / Master cards |
-| `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes? }` → full recipe + swaps + image |
+| `GET` | `/api/recipes/status` | AI, image gen, web search availability + pantry staples + `dietaryRestrictions` list |
+| `POST` | `/api/recipes/suggest` | `{ ingredients, notes?, restrictions? }` → four cards |
+| `POST` | `/api/recipes/expand` | `{ recipe, ingredients, notes?, restrictions? }` → full recipe + links + `restrictionWarnings` |
+| `POST` | `/api/recipes/named/suggest` | `{ name, notes?, restrictions? }` → Basic / Advanced / Master cards |
+| `POST` | `/api/recipes/named/expand` | `{ name, tier, recipe, notes?, restrictions? }` → full recipe + swaps + image + `restrictionWarnings` |
 | `POST` | `/api/recipes/grocery/price` | `{ ingredients, recipeIngredients? }` → sourced Coles/Woolworths prices + links |
 | `GET` | `/api/recipes/grocery/corrections` | List the learned correction glossary |
 | `POST` | `/api/recipes/grocery/feedback` | `{ ingredient, store?, note, matchedProduct? }` → saves a correction + re-prices that ingredient |
@@ -65,6 +95,12 @@ All long operations use the global **ProcessingModal**.
 | `GET` | `/api/recipes/library/:id` | Single item |
 | `PATCH` | `/api/recipes/library/:id` | Update title, tags, payload, image |
 | `DELETE` | `/api/recipes/library/:id` | Remove |
+| `GET` | `/api/recipes/meal-plans` | List saved meal plans (title, item count) |
+| `POST` | `/api/recipes/meal-plans` | `{ title, items: [{ recipeId, servings }] }` → create a plan |
+| `GET` | `/api/recipes/meal-plans/:id` | Single plan with items |
+| `DELETE` | `/api/recipes/meal-plans/:id` | Remove a plan (cascades items) |
+| `DELETE` | `/api/recipes/meal-plans/:id/items/:itemId` | Remove one recipe from a plan |
+| `POST` | `/api/recipes/meal-plans/:id/price` | Scale + merge every recipe's ingredients, price once via the shared grocery pipeline |
 
 Feature flag: **`recipes`** (Settings → Feature Access).
 

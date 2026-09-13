@@ -802,6 +802,37 @@ async function initSchema() {
         ON recipe_grocery_corrections ("ingredientTerm")
     `);
 
+    // Meal plans — aggregate several saved recipes into one weekly shop.
+    // See docs/recipes.md "Meal plans".
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recipe_meal_plans (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title         TEXT NOT NULL DEFAULT 'Untitled plan',
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_recipe_meal_plans_user_updated
+        ON recipe_meal_plans ("userId", "updatedAt" DESC)
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recipe_meal_plan_items (
+        id              SERIAL PRIMARY KEY,
+        "planId"        INTEGER NOT NULL REFERENCES recipe_meal_plans(id) ON DELETE CASCADE,
+        "recipeId"      INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
+        title           TEXT NOT NULL DEFAULT 'Untitled',
+        servings        INTEGER,
+        "position"      INTEGER NOT NULL DEFAULT 0,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_recipe_meal_plan_items_plan
+        ON recipe_meal_plan_items ("planId", "position")
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (
