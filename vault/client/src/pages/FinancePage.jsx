@@ -2674,7 +2674,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 
         {/* Home office */}
         <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Home Office Expense</h3>
+          <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
+            {lockedHMethod === 'fixed_rate' ? 'Home Office Hours' : 'Home Office Expense'}
+          </h3>
 
           {lockedHMethod ? (
             <MethodLockDisplay fy={hFy} claimTypeLabel="Home office" methodLabel={lockedHMethod === 'fixed_rate' ? 'Fixed rate' : 'Actual cost'} />
@@ -2746,16 +2748,21 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           </div>
           {lockedHMethod === 'fixed_rate' && (
             <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-              Each dated entry you save below builds your ongoing hours record — the ATO wants this kept as you go
-              (a diary, timesheet, or calendar note), not reconstructed later from a "typical week."
+              You're not entering a dollar expense here — just hours. Saving does two things at once: it builds
+              your ongoing hours record (the ATO wants this kept as you go — a diary, timesheet, or calendar
+              note, not reconstructed later from a "typical week"), and it posts that period's deduction into
+              your books. If you work from home consistently, one entry a week or fortnight with that period's
+              total hours is enough — you don't need to save daily.
             </p>
           )}
           <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
             <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
           </Tooltip>
           <ErrMsg msg={hError} />
-          <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
-            <Btn onClick={saveHomeOffice} disabled={hSaving || !lockedHMethod}>{hSaving ? 'Saving…' : 'Save Home Office Expense'}</Btn>
+          <Tooltip text={lockedHMethod === 'fixed_rate' ? "Logs these hours and posts the resulting deduction — it will flow into P&L/BAS through the normal expense journal" : "Post this as an expense — it will flow into P&L/BAS through the normal expense journal"}>
+            <Btn onClick={saveHomeOffice} disabled={hSaving || !lockedHMethod}>
+              {hSaving ? 'Saving…' : (lockedHMethod === 'fixed_rate' ? 'Save Hours' : 'Save Home Office Expense')}
+            </Btn>
           </Tooltip>
         </div>
       </div>
