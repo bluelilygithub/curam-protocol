@@ -14,6 +14,134 @@ const FIELD = {
   color: 'var(--color-text)',
 };
 
+const TOOL_HELP = {
+  title: 'Lighthouse',
+  description: 'Runs a real Google PageSpeed Insights audit (mobile + desktop) against any public URL and turns the results into a ranked, developer-ready work order — not just raw scores.',
+  features: [
+    'Real Lighthouse data via Google\'s PageSpeed Insights API, run for mobile and desktop in parallel',
+    'Work order: P0–P2 tickets covering all four scored categories — Performance, Accessibility, SEO, and Best practices',
+    'Full lab metrics, opportunities with exact files/savings, failed checks with selectors and contrast ratios, and field data (CrUX) where available',
+    'Copyable developer brief — paste the whole report, or just the current view, straight to a developer',
+    'Every run is saved, so you can filter by website and see the score trend over time',
+  ],
+};
+
+function HelpModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{TOOL_HELP.title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+        </div>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP.description}</p>
+        <ul className="space-y-1.5">
+          {TOOL_HELP.features.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// Score-over-time trend for one website. Single series -> no legend needed (the
+// title names it); the app's own --color-primary token is used so the line
+// tracks whichever theme (incl. dark mode) is active, rather than a fixed hex.
+function ScoreTrendChart({ points }) {
+  const [hover, setHover] = useState(null);
+  if (!points || points.length < 2) return null;
+
+  const W = 640;
+  const H = 160;
+  const padL = 28;
+  const padR = 12;
+  const padT = 12;
+  const padB = 24;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const xAt = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
+  const yAt = (score) => padT + plotH - (Math.max(0, Math.min(100, score)) / 100) * plotH;
+
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.score).toFixed(1)}`).join(' ');
+  const gridScores = [0, 25, 50, 75, 100];
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Performance score over time</p>
+        <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{points.length} run{points.length === 1 ? '' : 's'}</p>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        style={{ height: H, overflow: 'visible' }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {gridScores.map((g) => (
+          <line
+            key={g}
+            x1={padL} x2={W - padR}
+            y1={yAt(g)} y2={yAt(g)}
+            stroke="var(--color-border)"
+            strokeWidth={1}
+          />
+        ))}
+        {gridScores.map((g) => (
+          <text key={`lbl-${g}`} x={padL - 6} y={yAt(g) + 3} textAnchor="end" fontSize="9" fill="var(--color-muted)">{g}</text>
+        ))}
+        <path d={path} fill="none" stroke="var(--color-primary)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((p, i) => (
+          <circle
+            key={p.id ?? i}
+            cx={xAt(i)}
+            cy={yAt(p.score)}
+            r={hover === i ? 5 : i === points.length - 1 ? 4 : 3}
+            fill="var(--color-primary)"
+            stroke="var(--color-surface)"
+            strokeWidth={1.5}
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHover(i)}
+          />
+        ))}
+        {/* Larger invisible hit targets, per interaction spec — bigger than the visible mark */}
+        {points.map((p, i) => (
+          <circle
+            key={`hit-${p.id ?? i}`}
+            cx={xAt(i)}
+            cy={yAt(p.score)}
+            r={10}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHover(i)}
+          />
+        ))}
+      </svg>
+      {hover != null && points[hover] && (
+        <div
+          className="mt-1 inline-flex items-center gap-2 px-2 py-1 rounded-lg text-xs"
+          style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+        >
+          <span style={{ color: 'var(--color-muted)' }}>{points[hover].dateLabel}</span>
+          <span className="font-semibold tabular-nums" style={{ color: scoreTint(points[hover].score) }}>{points[hover].score}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
@@ -154,6 +282,8 @@ export default function HtmlAuditPage() {
   const [audits, setAudits] = useState([]);
   const [audit, setAudit] = useState(null);
   const [search, setSearch] = useState('');
+  const [hostFilter, setHostFilter] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
   const [sort, setSort] = useState(() => {
     try {
       const saved = localStorage.getItem('vault:htmlListSort');
@@ -211,13 +341,33 @@ export default function HtmlAuditPage() {
     return () => { cancelled = true; };
   }, [canUse, id, addToast, navigate]);
 
+  const hostnames = useMemo(() => {
+    const set = new Set(audits.map((a) => a.hostname || hostOf(a.url)).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [audits]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const rows = q
-      ? audits.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q))
-      : audits;
+    let rows = audits;
+    if (hostFilter) rows = rows.filter((a) => (a.hostname || hostOf(a.url)) === hostFilter);
+    if (q) rows = rows.filter((a) => `${a.name} ${a.url} ${a.hostname || ''}`.toLowerCase().includes(q));
     return sortAudits(rows, sort);
-  }, [audits, search, sort]);
+  }, [audits, search, sort, hostFilter]);
+
+  // Score-over-time points for the currently filtered website (or, with no
+  // filter set, the currently open audit's own site) — oldest first for the chart.
+  const trendHost = hostFilter || (audit ? (audit.hostname || hostOf(audit.url)) : '');
+  const trendPoints = useMemo(() => {
+    if (!trendHost) return [];
+    const rows = audits
+      .filter((a) => (a.hostname || hostOf(a.url)) === trendHost && a.score != null)
+      .sort((a, b) => runStamp(a) - runStamp(b));
+    return rows.map((a) => ({
+      id: a.id,
+      score: Number(a.score),
+      dateLabel: formatRunDate(a) || '',
+    }));
+  }, [audits, trendHost]);
 
   const handleCreate = async () => {
     if (!url.trim()) {
@@ -291,7 +441,17 @@ export default function HtmlAuditPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
             {getIcon('gauge', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Lighthouse</h1>
+          <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Lighthouse</h1>
+          <Tooltip text="What this tool does and its full feature list.">
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity flex-shrink-0"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              ?
+            </button>
+          </Tooltip>
         </div>
 
         <Tooltip text="Filter your saved runs by name, URL, or hostname.">
@@ -303,6 +463,23 @@ export default function HtmlAuditPage() {
             style={FIELD}
           />
         </Tooltip>
+
+        {hostnames.length > 1 && (
+          <Tooltip text="Show only runs for one website, and drive the progress chart from just that site.">
+            <select
+              aria-label="Filter by website"
+              value={hostFilter}
+              onChange={(e) => setHostFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+              style={FIELD}
+            >
+              <option value="">All websites</option>
+              {hostnames.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </Tooltip>
+        )}
 
         <Tooltip text="Order the run list by date, name, or score.">
           <select
@@ -403,6 +580,9 @@ export default function HtmlAuditPage() {
                 Runs Google Lighthouse on a public URL for <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then stores a developer brief (opportunities, files, failed checks, docs links). This is lab performance, not the SEO crawl.
               </p>
             </div>
+            {hostFilter && trendPoints.length >= 2 && (
+              <ScoreTrendChart points={trendPoints} />
+            )}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Website URL</span>
               <Tooltip text="Any public URL — Vault runs a real Google PageSpeed Insights audit against it, mobile and desktop.">
@@ -459,6 +639,13 @@ export default function HtmlAuditPage() {
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                   {audit.summary}
                 </p>
+                {!hostFilter && trendPoints.length >= 2 && (
+                  <Tooltip text="Filter by this website in the sidebar to see this chart on the landing page too.">
+                    <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                      {trendPoints.length} runs recorded for {trendHost}
+                    </span>
+                  </Tooltip>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <div
@@ -536,6 +723,7 @@ export default function HtmlAuditPage() {
 
             {active && (
               <>
+                {trendPoints.length >= 2 && <ScoreTrendChart points={trendPoints} />}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     ['Performance', cats.performance, 'Loading speed and responsiveness — every low score here also becomes a work-order ticket below.'],
@@ -642,6 +830,8 @@ export default function HtmlAuditPage() {
           </section>
         )}
       </main>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

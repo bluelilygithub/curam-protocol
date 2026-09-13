@@ -40,7 +40,11 @@ Priority: failed audits (binary, outright fail) → P0; opportunities with ≥30
 
 Feature flag: **`html`**.
 
-Every control (URL/name inputs, run button, mobile/desktop toggle, category score cards, work-order priority/category badges, copy/delete buttons, search/sort) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, Video Tools, YouTube, and Domain.
+Every control (URL/name inputs, run button, mobile/desktop toggle, category score cards, work-order priority/category badges, copy/delete buttons, search/sort/website filter) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, Video Tools, YouTube, and Domain. A `?` icon next to the "Lighthouse" sidebar title opens a modal with the tool's full description and feature list — the same click-to-open help layer as Graphics/PDF, absent until now since this is otherwise a single-purpose page.
+
+**Filter by website:** the sidebar's website dropdown (only shown once 2+ distinct hostnames have runs) narrows the run list to one site and drives the progress chart below from just that site's history.
+
+**Progress chart:** `ScoreTrendChart` in `HtmlAuditPage.jsx` — a plain inline SVG line chart (no charting library) plotting Performance score over time for one website, built from the already-stored `score`/`createdAt` fields on `listAudits()` results (no extra query). Single series, so no legend is needed (the chart title names it); the line uses the app's own `--color-primary` token rather than a fixed hex, so it follows whichever theme (including dark mode) is active. Shows automatically on the detail page once a site has 2+ runs, and on the landing page once a website filter is selected.
 
 A run often takes about a minute (two PSI jobs in parallel). Use ProcessingModal.
 
