@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
+import Tooltip from '../components/Tooltip';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -1264,7 +1265,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
-const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null };
+const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false };
 
 function ExpensesTab({ from, to }) {
   const [expenses, setExpenses]     = useState([]);
@@ -1330,6 +1331,7 @@ function ExpensesTab({ from, to }) {
       supplier:    exp.supplier || '',
       txCodeId:    exp.txCodeId || null,
       paidViaId:   exp.paidViaId || null,
+      isCapitalAsset: !!exp.isCapitalAsset,
     });
     setError('');
     setShowForm(true);
@@ -1528,10 +1530,25 @@ function ExpensesTab({ from, to }) {
                 )}
               </div>
             </Field>
+            <Field label="Capital Asset">
+              <Tooltip text="Tick if this purchase is a capital asset (equipment, machinery, etc.) rather than a day-to-day running cost. It still posts the same expense journal — this tool does not calculate depreciation — but it will be called out separately in the Profit & Loss report so you can hand it to your accountant for the asset register / instant-asset-write-off assessment.">
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="exp-capital"
+                    checked={!!form.isCapitalAsset}
+                    onChange={e => setForm(p => ({...p, isCapitalAsset: e.target.checked}))}
+                  />
+                  <label htmlFor="exp-capital" className="text-sm" style={{ color: 'var(--color-text)' }}>This is a capital asset purchase</label>
+                </div>
+              </Tooltip>
+            </Field>
           </div>
           <ErrMsg msg={error} />
           <div className="mt-2 flex gap-2">
-            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editingExpense ? 'Update Expense' : 'Save Expense'}</Btn>
+            <Tooltip text={editingExpense ? 'Save changes to this expense' : 'Record this expense and post its journal entry'}>
+              <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editingExpense ? 'Update Expense' : 'Save Expense'}</Btn>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -1557,7 +1574,14 @@ function ExpensesTab({ from, to }) {
               }).map(e => (
                 <tr key={e.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-2 text-xs whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{fmtDate(e.date)}</td>
-                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
+                    {e.description}
+                    {e.isCapitalAsset && (
+                      <Tooltip text="Flagged as a capital asset purchase — not automatically depreciated, see the Profit & Loss report">
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: 'var(--color-primary)', color: '#fff' }}>CAPITAL</span>
+                      </Tooltip>
+                    )}
+                  </td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{e.supplier || '—'}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(e.amount)}</td>
                   <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{fmt(e.gst)}</td>
@@ -1878,7 +1902,11 @@ function WagesTab({ from, to }) {
             <Field label="Gross ($)"><Input type="number" value={form.gross} onChange={handleGrossChange} placeholder="0.00" /></Field>
             <Field label="Tax Withheld ($)"><Input type="number" value={form.tax} onChange={handleTaxChange} placeholder="0.00" /></Field>
             <Field label="Superannuation ($)"><Input type="number" value={form.superannuation} onChange={v => setForm(p => ({...p, superannuation: v}))} placeholder="0.00" /></Field>
-            <Field label="Net Pay ($)"><Input type="number" value={form.net} onChange={v => setForm(p => ({...p, net: v}))} placeholder="0.00" /></Field>
+            <Field label="Net Pay ($)">
+              <Tooltip text="Must equal Gross minus Tax Withheld — the journal (DR gross, CR net, CR tax withheld) won't balance otherwise and the save will be rejected">
+                <Input type="number" value={form.net} onChange={v => setForm(p => ({...p, net: v}))} placeholder="0.00" />
+              </Tooltip>
+            </Field>
           </div>
           <ErrMsg msg={error} />
           <div className="mt-2"><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Wages'}</Btn></div>
@@ -1931,6 +1959,294 @@ function WagesTab({ from, to }) {
           onCancel={() => setConfirmModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Owner's Drawings ──────────────────────────────────────────────────────────
+
+function DrawingsTab({ from, to }) {
+  const [drawings, setDrawings] = useState([]);
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({ date: todayStr(), description: '', amount: '', paidViaId: null });
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const accountMap = Object.fromEntries(paymentAccounts.map(a => [a.id, a]));
+
+  const load = useCallback(() => {
+    api.get('/api/finance/drawings').then(r => r.json()).then(d => setDrawings(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/api/finance/accounts').then(r => r.json())
+      .then(d => setPaymentAccounts(Array.isArray(d) ? d.filter(a => a.type === 'asset' || a.type === 'liability') : []))
+      .catch(() => {});
+  }, []);
+
+  const save = async () => {
+    if (!form.amount) { setError('Amount required'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await api.post('/api/finance/drawings', form);
+      load();
+      setForm({ date: todayStr(), description: '', amount: '', paidViaId: null });
+      setShowForm(false);
+      addToast('Drawing recorded');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = (d) => {
+    setConfirmModal({
+      message: `Delete this drawing of ${fmt(d.amount)}?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        await api.delete(`/api/finance/drawings/${d.id}`);
+        setDrawings(prev => prev.filter(x => x.id !== d.id));
+        addToast('Drawing deleted');
+      },
+    });
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Owner's Drawings</h2>
+        <Tooltip text="Record money you take out of the business for yourself">
+          <Btn onClick={() => { setShowForm(v => !v); setError(''); }}>{showForm ? 'Cancel' : '+ Add Drawing'}</Btn>
+        </Tooltip>
+      </div>
+
+      <div className="mb-4 p-3 rounded-lg text-xs" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+        Money you take out of the business for yourself — not a wage, no tax withheld here. Your own income is the business profit, reported on your individual tax return. This is different from <strong>Wages</strong>, which is for actual employees (with PAYG withholding and superannuation).
+      </div>
+
+      {showForm && (
+        <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <Field label="Date"><Tooltip text="Date the funds left the business account"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Tooltip></Field>
+            <Field label="Amount ($)"><Tooltip text="How much you withdrew"><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
+            <div className="col-span-2">
+              <Field label="Description (optional)"><Tooltip text="Optional note, e.g. purpose of the withdrawal"><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="Optional note" /></Tooltip></Field>
+            </div>
+            <Field label="Paid via">
+              <Tooltip text="Which account the funds were drawn from — defaults to Bank / Cash">
+                <select
+                  value={form.paidViaId || ''}
+                  onChange={e => setForm(p => ({...p, paidViaId: e.target.value ? parseInt(e.target.value) : null}))}
+                  className="text-sm px-3 py-2 rounded-lg border w-full"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="">Bank / Cash (default)</option>
+                  {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                </select>
+              </Tooltip>
+            </Field>
+          </div>
+          <ErrMsg msg={error} />
+          <div className="mt-2"><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Drawing'}</Btn></div>
+        </div>
+      )}
+
+      {drawings.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No drawings recorded.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                {['Date', 'Description', 'Amount', 'Paid via', ''].map(h => (
+                  <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {drawings.filter(d => {
+                const dt = String(d.date).slice(0, 10);
+                if (from && dt < from) return false;
+                if (to   && dt > to)   return false;
+                return true;
+              }).map(d => (
+                <tr key={d.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="py-2 px-2 text-xs whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{fmtDate(d.date)}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{d.description || '—'}</td>
+                  <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(d.amount)}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {d.paidViaId && accountMap[d.paidViaId] ? accountMap[d.paidViaId].name : 'Bank / Cash'}
+                  </td>
+                  <td className="py-2 px-2">
+                    <button onClick={() => del(d)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          title="Delete Drawing"
+          message={confirmModal.message}
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Vehicle & Home Office calculators ────────────────────────────────────────
+
+function VehicleHomeOfficeTab() {
+  const addToast = useToastStore(s => s.addToast);
+  const [rates, setRates] = useState({ fin_vehicle_rate_per_km: '0.88', fin_home_office_rate_per_hour: '0.70' });
+  const [vForm, setVForm] = useState({ date: todayStr(), description: '', method: 'cents_per_km', km: '', businessUsePercent: '', actualCost: '' });
+  const [hForm, setHForm] = useState({ date: todayStr(), description: '', method: 'fixed_rate', hours: '', businessUsePercent: '', actualCost: '' });
+  const [vSaving, setVSaving] = useState(false);
+  const [hSaving, setHSaving] = useState(false);
+  const [vError, setVError] = useState('');
+  const [hError, setHError] = useState('');
+
+  useEffect(() => {
+    api.get('/api/finance/settings').then(r => r.json()).then(d => {
+      setRates(p => ({
+        fin_vehicle_rate_per_km: d.fin_vehicle_rate_per_km || p.fin_vehicle_rate_per_km,
+        fin_home_office_rate_per_hour: d.fin_home_office_rate_per_hour || p.fin_home_office_rate_per_hour,
+      }));
+    }).catch(() => {});
+  }, []);
+
+  const vehicleDeductible = vForm.method === 'cents_per_km'
+    ? (parseFloat(vForm.km) || 0) * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
+    : (parseFloat(vForm.actualCost) || 0) * ((parseFloat(vForm.businessUsePercent) || 0) / 100);
+
+  const homeOfficeDeductible = hForm.method === 'fixed_rate'
+    ? (parseFloat(hForm.hours) || 0) * (parseFloat(rates.fin_home_office_rate_per_hour) || 0)
+    : (parseFloat(hForm.actualCost) || 0) * ((parseFloat(hForm.businessUsePercent) || 0) / 100);
+
+  const saveRate = async (key, value) => {
+    try {
+      await api.put('/api/finance/settings', { [key]: value });
+      addToast('Rate saved');
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const saveVehicle = async () => {
+    if (vehicleDeductible <= 0) { setVError('Enter values that produce a deductible amount greater than zero'); return; }
+    setVSaving(true); setVError('');
+    try {
+      await api.post('/api/finance/expenses/vehicle', {
+        ...vForm,
+        ratePerKm: rates.fin_vehicle_rate_per_km,
+      });
+      addToast(`Vehicle expense saved — ${fmt(vehicleDeductible)} deductible`);
+      setVForm({ date: todayStr(), description: '', method: 'cents_per_km', km: '', businessUsePercent: '', actualCost: '' });
+    } catch (e) { setVError(e.message); } finally { setVSaving(false); }
+  };
+
+  const saveHomeOffice = async () => {
+    if (homeOfficeDeductible <= 0) { setHError('Enter values that produce a deductible amount greater than zero'); return; }
+    setHSaving(true); setHError('');
+    try {
+      await api.post('/api/finance/expenses/home-office', {
+        ...hForm,
+        ratePerHour: rates.fin_home_office_rate_per_hour,
+      });
+      addToast(`Home office expense saved — ${fmt(homeOfficeDeductible)} deductible`);
+      setHForm({ date: todayStr(), description: '', method: 'fixed_rate', hours: '', businessUsePercent: '', actualCost: '' });
+    } catch (e) { setHError(e.message); } finally { setHSaving(false); }
+  };
+
+  return (
+    <div className="p-6 max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Vehicle */}
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense Calculator</h3>
+        <Field label="ATO rate ($/km, cents-per-km method)" hint="Editable — the ATO rate changes each year">
+          <Tooltip text="The ATO cents-per-km rate changes yearly — keep this up to date">
+            <Input type="number" value={rates.fin_vehicle_rate_per_km} onChange={v => setRates(p => ({...p, fin_vehicle_rate_per_km: v}))} onBlurCapture={() => saveRate('fin_vehicle_rate_per_km', rates.fin_vehicle_rate_per_km)} />
+          </Tooltip>
+        </Field>
+        <div className="flex gap-3 my-3">
+          <Tooltip text="ATO cents-per-km method — rate × business kilometres, no receipts needed (capped at 5,000km/year by the ATO)">
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" checked={vForm.method === 'cents_per_km'} onChange={() => setVForm(p => ({...p, method: 'cents_per_km'}))} /> Cents-per-km
+            </label>
+          </Tooltip>
+          <Tooltip text="Logbook / actual-cost method — business-use % applied to your actual running costs">
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" checked={vForm.method === 'logbook'} onChange={() => setVForm(p => ({...p, method: 'logbook'}))} /> Logbook (actual cost)
+            </label>
+          </Tooltip>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="Date"><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Field>
+          <Field label="Description"><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. client visits" /></Field>
+          {vForm.method === 'cents_per_km' ? (
+            <Field label="Business km"><Tooltip text="Total business kilometres travelled this period"><Input type="number" value={vForm.km} onChange={v => setVForm(p => ({...p, km: v}))} placeholder="0" /></Tooltip></Field>
+          ) : (
+            <>
+              <Field label="Business use %"><Tooltip text="Percentage of total vehicle use that was for business, per your logbook"><Input type="number" value={vForm.businessUsePercent} onChange={v => setVForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
+              <Field label="Actual cost ($)"><Tooltip text="Total actual running cost (fuel, rego, insurance, servicing) for the period"><Input type="number" value={vForm.actualCost} onChange={v => setVForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
+            </>
+          )}
+        </div>
+        <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</p>
+        <ErrMsg msg={vError} />
+        <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
+          <Btn onClick={saveVehicle} disabled={vSaving}>{vSaving ? 'Saving…' : 'Save Vehicle Expense'}</Btn>
+        </Tooltip>
+      </div>
+
+      {/* Home office */}
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Home Office Expense Calculator</h3>
+        <Field label="ATO rate ($/hour, fixed-rate method)" hint="Editable — the ATO rate changes each year">
+          <Tooltip text="The ATO fixed (cents-per-hour) home office rate changes yearly — keep this up to date">
+            <Input type="number" value={rates.fin_home_office_rate_per_hour} onChange={v => setRates(p => ({...p, fin_home_office_rate_per_hour: v}))} onBlurCapture={() => saveRate('fin_home_office_rate_per_hour', rates.fin_home_office_rate_per_hour)} />
+          </Tooltip>
+        </Field>
+        <div className="flex gap-3 my-3">
+          <Tooltip text="ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs">
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" checked={hForm.method === 'fixed_rate'} onChange={() => setHForm(p => ({...p, method: 'fixed_rate'}))} /> Fixed rate
+            </label>
+          </Tooltip>
+          <Tooltip text="Actual cost method — business-use % applied to your actual home office running costs">
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" checked={hForm.method === 'actual_cost'} onChange={() => setHForm(p => ({...p, method: 'actual_cost'}))} /> Actual cost
+            </label>
+          </Tooltip>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="Date"><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Field>
+          <Field label="Description"><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Field>
+          {hForm.method === 'fixed_rate' ? (
+            <Field label="Hours worked from home"><Tooltip text="Total hours worked from home this period"><Input type="number" value={hForm.hours} onChange={v => setHForm(p => ({...p, hours: v}))} placeholder="0" /></Tooltip></Field>
+          ) : (
+            <>
+              <Field label="Business use %"><Tooltip text="Percentage of the cost attributable to business use"><Input type="number" value={hForm.businessUsePercent} onChange={v => setHForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
+              <Field label="Actual cost ($)"><Tooltip text="Total actual home office running cost (utilities, internet, etc.) for the period"><Input type="number" value={hForm.actualCost} onChange={v => setHForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
+            </>
+          )}
+        </div>
+        <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
+        <ErrMsg msg={hError} />
+        <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
+          <Btn onClick={saveHomeOffice} disabled={hSaving}>{hSaving ? 'Saving…' : 'Save Home Office Expense'}</Btn>
+        </Tooltip>
+      </div>
     </div>
   );
 }
@@ -2754,7 +3070,10 @@ function BASTab() {
 
   return (
     <div data-tour="finance-bas" className="p-6">
-      <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Business Activity Statement</h2>
+      <h2 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Business Activity Statement</h2>
+      <p className="text-xs italic mb-4" style={{ color: 'var(--color-muted)' }}>
+        GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.
+      </p>
 
       <div className="flex flex-col xl:flex-row gap-8">
         {/* Left: quarterly detail */}
@@ -3087,33 +3406,37 @@ function SettingsTab({ onHistoryReset }) {
     <div className="p-6 max-w-lg">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Finance Settings</h2>
       <div className="flex flex-col gap-3">
-        <Field label="Business Name"><Input value={f('fin_biz_name')} onChange={set('fin_biz_name')} placeholder="Your Business Name Pty Ltd" /></Field>
-        <Field label="ABN"><Input value={f('fin_abn')} onChange={set('fin_abn')} placeholder="12 345 678 901" /></Field>
-        <Field label="Business Address"><Input value={f('fin_address')} onChange={set('fin_address')} placeholder="Street, City, State, Postcode" /></Field>
+        <Field label="Business Name"><Tooltip text="Shown on invoices, quotes, and emails sent to clients"><Input value={f('fin_biz_name')} onChange={set('fin_biz_name')} placeholder="Your Business Name Pty Ltd" /></Tooltip></Field>
+        <Field label="ABN"><Tooltip text="Your Australian Business Number — printed on every invoice/quote"><Input value={f('fin_abn')} onChange={set('fin_abn')} placeholder="12 345 678 901" /></Tooltip></Field>
+        <Field label="Business Address"><Tooltip text="Printed on invoices and quotes"><Input value={f('fin_address')} onChange={set('fin_address')} placeholder="Street, City, State, Postcode" /></Tooltip></Field>
 
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Bank Details</p>
           <div className="flex flex-col gap-3">
-            <Field label="Bank Name"><Input value={f('fin_bank_name')} onChange={set('fin_bank_name')} placeholder="e.g. Commonwealth Bank" /></Field>
-            <Field label="Account Name"><Input value={f('fin_account_name')} onChange={set('fin_account_name')} placeholder="Your Business Name Pty Ltd" /></Field>
-            <Field label="BSB"><Input value={f('fin_bsb')} onChange={set('fin_bsb')} placeholder="000-000" /></Field>
-            <Field label="Account Number"><Input value={f('fin_account_number')} onChange={set('fin_account_number')} placeholder="123456789" /></Field>
+            <Field label="Bank Name"><Tooltip text="Shown to clients as your payment details on invoices"><Input value={f('fin_bank_name')} onChange={set('fin_bank_name')} placeholder="e.g. Commonwealth Bank" /></Tooltip></Field>
+            <Field label="Account Name"><Tooltip text="Account name clients should pay to"><Input value={f('fin_account_name')} onChange={set('fin_account_name')} placeholder="Your Business Name Pty Ltd" /></Tooltip></Field>
+            <Field label="BSB"><Tooltip text="Bank State Branch number for receiving payments"><Input value={f('fin_bsb')} onChange={set('fin_bsb')} placeholder="000-000" /></Tooltip></Field>
+            <Field label="Account Number"><Tooltip text="Bank account number for receiving payments"><Input value={f('fin_account_number')} onChange={set('fin_account_number')} placeholder="123456789" /></Tooltip></Field>
           </div>
         </div>
 
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
           <Field label="Default Payment Terms">
-            <Sel value={f('fin_payment_terms')} onChange={set('fin_payment_terms')}>
-              {['7','14','30','60'].map(v => <option key={v} value={v}>{v} days</option>)}
-            </Sel>
+            <Tooltip text="Default number of days until an invoice is due, and used when converting a quote to an invoice">
+              <Sel value={f('fin_payment_terms')} onChange={set('fin_payment_terms')}>
+                {['7','14','30','60'].map(v => <option key={v} value={v}>{v} days</option>)}
+              </Sel>
+            </Tooltip>
           </Field>
           <div className="flex items-center gap-2 mt-3">
-            <input
-              type="checkbox"
-              id="gst-reg"
-              checked={f('fin_gst_registered') !== 'false'}
-              onChange={e => set('fin_gst_registered')(e.target.checked ? 'true' : 'false')}
-            />
+            <Tooltip text="Controls whether GST (10%) is applied to invoice items by default — untick if not registered for GST">
+              <input
+                type="checkbox"
+                id="gst-reg"
+                checked={f('fin_gst_registered') !== 'false'}
+                onChange={e => set('fin_gst_registered')(e.target.checked ? 'true' : 'false')}
+              />
+            </Tooltip>
             <label htmlFor="gst-reg" className="text-sm" style={{ color: 'var(--color-text)' }}>Registered for GST</label>
           </div>
         </div>
@@ -4096,8 +4419,371 @@ function RecurringTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring']);
+// ── CSV download helper (client-side, mirrors ExportModal's blob-download pattern) ──
+function downloadCsv(filename, rows) {
+  const esc = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = '﻿' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Single-series line chart (cash flow / bank balance trend) — mirrors HtmlAuditPage's
+// ScoreTrendChart pattern exactly: plain inline SVG, --color-primary, hover crosshair, no legend.
+function CashFlowChart({ points }) {
+  const [hover, setHover] = useState(null);
+  if (!points || points.length < 2) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Not enough data yet.</p>;
+
+  const W = 640, H = 180, padL = 56, padR = 12, padT = 12, padB = 24;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const values = points.map(p => p.balance);
+  const min = Math.min(0, ...values), max = Math.max(...values, 1);
+  const xAt = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
+  const yAt = (v) => padT + plotH - ((v - min) / (max - min || 1)) * plotH;
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.balance).toFixed(1)}`).join(' ');
+  const gridVals = [min, (min + max) / 2, max];
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Bank balance trend (last 12 months)</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H, overflow: 'visible' }} onMouseLeave={() => setHover(null)}>
+        {gridVals.map((g, i) => (
+          <line key={i} x1={padL} x2={W - padR} y1={yAt(g)} y2={yAt(g)} stroke="var(--color-border)" strokeWidth={1} />
+        ))}
+        {gridVals.map((g, i) => (
+          <text key={`l${i}`} x={padL - 6} y={yAt(g) + 3} textAnchor="end" fontSize="9" fill="var(--color-muted)">{fmt(g)}</text>
+        ))}
+        <path d={path} fill="none" stroke="var(--color-primary)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((p, i) => (
+          <circle key={i} cx={xAt(i)} cy={yAt(p.balance)} r={hover === i ? 5 : 3} fill="var(--color-primary)" stroke="var(--color-surface)" strokeWidth={1.5} style={{ cursor: 'pointer' }} onMouseEnter={() => setHover(i)} />
+        ))}
+        {points.map((p, i) => (
+          <circle key={`h${i}`} cx={xAt(i)} cy={yAt(p.balance)} r={10} fill="transparent" style={{ cursor: 'pointer' }} onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+      {hover != null && points[hover] && (
+        <div className="mt-1 inline-flex items-center gap-2 px-2 py-1 rounded-lg text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+          <span style={{ color: 'var(--color-muted)' }}>{points[hover].date}</span>
+          <span className="font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{fmt(points[hover].balance)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Two-series (categorical) grouped bar chart — fixed hue order (primary = series A, muted-tinted
+// secondary = series B), legend always shown for 2+ series, hover tooltip per bar pair.
+function TwoSeriesBarChart({ title, points, keyA, keyB, labelA, labelB, xKey }) {
+  const [hover, setHover] = useState(null);
+  if (!points || points.length === 0) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Not enough data yet.</p>;
+
+  const W = 640, H = 200, padL = 48, padR = 12, padT = 12, padB = 32;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const max = Math.max(1, ...points.flatMap(p => [p[keyA], p[keyB]]));
+  const groupW = plotW / points.length;
+  const barW = Math.min(22, groupW * 0.32);
+  const yAt = (v) => padT + plotH - (v / max) * plotH;
+  const colorA = 'var(--color-primary)';
+  const colorB = 'var(--color-muted)';
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+        <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--color-muted)' }}>
+          <span className="flex items-center gap-1"><span style={{ width: 8, height: 8, borderRadius: 2, background: colorA, display: 'inline-block' }} />{labelA}</span>
+          <span className="flex items-center gap-1"><span style={{ width: 8, height: 8, borderRadius: 2, background: colorB, display: 'inline-block' }} />{labelB}</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H, overflow: 'visible' }} onMouseLeave={() => setHover(null)}>
+        <line x1={padL} x2={W - padR} y1={yAt(0)} y2={yAt(0)} stroke="var(--color-border)" strokeWidth={1} />
+        {points.map((p, i) => {
+          const cx = padL + groupW * i + groupW / 2;
+          return (
+            <g key={i}>
+              <rect x={cx - barW - 2} y={yAt(p[keyA])} width={barW} height={Math.max(0, yAt(0) - yAt(p[keyA]))} fill={colorA} rx={2}
+                onMouseEnter={() => setHover(i)} style={{ cursor: 'pointer', opacity: hover === i ? 1 : 0.9 }} />
+              <rect x={cx + 2} y={yAt(p[keyB])} width={barW} height={Math.max(0, yAt(0) - yAt(p[keyB]))} fill={colorB} rx={2}
+                onMouseEnter={() => setHover(i)} style={{ cursor: 'pointer', opacity: hover === i ? 1 : 0.9 }} />
+              <text x={cx} y={H - padB + 14} textAnchor="middle" fontSize="9" fill="var(--color-muted)">{String(p[xKey]).slice(2)}</text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover != null && points[hover] && (
+        <div className="mt-1 inline-flex items-center gap-3 px-2 py-1 rounded-lg text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+          <span style={{ color: 'var(--color-muted)' }}>{points[hover][xKey]}</span>
+          <span style={{ color: colorA }}>{labelA}: {fmt(points[hover][keyA])}</span>
+          <span style={{ color: colorB }}>{labelB}: {fmt(points[hover][keyB])}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CashBasisNote = () => (
+  <p className="text-xs italic mb-4" style={{ color: 'var(--color-muted)' }}>
+    GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.
+  </p>
+);
+
+const REPORT_SUBTABS = ['Profit & Loss', 'Balance Sheet', 'GST Summary', 'Trial Balance', 'Charts'];
+
+function ReportsTab() {
+  const [sub, setSub] = useState('Profit & Loss');
+  const [from, setFrom] = useState(() => getPresetRange('quarter').from);
+  const [to, setTo]     = useState(() => getPresetRange('quarter').to);
+  const [asOf, setAsOf] = useState(todayStr());
+  const [pl, setPl] = useState(null);
+  const [bs, setBs] = useState(null);
+  const [gst, setGst] = useState(null);
+  const [tb, setTb] = useState(null);
+  const [chartIncExp, setChartIncExp] = useState([]);
+  const [chartCashFlow, setChartCashFlow] = useState([]);
+  const [chartGst, setChartGst] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sub === 'Profit & Loss') {
+      setLoading(true);
+      api.get(`/api/finance/reports/profit-loss?from=${from}&to=${to}`).then(r => r.json()).then(setPl).catch(() => {}).finally(() => setLoading(false));
+    } else if (sub === 'Balance Sheet') {
+      setLoading(true);
+      api.get(`/api/finance/reports/balance-sheet?asOf=${asOf}`).then(r => r.json()).then(setBs).catch(() => {}).finally(() => setLoading(false));
+    } else if (sub === 'GST Summary') {
+      setLoading(true);
+      api.get(`/api/finance/reports/gst-summary?from=${from}&to=${to}`).then(r => r.json()).then(setGst).catch(() => {}).finally(() => setLoading(false));
+    } else if (sub === 'Trial Balance') {
+      setLoading(true);
+      api.get(`/api/finance/reports/trial-balance?asOf=${asOf}`).then(r => r.json()).then(setTb).catch(() => {}).finally(() => setLoading(false));
+    } else if (sub === 'Charts') {
+      api.get('/api/finance/reports/chart-income-expense').then(r => r.json()).then(d => setChartIncExp(d.points || [])).catch(() => {});
+      api.get('/api/finance/reports/chart-cash-flow').then(r => r.json()).then(d => setChartCashFlow(d.points || [])).catch(() => {});
+      api.get('/api/finance/reports/chart-gst-quarters').then(r => r.json()).then(d => setChartGst(d.points || [])).catch(() => {});
+    }
+  }, [sub, from, to, asOf]);
+
+  const exportPl = () => {
+    if (!pl) return;
+    const rows = [['Profit & Loss', `${pl.from} to ${pl.to}`], [], ['Income']];
+    pl.income.forEach(r => rows.push([r.code, r.name, fmtNum2(r.amount)]));
+    rows.push(['', 'Total Income', fmtNum2(pl.totalIncome)], [], ['Expenses']);
+    pl.expenses.forEach(r => rows.push([r.code, r.name, fmtNum2(r.amount)]));
+    rows.push(['', 'Total Expenses', fmtNum2(pl.totalExpense)], [], ['Net Profit', '', fmtNum2(pl.netProfit)]);
+    if (pl.capitalAssetPurchases?.length) {
+      rows.push([], ['Capital Asset Purchases (not depreciated)']);
+      pl.capitalAssetPurchases.forEach(r => rows.push([fmtDate(r.date), r.description, fmtNum2(r.amount)]));
+    }
+    downloadCsv(`profit-loss-${from}-${to}.csv`, rows);
+  };
+  const exportBs = () => {
+    if (!bs) return;
+    const rows = [['Balance Sheet', `as of ${bs.asOf}`], [], ['Assets']];
+    bs.assets.forEach(r => rows.push([r.code, r.name, fmtNum2(r.balance)]));
+    rows.push(['', 'Total Assets', fmtNum2(bs.totalAssets)], [], ['Liabilities']);
+    bs.liabilities.forEach(r => rows.push([r.code, r.name, fmtNum2(r.balance)]));
+    rows.push(['', 'Total Liabilities', fmtNum2(bs.totalLiabilities)], [], ['Equity']);
+    bs.equity.forEach(r => rows.push([r.code, r.name, fmtNum2(r.balance)]));
+    rows.push(['', 'Total Equity', fmtNum2(bs.totalEquity)], [], ['Assets = Liabilities + Equity?', bs.isBalanced ? 'Yes' : `NO — off by ${fmtNum2(bs.difference)}`]);
+    downloadCsv(`balance-sheet-${bs.asOf}.csv`, rows);
+  };
+  const exportGst = () => {
+    if (!gst) return;
+    const rows = [['GST Summary', `${gst.from} to ${gst.to}`], [], ['Income', fmtNum2(gst.income)], ['GST Collected', fmtNum2(gst.gstCollected)],
+      ['Expenses', fmtNum2(gst.expenses)], ['GST Paid', fmtNum2(gst.gstPaid)], ['Net GST', fmtNum2(gst.netGst)], [],
+      ['Income by code', 'Amount', 'GST']];
+    gst.byIncomeCode.forEach(r => rows.push([`${r.code} ${r.name}`, fmtNum2(r.amount), fmtNum2(r.gst)]));
+    rows.push([], ['Expenses by code', 'Amount', 'GST']);
+    gst.byExpenseCode.forEach(r => rows.push([`${r.code} ${r.name}`, fmtNum2(r.amount), fmtNum2(r.gst)]));
+    downloadCsv(`gst-summary-${from}-${to}.csv`, rows);
+  };
+  const exportTb = () => {
+    if (!tb) return;
+    const rows = [['Trial Balance', `as of ${tb.asOf}`], [], ['Code', 'Account', 'Type', 'Debit', 'Credit']];
+    tb.accounts.forEach(r => rows.push([r.code, r.name, r.type, fmtNum2(r.debitBalance), fmtNum2(r.creditBalance)]));
+    rows.push(['', 'Totals', '', fmtNum2(tb.totalDebit), fmtNum2(tb.totalCredit)]);
+    downloadCsv(`trial-balance-${tb.asOf}.csv`, rows);
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex gap-1 mb-4 overflow-x-auto">
+        {REPORT_SUBTABS.map(s => (
+          <button key={s} onClick={() => setSub(s)}
+            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border"
+            style={{
+              background: sub === s ? 'var(--color-primary)' : 'transparent',
+              color: sub === s ? '#fff' : 'var(--color-muted)',
+              borderColor: sub === s ? 'var(--color-primary)' : 'var(--color-border)',
+            }}
+          >{s}</button>
+        ))}
+      </div>
+
+      {(sub === 'Profit & Loss' || sub === 'GST Summary') && (
+        <div className="flex items-center gap-3 mb-4">
+          <Tooltip text="Start of the report period"><Field label="From"><Input type="date" value={from} onChange={setFrom} /></Field></Tooltip>
+          <Tooltip text="End of the report period"><Field label="To"><Input type="date" value={to} onChange={setTo} /></Field></Tooltip>
+        </div>
+      )}
+      {(sub === 'Balance Sheet' || sub === 'Trial Balance') && (
+        <div className="flex items-center gap-3 mb-4">
+          <Tooltip text="Show account balances as of this date"><Field label="As of"><Input type="date" value={asOf} onChange={setAsOf} /></Field></Tooltip>
+        </div>
+      )}
+
+      {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+
+      {sub === 'Profit & Loss' && pl && (
+        <div className="max-w-2xl">
+          <CashBasisNote />
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Profit &amp; Loss</h3>
+            <Tooltip text="Download this report as a CSV file"><Btn variant="secondary" onClick={exportPl}>Export CSV</Btn></Tooltip>
+          </div>
+          <ReportTable title="Income" rows={pl.income} total={pl.totalIncome} totalLabel="Total Income" />
+          <ReportTable title="Expenses" rows={pl.expenses} total={pl.totalExpense} totalLabel="Total Expenses" />
+          <div className="flex justify-between px-2 py-2 mt-2 rounded-lg font-semibold text-sm" style={{ background: 'var(--color-surface)', color: pl.netProfit >= 0 ? 'var(--color-text)' : '#ef4444' }}>
+            <span>Net Profit</span><span>{fmt(pl.netProfit)}</span>
+          </div>
+          {pl.capitalAssetPurchases?.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{pl.capitalAssetNote}</p>
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {pl.capitalAssetPurchases.map(r => (
+                    <tr key={r.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <td className="py-1 px-2" style={{ color: 'var(--color-muted)' }}>{fmtDate(r.date)}</td>
+                      <td className="py-1 px-2" style={{ color: 'var(--color-text)' }}>{r.description}</td>
+                      <td className="py-1 px-2 text-right" style={{ color: 'var(--color-text)' }}>{fmt(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sub === 'Balance Sheet' && bs && (
+        <div className="max-w-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Balance Sheet</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: bs.isBalanced ? '#d1fae5' : '#fee2e2', color: bs.isBalanced ? '#065f46' : '#991b1b' }}>
+                {bs.isBalanced ? '✓ Balanced' : `✗ Off by ${fmt(bs.difference)}`}
+              </span>
+              <Tooltip text="Download this report as a CSV file"><Btn variant="secondary" onClick={exportBs}>Export CSV</Btn></Tooltip>
+            </div>
+          </div>
+          <ReportTable title="Assets" rows={bs.assets.map(r => ({...r, amount: r.balance}))} total={bs.totalAssets} totalLabel="Total Assets" />
+          <ReportTable title="Liabilities" rows={bs.liabilities.map(r => ({...r, amount: r.balance}))} total={bs.totalLiabilities} totalLabel="Total Liabilities" />
+          <ReportTable title="Equity" rows={bs.equity.map(r => ({...r, amount: r.balance}))} total={bs.totalEquity} totalLabel="Total Equity" />
+        </div>
+      )}
+
+      {sub === 'GST Summary' && gst && (
+        <div className="max-w-2xl">
+          <CashBasisNote />
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>GST Summary</h3>
+            <Tooltip text="Download this report as a CSV file"><Btn variant="secondary" onClick={exportGst}>Export CSV</Btn></Tooltip>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <PositionCard label="GST Collected" value={gst.gstCollected} />
+            <PositionCard label="GST Paid" value={gst.gstPaid} />
+            <PositionCard label="Net GST" value={gst.netGst} tone={gst.netGst >= 0 ? 'warn' : 'good'} />
+          </div>
+          <ReportTable title="Income by code" rows={gst.byIncomeCode.map(r => ({...r, amount: r.amount}))} total={gst.income} totalLabel="Total Income" />
+          <ReportTable title="Expenses by code" rows={gst.byExpenseCode.map(r => ({...r, amount: r.amount}))} total={gst.expenses} totalLabel="Total Expenses" />
+        </div>
+      )}
+
+      {sub === 'Trial Balance' && tb && (
+        <div className="max-w-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Trial Balance</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: tb.isBalanced ? '#d1fae5' : '#fee2e2', color: tb.isBalanced ? '#065f46' : '#991b1b' }}>
+                {tb.isBalanced ? '✓ Balanced' : '✗ Out of balance'}
+              </span>
+              <Tooltip text="Download this report as a CSV file"><Btn variant="secondary" onClick={exportTb}>Export CSV</Btn></Tooltip>
+            </div>
+          </div>
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                {['Code', 'Account', 'Type', 'Debit', 'Credit'].map(h => (
+                  <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tb.accounts.map(r => (
+                <tr key={r.code} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <td className="py-1.5 px-2 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{r.code}</td>
+                  <td className="py-1.5 px-2" style={{ color: 'var(--color-text)' }}>{r.name}</td>
+                  <td className="py-1.5 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{r.type}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-xs" style={{ color: 'var(--color-text)' }}>{r.debitBalance > 0 ? fmt(r.debitBalance) : '—'}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-xs" style={{ color: 'var(--color-text)' }}>{r.creditBalance > 0 ? fmt(r.creditBalance) : '—'}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                <td colSpan={3} className="py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Totals</td>
+                <td className="py-2 px-2 text-right font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(tb.totalDebit)}</td>
+                <td className="py-2 px-2 text-right font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(tb.totalCredit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {sub === 'Charts' && (
+        <div className="max-w-3xl flex flex-col gap-6">
+          <TwoSeriesBarChart title="Income vs Expenses (monthly, last 12 months)" points={chartIncExp} keyA="income" keyB="expense" labelA="Income" labelB="Expenses" xKey="month" />
+          <CashFlowChart points={chartCashFlow} />
+          <TwoSeriesBarChart title="GST Collected vs GST Paid (per BAS quarter)" points={chartGst} keyA="gstCollected" keyB="gstPaid" labelA="GST Collected" labelB="GST Paid" xKey="label" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportTable({ title, rows, total, totalLabel }) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>{title}</p>
+      <table className="w-full text-sm border-collapse">
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td className="py-1.5 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>None</td></tr>
+          )}
+          {rows.map(r => (
+            <tr key={r.code + r.name} style={{ borderTop: '1px solid var(--color-border)' }}>
+              <td className="py-1.5 px-2 font-mono text-xs w-16" style={{ color: 'var(--color-muted)' }}>{r.code}</td>
+              <td className="py-1.5 px-2" style={{ color: 'var(--color-text)' }}>{r.name}</td>
+              <td className="py-1.5 px-2 text-right" style={{ color: 'var(--color-text)' }}>{fmt(r.amount)}</td>
+            </tr>
+          ))}
+          <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+            <td colSpan={2} className="py-1.5 px-2 text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{totalLabel}</td>
+            <td className="py-1.5 px-2 text-right text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function fmtNum2(n) { return (parseFloat(n) || 0).toFixed(2); }
+
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -4172,6 +4858,8 @@ export default function FinancePage() {
         {tab === 'Clients'   && <ClientsTab />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
+        {tab === 'Drawings'  && <DrawingsTab  from={from} to={to} />}
+        {tab === 'Vehicle/Home Office' && <VehicleHomeOfficeTab />}
         {tab === 'Recurring' && <RecurringTab />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
         {tab === 'Interest'  && <InterestTab from={from} to={to} />}
@@ -4181,6 +4869,7 @@ export default function FinancePage() {
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
+        {tab === 'Reports'   && <ReportsTab />}
         {tab === 'Settings'  && <SettingsTab onHistoryReset={(h) => setExportHistory(h || {})} />}
       </div>
 

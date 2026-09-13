@@ -89,6 +89,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '2300', name: 'Super Payable',          type: 'liability' },
   { code: '2400', name: 'PAYG Withholding Payable', type: 'liability' },
   { code: '3000', name: "Owner's Equity",         type: 'equity'    },
+  { code: '3100', name: "Owner's Drawings",       type: 'equity'    },
   { code: '4000', name: 'Income',                 type: 'income'    },
   { code: '4100', name: 'Interest Income',        type: 'income'    },
   { code: '5000', name: 'Expenses',               type: 'expense'   },
@@ -119,14 +120,14 @@ const DEFAULT_TX_CODES = [
   { code: 'EXP-160', name: 'Software & Subscriptions',           type: 'expense' },
   { code: 'EXP-170', name: 'Travel & Accommodation',             type: 'expense' },
   { code: 'EXP-180', name: 'Utilities',                          type: 'expense' },
+  { code: 'EXP-190', name: 'Vehicle',                            type: 'expense' },
+  { code: 'EXP-200', name: 'Home Office',                        type: 'expense' },
   { code: 'EXP-900', name: 'Other Expenses',                     type: 'expense' },
 ];
 
 async function ensureTxCodes(userId) {
-  const { rows } = await pool.query(
-    'SELECT id FROM fin_tx_codes WHERE "userId"=$1 LIMIT 1', [userId]
-  );
-  if (rows.length) return;
+  // Always attempt the full default set (ON CONFLICT DO NOTHING is idempotent) — not just on first
+  // run — so codes added to DEFAULT_TX_CODES later (e.g. EXP-190/EXP-200) backfill for existing users.
   for (const c of DEFAULT_TX_CODES) {
     await pool.query(
       `INSERT INTO fin_tx_codes ("userId", code, name, type, "isSystem") VALUES ($1,$2,$3,$4,true)
@@ -143,7 +144,29 @@ async function accountByCode(userId, code) {
   return rows[0]?.id;
 }
 
+// Round to cents and sum debit/credit sides of a lines[] array. Returns { debits, credits, balanced }.
+// Epsilon (0.005) absorbs floating-point noise from repeated toFixed(2)/parseFloat round-trips —
+// anything larger than half a cent is a real imbalance, not float noise.
+function checkJournalBalance(lines) {
+  const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const debits  = round2((lines || []).reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0));
+  const credits = round2((lines || []).reduce((s, l) => s + (parseFloat(l.credit) || 0), 0));
+  const balanced = Math.abs(debits - credits) < 0.005;
+  return { debits, credits, balanced };
+}
+
 async function createJournalEntry(client, userId, { date, description, reference, type, sourceId, lines }) {
+  // Defensive final check — no code path (invoices, expenses, wages, drawings, manual journal,
+  // or any future caller) may ever write an unbalanced entry to fin_journal_entries/fin_journal_lines.
+  // If this throws, the bug is upstream in whoever built `lines` — fail loudly rather than corrupt the books.
+  const { debits, credits, balanced } = checkJournalBalance(lines);
+  if (!balanced) {
+    throw new Error(
+      `Journal entry does not balance: debits $${debits.toFixed(2)}, credits $${credits.toFixed(2)} ` +
+      `(entry: "${description || ''}"${type ? `, type: ${type}` : ''})`
+    );
+  }
+
   const { rows } = await client.query(
     `INSERT INTO fin_journal_entries ("userId", date, description, reference, type, "sourceId")
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
@@ -174,13 +197,17 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
     );
     const result = {};
     for (const r of rows) result[r.key] = r.value;
+    // ATO rates change yearly and must be editable, never hardcoded in calculation code —
+    // these are just sensible current-year (2025-26) fallbacks when the user hasn't set one yet.
+    if (result.fin_vehicle_rate_per_km === undefined) result.fin_vehicle_rate_per_km = '0.88';
+    if (result.fin_home_office_rate_per_hour === undefined) result.fin_home_office_rate_per_hour = '0.70';
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -189,7 +216,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour'];
+    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
       await pool.query(
@@ -1281,16 +1308,16 @@ router.post('/expenses', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset } = req.body;
     // amount = total paid (GST-inclusive when gstIncluded=true)
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
 
     const { rows } = await dbClient.query(
-      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null]
+      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId", "isCapitalAsset")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset]
     );
     const expense = rows[0];
 
@@ -1387,15 +1414,15 @@ router.put('/expenses/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId    = req.user.id;
     const expenseId = req.params.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset } = req.body;
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2));
 
     const { rows } = await dbClient.query(
-      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"paidViaId"=$8,"updatedAt"=NOW()
-       WHERE id=$9 AND "userId"=$10 RETURNING *`,
-      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, expenseId, userId]
+      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"paidViaId"=$8,"isCapitalAsset"=$9,"updatedAt"=NOW()
+       WHERE id=$10 AND "userId"=$11 RETURNING *`,
+      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset, expenseId, userId]
     );
     if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const expense = rows[0];
@@ -1592,7 +1619,20 @@ router.post('/wages', async (req, res) => {
     const grossAmt = parseFloat(gross) || 0;
     const taxAmt   = parseFloat(tax) || 0;
     const superAmt = parseFloat(superAmount) || 0;
-    const netAmt   = parseFloat(net) || parseFloat((grossAmt - taxAmt).toFixed(2));
+    // net defaults to gross - tax when the client doesn't supply one. If it IS supplied, it must
+    // equal gross - tax (to the cent) or the wage journal (DR gross, CR net, CR tax [+ super pair])
+    // cannot balance — see A1's createJournalEntry() guard. Give a wages-specific explanation here
+    // rather than letting the generic journal-balance error surface on what looks like a simple form.
+    const expectedNet = Math.round((grossAmt - taxAmt) * 100) / 100;
+    const netAmt = (net === undefined || net === null || net === '')
+      ? expectedNet
+      : parseFloat(net);
+    if (Math.abs(netAmt - expectedNet) >= 0.005) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Net pay must equal gross minus tax withheld. Gross $${grossAmt.toFixed(2)} − Tax $${taxAmt.toFixed(2)} = $${expectedNet.toFixed(2)}, but $${netAmt.toFixed(2)} was entered.`,
+      });
+    }
 
     const { rows } = await dbClient.query(
       `INSERT INTO fin_wages ("userId", date, employee, gross, tax, superannuation, net)
@@ -1647,6 +1687,270 @@ router.delete('/wages/:id', async (req, res) => {
     await dbClient.query(`DELETE FROM fin_wages WHERE id=$1 AND "userId"=$2`, [id, userId]);
     await dbClient.query('COMMIT');
     res.json({ ok: true });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+// ── Owner's Drawings ──────────────────────────────────────────────────────────
+// A sole trader's own withdrawal from the business — NOT wages: no PAYG withholding, no super
+// guarantee. It reduces equity (account 3100), it is not a business expense.
+
+router.get('/drawings', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM fin_drawings WHERE "userId"=$1 ORDER BY date DESC, id DESC`, [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/drawings', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date, description, amount, paidViaId } = req.body;
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Valid amount required' }); }
+
+    await ensureAccounts(userId);
+    const drawingsId = await accountByCode(userId, '3100');
+    const bankId      = await accountByCode(userId, '1000');
+    const creditId    = paidViaId || bankId;
+    if (!drawingsId || !creditId) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'Required accounts not found' });
+    }
+
+    const { rows } = await dbClient.query(
+      `INSERT INTO fin_drawings ("userId", date, description, amount, "paidViaId")
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [userId, date || new Date().toISOString().slice(0, 10), description || null, amt, paidViaId || null]
+    );
+    const drawing = rows[0];
+
+    // Journal: DR Owner's Drawings, CR Bank/whatever paidViaId account — simple two-line balanced entry
+    await createJournalEntry(dbClient, userId, {
+      date:        drawing.date,
+      description: `Drawings${description ? `: ${description}` : ''}`,
+      type:        'drawing',
+      sourceId:    drawing.id,
+      lines: [
+        { accountId: drawingsId, debit: amt, credit: 0 },
+        { accountId: creditId,   debit: 0,   credit: amt },
+      ],
+    });
+
+    await dbClient.query('COMMIT');
+    res.json(drawing);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.put('/drawings/:id', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const drawingId = req.params.id;
+    const { date, description, amount, paidViaId } = req.body;
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Valid amount required' }); }
+
+    const { rows } = await dbClient.query(
+      `UPDATE fin_drawings SET date=$1, description=$2, amount=$3, "paidViaId"=$4, "updatedAt"=NOW()
+       WHERE id=$5 AND "userId"=$6 RETURNING *`,
+      [date, description || null, amt, paidViaId || null, drawingId, userId]
+    );
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const drawing = rows[0];
+
+    await deleteJournalForSource(dbClient, userId, parseInt(drawingId), 'drawing');
+    await ensureAccounts(userId);
+    const drawingsId = await accountByCode(userId, '3100');
+    const bankId      = await accountByCode(userId, '1000');
+    const creditId    = paidViaId || bankId;
+    if (drawingsId && creditId) {
+      await createJournalEntry(dbClient, userId, {
+        date:        drawing.date,
+        description: `Drawings${description ? `: ${description}` : ''}`,
+        type:        'drawing',
+        sourceId:    drawing.id,
+        lines: [
+          { accountId: drawingsId, debit: amt, credit: 0 },
+          { accountId: creditId,   debit: 0,   credit: amt },
+        ],
+      });
+    }
+
+    await dbClient.query('COMMIT');
+    res.json(drawing);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.delete('/drawings/:id', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const id     = parseInt(req.params.id);
+    await deleteJournalForSource(dbClient, userId, id, 'drawing');
+    await dbClient.query(`DELETE FROM fin_drawings WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    await dbClient.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+// ── Vehicle & Home Office expense calculators ────────────────────────────────
+// Thin layer on top of the normal expense journal (DR Expenses, CR Bank) so the calculated
+// deductible amount still flows into P&L/BAS correctly. The method-specific detail (km, rate,
+// business-use %, actual cost) is stored alongside for the accountant / substantiation record.
+
+router.post('/expenses/vehicle', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date, description, method, km, ratePerKm, businessUsePercent, actualCost, paidViaId } = req.body;
+
+    let deductible;
+    if (method === 'cents_per_km') {
+      const kmNum   = parseFloat(km) || 0;
+      const rateNum = parseFloat(ratePerKm) || 0;
+      deductible = parseFloat((kmNum * rateNum).toFixed(2));
+    } else if (method === 'logbook') {
+      const pct  = parseFloat(businessUsePercent) || 0;
+      const cost = parseFloat(actualCost) || 0;
+      deductible = parseFloat((cost * (pct / 100)).toFixed(2));
+    } else {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: "method must be 'cents_per_km' or 'logbook'" });
+    }
+    if (deductible <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Calculated deductible amount must be greater than zero' }); }
+
+    await ensureAccounts(userId);
+    await ensureTxCodes(userId);
+    const expId  = await accountByCode(userId, '5000');
+    const bankId = await accountByCode(userId, '1000');
+    const creditId = paidViaId || bankId;
+    const { rows: vehTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-190'`, [userId]);
+
+    // Vehicle deductions are ATO cents-per-km / logbook claims — no GST is separately claimed here.
+    const { rows } = await dbClient.query(
+      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId")
+       VALUES ($1,$2,$3,$4,0,'Vehicle',$5,$6) RETURNING *`,
+      [userId, date || new Date().toISOString().slice(0,10), description || 'Vehicle expense', deductible, vehTx[0]?.id || null, paidViaId || null]
+    );
+    const expense = rows[0];
+
+    await dbClient.query(
+      `INSERT INTO fin_vehicle_expenses ("userId","expenseId",method,km,"ratePerKm","businessUsePercent","actualCost")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [userId, expense.id, method, km ? parseFloat(km) : null, ratePerKm ? parseFloat(ratePerKm) : null,
+       businessUsePercent ? parseFloat(businessUsePercent) : null, actualCost ? parseFloat(actualCost) : null]
+    );
+
+    if (expId && creditId) {
+      await createJournalEntry(dbClient, userId, {
+        date:        expense.date,
+        description: `Vehicle expense: ${description || method}`,
+        type:        'expense',
+        sourceId:    expense.id,
+        lines: [
+          { accountId: expId,    debit: deductible, credit: 0 },
+          { accountId: creditId, debit: 0,           credit: deductible },
+        ],
+      });
+    }
+
+    await dbClient.query('COMMIT');
+    res.json({ ...expense, deductible, method });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.post('/expenses/home-office', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date, description, method, hours, ratePerHour, businessUsePercent, actualCost, paidViaId } = req.body;
+
+    let deductible;
+    if (method === 'fixed_rate') {
+      const hrs  = parseFloat(hours) || 0;
+      const rate = parseFloat(ratePerHour) || 0;
+      deductible = parseFloat((hrs * rate).toFixed(2));
+    } else if (method === 'actual_cost') {
+      const pct  = parseFloat(businessUsePercent) || 0;
+      const cost = parseFloat(actualCost) || 0;
+      deductible = parseFloat((cost * (pct / 100)).toFixed(2));
+    } else {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: "method must be 'fixed_rate' or 'actual_cost'" });
+    }
+    if (deductible <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Calculated deductible amount must be greater than zero' }); }
+
+    await ensureAccounts(userId);
+    await ensureTxCodes(userId);
+    const expId  = await accountByCode(userId, '5000');
+    const bankId = await accountByCode(userId, '1000');
+    const creditId = paidViaId || bankId;
+    const { rows: hoTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-200'`, [userId]);
+
+    const { rows } = await dbClient.query(
+      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId")
+       VALUES ($1,$2,$3,$4,0,'Home Office',$5,$6) RETURNING *`,
+      [userId, date || new Date().toISOString().slice(0,10), description || 'Home office expense', deductible, hoTx[0]?.id || null, paidViaId || null]
+    );
+    const expense = rows[0];
+
+    await dbClient.query(
+      `INSERT INTO fin_home_office_expenses ("userId","expenseId",method,hours,"ratePerHour","businessUsePercent","actualCost")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [userId, expense.id, method, hours ? parseFloat(hours) : null, ratePerHour ? parseFloat(ratePerHour) : null,
+       businessUsePercent ? parseFloat(businessUsePercent) : null, actualCost ? parseFloat(actualCost) : null]
+    );
+
+    if (expId && creditId) {
+      await createJournalEntry(dbClient, userId, {
+        date:        expense.date,
+        description: `Home office expense: ${description || method}`,
+        type:        'expense',
+        sourceId:    expense.id,
+        lines: [
+          { accountId: expId,    debit: deductible, credit: 0 },
+          { accountId: creditId, debit: 0,           credit: deductible },
+        ],
+      });
+    }
+
+    await dbClient.query('COMMIT');
+    res.json({ ...expense, deductible, method });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -1741,7 +2045,14 @@ router.post('/journal', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const { date, description, lines = [] } = req.body;
-    if (!lines.length) return res.status(400).json({ error: 'Lines required' });
+    if (!lines.length) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Lines required' }); }
+    const { debits, credits, balanced } = checkJournalBalance(lines);
+    if (!balanced) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Journal entry does not balance: debits $${debits.toFixed(2)}, credits $${credits.toFixed(2)}`,
+      });
+    }
     const entryId = await createJournalEntry(dbClient, req.user.id, {
       date:        date || new Date().toISOString().slice(0, 10),
       description,
@@ -2636,6 +2947,362 @@ router.get('/trial-balance', async (req, res) => {
       [req.user.id]
     );
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Reports: Profit & Loss / Balance Sheet / GST summary / Trial Balance ─────
+// All four are derived from fin_journal_entries/fin_journal_lines (the journal is the source of
+// truth) — NOT by re-summing fin_invoices/fin_expenses/fin_wages separately, so manual journal
+// entries flow into them correctly, which summing the source tables would miss.
+
+router.get('/reports/profit-loss', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+    await ensureAccounts(userId);
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.code, a.name, a.type,
+              COALESCE(SUM(l.debit),0)  AS "totalDebit",
+              COALESCE(SUM(l.credit),0) AS "totalCredit"
+       FROM fin_accounts a
+       LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
+       LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
+         AND e.date BETWEEN $2 AND $3
+       WHERE a."userId" = $1 AND a.type IN ('income','expense')
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [userId, from, to]
+    );
+
+    const income = [];
+    const expenses = [];
+    let totalIncome = 0, totalExpense = 0;
+    for (const r of rows) {
+      const debit = Number(r.totalDebit), credit = Number(r.totalCredit);
+      if (r.type === 'income') {
+        const amount = parseFloat((credit - debit).toFixed(2));
+        if (amount !== 0) { income.push({ code: r.code, name: r.name, amount }); totalIncome += amount; }
+      } else {
+        const amount = parseFloat((debit - credit).toFixed(2));
+        if (amount !== 0) { expenses.push({ code: r.code, name: r.name, amount }); totalExpense += amount; }
+      }
+    }
+    totalIncome  = parseFloat(totalIncome.toFixed(2));
+    totalExpense = parseFloat(totalExpense.toFixed(2));
+
+    // Capital-asset-flagged expenses in the period — called out separately per B3, not lumped
+    // into ordinary expenses (still counted in totalExpense above; this is informational only).
+    const { rows: capitalRows } = await pool.query(
+      `SELECT id, date, description, amount, gst, category
+       FROM fin_expenses
+       WHERE "userId"=$1 AND "isCapitalAsset"=true AND date BETWEEN $2 AND $3
+       ORDER BY date`,
+      [userId, from, to]
+    );
+
+    res.json({
+      from, to,
+      income,
+      expenses,
+      totalIncome,
+      totalExpense,
+      netProfit: parseFloat((totalIncome - totalExpense).toFixed(2)),
+      capitalAssetPurchases: capitalRows.map(r => ({
+        id: r.id, date: r.date, description: r.description,
+        amount: Number(r.amount), gst: Number(r.gst), category: r.category,
+      })),
+      capitalAssetNote: 'Capital purchases below (not automatically depreciated — provide to your accountant for the asset register / instant-asset-write-off assessment).',
+      cashBasisNote: 'GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/balance-sheet', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const asOf = req.query.asOf || new Date().toISOString().slice(0, 10);
+    await ensureAccounts(userId);
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.code, a.name, a.type,
+              COALESCE(SUM(l.debit),0)  AS "totalDebit",
+              COALESCE(SUM(l.credit),0) AS "totalCredit"
+       FROM fin_accounts a
+       LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
+       LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
+         AND e.date <= $2
+       WHERE a."userId" = $1 AND a.type IN ('asset','liability','equity')
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [userId, asOf]
+    );
+
+    // Also fold in the period's net profit as a movement in retained earnings (equity),
+    // computed the same journal-derived way as the P&L report — required for
+    // Assets = Liabilities + Equity to hold, since income/expense accounts aren't on the
+    // balance sheet themselves; their net effect closes to equity.
+    const { rows: peRows } = await pool.query(
+      `SELECT a.type,
+              COALESCE(SUM(l.debit),0)  AS "totalDebit",
+              COALESCE(SUM(l.credit),0) AS "totalCredit"
+       FROM fin_accounts a
+       LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
+       LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
+         AND e.date <= $2
+       WHERE a."userId" = $1 AND a.type IN ('income','expense')
+       GROUP BY a.type`,
+      [userId, asOf]
+    );
+    let retainedEarnings = 0;
+    for (const r of peRows) {
+      const debit = Number(r.totalDebit), credit = Number(r.totalCredit);
+      retainedEarnings += r.type === 'income' ? (credit - debit) : -(debit - credit);
+    }
+    retainedEarnings = parseFloat(retainedEarnings.toFixed(2));
+
+    const assets = [], liabilities = [], equity = [];
+    let totalAssets = 0, totalLiabilities = 0, totalEquity = 0;
+    for (const r of rows) {
+      const debit = Number(r.totalDebit), credit = Number(r.totalCredit);
+      if (r.type === 'asset') {
+        const balance = parseFloat((debit - credit).toFixed(2));
+        assets.push({ code: r.code, name: r.name, balance }); totalAssets += balance;
+      } else if (r.type === 'liability') {
+        const balance = parseFloat((credit - debit).toFixed(2));
+        liabilities.push({ code: r.code, name: r.name, balance }); totalLiabilities += balance;
+      } else {
+        const balance = parseFloat((credit - debit).toFixed(2));
+        equity.push({ code: r.code, name: r.name, balance }); totalEquity += balance;
+      }
+    }
+    equity.push({ code: '—', name: 'Retained Earnings (current profit/loss)', balance: retainedEarnings });
+    totalEquity = parseFloat((totalEquity + retainedEarnings).toFixed(2));
+    totalAssets = parseFloat(totalAssets.toFixed(2));
+    totalLiabilities = parseFloat(totalLiabilities.toFixed(2));
+
+    const balances = parseFloat((totalAssets - (totalLiabilities + totalEquity)).toFixed(2));
+    // Verified internally, not papered over — if this is ever non-zero, it is a real bug in a
+    // journal-posting code path (see brief B/Balance Sheet), not something to plug here.
+    const isBalanced = Math.abs(balances) < 0.005;
+
+    res.json({
+      asOf,
+      assets, liabilities, equity,
+      totalAssets, totalLiabilities, totalEquity,
+      isBalanced,
+      difference: balances,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/gst-summary', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+    // Reuses the same cash-basis calculation as /bas (paidAt for income, date for expenses) —
+    // adds a breakdown by tx code on top rather than reimplementing the totals.
+    const [totalsInv, totalsExp, byIncomeCode, byExpenseCode] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
+         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+        [userId, from, to]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0) AS expenses, COALESCE(SUM(gst),0) AS "gstPaid"
+         FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        [userId, from, to]
+      ),
+      pool.query(
+        `SELECT COALESCE(t.code,'(none)') AS code, COALESCE(t.name,'Uncategorised') AS name,
+                COALESCE(SUM(ii.amount),0) AS amount, COALESCE(SUM(ii.gst),0) AS gst
+         FROM fin_invoice_items ii
+         JOIN fin_invoices i ON i.id = ii."invoiceId"
+         LEFT JOIN fin_tx_codes t ON t.id = ii."txCodeId"
+         WHERE i."userId"=$1 AND i.status='paid' AND i."paidAt"::date BETWEEN $2 AND $3
+         GROUP BY t.code, t.name ORDER BY t.code NULLS LAST`,
+        [userId, from, to]
+      ),
+      pool.query(
+        `SELECT COALESCE(t.code,'(none)') AS code, COALESCE(t.name,'Uncategorised') AS name,
+                COALESCE(SUM(e.amount),0) AS amount, COALESCE(SUM(e.gst),0) AS gst
+         FROM fin_expenses e
+         LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
+         WHERE e."userId"=$1 AND e.date BETWEEN $2 AND $3
+         GROUP BY t.code, t.name ORDER BY t.code NULLS LAST`,
+        [userId, from, to]
+      ),
+    ]);
+
+    const gstCollected = parseFloat(totalsInv.rows[0].gstCollected);
+    const gstPaid       = parseFloat(totalsExp.rows[0].gstPaid);
+
+    res.json({
+      from, to,
+      income:         parseFloat(totalsInv.rows[0].income),
+      gstCollected,
+      expenses:       parseFloat(totalsExp.rows[0].expenses),
+      gstPaid,
+      netGst:         parseFloat((gstCollected - gstPaid).toFixed(2)),
+      byIncomeCode:   byIncomeCode.rows.map(r => ({ code: r.code, name: r.name, amount: Number(r.amount), gst: Number(r.gst) })),
+      byExpenseCode:  byExpenseCode.rows.map(r => ({ code: r.code, name: r.name, amount: Number(r.amount), gst: Number(r.gst) })),
+      cashBasisNote:  'GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/trial-balance', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const asOf = req.query.asOf || new Date().toISOString().slice(0, 10);
+    await ensureAccounts(userId);
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.code, a.name, a.type,
+              COALESCE(SUM(l.debit),0)  AS "totalDebit",
+              COALESCE(SUM(l.credit),0) AS "totalCredit"
+       FROM fin_accounts a
+       LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
+       LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
+         AND e.date <= $2
+       WHERE a."userId" = $1
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [userId, asOf]
+    );
+
+    let totalDebit = 0, totalCredit = 0;
+    const accounts = rows.map(r => {
+      const debit = Number(r.totalDebit), credit = Number(r.totalCredit);
+      const net = parseFloat((debit - credit).toFixed(2));
+      // Normal-balance presentation: assets/expenses show a debit balance, liabilities/
+      // equity/income show a credit balance (matches trial-balance convention).
+      const debitBalance  = net >= 0 ? Math.abs(net) : 0;
+      const creditBalance = net < 0 ? Math.abs(net) : 0;
+      totalDebit  += debitBalance;
+      totalCredit += creditBalance;
+      return { code: r.code, name: r.name, type: r.type, debitBalance, creditBalance };
+    });
+    totalDebit  = parseFloat(totalDebit.toFixed(2));
+    totalCredit = parseFloat(totalCredit.toFixed(2));
+
+    res.json({
+      asOf,
+      accounts,
+      totalDebit,
+      totalCredit,
+      // Direct consequence of A1's balance guarantee — every entry that was ever posted balanced,
+      // so summed across all accounts these two totals must match. This is a verification, not new logic.
+      isBalanced: Math.abs(totalDebit - totalCredit) < 0.005,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Charts data ───────────────────────────────────────────────────────────────
+
+router.get('/reports/chart-income-expense', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await ensureAccounts(userId);
+    const { rows } = await pool.query(
+      `SELECT to_char(e.date, 'YYYY-MM') AS month, a.type,
+              COALESCE(SUM(l.debit),0) AS debit, COALESCE(SUM(l.credit),0) AS credit
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       JOIN fin_accounts a ON a.id = l."accountId"
+       WHERE e."userId"=$1 AND a.type IN ('income','expense')
+         AND e.date >= (CURRENT_DATE - INTERVAL '12 months')
+       GROUP BY month, a.type
+       ORDER BY month`,
+      [userId]
+    );
+    const byMonth = {};
+    for (const r of rows) {
+      byMonth[r.month] = byMonth[r.month] || { month: r.month, income: 0, expense: 0 };
+      const debit = Number(r.debit), credit = Number(r.credit);
+      if (r.type === 'income')  byMonth[r.month].income  += (credit - debit);
+      else                      byMonth[r.month].expense += (debit - credit);
+    }
+    const points = Object.values(byMonth)
+      .map(p => ({ month: p.month, income: parseFloat(p.income.toFixed(2)), expense: parseFloat(p.expense.toFixed(2)) }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+    res.json({ points });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/chart-cash-flow', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await ensureAccounts(userId);
+    const bankId = await accountByCode(userId, '1000');
+    if (!bankId) return res.json({ points: [] });
+
+    const { rows } = await pool.query(
+      `SELECT e.date, COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS "netMove"
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       WHERE e."userId"=$1 AND l."accountId"=$2
+         AND e.date >= (CURRENT_DATE - INTERVAL '12 months')
+       GROUP BY e.date
+       ORDER BY e.date`,
+      [userId, bankId]
+    );
+    // Opening balance = bank account balance strictly before the 12-month window
+    const { rows: openingRows } = await pool.query(
+      `SELECT COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS balance
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       WHERE e."userId"=$1 AND l."accountId"=$2 AND e.date < (CURRENT_DATE - INTERVAL '12 months')`,
+      [userId, bankId]
+    );
+    let running = Number(openingRows[0]?.balance || 0);
+    const points = rows.map(r => {
+      running += Number(r.netMove);
+      return { date: String(r.date).slice(0, 10), balance: parseFloat(running.toFixed(2)) };
+    });
+    res.json({ points });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/chart-gst-quarters', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows } = await pool.query(
+      `SELECT q.id AS "quarterId", q.from_date AS "from", q.to_date AS "to",
+              COALESCE((SELECT SUM(gst) FROM fin_invoices WHERE "userId"=$1 AND status='paid'
+                        AND "paidAt"::date BETWEEN q.from_date AND q.to_date), 0) AS "gstCollected",
+              COALESCE((SELECT SUM(gst) FROM fin_expenses WHERE "userId"=$1
+                        AND date BETWEEN q.from_date AND q.to_date), 0) AS "gstPaid"
+       FROM fin_bas_quarters q
+       WHERE q."userId"=$1
+       ORDER BY q.from_date DESC
+       LIMIT 8`,
+      [userId]
+    );
+    const points = rows.reverse().map(r => ({
+      quarterId: r.quarterId,
+      label: `${String(r.from).slice(0, 7)}`,
+      gstCollected: parseFloat(Number(r.gstCollected).toFixed(2)),
+      gstPaid: parseFloat(Number(r.gstPaid).toFixed(2)),
+    }));
+    res.json({ points });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

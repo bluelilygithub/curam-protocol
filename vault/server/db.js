@@ -1937,6 +1937,76 @@ async function initSchema() {
     )
   `);
 
+  // ── Finance: journal balance guarantee — allow 'drawing' type ────────────
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE fin_journal_entries DROP CONSTRAINT IF EXISTS fin_journal_entries_type_check;
+      ALTER TABLE fin_journal_entries
+        ADD CONSTRAINT fin_journal_entries_type_check
+        CHECK(type IN ('manual','invoice','payment','expense','wage','bas','interest','drawing'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$
+  `);
+
+  // ── Finance: Owner's Drawings (sole-trader equity withdrawals) ───────────
+  await pool.query(`
+    INSERT INTO fin_accounts ("userId", code, name, type, "isSystem")
+    SELECT DISTINCT "userId", '3100', E'Owner\\'s Drawings', 'equity', true
+    FROM fin_accounts
+    ON CONFLICT ("userId", code) DO NOTHING
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_drawings (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date         DATE NOT NULL DEFAULT CURRENT_DATE,
+      description  TEXT,
+      amount       NUMERIC(10,2) NOT NULL,
+      "paidViaId"  INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL,
+      "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ── Finance: capital asset flag on expenses ──────────────────────────────
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "isCapitalAsset" BOOLEAN NOT NULL DEFAULT FALSE`);
+
+  // ── Finance: vehicle & home-office method-tracked expenses ───────────────
+  // Small side tables linked 1:1 to the fin_expenses row that posted the journal,
+  // so the deductible amount still flows through the normal expense journal/P&L/BAS.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_vehicle_expenses (
+      id                    SERIAL PRIMARY KEY,
+      "userId"              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "expenseId"           INTEGER NOT NULL REFERENCES fin_expenses(id) ON DELETE CASCADE,
+      method                TEXT NOT NULL CHECK(method IN ('cents_per_km','logbook')),
+      km                    NUMERIC(10,2),
+      "ratePerKm"           NUMERIC(6,4),
+      "businessUsePercent"  NUMERIC(5,2),
+      "actualCost"          NUMERIC(10,2),
+      "createdAt"           TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("expenseId")
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_home_office_expenses (
+      id                    SERIAL PRIMARY KEY,
+      "userId"              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "expenseId"           INTEGER NOT NULL REFERENCES fin_expenses(id) ON DELETE CASCADE,
+      method                TEXT NOT NULL CHECK(method IN ('fixed_rate','actual_cost')),
+      hours                 NUMERIC(10,2),
+      "ratePerHour"         NUMERIC(6,4),
+      "businessUsePercent"  NUMERIC(5,2),
+      "actualCost"          NUMERIC(10,2),
+      "createdAt"           TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("expenseId")
+    )
+  `);
+
+  // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
+  // current-year default once per user's first ensureAccounts() pass (see finance.js).
+
   // ── Translate agent ───────────────────────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS translate_glossaries (
