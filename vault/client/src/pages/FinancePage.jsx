@@ -3932,16 +3932,34 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   const [hChoiceCurrent, setHChoiceCurrent] = useState('fixed_rate');
   const [locking, setLocking] = useState(null); // which key is mid-save, e.g. 'v-current'
 
-  const loadMethods = () => {
-    api.get('/api/finance/vehicle-method').then(r => r.json()).then(setVYearMethods).catch(() => {});
-    api.get('/api/finance/home-office-method').then(r => r.json()).then(setHYearMethods).catch(() => {});
-  };
-  useEffect(() => { loadMethods(); }, []);
+  // Start/end-of-year odometer — required logbook-method substantiation (business-use %
+  // is applied against total km travelled for the FY, which needs both readings on record).
+  const [odometer, setOdometer] = useState({ start: '', end: '' });
+  const [odometerSaving, setOdometerSaving] = useState(null); // 'start' | 'end' | null
 
   // Only the current FY's lock is ever shown here — next FY isn't offered ahead of
   // time; the annual reminder (fires ~1 July) prompts locking the new year when it
   // actually starts, so this settings section never needs to answer for two years.
   const currentFy = finYearForDate(todayStr());
+
+  const loadMethods = () => {
+    api.get('/api/finance/vehicle-method').then(r => r.json()).then(setVYearMethods).catch(() => {});
+    api.get('/api/finance/home-office-method').then(r => r.json()).then(setHYearMethods).catch(() => {});
+    api.get('/api/finance/vehicle-odometer?year=' + currentFy).then(r => r.json())
+      .then(d => setOdometer({ start: d.start ?? '', end: d.end ?? '' })).catch(() => {});
+  };
+  useEffect(() => { loadMethods(); }, []);
+
+  const saveOdometer = async (field, value) => {
+    setOdometerSaving(field);
+    try {
+      const res = await api.post('/api/finance/vehicle-odometer', { year: currentFy, [field]: value });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to save');
+      setOdometer({ start: body.start ?? '', end: body.end ?? '' });
+    } catch (e) { addToast(e.message, 'error'); } finally { setOdometerSaving(null); }
+  };
+
   const lockedVCurrent = vYearMethods[currentFy] || null;
   const lockedHCurrent = hYearMethods[currentFy] || null;
 
@@ -4004,6 +4022,39 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
           </div>
         </Tooltip>
       </div>
+
+      {lockedVCurrent === 'logbook' && (
+        <div className="p-3 rounded-lg border mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <Tooltip text="The logbook method applies your business-use % against total kilometres travelled for the year — the ATO expects both readings on record to support that.">
+            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Odometer readings for FY{currentFy}</p>
+          </Tooltip>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Odometer at 1 July (start of year)">
+              <Tooltip text="The car's odometer reading at the very start of this financial year — record it as close to 1 July as possible.">
+                <Input
+                  type="number"
+                  value={odometer.start}
+                  onChange={v => setOdometer(p => ({ ...p, start: v }))}
+                  onBlurCapture={() => saveOdometer('start', odometer.start)}
+                  placeholder="e.g. 45210"
+                />
+              </Tooltip>
+            </Field>
+            <Field label="Odometer at 30 June (end of year)">
+              <Tooltip text="The car's odometer reading at the end of this financial year — you won't have this until close to 30 June; fill it in when you do.">
+                <Input
+                  type="number"
+                  value={odometer.end}
+                  onChange={v => setOdometer(p => ({ ...p, end: v }))}
+                  onBlurCapture={() => saveOdometer('end', odometer.end)}
+                  placeholder="e.g. 52840"
+                />
+              </Tooltip>
+            </Field>
+          </div>
+          {odometerSaving && <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Saving…</p>}
+        </div>
+      )}
 
       {/* Home office method — current FY only, same reasoning as vehicle above. */}
       <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Home office method</p>

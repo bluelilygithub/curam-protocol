@@ -1974,6 +1974,50 @@ router.post('/vehicle-method', async (req, res) => {
   }
 });
 
+// Odometer readings at the start and end of each financial year — required substantiation
+// for the logbook method (business-use % is applied against total km travelled in the
+// year, which needs a start/end reading on record, separate from the method choice itself).
+// Same settings-row JSON-map-by-year pattern as the method locks above, just storing an
+// { start, end } object per year instead of a string.
+router.get('/vehicle-odometer', async (req, res) => {
+  try {
+    const map = await getMethodByYearMap(req.user.id, 'fin_vehicle_odometer_by_year');
+    const { year } = req.query;
+    if (year) return res.json({ year, ...(map[year] || { start: null, end: null }) });
+    res.json(map);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vehicle-odometer', async (req, res) => {
+  try {
+    const { year, start, end } = req.body;
+    if (!year || !FY_RE.test(year)) return res.status(400).json({ error: 'year must be like "2025-26"' });
+    const startNum = start === '' || start == null ? null : parseFloat(start);
+    const endNum   = end   === '' || end   == null ? null : parseFloat(end);
+    if (startNum != null && !(startNum >= 0)) return res.status(400).json({ error: 'start odometer must be a non-negative number' });
+    if (endNum != null && !(endNum >= 0)) return res.status(400).json({ error: 'end odometer must be a non-negative number' });
+    if (startNum != null && endNum != null && endNum < startNum) {
+      return res.status(400).json({ error: 'End-of-year odometer cannot be less than the start-of-year reading' });
+    }
+    const map = await getMethodByYearMap(req.user.id, 'fin_vehicle_odometer_by_year');
+    const existing = map[year] || {};
+    map[year] = {
+      start: startNum != null ? startNum : (existing.start ?? null),
+      end:   endNum   != null ? endNum   : (existing.end ?? null),
+    };
+    await pool.query(
+      `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_vehicle_odometer_by_year',$2)
+       ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+      [req.user.id, JSON.stringify(map)]
+    );
+    res.json({ year, ...map[year] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/home-office-method', async (req, res) => {
   try {
     const map = await getMethodByYearMap(req.user.id, 'fin_home_office_method_by_year');
