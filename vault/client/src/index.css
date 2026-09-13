@@ -49,6 +49,20 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 
+/* Obvious-scroll: for horizontal tab/menu bars that can overflow (e.g. Finance's
+   19-tab bar) — the default scrollbar above is deliberately subtle everywhere else,
+   so a wide tab strip needs a thicker, higher-contrast bar plus an edge fade to
+   actually read as "there's more, scroll me" rather than just looking cut off. */
+.scroll-x-obvious {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-muted) transparent;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+}
+.scroll-x-obvious::-webkit-scrollbar { height: 8px; }
+.scroll-x-obvious::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 10px; }
+.scroll-x-obvious::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
 /* Inline SVG icons (AI icon generator) fill their box */
 .icon-svg-box svg { width: 100%; height: 100%; display: block; }
 

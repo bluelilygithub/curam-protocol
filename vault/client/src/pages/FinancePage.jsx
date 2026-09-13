@@ -4960,7 +4960,7 @@ function ReportsTab() {
 
   return (
     <div className="p-6">
-      <div className="flex gap-1 mb-4 overflow-x-auto">
+      <div className="flex gap-1 mb-4 overflow-x-auto scroll-x-obvious">
         {REPORT_SUBTABS.map(s => (
           <Tooltip key={s} text={REPORT_SUBTAB_TIPS[s] || `Switch to the ${s} report.`}>
             <button onClick={() => setSub(s)}
@@ -5185,7 +5185,7 @@ export default function FinancePage() {
               <Tooltip text="Download a single combined CSV for Google Sheets — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn></Tooltip>
             </div>
           </div>
-          <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
+          <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto scroll-x-obvious">
             {TABS.map(t => (
               <Tooltip key={t} text={TOOL_HELP[t]?.description || `Switch to the ${t} tab.`}>
                 <button
