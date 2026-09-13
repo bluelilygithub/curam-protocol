@@ -1,6 +1,6 @@
 'use strict';
 
-const { sameOriginLinks } = require('./siteCrawler');
+const { sameOriginLinks, robotsAllows } = require('./siteCrawler');
 
 function attr(html, tagRe) {
   const m = String(html || '').match(tagRe);
@@ -33,6 +33,70 @@ function extractHeadings(html) {
   return out;
 }
 
+// Weighted scoring ----------------------------------------------------------
+// A flat "-12 per fail, -5 per warn" formula treats a missing OG tag the same
+// as a site the robots.txt has effectively de-indexed. A professional audit
+// weighs findings by real SEO impact instead. Tiers, heaviest first:
+//   CRITICAL (indexability-blocking) — robots.txt blocking everything,
+//     noindex on the homepage or a page meant to rank, X-Robots-Tag noindex,
+//     4xx/5xx, no usable HTML in the response, a redirect loop. These can
+//     remove a page (or the whole site) from the index outright.
+//   HIGH — missing/duplicate title, missing H1, query-canonical failures,
+//     duplicate/near-duplicate content across pages, broken internal links.
+//     These badly split or blunt ranking signal without necessarily blocking
+//     indexing.
+//   MEDIUM — missing/short/long meta description, missing canonical on a
+//     non-query page, missing schema on a commercial page, thin content.
+//     Real but secondary ranking signals.
+//   LOW — missing OG tags, missing alt text, a redirect chain under 3 hops,
+//     hreflang hygiene, missing html lang / viewport. Polish, not
+//     indexability or ranking blockers.
+// `severity` ('pass'|'warn'|'fail') stays exactly as before for client
+// compatibility; `weight` is additive and drives the score.
+const FINDING_WEIGHTS = {
+  // Critical
+  fetch: { fail: 30 },
+  status: { fail: 30 },
+  'x-robots': { fail: 30 },
+  'redirect-loop': { fail: 30 },
+  'robots-txt': { fail: 30, warn: 4 },
+  'robots-meta': { fail: 30, warn: 6 },
+  // High
+  title: { fail: 18, warn: 8 },
+  h1: { fail: 18, warn: 8 },
+  'query-canonical': { fail: 18, warn: 8 },
+  'dup-title': { fail: 18, warn: 10 },
+  'dup-description': { fail: 14, warn: 8 },
+  'dup-h1': { fail: 14, warn: 8 },
+  'duplicate-content': { fail: 18, warn: 10 },
+  broken: { fail: 18 },
+  'noindex-sitemap': { fail: 14, warn: 8 },
+  'internal-links': { warn: 8 },
+  // Medium
+  description: { fail: 10, warn: 6 },
+  canonical: { warn: 6 },
+  schema: { warn: 6 },
+  'schema-fields': { warn: 5 },
+  thin: { fail: 10, warn: 6 },
+  'query-params': { fail: 10, warn: 5 },
+  // Low
+  og: { warn: 3 },
+  alt: { fail: 6, warn: 3 },
+  'redirect-chain': { warn: 3 },
+  hreflang: { warn: 3 },
+  'html-lang': { warn: 3 },
+  viewport: { warn: 3 },
+  'js-heavy': { warn: 3 },
+};
+const DEFAULT_WEIGHT = { fail: 12, warn: 5 };
+
+function weightFor(id, severity) {
+  const w = FINDING_WEIGHTS[id] || DEFAULT_WEIGHT;
+  if (severity === 'fail') return w.fail != null ? w.fail : DEFAULT_WEIGHT.fail;
+  if (severity === 'warn') return w.warn != null ? w.warn : DEFAULT_WEIGHT.warn;
+  return 0;
+}
+
 function addFinding(list, item) {
   list.push({
     id: item.id,
@@ -40,14 +104,14 @@ function addFinding(list, item) {
     title: item.title,
     detail: item.detail || '',
     recommendation: item.recommendation || '',
+    weight: item.severity === 'pass' ? 0 : weightFor(item.id, item.severity),
   });
 }
 
 function scoreFromFindings(findings) {
   let score = 100;
   for (const f of findings) {
-    if (f.severity === 'fail') score -= 12;
-    else if (f.severity === 'warn') score -= 5;
+    score -= f.weight != null ? f.weight : weightFor(f.id, f.severity);
   }
   return Math.max(0, Math.min(100, score));
 }
@@ -65,56 +129,64 @@ function recommendationsFrom(findings) {
 
 const GLOBAL_SPECS = {
   https: {
-    applyIn: 'Hosting / WordPress',
-    action: 'Force HTTPS site-wide (hosting SSL + WordPress Address / Site Address) and 301 all http:// URLs.',
+    applyIn: 'Hosting / CMS',
+    action: 'Force HTTPS site-wide (hosting SSL certificate + your CMS’s site URL setting, or hardcode https:// in the template base URL) and 301 all http:// URLs. (On WordPress: hosting SSL + WordPress Address / Site Address.)',
   },
   og: {
-    applyIn: 'SEO plugin defaults',
-    action: 'Turn on Open Graph in the SEO plugin (Yoast, Rank Math, or AIOSEO) with a default title, description, and share image. Then override per URL only where needed.',
+    applyIn: 'CMS/SEO plugin defaults, or template',
+    action: 'Set default Open Graph tags (title, description, share image) once in your CMS/SEO plugin, or hardcode them in the page template. Then override per URL only where needed. (On WordPress: turn on Open Graph in Yoast, Rank Math, or AIOSEO.)',
   },
   jsonld: {
     applyIn: 'Homepage / Knowledge Graph',
-    action: 'Add Organization or LocalBusiness JSON-LD once (plugin Knowledge Graph or a snippet in the theme footer).',
+    action: 'Add Organization or LocalBusiness JSON-LD once, in your CMS/SEO plugin’s knowledge-graph setting or a snippet in the site template. (On WordPress: the SEO plugin’s Knowledge Graph setting, or a footer snippet.)',
   },
   title: {
-    applyIn: 'SEO plugin title template',
-    action: 'Set a title template per post type (e.g. “%%title%% | Brand”) and make sure every URL has a unique title. Do not use the same homepage title on inner pages.',
+    applyIn: 'CMS/SEO plugin title template',
+    action: 'Set a title template per content type (e.g. “%%title%% | Brand”) and make sure every URL has a unique title. Do not use the same homepage title on inner pages. (On WordPress: the SEO plugin’s title template.)',
   },
   description: {
-    applyIn: 'SEO plugin meta templates',
-    action: 'Set a meta description template (and write custom ones for key pages). Empty descriptions on many URLs are a template gap, not a one-page fix.',
+    applyIn: 'CMS/SEO plugin meta templates',
+    action: 'Set a meta description template (and write custom ones for key pages) in your CMS/SEO plugin, or in the template. Empty descriptions on many URLs are a template gap, not a one-page fix.',
   },
   h1: {
-    applyIn: 'Theme templates',
-    action: 'Output one H1 in each template (page, post, archive). If several templates omit H1, fix the theme rather than editing copy page by page.',
+    applyIn: 'Site templates',
+    action: 'Output one H1 in each template (page, post/article, category/archive). If several templates omit H1, fix the template rather than editing copy page by page.',
   },
   canonical: {
-    applyIn: 'SEO plugin',
-    action: 'Enable canonical URLs in the SEO plugin so every public URL self-canonicalises. Then 301 www vs apex to one host.',
+    applyIn: 'CMS/SEO plugin',
+    action: 'Enable canonical URLs in your CMS/SEO plugin (or hardcode <link rel="canonical"> in the template) so every public URL self-canonicalises. Then 301 www vs apex to one host.',
   },
   alt: {
-    applyIn: 'Media library / theme',
-    action: 'Require alt text on new uploads and add alts to existing images in the media library. Theme decorative images can use empty alt="".',
+    applyIn: 'Media library / CMS / template',
+    action: 'Require alt text on new uploads and add alts to existing images in the media library or CMS. Decorative images in the template can use empty alt="".',
   },
   thin: {
     applyIn: 'Templates + content',
     action: 'Put unique body copy in the page content (or server-render it). If many URLs are thin, the template is probably outputting chrome with no main text.',
   },
   'js-heavy': {
-    applyIn: 'Theme / page builder',
-    action: 'Ensure headings and body copy exist in the initial HTML, not only after JS. Check the page builder and cookie/script banners.',
+    applyIn: 'Front-end framework / page builder',
+    action: 'Ensure headings and body copy exist in the initial HTML, not only after JS runs (server-side render or pre-render key content). Check the page builder and cookie/script banners.',
   },
   'query-canonical': {
-    applyIn: 'SEO plugin / filters',
+    applyIn: 'CMS/SEO plugin / filters',
     action: 'Query-string URLs (?series=, ?sort=, etc.) must canonicalise to the clean path (e.g. /products), not to themselves or to each other. Otherwise Google can treat filters as duplicate pages.',
   },
   schema: {
-    applyIn: 'SEO plugin / schema',
-    action: 'Add JSON-LD that matches the page type: Organization or LocalBusiness on the homepage, Product on product URLs, BreadcrumbList on inner pages.',
+    applyIn: 'CMS/SEO plugin / schema, or template',
+    action: 'Add JSON-LD that matches the page type: Organization or LocalBusiness on the homepage, Product on product URLs, BreadcrumbList on inner pages. Set this in your CMS/SEO plugin, or hardcode it in the template.',
   },
   'robots-meta': {
-    applyIn: 'SEO plugin robots',
+    applyIn: 'CMS/SEO plugin robots settings',
     action: 'Review noindex/nofollow on templates. Public commercial pages must be indexable; thank-you and cart pages can stay noindex.',
+  },
+  'html-lang': {
+    applyIn: 'Site template / base layout',
+    action: 'Set <html lang="..."> (e.g. lang="en-AU") once in the base layout template so every page inherits it.',
+  },
+  viewport: {
+    applyIn: 'Site template / base layout',
+    action: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> once in the base layout <head> so every page inherits it.',
   },
 };
 
@@ -297,6 +369,37 @@ function pageHost(url) {
   try { return new URL(url).host.toLowerCase(); } catch { return ''; }
 }
 
+// Near-duplicate content detection ------------------------------------------
+// Plain-JS shingle/Jaccard similarity — no library, no simhash needed at this
+// scale (≤40 pages, O(n²) pairwise is fine). Word-level 5-grams; short texts
+// fall back to a single "shingle" of all their words so very short pages can
+// still compare (they'll usually miss the similarity threshold anyway).
+function wordShingles(text, size = 5) {
+  const words = String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const shingles = new Set();
+  if (words.length <= size) {
+    if (words.length) shingles.add(words.join(' '));
+    return shingles;
+  }
+  for (let i = 0; i <= words.length - size; i += 1) {
+    shingles.add(words.slice(i, i + size).join(' '));
+  }
+  return shingles;
+}
+
+function jaccardSimilarity(setA, setB) {
+  if (!setA.size || !setB.size) return 0;
+  const [small, big] = setA.size <= setB.size ? [setA, setB] : [setB, setA];
+  let intersection = 0;
+  for (const item of small) if (big.has(item)) intersection += 1;
+  const union = setA.size + setB.size - intersection;
+  return union ? intersection / union : 0;
+}
+
 function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, isHome, via, xRobotsTag, redirectChain, depth, inbound }) {
   const findings = [];
   const skipChrome = via === 'serper' || via === 'jina';
@@ -369,6 +472,10 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       charCount,
       findings,
       recommendations: recommendationsFrom(findings),
+      noindex: false,
+      bodyText: '',
+      h1Text: '',
+      descriptionText: '',
     };
   }
 
@@ -511,7 +618,9 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
+  let noindex = false;
   if (robotsMeta.includes('noindex') || robotsMeta.includes('none')) {
+    noindex = true;
     addFinding(findings, {
       id: 'robots-meta',
       severity: isHome ? 'fail' : 'warn',
@@ -544,7 +653,11 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
   }
 
   const pathLower = (() => { try { return new URL(url).pathname.toLowerCase(); } catch { return ''; } })();
-  const looksProduct = /product|shop|store|cabinet|series/i.test(pathLower) || queryKeysForUrl.includes('series');
+  // Heuristic only — this is not real product detection (that would require
+  // checking for JSON-LD Product schema itself, which is already checked
+  // separately below). It just flags likely product/category/listing paths
+  // so we can nudge for Product schema on them.
+  const looksProduct = /product|shop|store|category/i.test(pathLower) || queryKeysForUrl.includes('series');
   if (!skipChrome && !hasJsonLd && isHome) {
     addFinding(findings, {
       id: 'jsonld',
@@ -589,18 +702,32 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     });
   }
 
+  // hreflang: (a) flag missing x-default, (b) flag missing self-reference.
+  // This is a lighter heuristic check against this one page's own tags — it
+  // does NOT verify reciprocal hreflang links across the whole site, which
+  // would require fetching every alternate URL (out of scope for a
+  // same-crawl check).
   const alts = hreflangTags(htmlStr);
   if (alts.length) {
+    const hasXDefault = alts.some((a) => /^x-default$/i.test(a.lang));
+    const selfRef = alts.some((a) => urlPathKey(resolveHref(a.href, url)) === urlPathKey(url));
+    const issues = [];
+    if (!hasXDefault) issues.push('no x-default alternate');
+    if (!selfRef) issues.push('no self-referencing hreflang entry');
     addFinding(findings, {
       id: 'hreflang',
-      severity: 'pass',
-      title: `${alts.length} hreflang alternate${alts.length === 1 ? '' : 's'}`,
-      detail: alts.slice(0, 8).map((a) => `${a.lang} → ${a.href}`).join('\n'),
+      severity: issues.length ? 'warn' : 'pass',
+      title: issues.length
+        ? `hreflang issue: ${issues.join('; ')}`
+        : `${alts.length} hreflang alternate${alts.length === 1 ? '' : 's'}`,
+      detail: `${alts.slice(0, 8).map((a) => `${a.lang} → ${a.href}`).join('\n')}\n\nNote: checked against this page's own tags only — does not fetch alternate URLs to verify reciprocal hreflang links site-wide.`,
+      recommendation: issues.length ? 'Add the missing x-default and/or self-referencing hreflang entries.' : '',
     });
   }
 
   const xrt = String(xRobotsTag || '').toLowerCase();
   if (/noindex/.test(xrt)) {
+    noindex = true;
     addFinding(findings, {
       id: 'x-robots',
       severity: 'fail',
@@ -611,7 +738,21 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
   }
 
   const hops = Array.isArray(redirectChain) ? redirectChain : [];
-  if (hops.length >= 2) {
+  const seenHopFroms = new Set();
+  let isRedirectLoop = false;
+  for (const h of hops) {
+    if (h && seenHopFroms.has(h.from)) { isRedirectLoop = true; break; }
+    if (h) seenHopFroms.add(h.from);
+  }
+  if (isRedirectLoop) {
+    addFinding(findings, {
+      id: 'redirect-loop',
+      severity: 'fail',
+      title: `Redirect loop detected (${hops.length} hops)`,
+      detail: hops.map((h) => `${h.status} ${h.from} → ${h.to}`).join('\n'),
+      recommendation: 'Fix the redirect rule that sends this URL back to a page already in its own chain.',
+    });
+  } else if (hops.length >= 2) {
     addFinding(findings, {
       id: 'redirect-chain',
       severity: 'warn',
@@ -619,6 +760,31 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
       detail: hops.map((h) => `${h.status} ${h.from} → ${h.to}`).join('\n'),
       recommendation: 'Point links and canonicals at the final URL. Collapse chains to a single 301.',
     });
+  }
+
+  if (!skipChrome) {
+    const htmlLangMatch = htmlStr.match(/<html\b[^>]*\blang=["']([^"']*)["']/i);
+    const htmlLang = htmlLangMatch ? htmlLangMatch[1].trim() : '';
+    if (!htmlLang) {
+      addFinding(findings, {
+        id: 'html-lang',
+        severity: 'warn',
+        title: 'Missing <html lang> attribute',
+        detail: where,
+        recommendation: 'Add lang="..." (e.g. lang="en-AU") to the <html> tag. Cheap SEO and accessibility signal.',
+      });
+    }
+
+    const hasViewport = /<meta[^>]+name=["']viewport["']/i.test(htmlStr);
+    if (!hasViewport) {
+      addFinding(findings, {
+        id: 'viewport',
+        severity: 'warn',
+        title: 'Missing viewport meta tag',
+        detail: where,
+        recommendation: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> — a basic mobile-friendliness signal, distinct from Lighthouse\'s deeper mobile UX checks.',
+      });
+    }
   }
 
   if (img.total > 0 && img.missing > 0) {
@@ -675,6 +841,10 @@ function auditPage({ url, html, statusCode, title: fetchedTitle, text, error, is
     descriptionChars: serpLen(description),
     depth: Number(depth) || 0,
     inbound: Number(inbound) || 0,
+    noindex,
+    bodyText: String(text || '').replace(/\s+/g, ' ').trim().slice(0, 4000),
+    h1Text: (headings.find((h) => h.level === 1)?.text || '').trim(),
+    descriptionText: description || '',
   };
 }
 
@@ -754,6 +924,60 @@ function buildSiteAudit({ crawl }) {
       title: 'Duplicate titles across crawled pages',
       detail: dupTitles.join(' · '),
       recommendation: 'Give each URL a unique title that matches that page’s topic.',
+    });
+  }
+
+  const descriptionsForDup = pageReports.map((p) => String(p.descriptionText || '').trim().toLowerCase()).filter(Boolean);
+  const descCounts = new Map();
+  descriptionsForDup.forEach((d) => descCounts.set(d, (descCounts.get(d) || 0) + 1));
+  const dupDescriptions = [...descCounts.entries()].filter(([, n]) => n > 1).map(([d, n]) => `"${d.slice(0, 100)}" ×${n}`);
+  if (dupDescriptions.length) {
+    addFinding(siteFindings, {
+      id: 'dup-description',
+      severity: 'warn',
+      title: 'Duplicate meta descriptions across crawled pages',
+      detail: dupDescriptions.join(' · '),
+      recommendation: 'Write a unique meta description for each URL that summarises that specific page.',
+    });
+  }
+
+  const h1sForDup = pageReports.map((p) => String(p.h1Text || '').trim().toLowerCase()).filter(Boolean);
+  const h1Counts = new Map();
+  h1sForDup.forEach((h) => h1Counts.set(h, (h1Counts.get(h) || 0) + 1));
+  const dupH1s = [...h1Counts.entries()].filter(([, n]) => n > 1).map(([h, n]) => `"${h.slice(0, 100)}" ×${n}`);
+  if (dupH1s.length) {
+    addFinding(siteFindings, {
+      id: 'dup-h1',
+      severity: 'warn',
+      title: 'Duplicate H1 headings across crawled pages',
+      detail: dupH1s.join(' · '),
+      recommendation: 'Give each URL its own H1 that matches that page’s specific topic.',
+    });
+  }
+
+  // Near-duplicate content detection — plain-JS shingle/Jaccard similarity,
+  // O(n²) pairwise which is fine at the ≤40-page crawl cap. Pages under 200
+  // characters of body text are excluded (already flagged as thin; comparing
+  // near-empty pages produces noisy false positives).
+  const DUP_CONTENT_THRESHOLD = 0.8;
+  const contentCandidates = pageReports.filter((p) => p.statusCode < 400 && !p.error && (p.bodyText || '').length >= 200);
+  const shingleEntries = contentCandidates.map((p) => ({ url: p.url, shingles: wordShingles(p.bodyText) }));
+  const dupContentPairs = [];
+  for (let i = 0; i < shingleEntries.length; i += 1) {
+    for (let j = i + 1; j < shingleEntries.length; j += 1) {
+      const sim = jaccardSimilarity(shingleEntries[i].shingles, shingleEntries[j].shingles);
+      if (sim >= DUP_CONTENT_THRESHOLD) {
+        dupContentPairs.push({ a: shingleEntries[i].url, b: shingleEntries[j].url, similarity: Math.round(sim * 100) });
+      }
+    }
+  }
+  if (dupContentPairs.length) {
+    addFinding(siteFindings, {
+      id: 'duplicate-content',
+      severity: 'fail',
+      title: `${dupContentPairs.length} pair${dupContentPairs.length === 1 ? '' : 's'} of near-duplicate content (≥80% similar)`,
+      detail: dupContentPairs.slice(0, 15).map((d) => `${d.similarity}% similar: ${d.a} ↔ ${d.b}`).join('\n'),
+      recommendation: 'Merge or differentiate these pages, or canonicalise one to the other. Near-duplicate content splits ranking signal between URLs.',
     });
   }
 
@@ -888,6 +1112,18 @@ function buildSiteAudit({ crawl }) {
       recommendation: 'Add nav or hub links so Google does not rely on the sitemap alone.',
     });
   }
+  const sitemapSet = new Set(sitemapUrls);
+  const noindexInSitemap = pageReports.filter((p) => p.noindex && sitemapSet.has(p.url));
+  if (noindexInSitemap.length) {
+    addFinding(siteFindings, {
+      id: 'noindex-sitemap',
+      severity: 'fail',
+      title: `${noindexInSitemap.length} URL${noindexInSitemap.length === 1 ? '' : 's'} are both noindex and listed in the sitemap`,
+      detail: noindexInSitemap.map((p) => p.url).join('\n'),
+      recommendation: 'Remove these URLs from the sitemap, or remove noindex — never both. Wastes crawl budget and sends Google conflicting signals.',
+    });
+  }
+
   if (/user-agent/i.test(String(robots.body || '')) && !/^\s*sitemap:/im.test(String(robots.body || ''))) {
     addFinding(siteFindings, {
       id: 'robots-sitemap',
@@ -923,6 +1159,26 @@ function buildSiteAudit({ crawl }) {
   const pageRecommendations = pageReports.flatMap((p) => p.recommendations.map((r) => ({ ...r, url: p.url, pageTitle: p.title })));
   const globalUpdates = buildGlobalUpdates(pageReports, siteFindings, crawl);
 
+  // Indexability breakdown — the headline picture a professional audit leads
+  // with. "Blocked by robots" is derived from sitemap URLs robots.txt
+  // disallows: URLs actually blocked at crawl time are skipped before fetch
+  // (siteCrawler never requests a disallowed URL), so they cannot appear as
+  // crawled pages here — sitemap cross-reference is the only same-crawl way
+  // to surface them. Indexable/Noindexed/Error come from pages actually
+  // crawled.
+  const indexableCount = pageReports.filter((p) => p.statusCode < 400 && !p.error && !p.noindex).length;
+  const noindexedCount = pageReports.filter((p) => p.noindex).length;
+  const errorCount = pageReports.filter((p) => p.statusCode >= 400 || p.error).length;
+  const blockedByRobotsCount = sitemapUrls.filter((u) => !robotsAllows(u, robots.disallows || [])).length;
+  const indexability = {
+    indexable: indexableCount,
+    noindexed: noindexedCount,
+    blockedByRobots: blockedByRobotsCount,
+    error: errorCount,
+    totalCrawled: pageReports.length,
+    note: 'Indexable/Noindexed/Error are counted from crawled pages. Blocked-by-robots counts sitemap URLs robots.txt disallows — those are skipped before fetch, so they never show up as crawled pages.',
+  };
+
   return {
     score,
     summary: `${crawl.crawled} pages · ${fails} fail · ${warns} warn`,
@@ -932,6 +1188,7 @@ function buildSiteAudit({ crawl }) {
     findings: siteFindings,
     recommendations: siteRecommendations,
     globalUpdates,
+    indexability,
     notCovered: [
       'Page speed, Core Web Vitals, unused JS/CSS, contrast — use HTML (Lighthouse) at /html',
       'Paid search keywords and RSA copy — use Adwords at /google-ads',

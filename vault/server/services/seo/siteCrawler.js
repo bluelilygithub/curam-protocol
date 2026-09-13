@@ -305,6 +305,7 @@ module.exports = {
   crawlSite,
   clampPageLimit,
   sameOriginLinks,
+  robotsAllows,
   MIN_PAGES,
   MAX_PAGES,
   DEFAULT_PAGES,

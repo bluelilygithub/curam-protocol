@@ -7,6 +7,51 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatRunDate, formatSeoCampaignBrief, seoBriefFilename } from '../utils/seoCampaignBrief';
+import Tooltip from '../components/Tooltip';
+
+const TOOL_HELP = {
+  title: 'SEO',
+  description: 'Crawls a site\'s same-origin HTML for a real organic SEO campaign — built for a professional audit, not just an on-page checklist.',
+  features: [
+    'Weighted scoring — indexability-blocking issues (noindex, robots.txt blocks, 4xx/5xx, X-Robots-Tag) cost far more than a missing OG tag or a slightly-long meta description',
+    'Indexability breakdown — Indexable / Noindexed / Blocked-by-robots / Error counts at a glance',
+    'Near-duplicate content detection across crawled pages, plus duplicate titles, descriptions, and H1s',
+    'noindex-vs-sitemap conflict detection, redirect-loop detection, hreflang self-reference/x-default checks',
+    'html lang and viewport presence checks, alongside titles, descriptions, canonicals, schema, and internal links',
+    'Site-wide updates fold repeated per-page gaps into one theme/CMS/hosting fix instead of page-by-page edits',
+    'Copyable or downloadable campaign brief',
+  ],
+};
+
+function HelpModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{TOOL_HELP.title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+        </div>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP.description}</p>
+        <ul className="space-y-1.5">
+          {TOOL_HELP.features.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
 const FIELD = {
   background: 'var(--color-bg)',
@@ -79,6 +124,7 @@ export default function SeoAuditPage() {
   const [openPages, setOpenPages] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadList = useCallback(async () => {
     const res = await api.get('/api/seo/audits');
@@ -213,6 +259,7 @@ export default function SeoAuditPage() {
   const findings = audit?.report?.findings || [];
   const pages = audit?.report?.pages || [];
   const globalUpdates = audit?.report?.globalUpdates || [];
+  const indexability = audit?.report?.indexability || null;
   const score = audit ? Number(audit.score) : null;
   const scoreColor = score == null ? 'var(--color-muted)' : score >= 80 ? '#166534' : score >= 55 ? '#b45309' : '#ef4444';
   const notCovered = audit?.report?.notCovered || [];
@@ -238,45 +285,61 @@ export default function SeoAuditPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
             {getIcon('scan-search', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>SEO</h1>
+          <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>SEO</h1>
+          <Tooltip text="What this tool does and its full feature list.">
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity flex-shrink-0"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              ?
+            </button>
+          </Tooltip>
         </div>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search audits…"
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={FIELD}
-        />
+        <Tooltip text="Filter audits by name, URL, or host.">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search audits…"
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={FIELD}
+          />
+        </Tooltip>
 
-        <select
-          aria-label="Sort audits"
-          value={sort}
-          onChange={(e) => {
-            const next = e.target.value;
-            setSort(next);
-            try { localStorage.setItem('vault:seoListSort', next); } catch { /* ignore */ }
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={FIELD}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>Sort: {o.label}</option>
-          ))}
-        </select>
+        <Tooltip text="Change the order audits are listed in.">
+          <select
+            aria-label="Sort audits"
+            value={sort}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSort(next);
+              try { localStorage.setItem('vault:seoListSort', next); } catch { /* ignore */ }
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={FIELD}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>Sort: {o.label}</option>
+            ))}
+          </select>
+        </Tooltip>
 
-        <button
-          type="button"
-          onClick={() => navigate('/seo')}
-          className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
-          style={
-            !id
-              ? { background: 'var(--color-primary)', color: '#fff' }
-              : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
-          }
-        >
-          New audit
-        </button>
+        <Tooltip text="Start a new crawl and audit.">
+          <button
+            type="button"
+            onClick={() => navigate('/seo')}
+            className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+            style={
+              !id
+                ? { background: 'var(--color-primary)', color: '#fff' }
+                : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
+            }
+          >
+            New audit
+          </button>
+        </Tooltip>
 
         <ul className="space-y-0.5">
           {filtered.length === 0 && (
@@ -308,33 +371,37 @@ export default function SeoAuditPage() {
                 </div>
               ) : (
                 <div className="flex items-start gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/seo/${a.id}`)}
-                    className="min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-                    style={{
-                      background: String(id) === String(a.id) ? 'var(--color-bg)' : 'transparent',
-                      color: String(id) === String(a.id) ? 'var(--color-text)' : 'var(--color-muted)',
-                    }}
-                  >
-                    <span className="block truncate">{a.name}</span>
-                    <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
-                      {[
-                        a.score != null ? String(a.score) : null,
-                        formatRunDate(a.createdAt) || null,
-                        a.hostname || hostOf(a.url),
-                      ].filter(Boolean).join(' · ')}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${a.name}`}
-                    onClick={() => setPendingDeleteId(a.id)}
-                    className="shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-70"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
-                    {getIcon('trash', { size: 14 })}
-                  </button>
+                  <Tooltip text={`Open ${a.name}`}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/seo/${a.id}`)}
+                      className="min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                      style={{
+                        background: String(id) === String(a.id) ? 'var(--color-bg)' : 'transparent',
+                        color: String(id) === String(a.id) ? 'var(--color-text)' : 'var(--color-muted)',
+                      }}
+                    >
+                      <span className="block truncate">{a.name}</span>
+                      <span className="block truncate" style={{ color: 'var(--color-muted)' }}>
+                        {[
+                          a.score != null ? String(a.score) : null,
+                          formatRunDate(a.createdAt) || null,
+                          a.hostname || hostOf(a.url),
+                        ].filter(Boolean).join(' · ')}
+                      </span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Delete this audit.">
+                    <button
+                      type="button"
+                      aria-label={`Delete ${a.name}`}
+                      onClick={() => setPendingDeleteId(a.id)}
+                      className="shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {getIcon('trash', { size: 14 })}
+                    </button>
+                  </Tooltip>
                 </div>
               )}
             </li>
@@ -357,45 +424,53 @@ export default function SeoAuditPage() {
             </div>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Website URL</span>
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.example.com.au"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="The public website to crawl, starting from this page.">
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://www.example.com.au"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Name (optional)</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Defaults to the page title"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="Label for this audit in the list. Defaults to the page title if left blank.">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Defaults to the page title"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
             <label className="block space-y-1 max-w-xs">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Pages to crawl</span>
-              <input
-                type="number"
-                min={1}
-                max={40}
-                value={pageLimit}
-                onChange={(e) => setPageLimit(Number(e.target.value) || 25)}
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="How many same-origin pages to crawl (1–40). Homepage first, then hubs, then other pages, query-string URLs last.">
+                <input
+                  type="number"
+                  min={1}
+                  max={40}
+                  value={pageLimit}
+                  onChange={(e) => setPageLimit(Number(e.target.value) || 25)}
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
               <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>1–40. Homepage first, then hubs like /products, then other pages. Query-string URLs last. Default 25.</span>
             </label>
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Run audit
-            </button>
+            <Tooltip text="Crawl the site and generate the audit.">
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Run audit
+              </button>
+            </Tooltip>
           </section>
         )}
 
@@ -427,22 +502,26 @@ export default function SeoAuditPage() {
                 >
                   {score}
                 </div>
-                <button
-                  type="button"
-                  onClick={copyBrief}
-                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  Copy
-                </button>
-                <button
-                  type="button"
-                  onClick={downloadBrief}
-                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  Download
-                </button>
+                <Tooltip text="Copy the campaign brief as markdown.">
+                  <button
+                    type="button"
+                    onClick={copyBrief}
+                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Copy
+                  </button>
+                </Tooltip>
+                <Tooltip text="Download the campaign brief as a markdown file.">
+                  <button
+                    type="button"
+                    onClick={downloadBrief}
+                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Download
+                  </button>
+                </Tooltip>
                 {deleteConfirm ? (
                   <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     Delete?
@@ -450,17 +529,40 @@ export default function SeoAuditPage() {
                     <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
                   </span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                  >
-                    Delete
-                  </button>
+                  <Tooltip text="Delete this audit.">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      Delete
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
+
+            {indexability && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { key: 'indexable', label: 'Indexable', value: indexability.indexable, color: '#166534', tip: 'Crawled pages that returned 200 and are not noindex.' },
+                  { key: 'noindexed', label: 'Noindexed', value: indexability.noindexed, color: '#b45309', tip: 'Crawled pages with noindex in meta robots or the X-Robots-Tag header.' },
+                  { key: 'blockedByRobots', label: 'Blocked by robots', value: indexability.blockedByRobots, color: '#b45309', tip: 'Sitemap URLs robots.txt disallows. Robots-blocked URLs are skipped before fetch, so this is derived from the sitemap, not from pages actually crawled.' },
+                  { key: 'error', label: 'Error', value: indexability.error, color: '#ef4444', tip: 'Crawled URLs that returned 4xx/5xx or could not be fetched.' },
+                ].map((s) => (
+                  <Tooltip key={s.key} text={s.tip}>
+                    <div
+                      className="rounded-xl border p-3 text-center"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                    >
+                      <p className="text-lg font-semibold tabular-nums" style={{ color: s.color }}>{s.value}</p>
+                      <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{s.label}</p>
+                    </div>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
 
             {globalUpdates.length > 0 && (
               <div
@@ -537,27 +639,29 @@ export default function SeoAuditPage() {
                       className="rounded-2xl border overflow-hidden"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => togglePage(p.url)}
-                        className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 transition-opacity hover:opacity-70"
-                      >
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                            {p.title || hostOf(p.url)}
-                            {p.isHome ? ' · Home' : ''}
+                      <Tooltip text={open ? 'Collapse this page\'s checks and recommendations.' : 'Expand to see this page\'s checks and recommendations.'}>
+                        <button
+                          type="button"
+                          onClick={() => togglePage(p.url)}
+                          className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 transition-opacity hover:opacity-70"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                              {p.title || hostOf(p.url)}
+                              {p.isHome ? ' · Home' : ''}
+                            </span>
+                            <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.url}</span>
+                            <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                              {recs.length} recommendation{recs.length === 1 ? '' : 's'}
+                              {p.depth != null ? ` · depth ${p.depth}` : ''}
+                              {p.titleChars ? ` · title ${p.titleChars} ch` : ''}
+                            </span>
                           </span>
-                          <span className="block text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.url}</span>
-                          <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                            {recs.length} recommendation{recs.length === 1 ? '' : 's'}
-                            {p.depth != null ? ` · depth ${p.depth}` : ''}
-                            {p.titleChars ? ` · title ${p.titleChars} ch` : ''}
+                          <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: p.score >= 80 ? '#166534' : p.score >= 55 ? '#b45309' : '#ef4444' }}>
+                            {p.score}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: p.score >= 80 ? '#166534' : p.score >= 55 ? '#b45309' : '#ef4444' }}>
-                          {p.score}
-                        </span>
-                      </button>
+                        </button>
+                      </Tooltip>
                       {open && (
                         <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
                           {recs.length === 0 ? (
@@ -612,6 +716,8 @@ export default function SeoAuditPage() {
           </section>
         )}
       </main>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
