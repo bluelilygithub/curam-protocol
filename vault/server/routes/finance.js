@@ -1597,6 +1597,90 @@ router.delete('/expenses/:id/receipt', async (req, res) => {
   }
 });
 
+// ── Home office expense-type evidence ────────────────────────────────────────
+// One document per running-cost category (electricity/internet/phone/stationery) —
+// the ATO fixed-rate method needs proof the cost genuinely exists, not one bill per
+// claim. Uploading again for a category replaces the previous file for it.
+
+const HOME_OFFICE_EVIDENCE_CATEGORIES = ['electricity', 'internet', 'phone', 'stationery'];
+
+router.get('/home-office-evidence', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT category, "fileName", "uploadedAt" FROM fin_home_office_evidence WHERE "userId"=$1`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/home-office-evidence/:category', receiptUpload.single('file'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const category = req.params.category;
+    if (!HOME_OFFICE_EVIDENCE_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: `category must be one of: ${HOME_OFFICE_EVIDENCE_CATEGORIES.join(', ')}` });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const { rows } = await pool.query(
+      `SELECT "fileName" FROM fin_home_office_evidence WHERE "userId"=$1 AND category=$2`,
+      [userId, category]
+    );
+    if (rows[0]?.fileName) {
+      const old = path.join(RECEIPT_DIR, rows[0].fileName);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+
+    await pool.query(
+      `INSERT INTO fin_home_office_evidence ("userId", category, "fileName")
+       VALUES ($1,$2,$3)
+       ON CONFLICT ("userId", category) DO UPDATE SET "fileName"=EXCLUDED."fileName", "uploadedAt"=NOW()`,
+      [userId, category, req.file.filename]
+    );
+    res.json({ ok: true, category, fileName: req.file.filename });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/home-office-evidence/:category/file', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "fileName" FROM fin_home_office_evidence WHERE "userId"=$1 AND category=$2`,
+      [req.user.id, req.params.category]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'No file for this category' });
+    const filePath = path.join(RECEIPT_DIR, rows[0].fileName);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/home-office-evidence/:category', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "fileName" FROM fin_home_office_evidence WHERE "userId"=$1 AND category=$2`,
+      [req.user.id, req.params.category]
+    );
+    if (rows[0]?.fileName) {
+      const filePath = path.join(RECEIPT_DIR, rows[0].fileName);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await pool.query(
+      `DELETE FROM fin_home_office_evidence WHERE "userId"=$1 AND category=$2`,
+      [req.user.id, req.params.category]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Wages ─────────────────────────────────────────────────────────────────────
 
 router.get('/wages', async (req, res) => {

@@ -2004,6 +2004,21 @@ async function initSchema() {
     )
   `);
 
+  // One-off expense-type evidence per home-office running-cost category (electricity/internet/
+  // phone/stationery) — the ATO fixed-rate method needs one bill per category to show the cost
+  // genuinely exists, not one per claim. UNIQUE(userId, category) so a new upload replaces the
+  // prior one rather than accumulating — only the latest is needed as evidence.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_home_office_evidence (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category     TEXT NOT NULL CHECK(category IN ('electricity','internet','phone','stationery')),
+      "fileName"   TEXT NOT NULL,
+      "uploadedAt" TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("userId", category)
+    )
+  `);
+
   // Trip-purpose dropdown on vehicle entries (description/organization aid only — the ATO
   // logbook/diary substantiation record is still the user's own, this doesn't replace it).
   await pool.query(`ALTER TABLE fin_vehicle_expenses ADD COLUMN IF NOT EXISTS purpose TEXT`);

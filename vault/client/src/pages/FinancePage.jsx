@@ -2405,6 +2405,15 @@ const VEHICLE_PURPOSES = [
   'Other (describe)',
 ];
 
+// Home office fixed-rate evidence categories — one document per category is enough to
+// show the cost genuinely exists; the flat rate itself covers the amount (see docs/finance.md).
+const HOME_OFFICE_EVIDENCE_CATEGORIES = [
+  { id: 'electricity', label: 'Electricity' },
+  { id: 'internet', label: 'Internet' },
+  { id: 'phone', label: 'Phone' },
+  { id: 'stationery', label: 'Stationery/consumables' },
+];
+
 function Select({ value, onChange, children, className = '' }) {
   return (
     <select
@@ -2491,6 +2500,40 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [oSaving, setOSaving] = useState(false);
   const [oError, setOError] = useState('');
 
+  // One-off expense-type evidence per running-cost category — see docs/finance.md.
+  // Not per-claim: one bill/receipt showing the cost genuinely exists is enough.
+  const [hEvidence, setHEvidence] = useState({}); // { electricity: { fileName, uploadedAt }, ... }
+  const [hEvidenceUploading, setHEvidenceUploading] = useState(null); // category mid-upload
+
+  const loadHEvidence = () => {
+    api.get('/api/finance/home-office-evidence').then(r => r.json()).then(rows => {
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach(r => { map[r.category] = r; });
+      setHEvidence(map);
+    }).catch(() => {});
+  };
+
+  const uploadHEvidence = async (category, file) => {
+    if (!file) return;
+    setHEvidenceUploading(category);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.postForm(`/api/finance/home-office-evidence/${category}`, fd);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Upload failed');
+      addToast(`${category[0].toUpperCase()}${category.slice(1)} evidence saved`);
+      loadHEvidence();
+    } catch (e) { addToast(e.message, 'error'); } finally { setHEvidenceUploading(null); }
+  };
+
+  const deleteHEvidence = async (category) => {
+    try {
+      await api.delete(`/api/finance/home-office-evidence/${category}`);
+      loadHEvidence();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
   useEffect(() => {
     api.get('/api/finance/settings').then(r => r.json()).then(d => {
       setRates(p => ({
@@ -2500,6 +2543,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     }).catch(() => {});
     api.get('/api/finance/vehicle-method').then(r => r.json()).then(setVYearMethods).catch(() => {});
     api.get('/api/finance/home-office-method').then(r => r.json()).then(setHYearMethods).catch(() => {});
+    loadHEvidence();
   }, []);
 
   const vFy = finYearForDate(vForm.date);
@@ -2582,8 +2626,8 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   };
 
   return (
-    <div className="p-6 max-w-4xl flex flex-col gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="p-6 max-w-6xl flex flex-col gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Vehicle */}
         <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense</h3>
@@ -2647,6 +2691,43 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </div>
           )}
 
+          {lockedHMethod === 'fixed_rate' && (
+            <div className="p-3 rounded-lg border mb-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <Tooltip text="You don't need every bill for the year — one document per category is enough to show the cost genuinely exists. The flat rate handles the amount.">
+                <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Expense-type evidence (one per category, not per claim)</p>
+              </Tooltip>
+              <div className="flex flex-col gap-2">
+                {HOME_OFFICE_EVIDENCE_CATEGORIES.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span style={{ color: 'var(--color-text)' }}>{cat.label}</span>
+                    {hEvidence[cat.id] ? (
+                      <span className="flex items-center gap-2">
+                        <Tooltip text={`Uploaded ${new Date(hEvidence[cat.id].uploadedAt).toLocaleDateString('en-AU')}`}>
+                          <span style={{ color: 'var(--color-muted)' }}>✓ Saved</span>
+                        </Tooltip>
+                        <Tooltip text={`Remove the saved ${cat.label.toLowerCase()} evidence`}>
+                          <button type="button" onClick={() => deleteHEvidence(cat.id)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
+                        </Tooltip>
+                      </span>
+                    ) : (
+                      <Tooltip text={`Upload one ${cat.label.toLowerCase()} bill or receipt from any point in the year`}>
+                        <label className="px-2 py-1 rounded-md border cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          {hEvidenceUploading === cat.id ? 'Uploading…' : 'Upload'}
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            style={{ display: 'none' }}
+                            onChange={e => uploadHEvidence(cat.id, e.target.files?.[0])}
+                          />
+                        </label>
+                      </Tooltip>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 mb-3">
             <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
             <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
@@ -2660,6 +2741,12 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
               </>
             )}
           </div>
+          {lockedHMethod === 'fixed_rate' && (
+            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+              Each dated entry you save below builds your ongoing hours record — the ATO wants this kept as you go
+              (a diary, timesheet, or calendar note), not reconstructed later from a "typical week."
+            </p>
+          )}
           <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
             <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
           </Tooltip>
@@ -3832,13 +3919,6 @@ function ExportHistoryPanel({ onChanged }) {
   );
 }
 
-// FY string like "2025-26" -> "2026-27". Kept alongside finYearForDate() above.
-function nextFinYearLabel(fy) {
-  const [startY] = fy.split('-');
-  const nextStart = parseInt(startY, 10) + 1;
-  const nextEndYY = String((nextStart + 1) % 100).padStart(2, '0');
-  return `${nextStart}-${nextEndYY}`;
-}
 
 // Settings-tab-only: the once-a-year method + rate policy for Vehicle & Home Office (moved out of
 // the data-entry screen — see docs/finance.md). Shows the current FY's locked method/rate
@@ -3849,9 +3929,7 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   const [vYearMethods, setVYearMethods] = useState({});
   const [hYearMethods, setHYearMethods] = useState({});
   const [vChoiceCurrent, setVChoiceCurrent] = useState('cents_per_km');
-  const [vChoiceNext, setVChoiceNext] = useState('cents_per_km');
   const [hChoiceCurrent, setHChoiceCurrent] = useState('fixed_rate');
-  const [hChoiceNext, setHChoiceNext] = useState('fixed_rate');
   const [locking, setLocking] = useState(null); // which key is mid-save, e.g. 'v-current'
 
   const loadMethods = () => {
@@ -3860,12 +3938,12 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   };
   useEffect(() => { loadMethods(); }, []);
 
+  // Only the current FY's lock is ever shown here — next FY isn't offered ahead of
+  // time; the annual reminder (fires ~1 July) prompts locking the new year when it
+  // actually starts, so this settings section never needs to answer for two years.
   const currentFy = finYearForDate(todayStr());
-  const nextFy    = nextFinYearLabel(currentFy);
   const lockedVCurrent = vYearMethods[currentFy] || null;
-  const lockedVNext    = vYearMethods[nextFy] || null;
   const lockedHCurrent = hYearMethods[currentFy] || null;
-  const lockedHNext    = hYearMethods[nextFy] || null;
 
   const lockMethod = async (endpoint, key, year, method, setMap) => {
     setLocking(key);
@@ -3899,12 +3977,14 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
         </Field>
       </div>
 
-      {/* Vehicle method */}
+      {/* Vehicle method — current FY only. Next FY isn't offered ahead of time: the
+          annual reminder (fires ~1 July) is what prompts locking the new year, so this
+          page only ever needs to answer for the year that's actually running. */}
       <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle method</p>
-      <div className="flex flex-col gap-2 mb-4">
+      <div className="mb-4">
         <Tooltip text={`The vehicle claim method locked for the current financial year (FY${currentFy}). Can't be changed once entries exist against it.`}>
           <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Current FY{currentFy}</p>
+            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>FY{currentFy}</p>
             {lockedVCurrent ? (
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{vLabel(lockedVCurrent)} (locked)</p>
             ) : (
@@ -3923,75 +4003,31 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
             )}
           </div>
         </Tooltip>
-        <Tooltip text={`Lock the vehicle method for next financial year (FY${nextFy}) ahead of time, e.g. when reviewing in June.`}>
-          <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Next FY{nextFy}</p>
-            {lockedVNext ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{vLabel(lockedVNext)} (locked)</p>
-            ) : (
-              <MethodLockPicker
-                fy={nextFy}
-                claimTypeLabel="vehicle"
-                choice={vChoiceNext}
-                setChoice={setVChoiceNext}
-                onLock={() => lockMethod('/api/finance/vehicle-method', 'v-next', nextFy, vChoiceNext, setVYearMethods)}
-                locking={locking === 'v-next'}
-                options={[
-                  { value: 'cents_per_km', label: 'Cents-per-km', hint: 'ATO cents-per-km method — rate × business kilometres, no receipts needed (capped at 5,000km/year by the ATO)' },
-                  { value: 'logbook', label: 'Logbook (actual cost)', hint: 'Logbook / actual-cost method — business-use % applied to your actual running costs, requires a valid 12-week ATO logbook' },
-                ]}
-              />
-            )}
-          </div>
-        </Tooltip>
       </div>
 
-      {/* Home office method */}
+      {/* Home office method — current FY only, same reasoning as vehicle above. */}
       <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Home office method</p>
-      <div className="flex flex-col gap-2">
-        <Tooltip text={`The home office claim method locked for the current financial year (FY${currentFy}). Can't be changed once entries exist against it.`}>
-          <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Current FY{currentFy}</p>
-            {lockedHCurrent ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{hLabel(lockedHCurrent)} (locked)</p>
-            ) : (
-              <MethodLockPicker
-                fy={currentFy}
-                claimTypeLabel="home office"
-                choice={hChoiceCurrent}
-                setChoice={setHChoiceCurrent}
-                onLock={() => lockMethod('/api/finance/home-office-method', 'h-current', currentFy, hChoiceCurrent, setHYearMethods)}
-                locking={locking === 'h-current'}
-                options={[
-                  { value: 'fixed_rate', label: 'Fixed rate', hint: 'ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs' },
-                  { value: 'actual_cost', label: 'Actual cost', hint: 'Actual cost method — business-use % applied to your actual home office running costs' },
-                ]}
-              />
-            )}
-          </div>
-        </Tooltip>
-        <Tooltip text={`Lock the home office method for next financial year (FY${nextFy}) ahead of time, e.g. when reviewing in June.`}>
-          <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Next FY{nextFy}</p>
-            {lockedHNext ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{hLabel(lockedHNext)} (locked)</p>
-            ) : (
-              <MethodLockPicker
-                fy={nextFy}
-                claimTypeLabel="home office"
-                choice={hChoiceNext}
-                setChoice={setHChoiceNext}
-                onLock={() => lockMethod('/api/finance/home-office-method', 'h-next', nextFy, hChoiceNext, setHYearMethods)}
-                locking={locking === 'h-next'}
-                options={[
-                  { value: 'fixed_rate', label: 'Fixed rate', hint: 'ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs' },
-                  { value: 'actual_cost', label: 'Actual cost', hint: 'Actual cost method — business-use % applied to your actual home office running costs' },
-                ]}
-              />
-            )}
-          </div>
-        </Tooltip>
-      </div>
+      <Tooltip text={`The home office claim method locked for the current financial year (FY${currentFy}). Can't be changed once entries exist against it.`}>
+        <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>FY{currentFy}</p>
+          {lockedHCurrent ? (
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{hLabel(lockedHCurrent)} (locked)</p>
+          ) : (
+            <MethodLockPicker
+              fy={currentFy}
+              claimTypeLabel="home office"
+              choice={hChoiceCurrent}
+              setChoice={setHChoiceCurrent}
+              onLock={() => lockMethod('/api/finance/home-office-method', 'h-current', currentFy, hChoiceCurrent, setHYearMethods)}
+              locking={locking === 'h-current'}
+              options={[
+                { value: 'fixed_rate', label: 'Fixed rate', hint: 'ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs' },
+                { value: 'actual_cost', label: 'Actual cost', hint: 'Actual cost method — business-use % applied to your actual home office running costs' },
+              ]}
+            />
+          )}
+        </div>
+      </Tooltip>
     </div>
   );
 }
