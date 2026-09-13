@@ -39,6 +39,7 @@ const SECTIONS = [
   { id: 'ai-tools-apps',   label: 'AI Tools' },
   { id: 'more-content-tools', label: 'More Content Tools' },
   { id: 'website-tools',   label: 'Website Tools' },
+  { id: 'finance',         label: 'Finance' },
   { id: 'money-data-apps', label: 'Money & Data' },
   { id: 'personal-admin-apps', label: 'Personal & Admin' },
   { id: 'student',         label: 'Student' },
@@ -1823,20 +1824,94 @@ function UserGuidePage() {
 
         <Divider />
 
+        {/* ── Finance ── */}
+        <SectionHeading id="finance">Finance</SectionHeading>
+        <P>
+          <strong>Finance</strong> (under Apps → Money &amp; data) is a genuine small-business, double-entry
+          bookkeeping suite — not a personal budget tracker. It's built for a sole trader or small business owner
+          doing their own day-to-day books, with the output (reports, exports) meant to go to a real accountant at
+          tax time or each BAS quarter. A wrong click here can cost real money, so every control has a hover
+          tooltip and every tab has its own click-to-open help icon explaining what it does and who should use it.
+        </P>
+
+        <SubHeading>How the books work, in plain terms</SubHeading>
+        <P>
+          Underneath, Finance uses real double-entry bookkeeping — you don't need to understand it to use the app,
+          but it helps to know what the words mean. Every transaction (an invoice paid, an expense recorded, wages
+          paid) creates a <strong>journal entry</strong>: a record with two or more lines, some money
+          <strong> debited</strong> from one account and the same total <strong>credited</strong> to another. An
+          entry is <strong>balanced</strong> when its debits and credits add up to the same total — Vault enforces
+          this automatically, so it is not possible to accidentally save an entry that doesn't balance. The
+          <strong> Chart of Accounts</strong> (Accounts tab) is the full list of these accounts — bank, income,
+          expenses, GST, and so on — and the <strong>Journal</strong> tab is the ledger of every entry ever posted,
+          whether generated automatically by an invoice/expense/wage or typed in manually.
+        </P>
+
+        <SubHeading>Invoices, Quotes &amp; Expenses</SubHeading>
+        <UL>
+          <LI><strong>Invoices</strong> — bill a client, send it as an emailed PDF, track draft/sent/overdue/paid status, and mark it paid once the money lands. Paid invoices post income and GST straight to the journal.</LI>
+          <LI><strong>Quotes</strong> — the same builder, tracked separately, with one-click conversion into an invoice once a client accepts.</LI>
+          <LI><strong>Expenses</strong> — record what the business spent, with automatic GST splitting, receipt attachments, and credit-card settlement (pay a single charge, or batch-settle a whole statement).</LI>
+        </UL>
+
+        <SubHeading>Drawings vs Wages — which one is yours?</SubHeading>
+        <P>
+          These two tabs look similar but are for different people. <strong>Owner's Drawings</strong> is for a sole
+          trader taking money out of the business for themselves — it's not a wage and has no tax withheld, because
+          a sole trader's own "income" is simply the business's profit, reported on their individual tax return.
+          <strong> Wages</strong> is for actual employees (gross pay, PAYG tax withheld, and superannuation, all
+          posted as a proper payroll entry) — or for the case where the business operates through a company or
+          trust structure that pays the owner a wage like any other employee. If you're a sole trader paying
+          yourself, use Drawings; if you employ someone (or the business itself pays you a wage), use Wages.
+        </P>
+
+        <SubHeading>Vehicle &amp; Home Office calculators</SubHeading>
+        <P>
+          Two ATO-style deduction calculators, each with two methods:
+        </P>
+        <UL>
+          <LI><strong>Vehicle — cents-per-km</strong> suits simpler or lower-mileage use: the ATO rate × your business kilometres, no receipts required, capped by the ATO at 5,000&nbsp;km/year.</LI>
+          <LI><strong>Vehicle — logbook (actual cost)</strong> suits a higher business-use percentage: your business-use % × actual running costs, but requires a valid ATO 12-week logbook to substantiate the percentage claimed.</LI>
+          <LI><strong>Home office — fixed rate</strong> is the simpler option, needing less record-keeping: the ATO rate × hours worked from home.</LI>
+          <LI><strong>Home office — actual cost</strong> suits someone with a dedicated home office who keeps bills: business-use % × actual running costs (electricity, internet, etc.).</LI>
+        </UL>
+        <P>
+          Both post a normal expense journal entry once saved — the calculator just works out the deductible amount
+          first. The ATO's rates change every year, so they're editable in Settings rather than hardcoded.
+        </P>
+
+        <SubHeading>BAS &amp; Reports</SubHeading>
+        <P>
+          <strong>BAS</strong> (Business Activity Statement) is only relevant if the business is registered for
+          GST — it walks a quarter through Open → Reconciled → Lodged → Paid, with warnings before you reconcile
+          (e.g. no data recorded, an unusual negative net GST) and an annual summary of all four quarters.
+        </P>
+        <P>
+          The <strong>Reports</strong> tab is what actually goes to your accountant, split by who needs it and
+          when:
+        </P>
+        <UL>
+          <LI><strong>Profit &amp; Loss</strong> and <strong>Balance Sheet</strong> — hand both to your accountant at tax time; P&amp;L is income minus expenses for the year, the Balance Sheet is assets/liabilities/equity as of a date, with capital-asset purchases called out separately for the asset register.</LI>
+          <LI><strong>GST Summary</strong> — pull this each BAS quarter; it breaks GST collected vs GST paid down by code.</LI>
+          <LI><strong>Trial Balance</strong> — mainly a bookkeeping-integrity check for yourself; it should always show as balanced, since Vault won't let an unbalanced entry be posted in the first place.</LI>
+          <LI><strong>Charts</strong> — income vs expenses, bank balance trend, and GST per quarter, as quick visual sanity checks.</LI>
+        </UL>
+
+        <Callout type="warning">
+          BAS and GST figures throughout Finance are calculated on a <strong>cash basis</strong> — income is
+          recognised when an invoice is actually paid, and expenses when they're actually paid, not when they're
+          issued or received. This is internally consistent, but if your business reports GST on an accrual basis,
+          these numbers will not match what you lodge. A disclosure note appears wherever BAS/GST figures are
+          shown; accrual-basis GST is out of scope.
+        </Callout>
+
+        <Divider />
+
         {/* ── Money & Data (grouped) ── */}
         <SectionHeading id="money-data-apps">Money &amp; Data</SectionHeading>
         <P>
-          Financial and personal-data tools under Apps → Money &amp; data, alongside Shares (covered in full in
-          the main CLAUDE.md feature list and its own in-app pages).
-        </P>
-
-        <SubHeading>Finance</SubHeading>
-        <P>
-          A genuine small-business accounting suite: accounts, clients, and suppliers; invoices (create, send by
-          email, mark paid, convert between draft/final); expenses with receipt uploads and credit-card
-          reconciliation; wages; recurring transactions; a general journal; BAS (Business Activity Statement)
-          preparation with quarterly and annual views; a trial balance; and exports to MYOB, Xero, Excel, and
-          Google Sheets. This is a full bookkeeping tool, not a personal budget tracker.
+          Personal-data and other financial tools under Apps → Money &amp; data — Finance itself is covered in
+          full in its own section above.
         </P>
 
         <SubHeading>Property (Property Scenario)</SubHeading>

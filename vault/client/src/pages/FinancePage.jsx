@@ -5,6 +5,221 @@ import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
 
+// ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
+// Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
+// keyed by tab id since Finance has many tabs rather than one tool.
+
+const TOOL_HELP = {
+  Dashboard: {
+    title: 'Dashboard',
+    description: 'A quick at-a-glance summary of the current financial year — who owes you money, what you\'ve spent, and a rough profit estimate.',
+    features: [
+      'Revenue, outstanding, and overdue invoice totals',
+      'Quotes still pending client acceptance',
+      'Year-to-date expenses and gross wages',
+      'A rough net profit estimate — the Reports tab Profit & Loss is the accurate figure for tax purposes',
+    ],
+  },
+  Invoices: {
+    title: 'Invoices',
+    description: 'Bill your clients: draft, send, track payment status, and download PDFs. Every paid invoice posts income and GST straight to the journal.',
+    features: [
+      'Draft, edit, send (with PDF attachment), and mark invoices paid',
+      'Automatic GST split per line (10% or N-T/no-tax)',
+      'Status filter: draft, sent, overdue, paid',
+      'Send history per invoice — who it went to and when',
+      'Download any invoice as a PDF',
+    ],
+  },
+  Quotes: {
+    title: 'Quotes',
+    description: 'Send a price quote before committing to an invoice. Convert an accepted quote straight into an invoice with a new invoice number.',
+    features: [
+      'Same builder as Invoices, but tracked separately (draft/sent/accepted/declined)',
+      'One-click Convert to turn an accepted quote into an invoice',
+      'Send as PDF, with send history',
+    ],
+  },
+  Clients: {
+    title: 'Clients',
+    description: 'Lightweight billing-only client records used by Invoices and Quotes. Full contact and relationship management lives in the separate Clients module.',
+    features: [
+      'Quick client records for invoicing when you don\'t need the full CRM',
+      'Activate/deactivate without deleting history',
+      'Link through to the full Clients module record when available',
+    ],
+  },
+  Suppliers: {
+    title: 'Suppliers',
+    description: 'Who you buy from — a simple directory so you can reuse supplier details on expenses instead of retyping them.',
+    features: [
+      'Name, contact, ABN, and notes per supplier',
+      'Active/inactive toggle for the expense-form picker',
+    ],
+  },
+  Expenses: {
+    title: 'Expenses',
+    description: 'Record what the business spent. Every expense posts to the journal automatically and feeds your BAS and Profit & Loss.',
+    features: [
+      'Automatic GST split from a total amount paid',
+      'Attach a receipt image or PDF to any expense',
+      'Pay via Bank/Cash or a credit card account, with per-charge or statement-batch settlement',
+      'Flag a purchase as a capital asset for your accountant\'s asset register',
+    ],
+  },
+  Drawings: {
+    title: "Owner's Drawings",
+    description: 'For a sole trader taking money out of the business for themselves — not a wage, no tax withheld. Your own income is the business profit, reported on your individual tax return.',
+    features: [
+      'Simple two-line journal entry: reduces equity, not an expense',
+      'Use this instead of Wages for your own withdrawals',
+      'If the business operates through a company or trust that pays you a wage instead, use the Wages tab for that',
+    ],
+  },
+  'Vehicle/Home Office': {
+    title: 'Vehicle/Home Office',
+    description: 'ATO-style deduction calculators for vehicle and home-office running costs. Both post a normal expense journal entry once you save — this tool computes the deductible amount first.',
+    features: [
+      'Vehicle — cents-per-km: rate × business kilometres, no receipts needed, but the ATO caps this method at 5,000 km/year. Suits simpler or lower-km use where you haven\'t kept a 12-week logbook.',
+      'Vehicle — logbook (actual cost): business-use % × your actual running costs. Suits higher business-use claims, but requires a valid ATO 12-week logbook to substantiate the percentage.',
+      'Home office — fixed rate: rate × hours worked from home, simpler with less record-keeping (covers running costs like electricity, without needing separate receipts for each).',
+      'Home office — actual cost: business-use % × your actual home-office running costs. Suits someone with a dedicated home office space who keeps receipts/bills to substantiate the claim.',
+      'ATO rates are editable in Settings since they change yearly — never hardcoded',
+    ],
+  },
+  Recurring: {
+    title: 'Recurring',
+    description: 'Automate invoices or expenses that repeat on a schedule — a draft is generated automatically for you to review, not sent or posted without your action.',
+    features: [
+      'Weekly, fortnightly, monthly, quarterly, or annual frequency',
+      'Save a full invoice or expense template to reuse each time',
+      'Pause/resume without losing the schedule',
+    ],
+  },
+  Wages: {
+    title: 'Wages',
+    description: 'For actual employees — or a company/trust structure paying the owner a wage. Posts gross wages, PAYG withholding, and superannuation as a proper payroll journal entry.',
+    features: [
+      'Gross, tax withheld, superannuation, and net pay per entry',
+      'Net pay must equal gross minus tax withheld or the entry is rejected — this keeps the payroll journal balanced',
+      'Not for a sole trader\'s own withdrawals — use Drawings for that',
+    ],
+  },
+  Interest: {
+    title: 'Interest Income',
+    description: 'Record bank interest received — a simple two-line entry with no GST, since interest is not subject to GST.',
+    features: [
+      'Posts DR Bank / Cash, CR Interest Income',
+      'Totals shown across all recorded entries',
+    ],
+  },
+  Journal: {
+    title: 'Journal',
+    description: 'The full ledger of every transaction in the business — including entries auto-generated from Invoices, Expenses, Wages, Drawings, and BAS settlement — plus manual entries for anything else.',
+    features: [
+      'Every entry shown with its full debit/credit lines',
+      'Manual entries must balance (debits = credits) before they can be posted — enforced server-side, not just in the UI',
+      'Only manual entries can be deleted here; auto-generated entries are deleted by deleting/reversing their source record',
+    ],
+  },
+  Accounts: {
+    title: 'Chart of Accounts',
+    description: 'The full list of accounts the business uses — assets, liabilities, equity, income, and expenses. Add your own on top of the built-in set for anything not already covered.',
+    features: [
+      'Filter by account type',
+      'Built-in ("system") accounts can\'t be edited or deleted',
+      'Deleting a custom account fails if it already has journal entries posted against it',
+    ],
+  },
+  Codes: {
+    title: 'Income & Expense Codes',
+    description: 'Optional tags you can attach to invoice lines and expenses for finer-grained reporting than the chart of accounts alone provides.',
+    features: [
+      'Separate income and expense code lists',
+      'Active/inactive toggle for the code pickers',
+    ],
+  },
+  BAS: {
+    title: 'Business Activity Statement',
+    description: 'For GST-registered businesses only — work through each quarter\'s BAS: review the figures, mark reconciled, lodge with the ATO, then record payment. Figures are calculated on a cash basis.',
+    features: [
+      'G1, G11, 1A, 1B, net GST, and PAYG withholding per quarter',
+      'Warnings before reconciling — e.g. no data recorded, unusual negative net GST, unpaid invoices excluded from this quarter\'s figures',
+      'Cash-basis GST: income recognised when paid, expenses when paid — will not match an accrual-basis BAS',
+      'Annual summary panel showing all four quarters at a glance',
+    ],
+  },
+  Position: {
+    title: 'Financial Position',
+    description: 'A practical, business-facing snapshot of where things stand right now — cash, money owed to you, card debt, and GST position — not a formal financial statement.',
+    features: [
+      'Current cash position — reconcile this against your real bank balance regularly',
+      'Money owed to you (sent, unpaid invoices) and credit card debt',
+      'Estimated net GST payable/refund based on the ledger so far',
+    ],
+  },
+  Balances: {
+    title: 'Trial Balance',
+    description: 'Every account\'s debit/credit balance as of today — mainly a bookkeeping-integrity check. Should always read Balanced, since every journal entry is validated on posting.',
+    features: [
+      'Grouped by account type with subtotals',
+      'A live all-time cumulative balance, not a point-in-time report (use Reports → Trial Balance for a specific date)',
+    ],
+  },
+  Reports: {
+    title: 'Reports',
+    description: 'The formal reports your accountant needs, plus visual charts — each with a CSV export.',
+    features: [
+      'Profit & Loss — income minus expenses for a period, with a separate capital-asset-purchases callout; hand this to your accountant at tax time alongside the Balance Sheet',
+      'Balance Sheet — assets, liabilities, and equity as of a date, with a built-in balanced check',
+      'GST Summary — GST collected vs GST paid, broken down by code; use this each BAS quarter',
+      'Trial Balance — every account\'s balance as of a date; mainly a bookkeeping-integrity check',
+      'Charts — income vs expenses, bank balance trend, and GST per quarter, all theme-aware inline SVG',
+    ],
+  },
+  Settings: {
+    title: 'Finance Settings',
+    description: 'Business details shown on invoices, bank details for client payments, GST/payment-term defaults, reminder emails, and the export-history safety lock.',
+    features: [
+      'Business name, ABN, address, and bank details printed on invoices/quotes',
+      'Default payment terms and GST-registered toggle',
+      'Weekly overdue-items reminder email, with a test-send button',
+      'Export History — the safety lock preventing duplicate MYOB/Xero/Excel/Sheets imports; only override or clear after checking with your accountant',
+    ],
+  },
+};
+
+function FinanceHelpModal({ tab, onClose }) {
+  const entry = TOOL_HELP[tab] || TOOL_HELP.Dashboard;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{entry.title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+        </div>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{entry.description}</p>
+        <ul className="space-y-1.5">
+          {entry.features.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
 function fmt(n) {
@@ -407,33 +622,38 @@ function DateRangePicker({ value, onChange }) {
     <div className="flex items-center gap-2 flex-wrap px-6 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
       <div className="flex gap-1 flex-wrap">
         {DATE_PRESETS.map(p => (
-          <button
-            key={p.key}
-            onClick={() => select(p.key)}
-            className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
-            style={{
-              background:   preset === p.key ? 'var(--color-primary)' : 'transparent',
-              color:        preset === p.key ? '#fff' : 'var(--color-muted)',
-              border:       '1px solid var(--color-border)',
-            }}
-          >{p.label}</button>
+          <Tooltip key={p.key} text={p.key === 'custom' ? 'Pick your own start and end dates.' : p.key === 'all' ? 'Show every record regardless of date.' : `Filter this tab's records to the current ${p.label.toLowerCase()}.`}>
+            <button
+              onClick={() => select(p.key)}
+              className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+              style={{
+                background:   preset === p.key ? 'var(--color-primary)' : 'transparent',
+                color:        preset === p.key ? '#fff' : 'var(--color-muted)',
+                border:       '1px solid var(--color-border)',
+              }}
+            >{p.label}</button>
+          </Tooltip>
         ))}
       </div>
       {preset === 'custom' && (
         <div className="flex items-center gap-1.5">
-          <input
-            type="date" value={from}
-            onChange={e => onChange({ preset: 'custom', from: e.target.value, to })}
-            className="text-xs px-2 py-1 rounded-lg border outline-none"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <Tooltip text="Start of the custom date range.">
+            <input
+              type="date" value={from}
+              onChange={e => onChange({ preset: 'custom', from: e.target.value, to })}
+              className="text-xs px-2 py-1 rounded-lg border outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>–</span>
-          <input
-            type="date" value={to}
-            onChange={e => onChange({ preset: 'custom', from, to: e.target.value })}
-            className="text-xs px-2 py-1 rounded-lg border outline-none"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <Tooltip text="End of the custom date range.">
+            <input
+              type="date" value={to}
+              onChange={e => onChange({ preset: 'custom', from, to: e.target.value })}
+              className="text-xs px-2 py-1 rounded-lg border outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
         </div>
       )}
       {preset !== 'all' && preset !== 'custom' && from && to && (
@@ -467,31 +687,32 @@ function DashboardTab({ from, to }) {
   const net = parseFloat((data.yearRevenue - data.yearExpenses - data.yearWages).toFixed(2));
 
   const cards = [
-    { label: 'Revenue',          value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`                           },
-    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0 },
-    { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0    },
-    { label: 'Quotes',           value: fmt(data.quotesAmount),      sub: `${data.quotesCount} pending, not accepted`                             },
-    { label: 'Expenses',         value: fmt(data.yearExpenses),      sub: 'ex GST'                                                        },
-    { label: 'Wages',            value: fmt(data.yearWages),         sub: 'gross wages'                                                   },
-    { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0                  },
+    { label: 'Revenue',          value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`,                          tip: 'Total from invoices marked paid this financial year.' },
+    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0, tip: 'Sent invoices that are not yet overdue — money you are still waiting on.' },
+    { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0,     tip: 'Sent invoices past their due date — chase these up first.' },
+    { label: 'Quotes',           value: fmt(data.quotesAmount),      sub: `${data.quotesCount} pending, not accepted`,                   tip: 'Quotes sent to clients that have not yet been accepted — not yet real revenue.' },
+    { label: 'Expenses',         value: fmt(data.yearExpenses),      sub: 'ex GST',                                                       tip: 'Total business expenses this financial year, excluding GST.' },
+    { label: 'Wages',            value: fmt(data.yearWages),         sub: 'gross wages',                                                  tip: 'Total gross wages paid to employees this financial year.' },
+    { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0,                tip: 'Rough estimate only — the Reports tab Profit & Loss is the accurate figure for tax purposes.' },
   ];
 
   return (
     <div data-tour="finance-dashboard" className="p-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {cards.map(c => (
-          <div
-            key={c.label}
-            className="p-4 rounded-xl border"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
-            <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{c.label}</div>
+          <Tooltip key={c.label} text={c.tip}>
             <div
-              className="text-xl font-bold"
-              style={{ color: c.warn ? '#f59e0b' : c.neg ? '#ef4444' : 'var(--color-text)' }}
-            >{c.value}</div>
-            <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{c.sub}</div>
-          </div>
+              className="p-4 rounded-xl border"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{c.label}</div>
+              <div
+                className="text-xl font-bold"
+                style={{ color: c.warn ? '#f59e0b' : c.neg ? '#ef4444' : 'var(--color-text)' }}
+              >{c.value}</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{c.sub}</div>
+            </div>
+          </Tooltip>
         ))}
       </div>
     </div>
@@ -564,7 +785,7 @@ function ClientsTab() {
       </div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Billing records</h2>
-        <Btn onClick={openNew}>+ New</Btn>
+        <Tooltip text="Add a client used only for invoicing here — full contact/relationship management lives in the Clients module."><Btn onClick={openNew}>+ New</Btn></Tooltip>
       </div>
 
       {clients.length === 0 ? (
@@ -585,22 +806,26 @@ function ClientsTab() {
               </div>
               <div className="flex gap-2">
                 {c.source === 'crm' ? (
-                  <Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link>
+                  <Tooltip text="Open this client's full record in the Clients module."><Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link></Tooltip>
                 ) : (
                   <>
-                    <button
-                      onClick={() => toggleActive(c)}
-                      className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                      style={c.isActive
-                        ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
-                        : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
-                    >{c.isActive ? 'Deactivate' : 'Set active'}</button>
-                    <Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn>
-                    <button
-                      onClick={() => del(c.id, c.name)}
-                      className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                      style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-                    >Delete</button>
+                    <Tooltip text={c.isActive ? 'Hide this client from the picker when creating new invoices — existing invoices are unaffected.' : 'Make this client selectable again when creating new invoices.'}>
+                      <button
+                        onClick={() => toggleActive(c)}
+                        className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                        style={c.isActive
+                          ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
+                          : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
+                      >{c.isActive ? 'Deactivate' : 'Set active'}</button>
+                    </Tooltip>
+                    <Tooltip text="Edit this client's contact details."><Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn></Tooltip>
+                    <Tooltip text="Permanently remove this client record — existing invoices keep their saved client name.">
+                      <button
+                        onClick={() => del(c.id, c.name)}
+                        className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                        style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                      >Delete</button>
+                    </Tooltip>
                   </>
                 )}
               </div>
@@ -612,16 +837,16 @@ function ClientsTab() {
       {modal && (
         <Modal title={modal === 'new' ? 'New Client' : 'Edit Client'} onClose={() => setModal(null)}>
           <div className="flex flex-col gap-3">
-            <Field label="Name *"><Input value={form.name} onChange={v => setForm(p => ({...p, name: v}))} placeholder="Client name" /></Field>
-            <Field label="Contact Name"><Input value={form.contactName} onChange={v => setForm(p => ({...p, contactName: v}))} placeholder="Primary contact person" /></Field>
-            <Field label="Email"><Input type="email" value={form.email} onChange={v => setForm(p => ({...p, email: v}))} placeholder="email@example.com" /></Field>
-            <Field label="Phone"><Input value={form.phone} onChange={v => setForm(p => ({...p, phone: v}))} placeholder="+61 4xx xxx xxx" /></Field>
-            <Field label="ABN"><Input value={form.abn} onChange={v => setForm(p => ({...p, abn: v}))} placeholder="12 345 678 901" /></Field>
-            <Field label="Address"><Input value={form.address} onChange={v => setForm(p => ({...p, address: v}))} placeholder="Street, City, State" /></Field>
+            <Field label="Name *"><Tooltip text="Required — the name shown on invoices and quotes."><Input value={form.name} onChange={v => setForm(p => ({...p, name: v}))} placeholder="Client name" /></Tooltip></Field>
+            <Field label="Contact Name"><Tooltip text="Optional — a person to address, if different from the client/business name."><Input value={form.contactName} onChange={v => setForm(p => ({...p, contactName: v}))} placeholder="Primary contact person" /></Tooltip></Field>
+            <Field label="Email"><Tooltip text="Used when sending invoices/quotes to this client."><Input type="email" value={form.email} onChange={v => setForm(p => ({...p, email: v}))} placeholder="email@example.com" /></Tooltip></Field>
+            <Field label="Phone"><Tooltip text="Optional contact number, shown on the client record only."><Input value={form.phone} onChange={v => setForm(p => ({...p, phone: v}))} placeholder="+61 4xx xxx xxx" /></Tooltip></Field>
+            <Field label="ABN"><Tooltip text="Client's Australian Business Number — optional, useful for B2B invoices."><Input value={form.abn} onChange={v => setForm(p => ({...p, abn: v}))} placeholder="12 345 678 901" /></Tooltip></Field>
+            <Field label="Address"><Tooltip text="Postal or billing address, printed on invoices if set."><Input value={form.address} onChange={v => setForm(p => ({...p, address: v}))} placeholder="Street, City, State" /></Tooltip></Field>
             <ErrMsg msg={error} />
             <div className="flex gap-2 justify-end pt-1">
-              <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Btn>
+              <Tooltip text="Discard changes without saving."><Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Save this client."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -871,7 +1096,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>
           {isQuoteTab ? 'Quotes' : 'Invoices'}
         </h2>
-        <Btn onClick={openNew}>{isQuoteTab ? '+ New Quote' : '+ New Invoice'}</Btn>
+        <Tooltip text={isQuoteTab ? 'Draft a new quote to send a client.' : 'Draft a new invoice to bill a client.'}><Btn onClick={openNew}>{isQuoteTab ? '+ New Quote' : '+ New Invoice'}</Btn></Tooltip>
       </div>
 
       <div className="flex gap-1 mb-3 flex-wrap">
@@ -879,16 +1104,17 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
           ? ['all','draft','sent','accepted','declined']
           : ['all','draft','sent','overdue','paid']
         ).map(s => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className="text-xs px-2.5 py-1 rounded-md capitalize transition-colors"
-            style={{
-              background:  filterStatus === s ? 'var(--color-primary)' : 'var(--color-surface)',
-              color:       filterStatus === s ? '#fff' : 'var(--color-muted)',
-              border:      '1px solid var(--color-border)',
-            }}
-          >{s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}</button>
+          <Tooltip key={s} text={`Show only ${s === 'all' ? (isQuoteTab ? 'quotes' : 'invoices') : `${s} ` + (isQuoteTab ? 'quotes' : 'invoices')}.`}>
+            <button
+              onClick={() => setFilterStatus(s)}
+              className="text-xs px-2.5 py-1 rounded-md capitalize transition-colors"
+              style={{
+                background:  filterStatus === s ? 'var(--color-primary)' : 'var(--color-surface)',
+                color:       filterStatus === s ? '#fff' : 'var(--color-muted)',
+                border:      '1px solid var(--color-border)',
+              }}
+            >{s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}</button>
+          </Tooltip>
         ))}
       </div>
 
@@ -917,9 +1143,11 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
               {filtered.map(inv => (
                 <tr key={inv.id} className="border-b hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-2">
-                    <button onClick={() => viewDetail(inv)} className="font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>
-                      {inv.number}
-                    </button>
+                    <Tooltip text="Open the full line-item detail and send history for this record.">
+                      <button onClick={() => viewDetail(inv)} className="font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>
+                        {inv.number}
+                      </button>
+                    </Tooltip>
                   </td>
                   <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{inv.clientName || '—'}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.issueDate)}</td>
@@ -932,54 +1160,62 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       {isQuoteTab ? (
                         <>
                           {(inv.status === 'draft' || inv.status === 'sent') && (
-                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>
-                              {inv.status === 'draft' ? 'Send' : 'Resend'}
-                            </button>
+                            <Tooltip text={inv.status === 'draft' ? 'Email this quote to the client as a PDF.' : 'Re-send this quote to the client.'}>
+                              <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>
+                                {inv.status === 'draft' ? 'Send' : 'Resend'}
+                              </button>
+                            </Tooltip>
                           )}
                           {!inv.isLocked && inv.status !== 'accepted' && (
-                            <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
+                            <Tooltip text="Edit this quote's details and line items."><button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button></Tooltip>
                           )}
                           {inv.status !== 'accepted' && inv.status !== 'declined' && (
-                            <button
-                              onClick={() => convertQuote(inv)}
-                              disabled={converting === inv.id}
-                              className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
-                              style={{ color: '#065f46', borderColor: '#a7f3d0' }}
-                            >{converting === inv.id ? '…' : 'Convert →'}</button>
+                            <Tooltip text="Turn this accepted quote into an invoice with a new invoice number.">
+                              <button
+                                onClick={() => convertQuote(inv)}
+                                disabled={converting === inv.id}
+                                className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                                style={{ color: '#065f46', borderColor: '#a7f3d0' }}
+                              >{converting === inv.id ? '…' : 'Convert →'}</button>
+                            </Tooltip>
                           )}
                           {inv.status !== 'accepted' && (
-                            <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
+                            <Tooltip text="Permanently delete this quote."><button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button></Tooltip>
                           )}
-                          <button
-                            onClick={() => downloadPdf(inv)}
-                            disabled={pdfLoading === inv.id}
-                            className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
-                            style={{ color: '#6b7280', borderColor: '#d1d5db' }}
-                          >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                          <Tooltip text="Download this quote as a PDF.">
+                            <button
+                              onClick={() => downloadPdf(inv)}
+                              disabled={pdfLoading === inv.id}
+                              className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                              style={{ color: '#6b7280', borderColor: '#d1d5db' }}
+                            >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                          </Tooltip>
                         </>
                       ) : (
                         <>
                           {inv.status === 'draft' && (
-                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Send</button>
+                            <Tooltip text="Email this invoice to the client as a PDF."><button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Send</button></Tooltip>
                           )}
                           {inv.status === 'sent' && (
-                            <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Resend</button>
+                            <Tooltip text="Re-send this invoice to the client."><button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Resend</button></Tooltip>
                           )}
                           {!inv.isLocked && (
-                            <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
+                            <Tooltip text="Edit this invoice's details and line items."><button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button></Tooltip>
                           )}
                           {inv.status !== 'paid' && inv.status !== 'void' && (
-                            <button onClick={() => markPaid(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#065f46', borderColor: '#a7f3d0' }}>Paid</button>
+                            <Tooltip text="Record this invoice as paid and post the payment to the journal."><button onClick={() => markPaid(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#065f46', borderColor: '#a7f3d0' }}>Paid</button></Tooltip>
                           )}
                           {inv.status !== 'paid' && (
-                            <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
+                            <Tooltip text="Permanently delete this invoice."><button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button></Tooltip>
                           )}
-                          <button
-                            onClick={() => downloadPdf(inv)}
-                            disabled={pdfLoading === inv.id}
-                            className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
-                            style={{ color: '#6b7280', borderColor: '#d1d5db' }}
-                          >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                          <Tooltip text="Download this invoice as a PDF.">
+                            <button
+                              onClick={() => downloadPdf(inv)}
+                              disabled={pdfLoading === inv.id}
+                              className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                              style={{ color: '#6b7280', borderColor: '#d1d5db' }}
+                            >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
+                          </Tooltip>
                         </>
                       )}
                     </div>
@@ -1002,36 +1238,40 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Client">
-                <Sel value={form.clientRef} onChange={v => setForm(p => ({...p, clientRef: v}))}>
-                  <option value="">— No client —</option>
-                  {clients.map(c => <option key={`${c.source}:${c.id}`} value={`${c.source}:${c.id}`}>{c.name}</option>)}
-                </Sel>
+                <Tooltip text="Who this is billed to — pick an existing client or leave blank for an ad-hoc record.">
+                  <Sel value={form.clientRef} onChange={v => setForm(p => ({...p, clientRef: v}))}>
+                    <option value="">— No client —</option>
+                    {clients.map(c => <option key={`${c.source}:${c.id}`} value={`${c.source}:${c.id}`}>{c.name}</option>)}
+                  </Sel>
+                </Tooltip>
               </Field>
               <Field label="Issue Date">
-                <Input type="date" value={form.issueDate} onChange={v => setForm(p => ({...p, issueDate: v}))} />
+                <Tooltip text="The date this document is dated — used for GST period and reporting."><Input type="date" value={form.issueDate} onChange={v => setForm(p => ({...p, issueDate: v}))} /></Tooltip>
               </Field>
               <Field label={form.docType === 'quote' ? 'Valid Until Date' : 'Due Date'}>
-                <Input type="date" value={form.dueDate} onChange={v => setForm(p => ({...p, dueDate: v}))} />
+                <Tooltip text={form.docType === 'quote' ? 'Date after which the client should assume this quote may no longer be honoured.' : 'Payment due date — defaults from your Settings payment terms, but can be overridden per invoice.'}><Input type="date" value={form.dueDate} onChange={v => setForm(p => ({...p, dueDate: v}))} /></Tooltip>
               </Field>
               {modal !== 'new' && modal?.status === 'paid' && (
                 <Field label="Payment Date">
-                  <Input type="date" value={form.paidAt} onChange={v => setForm(p => ({...p, paidAt: v}))} />
+                  <Tooltip text="The date payment was actually received — this is the date used for cash-basis GST/BAS reporting."><Input type="date" value={form.paidAt} onChange={v => setForm(p => ({...p, paidAt: v}))} /></Tooltip>
                 </Field>
               )}
             </div>
             <Field label="Notes">
-              <Textarea value={form.notes} onChange={v => setForm(p => ({...p, notes: v}))} placeholder="Payment terms, reference…" rows={3} />
+              <Tooltip text="Free text printed on the document — payment terms, PO reference, or any message to the client."><Textarea value={form.notes} onChange={v => setForm(p => ({...p, notes: v}))} placeholder="Payment terms, reference…" rows={3} /></Tooltip>
             </Field>
 
             {/* Line items */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Line Items</span>
-                <button
-                  onClick={addItem}
-                  className="text-xs px-2 py-1 rounded border"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
-                >+ Add item</button>
+                <Tooltip text="Add another billable line to this document.">
+                  <button
+                    onClick={addItem}
+                    className="text-xs px-2 py-1 rounded border"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >+ Add item</button>
+                </Tooltip>
               </div>
               <div className="text-xs mb-1 grid gap-1" style={{ gridTemplateColumns: '1fr 60px 90px 80px 24px', color: 'var(--color-muted)' }}>
                 <span>Description</span><span>Qty</span><span>Unit Price</span><span className="text-center">Tax</span><span />
@@ -1040,33 +1280,39 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                 {form.items.map((item, idx) => (
                   <div key={idx} className="grid gap-1 items-start" style={{ gridTemplateColumns: '1fr 60px 90px 80px 24px' }}>
                     <div className="flex flex-col gap-1">
-                      <Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} />
-                      <TxCodeSelect value={item.txCodeId} onChange={v => setItem(idx, 'txCodeId', v)} type="income" placeholder="— income code —" />
+                      <Tooltip text="What this line is for — appears on the printed document."><Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} /></Tooltip>
+                      <Tooltip text="Optional income code — tags this line for the GST Summary / income reports by category."><TxCodeSelect value={item.txCodeId} onChange={v => setItem(idx, 'txCodeId', v)} type="income" placeholder="— income code —" /></Tooltip>
                     </div>
-                    <input
-                      type="number" min="1" step="1"
-                      value={item.qty}
-                      onChange={e => setItem(idx, 'qty', e.target.value.replace(/\./g, ''))}
-                      className="text-sm px-3 py-2 rounded-lg border w-full"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
-                    <div className="relative">
+                    <Tooltip text="Quantity for this line — whole numbers only.">
                       <input
-                        type="number"
-                        value={item.unitPrice}
-                        onChange={e => setItem(idx, 'unitPrice', e.target.value)}
-                        placeholder="0.00"
-                        className="text-sm px-3 py-2 rounded-lg border w-full pr-7"
+                        type="number" min="1" step="1"
+                        value={item.qty}
+                        onChange={e => setItem(idx, 'qty', e.target.value.replace(/\./g, ''))}
+                        className="text-sm px-3 py-2 rounded-lg border w-full"
                         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                       />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => setCalcIdx(calcIdx === idx ? null : idx)}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 leading-none hover:opacity-100"
-                        title="Calculator"
-                        style={{ color: 'var(--color-primary)', opacity: calcIdx === idx ? 1 : 0.35, fontSize: 13 }}
-                      >⊞</button>
+                    </Tooltip>
+                    <div className="relative">
+                      <Tooltip text="Price per unit, excluding GST.">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={e => setItem(idx, 'unitPrice', e.target.value)}
+                          placeholder="0.00"
+                          className="text-sm px-3 py-2 rounded-lg border w-full pr-7"
+                          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                        />
+                      </Tooltip>
+                      <Tooltip text="Open a quick calculator to work out this price.">
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setCalcIdx(calcIdx === idx ? null : idx)}
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 leading-none hover:opacity-100"
+                          title="Calculator"
+                          style={{ color: 'var(--color-primary)', opacity: calcIdx === idx ? 1 : 0.35, fontSize: 13 }}
+                        >⊞</button>
+                      </Tooltip>
                       {calcIdx === idx && (
                         <CalcPopover
                           onValue={v => setItem(idx, 'unitPrice', v)}
@@ -1075,17 +1321,19 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                       )}
                     </div>
                     <div className="flex items-start pt-0">
-                      <select
-                        value={item.gstCode || 'GST'}
-                        onChange={e => setItem(idx, 'gstCode', e.target.value)}
-                        className="text-sm px-3 py-2 rounded-lg border w-full"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                      >
-                        <option value="GST">GST 10%</option>
-                        <option value="NT">N-T</option>
-                      </select>
+                      <Tooltip text="GST 10% adds tax to this line; N-T (no tax) leaves it GST-free — get this right, it feeds your BAS.">
+                        <select
+                          value={item.gstCode || 'GST'}
+                          onChange={e => setItem(idx, 'gstCode', e.target.value)}
+                          className="text-sm px-3 py-2 rounded-lg border w-full"
+                          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                        >
+                          <option value="GST">GST 10%</option>
+                          <option value="NT">N-T</option>
+                        </select>
+                      </Tooltip>
                     </div>
-                    <button onClick={() => removeItem(idx)} className="text-xs rounded hover:opacity-60 text-center pt-2" style={{ color: '#ef4444' }}>✕</button>
+                    <Tooltip text="Remove this line."><button onClick={() => removeItem(idx)} className="text-xs rounded hover:opacity-60 text-center pt-2" style={{ color: '#ef4444' }}>✕</button></Tooltip>
                   </div>
                 ))}
               </div>
@@ -1109,10 +1357,12 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
             <ErrMsg msg={error} />
             <div className="flex gap-2 justify-end">
-              <Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={save} disabled={saving}>
-                {saving ? 'Saving…' : (form.docType === 'quote' ? 'Save Quote' : 'Save Invoice')}
-              </Btn>
+              <Tooltip text="Discard changes without saving."><Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Save this document and post it to your records.">
+                <Btn onClick={save} disabled={saving}>
+                  {saving ? 'Saving…' : (form.docType === 'quote' ? 'Save Quote' : 'Save Invoice')}
+                </Btn>
+              </Tooltip>
             </div>
           </div>
         </Modal>
@@ -1126,25 +1376,29 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
               {sendModal.docType === 'quote' ? 'The quote' : 'The invoice'} will be sent as a styled email with a <strong>PDF attachment</strong>. The client's email address is pre-filled from their record and can be edited before sending.
             </p>
             <Field label={sendModal.clientEmail ? 'Recipient email (pre-filled from client)' : 'Recipient email'}>
-              <Input
-                type="email"
-                value={sendTo}
-                onChange={setSendTo}
-                placeholder="client@example.com"
-              />
+              <Tooltip text="Where the email and PDF attachment will be sent — edit if the client wants a different address this time.">
+                <Input
+                  type="email"
+                  value={sendTo}
+                  onChange={setSendTo}
+                  placeholder="client@example.com"
+                />
+              </Tooltip>
             </Field>
             <Field label="Message (optional)">
-              <Textarea
-                value={sendMessage}
-                onChange={setSendMessage}
-                placeholder="Add a personal note to include at the top of the email…"
-                rows={4}
-              />
+              <Tooltip text="Extra text shown above the document in the email body — the client still receives the full PDF regardless.">
+                <Textarea
+                  value={sendMessage}
+                  onChange={setSendMessage}
+                  placeholder="Add a personal note to include at the top of the email…"
+                  rows={4}
+                />
+              </Tooltip>
             </Field>
             <ErrMsg msg={sendError} />
             <div className="flex gap-2 justify-end pt-1">
-              <Btn variant="secondary" onClick={() => setSendModal(null)}>Cancel</Btn>
-              <Btn onClick={confirmSend} disabled={sending}>{sending ? 'Sending…' : (sendModal.docType === 'quote' ? 'Send Quote' : 'Send Invoice')}</Btn>
+              <Tooltip text="Discard without sending."><Btn variant="secondary" onClick={() => setSendModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Send the email now."><Btn onClick={confirmSend} disabled={sending}>{sending ? 'Sending…' : (sendModal.docType === 'quote' ? 'Send Quote' : 'Send Invoice')}</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1165,11 +1419,11 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
         <Modal title={`Mark ${paidModal.inv.number} as Paid`} onClose={() => setPaidModal(null)}>
           <div className="flex flex-col gap-4">
             <Field label="Date payment was received">
-              <Input type="date" value={paidModal.date} onChange={v => setPaidModal(p => ({ ...p, date: v }))} />
+              <Tooltip text="This date is used for cash-basis GST/BAS reporting — use the actual date the money landed, not today's date if different."><Input type="date" value={paidModal.date} onChange={v => setPaidModal(p => ({ ...p, date: v }))} /></Tooltip>
             </Field>
             <div className="flex gap-2 justify-end">
-              <Btn variant="secondary" onClick={() => setPaidModal(null)}>Cancel</Btn>
-              <Btn onClick={confirmMarkPaid}>Mark Paid</Btn>
+              <Tooltip text="Cancel without marking as paid."><Btn variant="secondary" onClick={() => setPaidModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Confirm payment received and post it to the journal."><Btn onClick={confirmMarkPaid}>Mark Paid</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1252,9 +1506,9 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
             <div className="flex gap-2 justify-end">
               {viewInvoice.status !== 'paid' && viewInvoice.status !== 'void' && (
-                <Btn onClick={() => markPaid(viewInvoice)}>Mark Paid</Btn>
+                <Tooltip text="Record this as paid and post the payment to the journal."><Btn onClick={() => markPaid(viewInvoice)}>Mark Paid</Btn></Tooltip>
               )}
-              <Btn variant="secondary" onClick={() => setViewInvoice(null)}>Close</Btn>
+              <Tooltip text="Close this detail view."><Btn variant="secondary" onClick={() => setViewInvoice(null)}>Close</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1484,46 +1738,50 @@ function ExpensesTab({ from, to }) {
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Expenses</h2>
         <div className="flex gap-2">
           {expenses.some(e => e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled) && (
-            <Btn variant="secondary" onClick={openCcStatement}>Pay CC Statement</Btn>
+            <Tooltip text="Batch-settle unpaid credit card expenses when your card statement arrives — posts one payment from bank to the card account."><Btn variant="secondary" onClick={openCcStatement}>Pay CC Statement</Btn></Tooltip>
           )}
-          <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Expense'}</Btn>
+          <Tooltip text="Record a new business expense."><Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Expense'}</Btn></Tooltip>
         </div>
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
-            <Field label="Supplier"><SupplierInput value={form.supplier} onChange={v => setForm(p => ({...p, supplier: v}))} /></Field>
+            <Field label="Date"><Tooltip text="The date you paid this expense — used for cash-basis GST/BAS reporting."><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Tooltip></Field>
+            <Field label="Supplier"><Tooltip text="Who you paid — start typing to reuse a previous supplier."><SupplierInput value={form.supplier} onChange={v => setForm(p => ({...p, supplier: v}))} /></Tooltip></Field>
             <div className="col-span-2">
-              <Field label="Description"><Textarea value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" rows={2} /></Field>
+              <Field label="Description"><Tooltip text="What was purchased and why — this is what shows on your reports and to your accountant."><Textarea value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" rows={2} /></Tooltip></Field>
             </div>
-            <Field label="Category"><CategoryInput value={form.category} onChange={v => setForm(p => ({...p, category: v}))} /></Field>
+            <Field label="Category"><Tooltip text="Free-text grouping for your own reference — start typing to reuse a previous category."><CategoryInput value={form.category} onChange={v => setForm(p => ({...p, category: v}))} /></Tooltip></Field>
             <Field label="Expense Code">
-              <TxCodeSelect value={form.txCodeId} onChange={v => setForm(p => ({...p, txCodeId: v}))} type="expense" placeholder="— select code —" />
+              <Tooltip text="Optional tx code tagging this expense for the GST Summary / expense breakdowns by category."><TxCodeSelect value={form.txCodeId} onChange={v => setForm(p => ({...p, txCodeId: v}))} type="expense" placeholder="— select code —" /></Tooltip>
             </Field>
             <Field label="Paid via">
-              <select
-                value={form.paidViaId || ''}
-                onChange={e => setForm(p => ({...p, paidViaId: e.target.value ? parseInt(e.target.value) : null}))}
-                className="text-sm px-3 py-2 rounded-lg border w-full"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                <option value="">Bank / Cash (default)</option>
-                {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
-              </select>
+              <Tooltip text="Which account the money came from — leave as Bank / Cash unless this was paid on a credit card, which needs settling later.">
+                <select
+                  value={form.paidViaId || ''}
+                  onChange={e => setForm(p => ({...p, paidViaId: e.target.value ? parseInt(e.target.value) : null}))}
+                  className="text-sm px-3 py-2 rounded-lg border w-full"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="">Bank / Cash (default)</option>
+                  {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                </select>
+              </Tooltip>
             </Field>
             <Field label="Total Amount Paid ($)">
-              <Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" />
+              <Tooltip text="The total you actually paid, including GST if any — GST is worked out automatically below."><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip>
             </Field>
             <Field label="GST">
               <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="exp-gst"
-                  checked={form.gstIncluded}
-                  onChange={e => setForm(p => ({...p, gstIncluded: e.target.checked}))}
-                />
+                <Tooltip text="Tick if the amount you paid includes 10% GST — Vault splits it out automatically for your BAS.">
+                  <input
+                    type="checkbox"
+                    id="exp-gst"
+                    checked={form.gstIncluded}
+                    onChange={e => setForm(p => ({...p, gstIncluded: e.target.checked}))}
+                  />
+                </Tooltip>
                 <label htmlFor="exp-gst" className="text-sm" style={{ color: 'var(--color-text)' }}>GST Included (10%)</label>
                 {form.gstIncluded && form.amount && (
                   <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>GST = ${autoGst}</span>
@@ -1594,40 +1852,42 @@ function ExpensesTab({ from, to }) {
                     {e.paidViaId && accountMap[e.paidViaId] ? accountMap[e.paidViaId].name : 'Bank / Cash'}
                   </td>
                   <td className="py-2 px-1">
-                    <button
-                      onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}
-                      title={e.receipt_path ? 'View receipt' : 'Attach receipt'}
-                      className="text-sm hover:opacity-60 transition-opacity"
-                      style={{ color: e.receipt_path ? '#f59e0b' : 'var(--color-muted)' }}
-                    >📎</button>
+                    <Tooltip text={e.receipt_path ? 'View the attached receipt.' : 'Attach a receipt image or PDF to this expense.'}>
+                      <button
+                        onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}
+                        className="text-sm hover:opacity-60 transition-opacity"
+                        style={{ color: e.receipt_path ? '#f59e0b' : 'var(--color-muted)' }}
+                      >📎</button>
+                    </Tooltip>
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
                       {e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled && (
-                        <button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }} title="Record payment of this card charge from bank">Pay CC</button>
+                        <Tooltip text="Record payment of this single card charge from bank."><button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }}>Pay CC</button></Tooltip>
                       )}
                       {e.ccSettled && (
-                        <button
-                          className="text-xs hover:opacity-60"
-                          style={{ color: '#065f46' }}
-                          title="Unsettle — removes the settled flag only. Reverse the journal entry manually in the Journal tab if the amount was wrong."
-                          onClick={() => setConfirmModal({
-                            message: 'Unsettle this expense? The settlement journal entry is NOT reversed — delete it manually in the Journal tab if the amount was wrong.',
-                            onConfirm: async () => {
-                              setConfirmModal(null);
-                              try {
-                                await api.post(`/api/finance/expenses/${e.id}/cc-unsettle`);
-                                addToast('Expense unsettled');
-                                load();
-                              } catch (err) {
-                                addToast(err.message, 'error');
-                              }
-                            },
-                          })}
-                        >Settled ↩</button>
+                        <Tooltip text="Unsettle — removes the settled flag only. Reverse the journal entry manually in the Journal tab if the amount was wrong.">
+                          <button
+                            className="text-xs hover:opacity-60"
+                            style={{ color: '#065f46' }}
+                            onClick={() => setConfirmModal({
+                              message: 'Unsettle this expense? The settlement journal entry is NOT reversed — delete it manually in the Journal tab if the amount was wrong.',
+                              onConfirm: async () => {
+                                setConfirmModal(null);
+                                try {
+                                  await api.post(`/api/finance/expenses/${e.id}/cc-unsettle`);
+                                  addToast('Expense unsettled');
+                                  load();
+                                } catch (err) {
+                                  addToast(err.message, 'error');
+                                }
+                              },
+                            })}
+                          >Settled ↩</button>
+                        </Tooltip>
                       )}
-                      <button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
-                      <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                      <Tooltip text="Edit this expense's details."><button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button></Tooltip>
+                      <Tooltip text="Permanently delete this expense."><button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                     </div>
                   </td>
                 </tr>
@@ -1657,15 +1917,15 @@ function ExpensesTab({ from, to }) {
               <strong>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</strong>.
             </p>
             <Field label="Payment Date">
-              <Input type="date" value={ccPayDate} onChange={setCcPayDate} />
+              <Tooltip text="The date the bank actually paid the card statement."><Input type="date" value={ccPayDate} onChange={setCcPayDate} /></Tooltip>
             </Field>
             <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
               <div className="flex justify-between"><span>DR {ccPayModal.account?.code} — {ccPayModal.account?.name}</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
               <div className="flex justify-between"><span>CR 1000 — Bank / Cash</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
             </div>
             <div className="flex gap-2 justify-end">
-              <Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn>
-              <Btn onClick={confirmCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Posting…' : 'Post Entry'}</Btn>
+              <Tooltip text="Cancel without posting."><Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Post this payment journal entry now."><Btn onClick={confirmCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Posting…' : 'Post Entry'}</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1692,32 +1952,36 @@ function ExpensesTab({ from, to }) {
             <div className="flex flex-col gap-4">
               {ccStatement.accounts.length > 1 && (
                 <Field label="Credit Card Account">
-                  <Sel value={ccStmtAccountId} onChange={v => {
-                    setCcStmtAccountId(v);
-                    const next = ccStatement.expenses.filter(e => String(e.paidViaId) === v);
-                    setCcStmtSelected(new Set(next.map(e => e.id)));
-                  }}>
-                    {ccStatement.accounts.map(a => (
-                      <option key={a.id} value={String(a.id)}>{a.code} — {a.name}</option>
-                    ))}
-                  </Sel>
+                  <Tooltip text="Which card statement you're paying off.">
+                    <Sel value={ccStmtAccountId} onChange={v => {
+                      setCcStmtAccountId(v);
+                      const next = ccStatement.expenses.filter(e => String(e.paidViaId) === v);
+                      setCcStmtSelected(new Set(next.map(e => e.id)));
+                    }}>
+                      {ccStatement.accounts.map(a => (
+                        <option key={a.id} value={String(a.id)}>{a.code} — {a.name}</option>
+                      ))}
+                    </Sel>
+                  </Tooltip>
                 </Field>
               )}
               <Field label="Payment Date">
-                <Input type="date" value={ccStmtDate} onChange={setCcStmtDate} />
+                <Tooltip text="The date the bank actually paid the card statement."><Input type="date" value={ccStmtDate} onChange={setCcStmtDate} /></Tooltip>
               </Field>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
                     Unsettled items ({filteredExpenses.length})
                   </span>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                    <input type="checkbox"
-                      checked={filteredExpenses.length > 0 && filteredExpenses.every(e => ccStmtSelected.has(e.id))}
-                      onChange={e => toggleAll(e.target.checked)}
-                    />
-                    Select all
-                  </label>
+                  <Tooltip text="Select or deselect every unsettled item on this card at once.">
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                      <input type="checkbox"
+                        checked={filteredExpenses.length > 0 && filteredExpenses.every(e => ccStmtSelected.has(e.id))}
+                        onChange={e => toggleAll(e.target.checked)}
+                      />
+                      Select all
+                    </label>
+                  </Tooltip>
                 </div>
                 <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
                   <table className="w-full text-xs">
@@ -1735,10 +1999,12 @@ function ExpensesTab({ from, to }) {
                         return (
                           <tr key={e.id} style={{ borderTop: '1px solid var(--color-border)' }}>
                             <td className="px-3 py-2 text-center">
-                              <input type="checkbox"
-                                checked={ccStmtSelected.has(e.id)}
-                                onChange={ev => toggleOne(e.id, ev.target.checked)}
-                              />
+                              <Tooltip text="Include this item in today's payment.">
+                                <input type="checkbox"
+                                  checked={ccStmtSelected.has(e.id)}
+                                  onChange={ev => toggleOne(e.id, ev.target.checked)}
+                                />
+                              </Tooltip>
                             </td>
                             <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{fmtDate(e.date)}</td>
                             <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
@@ -1765,10 +2031,12 @@ function ExpensesTab({ from, to }) {
                   Total: {fmt(selectedTotal)} ({[...ccStmtSelected].filter(id => filteredExpenses.find(e => e.id === id)).length} items)
                 </span>
                 <div className="flex gap-2">
-                  <Btn variant="secondary" onClick={() => setCcStatement(null)}>Cancel</Btn>
-                  <Btn onClick={confirmCcStatement} disabled={ccStmtSaving || ccStmtSelected.size === 0}>
-                    {ccStmtSaving ? 'Posting…' : 'Post Payment'}
-                  </Btn>
+                  <Tooltip text="Cancel without posting."><Btn variant="secondary" onClick={() => setCcStatement(null)}>Cancel</Btn></Tooltip>
+                  <Tooltip text="Post one payment for all selected items, clearing the card account.">
+                    <Btn onClick={confirmCcStatement} disabled={ccStmtSaving || ccStmtSelected.size === 0}>
+                      {ccStmtSaving ? 'Posting…' : 'Post Payment'}
+                    </Btn>
+                  </Tooltip>
                 </div>
               </div>
             </div>
@@ -1803,7 +2071,7 @@ function ExpensesTab({ from, to }) {
               </span>
             </div>
             <div className="flex justify-end">
-              <Btn variant="secondary" onClick={() => setReceiptModal(null)}>Cancel</Btn>
+              <Tooltip text="Close without uploading."><Btn variant="secondary" onClick={() => setReceiptModal(null)}>Cancel</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1819,12 +2087,14 @@ function ExpensesTab({ from, to }) {
               <img src={viewReceiptModal.url} alt="Receipt" className="w-full rounded border object-contain" style={{ maxHeight: 500, borderColor: 'var(--color-border)' }} />
             )}
             <div className="flex gap-2 justify-between">
-              <button
-                onClick={() => removeReceipt(viewReceiptModal.expense)}
-                className="text-xs px-2 py-1 rounded border hover:opacity-70"
-                style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-              >Remove Receipt</button>
-              <Btn variant="secondary" onClick={() => { URL.revokeObjectURL(viewReceiptModal.url); setViewReceiptModal(null); }}>Close</Btn>
+              <Tooltip text="Permanently delete this attached receipt file.">
+                <button
+                  onClick={() => removeReceipt(viewReceiptModal.expense)}
+                  className="text-xs px-2 py-1 rounded border hover:opacity-70"
+                  style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                >Remove Receipt</button>
+              </Tooltip>
+              <Tooltip text="Close this preview."><Btn variant="secondary" onClick={() => { URL.revokeObjectURL(viewReceiptModal.url); setViewReceiptModal(null); }}>Close</Btn></Tooltip>
             </div>
           </div>
         </Modal>
@@ -1891,17 +2161,17 @@ function WagesTab({ from, to }) {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Wages</h2>
-        <Btn onClick={() => { setShowForm(v => !v); setError(''); }}>{showForm ? 'Cancel' : '+ Add Wages'}</Btn>
+        <Tooltip text="Record a pay run for an actual employee — for your own withdrawals as a sole trader use the Drawings tab instead."><Btn onClick={() => { setShowForm(v => !v); setError(''); }}>{showForm ? 'Cancel' : '+ Add Wages'}</Btn></Tooltip>
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
-            <Field label="Employee"><Input value={form.employee} onChange={v => setForm(p => ({...p, employee: v}))} placeholder="Employee name" /></Field>
-            <Field label="Gross ($)"><Input type="number" value={form.gross} onChange={handleGrossChange} placeholder="0.00" /></Field>
-            <Field label="Tax Withheld ($)"><Input type="number" value={form.tax} onChange={handleTaxChange} placeholder="0.00" /></Field>
-            <Field label="Superannuation ($)"><Input type="number" value={form.superannuation} onChange={v => setForm(p => ({...p, superannuation: v}))} placeholder="0.00" /></Field>
+            <Field label="Date"><Tooltip text="The pay date for this wage entry."><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Tooltip></Field>
+            <Field label="Employee"><Tooltip text="Who was paid."><Input value={form.employee} onChange={v => setForm(p => ({...p, employee: v}))} placeholder="Employee name" /></Tooltip></Field>
+            <Field label="Gross ($)"><Tooltip text="Total pay before tax and any deductions."><Input type="number" value={form.gross} onChange={handleGrossChange} placeholder="0.00" /></Tooltip></Field>
+            <Field label="Tax Withheld ($)"><Tooltip text="PAYG tax withheld from this pay, posted to PAYG Withholding Payable."><Input type="number" value={form.tax} onChange={handleTaxChange} placeholder="0.00" /></Tooltip></Field>
+            <Field label="Superannuation ($)"><Tooltip text="Employer super contribution for this pay — posted as a separate expense, not deducted from net pay."><Input type="number" value={form.superannuation} onChange={v => setForm(p => ({...p, superannuation: v}))} placeholder="0.00" /></Tooltip></Field>
             <Field label="Net Pay ($)">
               <Tooltip text="Must equal Gross minus Tax Withheld — the journal (DR gross, CR net, CR tax withheld) won't balance otherwise and the save will be rejected">
                 <Input type="number" value={form.net} onChange={v => setForm(p => ({...p, net: v}))} placeholder="0.00" />
@@ -1909,7 +2179,7 @@ function WagesTab({ from, to }) {
             </Field>
           </div>
           <ErrMsg msg={error} />
-          <div className="mt-2"><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Wages'}</Btn></div>
+          <div className="mt-2"><Tooltip text="Save this wage entry and post its journal entry."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Wages'}</Btn></Tooltip></div>
         </div>
       )}
 
@@ -1940,7 +2210,7 @@ function WagesTab({ from, to }) {
                   <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{fmt(w.superannuation)}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(w.net)}</td>
                   <td className="py-2 px-2">
-                    <button onClick={() => del(w)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                    <Tooltip text="Permanently delete this wage entry."><button onClick={() => del(w)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                   </td>
                 </tr>
               ))}
@@ -2052,7 +2322,7 @@ function DrawingsTab({ from, to }) {
             </Field>
           </div>
           <ErrMsg msg={error} />
-          <div className="mt-2"><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Drawing'}</Btn></div>
+          <div className="mt-2"><Tooltip text="Save this withdrawal and post it against Owner's Drawings."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Drawing'}</Btn></Tooltip></div>
         </div>
       )}
 
@@ -2083,7 +2353,7 @@ function DrawingsTab({ from, to }) {
                     {d.paidViaId && accountMap[d.paidViaId] ? accountMap[d.paidViaId].name : 'Bank / Cash'}
                   </td>
                   <td className="py-2 px-2">
-                    <button onClick={() => del(d)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                    <Tooltip text="Permanently delete this drawing."><button onClick={() => del(d)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                   </td>
                 </tr>
               ))}
@@ -2191,8 +2461,8 @@ function VehicleHomeOfficeTab() {
           </Tooltip>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <Field label="Date"><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Field>
-          <Field label="Description"><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. client visits" /></Field>
+          <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Tooltip></Field>
+          <Field label="Description"><Tooltip text="What the travel was for."><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. client visits" /></Tooltip></Field>
           {vForm.method === 'cents_per_km' ? (
             <Field label="Business km"><Tooltip text="Total business kilometres travelled this period"><Input type="number" value={vForm.km} onChange={v => setVForm(p => ({...p, km: v}))} placeholder="0" /></Tooltip></Field>
           ) : (
@@ -2230,8 +2500,8 @@ function VehicleHomeOfficeTab() {
           </Tooltip>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <Field label="Date"><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Field>
-          <Field label="Description"><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Field>
+          <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
+          <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
           {hForm.method === 'fixed_rate' ? (
             <Field label="Hours worked from home"><Tooltip text="Total hours worked from home this period"><Input type="number" value={hForm.hours} onChange={v => setHForm(p => ({...p, hours: v}))} placeholder="0" /></Tooltip></Field>
           ) : (
@@ -2315,18 +2585,18 @@ function InterestTab({ from, to }) {
             </p>
           )}
         </div>
-        <Btn onClick={() => { setShowForm(p => !p); setError(''); }}>
+        <Tooltip text="Record bank interest received — posts straight to Bank / Cash and Interest Income."><Btn onClick={() => { setShowForm(p => !p); setError(''); }}>
           {showForm ? 'Cancel' : '+ Record Interest'}
-        </Btn>
+        </Btn></Tooltip>
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({ ...p, date: v }))} /></Field>
-            <Field label="Amount (AUD)"><Input type="number" value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))} placeholder="0.00" /></Field>
+            <Field label="Date"><Tooltip text="The date the interest was credited to your account."><Input type="date" value={form.date} onChange={v => setForm(p => ({ ...p, date: v }))} /></Tooltip></Field>
+            <Field label="Amount (AUD)"><Tooltip text="Interest amount received — no GST applies to bank interest."><Input type="number" value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))} placeholder="0.00" /></Tooltip></Field>
             <div className="col-span-2">
-              <Field label="Description"><Input value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Bank interest" /></Field>
+              <Field label="Description"><Tooltip text="A short note for this entry — defaults to 'Bank interest'."><Input value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Bank interest" /></Tooltip></Field>
             </div>
           </div>
           <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1 mb-3" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
@@ -2335,7 +2605,7 @@ function InterestTab({ from, to }) {
           </div>
           <ErrMsg msg={error} />
           <div className="flex justify-end mt-2">
-            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Post Entry'}</Btn>
+            <Tooltip text="Post this journal entry."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Post Entry'}</Btn></Tooltip>
           </div>
         </div>
       )}
@@ -2360,7 +2630,7 @@ function InterestTab({ from, to }) {
                   <td className="px-4 py-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
                   <td className="px-4 py-2 text-right font-mono text-sm" style={{ color: '#065f46' }}>{fmt(e.amount)}</td>
                   <td className="px-4 py-2 text-right">
-                    <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                    <Tooltip text="Permanently delete this interest entry."><button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                   </td>
                 </tr>
               ))}
@@ -2448,37 +2718,41 @@ function AccountsTab() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Chart of Accounts</h2>
-        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Account'}</Btn>
+        <Tooltip text="Add a custom account on top of the built-in chart of accounts — for a non-standard asset, liability, or income/expense category."><Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Account'}</Btn></Tooltip>
       </div>
 
       <div className="flex gap-1 mb-4 flex-wrap">
         {[['all','All'], ...ACCOUNT_TYPES.map(t => [t, t.charAt(0).toUpperCase() + t.slice(1)])].map(([k,l]) => (
-          <button key={k} onClick={() => setTypeFilter(k)}
-            className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
-            style={{ background: typeFilter === k ? 'var(--color-primary)' : 'transparent', color: typeFilter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
-          >{l}</button>
+          <Tooltip key={k} text={k === 'all' ? 'Show every account.' : `Show only ${k} accounts.`}>
+            <button onClick={() => setTypeFilter(k)}
+              className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
+              style={{ background: typeFilter === k ? 'var(--color-primary)' : 'transparent', color: typeFilter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            >{l}</button>
+          </Tooltip>
         ))}
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-3 gap-3 mb-3">
-            <Field label="Code *"><Input value={form.code} onChange={af('code')} placeholder="2100" /></Field>
+            <Field label="Code *"><Tooltip text="A unique account number — pick one that fits the standard code ranges (1000s assets, 2000s liabilities, 3000s equity, 4000s income, 5000s+ expenses)."><Input value={form.code} onChange={af('code')} placeholder="2100" /></Tooltip></Field>
             <Field label="Type">
-              <Sel value={form.type} onChange={af('type')}>
-                {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </Sel>
+              <Tooltip text="Which side of the accounting equation this account sits on — determines how it behaves in reports.">
+                <Sel value={form.type} onChange={af('type')}>
+                  {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                </Sel>
+              </Tooltip>
             </Field>
             <div className="col-span-1" style={{ gridColumn: 'span 1' }}>
               {/* spacer */}
             </div>
             <div className="col-span-3">
-              <Field label="Account Name *"><Input value={form.name} onChange={af('name')} placeholder="e.g. Owner Loan" /></Field>
+              <Field label="Account Name *"><Tooltip text="A descriptive name shown throughout the app and on reports."><Input value={form.name} onChange={af('name')} placeholder="e.g. Owner Loan" /></Tooltip></Field>
             </div>
           </div>
           <ErrMsg msg={error} />
           <div className="flex gap-2 mt-2">
-            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Account'}</Btn>
+            <Tooltip text="Save this account."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Account'}</Btn></Tooltip>
           </div>
         </div>
       )}
@@ -2506,8 +2780,8 @@ function AccountsTab() {
                     <td className="py-2 px-2 text-right">
                       {!a.isSystem && (
                         <div className="flex gap-2 justify-end">
-                          <button onClick={() => openEdit(a)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
-                          <button onClick={() => del(a)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                          <Tooltip text="Edit this account's code, name, or type."><button onClick={() => openEdit(a)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button></Tooltip>
+                          <Tooltip text="Delete this account — fails if it already has journal entries posted against it."><button onClick={() => del(a)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                         </div>
                       )}
                     </td>
@@ -2612,15 +2886,15 @@ function JournalTab({ from, to }) {
     <div data-tour="finance-journal" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Journal</h2>
-        <Btn onClick={showForm ? cancelForm : () => setShowForm(true)}>{showForm ? 'Cancel' : '+ Manual Entry'}</Btn>
+        <Tooltip text="Post a manual double-entry journal entry — for anything the built-in forms (invoices, expenses, wages, drawings) don't cover. Debits must equal credits."><Btn onClick={showForm ? cancelForm : () => setShowForm(true)}>{showForm ? 'Cancel' : '+ Manual Entry'}</Btn></Tooltip>
       </div>
 
       {showForm && (
         <div className="mb-6 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
+            <Field label="Date"><Tooltip text="The date this entry is dated for reporting purposes."><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Tooltip></Field>
             <div className="col-span-2">
-              <Field label="Description"><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Loan repayment — owner loan settlement" /></Field>
+              <Field label="Description"><Tooltip text="What this entry is for — shown throughout the journal and reports."><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Loan repayment — owner loan settlement" /></Tooltip></Field>
             </div>
           </div>
 
@@ -2631,34 +2905,40 @@ function JournalTab({ from, to }) {
             <div className="flex flex-col gap-1.5">
               {form.lines.map((line, idx) => (
                 <div key={idx} className="grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 100px 100px 24px' }}>
-                  <select
-                    value={line.accountId}
-                    onChange={e => setLine(idx, 'accountId', e.target.value)}
-                    className="text-sm px-2 py-1.5 rounded-lg border w-full"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="">— select account —</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
-                  </select>
-                  <input
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    value={line.debit}
-                    onChange={e => setLine(idx, 'debit', e.target.value)}
-                    className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                  />
-                  <input
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    value={line.credit}
-                    onChange={e => setLine(idx, 'credit', e.target.value)}
-                    className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                  />
-                  <button onClick={() => removeLine(idx)} className="text-xs hover:opacity-60 text-center" style={{ color: '#ef4444' }}>✕</button>
+                  <Tooltip text="Which account this line affects.">
+                    <select
+                      value={line.accountId}
+                      onChange={e => setLine(idx, 'accountId', e.target.value)}
+                      className="text-sm px-2 py-1.5 rounded-lg border w-full"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      <option value="">— select account —</option>
+                      {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                    </select>
+                  </Tooltip>
+                  <Tooltip text="Debit amount for this line — increases assets/expenses, decreases liabilities/equity/income.">
+                    <input
+                      type="number" min="0" step="0.01" placeholder="0.00"
+                      value={line.debit}
+                      onChange={e => setLine(idx, 'debit', e.target.value)}
+                      className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </Tooltip>
+                  <Tooltip text="Credit amount for this line — increases liabilities/equity/income, decreases assets/expenses.">
+                    <input
+                      type="number" min="0" step="0.01" placeholder="0.00"
+                      value={line.credit}
+                      onChange={e => setLine(idx, 'credit', e.target.value)}
+                      className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </Tooltip>
+                  <Tooltip text="Remove this line."><button onClick={() => removeLine(idx)} className="text-xs hover:opacity-60 text-center" style={{ color: '#ef4444' }}>✕</button></Tooltip>
                 </div>
               ))}
             </div>
-            <button onClick={addLine} className="mt-2 text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>+ Add line</button>
+            <Tooltip text="Add another debit/credit line — every entry needs at least two."><button onClick={addLine} className="mt-2 text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>+ Add line</button></Tooltip>
           </div>
 
           <div className="flex justify-end gap-6 text-xs mb-3 font-mono" style={{ color: balanced ? '#065f46' : '#ef4444' }}>
@@ -2669,7 +2949,7 @@ function JournalTab({ from, to }) {
 
           <ErrMsg msg={error} />
           <div className="flex gap-2 mt-2">
-            <Btn onClick={save} disabled={saving || !balanced}>{saving ? 'Saving…' : 'Post Entry'}</Btn>
+            <Tooltip text="Post this entry — blocked until debits equal credits, so the books can never go out of balance."><Btn onClick={save} disabled={saving || !balanced}>{saving ? 'Saving…' : 'Post Entry'}</Btn></Tooltip>
           </div>
         </div>
       )}
@@ -2698,7 +2978,7 @@ function JournalTab({ from, to }) {
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>{entry.type}</span>
                   <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(entry.date)}</span>
                   {entry.type === 'manual' && (
-                    <button onClick={() => delEntry(entry)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                    <Tooltip text="Delete this manual entry — auto-generated entries (from invoices, expenses, wages, etc.) can't be deleted here."><button onClick={() => delEntry(entry)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                   )}
                 </div>
               </div>
@@ -2831,12 +3111,14 @@ function WarningsModal({ warnings, unpaidInvoices, onProceed, onCancel }) {
             </div>
           )}
           <div className="flex gap-2 justify-end pt-1">
-            <Btn variant="secondary" onClick={onCancel}>Go Back</Btn>
-            <button
-              onClick={onProceed}
-              className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80"
-              style={{ background: '#f59e0b', color: '#fff' }}
-            >Proceed Anyway</button>
+            <Tooltip text="Return to the BAS tab to fix these issues before reconciling."><Btn variant="secondary" onClick={onCancel}>Go Back</Btn></Tooltip>
+            <Tooltip text="Reconcile this quarter despite the warnings above — use only if you've reviewed them and they're expected.">
+              <button
+                onClick={onProceed}
+                className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80"
+                style={{ background: '#f59e0b', color: '#fff' }}
+              >Proceed Anyway</button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -2874,9 +3156,9 @@ function AnnualBASPanel({ fy, setFy, onSelectQuarter }) {
       <div className="flex items-center justify-between mb-5">
         <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Annual Summary</span>
         <div className="flex items-center gap-2">
-          <button onClick={() => setFy(f => f - 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>←</button>
+          <Tooltip text="View the previous financial year."><button onClick={() => setFy(f => f - 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>←</button></Tooltip>
           <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>FY {fy - 1}–{fy}</span>
-          <button onClick={() => setFy(f => f + 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>→</button>
+          <Tooltip text="View the next financial year."><button onClick={() => setFy(f => f + 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>→</button></Tooltip>
         </div>
       </div>
 
@@ -2898,6 +3180,7 @@ function AnnualBASPanel({ fy, setFy, onSelectQuarter }) {
                 return (
                   <tr
                     key={q.quarter}
+                    title={hasData ? 'Open this quarter\'s BAS detail' : undefined}
                     className={`border-b ${hasData ? 'cursor-pointer hover:opacity-75' : ''}`}
                     style={{ borderColor: 'var(--color-border)' }}
                     onClick={() => {
@@ -3080,9 +3363,11 @@ function BASTab() {
         <div className="flex-1 min-w-0 max-w-xl">
           <div className="mb-5">
             <Field label="Quarter">
-              <Sel value={qIdx} onChange={v => setQIdx(Number(v))}>
-                {quarters.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
-              </Sel>
+              <Tooltip text="Choose which BAS quarter to view or work through.">
+                <Sel value={qIdx} onChange={v => setQIdx(Number(v))}>
+                  {quarters.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
+                </Sel>
+              </Tooltip>
             </Field>
           </div>
 
@@ -3123,9 +3408,11 @@ function BASTab() {
               ) : (
                 <div className="flex flex-col gap-2">
                   {stepError && <p className="text-xs" style={{ color: '#ef4444' }}>{stepError}</p>}
-                  <Btn onClick={doStep} disabled={stepping}>
-                    {stepping ? 'Checking…' : actionLabels[data.status]}
-                  </Btn>
+                  <Tooltip text="Advance this quarter to its next stage — you'll be shown any warnings and asked to confirm first.">
+                    <Btn onClick={doStep} disabled={stepping}>
+                      {stepping ? 'Checking…' : actionLabels[data.status]}
+                    </Btn>
+                  </Tooltip>
                 </div>
               )}
             </>
@@ -3277,13 +3564,15 @@ function ExportHistoryPanel({ onChanged }) {
                 )}
               </div>
               {!isEditing && (
-                <button
-                  onClick={() => { setEditing(key); setEditDate(h?.lastTo || ''); }}
-                  className="text-xs px-2 py-1 rounded border"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
-                >
-                  Override
-                </button>
+                <Tooltip text={`Manually change or clear the export cutoff date for ${label} — risks duplicate imports if lowered, so only do this in agreement with your accountant.`}>
+                  <button
+                    onClick={() => { setEditing(key); setEditDate(h?.lastTo || ''); }}
+                    className="text-xs px-2 py-1 rounded border"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+                  >
+                    Override
+                  </button>
+                </Tooltip>
               )}
             </div>
 
@@ -3293,28 +3582,34 @@ function ExportHistoryPanel({ onChanged }) {
                   Set a new cutoff date for {label}. Future exports must start <strong>after</strong> this date. Leave blank to remove the restriction entirely.
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={editDate}
-                    onChange={e => setEditDate(e.target.value)}
-                    className="text-sm px-2 py-1 rounded border"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                  />
-                  <button
-                    onClick={() => saveOverride(key, editDate)}
-                    disabled={saving}
-                    className="text-xs px-3 py-1 rounded font-medium"
-                    style={{ background: '#ef4444', color: '#fff', opacity: saving ? 0.6 : 1 }}
-                  >
-                    {saving ? 'Saving…' : 'Apply'}
-                  </button>
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="text-xs px-2 py-1 rounded border"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
-                  >
-                    Cancel
-                  </button>
+                  <Tooltip text="The new cutoff date — future exports for this format can only start after this date.">
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={e => setEditDate(e.target.value)}
+                      className="text-sm px-2 py-1 rounded border"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </Tooltip>
+                  <Tooltip text="Save this cutoff override.">
+                    <button
+                      onClick={() => saveOverride(key, editDate)}
+                      disabled={saving}
+                      className="text-xs px-3 py-1 rounded font-medium"
+                      style={{ background: '#ef4444', color: '#fff', opacity: saving ? 0.6 : 1 }}
+                    >
+                      {saving ? 'Saving…' : 'Apply'}
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Discard without changing the cutoff.">
+                    <button
+                      onClick={() => setEditing(null)}
+                      className="text-xs px-2 py-1 rounded border"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
+                    >
+                      Cancel
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )}
@@ -3325,13 +3620,15 @@ function ExportHistoryPanel({ onChanged }) {
       {/* Clear all */}
       <div className="pt-1">
         {!confirmAll ? (
-          <button
-            onClick={() => setConfirmAll(true)}
-            className="text-xs px-3 py-1.5 rounded border font-medium"
-            style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#ef4444', background: 'rgba(239,68,68,0.06)' }}
-          >
-            Clear all cutoffs
-          </button>
+          <Tooltip text="Remove the export cutoff date for every format at once — a high-risk action, see the warning after clicking.">
+            <button
+              onClick={() => setConfirmAll(true)}
+              className="text-xs px-3 py-1.5 rounded border font-medium"
+              style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#ef4444', background: 'rgba(239,68,68,0.06)' }}
+            >
+              Clear all cutoffs
+            </button>
+          </Tooltip>
         ) : (
           <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
             <p className="text-sm font-semibold" style={{ color: '#ef4444' }}>Clear all export cutoffs?</p>
@@ -3339,12 +3636,16 @@ function ExportHistoryPanel({ onChanged }) {
               This removes the date lock for every format. Your next exports will have no restrictions — any period can be re-exported, which risks duplicate imports. Only proceed after confirming with your accountant.
             </p>
             <div className="flex gap-2 mt-1">
-              <button onClick={() => setConfirmAll(false)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
-                Cancel
-              </button>
-              <button onClick={clearAll} disabled={clearingAll} className="text-xs px-3 py-1.5 rounded font-medium" style={{ background: '#ef4444', color: '#fff', opacity: clearingAll ? 0.6 : 1 }}>
-                {clearingAll ? 'Clearing…' : 'Yes, clear all'}
-              </button>
+              <Tooltip text="Back out without clearing anything.">
+                <button onClick={() => setConfirmAll(false)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
+                  Cancel
+                </button>
+              </Tooltip>
+              <Tooltip text="Confirm — clears every format's cutoff date.">
+                <button onClick={clearAll} disabled={clearingAll} className="text-xs px-3 py-1.5 rounded font-medium" style={{ background: '#ef4444', color: '#fff', opacity: clearingAll ? 0.6 : 1 }}>
+                  {clearingAll ? 'Clearing…' : 'Yes, clear all'}
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}
@@ -3445,19 +3746,23 @@ function SettingsTab({ onHistoryReset }) {
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Email & Reminders</p>
           <div className="flex flex-col gap-3">
             <Field label="Admin CC email">
-              <Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" />
+              <Tooltip text="Receives a copy of every sent invoice/quote plus the weekly overdue summary."><Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" /></Tooltip>
             </Field>
             <Field label="Monday reminder time" hint="Overdue reminders send once per week, Monday morning at this time">
-              <Sel value={f('fin_reminder_hour') || '8'} onChange={set('fin_reminder_hour')}>
-                {Array.from({length: 24}, (_,i) => (
-                  <option key={i} value={String(i)}>{String(i).padStart(2,'0')}:00</option>
-                ))}
-              </Sel>
+              <Tooltip text="What time on Monday the weekly overdue-items summary is sent.">
+                <Sel value={f('fin_reminder_hour') || '8'} onChange={set('fin_reminder_hour')}>
+                  {Array.from({length: 24}, (_,i) => (
+                    <option key={i} value={String(i)}>{String(i).padStart(2,'0')}:00</option>
+                  ))}
+                </Sel>
+              </Tooltip>
             </Field>
             <div className="flex items-center gap-3">
-              <Btn variant="secondary" onClick={sendTestReminder} disabled={testSending}>
-                {testSending ? 'Sending…' : 'Send test reminder now'}
-              </Btn>
+              <Tooltip text="Send a test reminder email immediately, using your current overdue invoices/quotes.">
+                <Btn variant="secondary" onClick={sendTestReminder} disabled={testSending}>
+                  {testSending ? 'Sending…' : 'Send test reminder now'}
+                </Btn>
+              </Tooltip>
               {testMsg && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{testMsg}</span>}
             </div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -3469,7 +3774,7 @@ function SettingsTab({ onHistoryReset }) {
         </div>
 
         <div className="pt-2">
-          <Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn>
+          <Tooltip text="Save all Finance settings above."><Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn></Tooltip>
         </div>
 
         {/* Export history — nuclear option */}
@@ -3557,21 +3862,25 @@ function ExportModal({ type, history, onClose, onSuccess }) {
             If you need to re-export a corrected period after this, use "Reset export history" in Finance Settings.
           </p>
           <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => setStage('setup')}
-              className="px-4 py-2 text-sm rounded-lg border"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-            >
-              Back
-            </button>
-            <button
-              onClick={handleExport}
-              disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg font-medium"
-              style={{ background: '#ef4444', color: '#fff', opacity: loading ? 0.6 : 1 }}
-            >
-              {loading ? 'Exporting…' : `Yes, export ${typeName}`}
-            </button>
+            <Tooltip text="Go back and change the date range.">
+              <button
+                onClick={() => setStage('setup')}
+                className="px-4 py-2 text-sm rounded-lg border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+              >
+                Back
+              </button>
+            </Tooltip>
+            <Tooltip text="Download the file and lock this cutoff date — the period up to today can't be re-exported afterward without a reset.">
+              <button
+                onClick={handleExport}
+                disabled={loading}
+                className="px-4 py-2 text-sm rounded-lg font-medium"
+                style={{ background: '#ef4444', color: '#fff', opacity: loading ? 0.6 : 1 }}
+              >
+                {loading ? 'Exporting…' : `Yes, export ${typeName}`}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Modal>
@@ -3616,23 +3925,27 @@ function ExportModal({ type, history, onClose, onSuccess }) {
 
         <div className="flex gap-3">
           <Field label="From date">
-            <input
-              type="date"
-              value={from}
-              min={minFrom || undefined}
-              onChange={e => setFrom(e.target.value)}
-              className="text-sm px-3 py-2 rounded-lg border w-full"
-              style={{ background: 'var(--color-surface)', borderColor: cutoffBlocked ? '#ef4444' : 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-            />
+            <Tooltip text="Start of the export period — can't be earlier than your last export's cutoff, to prevent duplicate imports.">
+              <input
+                type="date"
+                value={from}
+                min={minFrom || undefined}
+                onChange={e => setFrom(e.target.value)}
+                className="text-sm px-3 py-2 rounded-lg border w-full"
+                style={{ background: 'var(--color-surface)', borderColor: cutoffBlocked ? '#ef4444' : 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+              />
+            </Tooltip>
           </Field>
           <Field label="To date">
-            <input
-              type="date"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              className="text-sm px-3 py-2 rounded-lg border w-full"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-            />
+            <Tooltip text="End of the export period — this date becomes the new cutoff once you confirm the export.">
+              <input
+                type="date"
+                value={to}
+                onChange={e => setTo(e.target.value)}
+                className="text-sm px-3 py-2 rounded-lg border w-full"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+              />
+            </Tooltip>
           </Field>
         </div>
 
@@ -3643,21 +3956,25 @@ function ExportModal({ type, history, onClose, onSuccess }) {
         )}
 
         <div className="flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => setStage('confirm')}
-            disabled={!from || !to || !!cutoffBlocked}
-            className="px-4 py-2 text-sm rounded-lg font-medium"
-            style={{ background: 'var(--color-primary)', color: '#fff', opacity: (!from || !to || !!cutoffBlocked) ? 0.5 : 1 }}
-          >
-            Review & Export
-          </button>
+          <Tooltip text="Close without exporting.">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm rounded-lg border"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            >
+              Cancel
+            </button>
+          </Tooltip>
+          <Tooltip text="See a summary of what will be exported and confirm before downloading.">
+            <button
+              onClick={() => setStage('confirm')}
+              disabled={!from || !to || !!cutoffBlocked}
+              className="px-4 py-2 text-sm rounded-lg font-medium"
+              style={{ background: 'var(--color-primary)', color: '#fff', opacity: (!from || !to || !!cutoffBlocked) ? 0.5 : 1 }}
+            >
+              Review & Export
+            </button>
+          </Tooltip>
         </div>
       </div>
     </Modal>
@@ -3726,26 +4043,26 @@ function SuppliersTab() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Suppliers</h2>
-        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Supplier'}</Btn>
+        <Tooltip text="Add a supplier so you can quickly reuse their details on future expenses."><Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Supplier'}</Btn></Tooltip>
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="col-span-2">
-              <Field label="Supplier Name *"><Input value={form.name} onChange={sf('name')} placeholder="Acme Corp" /></Field>
+              <Field label="Supplier Name *"><Tooltip text="Required — who you buy from."><Input value={form.name} onChange={sf('name')} placeholder="Acme Corp" /></Tooltip></Field>
             </div>
-            <Field label="Email"><Input type="email" value={form.email} onChange={sf('email')} placeholder="accounts@supplier.com" /></Field>
-            <Field label="Phone"><Input value={form.phone} onChange={sf('phone')} placeholder="+61 2 1234 5678" /></Field>
-            <Field label="ABN"><Input value={form.abn} onChange={sf('abn')} placeholder="12 345 678 901" /></Field>
-            <Field label="Website"><Input value={form.website} onChange={sf('website')} placeholder="https://supplier.com" /></Field>
+            <Field label="Email"><Tooltip text="Supplier's contact email, for your reference only."><Input type="email" value={form.email} onChange={sf('email')} placeholder="accounts@supplier.com" /></Tooltip></Field>
+            <Field label="Phone"><Tooltip text="Supplier's contact number."><Input value={form.phone} onChange={sf('phone')} placeholder="+61 2 1234 5678" /></Tooltip></Field>
+            <Field label="ABN"><Tooltip text="Supplier's Australian Business Number, if relevant for your records."><Input value={form.abn} onChange={sf('abn')} placeholder="12 345 678 901" /></Tooltip></Field>
+            <Field label="Website"><Tooltip text="Supplier's website, for your reference."><Input value={form.website} onChange={sf('website')} placeholder="https://supplier.com" /></Tooltip></Field>
             <div className="col-span-2">
-              <Field label="Notes"><Textarea value={form.notes} onChange={sf('notes')} rows={2} placeholder="Internal notes…" /></Field>
+              <Field label="Notes"><Tooltip text="Any internal notes about this supplier."><Textarea value={form.notes} onChange={sf('notes')} rows={2} placeholder="Internal notes…" /></Tooltip></Field>
             </div>
           </div>
           <ErrMsg msg={error} />
           <div className="flex gap-2 mt-2">
-            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Supplier'}</Btn>
+            <Tooltip text="Save this supplier."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Supplier'}</Btn></Tooltip>
           </div>
         </div>
       )}
@@ -3770,16 +4087,18 @@ function SuppliersTab() {
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{s.phone || '—'}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{s.abn || '—'}</td>
                   <td className="py-2 px-2">
-                    <button
-                      onClick={() => toggleActive(s)}
-                      className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{ background: s.isActive ? '#d1fae5' : 'var(--color-surface)', color: s.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
-                    >{s.isActive ? 'Active' : 'Inactive'}</button>
+                    <Tooltip text="Click to toggle whether this supplier appears in the supplier picker.">
+                      <button
+                        onClick={() => toggleActive(s)}
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: s.isActive ? '#d1fae5' : 'var(--color-surface)', color: s.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                      >{s.isActive ? 'Active' : 'Inactive'}</button>
+                    </Tooltip>
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
-                      <button onClick={() => openEdit(s)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
-                      <button onClick={() => del(s)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                      <Tooltip text="Edit this supplier's details."><button onClick={() => openEdit(s)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button></Tooltip>
+                      <Tooltip text="Permanently delete this supplier."><button onClick={() => del(s)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                     </div>
                   </td>
                 </tr>
@@ -3870,38 +4189,42 @@ function CodesTab() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Income & Expense Codes</h2>
-        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Code'}</Btn>
+        <Tooltip text="Add a custom income or expense code to tag invoice/expense lines for finer-grained reporting."><Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Code'}</Btn></Tooltip>
       </div>
 
       <div className="flex gap-1 mb-4">
         {[['all','All'],['income','Income'],['expense','Expense']].map(([k,l]) => (
-          <button key={k} onClick={() => setFilter(k)}
-            className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
-            style={{ background: filter === k ? 'var(--color-primary)' : 'transparent', color: filter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
-          >{l}</button>
+          <Tooltip key={k} text={k === 'all' ? 'Show every code.' : `Show only ${k} codes.`}>
+            <button onClick={() => setFilter(k)}
+              className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
+              style={{ background: filter === k ? 'var(--color-primary)' : 'transparent', color: filter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            >{l}</button>
+          </Tooltip>
         ))}
       </div>
 
       {showForm && (
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Code *"><Input value={form.code} onChange={cf('code')} placeholder="EXP-200" /></Field>
+            <Field label="Code *"><Tooltip text="A short unique code shown on invoice/expense lines tagged with it."><Input value={form.code} onChange={cf('code')} placeholder="EXP-200" /></Tooltip></Field>
             <Field label="Type">
-              <Sel value={form.type} onChange={cf('type')}>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-              </Sel>
+              <Tooltip text="Whether this code is used on income (invoice) lines or expense lines.">
+                <Sel value={form.type} onChange={cf('type')}>
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                </Sel>
+              </Tooltip>
             </Field>
             <div className="col-span-2">
-              <Field label="Name *"><Input value={form.name} onChange={cf('name')} placeholder="e.g. Software & Subscriptions" /></Field>
+              <Field label="Name *"><Tooltip text="A descriptive name shown wherever this code is picked."><Input value={form.name} onChange={cf('name')} placeholder="e.g. Software & Subscriptions" /></Tooltip></Field>
             </div>
             <div className="col-span-2">
-              <Field label="Description"><Textarea value={form.description} onChange={cf('description')} rows={2} placeholder="Optional description…" /></Field>
+              <Field label="Description"><Tooltip text="Optional extra detail about what this code is for."><Textarea value={form.description} onChange={cf('description')} rows={2} placeholder="Optional description…" /></Tooltip></Field>
             </div>
           </div>
           <ErrMsg msg={error} />
           <div className="flex gap-2 mt-2">
-            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Code'}</Btn>
+            <Tooltip text="Save this code."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Code'}</Btn></Tooltip>
           </div>
         </div>
       )}
@@ -3934,17 +4257,19 @@ function CodesTab() {
                     </span>
                   </td>
                   <td className="py-2 px-2">
-                    <button
-                      onClick={() => toggleActive(c)}
-                      className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{ background: c.isActive ? '#d1fae5' : 'var(--color-surface)', color: c.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
-                    >{c.isActive ? 'Active' : 'Inactive'}</button>
+                    <Tooltip text="Click to toggle whether this code appears in the code picker.">
+                      <button
+                        onClick={() => toggleActive(c)}
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: c.isActive ? '#d1fae5' : 'var(--color-surface)', color: c.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                      >{c.isActive ? 'Active' : 'Inactive'}</button>
+                    </Tooltip>
                   </td>
                   <td className="py-2 px-2">
                     {!c.isSystem && (
                       <div className="flex gap-2">
-                        <button onClick={() => openEdit(c)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
-                        <button onClick={() => del(c)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                        <Tooltip text="Edit this code's details."><button onClick={() => openEdit(c)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button></Tooltip>
+                        <Tooltip text="Permanently delete this code."><button onClick={() => del(c)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button></Tooltip>
                       </div>
                     )}
                   </td>
@@ -4004,12 +4329,14 @@ function BalancesTab() {
     <div className="p-6 max-w-3xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Trial Balance</h2>
-        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
-          background: balanced ? '#d1fae5' : '#fee2e2',
-          color:      balanced ? '#065f46' : '#991b1b',
-        }}>
-          {balanced ? '✓ Balanced' : '✗ Out of balance'}
-        </span>
+        <Tooltip text="A direct check that total debits equal total credits across every account — should always read Balanced, since every journal entry is validated on posting.">
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
+            background: balanced ? '#d1fae5' : '#fee2e2',
+            color:      balanced ? '#065f46' : '#991b1b',
+          }}>
+            {balanced ? '✓ Balanced' : '✗ Out of balance'}
+          </span>
+        </Tooltip>
       </div>
 
       <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
@@ -4163,30 +4490,38 @@ function PositionTab() {
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <PositionCard
-          label="Current cash position"
-          value={cash}
-          tone={cash >= 0 ? 'good' : 'bad'}
-          sub="Bank / Cash account balance"
-        />
-        <PositionCard
-          label="Money owed to you"
-          value={receivables}
-          tone={receivables > 0 ? 'warn' : 'neutral'}
-          sub="Sent invoices not marked paid"
-        />
-        <PositionCard
-          label="Credit cards owed"
-          value={creditCardOwed}
-          tone={creditCardOwed > 0 ? 'bad' : 'good'}
-          sub={creditCardCredit > 0 ? `${fmt(creditCardCredit)} card credit/overpayment` : 'Liability balance'}
-        />
-        <PositionCard
-          label="Net GST position"
-          value={Math.abs(gstNetPayable)}
-          tone={gstNetPayable > 0 ? 'warn' : 'good'}
-          sub={signedLabel(gstNetPayable, 'Estimated payable', 'Estimated refund/credit')}
-        />
+        <Tooltip text="The Bank / Cash account balance per the journal — reconcile this against your actual bank balance regularly.">
+          <PositionCard
+            label="Current cash position"
+            value={cash}
+            tone={cash >= 0 ? 'good' : 'bad'}
+            sub="Bank / Cash account balance"
+          />
+        </Tooltip>
+        <Tooltip text="Total of sent invoices that haven't been marked paid yet — money you're waiting on.">
+          <PositionCard
+            label="Money owed to you"
+            value={receivables}
+            tone={receivables > 0 ? 'warn' : 'neutral'}
+            sub="Sent invoices not marked paid"
+          />
+        </Tooltip>
+        <Tooltip text="What you currently owe across all credit card liability accounts.">
+          <PositionCard
+            label="Credit cards owed"
+            value={creditCardOwed}
+            tone={creditCardOwed > 0 ? 'bad' : 'good'}
+            sub={creditCardCredit > 0 ? `${fmt(creditCardCredit)} card credit/overpayment` : 'Liability balance'}
+          />
+        </Tooltip>
+        <Tooltip text="Estimated GST you owe (or are owed) based on GST Collected minus GST Paid so far — settle this via the BAS tab.">
+          <PositionCard
+            label="Net GST position"
+            value={Math.abs(gstNetPayable)}
+            tone={gstNetPayable > 0 ? 'warn' : 'good'}
+            sub={signedLabel(gstNetPayable, 'Estimated payable', 'Estimated refund/credit')}
+          />
+        </Tooltip>
       </div>
 
       <div className="rounded-xl border p-4 mb-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4289,7 +4624,7 @@ function RecurringTab() {
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Recurring</h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Schedules run automatically at midnight — drafts are created and ready to review before sending.</p>
         </div>
-        <button onClick={openNew} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--color-primary)' }}>+ New Schedule</button>
+        <Tooltip text="Set up an invoice or expense that generates itself automatically on a recurring schedule."><button onClick={openNew} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: 'var(--color-primary)' }}>+ New Schedule</button></Tooltip>
       </div>
 
       {items.length === 0 && (
@@ -4310,9 +4645,9 @@ function RecurringTab() {
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{FREQ_LABELS[rec.frequency]} · Next: {fmtDate(rec.nextDate)}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => toggle(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>{rec.active ? 'Pause' : 'Resume'}</button>
-              <button onClick={() => openEdit(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
-              <button onClick={() => setConfirm(rec.id)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: '#fecaca', color: '#dc2626' }}>Delete</button>
+              <Tooltip text={rec.active ? 'Stop this schedule from generating new drafts until resumed.' : 'Resume this schedule so it generates drafts again.'}><button onClick={() => toggle(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>{rec.active ? 'Pause' : 'Resume'}</button></Tooltip>
+              <Tooltip text="Edit this schedule's frequency and template."><button onClick={() => openEdit(rec)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button></Tooltip>
+              <Tooltip text="Permanently delete this recurring schedule."><button onClick={() => setConfirm(rec.id)} className="text-xs px-3 py-1 rounded-lg border" style={{ borderColor: '#fecaca', color: '#dc2626' }}>Delete</button></Tooltip>
             </div>
           </div>
         ))}
@@ -4329,40 +4664,44 @@ function RecurringTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Type</label>
-                  <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="invoice">Invoice</option>
-                    <option value="expense">Expense</option>
-                  </select>
+                  <Tooltip text="Whether this schedule generates draft invoices or draft expenses.">
+                    <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      <option value="invoice">Invoice</option>
+                      <option value="expense">Expense</option>
+                    </select>
+                  </Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Frequency</label>
-                  <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                    {Object.entries(FREQ_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
+                  <Tooltip text="How often a new draft is generated.">
+                    <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))} className="w-full text-sm px-3 py-2 rounded-lg border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      {Object.entries(FREQ_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </Tooltip>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Label</label>
-                  <Input value={form.label} onChange={v => setForm(p => ({ ...p, label: v }))} placeholder="e.g. Monthly hosting fee" />
+                  <Tooltip text="A name to identify this schedule in the list — not shown to clients."><Input value={form.label} onChange={v => setForm(p => ({ ...p, label: v }))} placeholder="e.g. Monthly hosting fee" /></Tooltip>
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Next Run Date</label>
-                  <Input type="date" value={form.nextDate} onChange={v => setForm(p => ({ ...p, nextDate: v }))} />
+                  <Tooltip text="The date the next draft will be generated — it then advances automatically by the frequency."><Input type="date" value={form.nextDate} onChange={v => setForm(p => ({ ...p, nextDate: v }))} /></Tooltip>
                 </div>
               </div>
 
               {form.type === 'expense' && (
                 <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
                   <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Expense Template</p>
-                  <Input value={form.template.description||''} onChange={v => setTpl('description', v)} placeholder="Description" />
+                  <Tooltip text="What this recurring expense is for."><Input value={form.template.description||''} onChange={v => setTpl('description', v)} placeholder="Description" /></Tooltip>
                   <div className="grid grid-cols-2 gap-3">
-                    <Input value={form.template.supplier||''} onChange={v => setTpl('supplier', v)} placeholder="Supplier" />
-                    <Input value={form.template.category||''} onChange={v => setTpl('category', v)} placeholder="Category" />
+                    <Tooltip text="Who this expense is paid to each time."><Input value={form.template.supplier||''} onChange={v => setTpl('supplier', v)} placeholder="Supplier" /></Tooltip>
+                    <Tooltip text="Free-text category for this recurring expense."><Input value={form.template.category||''} onChange={v => setTpl('category', v)} placeholder="Category" /></Tooltip>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Input type="number" value={form.template.amount||''} onChange={v => setTpl('amount', v)} placeholder="Amount (ex-GST)" />
-                    <Input type="number" value={form.template.gst||''} onChange={v => setTpl('gst', v)} placeholder="GST" />
+                    <Tooltip text="The expense amount excluding GST, used each time a draft is generated."><Input type="number" value={form.template.amount||''} onChange={v => setTpl('amount', v)} placeholder="Amount (ex-GST)" /></Tooltip>
+                    <Tooltip text="The GST amount for this expense, used each time a draft is generated."><Input type="number" value={form.template.gst||''} onChange={v => setTpl('gst', v)} placeholder="GST" /></Tooltip>
                   </div>
                 </div>
               )}
@@ -4370,32 +4709,34 @@ function RecurringTab() {
               {form.type === 'invoice' && (
                 <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
                   <p className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>Invoice Template</p>
-                  <Input value={form.template.notes||''} onChange={v => setTpl('notes', v)} placeholder="Notes (optional)" />
+                  <Tooltip text="Optional notes printed on each generated invoice."><Input value={form.template.notes||''} onChange={v => setTpl('notes', v)} placeholder="Notes (optional)" /></Tooltip>
                   <div className="space-y-2">
                     {(form.template.items||[]).map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                        <div className="col-span-5"><Input value={item.description||''} onChange={v => setTplItem(idx,'description',v)} placeholder="Description" /></div>
-                        <div className="col-span-2"><Input type="number" value={item.qty||''} onChange={v => setTplItem(idx,'qty',v)} placeholder="Qty" /></div>
-                        <div className="col-span-3"><Input type="number" value={item.unitPrice||''} onChange={v => setTplItem(idx,'unitPrice',v)} placeholder="Unit Price" /></div>
+                        <div className="col-span-5"><Tooltip text="What this line is for, on every generated invoice."><Input value={item.description||''} onChange={v => setTplItem(idx,'description',v)} placeholder="Description" /></Tooltip></div>
+                        <div className="col-span-2"><Tooltip text="Quantity for this line."><Input type="number" value={item.qty||''} onChange={v => setTplItem(idx,'qty',v)} placeholder="Qty" /></Tooltip></div>
+                        <div className="col-span-3"><Tooltip text="Price per unit, excluding GST."><Input type="number" value={item.unitPrice||''} onChange={v => setTplItem(idx,'unitPrice',v)} placeholder="Unit Price" /></Tooltip></div>
                         <div className="col-span-1">
-                          <select value={item.gstCode||'GST'} onChange={e => setTplItem(idx,'gstCode',e.target.value)} className="text-sm px-2 py-2 rounded-lg border w-full" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                            <option value="GST">GST</option>
-                            <option value="NT">N-T</option>
-                          </select>
+                          <Tooltip text="GST applies 10% tax to this line; N-T leaves it GST-free.">
+                            <select value={item.gstCode||'GST'} onChange={e => setTplItem(idx,'gstCode',e.target.value)} className="text-sm px-2 py-2 rounded-lg border w-full" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              <option value="GST">GST</option>
+                              <option value="NT">N-T</option>
+                            </select>
+                          </Tooltip>
                         </div>
                         <div className="col-span-1 flex justify-end pt-1">
-                          {(form.template.items||[]).length > 1 && <button onClick={() => removeTplItem(idx)} className="text-xs" style={{ color: '#dc2626' }}>✕</button>}
+                          {(form.template.items||[]).length > 1 && <Tooltip text="Remove this line."><button onClick={() => removeTplItem(idx)} className="text-xs" style={{ color: '#dc2626' }}>✕</button></Tooltip>}
                         </div>
                       </div>
                     ))}
-                    <button onClick={addTplItem} className="text-xs" style={{ color: 'var(--color-primary)' }}>+ Add line</button>
+                    <Tooltip text="Add another line to the invoice template."><button onClick={addTplItem} className="text-xs" style={{ color: 'var(--color-primary)' }}>+ Add line</button></Tooltip>
                   </div>
                 </div>
               )}
             </div>
             <div className="p-6 border-t flex justify-end gap-3" style={{ borderColor: 'var(--color-border)' }}>
-              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: 'var(--color-primary)' }}>{saving ? 'Saving…' : 'Save Schedule'}</button>
+              <Tooltip text="Discard without saving."><button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button></Tooltip>
+              <Tooltip text="Save this recurring schedule."><button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: 'var(--color-primary)' }}>{saving ? 'Saving…' : 'Save Schedule'}</button></Tooltip>
             </div>
           </div>
         </div>
@@ -4407,8 +4748,8 @@ function RecurringTab() {
           <div className="rounded-2xl p-6 shadow-2xl max-w-sm w-full" style={{ background: 'var(--color-surface)' }}>
             <p className="font-medium mb-4" style={{ color: 'var(--color-text)' }}>Delete this recurring schedule?</p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirm(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
-              <button onClick={() => del(confirm)} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: '#dc2626' }}>Delete</button>
+              <Tooltip text="Keep this schedule."><button onClick={() => setConfirm(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button></Tooltip>
+              <Tooltip text="Permanently delete this schedule."><button onClick={() => del(confirm)} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: '#dc2626' }}>Delete</button></Tooltip>
             </div>
           </div>
         </div>
@@ -4533,6 +4874,13 @@ const CashBasisNote = () => (
 );
 
 const REPORT_SUBTABS = ['Profit & Loss', 'Balance Sheet', 'GST Summary', 'Trial Balance', 'Charts'];
+const REPORT_SUBTAB_TIPS = {
+  'Profit & Loss': 'Income minus expenses for a period — the report your accountant needs most at tax time.',
+  'Balance Sheet': 'Assets, liabilities, and equity as of a date — hand this to your accountant alongside the P&L.',
+  'GST Summary': 'GST collected vs GST paid, broken down by code — matches what you lodge each BAS quarter.',
+  'Trial Balance': 'Every account\'s balance as of a date — mainly a bookkeeping-integrity check, should always be balanced.',
+  Charts: 'Visual trends: income vs expenses, bank balance over time, and GST per quarter.',
+};
 
 function ReportsTab() {
   const [sub, setSub] = useState('Profit & Loss');
@@ -4614,14 +4962,16 @@ function ReportsTab() {
     <div className="p-6">
       <div className="flex gap-1 mb-4 overflow-x-auto">
         {REPORT_SUBTABS.map(s => (
-          <button key={s} onClick={() => setSub(s)}
-            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border"
-            style={{
-              background: sub === s ? 'var(--color-primary)' : 'transparent',
-              color: sub === s ? '#fff' : 'var(--color-muted)',
-              borderColor: sub === s ? 'var(--color-primary)' : 'var(--color-border)',
-            }}
-          >{s}</button>
+          <Tooltip key={s} text={REPORT_SUBTAB_TIPS[s] || `Switch to the ${s} report.`}>
+            <button onClick={() => setSub(s)}
+              className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border"
+              style={{
+                background: sub === s ? 'var(--color-primary)' : 'transparent',
+                color: sub === s ? '#fff' : 'var(--color-muted)',
+                borderColor: sub === s ? 'var(--color-primary)' : 'var(--color-border)',
+              }}
+            >{s}</button>
+          </Tooltip>
         ))}
       </div>
 
@@ -4791,6 +5141,7 @@ export default function FinancePage() {
   const [exporting, setExporting] = useState(null);
   const [exportModal, setExportModal]   = useState(null); // { type: 'myob'|'xero'|'excel' } | null
   const [exportHistory, setExportHistory] = useState({});
+  const [showHelp, setShowHelp] = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
@@ -4816,30 +5167,41 @@ export default function FinancePage() {
             <div className="flex items-center gap-2">
               <span style={{ fontSize: 20 }}>💰</span>
               <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
+              <Tooltip text={`What the ${tab} tab does and who should use it.`}>
+                <button
+                  type="button"
+                  onClick={() => setShowHelp(true)}
+                  className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity flex-shrink-0"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                >
+                  ?
+                </button>
+              </Tooltip>
             </div>
             <div className="flex items-center gap-2">
-              <Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn>
-              <Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn>
-              <Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn>
-              <Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn>
+              <Tooltip text="Download a MYOB-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn></Tooltip>
+              <Tooltip text="Download a Xero-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn></Tooltip>
+              <Tooltip text="Download a full Excel export for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn></Tooltip>
+              <Tooltip text="Download a single combined CSV for Google Sheets — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn></Tooltip>
             </div>
           </div>
           <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
             {TABS.map(t => (
-              <button
-                key={t}
-                data-finance-tab={t}
-                onClick={() => setTab(t)}
-                className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
-                style={{
-                  background:        'transparent',
-                  color:             tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
-                  borderBottomColor: tab === t ? 'var(--color-primary)' : 'transparent',
-                  fontWeight:        tab === t ? 600 : 400,
-                }}
-              >
-                {t}
-              </button>
+              <Tooltip key={t} text={TOOL_HELP[t]?.description || `Switch to the ${t} tab.`}>
+                <button
+                  data-finance-tab={t}
+                  onClick={() => setTab(t)}
+                  className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
+                  style={{
+                    background:        'transparent',
+                    color:             tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
+                    borderBottomColor: tab === t ? 'var(--color-primary)' : 'transparent',
+                    fontWeight:        tab === t ? 600 : 400,
+                  }}
+                >
+                  {t}
+                </button>
+              </Tooltip>
             ))}
           </div>
         </div>
@@ -4884,6 +5246,8 @@ export default function FinancePage() {
           }))}
         />
       )}
+
+      {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
