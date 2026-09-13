@@ -170,6 +170,77 @@ function normaliseSitelink(raw, allowed, fallbackUrl) {
   };
 }
 
+// Plain-JS word-set Jaccard similarity — same technique as the near-duplicate
+// content check in seoAuditEngine.js, applied to headline/description word
+// sets rather than page shingles (these are short phrases, so whole-word
+// sets are enough at this scale).
+function wordSet(text) {
+  const words = String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  return new Set(words);
+}
+
+function jaccardWordSimilarity(setA, setB) {
+  if (!setA.size || !setB.size) return 0;
+  const [small, big] = setA.size <= setB.size ? [setA, setB] : [setB, setA];
+  let intersection = 0;
+  for (const w of small) if (big.has(w)) intersection += 1;
+  const union = setA.size + setB.size - intersection;
+  return union ? intersection / union : 0;
+}
+
+const AD_STRENGTH_SIMILARITY_THRESHOLD = 0.7;
+
+// Ad Strength-style diversity check: flags near-duplicate headline/description
+// pairs beyond exact-string dedup (uniqueStrings() already removes exact
+// dupes), and flags an ad group whose own keywords never surface in any
+// headline — a real, common Quality-Score-relevant gap.
+function checkAdStrength(ad, keywords = []) {
+  const warnings = [];
+  const headlineSets = (ad.headlines || []).map((text) => ({ text, set: wordSet(text) }));
+  for (let i = 0; i < headlineSets.length; i += 1) {
+    for (let j = i + 1; j < headlineSets.length; j += 1) {
+      const sim = jaccardWordSimilarity(headlineSets[i].set, headlineSets[j].set);
+      if (sim >= AD_STRENGTH_SIMILARITY_THRESHOLD) {
+        warnings.push(`Headlines too similar (${Math.round(sim * 100)}%): "${headlineSets[i].text}" / "${headlineSets[j].text}" — Google may not rotate both effectively.`);
+      }
+    }
+  }
+
+  const descriptionSets = (ad.descriptions || []).map((text) => ({ text, set: wordSet(text) }));
+  for (let i = 0; i < descriptionSets.length; i += 1) {
+    for (let j = i + 1; j < descriptionSets.length; j += 1) {
+      const sim = jaccardWordSimilarity(descriptionSets[i].set, descriptionSets[j].set);
+      if (sim >= AD_STRENGTH_SIMILARITY_THRESHOLD) {
+        warnings.push(`Descriptions too similar (${Math.round(sim * 100)}%): "${descriptionSets[i].text}" / "${descriptionSets[j].text}" — Google may not rotate both effectively.`);
+      }
+    }
+  }
+
+  const keywordWords = new Set();
+  for (const kw of keywords || []) {
+    for (const w of wordSet(kw?.phrase)) {
+      if (w.length > 2) keywordWords.add(w);
+    }
+  }
+  if (keywordWords.size) {
+    const headlineWords = new Set();
+    for (const h of headlineSets) for (const w of h.set) headlineWords.add(w);
+    let matched = false;
+    for (const w of keywordWords) {
+      if (headlineWords.has(w)) { matched = true; break; }
+    }
+    if (!matched) {
+      warnings.push("None of this ad group's keywords (or their core words) appear in any headline — keyword insertion opportunity missed.");
+    }
+  }
+
+  return warnings;
+}
+
 function extractAdsRaw(parsed, fmt) {
   if (Array.isArray(parsed?.ads) && parsed.ads.length) return parsed.ads.slice(0, fmt.adCount);
   if (Array.isArray(parsed?.adGroups) && parsed.adGroups.length) return parsed.adGroups.slice(0, fmt.adCount);
@@ -246,7 +317,8 @@ Each ads[] item MUST have exactly ${fmt.headlineCount} headlines and ${fmt.descr
   const ads = adsRaw
     .slice(0, fmt.adCount)
     .map((ad) => normaliseAd(ad, allowed, home, business || snapshot.title || offerLine, fmt))
-    .filter((ad) => ad.headlines.length && ad.descriptions.length);
+    .filter((ad) => ad.headlines.length && ad.descriptions.length)
+    .map((ad) => ({ ...ad, warnings: checkAdStrength(ad, keywords) }));
 
   const sitelinks = [];
   const seenLink = new Set();
@@ -312,4 +384,5 @@ module.exports = {
   resolveCopyFormat,
   generateGoogleAdsCopy,
   reportCopyGaps,
+  checkAdStrength,
 };

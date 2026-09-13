@@ -6,12 +6,137 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import Tooltip from '../components/Tooltip';
 
 const FIELD = {
   background: 'var(--color-bg)',
   borderColor: 'var(--color-border)',
   color: 'var(--color-text)',
 };
+
+const TOOL_HELP = {
+  title: 'Google Ads',
+  description: 'Turns a website URL and a plain description of what the business sells into an initial Google Ads Search campaign — keywords, negatives, and ad copy — ready to check in Keyword Planner and Ads Editor before spending budget.',
+  features: [
+    'Scrapes the site (homepage + up to four same-origin pages) for brand, URLs, and detail — but the offer you type is ground truth, so keywords never chase a scrape that describes a different industry',
+    '100 keywords and 100 negatives with match types, plus automatic detection of negative/positive keyword conflicts (a broad negative silently blocking a keyword you are also bidding on)',
+    'RSA (15 headlines / 4 descriptions per ad group) or a 10/10 copy pack, with an Ad Strength-style check for near-duplicate lines and missed keyword-insertion opportunities',
+    'Destination URLs and sitelinks drawn only from pages actually scraped',
+    'Copy or CSV export for Keyword Planner and Ads Editor — every list is AI-generated with no real search-volume or CPC data, so verify before setting budgets',
+  ],
+};
+
+function HelpModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{TOOL_HELP.title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+        </div>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{TOOL_HELP.description}</p>
+        <ul className="space-y-1.5">
+          {TOOL_HELP.features.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-primary)', flexShrink: 0 }}>•</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// Item 1 — this page has no real search-volume/CPC/competition signal behind
+// any list; every keyword, negative, and headline is pure LLM output. This
+// banner is deliberately persistent (not a one-time toast) wherever those
+// lists are shown, so it never reads as market-validated data.
+function MarketDataNotice() {
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-relaxed"
+      style={{ borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)', color: 'var(--color-text)' }}
+    >
+      <span className="font-bold flex-shrink-0" style={{ color: '#f59e0b' }}>⚠</span>
+      <span>
+        AI-generated starting point — these keywords, negatives, and ad copy carry no search-volume, CPC, or competition
+        data. Verify volume and competition in Google Ads Keyword Planner before setting budgets.
+      </span>
+    </div>
+  );
+}
+
+// Item 4 — static, deterministic, no AI call. Mirrors the tone of
+// seoAuditEngine.js's `notCovered` list: plain facts about what this agent
+// does not (and cannot) verify for you.
+const CAMPAIGN_READINESS_CHECKLIST = [
+  'Conversion tracking installed — call tracking, form-fill, or a GA4 goal.',
+  'Bid strategy chosen — Maximize Conversions, Target CPA, or Manual CPC to start.',
+  'Budget set at the campaign level, not just the ad-group level.',
+];
+
+function CampaignReadinessChecklist() {
+  return (
+    <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Before you spend budget</p>
+      <ul className="space-y-1">
+        {CAMPAIGN_READINESS_CHECKLIST.map((item, i) => (
+          <li key={item} className="flex items-start gap-2 text-xs leading-relaxed">
+            <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{i + 1}.</span>
+            <span style={{ color: 'var(--color-muted)' }}>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Item 2 — surfaces findKeywordConflicts() output from the server so a
+// negative that would silently suppress a keyword the advertiser is also
+// bidding on is visible before they upload the negative list.
+function ConflictWarnings({ conflicts }) {
+  if (!conflicts?.length) return null;
+  return (
+    <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+      <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+        <span style={{ color: '#f59e0b' }}>⚠</span>
+        {conflicts.length} negative/positive keyword conflict{conflicts.length === 1 ? '' : 's'}
+      </p>
+      <ul className="space-y-1 max-h-40 overflow-y-auto pr-1">
+        {conflicts.map((c, i) => (
+          <li key={`${c.negative}-${c.positive}-${i}`} className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {c.reason}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Item 3 — checkAdStrength() output from the server: near-duplicate
+// headline/description pairs and missed keyword-insertion opportunities.
+function AdStrengthWarnings({ warnings }) {
+  if (!warnings?.length) return null;
+  return (
+    <div className="rounded-lg border p-2.5 space-y-1" style={{ borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+      {warnings.map((w, i) => (
+        <p key={i} className="text-xs leading-relaxed flex items-start gap-1.5" style={{ color: 'var(--color-text)' }}>
+          <span className="flex-shrink-0" style={{ color: '#f59e0b' }}>⚠</span>
+          {w}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function googleAdsToken(item) {
   const phrase = item.phrase || '';
@@ -98,15 +223,19 @@ function KeywordList({ title, items, empty }) {
       ) : (
         <ol className="space-y-1 max-h-[28rem] overflow-y-auto pr-1">
           {items.map((item, i) => (
-            <li
+            <Tooltip
               key={`${item.phrase}-${i}`}
-              className="flex items-start justify-between gap-2 rounded-lg border px-2.5 py-1.5"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+              text={`${item.matchType} match${item.intent ? ` · ${item.intent} intent` : ''}`}
             >
-              <span className="text-xs leading-relaxed min-w-0 font-mono" style={{ color: 'var(--color-text)' }}>
-                {googleAdsToken(item)}
-              </span>
-            </li>
+              <li
+                className="flex items-start justify-between gap-2 rounded-lg border px-2.5 py-1.5"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+              >
+                <span className="text-xs leading-relaxed min-w-0 font-mono" style={{ color: 'var(--color-text)' }}>
+                  {googleAdsToken(item)}
+                </span>
+              </li>
+            </Tooltip>
           ))}
         </ol>
       )}
@@ -133,40 +262,48 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onGenerate}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {copy ? 'Regenerate ads' : 'Generate ads'}
-          </button>
+          <Tooltip text={copy ? 'Rebuild headlines and descriptions for the current format.' : 'Write headlines and descriptions from What they sell.'}>
+            <button
+              type="button"
+              onClick={onGenerate}
+              className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {copy ? 'Regenerate ads' : 'Generate ads'}
+            </button>
+          </Tooltip>
           {hasLines && (
             <>
-              <button
-                type="button"
-                onClick={() => onCopy(headlines, 'Headlines')}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Copy headlines
-              </button>
-              <button
-                type="button"
-                onClick={() => onCopy(descriptions, 'Descriptions')}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Copy descriptions
-              </button>
-              <button
-                type="button"
-                onClick={() => onDownload(`${projectName || 'google-ads'}-ads.csv`, adsToCsv(copy))}
-                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Download ads CSV
-              </button>
+              <Tooltip text="Copy every headline to the clipboard, one per line.">
+                <button
+                  type="button"
+                  onClick={() => onCopy(headlines, 'Headlines')}
+                  className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Copy headlines
+                </button>
+              </Tooltip>
+              <Tooltip text="Copy every description to the clipboard, one per line.">
+                <button
+                  type="button"
+                  onClick={() => onCopy(descriptions, 'Descriptions')}
+                  className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Copy descriptions
+                </button>
+              </Tooltip>
+              <Tooltip text="Download all ad groups, headlines, descriptions, and sitelinks as a CSV for Ads Editor.">
+                <button
+                  type="button"
+                  onClick={() => onDownload(`${projectName || 'google-ads'}-ads.csv`, adsToCsv(copy))}
+                  className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Download ads CSV
+                </button>
+              </Tooltip>
             </>
           )}
         </div>
@@ -174,22 +311,23 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
 
       <div className="flex flex-wrap gap-2">
         {[
-          { id: 'rsa', label: 'RSA · 15 headlines / 4 descriptions' },
-          { id: 'ten', label: '10 headlines / 10 descriptions' },
+          { id: 'rsa', label: 'RSA · 15 headlines / 4 descriptions', help: 'Three ad groups (brand, primary offer, location/secondary) — the standard Responsive Search Ads shape.' },
+          { id: 'ten', label: '10 headlines / 10 descriptions', help: 'One copy pack for the primary offer, instead of three RSA ad groups.' },
         ].map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => setAdsFormat(opt.id)}
-            className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-            style={{
-              borderColor: adsFormat === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
-              color: adsFormat === opt.id ? 'var(--color-text)' : 'var(--color-muted)',
-              fontWeight: adsFormat === opt.id ? 600 : 400,
-            }}
-          >
-            {opt.label}
-          </button>
+          <Tooltip key={opt.id} text={opt.help}>
+            <button
+              type="button"
+              onClick={() => setAdsFormat(opt.id)}
+              className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+              style={{
+                borderColor: adsFormat === opt.id ? 'var(--color-primary)' : 'var(--color-border)',
+                color: adsFormat === opt.id ? 'var(--color-text)' : 'var(--color-muted)',
+                fontWeight: adsFormat === opt.id ? 600 : 400,
+              }}
+            >
+              {opt.label}
+            </button>
+          </Tooltip>
         ))}
       </div>
 
@@ -267,6 +405,8 @@ function AdCopySection({ copy, projectName, adsFormat, setAdsFormat, onGenerate,
                 </p>
               )}
             </div>
+
+            <AdStrengthWarnings warnings={ad.warnings} />
           </article>
         );
       })}
@@ -330,6 +470,7 @@ export default function SeoPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pane, setPane] = useState('keywords');
   const [adsFormat, setAdsFormat] = useState('rsa');
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadList = useCallback(async () => {
     const res = await api.get('/api/google-ads/projects');
@@ -548,29 +689,43 @@ export default function SeoPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
             {getIcon('megaphone', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Google Ads</h1>
+          <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Google Ads</h1>
+          <Tooltip text="What this tool does and its full feature list.">
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="text-xs w-5 h-5 flex items-center justify-center rounded-full border hover:opacity-60 transition-opacity flex-shrink-0"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              ?
+            </button>
+          </Tooltip>
         </div>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search projects…"
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={FIELD}
-        />
+        <Tooltip text="Filter projects by name or website.">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search projects…"
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={FIELD}
+          />
+        </Tooltip>
 
-        <button
-          type="button"
-          data-tour="google-ads-new"
-          onClick={() => navigate('/google-ads')}
-          className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-          style={{
-            background: !id ? 'var(--color-bg)' : 'transparent',
-            color: !id ? 'var(--color-text)' : 'var(--color-muted)',
-          }}
-        >
-          New project
-        </button>
+        <Tooltip text="Start a fresh campaign from a new URL and offer.">
+          <button
+            type="button"
+            data-tour="google-ads-new"
+            onClick={() => navigate('/google-ads')}
+            className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+            style={{
+              background: !id ? 'var(--color-bg)' : 'transparent',
+              color: !id ? 'var(--color-text)' : 'var(--color-muted)',
+            }}
+          >
+            New project
+          </button>
+        </Tooltip>
 
         <div>
           <button
@@ -627,58 +782,70 @@ export default function SeoPage() {
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Website URL</span>
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.example.com.au"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="The public site to scrape for brand, pages, and destination URLs.">
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://www.example.com.au"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What they sell</span>
-              <textarea
-                value={offer}
-                onChange={(e) => setOffer(e.target.value)}
-                rows={2}
-                placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                style={FIELD}
-              />
+              <Tooltip text="Ground truth for keywords and ads — this wins over anything the scrape says, including a different industry.">
+                <textarea
+                  value={offer}
+                  onChange={(e) => setOffer(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Project name (optional)</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Defaults to the offer or page title"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="Shown in the sidebar. Leave blank to use the offer or scraped page title.">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Defaults to the offer or page title"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
 
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Notes (optional)</span>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Locations, competitors to exclude…"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                style={FIELD}
-              />
+              <Tooltip text="Extra context for the model — locations, competitors to exclude, anything not obvious from the offer.">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Locations, competitors to exclude…"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
 
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Scrape & generate campaign
-            </button>
+            <Tooltip text="Scrapes the site, then generates keywords, negatives, and RSA ad copy in one go.">
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Scrape & generate campaign
+              </button>
+            </Tooltip>
+
+            <MarketDataNotice />
           </section>
         )}
 
@@ -711,14 +878,16 @@ export default function SeoPage() {
                     <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
                   </span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                  >
-                    Delete
-                  </button>
+                  <Tooltip text="Delete this project and its generated lists and ads.">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      Delete
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -746,24 +915,31 @@ export default function SeoPage() {
             <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What they sell</span>
-                <textarea
-                  value={offerDraft}
-                  onChange={(e) => setOfferDraft(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
-                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                  style={FIELD}
-                />
+                <Tooltip text="Ground truth for keywords and ads — this wins over anything the scrape says, including a different industry.">
+                  <textarea
+                    value={offerDraft}
+                    onChange={(e) => setOfferDraft(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Waterproofing inspections, leak detection, and remedial waterproofing"
+                    className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
+                    style={FIELD}
+                  />
+                </Tooltip>
               </label>
-              <button
-                type="button"
-                onClick={handleSaveOfferAndRegen}
-                className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                Save offer & regenerate lists
-              </button>
+              <Tooltip text="Saves the offer, then rebuilds keywords, negatives, and ads to match it.">
+                <button
+                  type="button"
+                  onClick={handleSaveOfferAndRegen}
+                  className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  Save offer & regenerate lists
+                </button>
+              </Tooltip>
             </div>
+
+            <MarketDataNotice />
+            <CampaignReadinessChecklist />
 
             {snapshot.title && (
               <div className="rounded-2xl border p-4 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -804,46 +980,56 @@ export default function SeoPage() {
             {pane === 'keywords' && (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleRegenerate}
-                    className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
-                    style={{ background: 'var(--color-primary)' }}
-                  >
-                    {project.googleAdsKeywords ? 'Regenerate keywords' : 'Generate keywords'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => copyList(keywords, 'Keywords')}
-                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    Copy keywords
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => copyList(negatives, 'Negatives')}
-                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    Copy negatives
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadCsv(`${project.name || 'google-ads'}-keywords.txt`, toKeywordExport(keywords))}
-                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    Download keywords
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadCsv(`${project.name || 'google-ads'}-negatives.txt`, toKeywordExport(negatives))}
-                    className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    Download negatives
-                  </button>
+                  <Tooltip text="Rebuild both lists from the current offer and scrape.">
+                    <button
+                      type="button"
+                      onClick={handleRegenerate}
+                      className="px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+                      style={{ background: 'var(--color-primary)' }}
+                    >
+                      {project.googleAdsKeywords ? 'Regenerate keywords' : 'Generate keywords'}
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Copy the keyword list to the clipboard in Google Ads syntax.">
+                    <button
+                      type="button"
+                      onClick={() => copyList(keywords, 'Keywords')}
+                      className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      Copy keywords
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Copy the negative keyword list to the clipboard in Google Ads syntax.">
+                    <button
+                      type="button"
+                      onClick={() => copyList(negatives, 'Negatives')}
+                      className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      Copy negatives
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Download keywords as a text file, one per line, ready for Keyword Planner or Ads Editor.">
+                    <button
+                      type="button"
+                      onClick={() => downloadCsv(`${project.name || 'google-ads'}-keywords.txt`, toKeywordExport(keywords))}
+                      className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      Download keywords
+                    </button>
+                  </Tooltip>
+                  <Tooltip text="Download negatives as a text file, one per line, ready for Keyword Planner or Ads Editor.">
+                    <button
+                      type="button"
+                      onClick={() => downloadCsv(`${project.name || 'google-ads'}-negatives.txt`, toKeywordExport(negatives))}
+                      className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      Download negatives
+                    </button>
+                  </Tooltip>
                 </div>
 
                 {!project.googleAdsKeywords && (
@@ -851,6 +1037,8 @@ export default function SeoPage() {
                     No keyword lists yet. Tap Generate keywords — lists follow What they sell when that field is set.
                   </p>
                 )}
+
+                <ConflictWarnings conflicts={project.googleAdsKeywords?.conflicts} />
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <KeywordList title="Keywords" items={keywords} empty="No keywords yet." />
@@ -873,6 +1061,8 @@ export default function SeoPage() {
           </section>
         )}
       </main>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

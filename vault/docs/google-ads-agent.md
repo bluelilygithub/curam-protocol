@@ -27,6 +27,32 @@ Character limits are enforced after the model returns (headlines ≤30, descript
 
 ---
 
+## Market-data disclaimer
+
+Every keyword, negative, and line of ad copy is pure LLM output — there is no search-volume, CPC, or competition signal behind any of it. A persistent amber banner (`MarketDataNotice` in `SeoPage.jsx`, shown on the new-project form and on every existing project) says so: *"AI-generated starting point — verify search volume and competition in Google Ads Keyword Planner before setting budgets."* This does not gate the feature — it just stops the lists from reading as market-validated data.
+
+## Keyword conflict detection
+
+`findKeywordConflicts(keywords, negatives)` in `googleAdsKeywords.js` runs after the existing exact-string `dropOverlaps()` step and flags match-type-aware overlaps `dropOverlaps()` doesn't catch: a negative that appears as a whole word/phrase *inside* a positive keyword (e.g. negative "cheap" would block positive "cheap removalists"). Word-boundary regex (`\W` boundaries), not `.includes()`, so it doesn't false-positive on partial words (negative "cat" does not flag positive "category"). Returned as a new `conflicts` array on the keywords payload: `{ negative, positive, matchType, reason }`. The client surfaces these via `ConflictWarnings` above the keyword/negative lists.
+
+## Ad Strength check
+
+`checkAdStrength(ad, keywords)` in `googleAdsCopy.js` runs per ad group after normalisation and adds a `warnings` array to each ad in the payload. It flags:
+- Near-duplicate headline pairs and near-duplicate description pairs — word-set Jaccard similarity ≥ 70% (same technique as the duplicate-content check in `seoAuditEngine.js`, applied to word sets instead of page shingles).
+- A missed keyword-insertion opportunity — none of the ad group's own keywords (or their core words, 3+ characters) appear in any headline.
+
+The client renders these via `AdStrengthWarnings` under each ad group.
+
+## Campaign-readiness checklist
+
+A static, deterministic (non-AI) checklist — `CampaignReadinessChecklist` in `SeoPage.jsx`, shown once a project exists — mirrors the tone of `seoAuditEngine.js`'s `notCovered` list: conversion tracking installed, bid strategy chosen, budget set at the campaign level. No server payload field; it's presentation-only.
+
+## Client help + tooltips
+
+`SeoPage.jsx` now has the same click-to-open help-icon + `TOOL_HELP`/`HelpModal` pattern as `HtmlAuditPage.jsx` and `SeoAuditPage.jsx` (a "?" button next to the sidebar title). Every input, button, format toggle, and keyword-list row is wrapped in the shared `Tooltip` component.
+
+---
+
 ## API
 
 Mounted at **`/api/google-ads`**. Same paths as before (`/status`, `/projects`, `/projects/:id/keywords`, `/projects/:id/ads`).

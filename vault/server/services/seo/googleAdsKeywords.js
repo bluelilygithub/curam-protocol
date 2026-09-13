@@ -82,6 +82,45 @@ function dropOverlaps(negatives, keywords) {
   return negatives.filter((n) => !positive.has(n.phrase.toLowerCase()));
 }
 
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Word/phrase-boundary containment check — deliberately not a naive
+// `.includes()`, which would false-positive on partial words (e.g. negative
+// "cat" inside positive "category"). `\W` boundaries treat the phrase as a
+// whole word/phrase run, matching how Google Ads itself tokenises negatives.
+function phraseContains(haystack, needle) {
+  if (!haystack || !needle) return false;
+  const pattern = new RegExp(`(^|\\W)${escapeRegExp(needle)}(\\W|$)`, 'i');
+  return pattern.test(haystack);
+}
+
+// Match-type-aware negative/positive conflict detection. A broad-match
+// negative blocks any positive keyword that contains it as a whole
+// word/phrase; an exact/phrase negative conflicts the same way (identical or
+// phrase-contained) — dropOverlaps() already removes exact case-insensitive
+// duplicates before this runs, so what's left here is genuine partial-phrase
+// overlap the advertiser should see before uploading the negative list.
+function findKeywordConflicts(keywords, negatives) {
+  const conflicts = [];
+  for (const neg of negatives || []) {
+    const negPhrase = String(neg?.phrase || '').toLowerCase().trim();
+    if (!negPhrase) continue;
+    for (const kw of keywords || []) {
+      const kwPhrase = String(kw?.phrase || '').toLowerCase().trim();
+      if (!kwPhrase) continue;
+      const identical = kwPhrase === negPhrase;
+      if (!identical && !phraseContains(kwPhrase, negPhrase)) continue;
+      const reason = identical
+        ? `Negative "${neg.phrase}" (${neg.matchType}) is identical to positive keyword "${kw.phrase}".`
+        : `Negative "${neg.phrase}" (${neg.matchType} match) would block positive keyword "${kw.phrase}" because it contains that phrase.`;
+      conflicts.push({ negative: neg.phrase, positive: kw.phrase, matchType: neg.matchType, reason });
+    }
+  }
+  return conflicts;
+}
+
 async function resolveModel(userId) {
   const tiers = await getModelsForUser(userId);
   const modelId = pickTextModel(tiers, 'standard');
@@ -232,6 +271,7 @@ The negatives array MUST contain exactly ${TARGET} items.`, {
     feature: 'seo_negatives',
   });
   negatives = dropOverlaps(negatives, keywords).slice(0, TARGET);
+  const conflicts = findKeywordConflicts(keywords, negatives);
 
   return {
     kind: 'google_ads_keywords',
@@ -239,7 +279,8 @@ The negatives array MUST contain exactly ${TARGET} items.`, {
     geo: String(kwParsed.geo || '').slice(0, 120),
     keywords,
     negatives,
-    counts: { keywords: keywords.length, negatives: negatives.length },
+    conflicts,
+    counts: { keywords: keywords.length, negatives: negatives.length, conflicts: conflicts.length },
     generatedAt: new Date().toISOString(),
     model: modelId,
   };
@@ -263,4 +304,5 @@ module.exports = {
   callJson,
   resolveModel,
   siteBrief,
+  findKeywordConflicts,
 };
