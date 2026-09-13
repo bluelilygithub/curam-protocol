@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import Tooltip from '../components/Tooltip';
 
 const FIELD = {
   background: 'var(--color-bg)',
@@ -293,42 +294,48 @@ export default function HtmlAuditPage() {
           <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Lighthouse</h1>
         </div>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search runs…"
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={FIELD}
-        />
+        <Tooltip text="Filter your saved runs by name, URL, or hostname.">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search runs…"
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={FIELD}
+          />
+        </Tooltip>
 
-        <select
-          aria-label="Sort runs"
-          value={sort}
-          onChange={(e) => {
-            const next = e.target.value;
-            setSort(next);
-            try { localStorage.setItem('vault:htmlListSort', next); } catch { /* ignore */ }
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
-          style={FIELD}
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>Sort: {o.label}</option>
-          ))}
-        </select>
+        <Tooltip text="Order the run list by date, name, or score.">
+          <select
+            aria-label="Sort runs"
+            value={sort}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSort(next);
+              try { localStorage.setItem('vault:htmlListSort', next); } catch { /* ignore */ }
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+            style={FIELD}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>Sort: {o.label}</option>
+            ))}
+          </select>
+        </Tooltip>
 
-        <button
-          type="button"
-          onClick={() => navigate('/html')}
-          className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
-          style={
-            !id
-              ? { background: 'var(--color-primary)', color: '#fff' }
-              : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
-          }
-        >
-          New Lighthouse run
-        </button>
+        <Tooltip text="Start a fresh Lighthouse run on a new URL.">
+          <button
+            type="button"
+            onClick={() => navigate('/html')}
+            className="w-full px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+            style={
+              !id
+                ? { background: 'var(--color-primary)', color: '#fff' }
+                : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
+            }
+          >
+            New Lighthouse run
+          </button>
+        </Tooltip>
 
         <ul className="space-y-0.5">
           {filtered.length === 0 && (
@@ -365,15 +372,17 @@ export default function HtmlAuditPage() {
                       ].filter(Boolean).join(' · ')}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${a.name}`}
-                    onClick={() => setPendingDeleteId(a.id)}
-                    className="shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-70"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
-                    {getIcon('trash', { size: 14 })}
-                  </button>
+                  <Tooltip text={`Delete this saved run.`}>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${a.name}`}
+                      onClick={() => setPendingDeleteId(a.id)}
+                      className="shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {getIcon('trash', { size: 14 })}
+                    </button>
+                  </Tooltip>
                 </div>
               )}
             </li>
@@ -396,32 +405,38 @@ export default function HtmlAuditPage() {
             </div>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Website URL</span>
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.example.com.au"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="Any public URL — Vault runs a real Google PageSpeed Insights audit against it, mobile and desktop.">
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://www.example.com.au"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Name (optional)</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Defaults to the hostname"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={FIELD}
-              />
+              <Tooltip text="A label to find this run later in the sidebar list — defaults to the site's hostname.">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Defaults to the hostname"
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={FIELD}
+                />
+              </Tooltip>
             </label>
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Run Lighthouse
-            </button>
+            <Tooltip text="Takes about a minute — two PageSpeed Insights runs (mobile + desktop) in parallel.">
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Run Lighthouse
+              </button>
+            </Tooltip>
           </section>
         )}
 
@@ -459,52 +474,59 @@ export default function HtmlAuditPage() {
                     <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
                   </span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                  >
-                    Delete
-                  </button>
+                  <Tooltip text="Delete this saved run.">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      Delete
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               {['mobile', 'desktop'].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setView(s)}
-                  className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                  style={view === s
-                    ? { background: 'var(--color-primary)', color: '#fff' }
-                    : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  {s === 'mobile' ? 'Mobile' : 'Desktop'}
-                  {pair[s]?.score != null ? ` ${pair[s].score}` : ''}
-                </button>
+                <Tooltip key={s} text={`Switch to the ${s} report for this run.`}>
+                  <button
+                    type="button"
+                    onClick={() => setView(s)}
+                    className="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+                    style={view === s
+                      ? { background: 'var(--color-primary)', color: '#fff' }
+                      : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                  >
+                    {s === 'mobile' ? 'Mobile' : 'Desktop'}
+                    {pair[s]?.score != null ? ` ${pair[s].score}` : ''}
+                  </button>
+                </Tooltip>
               ))}
               {active?.developerBrief ? (
-                <button
-                  type="button"
-                  onClick={() => copyBrief(active.developerBrief)}
-                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  Copy this report
-                </button>
+                <Tooltip text="Copy the work order, metrics, and findings for the currently selected view (mobile or desktop) as plain text.">
+                  <button
+                    type="button"
+                    onClick={() => copyBrief(active.developerBrief)}
+                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Copy this report
+                  </button>
+                </Tooltip>
               ) : null}
               {audit?.report?.developerBrief ? (
-                <button
-                  type="button"
-                  onClick={() => copyBrief(audit.report.developerBrief)}
-                  className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  Copy mobile + desktop
-                </button>
+                <Tooltip text="Copy both the mobile and desktop reports together as plain text.">
+                  <button
+                    type="button"
+                    onClick={() => copyBrief(audit.report.developerBrief)}
+                    className="px-3.5 py-1.5 rounded-lg text-sm border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Copy mobile + desktop
+                  </button>
+                </Tooltip>
               ) : null}
             </div>
 
@@ -516,19 +538,20 @@ export default function HtmlAuditPage() {
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    ['Performance', cats.performance],
-                    ['Accessibility', cats.accessibility],
-                    ['Best practices', cats.bestPractices],
-                    ['Lighthouse SEO', cats.seo],
-                  ].map(([label, n]) => (
-                    <div
-                      key={label}
-                      className="rounded-2xl border p-4"
-                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-                    >
-                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{label}</p>
-                      <p className="text-xl font-semibold tabular-nums mt-1" style={{ color: scoreTint(n) }}>{n ?? '—'}</p>
-                    </div>
+                    ['Performance', cats.performance, 'Loading speed and responsiveness — every low score here also becomes a work-order ticket below.'],
+                    ['Accessibility', cats.accessibility, 'How usable the page is with a screen reader, keyboard, or low vision — now covered in the work order, not just this number.'],
+                    ['Best practices', cats.bestPractices, 'General web-platform hygiene: HTTPS, no known-vulnerable libraries, no console errors, and more.'],
+                    ['Lighthouse SEO', cats.seo, 'Lighthouse\'s lab-based SEO checks (meta tags, crawlability basics) — for a full multi-page SEO crawl use the separate SEO tool.'],
+                  ].map(([label, n, tip]) => (
+                    <Tooltip key={label} text={tip}>
+                      <div
+                        className="rounded-2xl border p-4"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                        <p className="text-xl font-semibold tabular-nums mt-1" style={{ color: scoreTint(n) }}>{n ?? '—'}</p>
+                      </div>
+                    </Tooltip>
                   ))}
                 </div>
 
@@ -545,7 +568,7 @@ export default function HtmlAuditPage() {
                   <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                     <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Work order</p>
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                      Ranked tickets for a developer. Copy this report to paste the same list.
+                      Ranked tickets for a developer, covering all four scored categories — not just Performance. Copy this report to paste the same list.
                     </p>
                     <ul className="space-y-3">
                       {active.workOrder.map((t) => (
@@ -554,7 +577,19 @@ export default function HtmlAuditPage() {
                           className="rounded-xl border p-4 space-y-1"
                           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
                         >
-                          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>{t.priority}</p>
+                          <div className="flex items-center gap-2">
+                            <Tooltip text="P0 = fix first (outright failure or biggest impact). P1 = important. P2 = worth doing.">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>{t.priority}</span>
+                            </Tooltip>
+                            {t.categoryLabel && (
+                              <span
+                                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+                                style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                              >
+                                {t.categoryLabel}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.title}</p>
                           <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{t.action}</p>
                           {(t.evidence || []).length > 0 && (

@@ -174,23 +174,45 @@ function findAudit(view, test) {
   return null;
 }
 
-function workOrder(view) {
+// Human-readable label for a Lighthouse/PSI category id, used to group work-order
+// tickets so every scored category (not just Performance) gets visible coverage.
+const CATEGORY_LABELS = {
+  performance: 'Performance',
+  accessibility: 'Accessibility',
+  seo: 'SEO',
+  'best-practices': 'Best practices',
+};
+
+function categoryLabel(cid) {
+  return CATEGORY_LABELS[cid] || 'General';
+}
+
+// Curated tickets for a handful of well-understood, high-value patterns. These
+// give more specific, code-level guidance than a generic audit description can
+// (e.g. exactly which HTML attribute to add) — kept alongside, not instead of,
+// full category coverage from genericTickets() below. `usedIds` is populated so
+// the generic pass doesn't also emit a duplicate ticket for the same audit.
+function curatedTickets(view, usedIds) {
   const tickets = [];
   const redir = findAudit(view, (a) => a.id === 'redirects');
   if (redir) {
+    usedIds.add(redir.id);
     tickets.push({
       priority: 'P0',
+      category: 'performance',
       title: 'Serve one host — drop the extra redirect',
-      action: 'Pick one canonical host (www or apex). 301 the other to it. Set WordPress Address, Site Address, canonicals, and sitemaps to that host so the first HTML response is already canonical. This hop is the largest mobile delay in this report.',
+      action: 'Pick one canonical host (www or apex). 301 the other to it. Set the site\'s canonical URL, sitemaps, and internal links to that host so the first HTML response is already canonical — an extra redirect hop is one of the most common largest mobile delays.',
       evidence: (redir.items || []).map(formatItemLine).filter(Boolean),
     });
   }
   const lcp = findAudit(view, (a) => /lcp-breakdown|lcp-discovery/i.test(a.id || ''));
   if (lcp) {
+    usedIds.add(lcp.id);
     const hero = (lcp.items || []).map((i) => i.url || srcFromHtml(i.snippet)).find(Boolean);
     const cls = (lcp.items || []).map((i) => i.selector).find(Boolean);
     tickets.push({
       priority: 'P0',
+      category: 'performance',
       title: 'Make the hero LCP image discoverable immediately',
       action: `${hero ? `Hero image: ${hero}. ` : ''}${cls ? `Selector: ${cls}. ` : ''}In the first HTML response give that <img> fetchpriority="high", width and height, and a matching <link rel="preload" as="image">. Do not lazy-load it. Compress and size it for mobile.`,
       evidence: (lcp.items || []).map(formatItemLine).filter(Boolean),
@@ -198,52 +220,138 @@ function workOrder(view) {
   }
   const js = findAudit(view, (a) => a.id === 'unused-javascript');
   if (js) {
+    usedIds.add(js.id);
+    const items = js.items || [];
+    const hasThirdPartyTag = items.some((i) => /gtm\.js|gtag\/js|googletagmanager|google-analytics/i.test(i.url || ''));
     tickets.push({
       priority: 'P1',
-      title: 'Stop GTM from competing with first paint',
-      action: 'Load Google Tag Manager after first paint (requestIdleCallback or consent). Do not put gtm.js / gtag.js in the document head as a render-blocking script.',
-      evidence: (js.items || []).map(formatItemLine).filter(Boolean),
+      category: 'performance',
+      title: hasThirdPartyTag ? 'Defer the tag-manager script so it stops competing with first paint' : 'Trim unused JavaScript blocking first paint',
+      action: hasThirdPartyTag
+        ? 'Load the tag-manager/analytics script after first paint (requestIdleCallback, or after consent) rather than as a render-blocking script in the document head.'
+        : 'Split or lazy-load the scripts listed in evidence so the unused portion is not shipped on first load. See each file\'s unused-byte count below.',
+      evidence: items.map(formatItemLine).filter(Boolean),
     });
   }
   const cssUnused = findAudit(view, (a) => a.id === 'unused-css-rules');
   const cssMin = findAudit(view, (a) => a.id === 'unminified-css');
   if (cssUnused || cssMin) {
+    if (cssUnused) usedIds.add(cssUnused.id);
+    if (cssMin) usedIds.add(cssMin.id);
     const items = uniqRows([...(cssUnused?.items || []), ...(cssMin?.items || [])]);
-    const file = items.map((i) => i.url).find(Boolean) || 'the theme stylesheet';
+    const file = items.map((i) => i.url).find(Boolean) || 'the stylesheet';
     tickets.push({
       priority: 'P1',
+      category: 'performance',
       title: 'Minify and split unused CSS',
-      action: `Minify ${file}. Deliver only above-the-fold rules on this template; defer the rest.`,
+      action: `Minify ${file}. Deliver only above-the-fold rules for this template; defer or split out the rest.`,
       evidence: items.map(formatItemLine).filter(Boolean),
     });
   }
   const headings = findAudit(view, (a) => a.id === 'heading-order');
   if (headings) {
+    usedIds.add(headings.id);
     tickets.push({
       priority: 'P2',
-      title: 'Fix heading levels (do not skip h2→h4 / footer h5)',
-      action: 'Use sequential headings (do not skip levels, e.g. h2 then h4). Footer nav should not jump to h5. Match the selectors in evidence.',
+      category: 'accessibility',
+      title: 'Fix heading levels — don\'t skip a level',
+      action: 'Headings should step down one level at a time (h1 → h2 → h3, never h2 → h4). Screen-reader users navigate by heading level, so a skipped level reads as missing structure. Fix each selector in evidence.',
       evidence: (headings.items || []).map(formatItemLine).filter(Boolean),
     });
   }
   const contrast = findAudit(view, (a) => a.id === 'color-contrast');
   if (contrast) {
+    usedIds.add(contrast.id);
     tickets.push({
       priority: 'P2',
-      title: 'Raise text contrast on buttons, links, eyebrows, figcaptions',
-      action: 'Each evidence row lists selector, text colour, background, and ratio. Target 4.5:1 for normal text and 3:1 for large text. Fix the shared button/link/eyebrow/figcaption/footer tokens rather than one-off pages.',
+      category: 'accessibility',
+      title: 'Raise text contrast on the flagged elements',
+      action: 'Each evidence row lists selector, text colour, background, and ratio. Target 4.5:1 for normal text and 3:1 for large text. Fix the shared design-token/colour variable behind these elements rather than one-off overrides.',
       evidence: (contrast.items || []).map(formatItemLine).filter(Boolean),
     });
   }
   const reflow = findAudit(view, (a) => /forced-reflow/i.test(a.id || ''));
   if (reflow && (reflow.items || []).length) {
+    usedIds.add(reflow.id);
     tickets.push({
       priority: 'P2',
-      title: 'Remove forced reflow in theme JS',
-      action: 'Avoid reading layout (offsetWidth/getBoundingClientRect) immediately after DOM/style writes. Batch reads, then writes. Check theme JS on this page.',
+      category: 'performance',
+      title: 'Remove forced reflow in page JS',
+      action: 'Avoid reading layout (offsetWidth/getBoundingClientRect) immediately after a DOM/style write. Batch all reads, then all writes.',
       evidence: (reflow.items || []).map(formatItemLine).filter(Boolean),
     });
   }
+  return tickets;
+}
+
+// Generic coverage for every remaining failed/low-scoring audit across all four
+// categories, so Accessibility/SEO/Best-practices issues get a ticket too, not
+// just a raw entry buried in the Diagnostics/Failed-checks lists below.
+function genericTickets(view, usedIds) {
+  const tickets = [];
+
+  for (const a of view.failedAudits || []) {
+    if (usedIds.has(a.id)) continue;
+    usedIds.add(a.id);
+    tickets.push({
+      priority: 'P0',
+      category: a.category || '',
+      title: a.title,
+      action: a.description || 'This check failed outright — see evidence below for the exact elements involved.',
+      evidence: (a.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+
+  for (const o of view.opportunities || []) {
+    if (usedIds.has(o.id)) continue;
+    usedIds.add(o.id);
+    const big = (o.savingsMs || 0) >= 300 || (o.savingsBytes || 0) >= 102400;
+    tickets.push({
+      priority: big ? 'P0' : 'P1',
+      category: o.category || 'performance',
+      title: o.title,
+      action: o.description || 'See evidence below for the files/elements this affects and the estimated savings.',
+      evidence: (o.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+
+  for (const d of view.diagnostics || []) {
+    if (usedIds.has(d.id)) continue;
+    usedIds.add(d.id);
+    tickets.push({
+      priority: (d.score ?? 1) < 0.5 ? 'P1' : 'P2',
+      category: d.category || '',
+      title: d.title,
+      action: d.description || 'See evidence below.',
+      evidence: (d.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+
+  for (const w of view.warnings || []) {
+    if (usedIds.has(w.id)) continue;
+    usedIds.add(w.id);
+    tickets.push({
+      priority: 'P2',
+      category: w.category || '',
+      title: w.title,
+      action: w.description || 'See evidence below.',
+      evidence: (w.items || []).map(formatItemLine).filter(Boolean),
+    });
+  }
+
+  return tickets;
+}
+
+const PRIORITY_ORDER = { P0: 0, P1: 1, P2: 2 };
+
+function workOrder(view) {
+  const usedIds = new Set();
+  const tickets = [
+    ...curatedTickets(view, usedIds),
+    ...genericTickets(view, usedIds),
+  ];
+  tickets.forEach((t) => { t.categoryLabel = categoryLabel(t.category); });
+  tickets.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3));
   return tickets;
 }
 

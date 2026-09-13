@@ -12,9 +12,20 @@ Lighthouse lab audit at **`/html`**. Paste a public URL. Vault runs Google PageS
 
 1. **New run** — URL and optional name.
 2. **PageSpeed** — two `runPagespeed` calls in parallel (mobile + desktop), categories performance, accessibility, best-practices, SEO. Requires **`PAGESPEED_API_KEY`**.
-3. **Report** — toggle Mobile / Desktop. **Work order** (P0–P2 tickets a developer can implement), category scores, CrUX, lab metrics, opportunities with URLs/savings, diagnostics, failed checks with selectors and contrast values, copyable brief.
+3. **Report** — toggle Mobile / Desktop. **Work order** (P0–P2 tickets a developer can implement, tagged by category so Accessibility/SEO/Best-practices issues get real tickets too, not just Performance), category scores, CrUX, lab metrics, opportunities with URLs/savings, diagnostics, failed checks with selectors and contrast values, copyable brief.
 
 SSRF-safe: the page URL is DNS-checked before it is sent to Google.
+
+---
+
+## Work order
+
+`workOrder()` in `htmlLighthouse.js` builds the ranked ticket list in two passes:
+
+1. **Curated tickets** — a handful of well-understood, high-value patterns (redirect chains, LCP image discoverability, unused/render-blocking JS, unused/unminified CSS, heading order, colour contrast, forced reflow) get specific, code-level guidance (exact HTML attributes, exact fix) rather than a generic audit description. Each curated ticket records the audit id(s) it consumed.
+2. **Generic tickets** — every remaining failed audit, opportunity, or low-scoring diagnostic/warning across **all four PSI categories** (Performance, Accessibility, SEO, Best practices) that wasn't already claimed by a curated ticket gets its own ticket, titled from the audit and using Lighthouse's own description as the action text. This is what closes the gap where Accessibility/SEO/Best-practices audits used to score a number with no accompanying guidance.
+
+Priority: failed audits (binary, outright fail) → P0; opportunities with ≥300ms or ≥100KB savings → P0, else P1; low-scoring diagnostics → P1 (score < 0.5) or P2; warnings → P2. Every ticket carries a `category`/`categoryLabel` so the UI can show which of the four scores it addresses.
 
 ---
 
@@ -28,6 +39,8 @@ SSRF-safe: the page URL is DNS-checked before it is sent to Google.
 | `DELETE` | `/api/html/audits/:id` | Remove run |
 
 Feature flag: **`html`**.
+
+Every control (URL/name inputs, run button, mobile/desktop toggle, category score cards, work-order priority/category badges, copy/delete buttons, search/sort) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, Video Tools, YouTube, and Domain.
 
 A run often takes about a minute (two PSI jobs in parallel). Use ProcessingModal.
 
