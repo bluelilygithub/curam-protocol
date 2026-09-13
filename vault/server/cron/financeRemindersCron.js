@@ -2,6 +2,16 @@
 
 const cron = require('node-cron');
 const { pool } = require('../db');
+const { captureIf, makeFingerprint } = require('../services/SuggestionService');
+
+// Must stay in sync with `finYearForDate()` in server/routes/finance.js and FinancePage.jsx.
+function finYearForDate(dateStr) {
+  const d = new Date(dateStr);
+  const y = d.getUTCFullYear();
+  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
+  const endYY = String((startYear + 1) % 100).padStart(2, '0');
+  return `${startYear}-${endYY}`;
+}
 
 function fmtDate(d) {
   if (!d) return '—';
@@ -225,7 +235,109 @@ async function runFinanceReminders(onlyUserId = null) {
   return { sent: anySent };
 }
 
+function buildAnnualVhoReminderHtml({ bizName, fyLabel, vLocked, hLocked }) {
+  const items = [];
+  if (!vLocked) items.push('Vehicle claim method (cents-per-km or logbook)');
+  if (!hLocked) items.push('Home office claim method (fixed-rate or actual-cost)');
+  const itemsHtml = items.map(i => `<li style="margin-bottom:6px;">${i}</li>`).join('');
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+    <div style="background:#1f2937;padding:24px 32px;">
+      <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">FY${fyLabel} vehicle/home office method</h1>
+      ${bizName ? `<p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">${bizName}</p>` : ''}
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#1f2937;">FY${fyLabel} starts 1 July. The ATO requires one method per financial year for vehicle and home office claims, locked before you log entries against it.</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;">Not yet locked for FY${fyLabel}:</p>
+      <ul style="margin:0 0 20px;padding-left:20px;font-size:14px;color:#374151;">${itemsHtml}</ul>
+      <p style="margin:0;font-size:13px;color:#6b7280;">Go to Finance → Settings → Vehicle &amp; Home Office to review and lock the method(s) for the new financial year.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// Once-a-year nudge, fired in a window around 1 July (AU financial year start) rather than a
+// fixed date, so a brief downtime doesn't skip it entirely. Dedupes per user per calendar year
+// via the `fin_annual_vho_reminder_year` settings key. Reuses the Suggestions inbox (low-urgency,
+// once-a-year prompt — a better fit than a dedicated channel) plus the same admin-email pattern
+// already used for the weekly overdue reminders above.
+async function checkAnnualVehicleHoReminder() {
+  const today = new Date();
+  const month = today.getMonth(); // 0-indexed; June = 5, July = 6
+  const day   = today.getDate();
+  const inWindow = (month === 5 && day >= 25) || (month === 6 && day <= 14);
+  if (!inWindow) return;
+
+  const nowYear = today.getFullYear();
+  const fyLabel = finYearForDate(today.toISOString().slice(0, 10));
+
+  const { rows: adminRows } = await pool.query(`
+    SELECT "userId", value AS admin_email FROM settings
+    WHERE key = 'fin_admin_email' AND value IS NOT NULL AND value <> ''
+  `);
+  if (!adminRows.length) return;
+
+  const sendEmail = require('../utils/sendEmail');
+
+  for (const { userId, admin_email } of adminRows) {
+    try {
+      const { rows: sentRows } = await pool.query(
+        `SELECT value FROM settings WHERE "userId"=$1 AND key='fin_annual_vho_reminder_year'`, [userId]
+      );
+      if (sentRows[0]?.value === String(nowYear)) continue;
+
+      const { rows: vRows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_vehicle_method_by_year'`, [userId]);
+      const { rows: hRows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_home_office_method_by_year'`, [userId]);
+      let vMap = {}, hMap = {};
+      try { vMap = JSON.parse(vRows[0]?.value || '{}') || {}; } catch {}
+      try { hMap = JSON.parse(hRows[0]?.value || '{}') || {}; } catch {}
+      const vLocked = !!vMap[fyLabel];
+      const hLocked = !!hMap[fyLabel];
+
+      const markSent = () => pool.query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_annual_vho_reminder_year',$2)
+         ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+        [userId, String(nowYear)]
+      );
+
+      if (vLocked && hLocked) { await markSent(); continue; }
+
+      await captureIf(true, {
+        userId,
+        source: 'financeRemindersCron',
+        category: 'alert',
+        fingerprint: makeFingerprint('financeRemindersCron', `vho-method-lock:${fyLabel}`),
+        title: `Lock vehicle/home office method for FY${fyLabel}`,
+        body: `FY${fyLabel} starts 1 July. ${!vLocked ? 'Vehicle claim method is not yet locked. ' : ''}${!hLocked ? 'Home office claim method is not yet locked. ' : ''}Go to Finance → Settings → Vehicle & Home Office to lock the method(s) before logging any entries dated in this financial year.`,
+        context: 'Finance → Settings → Vehicle & Home Office',
+      });
+
+      const { rows: bizRows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_biz_name'`, [userId]);
+      const bizName = bizRows[0]?.value || '';
+      try {
+        await sendEmail({
+          to: admin_email,
+          subject: `Lock your FY${fyLabel} vehicle/home office method${bizName ? ` — ${bizName}` : ''}`,
+          html: buildAnnualVhoReminderHtml({ bizName, fyLabel, vLocked, hLocked }),
+        });
+        console.log(`[finance-reminders] Annual vehicle/home office nudge sent to ${admin_email} for FY${fyLabel}`);
+      } catch (err) {
+        console.error(`[finance-reminders] Annual vehicle/home office email failed for user ${userId}:`, err.message);
+      }
+
+      await markSent();
+    } catch (err) {
+      console.error(`[finance-reminders] Annual vehicle/home office check failed for user ${userId}:`, err.message);
+    }
+  }
+}
+
 let task = null;
+let annualVhoTask = null;
 
 function startFinanceRemindersCron() {
   if (task) return;
@@ -258,6 +370,15 @@ function startFinanceRemindersCron() {
     }
   });
   console.log('[finance-reminders] Cron scheduled — runs hourly on Mondays, fires per-user at configured hour (default 08:00)');
+
+  if (annualVhoTask) return;
+  // Daily at 08:00 server time; checkAnnualVehicleHoReminder() no-ops outside the ~25 Jun – 14 Jul window.
+  annualVhoTask = cron.schedule('0 8 * * *', () => {
+    checkAnnualVehicleHoReminder().catch(err =>
+      console.error('[finance-reminders] Annual vehicle/home office cron error:', err.message)
+    );
+  });
+  console.log('[finance-reminders] Annual vehicle/home office cron scheduled — checks daily, fires once per year around 1 July');
 }
 
-module.exports = { startFinanceRemindersCron, runFinanceReminders };
+module.exports = { startFinanceRemindersCron, runFinanceReminders, checkAnnualVehicleHoReminder };

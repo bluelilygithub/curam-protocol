@@ -1843,6 +1843,11 @@ function finYearForDate(dateStr) {
   return `${startYear}-${endYY}`;
 }
 
+async function getSettingValue(userId, key, fallback) {
+  const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key=$2`, [userId, key]);
+  return rows.length && rows[0].value !== null && rows[0].value !== '' ? rows[0].value : fallback;
+}
+
 async function getMethodByYearMap(userId, key) {
   const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key=$2`, [userId, key]);
   if (!rows.length) return {};
@@ -1926,7 +1931,12 @@ router.post('/expenses/vehicle', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, purpose, method, km, ratePerKm, businessUsePercent, actualCost, paidViaId } = req.body;
+    // NOTE: the client no longer sends `method` or a rate at all — the entry screen only offers
+    // date/purpose/km-or-cost fields (see docs/finance.md). The server resolves the FY's locked
+    // method and the current ATO rate itself, so there is structurally no way for a request to
+    // apply a different method to an entry than the one locked for its financial year. The
+    // `method` check below is kept only as defense-in-depth against a direct/legacy API call.
+    const { date, description, purpose, method, km, businessUsePercent, actualCost, paidViaId } = req.body;
     const expenseDate = date || new Date().toISOString().slice(0, 10);
     const fy = finYearForDate(expenseDate);
 
@@ -1934,13 +1944,14 @@ router.post('/expenses/vehicle', async (req, res) => {
     const lockedMethod = methodMap[fy];
     if (!lockedMethod) {
       await dbClient.query('ROLLBACK');
-      return res.status(400).json({ error: `No vehicle claim method set for FY${fy} yet. Set one (cents-per-km or logbook) via /api/finance/vehicle-method before saving — the ATO requires one method per financial year, not per entry.` });
+      return res.status(400).json({ error: `No vehicle claim method set for FY${fy} yet. Go to Finance → Settings → Vehicle & Home Office to lock one (cents-per-km or logbook) before saving — the ATO requires one method per financial year, not per entry.`, fy, needsMethodLock: 'vehicle' });
     }
     if (method && method !== lockedMethod) {
       await dbClient.query('ROLLBACK');
       return res.status(400).json({ error: `FY${fy} is locked to '${lockedMethod}'. You cannot use '${method}' for an entry dated in this financial year — the ATO does not allow mixing vehicle claim methods within the same financial year.` });
     }
     const useMethod = lockedMethod;
+    const ratePerKm = await getSettingValue(userId, 'fin_vehicle_rate_per_km', '0.88');
 
     let deductible;
     if (useMethod === 'cents_per_km') {
@@ -2006,7 +2017,8 @@ router.post('/expenses/home-office', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, method, hours, ratePerHour, businessUsePercent, actualCost, paidViaId } = req.body;
+    // See note above the vehicle route — the client no longer sends `method` or a rate.
+    const { date, description, method, hours, businessUsePercent, actualCost, paidViaId } = req.body;
     const expenseDate = date || new Date().toISOString().slice(0, 10);
     const fy = finYearForDate(expenseDate);
 
@@ -2014,13 +2026,14 @@ router.post('/expenses/home-office', async (req, res) => {
     const lockedMethod = methodMap[fy];
     if (!lockedMethod) {
       await dbClient.query('ROLLBACK');
-      return res.status(400).json({ error: `No home office claim method set for FY${fy} yet. Set one (fixed-rate or actual-cost) via /api/finance/home-office-method before saving — the ATO requires one method per financial year, not per entry.` });
+      return res.status(400).json({ error: `No home office claim method set for FY${fy} yet. Go to Finance → Settings → Vehicle & Home Office to lock one (fixed-rate or actual-cost) before saving — the ATO requires one method per financial year, not per entry.`, fy, needsMethodLock: 'homeOffice' });
     }
     if (method && method !== lockedMethod) {
       await dbClient.query('ROLLBACK');
       return res.status(400).json({ error: `FY${fy} is locked to '${lockedMethod}'. You cannot use '${method}' for an entry dated in this financial year — the ATO does not allow mixing home office claim methods within the same financial year.` });
     }
     const useMethod = lockedMethod;
+    const ratePerHour = await getSettingValue(userId, 'fin_home_office_rate_per_hour', '0.70');
 
     let deductible;
     if (useMethod === 'fixed_rate') {
