@@ -50,7 +50,25 @@ Both post through the normal expense journal (DR Expenses 5000, CR Bank/paidVia)
 - **Vehicle** (`fin_vehicle_expenses`, linked 1:1 to a `fin_expenses` row via `expenseId`): `cents_per_km` (km × `fin_vehicle_rate_per_km` setting) or `logbook` (actualCost × businessUsePercent / 100). Tx code `EXP-190`.
 - **Home Office** (`fin_home_office_expenses`, same pattern): `fixed_rate` (hours × `fin_home_office_rate_per_hour` setting) or `actual_cost` (actualCost × businessUsePercent / 100). Tx code `EXP-200`.
 
-Both rates are editable Settings values (`fin_vehicle_rate_per_km` default 0.88, `fin_home_office_rate_per_hour` default 0.70 — 2025-26 ATO rates) — **never hardcoded** in calculation code, since the ATO changes them yearly. Routes: `POST /api/finance/expenses/vehicle`, `POST /api/finance/expenses/home-office`. Client: "Vehicle/Home Office" tab.
+Both rates are editable Settings values (`fin_vehicle_rate_per_km` default 0.88, `fin_home_office_rate_per_hour` default 0.70 — 2025-26 ATO rates) — **never hardcoded** in calculation code, since the ATO changes them yearly. Editable directly in the "Vehicle/Home Office" tab (each rate field saves via `PUT /api/finance/settings` on blur), not only in the database. Routes: `POST /api/finance/expenses/vehicle`, `POST /api/finance/expenses/home-office`. Client: "Vehicle/Home Office" tab.
+
+### Method is locked per financial year, not chosen per entry
+
+The ATO requires **one method per financial year (1 Jul–30 Jun) per claim type** — you cannot mix `cents_per_km`/`logbook`, or `fixed_rate`/`actual_cost`, within the same FY. This is enforced, not just a UI convention:
+
+- The locked method per FY is stored as a JSON map in the existing `settings` table (same row/key convention as `fin_vehicle_rate_per_km` etc.) under `fin_vehicle_method_by_year` / `fin_home_office_method_by_year`, e.g. `{ "2025-26": "cents_per_km", "2024-25": "logbook" }`. No new table — a settings-row JSONB-shaped value was the clean fit.
+- `finYearForDate()` (duplicated identically in `server/routes/finance.js` and `client/src/pages/FinancePage.jsx` — keep both in sync if it ever changes) resolves a date to `"YYYY-YY"` (FY starts 1 July).
+- Routes: `GET/POST /api/finance/vehicle-method` and `GET/POST /api/finance/home-office-method`, each `{ year, method }`. `GET` with no `year` query param returns the full map.
+- `POST /api/finance/expenses/vehicle` and `POST /api/finance/expenses/home-office` resolve the entry date's FY, look up the locked method, and use it regardless of what the client sends — if no method is locked for that FY yet, or the client-supplied `method` disagrees with the locked one, the request is rejected with a 400 and a clear message. This guards server-side against any client-side bypass or direct API call, in addition to the client no longer exposing a per-entry method choice.
+- Client: opening the tab resolves the entry date's FY and shows either a read-only "method for FY2025–26: … (locked)" line, or — if that FY has no method set yet — a one-time "Set vehicle/home office method for FY2025–26" picker. There is no per-entry method radio anymore.
+
+### Vehicle trip-purpose dropdown
+
+Vehicle entries use a short dropdown of common ATO-accepted sole-trader business-travel purposes (`VEHICLE_PURPOSES` in `FinancePage.jsx`) instead of free text: Client meeting/visit, Travel between two places of work, Delivering or collecting goods/supplies, Bank/post office/supplier errand, Attending a work-related course/conference, Travel to see an accountant/bookkeeper/tax agent, Vehicle servicing/repairs, and "Other (describe)" (shows a free-text field). The selected purpose becomes the expense description unless "Other" is picked. This is a description/organization aid only — a real logbook/diary is still what the ATO requires to substantiate a logbook-method claim; the dropdown does not replace it. Stored in a new `fin_vehicle_expenses.purpose` column.
+
+### Home office fixed-rate bundling — what it does and doesn't cover
+
+The ATO fixed rate (`fin_home_office_rate_per_hour`) already bundles **electricity, gas, phone, internet, and stationery/computer consumables** — a user on fixed-rate for a FY should not separately expense those specific categories that year (double-claiming). It does **not** bundle depreciation or repairs/maintenance on office furniture/equipment (desk, chair, monitor, computer) — those stay separately claimable even while fixed-rate is locked, and doing so is not "mixing methods." The Home Office tab shows a prominent warning callout listing the bundled categories whenever fixed-rate is the FY's locked method, plus a distinct "Office equipment & depreciation" mini-form that posts a normal expense (via the existing `POST /api/finance/expenses`, category "Office Equipment", capital-asset checkbox pre-ticked) independent of whichever home-office method is locked.
 
 ## Capital asset flag (B3)
 

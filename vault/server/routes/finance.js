@@ -1825,28 +1825,136 @@ router.delete('/drawings/:id', async (req, res) => {
 // Thin layer on top of the normal expense journal (DR Expenses, CR Bank) so the calculated
 // deductible amount still flows into P&L/BAS correctly. The method-specific detail (km, rate,
 // business-use %, actual cost) is stored alongside for the accountant / substantiation record.
+//
+// ATO rule: the claim method (cents-per-km vs logbook; fixed-rate vs actual-cost) is chosen
+// ONCE PER AUSTRALIAN FINANCIAL YEAR per claim type, never per entry. The locked method for a
+// given FY is stored as a JSON map in the `settings` table (same row/key convention as the rate
+// settings below) — `fin_vehicle_method_by_year` / `fin_home_office_method_by_year`, e.g.
+// { "2025-26": "cents_per_km" }. Every save re-validates the entry's date resolves to a FY that
+// already has a locked method, and that the requested method (if the caller sent one) matches —
+// this guards against any client-side bypass or direct API call.
+
+// Australian financial year (1 Jul–30 Jun) as "YYYY-YY", e.g. 2025-11-03 -> "2025-26".
+function finYearForDate(dateStr) {
+  const d = new Date(dateStr);
+  const y = d.getUTCFullYear();
+  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
+  const endYY = String((startYear + 1) % 100).padStart(2, '0');
+  return `${startYear}-${endYY}`;
+}
+
+async function getMethodByYearMap(userId, key) {
+  const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key=$2`, [userId, key]);
+  if (!rows.length) return {};
+  try { return JSON.parse(rows[0].value) || {}; } catch { return {}; }
+}
+
+async function setMethodForYear(userId, key, year, method) {
+  const map = await getMethodByYearMap(userId, key);
+  map[year] = method;
+  await pool.query(
+    `INSERT INTO settings ("userId", key, value) VALUES ($1,$2,$3)
+     ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+    [userId, key, JSON.stringify(map)]
+  );
+  return map;
+}
+
+const FY_RE = /^\d{4}-\d{2}$/;
+
+router.get('/vehicle-method', async (req, res) => {
+  try {
+    const map = await getMethodByYearMap(req.user.id, 'fin_vehicle_method_by_year');
+    const { year } = req.query;
+    if (year) return res.json({ year, method: map[year] || null });
+    res.json(map);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vehicle-method', async (req, res) => {
+  try {
+    const { year, method } = req.body;
+    if (!year || !FY_RE.test(year)) return res.status(400).json({ error: 'year must be like "2025-26"' });
+    if (!['cents_per_km', 'logbook'].includes(method)) return res.status(400).json({ error: "method must be 'cents_per_km' or 'logbook'" });
+    const map = await setMethodForYear(req.user.id, 'fin_vehicle_method_by_year', year, method);
+    res.json({ year, method, all: map });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/home-office-method', async (req, res) => {
+  try {
+    const map = await getMethodByYearMap(req.user.id, 'fin_home_office_method_by_year');
+    const { year } = req.query;
+    if (year) return res.json({ year, method: map[year] || null });
+    res.json(map);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/home-office-method', async (req, res) => {
+  try {
+    const { year, method } = req.body;
+    if (!year || !FY_RE.test(year)) return res.status(400).json({ error: 'year must be like "2025-26"' });
+    if (!['fixed_rate', 'actual_cost'].includes(method)) return res.status(400).json({ error: "method must be 'fixed_rate' or 'actual_cost'" });
+    const map = await setMethodForYear(req.user.id, 'fin_home_office_method_by_year', year, method);
+    res.json({ year, method, all: map });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Short list of common ATO-accepted sole-trader business-travel purposes — for description/
+// organization only; the ATO logbook/diary substantiation record is still the user's own.
+const VEHICLE_PURPOSES = [
+  'Client meeting/visit',
+  'Travel between two places of work',
+  'Delivering or collecting goods/supplies',
+  'Bank, post office, or supplier errand (business purpose)',
+  'Attending a work-related course/conference',
+  'Travel to see an accountant/bookkeeper/tax agent',
+  'Vehicle servicing/repairs (business vehicle)',
+  'Other (describe)',
+];
 
 router.post('/expenses/vehicle', async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, method, km, ratePerKm, businessUsePercent, actualCost, paidViaId } = req.body;
+    const { date, description, purpose, method, km, ratePerKm, businessUsePercent, actualCost, paidViaId } = req.body;
+    const expenseDate = date || new Date().toISOString().slice(0, 10);
+    const fy = finYearForDate(expenseDate);
+
+    const methodMap = await getMethodByYearMap(userId, 'fin_vehicle_method_by_year');
+    const lockedMethod = methodMap[fy];
+    if (!lockedMethod) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: `No vehicle claim method set for FY${fy} yet. Set one (cents-per-km or logbook) via /api/finance/vehicle-method before saving — the ATO requires one method per financial year, not per entry.` });
+    }
+    if (method && method !== lockedMethod) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: `FY${fy} is locked to '${lockedMethod}'. You cannot use '${method}' for an entry dated in this financial year — the ATO does not allow mixing vehicle claim methods within the same financial year.` });
+    }
+    const useMethod = lockedMethod;
 
     let deductible;
-    if (method === 'cents_per_km') {
+    if (useMethod === 'cents_per_km') {
       const kmNum   = parseFloat(km) || 0;
       const rateNum = parseFloat(ratePerKm) || 0;
       deductible = parseFloat((kmNum * rateNum).toFixed(2));
-    } else if (method === 'logbook') {
+    } else {
       const pct  = parseFloat(businessUsePercent) || 0;
       const cost = parseFloat(actualCost) || 0;
       deductible = parseFloat((cost * (pct / 100)).toFixed(2));
-    } else {
-      await dbClient.query('ROLLBACK');
-      return res.status(400).json({ error: "method must be 'cents_per_km' or 'logbook'" });
     }
     if (deductible <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Calculated deductible amount must be greater than zero' }); }
+
+    const finalDescription = description || purpose || 'Vehicle expense';
 
     await ensureAccounts(userId);
     await ensureTxCodes(userId);
@@ -1859,21 +1967,21 @@ router.post('/expenses/vehicle', async (req, res) => {
     const { rows } = await dbClient.query(
       `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId")
        VALUES ($1,$2,$3,$4,0,'Vehicle',$5,$6) RETURNING *`,
-      [userId, date || new Date().toISOString().slice(0,10), description || 'Vehicle expense', deductible, vehTx[0]?.id || null, paidViaId || null]
+      [userId, expenseDate, finalDescription, deductible, vehTx[0]?.id || null, paidViaId || null]
     );
     const expense = rows[0];
 
     await dbClient.query(
-      `INSERT INTO fin_vehicle_expenses ("userId","expenseId",method,km,"ratePerKm","businessUsePercent","actualCost")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [userId, expense.id, method, km ? parseFloat(km) : null, ratePerKm ? parseFloat(ratePerKm) : null,
-       businessUsePercent ? parseFloat(businessUsePercent) : null, actualCost ? parseFloat(actualCost) : null]
+      `INSERT INTO fin_vehicle_expenses ("userId","expenseId",method,km,"ratePerKm","businessUsePercent","actualCost",purpose)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [userId, expense.id, useMethod, km ? parseFloat(km) : null, ratePerKm ? parseFloat(ratePerKm) : null,
+       businessUsePercent ? parseFloat(businessUsePercent) : null, actualCost ? parseFloat(actualCost) : null, purpose || null]
     );
 
     if (expId && creditId) {
       await createJournalEntry(dbClient, userId, {
         date:        expense.date,
-        description: `Vehicle expense: ${description || method}`,
+        description: `Vehicle expense: ${finalDescription}`,
         type:        'expense',
         sourceId:    expense.id,
         lines: [
@@ -1884,7 +1992,7 @@ router.post('/expenses/vehicle', async (req, res) => {
     }
 
     await dbClient.query('COMMIT');
-    res.json({ ...expense, deductible, method });
+    res.json({ ...expense, deductible, method: useMethod, purpose: purpose || null });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -1899,19 +2007,30 @@ router.post('/expenses/home-office', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const { date, description, method, hours, ratePerHour, businessUsePercent, actualCost, paidViaId } = req.body;
+    const expenseDate = date || new Date().toISOString().slice(0, 10);
+    const fy = finYearForDate(expenseDate);
+
+    const methodMap = await getMethodByYearMap(userId, 'fin_home_office_method_by_year');
+    const lockedMethod = methodMap[fy];
+    if (!lockedMethod) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: `No home office claim method set for FY${fy} yet. Set one (fixed-rate or actual-cost) via /api/finance/home-office-method before saving — the ATO requires one method per financial year, not per entry.` });
+    }
+    if (method && method !== lockedMethod) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: `FY${fy} is locked to '${lockedMethod}'. You cannot use '${method}' for an entry dated in this financial year — the ATO does not allow mixing home office claim methods within the same financial year.` });
+    }
+    const useMethod = lockedMethod;
 
     let deductible;
-    if (method === 'fixed_rate') {
+    if (useMethod === 'fixed_rate') {
       const hrs  = parseFloat(hours) || 0;
       const rate = parseFloat(ratePerHour) || 0;
       deductible = parseFloat((hrs * rate).toFixed(2));
-    } else if (method === 'actual_cost') {
+    } else {
       const pct  = parseFloat(businessUsePercent) || 0;
       const cost = parseFloat(actualCost) || 0;
       deductible = parseFloat((cost * (pct / 100)).toFixed(2));
-    } else {
-      await dbClient.query('ROLLBACK');
-      return res.status(400).json({ error: "method must be 'fixed_rate' or 'actual_cost'" });
     }
     if (deductible <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Calculated deductible amount must be greater than zero' }); }
 
@@ -1925,21 +2044,21 @@ router.post('/expenses/home-office', async (req, res) => {
     const { rows } = await dbClient.query(
       `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId")
        VALUES ($1,$2,$3,$4,0,'Home Office',$5,$6) RETURNING *`,
-      [userId, date || new Date().toISOString().slice(0,10), description || 'Home office expense', deductible, hoTx[0]?.id || null, paidViaId || null]
+      [userId, expenseDate, description || 'Home office expense', deductible, hoTx[0]?.id || null, paidViaId || null]
     );
     const expense = rows[0];
 
     await dbClient.query(
       `INSERT INTO fin_home_office_expenses ("userId","expenseId",method,hours,"ratePerHour","businessUsePercent","actualCost")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [userId, expense.id, method, hours ? parseFloat(hours) : null, ratePerHour ? parseFloat(ratePerHour) : null,
+      [userId, expense.id, useMethod, hours ? parseFloat(hours) : null, ratePerHour ? parseFloat(ratePerHour) : null,
        businessUsePercent ? parseFloat(businessUsePercent) : null, actualCost ? parseFloat(actualCost) : null]
     );
 
     if (expId && creditId) {
       await createJournalEntry(dbClient, userId, {
         date:        expense.date,
-        description: `Home office expense: ${description || method}`,
+        description: `Home office expense: ${description || useMethod}`,
         type:        'expense',
         sourceId:    expense.id,
         lines: [
@@ -1950,7 +2069,7 @@ router.post('/expenses/home-office', async (req, res) => {
     }
 
     await dbClient.query('COMMIT');
-    res.json({ ...expense, deductible, method });
+    res.json({ ...expense, deductible, method: useMethod });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });

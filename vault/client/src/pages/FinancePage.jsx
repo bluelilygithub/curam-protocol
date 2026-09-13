@@ -78,13 +78,16 @@ const TOOL_HELP = {
   },
   'Vehicle/Home Office': {
     title: 'Vehicle/Home Office',
-    description: 'ATO-style deduction calculators for vehicle and home-office running costs. Both post a normal expense journal entry once you save — this tool computes the deductible amount first.',
+    description: 'ATO-style deduction calculators for vehicle and home-office running costs. Both post a normal expense journal entry once you save — this tool computes the deductible amount first. The ATO requires one method per financial year per claim type, so the method is locked per FY, not chosen per entry.',
     features: [
       'Vehicle — cents-per-km: rate × business kilometres, no receipts needed, but the ATO caps this method at 5,000 km/year. Suits simpler or lower-km use where you haven\'t kept a 12-week logbook.',
       'Vehicle — logbook (actual cost): business-use % × your actual running costs. Suits higher business-use claims, but requires a valid ATO 12-week logbook to substantiate the percentage.',
-      'Home office — fixed rate: rate × hours worked from home, simpler with less record-keeping (covers running costs like electricity, without needing separate receipts for each).',
+      'Vehicle entries use a trip-purpose dropdown for description/organization — your own logbook/diary is still the substantiation record the ATO requires.',
+      'Home office — fixed rate: rate × hours worked from home, simpler with less record-keeping (bundles running costs — electricity, gas, phone, internet, stationery/consumables — so don\'t separately claim those while on this method).',
       'Home office — actual cost: business-use % × your actual home-office running costs. Suits someone with a dedicated home office space who keeps receipts/bills to substantiate the claim.',
-      'ATO rates are editable in Settings since they change yearly — never hardcoded',
+      'Office equipment/furniture depreciation and repairs stay separately claimable regardless of the locked home-office method — not double-dipping.',
+      'Method is locked once per financial year (1 Jul–30 Jun) per claim type — no mixing cents-per-km/logbook or fixed-rate/actual-cost within the same FY.',
+      'ATO rates are editable right here (and in Settings) since they change yearly — never hardcoded',
     ],
   },
   Recurring: {
@@ -2377,16 +2380,102 @@ function DrawingsTab({ from, to }) {
 }
 
 // ── Vehicle & Home Office calculators ────────────────────────────────────────
+// Method (cents-per-km/logbook for vehicle, fixed-rate/actual-cost for home office) is an ATO
+// per-financial-year lock, not a per-entry choice — see docs/finance.md. `finYearForDate()` here
+// must stay in sync with the server's `finYearForDate()` in server/routes/finance.js.
+
+function finYearForDate(dateStr) {
+  const d = new Date(dateStr);
+  const y = d.getUTCFullYear();
+  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
+  const endYY = String((startYear + 1) % 100).padStart(2, '0');
+  return `${startYear}-${endYY}`;
+}
+
+// Short list of common ATO-accepted sole-trader business-travel purposes — for description/
+// organization only; a real logbook/diary is still what the ATO requires to substantiate a claim.
+const VEHICLE_PURPOSES = [
+  'Client meeting/visit',
+  'Travel between two places of work',
+  'Delivering or collecting goods/supplies',
+  'Bank, post office, or supplier errand (business purpose)',
+  'Attending a work-related course/conference',
+  'Travel to see an accountant/bookkeeper/tax agent',
+  'Vehicle servicing/repairs (business vehicle)',
+  'Other (describe)',
+];
+
+function Select({ value, onChange, children, className = '' }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={`text-sm px-3 py-2 rounded-lg border w-full ${className}`}
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+    >
+      {children}
+    </select>
+  );
+}
+
+// One-time "lock a method for this financial year" control — shown only while the year has no
+// locked method yet. Once set it's read-only (see MethodLockDisplay).
+function MethodLockPicker({ fy, options, choice, setChoice, onLock, locking, claimTypeLabel }) {
+  return (
+    <div className="p-3 rounded-lg border mb-3" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+      <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Set {claimTypeLabel} method for FY{fy}</p>
+      <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+        The ATO requires one method per financial year — you cannot mix methods within FY{fy} once this is set.
+      </p>
+      <div className="flex gap-3 mb-2">
+        {options.map(opt => (
+          <Tooltip key={opt.value} text={opt.hint}>
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" checked={choice === opt.value} onChange={() => setChoice(opt.value)} /> {opt.label}
+            </label>
+          </Tooltip>
+        ))}
+      </div>
+      <Tooltip text={`Lock this method for FY${fy}. This cannot be changed after entries are saved against it — choose carefully.`}>
+        <Btn onClick={onLock} disabled={locking}>{locking ? 'Setting…' : `Lock method for FY${fy}`}</Btn>
+      </Tooltip>
+    </div>
+  );
+}
+
+function MethodLockDisplay({ fy, methodLabel, claimTypeLabel }) {
+  return (
+    <Tooltip text={`Locked for the whole of FY${fy} per the ATO one-method-per-year rule — this can't be changed per entry.`}>
+      <p className="text-xs mb-3 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+        {claimTypeLabel} method for FY{fy}: <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{methodLabel}</span> (locked)
+      </p>
+    </Tooltip>
+  );
+}
 
 function VehicleHomeOfficeTab() {
   const addToast = useToastStore(s => s.addToast);
   const [rates, setRates] = useState({ fin_vehicle_rate_per_km: '0.88', fin_home_office_rate_per_hour: '0.70' });
-  const [vForm, setVForm] = useState({ date: todayStr(), description: '', method: 'cents_per_km', km: '', businessUsePercent: '', actualCost: '' });
-  const [hForm, setHForm] = useState({ date: todayStr(), description: '', method: 'fixed_rate', hours: '', businessUsePercent: '', actualCost: '' });
+
+  const [vForm, setVForm] = useState({ date: todayStr(), purpose: VEHICLE_PURPOSES[0], description: '', km: '', businessUsePercent: '', actualCost: '' });
+  const [hForm, setHForm] = useState({ date: todayStr(), description: '', hours: '', businessUsePercent: '', actualCost: '' });
   const [vSaving, setVSaving] = useState(false);
   const [hSaving, setHSaving] = useState(false);
   const [vError, setVError] = useState('');
   const [hError, setHError] = useState('');
+
+  const [vYearMethods, setVYearMethods] = useState({});
+  const [hYearMethods, setHYearMethods] = useState({});
+  const [vMethodChoice, setVMethodChoice] = useState('cents_per_km');
+  const [hMethodChoice, setHMethodChoice] = useState('fixed_rate');
+  const [vLocking, setVLocking] = useState(false);
+  const [hLocking, setHLocking] = useState(false);
+
+  // Office equipment / depreciation — separate from the hourly rate, available regardless of
+  // which home-office method is locked for the year (see docs/finance.md).
+  const [oForm, setOForm] = useState({ date: todayStr(), description: '', amount: '', isCapitalAsset: true });
+  const [oSaving, setOSaving] = useState(false);
+  const [oError, setOError] = useState('');
 
   useEffect(() => {
     api.get('/api/finance/settings').then(r => r.json()).then(d => {
@@ -2395,15 +2484,44 @@ function VehicleHomeOfficeTab() {
         fin_home_office_rate_per_hour: d.fin_home_office_rate_per_hour || p.fin_home_office_rate_per_hour,
       }));
     }).catch(() => {});
+    api.get('/api/finance/vehicle-method').then(r => r.json()).then(setVYearMethods).catch(() => {});
+    api.get('/api/finance/home-office-method').then(r => r.json()).then(setHYearMethods).catch(() => {});
   }, []);
 
-  const vehicleDeductible = vForm.method === 'cents_per_km'
-    ? (parseFloat(vForm.km) || 0) * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
-    : (parseFloat(vForm.actualCost) || 0) * ((parseFloat(vForm.businessUsePercent) || 0) / 100);
+  const vFy = finYearForDate(vForm.date);
+  const hFy = finYearForDate(hForm.date);
+  const lockedVMethod = vYearMethods[vFy] || null;
+  const lockedHMethod = hYearMethods[hFy] || null;
 
-  const homeOfficeDeductible = hForm.method === 'fixed_rate'
+  const lockVehicleMethod = async () => {
+    setVLocking(true);
+    try {
+      await api.post('/api/finance/vehicle-method', { year: vFy, method: vMethodChoice });
+      setVYearMethods(p => ({ ...p, [vFy]: vMethodChoice }));
+      addToast(`Vehicle method locked for FY${vFy}`);
+    } catch (e) { addToast(e.message, 'error'); } finally { setVLocking(false); }
+  };
+
+  const lockHomeOfficeMethod = async () => {
+    setHLocking(true);
+    try {
+      await api.post('/api/finance/home-office-method', { year: hFy, method: hMethodChoice });
+      setHYearMethods(p => ({ ...p, [hFy]: hMethodChoice }));
+      addToast(`Home office method locked for FY${hFy}`);
+    } catch (e) { addToast(e.message, 'error'); } finally { setHLocking(false); }
+  };
+
+  const vehicleDeductible = lockedVMethod === 'cents_per_km'
+    ? (parseFloat(vForm.km) || 0) * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
+    : lockedVMethod === 'logbook'
+    ? (parseFloat(vForm.actualCost) || 0) * ((parseFloat(vForm.businessUsePercent) || 0) / 100)
+    : 0;
+
+  const homeOfficeDeductible = lockedHMethod === 'fixed_rate'
     ? (parseFloat(hForm.hours) || 0) * (parseFloat(rates.fin_home_office_rate_per_hour) || 0)
-    : (parseFloat(hForm.actualCost) || 0) * ((parseFloat(hForm.businessUsePercent) || 0) / 100);
+    : lockedHMethod === 'actual_cost'
+    ? (parseFloat(hForm.actualCost) || 0) * ((parseFloat(hForm.businessUsePercent) || 0) / 100)
+    : 0;
 
   const saveRate = async (key, value) => {
     try {
@@ -2413,29 +2531,54 @@ function VehicleHomeOfficeTab() {
   };
 
   const saveVehicle = async () => {
+    if (!lockedVMethod) { setVError(`Set the vehicle claim method for FY${vFy} first`); return; }
     if (vehicleDeductible <= 0) { setVError('Enter values that produce a deductible amount greater than zero'); return; }
     setVSaving(true); setVError('');
     try {
+      const description = vForm.purpose === 'Other (describe)' ? vForm.description : vForm.purpose;
       await api.post('/api/finance/expenses/vehicle', {
         ...vForm,
+        description,
+        method: lockedVMethod,
         ratePerKm: rates.fin_vehicle_rate_per_km,
       });
       addToast(`Vehicle expense saved — ${fmt(vehicleDeductible)} deductible`);
-      setVForm({ date: todayStr(), description: '', method: 'cents_per_km', km: '', businessUsePercent: '', actualCost: '' });
+      setVForm({ date: todayStr(), purpose: VEHICLE_PURPOSES[0], description: '', km: '', businessUsePercent: '', actualCost: '' });
     } catch (e) { setVError(e.message); } finally { setVSaving(false); }
   };
 
   const saveHomeOffice = async () => {
+    if (!lockedHMethod) { setHError(`Set the home office claim method for FY${hFy} first`); return; }
     if (homeOfficeDeductible <= 0) { setHError('Enter values that produce a deductible amount greater than zero'); return; }
     setHSaving(true); setHError('');
     try {
       await api.post('/api/finance/expenses/home-office', {
         ...hForm,
+        method: lockedHMethod,
         ratePerHour: rates.fin_home_office_rate_per_hour,
       });
       addToast(`Home office expense saved — ${fmt(homeOfficeDeductible)} deductible`);
-      setHForm({ date: todayStr(), description: '', method: 'fixed_rate', hours: '', businessUsePercent: '', actualCost: '' });
+      setHForm({ date: todayStr(), description: '', hours: '', businessUsePercent: '', actualCost: '' });
     } catch (e) { setHError(e.message); } finally { setHSaving(false); }
+  };
+
+  const saveOfficeEquipment = async () => {
+    const amt = parseFloat(oForm.amount) || 0;
+    if (amt <= 0) { setOError('Enter an amount greater than zero'); return; }
+    if (!oForm.description.trim()) { setOError('Enter a description (e.g. "Office desk")'); return; }
+    setOSaving(true); setOError('');
+    try {
+      await api.post('/api/finance/expenses', {
+        date: oForm.date,
+        description: oForm.description,
+        amount: oForm.amount,
+        gstIncluded: true,
+        category: 'Office Equipment',
+        isCapitalAsset: oForm.isCapitalAsset,
+      });
+      addToast(`Office equipment expense saved — ${fmt(amt)}`);
+      setOForm({ date: todayStr(), description: '', amount: '', isCapitalAsset: true });
+    } catch (e) { setOError(e.message); } finally { setOSaving(false); }
   };
 
   return (
@@ -2443,29 +2586,45 @@ function VehicleHomeOfficeTab() {
       {/* Vehicle */}
       <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense Calculator</h3>
-        <Field label="ATO rate ($/km, cents-per-km method)" hint="Editable — the ATO rate changes each year">
-          <Tooltip text="The ATO cents-per-km rate changes yearly — keep this up to date">
+        <Field label="ATO rate ($/km, cents-per-km method)" hint="Editable — check the current published ATO rate each year before relying on this default">
+          <Tooltip text="The ATO cents-per-km rate changes yearly — check the current published rate before relying on this default">
             <Input type="number" value={rates.fin_vehicle_rate_per_km} onChange={v => setRates(p => ({...p, fin_vehicle_rate_per_km: v}))} onBlurCapture={() => saveRate('fin_vehicle_rate_per_km', rates.fin_vehicle_rate_per_km)} />
           </Tooltip>
         </Field>
-        <div className="flex gap-3 my-3">
-          <Tooltip text="ATO cents-per-km method — rate × business kilometres, no receipts needed (capped at 5,000km/year by the ATO)">
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="radio" checked={vForm.method === 'cents_per_km'} onChange={() => setVForm(p => ({...p, method: 'cents_per_km'}))} /> Cents-per-km
-            </label>
-          </Tooltip>
-          <Tooltip text="Logbook / actual-cost method — business-use % applied to your actual running costs">
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="radio" checked={vForm.method === 'logbook'} onChange={() => setVForm(p => ({...p, method: 'logbook'}))} /> Logbook (actual cost)
-            </label>
-          </Tooltip>
-        </div>
+
+        {lockedVMethod ? (
+          <MethodLockDisplay fy={vFy} claimTypeLabel="Vehicle" methodLabel={lockedVMethod === 'cents_per_km' ? 'Cents-per-km' : 'Logbook (actual cost)'} />
+        ) : (
+          <MethodLockPicker
+            fy={vFy}
+            claimTypeLabel="vehicle"
+            choice={vMethodChoice}
+            setChoice={setVMethodChoice}
+            onLock={lockVehicleMethod}
+            locking={vLocking}
+            options={[
+              { value: 'cents_per_km', label: 'Cents-per-km', hint: 'ATO cents-per-km method — rate × business kilometres, no receipts needed (capped at 5,000km/year by the ATO)' },
+              { value: 'logbook', label: 'Logbook (actual cost)', hint: 'Logbook / actual-cost method — business-use % applied to your actual running costs, requires a valid 12-week ATO logbook' },
+            ]}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Tooltip></Field>
-          <Field label="Description"><Tooltip text="What the travel was for."><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. client visits" /></Tooltip></Field>
-          {vForm.method === 'cents_per_km' ? (
+          <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Tooltip></Field>
+          <Field label="Purpose" hint="For description/organization — your own logbook/diary is still the substantiation record">
+            <Tooltip text="Common ATO-accepted business-travel purposes, for description/organization only — this dropdown doesn't replace your logbook/diary substantiation">
+              <Select value={vForm.purpose} onChange={v => setVForm(p => ({...p, purpose: v}))}>
+                {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+              </Select>
+            </Tooltip>
+          </Field>
+          {vForm.purpose === 'Other (describe)' && (
+            <Field label="Describe purpose"><Tooltip text="Free-text description of the business purpose for this travel."><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Tooltip></Field>
+          )}
+          {lockedVMethod === 'cents_per_km' && (
             <Field label="Business km"><Tooltip text="Total business kilometres travelled this period"><Input type="number" value={vForm.km} onChange={v => setVForm(p => ({...p, km: v}))} placeholder="0" /></Tooltip></Field>
-          ) : (
+          )}
+          {lockedVMethod === 'logbook' && (
             <>
               <Field label="Business use %"><Tooltip text="Percentage of total vehicle use that was for business, per your logbook"><Input type="number" value={vForm.businessUsePercent} onChange={v => setVForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
               <Field label="Actual cost ($)"><Tooltip text="Total actual running cost (fuel, rego, insurance, servicing) for the period"><Input type="number" value={vForm.actualCost} onChange={v => setVForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
@@ -2475,36 +2634,55 @@ function VehicleHomeOfficeTab() {
         <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</p>
         <ErrMsg msg={vError} />
         <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
-          <Btn onClick={saveVehicle} disabled={vSaving}>{vSaving ? 'Saving…' : 'Save Vehicle Expense'}</Btn>
+          <Btn onClick={saveVehicle} disabled={vSaving || !lockedVMethod}>{vSaving ? 'Saving…' : 'Save Vehicle Expense'}</Btn>
         </Tooltip>
       </div>
 
       {/* Home office */}
       <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Home Office Expense Calculator</h3>
-        <Field label="ATO rate ($/hour, fixed-rate method)" hint="Editable — the ATO rate changes each year">
-          <Tooltip text="The ATO fixed (cents-per-hour) home office rate changes yearly — keep this up to date">
+        <Field label="ATO rate ($/hour, fixed-rate method)" hint="Editable — check the current published ATO rate each year before relying on this default">
+          <Tooltip text="The ATO fixed (cents-per-hour) home office rate changes yearly — check the current published rate before relying on this default">
             <Input type="number" value={rates.fin_home_office_rate_per_hour} onChange={v => setRates(p => ({...p, fin_home_office_rate_per_hour: v}))} onBlurCapture={() => saveRate('fin_home_office_rate_per_hour', rates.fin_home_office_rate_per_hour)} />
           </Tooltip>
         </Field>
-        <div className="flex gap-3 my-3">
-          <Tooltip text="ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs">
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="radio" checked={hForm.method === 'fixed_rate'} onChange={() => setHForm(p => ({...p, method: 'fixed_rate'}))} /> Fixed rate
-            </label>
-          </Tooltip>
-          <Tooltip text="Actual cost method — business-use % applied to your actual home office running costs">
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="radio" checked={hForm.method === 'actual_cost'} onChange={() => setHForm(p => ({...p, method: 'actual_cost'}))} /> Actual cost
-            </label>
-          </Tooltip>
-        </div>
+
+        {lockedHMethod ? (
+          <MethodLockDisplay fy={hFy} claimTypeLabel="Home office" methodLabel={lockedHMethod === 'fixed_rate' ? 'Fixed rate' : 'Actual cost'} />
+        ) : (
+          <MethodLockPicker
+            fy={hFy}
+            claimTypeLabel="home office"
+            choice={hMethodChoice}
+            setChoice={setHMethodChoice}
+            onLock={lockHomeOfficeMethod}
+            locking={hLocking}
+            options={[
+              { value: 'fixed_rate', label: 'Fixed rate', hint: 'ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs' },
+              { value: 'actual_cost', label: 'Actual cost', hint: 'Actual cost method — business-use % applied to your actual home office running costs' },
+            ]}
+          />
+        )}
+
+        {lockedHMethod === 'fixed_rate' && (
+          <div className="p-3 rounded-lg border mb-3" style={{ borderColor: '#f59e0b', background: 'var(--color-surface)' }}>
+            <p className="text-sm font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠ Fixed rate already bundles these — don't double-claim</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              The {rates.fin_home_office_rate_per_hour}c/hour fixed rate already covers electricity, gas, phone, internet, and stationery/computer consumables.
+              Don't separately expense those specific categories while on the fixed-rate method for FY{hFy}.
+              Depreciation on office furniture/equipment (desk, chair, monitor, computer) and their repairs/maintenance is <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>not</span> bundled —
+              use "Office equipment &amp; depreciation" below for those; it's not double-dipping.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 mb-3">
-          <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
+          <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
           <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
-          {hForm.method === 'fixed_rate' ? (
+          {lockedHMethod === 'fixed_rate' && (
             <Field label="Hours worked from home"><Tooltip text="Total hours worked from home this period"><Input type="number" value={hForm.hours} onChange={v => setHForm(p => ({...p, hours: v}))} placeholder="0" /></Tooltip></Field>
-          ) : (
+          )}
+          {lockedHMethod === 'actual_cost' && (
             <>
               <Field label="Business use %"><Tooltip text="Percentage of the cost attributable to business use"><Input type="number" value={hForm.businessUsePercent} onChange={v => setHForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
               <Field label="Actual cost ($)"><Tooltip text="Total actual home office running cost (utilities, internet, etc.) for the period"><Input type="number" value={hForm.actualCost} onChange={v => setHForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
@@ -2514,8 +2692,32 @@ function VehicleHomeOfficeTab() {
         <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
         <ErrMsg msg={hError} />
         <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
-          <Btn onClick={saveHomeOffice} disabled={hSaving}>{hSaving ? 'Saving…' : 'Save Home Office Expense'}</Btn>
+          <Btn onClick={saveHomeOffice} disabled={hSaving || !lockedHMethod}>{hSaving ? 'Saving…' : 'Save Home Office Expense'}</Btn>
         </Tooltip>
+
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <h4 className="font-semibold mb-1 text-sm" style={{ color: 'var(--color-text)' }}>Office equipment &amp; depreciation</h4>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Separate from the hourly rate above — furniture/equipment (desk, chair, monitor, computer) and their repairs/maintenance
+            stay claimable no matter which home office method is locked for the year. This is not double-dipping.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={oForm.date} onChange={v => setOForm(p => ({...p, date: v}))} /></Tooltip></Field>
+            <Field label="Amount ($, GST-incl.)"><Tooltip text="Total amount paid, including GST if applicable."><Input type="number" value={oForm.amount} onChange={v => setOForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
+            <Field label="Description"><Tooltip text="e.g. Office desk, monitor, chair repair."><Input value={oForm.description} onChange={v => setOForm(p => ({...p, description: v}))} placeholder="e.g. Office desk" /></Tooltip></Field>
+            <Field label="Capital asset?">
+              <Tooltip text="Tick if this is a capital asset purchase (equipment, furniture) rather than a running repair — flags it for your accountant's asset register / instant-asset-write-off assessment.">
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer mt-2" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={oForm.isCapitalAsset} onChange={e => setOForm(p => ({...p, isCapitalAsset: e.target.checked}))} /> Capital asset
+                </label>
+              </Tooltip>
+            </Field>
+          </div>
+          <ErrMsg msg={oError} />
+          <Tooltip text="Post this as a normal expense — it will flow into P&L/BAS through the normal expense journal, independent of the home office method locked above">
+            <Btn onClick={saveOfficeEquipment} disabled={oSaving}>{oSaving ? 'Saving…' : 'Save Office Equipment Expense'}</Btn>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

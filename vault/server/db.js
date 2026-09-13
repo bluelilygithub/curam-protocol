@@ -2004,8 +2004,18 @@ async function initSchema() {
     )
   `);
 
+  // Trip-purpose dropdown on vehicle entries (description/organization aid only — the ATO
+  // logbook/diary substantiation record is still the user's own, this doesn't replace it).
+  await pool.query(`ALTER TABLE fin_vehicle_expenses ADD COLUMN IF NOT EXISTS purpose TEXT`);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
+
+  // Per-financial-year method locks (vehicle: cents_per_km/logbook; home office: fixed_rate/
+  // actual_cost) are stored as JSON-stringified maps in the existing `settings` table under
+  // keys `fin_vehicle_method_by_year` / `fin_home_office_method_by_year`, e.g.
+  // '{"2025-26":"cents_per_km"}' — same row/table convention as fin_vehicle_rate_per_km etc.,
+  // no new table needed. ATO rule: one method per claim type per financial year, no mixing.
 
   // ── Translate agent ───────────────────────────────────────────────────────
   await pool.query(`
