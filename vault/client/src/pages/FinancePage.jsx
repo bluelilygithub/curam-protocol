@@ -2701,6 +2701,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
               <Tooltip text="You don't need every bill for the year — one document per category is enough to show the cost genuinely exists. The flat rate handles the amount.">
                 <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Expense-type evidence (one per category, not per claim)</p>
               </Tooltip>
+              <p className="text-[11px] mb-2" style={{ color: 'var(--color-muted)' }}>
+                Just a file — nothing is read from it or extracted. The deductible amount above is hours × rate only, not the value of any bill.
+                This isn't for rent or mortgage — those are a separate "occupancy expense" category with capital-gains implications, not covered by this tool.
+              </p>
               <div className="flex flex-col gap-2">
                 {HOME_OFFICE_EVIDENCE_CATEGORIES.map(cat => (
                   <div key={cat.id} className="flex items-center justify-between gap-2 text-xs">
