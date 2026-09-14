@@ -2466,6 +2466,34 @@ router.get('/assets/low-value-pool-election', async (req, res) => {
   }
 });
 
+// Explicit Settings-page toggle — the election otherwise only ever fires implicitly the first
+// time someone picks "Low-value pool" on a qualifying asset. This lets it be decided upfront,
+// same pattern as the Vehicle/Home Office method locks. Turning it ON just records the election
+// (no asset needed). Turning it OFF is only allowed if no asset has actually been pooled yet —
+// once one has, the ATO election is real and permanent, not a preference to flip back.
+router.post('/assets/low-value-pool-election', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { elected } = req.body;
+    if (elected) {
+      await setLowValuePoolElection(userId, { assetId: null, description: 'Elected in Settings', date: new Date().toISOString().slice(0, 10) });
+      return res.json(await getLowValuePoolElection(userId));
+    }
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS count FROM fin_assets WHERE "userId"=$1 AND method='low_value_pool'`, [userId]);
+    if (rows[0].count > 0) {
+      return res.status(400).json({ error: 'Cannot un-elect the low-value pool — at least one asset has already been pooled, and the ATO election is permanent once used.' });
+    }
+    await pool.query(
+      `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_low_value_pool_election',$2)
+       ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+      [userId, JSON.stringify({ elected: false })]
+    );
+    res.json({ elected: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/assets', async (req, res) => {
   try {
     const { rows } = await pool.query(

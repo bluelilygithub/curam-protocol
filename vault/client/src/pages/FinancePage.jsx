@@ -4517,6 +4517,61 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   );
 }
 
+// Explicit upfront version of the low-value pool election — same pattern as the method locks
+// above. Otherwise the election only ever fires implicitly the first time someone picks it on
+// a qualifying asset (still works, just not decided ahead of time). Toggling on is instant;
+// toggling off is only allowed if nothing's been pooled yet (server-enforced).
+function AssetsSettingsSection() {
+  const addToast = useToastStore(s => s.addToast);
+  const [election, setElection] = useState({ elected: false });
+  const [saving, setSaving] = useState(false);
+
+  const load = () => {
+    api.get('/api/finance/assets/low-value-pool-election').then(r => r.json()).then(setElection).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggle = async (elected) => {
+    setSaving(true);
+    try {
+      const res = await api.post('/api/finance/assets/low-value-pool-election', { elected });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to update');
+      setElection(body);
+      addToast(elected ? 'Low-value pool elected for future $300-$999.99 assets' : 'Election cleared');
+    } catch (e) { addToast(e.message, 'error'); } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Assets — Low-Value Pool Election</p>
+      <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+        Assets costing $300-$999.99 (ex-GST) can go into the ATO low-value pool. Once elected — here, or automatically the first time you pick it on a qualifying asset — every future asset in that band must be pooled too; it's a real permanent election, not a per-asset preference.
+      </p>
+      <Tooltip text={election.elected ? "Already elected — can only be un-elected below if nothing's been pooled yet." : "Elect the low-value pool now, before buying anything in the $300-$999.99 band, instead of waiting for the first asset to trigger it."}>
+        <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          {election.elected ? (
+            <>
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Elected{election.date ? ` (${formatFriendlyDate(election.date)})` : ''}</p>
+              {election.description && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Triggered by: {election.description}</p>}
+              <Tooltip text="Only works if no asset has actually been pooled yet — the ATO election is permanent once used.">
+                <button type="button" onClick={() => toggle(false)} disabled={saving} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+                  {saving ? 'Updating…' : 'Un-elect (only if unused so far)'}
+                </button>
+              </Tooltip>
+            </>
+          ) : (
+            <>
+              <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>Not yet elected — you'll be asked to choose pool vs. individual the first time you enter a $300-$999.99 asset.</p>
+              <Btn onClick={() => toggle(true)} disabled={saving}>{saving ? 'Saving…' : 'Elect Low-Value Pool Now'}</Btn>
+            </>
+          )}
+        </div>
+      </Tooltip>
+    </div>
+  );
+}
+
 function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '',
@@ -4662,6 +4717,8 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
           onChangeRate={(key, v) => set(key)(v)}
           saveRate={saveRate}
         />
+
+        <AssetsSettingsSection />
 
         {/* Export history — nuclear option */}
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
