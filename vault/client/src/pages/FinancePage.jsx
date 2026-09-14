@@ -3007,14 +3007,20 @@ function AssetsTab() {
     } catch (e) { setError(e.message); } finally { setSaving(false); }
   };
 
-  const payAssetCc = async (asset) => {
+  const [ccPayModal, setCcPayModal] = useState(null); // asset being settled
+  const [ccPayDate, setCcPayDate] = useState(todayStr());
+  const [ccPaySaving, setCcPaySaving] = useState(false);
+  const openCcPay = (asset) => { setCcPayModal(asset); setCcPayDate(asset.datePurchased || todayStr()); };
+  const submitCcPay = async () => {
+    setCcPaySaving(true);
     try {
-      const res = await api.post(`/api/finance/assets/${asset.id}/cc-pay`, {});
+      const res = await api.post(`/api/finance/assets/${ccPayModal.id}/cc-pay`, { date: ccPayDate });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to settle');
       addToast('Credit card payment recorded');
+      setCcPayModal(null);
       load();
-    } catch (e) { addToast(e.message, 'error'); }
+    } catch (e) { addToast(e.message, 'error'); } finally { setCcPaySaving(false); }
   };
 
   const deleteAsset = async (asset) => {
@@ -3212,7 +3218,7 @@ function AssetsTab() {
                     <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{fmt(wdv)}</td>
                     <td className="py-2 px-2 text-right">
                       {a.method !== 'immediate' && a.paidViaId && accountMap[a.paidViaId]?.type === 'liability' && !a.ccSettled && (
-                        <Tooltip text={`Record payment of this ${accountMap[a.paidViaId].name} charge from bank.`}><button type="button" onClick={() => payAssetCc(a)} className="hover:opacity-60 mr-2" style={{ color: '#f59e0b' }}>Pay CC</button></Tooltip>
+                        <Tooltip text={`Record payment of this ${accountMap[a.paidViaId].name} charge from bank.`}><button type="button" onClick={() => openCcPay(a)} className="hover:opacity-60 mr-2" style={{ color: '#f59e0b' }}>Pay CC</button></Tooltip>
                       )}
                       {!a.immediateExpenseId && !a.lastDepreciatedFy && (
                         <Tooltip text="Delete this asset — only available before any deduction/depreciation has been posted against it."><button type="button" onClick={() => deleteAsset(a)} className="hover:opacity-60 mr-2" style={{ color: 'var(--color-muted)' }}>Delete</button></Tooltip>
@@ -3255,6 +3261,21 @@ function AssetsTab() {
               <Btn onClick={submitDispose} disabled={disposing}>{disposing ? 'Recording…' : 'Confirm Disposal'}</Btn>
             </Tooltip>
             <Btn variant="secondary" onClick={() => setDisposeModal(null)}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {ccPayModal && (
+        <Modal onClose={() => setCcPayModal(null)} title={`Pay CC: ${ccPayModal.description}`}>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+            This will post a journal entry clearing <strong>{accountMap[ccPayModal.paidViaId]?.name}</strong> and debiting <strong>Bank / Cash</strong> for {fmt(parseFloat(ccPayModal.amount) + parseFloat(ccPayModal.gst || 0))}.
+          </p>
+          <Field label="Payment date" hint="Defaults to the purchase date — change it if you paid the card off later.">
+            <Input type="date" value={ccPayDate} onChange={setCcPayDate} />
+          </Field>
+          <div className="flex gap-2 mt-3">
+            <Btn onClick={submitCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Recording…' : 'Confirm Payment'}</Btn>
+            <Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn>
           </div>
         </Modal>
       )}
