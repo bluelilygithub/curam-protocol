@@ -3026,6 +3026,17 @@ function AssetsTab() {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const cleanupOrphaned = async () => {
+    setCleaningUp(true);
+    try {
+      const res = await api.post('/api/finance/assets/cleanup-orphaned-journal-entries', {});
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Cleanup failed');
+      addToast(body.deleted > 0 ? `Removed ${body.deleted} orphaned journal ${body.deleted === 1 ? 'entry' : 'entries'}` : 'Nothing to clean up');
+    } catch (e) { addToast(e.message, 'error'); } finally { setCleaningUp(false); }
+  };
+
   const submitDispose = async () => {
     setDisposing(true);
     try {
@@ -3170,7 +3181,14 @@ function AssetsTab() {
       </div>
 
       <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Register</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Register</h3>
+          <Tooltip text="Removes journal entries left behind by a fixed bug where deleting an asset didn't remove its posted purchase journal entry. Only ever deletes entries whose asset no longer exists — never touches a still-valid one.">
+            <button type="button" onClick={cleanupOrphaned} disabled={cleaningUp} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+              {cleaningUp ? 'Cleaning…' : 'Clean up orphaned journal entries'}
+            </button>
+          </Tooltip>
+        </div>
         {activeAssets.length === 0 ? (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No assets yet.</p>
         ) : (

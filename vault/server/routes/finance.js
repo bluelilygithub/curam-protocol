@@ -2706,17 +2706,28 @@ router.put('/assets/:id', async (req, res) => {
 });
 
 router.delete('/assets/:id', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
+    await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { rows } = await pool.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
-    if (!rows.length) return res.status(404).json({ error: 'Asset not found' });
+    const { rows } = await dbClient.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    if (!rows.length) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Asset not found' }); }
     if (rows[0].immediateExpenseId || rows[0].lastDepreciatedFy) {
+      await dbClient.query('ROLLBACK');
       return res.status(400).json({ error: 'This asset already has a posted deduction/depreciation — dispose it instead of deleting it' });
     }
-    await pool.query(`DELETE FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    // Every asset (any method) posts an 'asset_purchase' journal entry at creation now — deleting
+    // the fin_assets row without also removing that journal entry (a real bug: this previously
+    // left orphaned Fixed Assets/GST Paid lines in the books forever) leaves the books wrong.
+    await deleteJournalForSource(dbClient, userId, rows[0].id, 'asset_purchase');
+    await dbClient.query(`DELETE FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
@@ -2800,6 +2811,37 @@ router.post('/assets/:id/dispose', async (req, res) => {
 
 // Preview what running depreciation for a FY would post, without posting — a generic loop over
 // every asset, not a one-off calc. Named before /assets/depreciation/run per route-ordering.
+// One-off cleanup for journal entries orphaned by a bug in an earlier version of DELETE
+// /assets/:id (fixed above) that removed the fin_assets row without removing its posted
+// 'asset_purchase' journal entry. Safe by construction: only ever deletes an asset-sourced
+// journal entry whose sourceId has NO matching fin_assets row left — a still-valid asset's
+// entries are never touched, regardless of how many times this is called.
+router.post('/assets/cleanup-orphaned-journal-entries', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { rows: orphaned } = await dbClient.query(
+      `SELECT id FROM fin_journal_entries
+       WHERE "userId"=$1 AND type IN ('asset_purchase','depreciation','asset_disposal')
+         AND "sourceId" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM fin_assets fa WHERE fa.id = fin_journal_entries."sourceId")`,
+      [userId]
+    );
+    for (const row of orphaned) {
+      await dbClient.query(`DELETE FROM fin_journal_lines WHERE "entryId"=$1`, [row.id]);
+      await dbClient.query(`DELETE FROM fin_journal_entries WHERE id=$1`, [row.id]);
+    }
+    await dbClient.query('COMMIT');
+    res.json({ deleted: orphaned.length });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
 router.get('/assets/depreciation/preview', async (req, res) => {
   try {
     const { fy } = req.query;
