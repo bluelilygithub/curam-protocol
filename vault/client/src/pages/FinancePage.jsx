@@ -4901,7 +4901,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   };
 
   return (
-    <div className="p-6 max-w-lg">
+    <div className="p-6 max-w-3xl">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Finance Settings</h2>
       <div className="flex flex-col gap-3">
         <Field label="Business Name"><Tooltip text="Shown on invoices, quotes, and emails sent to clients"><Input value={f('fin_biz_name')} onChange={set('fin_biz_name')} placeholder="Your Business Name Pty Ltd" /></Tooltip></Field>
