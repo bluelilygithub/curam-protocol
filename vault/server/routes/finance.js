@@ -1294,6 +1294,10 @@ router.get('/expenses/categories', async (req, res) => {
   }
 });
 
+// ATO instant-deduction threshold — also used by the Assets register further below (moved here,
+// ahead of both call sites, so it's never referenced before its own declaration).
+const IMMEDIATE_DEDUCTION_THRESHOLD = 300;
+
 router.get('/expenses', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1345,7 +1349,26 @@ router.post('/expenses', async (req, res) => {
     }
 
     await dbClient.query('COMMIT');
-    res.json(expense);
+
+    // Split-purchase check: identical items bought together (same date, same description) that
+    // individually sit under $300 but collectively don't, may need treating as one capital
+    // purchase rather than several immediate deductions — a real ATO "matching set" rule, not
+    // just a nicety. This can't be verified automatically (same description could be unrelated
+    // items) so it's a warning, not a block — the user still decides.
+    let warning;
+    if (!isCapitalAsset && amt <= IMMEDIATE_DEDUCTION_THRESHOLD) {
+      const { rows: matchRows } = await pool.query(
+        `SELECT COALESCE(SUM(amount),0)::float AS total, COUNT(*)::int AS count
+         FROM fin_expenses WHERE "userId"=$1 AND date=$2 AND LOWER(description)=LOWER($3)`,
+        [userId, expense.date, description]
+      );
+      const { total, count } = matchRows[0];
+      if (count > 1 && total > IMMEDIATE_DEDUCTION_THRESHOLD) {
+        warning = `You've now entered ${count} expenses dated ${expense.date} with the description "${description}", totaling $${total.toFixed(2)} — if these are identical/matching items bought as a set, the ATO may require treating them as one $${total.toFixed(2)} capital purchase rather than separate immediate deductions. Consider deleting these and re-entering as a single Capital Asset expense instead.`;
+      }
+    }
+
+    res.json({ ...expense, warning });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -2357,7 +2380,6 @@ router.post('/expenses/home-office', async (req, res) => {
 // for prime_cost/diminishing_value, not low_value_pool). Annual depreciation is a generic loop
 // over every active asset for a given FY, not a one-off per-item calculation.
 
-const IMMEDIATE_DEDUCTION_THRESHOLD = 300;
 // ATO "low-cost asset" pool-eligibility threshold — an asset costing $1,000+ (ex-GST) can never
 // go into the low-value pool, election or not; only assets in the $300-$999.99 band are ever
 // eligible. Once the pool is elected for one such asset, ATO rules require every future

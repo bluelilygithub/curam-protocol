@@ -1655,8 +1655,12 @@ function ExpensesTab({ from, to }) {
         if (!res.ok) throw new Error(body.error || 'Failed to save asset');
         addToast('Capital asset added to the register — see the Assets tab for depreciation');
       } else {
-        await api.post('/api/finance/expenses', form);
+        const res = await api.post('/api/finance/expenses', form);
+        const body = await res.json();
         addToast('Expense saved');
+        // Split-purchase check — identical items bought the same day under $300 each that add
+        // up past it may need treating as one capital purchase, not several immediate deductions.
+        if (body.warning) addToast(body.warning, 'error');
       }
       load();
       cancelForm();
