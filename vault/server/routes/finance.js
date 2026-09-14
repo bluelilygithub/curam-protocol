@@ -2358,6 +2358,26 @@ router.post('/expenses/home-office', async (req, res) => {
 // over every active asset for a given FY, not a one-off per-item calculation.
 
 const IMMEDIATE_DEDUCTION_THRESHOLD = 300;
+// ATO "low-cost asset" pool-eligibility threshold — an asset costing $1,000+ (ex-GST) can never
+// go into the low-value pool, election or not; only assets in the $300-$999.99 band are ever
+// eligible. Once the pool is elected for one such asset, ATO rules require every future
+// low-cost asset to be pooled too — this is enforced structurally below, not left to memory.
+const LOW_VALUE_POOL_MAX = 1000;
+
+async function getLowValuePoolElection(userId) {
+  const raw = await getSettingValue(userId, 'fin_low_value_pool_election', null);
+  if (!raw) return { elected: false };
+  try { return JSON.parse(raw); } catch { return { elected: false }; }
+}
+
+async function setLowValuePoolElection(userId, { assetId, description, date }) {
+  const value = JSON.stringify({ elected: true, assetId, description, date });
+  await pool.query(
+    `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_low_value_pool_election',$2)
+     ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+    [userId, value]
+  );
+}
 
 function daysBetweenInclusive(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
@@ -2416,6 +2436,14 @@ function round2(n) {
   return Math.round((parseFloat(n) || 0) * 100) / 100;
 }
 
+router.get('/assets/low-value-pool-election', async (req, res) => {
+  try {
+    res.json(await getLowValuePoolElection(req.user.id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/assets', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -2446,14 +2474,29 @@ router.post('/assets', async (req, res) => {
     if (!(pctNum > 0 && pctNum <= 100)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Business-use % must be between 0 and 100' }); }
 
     let useMethod, lifeNum = null;
+    let triggersPoolElection = false;
     if (amountNum <= IMMEDIATE_DEDUCTION_THRESHOLD) {
       useMethod = 'immediate';
     } else {
-      if (!['low_value_pool', 'prime_cost', 'diminishing_value'].includes(method)) {
+      const poolEligible = amountNum < LOW_VALUE_POOL_MAX;
+      const election = poolEligible ? await getLowValuePoolElection(userId) : { elected: false };
+
+      if (poolEligible && election.elected) {
+        // Structural, not a default: once the pool is elected, every future low-cost asset
+        // MUST be pooled — the client can't send a different method for this amount band at
+        // all, same "server resolves it, client can't override" pattern as the FY method locks.
+        useMethod = 'low_value_pool';
+      } else if (!poolEligible && method === 'low_value_pool') {
         await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: `Assets over $${IMMEDIATE_DEDUCTION_THRESHOLD} need a depreciation method (low-value pool, prime cost, or diminishing value)` });
+        return res.status(400).json({ error: `The low-value pool only applies to assets under $${LOW_VALUE_POOL_MAX} (ex-GST) — this asset needs prime cost or diminishing value` });
+      } else {
+        if (!['low_value_pool', 'prime_cost', 'diminishing_value'].includes(method) || (!poolEligible && method === 'low_value_pool')) {
+          await dbClient.query('ROLLBACK');
+          return res.status(400).json({ error: `Assets over $${IMMEDIATE_DEDUCTION_THRESHOLD} need a depreciation method (${poolEligible ? 'low-value pool, ' : ''}prime cost, or diminishing value)` });
+        }
+        useMethod = method;
+        if (poolEligible && useMethod === 'low_value_pool') triggersPoolElection = true; // first-ever election
       }
-      useMethod = method;
       if (useMethod !== 'low_value_pool') {
         lifeNum = parseFloat(effectiveLifeYears);
         if (!(lifeNum > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Effective life (years) is required for prime cost / diminishing value' }); }
@@ -2466,6 +2509,10 @@ router.post('/assets', async (req, res) => {
       [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, pctNum, useMethod, lifeNum]
     );
     let asset = rows[0];
+
+    if (triggersPoolElection) {
+      await setLowValuePoolElection(userId, { assetId: asset.id, description: asset.description, date: datePurchased });
+    }
 
     // Immediate deduction (<= threshold) posts straight away, same pattern as any other
     // capital-asset expense — full cost (adjusted for business-use %) claimed now, no schedule.

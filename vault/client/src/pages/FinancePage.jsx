@@ -1525,10 +1525,13 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
 // Shared by the Expenses form's inline capital-asset fields and the Assets tab's own form.
 const ASSET_METHODS = [
-  { value: 'low_value_pool',    label: 'Low-value pool',       hint: 'Pooled at 18.75% in the year added, 37.5% each year after — no effective life needed' },
+  { value: 'low_value_pool',    label: 'Low-value pool',       hint: 'Pooled at 18.75% in the year added, 37.5% each year after — no effective life needed. Only available under $1,000; once elected for one such asset, the ATO requires every future one to be pooled too.' },
   { value: 'prime_cost',        label: 'Prime cost',           hint: 'Straight-line: cost × (days held ÷ 365) × (100% ÷ effective life)' },
   { value: 'diminishing_value', label: 'Diminishing value',    hint: 'Declining balance: opening value × (days held ÷ 365) × (200% ÷ effective life)' },
 ];
+const LOW_VALUE_POOL_MAX = 1000; // ATO "low-cost asset" pool-eligibility threshold, ex-GST
+// Only offer Low-value pool as a radio choice when the asset is actually eligible for it.
+const assetMethodOptions = (amountNum) => amountNum < LOW_VALUE_POOL_MAX ? ASSET_METHODS : ASSET_METHODS.filter(m => m.value !== 'low_value_pool');
 
 const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false, businessUsePercent: '100', assetMethod: '', effectiveLifeYears: '' };
 
@@ -1555,6 +1558,10 @@ function ExpensesTab({ from, to }) {
   const [receiptUploading, setReceiptUploading] = useState(false);
   const receiptInputRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
+  const [poolElection, setPoolElection] = useState({ elected: false });
+  useEffect(() => {
+    api.get('/api/finance/assets/low-value-pool-election').then(r => r.json()).then(setPoolElection).catch(() => {});
+  }, []);
 
   const autoGst = form.gstIncluded && form.amount
     ? (parseFloat(form.amount) / 11).toFixed(2)
@@ -1611,6 +1618,16 @@ function ExpensesTab({ from, to }) {
   const totalPaid = parseFloat(form.amount) || 0;
   const exGstAmount = form.gstIncluded ? parseFloat((totalPaid - totalPaid / 11).toFixed(2)) : totalPaid;
   const needsAssetFields = !editingExpense && form.isCapitalAsset && exGstAmount > 300;
+  const poolEligible = exGstAmount < LOW_VALUE_POOL_MAX;
+  const autoPooled = needsAssetFields && poolEligible && poolElection.elected;
+
+  // Once the pool is elected, every future eligible asset MUST be pooled — structural, not a
+  // default the user could accidentally type over: the radio group doesn't even render.
+  useEffect(() => {
+    if (autoPooled && form.assetMethod !== 'low_value_pool') {
+      setForm(p => ({ ...p, assetMethod: 'low_value_pool' }));
+    }
+  }, [autoPooled, form.assetMethod]);
 
   const save = async () => {
     if (!form.description.trim() || !form.amount) { setError('Description and amount required'); return; }
@@ -1845,21 +1862,31 @@ function ExpensesTab({ from, to }) {
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <Field label="Business-use %"><Tooltip text="Percentage of use that's for business — reduces the deduction claimed, not the asset's own value."><Input type="number" value={form.businessUsePercent} onChange={v => setForm(p => ({...p, businessUsePercent: v}))} placeholder="100" /></Tooltip></Field>
               </div>
-              <Field label="Depreciation method">
-                <div className="flex flex-col gap-1.5">
-                  {ASSET_METHODS.map(m => (
-                    <Tooltip key={m.value} text={m.hint}>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-                        <input type="radio" checked={form.assetMethod === m.value} onChange={() => setForm(p => ({...p, assetMethod: m.value}))} /> {m.label}
-                      </label>
-                    </Tooltip>
-                  ))}
-                </div>
-              </Field>
-              {(form.assetMethod === 'prime_cost' || form.assetMethod === 'diminishing_value') && (
-                <div className="mt-2">
-                  <Field label="Effective life (years)"><Tooltip text="ATO-published effective life for this asset type — check the current determination."><Input type="number" value={form.effectiveLifeYears} onChange={v => setForm(p => ({...p, effectiveLifeYears: v}))} placeholder="e.g. 4" /></Tooltip></Field>
-                </div>
+              {autoPooled ? (
+                <Tooltip text={`You elected the low-value pool on ${poolElection.date ? formatFriendlyDate(poolElection.date) : 'an earlier asset'} (triggered by "${poolElection.description || 'an earlier asset'}") — the ATO requires every eligible asset since then to be pooled too, so this one is too.`}>
+                  <p className="text-xs px-3 py-2 rounded-lg border cursor-help" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+                    Auto-pooled — Low-value pool (per your earlier election)
+                  </p>
+                </Tooltip>
+              ) : (
+                <>
+                  <Field label="Depreciation method">
+                    <div className="flex flex-col gap-1.5">
+                      {assetMethodOptions(exGstAmount).map(m => (
+                        <Tooltip key={m.value} text={m.hint}>
+                          <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                            <input type="radio" checked={form.assetMethod === m.value} onChange={() => setForm(p => ({...p, assetMethod: m.value}))} /> {m.label}
+                          </label>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </Field>
+                  {(form.assetMethod === 'prime_cost' || form.assetMethod === 'diminishing_value') && (
+                    <div className="mt-2">
+                      <Field label="Effective life (years)"><Tooltip text="ATO-published effective life for this asset type — check the current determination."><Input type="number" value={form.effectiveLifeYears} onChange={v => setForm(p => ({...p, effectiveLifeYears: v}))} placeholder="e.g. 4" /></Tooltip></Field>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -2914,14 +2941,26 @@ function AssetsTab() {
   const [previewFy, setPreviewFy] = useState(finYearForDate(todayStr()));
   const [previewLoading, setPreviewLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [poolElection, setPoolElection] = useState({ elected: false });
 
   const load = () => {
     api.get('/api/finance/assets').then(r => r.json()).then(rows => setAssets(Array.isArray(rows) ? rows : [])).catch(() => {});
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.get('/api/finance/assets/low-value-pool-election').then(r => r.json()).then(setPoolElection).catch(() => {});
+  }, []);
 
   const amountNum = parseFloat(form.amount) || 0;
   const isImmediate = amountNum > 0 && amountNum <= 300;
+  const poolEligible = amountNum < LOW_VALUE_POOL_MAX;
+  const autoPooled = !isImmediate && poolEligible && poolElection.elected;
+
+  useEffect(() => {
+    if (autoPooled && form.method !== 'low_value_pool') {
+      setForm(p => ({ ...p, method: 'low_value_pool' }));
+    }
+  }, [autoPooled, form.method]);
 
   const saveAsset = async () => {
     if (!form.description.trim()) { setError('Description is required'); return; }
@@ -3011,17 +3050,25 @@ function AssetsTab() {
             </p>
           ) : (
             <div className="mb-3">
-              <Field label="Depreciation method">
-                <div className="flex flex-col gap-1.5">
-                  {ASSET_METHODS.map(m => (
-                    <Tooltip key={m.value} text={m.hint}>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-                        <input type="radio" checked={form.method === m.value} onChange={() => setForm(p => ({...p, method: m.value}))} /> {m.label}
-                      </label>
-                    </Tooltip>
-                  ))}
-                </div>
-              </Field>
+              {autoPooled ? (
+                <Tooltip text={`You elected the low-value pool on ${poolElection.date ? formatFriendlyDate(poolElection.date) : 'an earlier asset'} (triggered by "${poolElection.description || 'an earlier asset'}") — the ATO requires every eligible asset since then to be pooled too, so this one is too.`}>
+                  <p className="text-xs px-3 py-2 rounded-lg border cursor-help" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                    Auto-pooled — Low-value pool (per your earlier election)
+                  </p>
+                </Tooltip>
+              ) : (
+                <Field label="Depreciation method">
+                  <div className="flex flex-col gap-1.5">
+                    {assetMethodOptions(amountNum).map(m => (
+                      <Tooltip key={m.value} text={m.hint}>
+                        <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                          <input type="radio" checked={form.method === m.value} onChange={() => setForm(p => ({...p, method: m.value}))} /> {m.label}
+                        </label>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </Field>
+              )}
               {(form.method === 'prime_cost' || form.method === 'diminishing_value') && (
                 <div className="mt-2">
                   <Field label="Effective life (years)"><Tooltip text="ATO-published effective life for this asset type — check the current determination."><Input type="number" value={form.effectiveLifeYears} onChange={v => setForm(p => ({...p, effectiveLifeYears: v}))} placeholder="e.g. 4" /></Tooltip></Field>
