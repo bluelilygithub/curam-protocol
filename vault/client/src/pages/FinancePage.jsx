@@ -2536,7 +2536,6 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   // itself — the global WfhHoursPrompt popup (Layout.jsx) is what writes daily entries.
   const [hDailyLog, setHDailyLog] = useState([]); // last 60 days, from server
   const [hPending, setHPending] = useState({ hours: 0, count: 0, oldestDate: null }); // unposted diary rows
-  const [hHoursAutoFilled, setHHoursAutoFilled] = useState(false); // has this render's auto-fill run?
 
   const loadHDailyLog = () => {
     api.get('/api/finance/home-office-daily-log').then(r => r.json()).then(rows => {
@@ -2600,18 +2599,6 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const lockedVMethod = vYearMethods[vFy] || null;
   const lockedHMethod = hYearMethods[hFy] || null;
 
-  // Prefill Hours from the daily diary once, when there's something to prefill and the
-  // user hasn't already started typing their own number — avoids asking for the same
-  // figure twice (daily popup, then again here) without silently overwriting an edit.
-  useEffect(() => {
-    if (hHoursAutoFilled) return;
-    if (lockedHMethod !== 'fixed_rate') return;
-    if (hPending.hours <= 0) return;
-    if (hForm.hours !== '') return;
-    setHForm(p => ({ ...p, hours: String(hPending.hours) }));
-    setHHoursAutoFilled(true);
-  }, [hHoursAutoFilled, lockedHMethod, hPending.hours, hForm.hours]);
-
   // Daily diary summary for the card header — hours + day count logged over the last 14
   // calendar days (matches the popup's own backfill window), plus any weekday gaps OLDER than
   // that 14-day window (not force-prompted via the popup, just surfaced here as a plain list so
@@ -2646,8 +2633,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     ? (parseFloat(vForm.actualCost) || 0) * ((parseFloat(vForm.businessUsePercent) || 0) / 100)
     : 0;
 
+  // fixed_rate no longer takes manual hours entry — the number posted is always exactly what's
+  // pending in the daily diary (hPending.hours), not something typed here. See saveHomeOffice().
   const homeOfficeDeductible = lockedHMethod === 'fixed_rate'
-    ? (parseFloat(hForm.hours) || 0) * (parseFloat(rates.fin_home_office_rate_per_hour) || 0)
+    ? hPending.hours * (parseFloat(rates.fin_home_office_rate_per_hour) || 0)
     : lockedHMethod === 'actual_cost'
     ? (parseFloat(hForm.actualCost) || 0) * ((parseFloat(hForm.businessUsePercent) || 0) / 100)
     : 0;
@@ -2680,11 +2669,13 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     if (homeOfficeDeductible <= 0) { setHError('Enter values that produce a deductible amount greater than zero'); return; }
     setHSaving(true); setHError('');
     try {
-      // No `method` or rate field is sent — see saveVehicle() above.
+      // No `method` or rate field is sent — see saveVehicle() above. For fixed_rate, hours is
+      // never typed here — it's always exactly the pending diary total (hPending.hours), since
+      // data entry for hours worked is handled entirely by the daily reminder popup now.
       const res = await api.post('/api/finance/expenses/home-office', {
         date: hForm.date,
         description: hForm.description,
-        hours: hForm.hours,
+        hours: lockedHMethod === 'fixed_rate' ? hPending.hours : hForm.hours,
         businessUsePercent: hForm.businessUsePercent,
         actualCost: hForm.actualCost,
       });
@@ -2692,7 +2683,6 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       if (!res.ok) throw new Error(body.error || 'Failed to save');
       addToast(`Home office expense saved — ${fmt(homeOfficeDeductible)} deductible`);
       setHForm({ date: todayStr(), description: '', hours: '', businessUsePercent: '', actualCost: '' });
-      setHHoursAutoFilled(false); // allow the next entry to auto-fill again from whatever's newly pending
       loadHPending();
       loadHDailyLog();
     } catch (e) { setHError(e.message); } finally { setHSaving(false); }
@@ -2850,9 +2840,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
             <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
             {lockedHMethod === 'fixed_rate' && (
-              <Field label="Hours worked from home" hint={hPending.hours > 0 ? "Auto-filled from your daily diary — adjust if needed" : undefined}>
-                <Tooltip text="Total hours worked from home this period — prefilled from the daily diary popup where possible, but you can still adjust it.">
-                  <Input type="number" value={hForm.hours} onChange={v => setHForm(p => ({...p, hours: v}))} placeholder="0" />
+              <Field label="Hours worked from home">
+                <Tooltip text="Not editable here — hours worked from home is captured entirely by the daily reminder popup. This is the total pending in that diary since the last posted deduction, and is exactly what gets posted.">
+                  <p className="text-sm font-semibold py-1" style={{ color: 'var(--color-text)' }}>{hPending.hours.toFixed(2)} hours</p>
                 </Tooltip>
               </Field>
             )}
