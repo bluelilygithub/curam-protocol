@@ -2068,6 +2068,38 @@ async function initSchema() {
     )
   `);
 
+  // Assets register — one table regardless of asset count, per the design principle that a
+  // register handling 1 asset and one handling 50 should be structurally identical; only the
+  // row count differs. Covers both branches: amount <= $300 auto-routes to an immediate
+  // deduction (no method/effectiveLife needed), amount > $300 needs a depreciation method and,
+  // for prime_cost/diminishing_value (not low_value_pool), an effective life. Depreciation is
+  // computed generically by looping over active (non-fully-depreciated, non-disposed) assets
+  // each FY — see computeAssetYearDepreciation() in finance.js — not as a one-off per-item calc.
+  // "accumulatedDepreciation" + "lastDepreciatedFy" track state so a FY is never double-posted
+  // and diminishing-value's opening base (cost - accumulated) is always derivable. Disposal
+  // fields exist from day one (even with zero disposals yet) so a later profit/loss-on-disposal
+  // balancing adjustment doesn't need a retrofit migration.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_assets (
+      id                        SERIAL PRIMARY KEY,
+      "userId"                  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "datePurchased"           DATE NOT NULL,
+      "dateFirstUsed"           DATE NOT NULL,
+      description               TEXT NOT NULL,
+      amount                    NUMERIC(12,2) NOT NULL CHECK(amount > 0),
+      "businessUsePercent"      NUMERIC(5,2) NOT NULL DEFAULT 100 CHECK("businessUsePercent" > 0 AND "businessUsePercent" <= 100),
+      method                    TEXT CHECK(method IN ('immediate','low_value_pool','prime_cost','diminishing_value')),
+      "effectiveLifeYears"      NUMERIC(5,2),
+      "accumulatedDepreciation" NUMERIC(12,2) NOT NULL DEFAULT 0,
+      "lastDepreciatedFy"       TEXT,
+      "immediateExpenseId"      INTEGER REFERENCES fin_expenses(id) ON DELETE SET NULL,
+      "disposedDate"            DATE,
+      "disposalAmount"          NUMERIC(12,2),
+      "createdAt"               TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"               TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
 

@@ -92,6 +92,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '3100', name: "Owner's Drawings",       type: 'equity'    },
   { code: '4000', name: 'Income',                 type: 'income'    },
   { code: '4100', name: 'Interest Income',        type: 'income'    },
+  { code: '1300', name: 'Accumulated Depreciation', type: 'asset'   },
   { code: '5000', name: 'Expenses',               type: 'expense'   },
   { code: '6000', name: 'Wages',                  type: 'expense'   },
   { code: '6100', name: 'Superannuation Expense', type: 'expense'   },
@@ -122,6 +123,7 @@ const DEFAULT_TX_CODES = [
   { code: 'EXP-180', name: 'Utilities',                          type: 'expense' },
   { code: 'EXP-190', name: 'Vehicle',                            type: 'expense' },
   { code: 'EXP-200', name: 'Home Office',                        type: 'expense' },
+  { code: 'EXP-210', name: 'Depreciation',                       type: 'expense' },
   { code: 'EXP-900', name: 'Other Expenses',                     type: 'expense' },
 ];
 
@@ -2341,6 +2343,328 @@ router.post('/expenses/home-office', async (req, res) => {
 
     await dbClient.query('COMMIT');
     res.json({ ...expense, deductible, method: useMethod });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+// ── Assets register ───────────────────────────────────────────────────────────
+// One table, one form, regardless of how many assets exist — see fin_assets in db.js. Amount
+// <= $300 auto-routes to an immediate deduction; amount > $300 needs a method (+ effective life
+// for prime_cost/diminishing_value, not low_value_pool). Annual depreciation is a generic loop
+// over every active asset for a given FY, not a one-off per-item calculation.
+
+const IMMEDIATE_DEDUCTION_THRESHOLD = 300;
+
+function daysBetweenInclusive(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+}
+
+// Simplified ATO decline-in-value calc: real depreciation has edge cases (pooling elections,
+// balancing adjustments, mixed-use assets) this does not attempt to fully model — treat as a
+// starting figure for the accountant to review, same disclaimer this app already carries for
+// other calculators. Returns { decline, deduction } for the given FY, or null if the asset isn't
+// depreciable that year (immediate method, not yet in use, disposed before the FY, or fully
+// written down already).
+function computeAssetYearDepreciation(asset, fy) {
+  if (asset.method === 'immediate' || !asset.method) return null;
+  const fyStartYear = parseInt(fy.slice(0, 4), 10);
+  const fyStart = `${fyStartYear}-07-01`;
+  const fyEnd = `${fyStartYear + 1}-06-30`;
+  if (asset.disposedDate && asset.disposedDate < fyStart) return null;
+  if (asset.dateFirstUsed > fyEnd) return null;
+
+  const effectiveStart = asset.dateFirstUsed > fyStart ? asset.dateFirstUsed : fyStart;
+  const effectiveEnd = asset.disposedDate && asset.disposedDate < fyEnd ? asset.disposedDate : fyEnd;
+  if (effectiveStart > effectiveEnd) return null;
+
+  const daysHeld = daysBetweenInclusive(effectiveStart, effectiveEnd);
+  const daysInYear = daysBetweenInclusive(fyStart, fyEnd);
+  const cost = parseFloat(asset.amount) || 0;
+  const accumulated = parseFloat(asset.accumulatedDepreciation) || 0;
+  const openingValue = round2(cost - accumulated);
+  if (openingValue <= 0) return null;
+
+  let rate, base;
+  if (asset.method === 'prime_cost') {
+    const life = parseFloat(asset.effectiveLifeYears) || 0;
+    if (life <= 0) return null;
+    rate = 100 / life;
+    base = cost;
+  } else if (asset.method === 'diminishing_value') {
+    const life = parseFloat(asset.effectiveLifeYears) || 0;
+    if (life <= 0) return null;
+    rate = 200 / life;
+    base = openingValue;
+  } else { // low_value_pool
+    rate = accumulated === 0 ? 18.75 : 37.5;
+    base = openingValue;
+  }
+
+  let decline = round2(base * (daysHeld / daysInYear) * (rate / 100));
+  decline = Math.min(decline, openingValue);
+  if (decline <= 0) return null;
+  const businessUsePercent = parseFloat(asset.businessUsePercent) || 100;
+  const deduction = round2(decline * (businessUsePercent / 100));
+  return { decline, deduction };
+}
+
+function round2(n) {
+  return Math.round((parseFloat(n) || 0) * 100) / 100;
+}
+
+router.get('/assets', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "datePurchased"::text AS "datePurchased", "dateFirstUsed"::text AS "dateFirstUsed",
+              description, amount, "businessUsePercent", method, "effectiveLifeYears",
+              "accumulatedDepreciation", "lastDepreciatedFy", "immediateExpenseId",
+              "disposedDate"::text AS "disposedDate", "disposalAmount", "createdAt"
+       FROM fin_assets WHERE "userId"=$1 ORDER BY "datePurchased" DESC, id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/assets', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { datePurchased, dateFirstUsed, description, amount, businessUsePercent, method, effectiveLifeYears } = req.body;
+    if (!datePurchased || !dateFirstUsed) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Date purchased and date first used are required' }); }
+    if (!description || !description.trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
+    const amountNum = parseFloat(amount);
+    if (!(amountNum > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
+    const pctNum = businessUsePercent === undefined || businessUsePercent === '' ? 100 : parseFloat(businessUsePercent);
+    if (!(pctNum > 0 && pctNum <= 100)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Business-use % must be between 0 and 100' }); }
+
+    let useMethod, lifeNum = null;
+    if (amountNum <= IMMEDIATE_DEDUCTION_THRESHOLD) {
+      useMethod = 'immediate';
+    } else {
+      if (!['low_value_pool', 'prime_cost', 'diminishing_value'].includes(method)) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: `Assets over $${IMMEDIATE_DEDUCTION_THRESHOLD} need a depreciation method (low-value pool, prime cost, or diminishing value)` });
+      }
+      useMethod = method;
+      if (useMethod !== 'low_value_pool') {
+        lifeNum = parseFloat(effectiveLifeYears);
+        if (!(lifeNum > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Effective life (years) is required for prime cost / diminishing value' }); }
+      }
+    }
+
+    const { rows } = await dbClient.query(
+      `INSERT INTO fin_assets ("userId","datePurchased","dateFirstUsed",description,amount,"businessUsePercent",method,"effectiveLifeYears")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, pctNum, useMethod, lifeNum]
+    );
+    let asset = rows[0];
+
+    // Immediate deduction (<= threshold) posts straight away, same pattern as any other
+    // capital-asset expense — full cost (adjusted for business-use %) claimed now, no schedule.
+    if (useMethod === 'immediate') {
+      const deductible = round2(amountNum * (pctNum / 100));
+      await ensureAccounts(userId);
+      await ensureTxCodes(userId);
+      const expId = await accountByCode(userId, '5000');
+      const bankId = await accountByCode(userId, '1000');
+      const { rows: depTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
+      const { rows: expRows } = await dbClient.query(
+        `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "isCapitalAsset")
+         VALUES ($1,$2,$3,$4,0,'Assets',$5,true) RETURNING *`,
+        [userId, datePurchased, `Asset (immediate deduction): ${description.trim()}`, deductible, depTx[0]?.id || null]
+      );
+      const expense = expRows[0];
+      if (expId && bankId) {
+        await createJournalEntry(dbClient, userId, {
+          date: expense.date, description: `Asset immediate deduction: ${description.trim()}`, type: 'expense', sourceId: expense.id,
+          lines: [{ accountId: expId, debit: deductible, credit: 0 }, { accountId: bankId, debit: 0, credit: deductible }],
+        });
+      }
+      const { rows: updated } = await dbClient.query(
+        `UPDATE fin_assets SET "accumulatedDepreciation"=$1, "immediateExpenseId"=$2, "updatedAt"=NOW() WHERE id=$3 RETURNING *`,
+        [amountNum, expense.id, asset.id]
+      );
+      asset = updated[0];
+    }
+
+    await dbClient.query('COMMIT');
+    res.json(asset);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.put('/assets/:id', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows: existingRows } = await pool.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    if (!existingRows.length) return res.status(404).json({ error: 'Asset not found' });
+    const existing = existingRows[0];
+    if (existing.immediateExpenseId || existing.lastDepreciatedFy) {
+      return res.status(400).json({ error: 'This asset already has a posted deduction/depreciation — dispose it instead of editing its cost/method' });
+    }
+    const { datePurchased, dateFirstUsed, description, businessUsePercent } = req.body;
+    const pctNum = businessUsePercent === undefined || businessUsePercent === '' ? existing.businessUsePercent : parseFloat(businessUsePercent);
+    if (!(pctNum > 0 && pctNum <= 100)) return res.status(400).json({ error: 'Business-use % must be between 0 and 100' });
+    const { rows } = await pool.query(
+      `UPDATE fin_assets SET "datePurchased"=$1,"dateFirstUsed"=$2,description=$3,"businessUsePercent"=$4,"updatedAt"=NOW()
+       WHERE id=$5 AND "userId"=$6 RETURNING *`,
+      [datePurchased || existing.datePurchased, dateFirstUsed || existing.dateFirstUsed, (description || existing.description).trim(), pctNum, req.params.id, userId]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/assets/:id', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows } = await pool.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    if (!rows.length) return res.status(404).json({ error: 'Asset not found' });
+    if (rows[0].immediateExpenseId || rows[0].lastDepreciatedFy) {
+      return res.status(400).json({ error: 'This asset already has a posted deduction/depreciation — dispose it instead of deleting it' });
+    }
+    await pool.query(`DELETE FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Disposal — balancing adjustment between sale proceeds and the asset's written-down value
+// (cost minus accumulated depreciation; for an already-fully-immediate-deducted asset that's
+// effectively the whole amount). Profit posts to Other Income, loss posts as an expense.
+router.post('/assets/:id/dispose', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { disposedDate, disposalAmount } = req.body;
+    if (!disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Disposal date is required' }); }
+    const disposalNum = parseFloat(disposalAmount) || 0;
+    const { rows } = await dbClient.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    if (!rows.length) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Asset not found' }); }
+    const asset = rows[0];
+    if (asset.disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Asset already disposed' }); }
+
+    const writtenDownValue = round2((parseFloat(asset.amount) || 0) - (parseFloat(asset.accumulatedDepreciation) || 0));
+    const adjustment = round2(disposalNum - writtenDownValue);
+
+    if (Math.abs(adjustment) >= 0.01) {
+      await ensureAccounts(userId);
+      const bankId = await accountByCode(userId, '1000');
+      if (adjustment > 0) {
+        const incId = await accountByCode(userId, '4100');
+        if (bankId && incId) {
+          await createJournalEntry(dbClient, userId, {
+            date: disposedDate, description: `Profit on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
+            lines: [{ accountId: bankId, debit: adjustment, credit: 0 }, { accountId: incId, debit: 0, credit: adjustment }],
+          });
+        }
+      } else {
+        const expId = await accountByCode(userId, '5000');
+        const lossAmt = Math.abs(adjustment);
+        if (bankId && expId) {
+          await createJournalEntry(dbClient, userId, {
+            date: disposedDate, description: `Loss on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
+            lines: [{ accountId: expId, debit: lossAmt, credit: 0 }, { accountId: bankId, debit: 0, credit: lossAmt }],
+          });
+        }
+      }
+    }
+
+    const { rows: updated } = await dbClient.query(
+      `UPDATE fin_assets SET "disposedDate"=$1,"disposalAmount"=$2,"updatedAt"=NOW() WHERE id=$3 RETURNING *`,
+      [disposedDate, disposalNum, asset.id]
+    );
+    await dbClient.query('COMMIT');
+    res.json({ ...updated[0], writtenDownValue, adjustment });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+// Preview what running depreciation for a FY would post, without posting — a generic loop over
+// every asset, not a one-off calc. Named before /assets/depreciation/run per route-ordering.
+router.get('/assets/depreciation/preview', async (req, res) => {
+  try {
+    const { fy } = req.query;
+    if (!fy || !FY_RE.test(fy)) return res.status(400).json({ error: 'fy must be like "2025-26"' });
+    const { rows } = await pool.query(
+      `SELECT id, description, "dateFirstUsed"::text AS "dateFirstUsed", amount, "businessUsePercent", method,
+              "effectiveLifeYears", "accumulatedDepreciation", "lastDepreciatedFy", "disposedDate"::text AS "disposedDate"
+       FROM fin_assets WHERE "userId"=$1`,
+      [req.user.id]
+    );
+    const preview = rows
+      .filter(a => a.lastDepreciatedFy !== fy)
+      .map(a => ({ asset: a, calc: computeAssetYearDepreciation(a, fy) }))
+      .filter(r => r.calc)
+      .map(r => ({ id: r.asset.id, description: r.asset.description, decline: r.calc.decline, deduction: r.calc.deduction }));
+    res.json(preview);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/assets/depreciation/run', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { fy } = req.body;
+    if (!fy || !FY_RE.test(fy)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'fy must be like "2025-26"' }); }
+
+    const { rows: assets } = await dbClient.query(`SELECT * FROM fin_assets WHERE "userId"=$1`, [userId]);
+    await ensureAccounts(userId);
+    await ensureTxCodes(userId);
+    const expId = await accountByCode(userId, '5000');
+    const accDepId = await accountByCode(userId, '1300');
+    const { rows: depTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
+    const fyEnd = `${parseInt(fy.slice(0, 4), 10) + 1}-06-30`;
+
+    const posted = [];
+    for (const asset of assets) {
+      if (asset.lastDepreciatedFy === fy) continue; // already run for this FY — never double-post
+      const calc = computeAssetYearDepreciation(asset, fy);
+      if (!calc) continue;
+
+      const { rows: expRows } = await dbClient.query(
+        `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId")
+         VALUES ($1,$2,$3,$4,0,'Depreciation',$5) RETURNING *`,
+        [userId, fyEnd, `Depreciation FY${fy}: ${asset.description}`, calc.deduction, depTx[0]?.id || null]
+      );
+      const expense = expRows[0];
+      if (expId && accDepId) {
+        await createJournalEntry(dbClient, userId, {
+          date: expense.date, description: `Depreciation FY${fy}: ${asset.description}`, type: 'depreciation', sourceId: expense.id,
+          lines: [{ accountId: expId, debit: calc.deduction, credit: 0 }, { accountId: accDepId, debit: 0, credit: calc.deduction }],
+        });
+      }
+      await dbClient.query(
+        `UPDATE fin_assets SET "accumulatedDepreciation"="accumulatedDepreciation"+$1,"lastDepreciatedFy"=$2,"updatedAt"=NOW() WHERE id=$3`,
+        [calc.decline, fy, asset.id]
+      );
+      posted.push({ id: asset.id, description: asset.description, deduction: calc.deduction });
+    }
+
+    await dbClient.query('COMMIT');
+    res.json({ fy, posted });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });

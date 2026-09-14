@@ -2888,6 +2888,259 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   );
 }
 
+// ── Assets register ────────────────────────────────────────────────────────────
+// One table, one form, whether there's 1 asset or 40 — see docs/finance.md and fin_assets in
+// db.js. Amount <= $300 auto-routes to an immediate deduction with no further fields; amount
+// > $300 needs a method, and prime_cost/diminishing_value additionally need an effective life.
+const ASSET_METHODS = [
+  { value: 'low_value_pool',    label: 'Low-value pool',       hint: 'Pooled at 18.75% in the year added, 37.5% each year after — no effective life needed' },
+  { value: 'prime_cost',        label: 'Prime cost',           hint: 'Straight-line: cost × (days held ÷ 365) × (100% ÷ effective life)' },
+  { value: 'diminishing_value', label: 'Diminishing value',    hint: 'Declining balance: opening value × (days held ÷ 365) × (200% ÷ effective life)' },
+];
+
+function AssetsTab() {
+  const addToast = useToastStore(s => s.addToast);
+  const [assets, setAssets] = useState([]);
+  const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [disposeModal, setDisposeModal] = useState(null); // asset being disposed
+  const [disposeForm, setDisposeForm] = useState({ disposedDate: todayStr(), disposalAmount: '' });
+  const [disposing, setDisposing] = useState(false);
+  const [preview, setPreview] = useState(null); // depreciation preview rows, or null if not loaded
+  const [previewFy, setPreviewFy] = useState(finYearForDate(todayStr()));
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  const load = () => {
+    api.get('/api/finance/assets').then(r => r.json()).then(rows => setAssets(Array.isArray(rows) ? rows : [])).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+
+  const amountNum = parseFloat(form.amount) || 0;
+  const isImmediate = amountNum > 0 && amountNum <= 300;
+
+  const saveAsset = async () => {
+    if (!form.description.trim()) { setError('Description is required'); return; }
+    if (amountNum <= 0) { setError('Amount must be greater than zero'); return; }
+    if (!isImmediate && !form.method) { setError('Choose a depreciation method for assets over $300'); return; }
+    if (!isImmediate && form.method !== 'low_value_pool' && !(parseFloat(form.effectiveLifeYears) > 0)) { setError('Effective life (years) is required for this method'); return; }
+    setSaving(true); setError('');
+    try {
+      const res = await api.post('/api/finance/assets', {
+        datePurchased: form.datePurchased,
+        dateFirstUsed: form.dateFirstUsed,
+        description: form.description,
+        amount: form.amount,
+        businessUsePercent: form.businessUsePercent,
+        method: isImmediate ? undefined : form.method,
+        effectiveLifeYears: isImmediate || form.method === 'low_value_pool' ? undefined : form.effectiveLifeYears,
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to save');
+      addToast(isImmediate ? `Asset saved — $${amountNum.toFixed(2)} deducted immediately` : 'Asset added to register');
+      setForm({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '' });
+      load();
+    } catch (e) { setError(e.message); } finally { setSaving(false); }
+  };
+
+  const deleteAsset = async (asset) => {
+    try {
+      const res = await api.delete(`/api/finance/assets/${asset.id}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to delete');
+      load();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const submitDispose = async () => {
+    setDisposing(true);
+    try {
+      const res = await api.post(`/api/finance/assets/${disposeModal.id}/dispose`, disposeForm);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to record disposal');
+      addToast(body.adjustment > 0 ? `Disposed — $${body.adjustment.toFixed(2)} profit on disposal posted` : body.adjustment < 0 ? `Disposed — $${Math.abs(body.adjustment).toFixed(2)} loss on disposal posted` : 'Disposed — no balancing adjustment needed');
+      setDisposeModal(null);
+      load();
+    } catch (e) { addToast(e.message, 'error'); } finally { setDisposing(false); }
+  };
+
+  const loadPreview = () => {
+    setPreviewLoading(true);
+    api.get(`/api/finance/assets/depreciation/preview?fy=${previewFy}`).then(r => r.json())
+      .then(rows => setPreview(Array.isArray(rows) ? rows : [])).catch(() => setPreview([])).finally(() => setPreviewLoading(false));
+  };
+
+  const runDepreciation = async () => {
+    setRunning(true);
+    try {
+      const res = await api.post('/api/finance/assets/depreciation/run', { fy: previewFy });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to run depreciation');
+      addToast(`Depreciation posted for ${body.posted.length} asset${body.posted.length === 1 ? '' : 's'}, FY${previewFy}`);
+      setPreview(null);
+      load();
+    } catch (e) { addToast(e.message, 'error'); } finally { setRunning(false); }
+  };
+
+  const activeAssets = assets.filter(a => !a.disposedDate);
+  const disposedAssets = assets.filter(a => a.disposedDate);
+
+  return (
+    <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Add an asset</h3>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+          $300 or under deducts immediately in full. Over $300 needs a depreciation method — this is separate from the small "Office Equipment" running-repairs card on Vehicle/Home Office, which is for repairs/maintenance, not asset purchases.
+        </p>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="Date purchased"><Tooltip text="When the asset was bought/invoiced."><Input type="date" value={form.datePurchased} onChange={v => setForm(p => ({...p, datePurchased: v}))} /></Tooltip></Field>
+          <Field label="Date first used" hint="Depreciation starts from this date, not the purchase date"><Tooltip text="When the asset was first used or installed ready for use — this is when the ATO says depreciation starts, which can be later than the purchase date."><Input type="date" value={form.dateFirstUsed} onChange={v => setForm(p => ({...p, dateFirstUsed: v}))} /></Tooltip></Field>
+          <Field label="Description"><Tooltip text="What the asset is, e.g. 'Mac Mini'."><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Mac Mini" /></Tooltip></Field>
+          <Field label="Amount ($, GST-excl.)"><Tooltip text="Cost of the asset, excluding GST."><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
+          <Field label="Business-use %"><Tooltip text="Percentage of use that's for business — reduces the deduction/depreciation claimed, doesn't change the asset's own value."><Input type="number" value={form.businessUsePercent} onChange={v => setForm(p => ({...p, businessUsePercent: v}))} placeholder="100" /></Tooltip></Field>
+        </div>
+
+        {amountNum > 0 && (
+          isImmediate ? (
+            <p className="text-xs mb-3 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+              $300 or under — deducted immediately in full, no depreciation schedule.
+            </p>
+          ) : (
+            <div className="mb-3">
+              <Field label="Depreciation method">
+                <div className="flex flex-col gap-1.5">
+                  {ASSET_METHODS.map(m => (
+                    <Tooltip key={m.value} text={m.hint}>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="radio" checked={form.method === m.value} onChange={() => setForm(p => ({...p, method: m.value}))} /> {m.label}
+                      </label>
+                    </Tooltip>
+                  ))}
+                </div>
+              </Field>
+              {(form.method === 'prime_cost' || form.method === 'diminishing_value') && (
+                <div className="mt-2">
+                  <Field label="Effective life (years)"><Tooltip text="ATO-published effective life for this asset type — check the current determination."><Input type="number" value={form.effectiveLifeYears} onChange={v => setForm(p => ({...p, effectiveLifeYears: v}))} placeholder="e.g. 4" /></Tooltip></Field>
+                </div>
+              )}
+            </div>
+          )
+        )}
+        <ErrMsg msg={error} />
+        <Tooltip text={isImmediate ? "Posts the full amount (adjusted for business-use %) as an expense immediately" : "Adds this asset to the register — depreciation is posted separately via the annual 'Run depreciation' action below"}>
+          <Btn onClick={saveAsset} disabled={saving}>{saving ? 'Saving…' : (isImmediate ? 'Save & Deduct Now' : 'Add to Register')}</Btn>
+        </Tooltip>
+      </div>
+
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Annual depreciation</h3>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+          Loops over every asset in the register with a depreciation method, once per financial year — the same action whether there's 1 asset or 40. Preview before posting; a FY already run for a given asset is never posted twice.
+        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <Field label="Financial year"><Tooltip text="e.g. 2025-26"><Input value={previewFy} onChange={v => { setPreviewFy(v); setPreview(null); }} placeholder="2025-26" /></Tooltip></Field>
+          <Tooltip text="See what would be posted for this FY, without posting anything yet.">
+            <Btn variant="secondary" onClick={loadPreview} disabled={previewLoading}>{previewLoading ? 'Loading…' : 'Preview'}</Btn>
+          </Tooltip>
+        </div>
+        {preview && (
+          preview.length === 0 ? (
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Nothing to post for FY{previewFy} — either already run, or no eligible assets.</p>
+          ) : (
+            <div className="mb-3">
+              <table className="w-full text-xs mb-2">
+                <tbody>
+                  {preview.map(p => (
+                    <tr key={p.id} className="border-b" style={{ borderColor: 'var(--color-border)' }}>
+                      <td className="py-1" style={{ color: 'var(--color-text)' }}>{p.description}</td>
+                      <td className="py-1 text-right font-semibold" style={{ color: 'var(--color-primary)' }}>{fmt(p.deduction)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Tooltip text="Posts one expense (Debit Expenses, Credit Accumulated Depreciation) per asset shown above for this FY.">
+                <Btn onClick={runDepreciation} disabled={running}>{running ? 'Posting…' : `Run depreciation for FY${previewFy}`}</Btn>
+              </Tooltip>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Register</h3>
+        {activeAssets.length === 0 ? (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No assets yet.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr>
+                {['Description', 'Purchased', 'Amount', 'Method', 'Written-down value', ''].map(h => (
+                  <th key={h} className="text-left py-2 px-2 font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {activeAssets.map(a => {
+                const wdv = round2ForDisplay((parseFloat(a.amount) || 0) - (parseFloat(a.accumulatedDepreciation) || 0));
+                return (
+                  <tr key={a.id} className="border-b" style={{ borderColor: 'var(--color-border)' }}>
+                    <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{a.description}</td>
+                    <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{fmtDate(a.datePurchased)}</td>
+                    <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{fmt(a.amount)}</td>
+                    <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{a.method === 'immediate' ? 'Immediate' : a.method === 'low_value_pool' ? 'Low-value pool' : a.method === 'prime_cost' ? 'Prime cost' : 'Diminishing value'}</td>
+                    <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{fmt(wdv)}</td>
+                    <td className="py-2 px-2 text-right">
+                      {!a.immediateExpenseId && !a.lastDepreciatedFy && (
+                        <Tooltip text="Delete this asset — only available before any deduction/depreciation has been posted against it."><button type="button" onClick={() => deleteAsset(a)} className="hover:opacity-60 mr-2" style={{ color: 'var(--color-muted)' }}>Delete</button></Tooltip>
+                      )}
+                      <Tooltip text="Record this asset as sold/scrapped — posts a profit or loss on disposal balancing adjustment if sale proceeds differ from written-down value.">
+                        <button type="button" onClick={() => { setDisposeModal(a); setDisposeForm({ disposedDate: todayStr(), disposalAmount: '' }); }} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Dispose</button>
+                      </Tooltip>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {disposedAssets.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Disposed</p>
+            <table className="w-full text-xs">
+              <tbody>
+                {disposedAssets.map(a => (
+                  <tr key={a.id} className="border-b" style={{ borderColor: 'var(--color-border)' }}>
+                    <td className="py-1 px-2" style={{ color: 'var(--color-text)' }}>{a.description}</td>
+                    <td className="py-1 px-2" style={{ color: 'var(--color-muted)' }}>Disposed {fmtDate(a.disposedDate)} — {fmt(a.disposalAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {disposeModal && (
+        <Modal onClose={() => setDisposeModal(null)} title={`Dispose: ${disposeModal.description}`}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <Field label="Disposal date"><Input type="date" value={disposeForm.disposedDate} onChange={v => setDisposeForm(p => ({...p, disposedDate: v}))} /></Field>
+            <Field label="Sale/disposal proceeds ($)"><Tooltip text="What the asset sold for, or 0 if scrapped with no proceeds."><Input type="number" value={disposeForm.disposalAmount} onChange={v => setDisposeForm(p => ({...p, disposalAmount: v}))} placeholder="0.00" /></Tooltip></Field>
+          </div>
+          <div className="flex gap-2">
+            <Tooltip text="Posts a profit or loss on disposal balancing adjustment automatically, based on proceeds vs written-down value.">
+              <Btn onClick={submitDispose} disabled={disposing}>{disposing ? 'Recording…' : 'Confirm Disposal'}</Btn>
+            </Tooltip>
+            <Btn variant="secondary" onClick={() => setDisposeModal(null)}>Cancel</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function round2ForDisplay(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+
 // ── Interest Income ───────────────────────────────────────────────────────────
 
 function InterestTab({ from, to }) {
@@ -5711,7 +5964,7 @@ function ReportTable({ title, rows, total, totalLabel }) {
 
 function fmtNum2(n) { return (parseFloat(n) || 0).toFixed(2); }
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
 const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
@@ -5807,6 +6060,7 @@ export default function FinancePage() {
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Drawings'  && <DrawingsTab  from={from} to={to} />}
         {tab === 'Vehicle/Home Office' && <VehicleHomeOfficeTab onGoToSettings={goToVehicleHomeOfficeSettings} />}
+        {tab === 'Assets' && <AssetsTab />}
         {tab === 'Recurring' && <RecurringTab />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
         {tab === 'Interest'  && <InterestTab from={from} to={to} />}
