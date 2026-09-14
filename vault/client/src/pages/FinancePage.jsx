@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
+import { useIcon } from '../providers/IconProvider';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -2487,6 +2488,7 @@ function NoMethodLockedNotice({ fy, claimTypeLabel, onGoToSettings }) {
 }
 
 function VehicleHomeOfficeTab({ onGoToSettings }) {
+  const getIcon = useIcon();
   const addToast = useToastStore(s => s.addToast);
   const [rates, setRates] = useState({ fin_vehicle_rate_per_km: '0.88', fin_home_office_rate_per_hour: '0.70' });
 
@@ -2782,26 +2784,20 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           )}
 
           {lockedHMethod === 'fixed_rate' && (
-            <div className="p-3 rounded-lg border mb-3" style={{ borderColor: '#f59e0b', background: 'var(--color-surface)' }}>
-              <p className="text-sm font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠ Fixed rate already bundles these — don't double-claim</p>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                The {rates.fin_home_office_rate_per_hour}c/hour fixed rate already covers electricity, gas, phone, internet, and stationery/computer consumables.
-                Don't separately expense those specific categories while on the fixed-rate method for FY{hFy}.
-                Depreciation on office furniture/equipment (desk, chair, monitor, computer) and their repairs/maintenance is <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>not</span> bundled —
-                use the standalone "Office Equipment &amp; Depreciation" card below for those; it's not double-dipping.
+            <Tooltip text={`The ${rates.fin_home_office_rate_per_hour}c/hour fixed rate already covers electricity, gas, phone, internet, and stationery/computer consumables — don't separately expense those categories for FY${hFy}. Depreciation on office furniture/equipment and their repairs/maintenance is NOT bundled — use the standalone "Office Equipment & Depreciation" card for those; it's not double-dipping.`}>
+              <p className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg border cursor-help" style={{ borderColor: '#f59e0b', color: '#f59e0b', background: 'var(--color-surface)' }}>
+                {getIcon('info', { size: 13 })} Fixed rate already bundles some expenses — don't double-claim (hover for details)
               </p>
-            </div>
+            </Tooltip>
           )}
 
           {lockedHMethod === 'fixed_rate' && (
             <div className="p-3 rounded-lg border mb-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <Tooltip text="You don't need every bill for the year — one document per category is enough to show the cost genuinely exists. The flat rate handles the amount.">
-                <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Expense-type evidence (one per category, not per claim)</p>
+              <Tooltip text="You don't need every bill for the year — one document per category is enough to show the cost genuinely exists. The flat rate handles the amount. Nothing is read from the file or extracted — the deductible amount is hours × rate only. This isn't for rent or mortgage — those are a separate 'occupancy expense' category with capital-gains implications, not covered by this tool.">
+                <p className="flex items-center gap-1.5 text-xs font-semibold mb-2 cursor-help" style={{ color: 'var(--color-text)' }}>
+                  {getIcon('info', { size: 12 })} Expense-type evidence (one per category, not per claim)
+                </p>
               </Tooltip>
-              <p className="text-[11px] mb-2" style={{ color: 'var(--color-muted)' }}>
-                Just a file — nothing is read from it or extracted. The deductible amount above is hours × rate only, not the value of any bill.
-                This isn't for rent or mortgage — those are a separate "occupancy expense" category with capital-gains implications, not covered by this tool.
-              </p>
               <div className="flex flex-col gap-2">
                 {HOME_OFFICE_EVIDENCE_CATEGORIES.map(cat => (
                   <div key={cat.id} className="flex items-center justify-between gap-2 text-xs">
@@ -2852,13 +2848,11 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             )}
           </div>
           {lockedHMethod === 'fixed_rate' && (
-            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-              You're not entering a dollar expense here — just hours. Saving does two things at once: it builds
-              your ongoing hours record (the ATO wants this kept as you go — a diary, timesheet, or calendar
-              note, not reconstructed later from a "typical week"), and it posts that period's deduction into
-              your books. If you work from home consistently, one entry a week or fortnight with that period's
-              total hours is enough — you don't need to save daily.
-            </p>
+            <Tooltip text="You're not entering a dollar expense here — just hours. Saving does two things at once: it builds your ongoing hours record (the ATO wants this kept as you go, not reconstructed later from a 'typical week'), and it posts that period's deduction into your books. If you work from home consistently, one entry a week or fortnight is enough — you don't need to save daily.">
+              <p className="flex items-center gap-1.5 text-xs mb-3 cursor-help" style={{ color: 'var(--color-muted)' }}>
+                {getIcon('info', { size: 13 })} Hours only, not a dollar expense — saving builds your ATO hours record too (hover for details)
+              </p>
+            </Tooltip>
           )}
           <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
             <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
