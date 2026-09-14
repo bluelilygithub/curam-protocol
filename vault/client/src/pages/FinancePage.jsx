@@ -1523,7 +1523,14 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
-const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false };
+// Shared by the Expenses form's inline capital-asset fields and the Assets tab's own form.
+const ASSET_METHODS = [
+  { value: 'low_value_pool',    label: 'Low-value pool',       hint: 'Pooled at 18.75% in the year added, 37.5% each year after — no effective life needed' },
+  { value: 'prime_cost',        label: 'Prime cost',           hint: 'Straight-line: cost × (days held ÷ 365) × (100% ÷ effective life)' },
+  { value: 'diminishing_value', label: 'Diminishing value',    hint: 'Declining balance: opening value × (days held ÷ 365) × (200% ÷ effective life)' },
+];
+
+const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false, businessUsePercent: '100', assetMethod: '', effectiveLifeYears: '' };
 
 function ExpensesTab({ from, to }) {
   const [expenses, setExpenses]     = useState([]);
@@ -1597,14 +1604,39 @@ function ExpensesTab({ from, to }) {
 
   const cancelForm = () => { setShowForm(false); setEditing(null); setError(''); };
 
+  // A capital asset over $300 needs a depreciation schedule, not just a badge — route it
+  // through the Assets register (same table/engine as the Assets tab) instead of a plain
+  // expense. $300-and-under capital assets stay on the normal /expenses path (already an
+  // immediate deduction, badged) — only new entries route this way, not edits of existing ones.
+  const totalPaid = parseFloat(form.amount) || 0;
+  const exGstAmount = form.gstIncluded ? parseFloat((totalPaid - totalPaid / 11).toFixed(2)) : totalPaid;
+  const needsAssetFields = !editingExpense && form.isCapitalAsset && exGstAmount > 300;
+
   const save = async () => {
     if (!form.description.trim() || !form.amount) { setError('Description and amount required'); return; }
+    if (needsAssetFields) {
+      if (!form.assetMethod) { setError('Choose a depreciation method for a capital asset over $300'); return; }
+      if (form.assetMethod !== 'low_value_pool' && !(parseFloat(form.effectiveLifeYears) > 0)) { setError('Effective life (years) is required for this method'); return; }
+    }
     setSaving(true);
     setError('');
     try {
       if (editingExpense) {
         await api.put(`/api/finance/expenses/${editingExpense.id}`, form);
         addToast('Expense updated');
+      } else if (needsAssetFields) {
+        const res = await api.post('/api/finance/assets', {
+          datePurchased: form.date,
+          dateFirstUsed: form.date,
+          description: form.description,
+          amount: exGstAmount,
+          businessUsePercent: form.businessUsePercent,
+          method: form.assetMethod,
+          effectiveLifeYears: form.assetMethod === 'low_value_pool' ? undefined : form.effectiveLifeYears,
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Failed to save asset');
+        addToast('Capital asset added to the register — see the Assets tab for depreciation');
       } else {
         await api.post('/api/finance/expenses', form);
         addToast('Expense saved');
@@ -1793,19 +1825,44 @@ function ExpensesTab({ from, to }) {
               </div>
             </Field>
             <Field label="Capital Asset">
-              <Tooltip text="Tick if this purchase is a capital asset (equipment, machinery, etc.) rather than a day-to-day running cost. It still posts the same expense journal — this tool does not calculate depreciation — but it will be called out separately in the Profit & Loss report so you can hand it to your accountant for the asset register / instant-asset-write-off assessment.">
+              <Tooltip text="Tick if this purchase is a capital asset (equipment, machinery, etc.) rather than a day-to-day running cost. $300 or under still posts immediately as a normal expense, just badged. Over $300, this reveals depreciation fields and adds it to the Assets register instead of a plain expense.">
                 <div className="flex items-center gap-2 pt-2">
                   <input
                     type="checkbox"
                     id="exp-capital"
                     checked={!!form.isCapitalAsset}
                     onChange={e => setForm(p => ({...p, isCapitalAsset: e.target.checked}))}
+                    disabled={!!editingExpense}
                   />
                   <label htmlFor="exp-capital" className="text-sm" style={{ color: 'var(--color-text)' }}>This is a capital asset purchase</label>
                 </div>
               </Tooltip>
             </Field>
           </div>
+          {needsAssetFields && (
+            <div className="p-3 rounded-lg border mb-3 mt-1" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Over $300 — depreciation schedule (added to the Assets register, not a plain expense)</p>
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <Field label="Business-use %"><Tooltip text="Percentage of use that's for business — reduces the deduction claimed, not the asset's own value."><Input type="number" value={form.businessUsePercent} onChange={v => setForm(p => ({...p, businessUsePercent: v}))} placeholder="100" /></Tooltip></Field>
+              </div>
+              <Field label="Depreciation method">
+                <div className="flex flex-col gap-1.5">
+                  {ASSET_METHODS.map(m => (
+                    <Tooltip key={m.value} text={m.hint}>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                        <input type="radio" checked={form.assetMethod === m.value} onChange={() => setForm(p => ({...p, assetMethod: m.value}))} /> {m.label}
+                      </label>
+                    </Tooltip>
+                  ))}
+                </div>
+              </Field>
+              {(form.assetMethod === 'prime_cost' || form.assetMethod === 'diminishing_value') && (
+                <div className="mt-2">
+                  <Field label="Effective life (years)"><Tooltip text="ATO-published effective life for this asset type — check the current determination."><Input type="number" value={form.effectiveLifeYears} onChange={v => setForm(p => ({...p, effectiveLifeYears: v}))} placeholder="e.g. 4" /></Tooltip></Field>
+                </div>
+              )}
+            </div>
+          )}
           <ErrMsg msg={error} />
           <div className="mt-2 flex gap-2">
             <Tooltip text={editingExpense ? 'Save changes to this expense' : 'Record this expense and post its journal entry'}>
@@ -2519,12 +2576,6 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [vYearMethods, setVYearMethods] = useState({});
   const [hYearMethods, setHYearMethods] = useState({});
 
-  // Office equipment / depreciation — its own standalone entry point, not subject to either
-  // method lock (see docs/finance.md).
-  const [oForm, setOForm] = useState({ date: todayStr(), description: '', amount: '', isCapitalAsset: true });
-  const [oSaving, setOSaving] = useState(false);
-  const [oError, setOError] = useState('');
-
   // One-off expense-type evidence per running-cost category — see docs/finance.md.
   // Not per-claim: one bill/receipt showing the cost genuinely exists is enough.
   const [hEvidence, setHEvidence] = useState({}); // { electricity: { fileName, uploadedAt }, ... }
@@ -2689,31 +2740,14 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     } catch (e) { setHError(e.message); } finally { setHSaving(false); }
   };
 
-  const saveOfficeEquipment = async () => {
-    const amt = parseFloat(oForm.amount) || 0;
-    if (amt <= 0) { setOError('Enter an amount greater than zero'); return; }
-    if (!oForm.description.trim()) { setOError('Enter a description (e.g. "Office desk")'); return; }
-    setOSaving(true); setOError('');
-    try {
-      await api.post('/api/finance/expenses', {
-        date: oForm.date,
-        description: oForm.description,
-        amount: oForm.amount,
-        gstIncluded: true,
-        category: 'Office Equipment',
-        isCapitalAsset: oForm.isCapitalAsset,
-      });
-      addToast(`Office equipment expense saved — ${fmt(amt)}`);
-      setOForm({ date: todayStr(), description: '', amount: '', isCapitalAsset: true });
-    } catch (e) { setOError(e.message); } finally { setOSaving(false); }
-  };
-
   return (
     <div className="p-6 flex flex-col gap-6">
-      {/* Always 3 equal columns on one row — cards shrink to fit rather than wrap,
-          per explicit request (auto-fit/minmax was still wrapping to 2+1 on
-          narrower windows since it wouldn't shrink a card below 260px). */}
-      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      {/* 2 equal columns on one row — cards shrink to fit rather than wrap. Office Equipment
+          used to be a third column here; it's now just the Capital Asset checkbox on the
+          general Expenses form (see ExpensesTab / docs/finance.md) — it was duplicating
+          fields with no method-specific logic of its own, unlike Vehicle/Home Office which
+          each apply a real rate calculation a generic expense form can't do. */}
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         {/* Vehicle */}
         <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense</h3>
@@ -2856,33 +2890,6 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </Btn>
           </Tooltip>
         </div>
-
-      {/* Office equipment & depreciation — its own standalone card, not a sub-feature of either
-          method, always available regardless of any FY lock (see docs/finance.md). Third column
-          of the same grid, not a separate row — was previously a sibling block below the grid. */}
-      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h3 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Office Equipment &amp; Depreciation</h3>
-        <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-          Furniture/equipment (desk, chair, monitor, computer) and their repairs/maintenance — separate from either method lock above,
-          always claimable regardless of which vehicle or home office method is locked for the year. This is not double-dipping.
-        </p>
-        <div className="grid grid-cols-2 gap-3 mb-2">
-          <Field label="Date"><Tooltip text="The date this expense is recorded against."><Input type="date" value={oForm.date} onChange={v => setOForm(p => ({...p, date: v}))} /></Tooltip></Field>
-          <Field label="Amount ($, GST-incl.)"><Tooltip text="Total amount paid, including GST if applicable."><Input type="number" value={oForm.amount} onChange={v => setOForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
-          <Field label="Description"><Tooltip text="e.g. Office desk, monitor, chair repair."><Input value={oForm.description} onChange={v => setOForm(p => ({...p, description: v}))} placeholder="e.g. Office desk" /></Tooltip></Field>
-          <Field label="Capital asset?">
-            <Tooltip text="Tick if this is a capital asset purchase (equipment, furniture) rather than a running repair — flags it for your accountant's asset register / instant-asset-write-off assessment.">
-              <label className="flex items-center gap-1.5 text-sm cursor-pointer mt-2" style={{ color: 'var(--color-text)' }}>
-                <input type="checkbox" checked={oForm.isCapitalAsset} onChange={e => setOForm(p => ({...p, isCapitalAsset: e.target.checked}))} /> Capital asset
-              </label>
-            </Tooltip>
-          </Field>
-        </div>
-        <ErrMsg msg={oError} />
-        <Tooltip text="Post this as a normal expense — it will flow into P&L/BAS through the normal expense journal, independent of any method locked above">
-          <Btn onClick={saveOfficeEquipment} disabled={oSaving}>{oSaving ? 'Saving…' : 'Save Office Equipment Expense'}</Btn>
-        </Tooltip>
-      </div>
       </div>
     </div>
   );
@@ -2892,11 +2899,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 // One table, one form, whether there's 1 asset or 40 — see docs/finance.md and fin_assets in
 // db.js. Amount <= $300 auto-routes to an immediate deduction with no further fields; amount
 // > $300 needs a method, and prime_cost/diminishing_value additionally need an effective life.
-const ASSET_METHODS = [
-  { value: 'low_value_pool',    label: 'Low-value pool',       hint: 'Pooled at 18.75% in the year added, 37.5% each year after — no effective life needed' },
-  { value: 'prime_cost',        label: 'Prime cost',           hint: 'Straight-line: cost × (days held ÷ 365) × (100% ÷ effective life)' },
-  { value: 'diminishing_value', label: 'Diminishing value',    hint: 'Declining balance: opening value × (days held ÷ 365) × (200% ÷ effective life)' },
-];
+// (ASSET_METHODS itself lives above ExpensesTab — also used by its inline capital-asset fields.)
 
 function AssetsTab() {
   const addToast = useToastStore(s => s.addToast);

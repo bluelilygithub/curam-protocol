@@ -92,9 +92,15 @@ The logbook method applies the business-use % against total kilometres travelled
 
 The ATO fixed rate (`fin_home_office_rate_per_hour`) already bundles **electricity, gas, phone, internet, and stationery/computer consumables** — a user on fixed-rate for a FY should not separately expense those specific categories that year (double-claiming). It does **not** bundle depreciation or repairs/maintenance on office furniture/equipment (desk, chair, monitor, computer) — those stay separately claimable even while fixed-rate is locked, and doing so is not "mixing methods." The Home Office card shows a prominent warning callout listing the bundled categories whenever fixed-rate is the FY's locked method.
 
-### Office Equipment & Depreciation — standalone entry point
+### Office Equipment — removed as a standalone card; it's the general Expenses form's Capital Asset checkbox
 
-Not subject to either method lock, so it lives in its **own standalone card** on the Vehicle/Home Office tab — a sibling of the Vehicle and Home Office cards, not nested under Home Office. Posts a normal expense (`POST /api/finance/expenses`, category "Office Equipment", capital-asset checkbox pre-ticked) independent of whichever vehicle or home-office method is locked for the year, unchanged from its original behaviour — only its placement moved. All three cards (Vehicle, Home Office, Office Equipment & Depreciation) are the three columns of one `gridTemplateColumns: repeat(3, 1fr)` grid — always one row, shrinking rather than wrapping, and the grid spans the tab's full width (no `max-w-6xl` cap).
+A dedicated "Office Equipment & Depreciation" card briefly existed on the Vehicle/Home Office tab, but was removed: unlike Vehicle/Home Office, it applied no method-specific rate calculation of its own — it just duplicated Date/Amount/Description/Capital-asset fields the general Expenses form already had. It was also miscategorized as "office equipment" when a qualifying capital purchase (a laptop, a GPS mount, anything) isn't inherently office-specific.
+
+The fix: the **Capital Asset checkbox on the general Expenses form** (`ExpensesTab`) is now the single trigger for asset handling, for any expense category:
+- **$300 or under** — ticking the box changes nothing else; it posts immediately as a normal expense, badged `isCapitalAsset` (unchanged from before).
+- **Over $300** — ticking the box reveals inline fields (Business-use %, depreciation method via `ASSET_METHODS`, effective life for prime_cost/diminishing_value) right there in the same form, before Save. Saving routes through `POST /api/finance/assets` instead of `/expenses` — the entry becomes a row in the **Assets register** (see below) with its own depreciation schedule, not a plain expense. This only applies to new entries (`editingExpense` is null) — editing an existing plain expense's capital-asset flag doesn't retroactively create an asset.
+
+Vehicle/Home Office tab's card grid is now 2 columns (`gridTemplateColumns: repeat(2, 1fr)`), full tab width, no `max-w-6xl` cap.
 
 ### Home office fixed-rate substantiation — two record types, two frequencies
 
