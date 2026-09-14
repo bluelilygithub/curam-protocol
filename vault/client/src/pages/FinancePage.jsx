@@ -2870,11 +2870,11 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </Btn>
           </Tooltip>
         </div>
-      </div>
 
       {/* Office equipment & depreciation — its own standalone card, not a sub-feature of either
-          method, always available regardless of any FY lock (see docs/finance.md). */}
-      <div className="p-4 rounded-xl border max-w-md" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          method, always available regardless of any FY lock (see docs/finance.md). Third column
+          of the same grid, not a separate row — was previously a sibling block below the grid. */}
+      <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Office Equipment &amp; Depreciation</h3>
         <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
           Furniture/equipment (desk, chair, monitor, computer) and their repairs/maintenance — separate from either method lock above,
@@ -2896,6 +2896,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
         <Tooltip text="Post this as a normal expense — it will flow into P&L/BAS through the normal expense journal, independent of any method locked above">
           <Btn onClick={saveOfficeEquipment} disabled={oSaving}>{oSaving ? 'Saving…' : 'Save Office Equipment Expense'}</Btn>
         </Tooltip>
+      </div>
       </div>
     </div>
   );
