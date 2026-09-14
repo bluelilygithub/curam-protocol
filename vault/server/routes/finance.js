@@ -1283,6 +1283,26 @@ router.post('/reminders/test', async (req, res) => {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
+// Today's posted total per category — backs the "Today: $X across N entries" summary line on
+// the Vehicle/Home Office cards. Vehicle/Home Office expenses carry no separate GST (see the
+// route comments above), so `amount` is already the full deductible figure — no split needed.
+router.get('/expenses/today-summary', async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { rows } = await pool.query(
+      `SELECT category, COALESCE(SUM(amount),0)::float AS total, COUNT(*)::int AS count
+       FROM fin_expenses WHERE "userId"=$1 AND date=$2 AND category IN ('Vehicle','Home Office')
+       GROUP BY category`,
+      [req.user.id, today]
+    );
+    const result = { Vehicle: { total: 0, count: 0 }, 'Home Office': { total: 0, count: 0 } };
+    for (const r of rows) result[r.category] = { total: r.total, count: r.count };
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/expenses/categories', async (req, res) => {
   try {
     const { rows } = await pool.query(

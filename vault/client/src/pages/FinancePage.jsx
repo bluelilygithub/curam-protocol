@@ -2625,6 +2625,13 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [hDailyLog, setHDailyLog] = useState([]); // last 60 days, from server
   const [hPending, setHPending] = useState({ hours: 0, count: 0, oldestDate: null }); // unposted diary rows
 
+  // Today's posted $ total for each card — same scope on both, unlike the mismatch that existed
+  // before (Vehicle showed nothing, Home Office effectively showed FY-scoped figures elsewhere).
+  const [todaySummary, setTodaySummary] = useState({ Vehicle: { total: 0, count: 0 }, 'Home Office': { total: 0, count: 0 } });
+  const loadTodaySummary = () => {
+    api.get('/api/finance/expenses/today-summary').then(r => r.json()).then(setTodaySummary).catch(() => {});
+  };
+
   const loadHDailyLog = () => {
     api.get('/api/finance/home-office-daily-log').then(r => r.json()).then(rows => {
       setHDailyLog(Array.isArray(rows) ? rows : []);
@@ -2680,6 +2687,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     loadHEvidence();
     loadHDailyLog();
     loadHPending();
+    loadTodaySummary();
   }, []);
 
   const vFy = finYearForDate(vForm.date);
@@ -2749,6 +2757,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       if (!res.ok) throw new Error(body.error || 'Failed to save');
       addToast(`Vehicle expense saved — ${fmt(vehicleDeductible)} deductible`);
       setVForm({ date: todayStr(), purpose: VEHICLE_PURPOSES[0], description: '', km: '', businessUsePercent: '', actualCost: '' });
+      loadTodaySummary();
     } catch (e) { setVError(e.message); } finally { setVSaving(false); }
   };
 
@@ -2774,6 +2783,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       setHForm({ date: todayStr(), description: '', hours: '', businessUsePercent: '', actualCost: '' });
       loadHPending();
       loadHDailyLog();
+      loadTodaySummary();
     } catch (e) { setHError(e.message); } finally { setHSaving(false); }
   };
 
@@ -2788,6 +2798,11 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
         {/* Vehicle */}
         <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Vehicle Expense</h3>
+          <Tooltip text="Sum of Vehicle-category expenses posted today.">
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Today: {fmt(todaySummary.Vehicle.total)} posted across {todaySummary.Vehicle.count} {todaySummary.Vehicle.count === 1 ? 'entry' : 'entries'}
+            </p>
+          </Tooltip>
 
           {lockedVMethod ? (
             <MethodLockDisplay fy={vFy} claimTypeLabel="Vehicle" methodLabel={lockedVMethod === 'cents_per_km' ? 'Cents-per-km' : 'Logbook (actual cost)'} />
@@ -2831,6 +2846,11 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
             {lockedHMethod === 'fixed_rate' ? 'Home Office Hours' : 'Home Office Expense'}
           </h3>
+          <Tooltip text="Sum of Home Office-category expenses posted today.">
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Today: {fmt(todaySummary['Home Office'].total)} posted across {todaySummary['Home Office'].count} {todaySummary['Home Office'].count === 1 ? 'entry' : 'entries'}
+            </p>
+          </Tooltip>
 
           {lockedHMethod ? (
             <MethodLockDisplay fy={hFy} claimTypeLabel="Home office" methodLabel={lockedHMethod === 'fixed_rate' ? 'Fixed rate' : 'Actual cost'} />
