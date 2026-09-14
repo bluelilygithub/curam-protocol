@@ -2669,12 +2669,13 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     if (homeOfficeDeductible <= 0) { setHError('Enter values that produce a deductible amount greater than zero'); return; }
     setHSaving(true); setHError('');
     try {
-      // No `method` or rate field is sent — see saveVehicle() above. For fixed_rate, hours is
-      // never typed here — it's always exactly the pending diary total (hPending.hours), since
-      // data entry for hours worked is handled entirely by the daily reminder popup now.
+      // No `method` or rate field is sent — see saveVehicle() above. For fixed_rate, there's no
+      // Date/Description/Hours entry at all any more — date defaults to today, description
+      // defaults server-side, and hours is always exactly the pending diary total (hPending.hours),
+      // since data entry for hours worked is handled entirely by the daily reminder popup now.
       const res = await api.post('/api/finance/expenses/home-office', {
-        date: hForm.date,
-        description: hForm.description,
+        date: lockedHMethod === 'fixed_rate' ? todayStr() : hForm.date,
+        description: lockedHMethod === 'fixed_rate' ? undefined : hForm.description,
         hours: lockedHMethod === 'fixed_rate' ? hPending.hours : hForm.hours,
         businessUsePercent: hForm.businessUsePercent,
         actualCost: hForm.actualCost,
@@ -2781,18 +2782,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           )}
 
           {lockedHMethod === 'fixed_rate' && hDailySummary.olderGaps.length > 0 && (
-            <Tooltip text="These weekdays are older than the 14-day popup backfill window, so they're not force-prompted — but they're still unfilled in the daily diary if you want to log them manually.">
-              <div className="text-xs mb-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                {hDailySummary.olderGaps.length} earlier day{hDailySummary.olderGaps.length === 1 ? '' : 's'} still unfilled in the daily diary:{' '}
-                {hDailySummary.olderGaps.map(d => formatFriendlyDate(d)).join(', ')}
-              </div>
-            </Tooltip>
-          )}
-
-          {lockedHMethod === 'fixed_rate' && (
-            <Tooltip text={`The ${rates.fin_home_office_rate_per_hour}c/hour fixed rate already covers electricity, gas, phone, internet, and stationery/computer consumables — don't separately expense those categories for FY${hFy}. Depreciation on office furniture/equipment and their repairs/maintenance is NOT bundled — use the standalone "Office Equipment & Depreciation" card for those; it's not double-dipping.`}>
-              <p className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg border cursor-help" style={{ borderColor: '#f59e0b', color: '#f59e0b', background: 'var(--color-surface)' }}>
-                {getIcon('info', { size: 13 })} Fixed rate already bundles some expenses — don't double-claim (hover for details)
+            <Tooltip text="These weekdays are older than the 14-day popup backfill window, so they're not force-prompted, and were unfilled before this feature was turned on — nothing to fill in now.">
+              <p className="text-xs mb-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                {hDailySummary.olderGaps.length} earlier day{hDailySummary.olderGaps.length === 1 ? '' : 's'} not filled in before you started using the daily diary.
               </p>
             </Tooltip>
           )}
@@ -2836,37 +2828,31 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
-            <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
-            {lockedHMethod === 'fixed_rate' && (
-              <Field label="Hours worked from home">
-                <Tooltip text="Not editable here — hours worked from home is captured entirely by the daily reminder popup. This is the total pending in that diary since the last posted deduction, and is exactly what gets posted.">
-                  <p className="text-sm font-semibold py-1" style={{ color: 'var(--color-text)' }}>{hPending.hours.toFixed(2)} hours</p>
-                </Tooltip>
-              </Field>
-            )}
-            {lockedHMethod === 'actual_cost' && (
-              <>
-                <Field label="Business use %"><Tooltip text="Percentage of the cost attributable to business use"><Input type="number" value={hForm.businessUsePercent} onChange={v => setHForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
-                <Field label="Actual cost ($)"><Tooltip text="Total actual home office running cost (utilities, internet, etc.) for the period"><Input type="number" value={hForm.actualCost} onChange={v => setHForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
-              </>
-            )}
-          </div>
+          {lockedHMethod === 'actual_cost' && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={hForm.date} onChange={v => setHForm(p => ({...p, date: v}))} /></Tooltip></Field>
+              <Field label="Description"><Tooltip text="What this claim covers."><Input value={hForm.description} onChange={v => setHForm(p => ({...p, description: v}))} placeholder="e.g. Q1 home office" /></Tooltip></Field>
+              <Field label="Business use %"><Tooltip text="Percentage of the cost attributable to business use"><Input type="number" value={hForm.businessUsePercent} onChange={v => setHForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
+              <Field label="Actual cost ($)"><Tooltip text="Total actual home office running cost (utilities, internet, etc.) for the period"><Input type="number" value={hForm.actualCost} onChange={v => setHForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
+            </div>
+          )}
           {lockedHMethod === 'fixed_rate' && (
-            <Tooltip text="You're not entering a dollar expense here — just hours. Saving does two things at once: it builds your ongoing hours record (the ATO wants this kept as you go, not reconstructed later from a 'typical week'), and it posts that period's deduction into your books. If you work from home consistently, one entry a week or fortnight is enough — you don't need to save daily.">
-              <p className="flex items-center gap-1.5 text-xs mb-3 cursor-help" style={{ color: 'var(--color-muted)' }}>
-                {getIcon('info', { size: 13 })} Hours only, not a dollar expense — saving builds your ATO hours record too (hover for details)
+            <Tooltip text="Hours worked from home, unposted, since the last posted deduction — captured entirely by the daily reminder popup, not editable here. Deductible is this × the current ATO rate.">
+              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 cursor-help" style={{ color: 'var(--color-text)' }}>
+                <span>{hPending.hours.toFixed(2)} hours</span>
+                <span style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</span>
               </p>
             </Tooltip>
           )}
-          <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
-            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
-          </Tooltip>
+          {lockedHMethod === 'actual_cost' && (
+            <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
+              <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</p>
+            </Tooltip>
+          )}
           <ErrMsg msg={hError} />
-          <Tooltip text={lockedHMethod === 'fixed_rate' ? "Logs these hours and posts the resulting deduction — it will flow into P&L/BAS through the normal expense journal" : "Post this as an expense — it will flow into P&L/BAS through the normal expense journal"}>
-            <Btn onClick={saveHomeOffice} disabled={hSaving || !lockedHMethod}>
-              {hSaving ? 'Saving…' : (lockedHMethod === 'fixed_rate' ? 'Save Hours' : 'Save Home Office Expense')}
+          <Tooltip text={lockedHMethod === 'fixed_rate' ? "Posts the diary's pending hours as a deduction — it will flow into P&L/BAS through the normal expense journal. Hours are already recorded via the daily popup; this only posts them." : "Post this as an expense — it will flow into P&L/BAS through the normal expense journal"}>
+            <Btn onClick={saveHomeOffice} disabled={hSaving || !lockedHMethod || (lockedHMethod === 'fixed_rate' && hPending.hours <= 0)}>
+              {hSaving ? 'Posting…' : (lockedHMethod === 'fixed_rate' ? 'Post Deduction' : 'Save Home Office Expense')}
             </Btn>
           </Tooltip>
         </div>
