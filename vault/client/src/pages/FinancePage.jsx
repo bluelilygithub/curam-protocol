@@ -2436,7 +2436,7 @@ function Select({ value, onChange, children, className = '' }) {
 
 // One-time "lock a method for this financial year" control — shown only while the year has no
 // locked method yet. Once set it's read-only (see MethodLockDisplay).
-function MethodLockPicker({ fy, options, choice, setChoice, onLock, locking, claimTypeLabel }) {
+function MethodLockPicker({ fy, options, choice, setChoice, onLock, onCancel, locking, claimTypeLabel }) {
   return (
     <div className="p-3 rounded-lg border mb-3" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
       <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Set {claimTypeLabel} method for FY{fy}</p>
@@ -2452,9 +2452,14 @@ function MethodLockPicker({ fy, options, choice, setChoice, onLock, locking, cla
           </Tooltip>
         ))}
       </div>
-      <Tooltip text={`Lock this method for FY${fy}. This cannot be changed after entries are saved against it — choose carefully.`}>
-        <Btn onClick={onLock} disabled={locking}>{locking ? 'Setting…' : `Lock method for FY${fy}`}</Btn>
-      </Tooltip>
+      <div className="flex items-center gap-2">
+        <Tooltip text={`Lock this method for FY${fy}. This cannot be changed after entries are saved against it — choose carefully.`}>
+          <Btn onClick={onLock} disabled={locking}>{locking ? 'Setting…' : `Lock method for FY${fy}`}</Btn>
+        </Tooltip>
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -4052,6 +4057,12 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   const [vChoiceCurrent, setVChoiceCurrent] = useState('cents_per_km');
   const [hChoiceCurrent, setHChoiceCurrent] = useState('fixed_rate');
   const [locking, setLocking] = useState(null); // which key is mid-save, e.g. 'v-current'
+  // "Change method" escape hatch for a wrongly-locked FY — the lock is meant to be a once-a-year
+  // choice, not a permanent mistake with no way back. Re-locking is always allowed server-side
+  // (POST just overwrites); this just exposes that as a deliberate, warned action instead of
+  // the method being stuck the moment it's set once.
+  const [vEditingLock, setVEditingLock] = useState(false);
+  const [hEditingLock, setHEditingLock] = useState(false);
 
   // Start/end-of-year odometer — required logbook-method substantiation (business-use %
   // is applied against total km travelled for the FY, which needs both readings on record).
@@ -4084,12 +4095,13 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   const lockedVCurrent = vYearMethods[currentFy] || null;
   const lockedHCurrent = hYearMethods[currentFy] || null;
 
-  const lockMethod = async (endpoint, key, year, method, setMap) => {
+  const lockMethod = async (endpoint, key, year, method, setMap, onDone) => {
     setLocking(key);
     try {
       await api.post(endpoint, { year, method });
       setMap(p => ({ ...p, [year]: method }));
       addToast(`Method locked for FY${year}`);
+      if (onDone) onDone();
     } catch (e) { addToast(e.message, 'error'); } finally { setLocking(null); }
   };
 
@@ -4124,15 +4136,24 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
         <Tooltip text={`The vehicle claim method locked for the current financial year (FY${currentFy}). Can't be changed once entries exist against it.`}>
           <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>FY{currentFy}</p>
-            {lockedVCurrent ? (
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{vLabel(lockedVCurrent)} (locked)</p>
+            {lockedVCurrent && !vEditingLock ? (
+              <>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{vLabel(lockedVCurrent)} (locked)</p>
+                <Tooltip text="Only change this if the locked method was actually wrong — the ATO doesn't allow mixing methods within a FY, so this should not be used to switch methods mid-year for a reason other than correcting a mistake.">
+                  <button type="button" onClick={() => { setVChoiceCurrent(lockedVCurrent); setVEditingLock(true); }}
+                    className="text-xs underline mt-1 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+                    Change method (fixing a mistake only)
+                  </button>
+                </Tooltip>
+              </>
             ) : (
               <MethodLockPicker
                 fy={currentFy}
                 claimTypeLabel="vehicle"
                 choice={vChoiceCurrent}
                 setChoice={setVChoiceCurrent}
-                onLock={() => lockMethod('/api/finance/vehicle-method', 'v-current', currentFy, vChoiceCurrent, setVYearMethods)}
+                onLock={() => lockMethod('/api/finance/vehicle-method', 'v-current', currentFy, vChoiceCurrent, setVYearMethods, () => setVEditingLock(false))}
+                onCancel={lockedVCurrent ? () => setVEditingLock(false) : null}
                 locking={locking === 'v-current'}
                 options={[
                   { value: 'cents_per_km', label: 'Cents-per-km', hint: 'ATO cents-per-km method — rate × business kilometres, no receipts needed (capped at 5,000km/year by the ATO)' },
@@ -4182,15 +4203,24 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
       <Tooltip text={`The home office claim method locked for the current financial year (FY${currentFy}). Can't be changed once entries exist against it.`}>
         <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>FY{currentFy}</p>
-          {lockedHCurrent ? (
-            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{hLabel(lockedHCurrent)} (locked)</p>
+          {lockedHCurrent && !hEditingLock ? (
+            <>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{hLabel(lockedHCurrent)} (locked)</p>
+              <Tooltip text="Only change this if the locked method was actually wrong — the ATO doesn't allow mixing methods within a FY, so this should not be used to switch methods mid-year for a reason other than correcting a mistake.">
+                <button type="button" onClick={() => { setHChoiceCurrent(lockedHCurrent); setHEditingLock(true); }}
+                  className="text-xs underline mt-1 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+                  Change method (fixing a mistake only)
+                </button>
+              </Tooltip>
+            </>
           ) : (
             <MethodLockPicker
               fy={currentFy}
               claimTypeLabel="home office"
               choice={hChoiceCurrent}
               setChoice={setHChoiceCurrent}
-              onLock={() => lockMethod('/api/finance/home-office-method', 'h-current', currentFy, hChoiceCurrent, setHYearMethods)}
+              onLock={() => lockMethod('/api/finance/home-office-method', 'h-current', currentFy, hChoiceCurrent, setHYearMethods, () => setHEditingLock(false))}
+              onCancel={lockedHCurrent ? () => setHEditingLock(false) : null}
               locking={locking === 'h-current'}
               options={[
                 { value: 'fixed_rate', label: 'Fixed rate', hint: 'ATO fixed rate method — rate × hours worked from home, no receipts needed for running costs' },
