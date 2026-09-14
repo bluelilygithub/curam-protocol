@@ -1949,6 +1949,20 @@ async function initSchema() {
     END $$
   `);
 
+  // Assets register added three new journal types (asset_purchase at cost, depreciation for the
+  // annual decline, asset_disposal for the balancing derecognition entry) — extend the allowed
+  // list rather than reusing 'expense'/'manual', so these stay distinguishable in the journal.
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE fin_journal_entries DROP CONSTRAINT IF EXISTS fin_journal_entries_type_check;
+      ALTER TABLE fin_journal_entries
+        ADD CONSTRAINT fin_journal_entries_type_check
+        CHECK(type IN ('manual','invoice','payment','expense','wage','bas','interest','drawing','asset_purchase','depreciation','asset_disposal'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$
+  `);
+
   // ── Finance: Owner's Drawings (sole-trader equity withdrawals) ───────────
   await pool.query(`
     INSERT INTO fin_accounts ("userId", code, name, type, "isSystem")
