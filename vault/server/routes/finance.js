@@ -2691,7 +2691,21 @@ router.put('/assets/:id', async (req, res) => {
     if (existing.immediateExpenseId || existing.lastDepreciatedFy) {
       return res.status(400).json({ error: 'This asset already has a posted deduction/depreciation — dispose it instead of editing its cost/method' });
     }
+    // Every non-immediate asset posts an 'asset_purchase' journal entry the moment it's created
+    // (see POST /assets) — its date/description would silently drift from that entry if this
+    // route changed datePurchased/description without also updating or blocking the journal.
+    // No client UI currently calls this route, but block it structurally rather than leave a
+    // latent inconsistency for whenever an edit screen is built.
+    const { rows: purchaseJournal } = await pool.query(
+      `SELECT id FROM fin_journal_entries WHERE "userId"=$1 AND "sourceId"=$2 AND type='asset_purchase'`,
+      [userId, existing.id]
+    );
     const { datePurchased, dateFirstUsed, description, businessUsePercent } = req.body;
+    const dateOrDescChanged = (datePurchased && datePurchased !== String(existing.datePurchased).slice(0, 10))
+      || (description && description.trim() !== existing.description);
+    if (purchaseJournal.length && dateOrDescChanged) {
+      return res.status(400).json({ error: 'This asset already has a posted purchase journal entry — date and description can no longer be changed here (dispose the asset instead if it was entered wrong).' });
+    }
     const pctNum = businessUsePercent === undefined || businessUsePercent === '' ? existing.businessUsePercent : parseFloat(businessUsePercent);
     if (!(pctNum > 0 && pctNum <= 100)) return res.status(400).json({ error: 'Business-use % must be between 0 and 100' });
     const { rows } = await pool.query(
