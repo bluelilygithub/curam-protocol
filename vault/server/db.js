@@ -2100,6 +2100,14 @@ async function initSchema() {
     )
   `);
 
+  // How the asset purchase itself was paid for — separate from the depreciation schedule.
+  // A capital asset's full cost hits the balance sheet (Fixed Assets) immediately regardless of
+  // method, the same as any other purchase; depreciation only ever affects book value later.
+  // Missing this was a real gap: a >$300 asset previously posted no purchase journal entry at
+  // all, so a credit-card purchase had no way to be settled like a normal CC expense.
+  await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "paidViaId" INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "ccSettled" BOOLEAN NOT NULL DEFAULT FALSE`);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
 

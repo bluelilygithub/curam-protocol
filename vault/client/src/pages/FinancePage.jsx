@@ -1650,6 +1650,7 @@ function ExpensesTab({ from, to }) {
           businessUsePercent: form.businessUsePercent,
           method: form.assetMethod,
           effectiveLifeYears: form.assetMethod === 'low_value_pool' ? undefined : form.effectiveLifeYears,
+          paidViaId: form.paidViaId,
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'Failed to save asset');
@@ -2935,7 +2936,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 function AssetsTab() {
   const addToast = useToastStore(s => s.addToast);
   const [assets, setAssets] = useState([]);
-  const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '' });
+  const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const accountMap = Object.fromEntries(paymentAccounts.map(a => [a.id, a]));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [disposeModal, setDisposeModal] = useState(null); // asset being disposed
@@ -2953,6 +2956,9 @@ function AssetsTab() {
   useEffect(() => {
     load();
     api.get('/api/finance/assets/low-value-pool-election').then(r => r.json()).then(setPoolElection).catch(() => {});
+    api.get('/api/finance/accounts').then(r => r.json())
+      .then(d => setPaymentAccounts(Array.isArray(d) ? d.filter(a => a.type === 'asset' || a.type === 'liability') : []))
+      .catch(() => {});
   }, []);
 
   const amountNum = parseFloat(form.amount) || 0;
@@ -2981,13 +2987,24 @@ function AssetsTab() {
         businessUsePercent: form.businessUsePercent,
         method: isImmediate ? undefined : form.method,
         effectiveLifeYears: isImmediate || form.method === 'low_value_pool' ? undefined : form.effectiveLifeYears,
+        paidViaId: form.paidViaId,
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to save');
       addToast(isImmediate ? `Asset saved — $${amountNum.toFixed(2)} deducted immediately` : 'Asset added to register');
-      setForm({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '' });
+      setForm({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
       load();
     } catch (e) { setError(e.message); } finally { setSaving(false); }
+  };
+
+  const payAssetCc = async (asset) => {
+    try {
+      const res = await api.post(`/api/finance/assets/${asset.id}/cc-pay`, {});
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to settle');
+      addToast('Credit card payment recorded');
+      load();
+    } catch (e) { addToast(e.message, 'error'); }
   };
 
   const deleteAsset = async (asset) => {
@@ -3045,6 +3062,14 @@ function AssetsTab() {
           <Field label="Description"><Tooltip text="What the asset is, e.g. 'Mac Mini'."><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Mac Mini" /></Tooltip></Field>
           <Field label="Amount ($, GST-excl.)"><Tooltip text="Cost of the asset, excluding GST."><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
           <Field label="Business-use %"><Tooltip text="Percentage of use that's for business — reduces the deduction/depreciation claimed, doesn't change the asset's own value."><Input type="number" value={form.businessUsePercent} onChange={v => setForm(p => ({...p, businessUsePercent: v}))} placeholder="100" /></Tooltip></Field>
+          <Field label="Paid via" hint="Defaults to Bank/Cash — pick a credit card account if you haven't paid it off yet">
+            <Tooltip text="How this purchase was paid for — the full cost posts against this account (or Bank if left blank) immediately, regardless of the depreciation schedule. Pick a credit card account here if you need to settle it later.">
+              <Select value={form.paidViaId || ''} onChange={v => setForm(p => ({...p, paidViaId: v ? parseInt(v) : null}))}>
+                <option value="">Bank / Cash</option>
+                {paymentAccounts.filter(a => a.id !== undefined).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </Tooltip>
+          </Field>
         </div>
 
         {amountNum > 0 && (
@@ -3145,6 +3170,9 @@ function AssetsTab() {
                     <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{a.method === 'immediate' ? 'Immediate' : a.method === 'low_value_pool' ? 'Low-value pool' : a.method === 'prime_cost' ? 'Prime cost' : 'Diminishing value'}</td>
                     <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{fmt(wdv)}</td>
                     <td className="py-2 px-2 text-right">
+                      {a.method !== 'immediate' && a.paidViaId && accountMap[a.paidViaId]?.type === 'liability' && !a.ccSettled && (
+                        <Tooltip text={`Record payment of this ${accountMap[a.paidViaId].name} charge from bank.`}><button type="button" onClick={() => payAssetCc(a)} className="hover:opacity-60 mr-2" style={{ color: '#f59e0b' }}>Pay CC</button></Tooltip>
+                      )}
                       {!a.immediateExpenseId && !a.lastDepreciatedFy && (
                         <Tooltip text="Delete this asset — only available before any deduction/depreciation has been posted against it."><button type="button" onClick={() => deleteAsset(a)} className="hover:opacity-60 mr-2" style={{ color: 'var(--color-muted)' }}>Delete</button></Tooltip>
                       )}

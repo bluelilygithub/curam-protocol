@@ -93,6 +93,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '4000', name: 'Income',                 type: 'income'    },
   { code: '4100', name: 'Interest Income',        type: 'income'    },
   { code: '1300', name: 'Accumulated Depreciation', type: 'asset'   },
+  { code: '1400', name: 'Fixed Assets',           type: 'asset'     },
   { code: '5000', name: 'Expenses',               type: 'expense'   },
   { code: '6000', name: 'Wages',                  type: 'expense'   },
   { code: '6100', name: 'Superannuation Expense', type: 'expense'   },
@@ -2499,7 +2500,7 @@ router.get('/assets', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, "datePurchased"::text AS "datePurchased", "dateFirstUsed"::text AS "dateFirstUsed",
               description, amount, "businessUsePercent", method, "effectiveLifeYears",
-              "accumulatedDepreciation", "lastDepreciatedFy", "immediateExpenseId",
+              "accumulatedDepreciation", "lastDepreciatedFy", "immediateExpenseId", "paidViaId", "ccSettled",
               "disposedDate"::text AS "disposedDate", "disposalAmount", "createdAt"
        FROM fin_assets WHERE "userId"=$1 ORDER BY "datePurchased" DESC, id DESC`,
       [req.user.id]
@@ -2510,12 +2511,54 @@ router.get('/assets', async (req, res) => {
   }
 });
 
+// Settle a credit-card-purchased asset — same pattern as POST /expenses/:id/cc-pay, just against
+// fin_assets since a non-immediate asset purchase never creates a fin_expenses row (it hits
+// Fixed Assets, not Expenses).
+router.post('/assets/:id/cc-pay', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date } = req.body;
+    const { rows } = await dbClient.query(
+      `SELECT ast.*, a.id AS "creditAccountId", a.name AS "creditName"
+       FROM fin_assets ast JOIN fin_accounts a ON a.id = ast."paidViaId"
+       WHERE ast.id=$1 AND ast."userId"=$2`,
+      [req.params.id, userId]
+    );
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Asset not found, or not paid via a credit card account' }); }
+    const asset = rows[0];
+    if (asset.ccSettled) { await dbClient.query('ROLLBACK'); return res.status(409).json({ error: 'CC already settled for this asset' }); }
+
+    const bankId = await accountByCode(userId, '1000');
+    if (!bankId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Bank / Cash account (1000) not found' }); }
+
+    await createJournalEntry(dbClient, userId, {
+      date: date || new Date().toISOString().slice(0, 10),
+      description: `CC payment — ${asset.description}`,
+      type: 'manual',
+      lines: [
+        { accountId: asset.creditAccountId, debit: parseFloat(asset.amount), credit: 0 },
+        { accountId: bankId, debit: 0, credit: parseFloat(asset.amount) },
+      ],
+    });
+    await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "updatedAt"=NOW() WHERE id=$1`, [asset.id]);
+    await dbClient.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
 router.post('/assets', async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { datePurchased, dateFirstUsed, description, amount, businessUsePercent, method, effectiveLifeYears } = req.body;
+    const { datePurchased, dateFirstUsed, description, amount, businessUsePercent, method, effectiveLifeYears, paidViaId } = req.body;
     if (!datePurchased || !dateFirstUsed) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Date purchased and date first used are required' }); }
     if (!description || !description.trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
     const amountNum = parseFloat(amount);
@@ -2554,9 +2597,9 @@ router.post('/assets', async (req, res) => {
     }
 
     const { rows } = await dbClient.query(
-      `INSERT INTO fin_assets ("userId","datePurchased","dateFirstUsed",description,amount,"businessUsePercent",method,"effectiveLifeYears")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, pctNum, useMethod, lifeNum]
+      `INSERT INTO fin_assets ("userId","datePurchased","dateFirstUsed",description,amount,"businessUsePercent",method,"effectiveLifeYears","paidViaId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, pctNum, useMethod, lifeNum, paidViaId || null]
     );
     let asset = rows[0];
 
@@ -2564,25 +2607,27 @@ router.post('/assets', async (req, res) => {
       await setLowValuePoolElection(userId, { assetId: asset.id, description: asset.description, date: datePurchased });
     }
 
+    await ensureAccounts(userId);
+    await ensureTxCodes(userId);
+    const bankId = await accountByCode(userId, '1000');
+    const creditId = paidViaId || bankId;
+
     // Immediate deduction (<= threshold) posts straight away, same pattern as any other
     // capital-asset expense — full cost (adjusted for business-use %) claimed now, no schedule.
     if (useMethod === 'immediate') {
       const deductible = round2(amountNum * (pctNum / 100));
-      await ensureAccounts(userId);
-      await ensureTxCodes(userId);
       const expId = await accountByCode(userId, '5000');
-      const bankId = await accountByCode(userId, '1000');
       const { rows: depTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
       const { rows: expRows } = await dbClient.query(
-        `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "isCapitalAsset")
-         VALUES ($1,$2,$3,$4,0,'Assets',$5,true) RETURNING *`,
-        [userId, datePurchased, `Asset (immediate deduction): ${description.trim()}`, deductible, depTx[0]?.id || null]
+        `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId", "isCapitalAsset")
+         VALUES ($1,$2,$3,$4,0,'Assets',$5,$6,true) RETURNING *`,
+        [userId, datePurchased, `Asset (immediate deduction): ${description.trim()}`, deductible, depTx[0]?.id || null, paidViaId || null]
       );
       const expense = expRows[0];
-      if (expId && bankId) {
+      if (expId && creditId) {
         await createJournalEntry(dbClient, userId, {
           date: expense.date, description: `Asset immediate deduction: ${description.trim()}`, type: 'expense', sourceId: expense.id,
-          lines: [{ accountId: expId, debit: deductible, credit: 0 }, { accountId: bankId, debit: 0, credit: deductible }],
+          lines: [{ accountId: expId, debit: deductible, credit: 0 }, { accountId: creditId, debit: 0, credit: deductible }],
         });
       }
       const { rows: updated } = await dbClient.query(
@@ -2590,6 +2635,19 @@ router.post('/assets', async (req, res) => {
         [amountNum, expense.id, asset.id]
       );
       asset = updated[0];
+    } else {
+      // Every other method still incurs the full purchase cost NOW — that's a balance-sheet
+      // event (Fixed Assets) independent of the depreciation schedule, which only ever affects
+      // book value later. Without this, a >$300 asset previously posted no journal entry at all
+      // at purchase time, so a credit-card purchase had no way to be settled like a normal
+      // CC expense — this is what fixes that.
+      const fixedAssetsId = await accountByCode(userId, '1400');
+      if (fixedAssetsId && creditId) {
+        await createJournalEntry(dbClient, userId, {
+          date: datePurchased, description: `Asset purchase: ${description.trim()}`, type: 'asset_purchase', sourceId: asset.id,
+          lines: [{ accountId: fixedAssetsId, debit: amountNum, credit: 0 }, { accountId: creditId, debit: 0, credit: amountNum }],
+        });
+      }
     }
 
     await dbClient.query('COMMIT');
@@ -2656,29 +2714,51 @@ router.post('/assets/:id/dispose', async (req, res) => {
     const asset = rows[0];
     if (asset.disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Asset already disposed' }); }
 
-    const writtenDownValue = round2((parseFloat(asset.amount) || 0) - (parseFloat(asset.accumulatedDepreciation) || 0));
+    const cost = parseFloat(asset.amount) || 0;
+    const accumulated = parseFloat(asset.accumulatedDepreciation) || 0;
+    const writtenDownValue = round2(cost - accumulated);
     const adjustment = round2(disposalNum - writtenDownValue);
 
-    if (Math.abs(adjustment) >= 0.01) {
-      await ensureAccounts(userId);
-      const bankId = await accountByCode(userId, '1000');
-      if (adjustment > 0) {
-        const incId = await accountByCode(userId, '4100');
-        if (bankId && incId) {
+    await ensureAccounts(userId);
+    const bankId = await accountByCode(userId, '1000');
+    const incId = await accountByCode(userId, '4100');
+    const expId = await accountByCode(userId, '5000');
+
+    if (asset.method === 'immediate') {
+      // Already fully expensed at purchase — never capitalized, so nothing to derecognize on
+      // the balance sheet. Any proceeds are pure profit (or loss, if negative) on disposal.
+      if (Math.abs(adjustment) >= 0.01 && bankId) {
+        if (adjustment > 0 && incId) {
           await createJournalEntry(dbClient, userId, {
             date: disposedDate, description: `Profit on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
             lines: [{ accountId: bankId, debit: adjustment, credit: 0 }, { accountId: incId, debit: 0, credit: adjustment }],
           });
-        }
-      } else {
-        const expId = await accountByCode(userId, '5000');
-        const lossAmt = Math.abs(adjustment);
-        if (bankId && expId) {
+        } else if (adjustment < 0 && expId) {
+          const lossAmt = Math.abs(adjustment);
           await createJournalEntry(dbClient, userId, {
             date: disposedDate, description: `Loss on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
             lines: [{ accountId: expId, debit: lossAmt, credit: 0 }, { accountId: bankId, debit: 0, credit: lossAmt }],
           });
         }
+      }
+    } else {
+      // Real depreciation methods were capitalized to Fixed Assets at purchase — disposal must
+      // fully derecognize both the original cost and its accumulated depreciation, not just post
+      // a standalone profit/loss line, or the balance sheet would carry a phantom asset forever.
+      const fixedAssetsId = await accountByCode(userId, '1400');
+      const accDepId = await accountByCode(userId, '1300');
+      if (fixedAssetsId && accDepId && bankId) {
+        const lines = [
+          { accountId: accDepId, debit: accumulated, credit: 0 },
+          { accountId: bankId, debit: disposalNum, credit: 0 },
+          { accountId: fixedAssetsId, debit: 0, credit: cost },
+        ];
+        if (adjustment > 0 && incId) lines.push({ accountId: incId, debit: 0, credit: adjustment });
+        else if (adjustment < 0 && expId) lines.push({ accountId: expId, debit: Math.abs(adjustment), credit: 0 });
+        await createJournalEntry(dbClient, userId, {
+          date: disposedDate, description: `Disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
+          lines,
+        });
       }
     }
 
