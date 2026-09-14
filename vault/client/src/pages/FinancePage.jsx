@@ -2708,7 +2708,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   };
 
   return (
-    <div className="p-6 max-w-6xl flex flex-col gap-6">
+    <div className="p-6 flex flex-col gap-6">
       {/* Always 3 equal columns on one row — cards shrink to fit rather than wrap,
           per explicit request (auto-fit/minmax was still wrapping to 2+1 on
           narrower windows since it wouldn't shrink a card below 260px). */}
