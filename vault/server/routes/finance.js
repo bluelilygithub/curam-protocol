@@ -2217,6 +2217,24 @@ router.post('/expenses/vehicle', async (req, res) => {
   }
 });
 
+// Latest date a home-office deduction was actually posted — lets the client auto-sum
+// daily-log hours since that date instead of asking the user to re-enter the same
+// hours twice (once via the daily popup, again here). Read-only, no side effects.
+router.get('/home-office-last-posted-date', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT MAX(e.date)::text AS date
+       FROM fin_home_office_expenses ho
+       JOIN fin_expenses e ON e.id = ho."expenseId"
+       WHERE ho."userId"=$1`,
+      [req.user.id]
+    );
+    res.json({ date: rows[0]?.date || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/expenses/home-office', async (req, res) => {
   const dbClient = await pool.connect();
   try {
