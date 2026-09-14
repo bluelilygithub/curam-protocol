@@ -2499,7 +2499,7 @@ router.get('/assets', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, "datePurchased"::text AS "datePurchased", "dateFirstUsed"::text AS "dateFirstUsed",
-              description, amount, "businessUsePercent", method, "effectiveLifeYears",
+              description, amount, gst, "businessUsePercent", method, "effectiveLifeYears",
               "accumulatedDepreciation", "lastDepreciatedFy", "immediateExpenseId", "paidViaId", "ccSettled",
               "disposedDate"::text AS "disposedDate", "disposalAmount", "createdAt"
        FROM fin_assets WHERE "userId"=$1 ORDER BY "datePurchased" DESC, id DESC`,
@@ -2533,13 +2533,16 @@ router.post('/assets/:id/cc-pay', async (req, res) => {
     const bankId = await accountByCode(userId, '1000');
     if (!bankId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Bank / Cash account (1000) not found' }); }
 
+    // Settle the full amount actually charged (ex-GST cost + GST), not just the ex-GST "amount"
+    // column — that mismatch was the exact bug this whole fix addresses.
+    const totalCharged = round2((parseFloat(asset.amount) || 0) + (parseFloat(asset.gst) || 0));
     await createJournalEntry(dbClient, userId, {
       date: date || new Date().toISOString().slice(0, 10),
       description: `CC payment — ${asset.description}`,
       type: 'manual',
       lines: [
-        { accountId: asset.creditAccountId, debit: parseFloat(asset.amount), credit: 0 },
-        { accountId: bankId, debit: 0, credit: parseFloat(asset.amount) },
+        { accountId: asset.creditAccountId, debit: totalCharged, credit: 0 },
+        { accountId: bankId, debit: 0, credit: totalCharged },
       ],
     });
     await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "updatedAt"=NOW() WHERE id=$1`, [asset.id]);
@@ -2558,11 +2561,18 @@ router.post('/assets', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { datePurchased, dateFirstUsed, description, amount, businessUsePercent, method, effectiveLifeYears, paidViaId } = req.body;
+    // `amount` is the total actually paid (GST-inclusive when gstIncluded, matching the same
+    // contract as POST /expenses) — the server splits it, not the client, so there's one
+    // consistent GST calculation instead of the client pre-computing an ex-GST figure that then
+    // silently drops the GST from the purchase journal (the exact bug this fixes: a $1,099
+    // charge recorded as a $999.09 asset with nothing crediting the missing $99.91 anywhere).
+    const { datePurchased, dateFirstUsed, description, amount, gstIncluded, businessUsePercent, method, effectiveLifeYears, paidViaId } = req.body;
     if (!datePurchased || !dateFirstUsed) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Date purchased and date first used are required' }); }
     if (!description || !description.trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
-    const amountNum = parseFloat(amount);
-    if (!(amountNum > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
+    const totalPaid = parseFloat(amount);
+    if (!(totalPaid > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
+    const gstAmt = gstIncluded ? round2(totalPaid / 11) : 0;
+    const amountNum = round2(totalPaid - gstAmt); // ex-GST cost basis — used for thresholds, capitalization, and depreciation
     const pctNum = businessUsePercent === undefined || businessUsePercent === '' ? 100 : parseFloat(businessUsePercent);
     if (!(pctNum > 0 && pctNum <= 100)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Business-use % must be between 0 and 100' }); }
 
@@ -2597,9 +2607,9 @@ router.post('/assets', async (req, res) => {
     }
 
     const { rows } = await dbClient.query(
-      `INSERT INTO fin_assets ("userId","datePurchased","dateFirstUsed",description,amount,"businessUsePercent",method,"effectiveLifeYears","paidViaId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, pctNum, useMethod, lifeNum, paidViaId || null]
+      `INSERT INTO fin_assets ("userId","datePurchased","dateFirstUsed",description,amount,gst,"businessUsePercent",method,"effectiveLifeYears","paidViaId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [userId, datePurchased, dateFirstUsed, description.trim(), amountNum, gstAmt, pctNum, useMethod, lifeNum, paidViaId || null]
     );
     let asset = rows[0];
 
@@ -2610,24 +2620,31 @@ router.post('/assets', async (req, res) => {
     await ensureAccounts(userId);
     await ensureTxCodes(userId);
     const bankId = await accountByCode(userId, '1000');
+    const gstPaidId = await accountByCode(userId, '1200');
     const creditId = paidViaId || bankId;
 
     // Immediate deduction (<= threshold) posts straight away, same pattern as any other
     // capital-asset expense — full cost (adjusted for business-use %) claimed now, no schedule.
+    // GST claimed is also business-use-adjusted, same as the ex-GST deduction.
     if (useMethod === 'immediate') {
       const deductible = round2(amountNum * (pctNum / 100));
+      const gstClaim = round2(gstAmt * (pctNum / 100));
       const expId = await accountByCode(userId, '5000');
       const { rows: depTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
       const { rows: expRows } = await dbClient.query(
         `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId", "paidViaId", "isCapitalAsset")
-         VALUES ($1,$2,$3,$4,0,'Assets',$5,$6,true) RETURNING *`,
-        [userId, datePurchased, `Asset (immediate deduction): ${description.trim()}`, deductible, depTx[0]?.id || null, paidViaId || null]
+         VALUES ($1,$2,$3,$4,$5,'Assets',$6,$7,true) RETURNING *`,
+        [userId, datePurchased, `Asset (immediate deduction): ${description.trim()}`, deductible, gstClaim, depTx[0]?.id || null, paidViaId || null]
       );
       const expense = expRows[0];
+      const creditAmt = round2(deductible + gstClaim);
       if (expId && creditId) {
+        const lines = [{ accountId: expId, debit: deductible, credit: 0 }];
+        if (gstClaim > 0 && gstPaidId) lines.push({ accountId: gstPaidId, debit: gstClaim, credit: 0 });
+        lines.push({ accountId: creditId, debit: 0, credit: creditAmt });
         await createJournalEntry(dbClient, userId, {
           date: expense.date, description: `Asset immediate deduction: ${description.trim()}`, type: 'expense', sourceId: expense.id,
-          lines: [{ accountId: expId, debit: deductible, credit: 0 }, { accountId: creditId, debit: 0, credit: deductible }],
+          lines,
         });
       }
       const { rows: updated } = await dbClient.query(
@@ -2638,14 +2655,19 @@ router.post('/assets', async (req, res) => {
     } else {
       // Every other method still incurs the full purchase cost NOW — that's a balance-sheet
       // event (Fixed Assets) independent of the depreciation schedule, which only ever affects
-      // book value later. Without this, a >$300 asset previously posted no journal entry at all
-      // at purchase time, so a credit-card purchase had no way to be settled like a normal
-      // CC expense — this is what fixes that.
+      // book value later. Capitalized at the FULL ex-GST cost regardless of business-use % —
+      // apportionment happens when depreciation is later claimed, not at purchase. GST is
+      // claimed in full here too (input tax credits aren't spread over the depreciation
+      // schedule). Credits the exact total actually paid/charged — this, plus the missing GST
+      // line, is what fixes a CC settlement not matching the real card charge.
       const fixedAssetsId = await accountByCode(userId, '1400');
       if (fixedAssetsId && creditId) {
+        const lines = [{ accountId: fixedAssetsId, debit: amountNum, credit: 0 }];
+        if (gstAmt > 0 && gstPaidId) lines.push({ accountId: gstPaidId, debit: gstAmt, credit: 0 });
+        lines.push({ accountId: creditId, debit: 0, credit: totalPaid });
         await createJournalEntry(dbClient, userId, {
           date: datePurchased, description: `Asset purchase: ${description.trim()}`, type: 'asset_purchase', sourceId: asset.id,
-          lines: [{ accountId: fixedAssetsId, debit: amountNum, credit: 0 }, { accountId: creditId, debit: 0, credit: amountNum }],
+          lines,
         });
       }
     }

@@ -1642,11 +1642,16 @@ function ExpensesTab({ from, to }) {
         await api.put(`/api/finance/expenses/${editingExpense.id}`, form);
         addToast('Expense updated');
       } else if (needsAssetFields) {
+        // Send the raw GST-inclusive total + gstIncluded flag, not a pre-computed ex-GST figure
+        // — the server does the one authoritative GST split so it can also post the GST line on
+        // the purchase journal (an earlier version dropped GST entirely by only ever receiving
+        // an already-split ex-GST number here).
         const res = await api.post('/api/finance/assets', {
           datePurchased: form.date,
           dateFirstUsed: form.date,
           description: form.description,
-          amount: exGstAmount,
+          amount: form.amount,
+          gstIncluded: form.gstIncluded,
           businessUsePercent: form.businessUsePercent,
           method: form.assetMethod,
           effectiveLifeYears: form.assetMethod === 'low_value_pool' ? undefined : form.effectiveLifeYears,
@@ -2936,7 +2941,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 function AssetsTab() {
   const addToast = useToastStore(s => s.addToast);
   const [assets, setAssets] = useState([]);
-  const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
+  const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', gstIncluded: true, businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
   const [paymentAccounts, setPaymentAccounts] = useState([]);
   const accountMap = Object.fromEntries(paymentAccounts.map(a => [a.id, a]));
   const [saving, setSaving] = useState(false);
@@ -2961,9 +2966,13 @@ function AssetsTab() {
       .catch(() => {});
   }, []);
 
-  const amountNum = parseFloat(form.amount) || 0;
-  const isImmediate = amountNum > 0 && amountNum <= 300;
-  const poolEligible = amountNum < LOW_VALUE_POOL_MAX;
+  // "Amount" is the total actually paid (GST-inclusive when gstIncluded) — thresholds/eligibility
+  // are evaluated on the ex-GST figure, matching the server's own split, so the UI classifies
+  // this exactly the same way the server will.
+  const totalPaid = parseFloat(form.amount) || 0;
+  const exGstAmount = form.gstIncluded ? parseFloat((totalPaid - totalPaid / 11).toFixed(2)) : totalPaid;
+  const isImmediate = exGstAmount > 0 && exGstAmount <= 300;
+  const poolEligible = exGstAmount < LOW_VALUE_POOL_MAX;
   const autoPooled = !isImmediate && poolEligible && poolElection.elected;
 
   useEffect(() => {
@@ -2974,7 +2983,7 @@ function AssetsTab() {
 
   const saveAsset = async () => {
     if (!form.description.trim()) { setError('Description is required'); return; }
-    if (amountNum <= 0) { setError('Amount must be greater than zero'); return; }
+    if (exGstAmount <= 0) { setError('Amount must be greater than zero'); return; }
     if (!isImmediate && !form.method) { setError('Choose a depreciation method for assets over $300'); return; }
     if (!isImmediate && form.method !== 'low_value_pool' && !(parseFloat(form.effectiveLifeYears) > 0)) { setError('Effective life (years) is required for this method'); return; }
     setSaving(true); setError('');
@@ -2984,6 +2993,7 @@ function AssetsTab() {
         dateFirstUsed: form.dateFirstUsed,
         description: form.description,
         amount: form.amount,
+        gstIncluded: form.gstIncluded,
         businessUsePercent: form.businessUsePercent,
         method: isImmediate ? undefined : form.method,
         effectiveLifeYears: isImmediate || form.method === 'low_value_pool' ? undefined : form.effectiveLifeYears,
@@ -2991,8 +3001,8 @@ function AssetsTab() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to save');
-      addToast(isImmediate ? `Asset saved — $${amountNum.toFixed(2)} deducted immediately` : 'Asset added to register');
-      setForm({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
+      addToast(isImmediate ? `Asset saved — $${exGstAmount.toFixed(2)} deducted immediately` : 'Asset added to register');
+      setForm({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', gstIncluded: true, businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
       load();
     } catch (e) { setError(e.message); } finally { setSaving(false); }
   };
@@ -3060,7 +3070,20 @@ function AssetsTab() {
           <Field label="Date purchased"><Tooltip text="When the asset was bought/invoiced."><Input type="date" value={form.datePurchased} onChange={v => setForm(p => ({...p, datePurchased: v}))} /></Tooltip></Field>
           <Field label="Date first used" hint="Depreciation starts from this date, not the purchase date"><Tooltip text="When the asset was first used or installed ready for use — this is when the ATO says depreciation starts, which can be later than the purchase date."><Input type="date" value={form.dateFirstUsed} onChange={v => setForm(p => ({...p, dateFirstUsed: v}))} /></Tooltip></Field>
           <Field label="Description"><Tooltip text="What the asset is, e.g. 'Mac Mini'."><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Mac Mini" /></Tooltip></Field>
-          <Field label="Amount ($, GST-excl.)"><Tooltip text="Cost of the asset, excluding GST."><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip></Field>
+          <Field label="Amount ($, total paid)">
+            <Tooltip text="The total you actually paid/were charged — Vault splits out the GST automatically, same as the Expenses form.">
+              <div className="flex items-center gap-2">
+                <Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" />
+              </div>
+            </Tooltip>
+          </Field>
+          <Field label="">
+            <div className="flex items-center gap-2 pt-6">
+              <input type="checkbox" id="asset-gst" checked={form.gstIncluded} onChange={e => setForm(p => ({...p, gstIncluded: e.target.checked}))} />
+              <label htmlFor="asset-gst" className="text-sm" style={{ color: 'var(--color-text)' }}>GST Included (10%)</label>
+              {form.gstIncluded && totalPaid > 0 && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>GST = ${(totalPaid / 11).toFixed(2)}</span>}
+            </div>
+          </Field>
           <Field label="Business-use %"><Tooltip text="Percentage of use that's for business — reduces the deduction/depreciation claimed, doesn't change the asset's own value."><Input type="number" value={form.businessUsePercent} onChange={v => setForm(p => ({...p, businessUsePercent: v}))} placeholder="100" /></Tooltip></Field>
           <Field label="Paid via" hint="Defaults to Bank/Cash — pick a credit card account if you haven't paid it off yet">
             <Tooltip text="How this purchase was paid for — the full cost posts against this account (or Bank if left blank) immediately, regardless of the depreciation schedule. Pick a credit card account here if you need to settle it later.">
@@ -3072,7 +3095,7 @@ function AssetsTab() {
           </Field>
         </div>
 
-        {amountNum > 0 && (
+        {exGstAmount > 0 && (
           isImmediate ? (
             <p className="text-xs mb-3 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
               $300 or under — deducted immediately in full, no depreciation schedule.
@@ -3088,7 +3111,7 @@ function AssetsTab() {
               ) : (
                 <Field label="Depreciation method">
                   <div className="flex flex-col gap-1.5">
-                    {assetMethodOptions(amountNum).map(m => (
+                    {assetMethodOptions(exGstAmount).map(m => (
                       <Tooltip key={m.value} text={m.hint}>
                         <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
                           <input type="radio" checked={form.method === m.value} onChange={() => setForm(p => ({...p, method: m.value}))} /> {m.label}

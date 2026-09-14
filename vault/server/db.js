@@ -2121,6 +2121,11 @@ async function initSchema() {
   // all, so a credit-card purchase had no way to be settled like a normal CC expense.
   await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "paidViaId" INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "ccSettled" BOOLEAN NOT NULL DEFAULT FALSE`);
+  // GST paid at purchase — separate from "amount" (the ex-GST cost basis used for thresholds and
+  // depreciation). Real bug this fixes: a GST-inclusive purchase previously had its GST silently
+  // dropped from the purchase journal entirely, so a CC-paid asset's settlement amount never
+  // matched the actual card charge.
+  await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS gst NUMERIC(12,2) NOT NULL DEFAULT 0`);
 
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
