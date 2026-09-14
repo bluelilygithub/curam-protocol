@@ -147,6 +147,33 @@ async function accountByCode(userId, code) {
   return rows[0]?.id;
 }
 
+// GST paid/claimed for a date range, cash basis. Sums fin_expenses.gst (covers ordinary
+// expenses AND immediate-deduction asset purchases, which post through fin_expenses too)
+// PLUS the GST line on non-immediate asset purchases (prime cost / diminishing value /
+// low-value pool), which post straight to the journal (type='asset_purchase') and never touch
+// fin_expenses — so a plain SUM(gst) FROM fin_expenses silently drops that GST from BAS.
+// Single source of truth for every BAS/GST-summary endpoint instead of each one reimplementing
+// (and drifting from) the same two-part sum.
+async function gstPaidForRange(userId, from, to) {
+  const gstPaidAccountId = await accountByCode(userId, '1200');
+  const [expRows, assetRows] = await Promise.all([
+    pool.query(
+      `SELECT COALESCE(SUM(gst),0) AS gst FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+      [userId, from, to]
+    ),
+    gstPaidAccountId
+      ? pool.query(
+          `SELECT COALESCE(SUM(l.debit),0) AS gst
+           FROM fin_journal_entries e
+           JOIN fin_journal_lines l ON l."entryId" = e.id
+           WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2 AND e.date BETWEEN $3 AND $4`,
+          [userId, gstPaidAccountId, from, to]
+        )
+      : Promise.resolve({ rows: [{ gst: 0 }] }),
+  ]);
+  return parseFloat((parseFloat(expRows.rows[0].gst) + parseFloat(assetRows.rows[0].gst)).toFixed(2));
+}
+
 // Round to cents and sum debit/credit sides of a lines[] array. Returns { debits, credits, balanced }.
 // Epsilon (0.005) absorbs floating-point noise from repeated toFixed(2)/parseFloat round-trips —
 // anything larger than half a cent is a real imbalance, not float noise.
@@ -3087,14 +3114,14 @@ router.get('/bas', async (req, res) => {
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'from and to required' });
 
-    const [invRows, expRows, wageRows] = await Promise.all([
+    const [invRows, expRows, wageRows, gstPaid] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
          FROM fin_invoices WHERE "userId"=$1 AND status = 'paid' AND "paidAt"::date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(amount),0) AS expenses, COALESCE(SUM(gst),0) AS "gstPaid"
+        `SELECT COALESCE(SUM(amount),0) AS expenses
          FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
@@ -3103,10 +3130,10 @@ router.get('/bas', async (req, res) => {
          FROM fin_wages WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
+      gstPaidForRange(userId, from, to),
     ]);
 
     const gstCollected = parseFloat(invRows.rows[0].gstCollected);
-    const gstPaid      = parseFloat(expRows.rows[0].gstPaid);
 
     // Upsert the quarter record so we can track status
     const { rows: qRows } = await pool.query(
@@ -3185,20 +3212,15 @@ router.post('/bas/:quarterId/paid', async (req, res) => {
     const quarter = qRows[0];
 
     // Recalculate net GST for journal entry
-    const [invRows, expRows] = await Promise.all([
+    const [invRows, gstPaid] = await Promise.all([
       dbClient.query(
         `SELECT COALESCE(SUM(gst),0) AS "gstCollected"
          FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
         [userId, quarter.from_date, quarter.to_date]
       ),
-      dbClient.query(
-        `SELECT COALESCE(SUM(gst),0) AS "gstPaid"
-         FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
-        [userId, quarter.from_date, quarter.to_date]
-      ),
+      gstPaidForRange(userId, quarter.from_date, quarter.to_date),
     ]);
     const gstCollected = parseFloat(invRows.rows[0].gstCollected);
-    const gstPaid      = parseFloat(expRows.rows[0].gstPaid);
     const netGst       = parseFloat((gstCollected - gstPaid).toFixed(2));
 
     // Journal: DR GST Collected, CR GST Paid, CR Bank (net settlement)
@@ -3249,18 +3271,14 @@ router.get('/bas/annual', async (req, res) => {
     ];
 
     const quarters = await Promise.all(quarterDefs.map(async (qd) => {
-      const [invRow, expRow, qRow] = await Promise.all([
+      const [invRow, gstCredits, qRow] = await Promise.all([
         pool.query(
           `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
            FROM fin_invoices
            WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
           [userId, qd.from, qd.to]
         ),
-        pool.query(
-          `SELECT COALESCE(SUM(gst),0) AS "gstPaid"
-           FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
-          [userId, qd.from, qd.to]
-        ),
+        gstPaidForRange(userId, qd.from, qd.to),
         pool.query(
           `SELECT id, status FROM fin_bas_quarters WHERE "userId"=$1 AND from_date=$2`,
           [userId, qd.from]
@@ -3269,7 +3287,6 @@ router.get('/bas/annual', async (req, res) => {
 
       const income     = parseFloat(invRow.rows[0].income);
       const gstOnSales = parseFloat(invRow.rows[0].gstCollected);
-      const gstCredits = parseFloat(expRow.rows[0].gstPaid);
       const g1         = parseFloat((income + gstOnSales).toFixed(2));
       const netGst     = parseFloat((gstOnSales - gstCredits).toFixed(2));
       const qRecord    = qRow.rows[0] || null;
@@ -3451,6 +3468,58 @@ function validateExportCutoff(history, typeKey, from) {
   return null;
 }
 
+// ── Export account mapping ──────────────────────────────────────────────────
+// Internal chart-of-accounts codes (DEFAULT_ACCOUNTS) are arbitrary — they don't match a real
+// accountant's MYOB/Xero file. Rather than re-typing the accountant's actual codes/tax types
+// into an export wizard every single time, the mapping is entered once here and reused on
+// every future myob/xero export automatically. Missing entries fall back to the internal code
+// and the existing auto-detected tax code/type (current behaviour, unchanged).
+async function getExportAccountMap(userId) {
+  const { rows } = await pool.query(
+    `SELECT value FROM settings WHERE "userId"=$1 AND key='fin_export_account_map' LIMIT 1`,
+    [userId]
+  );
+  try { return rows[0] ? JSON.parse(rows[0].value) : {}; }
+  catch { return {}; }
+}
+
+router.get('/export/account-map', async (req, res) => {
+  try {
+    const map = await getExportAccountMap(req.user.id);
+    res.json({ accounts: DEFAULT_ACCOUNTS, map });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/export/account-map', async (req, res) => {
+  try {
+    const { map } = req.body;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) {
+      return res.status(400).json({ error: 'map must be an object keyed by internal account code' });
+    }
+    const validCodes = new Set(DEFAULT_ACCOUNTS.map(a => a.code));
+    const cleaned = {};
+    for (const [code, entry] of Object.entries(map)) {
+      if (!validCodes.has(code) || !entry || typeof entry !== 'object') continue;
+      const row = {};
+      if (entry.code && String(entry.code).trim())     row.code    = String(entry.code).trim();
+      if (entry.name && String(entry.name).trim())     row.name    = String(entry.name).trim();
+      if (entry.myobTax && String(entry.myobTax).trim()) row.myobTax = String(entry.myobTax).trim();
+      if (entry.xeroTax && String(entry.xeroTax).trim()) row.xeroTax = String(entry.xeroTax).trim();
+      if (Object.keys(row).length) cleaned[code] = row;
+    }
+    await pool.query(
+      `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_export_account_map',$2)
+       ON CONFLICT ("userId", key) DO UPDATE SET value=$2`,
+      [req.user.id, JSON.stringify(cleaned)]
+    );
+    res.json({ ok: true, map: cleaned });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Reset export history (allows any future export range — deliberate override)
 router.delete('/export/history', async (req, res) => {
   try {
@@ -3503,6 +3572,8 @@ router.get('/export/myob', async (req, res) => {
     const cutoffErr = validateExportCutoff(history, 'myob', from);
     if (cutoffErr) return res.status(409).json(cutoffErr);
 
+    const accountMap = await getExportAccountMap(userId);
+
     let where = `e."userId"=$1`;
     const params = [userId];
     if (from) { params.push(from); where += ` AND e.date >= $${params.length}`; }
@@ -3532,15 +3603,18 @@ router.get('/export/myob', async (req, res) => {
     for (const entry of rows) {
       const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
       for (const line of entry.lines) {
+        const mapped = accountMap[line.code] || {};
         const isGstAccount = line.name && line.name.toUpperCase().includes('GST');
-        const taxCode = (isGstAccount || (hasGst && (line.atype === 'expense' || line.atype === 'income')))
+        const autoTaxCode = (isGstAccount || (hasGst && (line.atype === 'expense' || line.atype === 'income')))
           ? 'GST'
           : 'N-T';
+        const taxCode = mapped.myobTax || autoTaxCode;
+        const accountNumber = mapped.code || line.code;
         lines.push(csvRow(
           fmtDateAU(entry.date),
           entry.description,
           taxCode,
-          line.code,
+          accountNumber,
           fmtNum(line.debit),
           fmtNum(line.credit)
         ));
@@ -3573,6 +3647,8 @@ router.get('/export/xero', async (req, res) => {
     const history   = await readExportHistory(userId);
     const cutoffErr = validateExportCutoff(history, 'xero', from);
     if (cutoffErr) return res.status(409).json(cutoffErr);
+
+    const accountMap = await getExportAccountMap(userId);
 
     let where = `e."userId"=$1`;
     const params = [userId];
@@ -3611,13 +3687,16 @@ router.get('/export/xero', async (req, res) => {
       const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
       const dateStr = fmtDateAU(entry.date);
       for (const line of entry.lines) {
-        const taxType = xeroTaxType(line, hasGst);
+        const mapped = accountMap[line.code] || {};
+        const taxType = mapped.xeroTax || xeroTaxType(line, hasGst);
+        const accountCode = mapped.code || line.code;
+        const accountName = mapped.name || line.name;
         const lineAmt = parseFloat(line.debit || 0) - parseFloat(line.credit || 0);
         csvLines.push(csvRow(
           entry.description,
           dateStr,
-          line.code,
-          line.name,
+          accountCode,
+          accountName,
           taxType,
           fmtNum(lineAmt)
         ));
@@ -3664,7 +3743,25 @@ router.get('/export/excel', async (req, res) => {
     if (from) { wageParams.push(from); wageWhere += ` AND date >= $${wageParams.length}`; }
     if (to)   { wageParams.push(to);   wageWhere += ` AND date <= $${wageParams.length}`; }
 
-    const [expenses, invoices, wages] = await Promise.all([
+    const assetParams = [userId];
+    let assetWhere = `"userId"=$1`;
+    if (from) { assetParams.push(from); assetWhere += ` AND "datePurchased" >= $${assetParams.length}`; }
+    if (to)   { assetParams.push(to);   assetWhere += ` AND "datePurchased" <= $${assetParams.length}`; }
+
+    const drawParams = [userId];
+    let drawWhere = `"userId"=$1`;
+    if (from) { drawParams.push(from); drawWhere += ` AND date >= $${drawParams.length}`; }
+    if (to)   { drawParams.push(to);   drawWhere += ` AND date <= $${drawParams.length}`; }
+
+    // Manual journal entries + bank interest + BAS settlement — the entries that never land in
+    // fin_expenses/fin_invoices/fin_wages/fin_assets/fin_drawings at all, so without this sheet
+    // they'd export nowhere.
+    const journalParams = [userId];
+    let journalWhere = `e."userId"=$1 AND e.type IN ('manual','interest','bas')`;
+    if (from) { journalParams.push(from); journalWhere += ` AND e.date >= $${journalParams.length}`; }
+    if (to)   { journalParams.push(to);   journalWhere += ` AND e.date <= $${journalParams.length}`; }
+
+    const [expenses, invoices, wages, assets, drawings, journalOther] = await Promise.all([
       pool.query(
         `SELECT e.date, e.description, e.supplier, e.amount, e.gst, e.category, e."ccSettled",
                 a.code AS "accountCode", a.name AS "accountName", t.code AS "txCode"
@@ -3682,6 +3779,20 @@ router.get('/export/excel', async (req, res) => {
       pool.query(
         `SELECT date, employee, gross, tax, superannuation, net
          FROM fin_wages WHERE ${wageWhere} ORDER BY date ASC, id ASC`, wageParams),
+      pool.query(
+        `SELECT "datePurchased", description, amount, gst, "businessUsePercent", method,
+                "effectiveLifeYears", "accumulatedDepreciation", "disposedDate", "disposalAmount"
+         FROM fin_assets WHERE ${assetWhere} ORDER BY "datePurchased" ASC, id ASC`, assetParams),
+      pool.query(
+        `SELECT date, description, amount
+         FROM fin_drawings WHERE ${drawWhere} ORDER BY date ASC, id ASC`, drawParams),
+      pool.query(
+        `SELECT e.date, e.description, e.type, SUM(l.debit) AS amount
+         FROM fin_journal_entries e
+         JOIN fin_journal_lines l ON l."entryId" = e.id
+         WHERE ${journalWhere}
+         GROUP BY e.id, e.date, e.description, e.type
+         ORDER BY e.date ASC, e.id ASC`, journalParams),
     ]);
 
     const wb = XLSX.utils.book_new();
@@ -3731,6 +3842,37 @@ router.get('/export/excel', async (req, res) => {
     wsWage['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, wsWage, 'Wages');
 
+    // ── Sheet 4: Assets ────────────────────────────────────────────────────
+    const assetRows = [['Date Purchased', 'Description', 'Ex-GST Cost', 'GST', 'Business Use %', 'Method', 'Effective Life (yrs)', 'Accum. Depreciation', 'Disposed Date', 'Disposal Amount']];
+    for (const a of assets.rows) {
+      assetRows.push([
+        toDate(a.datePurchased), a.description, num(a.amount), num(a.gst), num(a.businessUsePercent),
+        a.method || '', a.effectiveLifeYears ? num(a.effectiveLifeYears) : '',
+        num(a.accumulatedDepreciation), toDate(a.disposedDate), a.disposalAmount != null ? num(a.disposalAmount) : '',
+      ]);
+    }
+    const wsAsset = XLSX.utils.aoa_to_sheet(assetRows);
+    wsAsset['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsAsset, 'Assets');
+
+    // ── Sheet 5: Drawings ──────────────────────────────────────────────────
+    const drawRows = [['Date', 'Description', 'Amount']];
+    for (const d of drawings.rows) {
+      drawRows.push([toDate(d.date), d.description || '', num(d.amount)]);
+    }
+    const wsDraw = XLSX.utils.aoa_to_sheet(drawRows);
+    wsDraw['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsDraw, 'Drawings');
+
+    // ── Sheet 6: Other Journal (manual entries, bank interest, BAS settlements) ────────────
+    const journalRows = [['Date', 'Type', 'Description', 'Amount']];
+    for (const j of journalOther.rows) {
+      journalRows.push([toDate(j.date), j.type, j.description || '', num(j.amount)]);
+    }
+    const wsJournal = XLSX.utils.aoa_to_sheet(journalRows);
+    wsJournal['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 36 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsJournal, 'Other Journal');
+
     const today = new Date().toISOString().slice(0, 10);
     history.excel = { lastTo: to || today, exportedAt: new Date().toISOString() };
     await writeExportHistory(userId, history).catch(e => console.error('[export/excel] history write failed:', e.message));
@@ -3765,11 +3907,14 @@ router.get('/export/sheets', async (req, res) => {
       return { p, where };
     };
 
-    const exp  = makeParams();
-    const inv  = makeParams();
-    const wage = makeParams();
+    const exp   = makeParams();
+    const inv   = makeParams();
+    const wage  = makeParams();
+    const asset = makeParams();
+    const draw  = makeParams();
+    const jnl   = makeParams();
 
-    const [expRows, invRows, wageRows] = await Promise.all([
+    const [expRows, invRows, wageRows, assetRows, drawRows, jnlRows] = await Promise.all([
       pool.query(
         `SELECT e.date, e.description, e.supplier AS party, e.amount, e.gst,
                 e.amount + e.gst AS total, e.category AS notes, 'Expense' AS type
@@ -3801,12 +3946,45 @@ router.get('/export/sheets', async (req, res) => {
          ORDER BY date ASC, id ASC`,
         wage.p
       ),
+      pool.query(
+        `SELECT "datePurchased" AS date, '' AS party, description,
+                amount, gst, amount + gst AS total,
+                'Method: ' || COALESCE(method,'') || '  Business use: ' || "businessUsePercent" || '%' AS notes,
+                'Asset' AS type
+         FROM fin_assets
+         WHERE ${asset.where.replace(/%COL%/g, '"datePurchased"')}
+         ORDER BY "datePurchased" ASC, id ASC`,
+        asset.p
+      ),
+      pool.query(
+        `SELECT date, '' AS party, COALESCE(description, 'Drawing') AS description,
+                amount, 0 AS gst, amount AS total, '' AS notes,
+                'Drawing' AS type
+         FROM fin_drawings
+         WHERE ${draw.where.replace(/%COL%/g, 'date')}
+         ORDER BY date ASC, id ASC`,
+        draw.p
+      ),
+      pool.query(
+        `SELECT e.date, '' AS party, e.description,
+                SUM(l.debit) AS amount, 0 AS gst, SUM(l.debit) AS total, '' AS notes,
+                INITCAP(e.type) AS type
+         FROM fin_journal_entries e
+         JOIN fin_journal_lines l ON l."entryId" = e.id
+         WHERE ${jnl.where.replace(/%COL%/g, 'e.date').replace('"userId"', 'e."userId"')} AND e.type IN ('manual','interest','bas')
+         GROUP BY e.id, e.date, e.description, e.type
+         ORDER BY e.date ASC, e.id ASC`,
+        jnl.p
+      ),
     ]);
 
     const allRows = [
       ...expRows.rows,
       ...invRows.rows,
       ...wageRows.rows,
+      ...assetRows.rows,
+      ...drawRows.rows,
+      ...jnlRows.rows,
     ].sort((a, b) => String(a.date).slice(0,10).localeCompare(String(b.date).slice(0,10)));
 
     const lines = ['Date,Type,Description,Party,Amount (ex GST),GST,Total,Notes'];
@@ -4100,17 +4278,18 @@ router.get('/reports/gst-summary', async (req, res) => {
 
     // Reuses the same cash-basis calculation as /bas (paidAt for income, date for expenses) —
     // adds a breakdown by tx code on top rather than reimplementing the totals.
-    const [totalsInv, totalsExp, byIncomeCode, byExpenseCode] = await Promise.all([
+    const [totalsInv, totalsExp, gstPaid, byIncomeCode, byExpenseCode] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
          FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(amount),0) AS expenses, COALESCE(SUM(gst),0) AS "gstPaid"
+        `SELECT COALESCE(SUM(amount),0) AS expenses
          FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
+      gstPaidForRange(userId, from, to),
       pool.query(
         `SELECT COALESCE(t.code,'(none)') AS code, COALESCE(t.name,'Uncategorised') AS name,
                 COALESCE(SUM(ii.amount),0) AS amount, COALESCE(SUM(ii.gst),0) AS gst
@@ -4133,7 +4312,6 @@ router.get('/reports/gst-summary', async (req, res) => {
     ]);
 
     const gstCollected = parseFloat(totalsInv.rows[0].gstCollected);
-    const gstPaid       = parseFloat(totalsExp.rows[0].gstPaid);
 
     res.json({
       from, to,
@@ -4273,17 +4451,22 @@ router.get('/reports/chart-cash-flow', async (req, res) => {
 router.get('/reports/chart-gst-quarters', async (req, res) => {
   try {
     const userId = req.user.id;
+    const gstPaidAccountId = await accountByCode(userId, '1200');
     const { rows } = await pool.query(
       `SELECT q.id AS "quarterId", q.from_date AS "from", q.to_date AS "to",
               COALESCE((SELECT SUM(gst) FROM fin_invoices WHERE "userId"=$1 AND status='paid'
                         AND "paidAt"::date BETWEEN q.from_date AND q.to_date), 0) AS "gstCollected",
               COALESCE((SELECT SUM(gst) FROM fin_expenses WHERE "userId"=$1
-                        AND date BETWEEN q.from_date AND q.to_date), 0) AS "gstPaid"
+                        AND date BETWEEN q.from_date AND q.to_date), 0)
+              + COALESCE((SELECT SUM(l.debit) FROM fin_journal_entries e
+                          JOIN fin_journal_lines l ON l."entryId" = e.id
+                          WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2
+                            AND e.date BETWEEN q.from_date AND q.to_date), 0) AS "gstPaid"
        FROM fin_bas_quarters q
        WHERE q."userId"=$1
        ORDER BY q.from_date DESC
        LIMIT 8`,
-      [userId]
+      [userId, gstPaidAccountId || 0]
     );
     const points = rows.reverse().map(r => ({
       quarterId: r.quarterId,

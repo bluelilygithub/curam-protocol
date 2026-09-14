@@ -4438,6 +4438,155 @@ function ExportHistoryPanel({ onChanged }) {
   );
 }
 
+// ── Export Account Mapping Panel ───────────────────────────────────────────────
+// Entered once, reused on every future MYOB/Xero export automatically — no re-typing the
+// accountant's real account codes / tax codes into an export wizard each time.
+function ExportAccountMapPanel() {
+  const [accounts, setAccounts] = useState([]);
+  const [map, setMap]           = useState({});
+  const [draft, setDraft]       = useState({});
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = () => {
+    setLoading(true);
+    api.get('/api/finance/export/account-map')
+      .then(r => r.json())
+      .then(data => {
+        setAccounts(data.accounts || []);
+        setMap(data.map || {});
+        setDraft(data.map || {});
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const updateDraft = (code, field, value) => {
+    setDraft(prev => ({ ...prev, [code]: { ...(prev[code] || {}), [field]: value } }));
+  };
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(map);
+  const mappedCount = Object.values(draft).filter(v => v && v.code).length;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      // Drop entries that are entirely blank so they fall back to auto-detected behaviour.
+      const cleaned = {};
+      for (const [code, entry] of Object.entries(draft)) {
+        const row = {};
+        if (entry?.code?.trim())    row.code    = entry.code.trim();
+        if (entry?.name?.trim())    row.name    = entry.name.trim();
+        if (entry?.myobTax?.trim()) row.myobTax = entry.myobTax.trim();
+        if (entry?.xeroTax?.trim()) row.xeroTax = entry.xeroTax.trim();
+        if (Object.keys(row).length) cleaned[code] = row;
+      }
+      const res = await api.put('/api/finance/export/account-map', { map: cleaned });
+      if (!res.ok) throw new Error('Save failed');
+      const body = await res.json();
+      setMap(body.map || {});
+      setDraft(body.map || {});
+      addToast('Export account mapping saved — applies to every future MYOB/Xero export.', 'success');
+    } catch (e) {
+      addToast(e.message || 'Save failed', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+        Get your accountant's real account code (and, for Xero, the exact tax rate name they use)
+        for each row below. Left blank, that row exports using the app's internal code and an
+        auto-detected tax code — which your accountant's file almost certainly won't already have.
+        {mappedCount > 0 && <span> {mappedCount} of {accounts.length} accounts mapped.</span>}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ color: 'var(--color-muted)', textAlign: 'left' }}>
+              <th className="pb-1 pr-2">Internal account</th>
+              <th className="pb-1 pr-2">Accountant's code</th>
+              <th className="pb-1 pr-2">Account name override</th>
+              <th className="pb-1 pr-2">MYOB tax code</th>
+              <th className="pb-1 pr-2">Xero tax type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map(a => {
+              const row = draft[a.code] || {};
+              return (
+                <tr key={a.code} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <td className="py-1 pr-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                    {a.code} — {a.name}
+                  </td>
+                  <td className="py-1 pr-2">
+                    <input
+                      value={row.code || ''}
+                      onChange={e => updateDraft(a.code, 'code', e.target.value)}
+                      placeholder={a.code}
+                      className="text-xs px-1.5 py-1 rounded border w-24"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <input
+                      value={row.name || ''}
+                      onChange={e => updateDraft(a.code, 'name', e.target.value)}
+                      placeholder={a.name}
+                      className="text-xs px-1.5 py-1 rounded border w-36"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <input
+                      value={row.myobTax || ''}
+                      onChange={e => updateDraft(a.code, 'myobTax', e.target.value)}
+                      placeholder="GST / N-T"
+                      className="text-xs px-1.5 py-1 rounded border w-20"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <input
+                      value={row.xeroTax || ''}
+                      onChange={e => updateDraft(a.code, 'xeroTax', e.target.value)}
+                      placeholder="INPUT / OUTPUT / BASEXCLUDED"
+                      className="text-xs px-1.5 py-1 rounded border w-40"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <Tooltip text="Save this mapping — every future MYOB/Xero export uses it automatically.">
+          <button
+            onClick={save}
+            disabled={saving || !hasChanges}
+            className="text-xs px-3 py-1.5 rounded font-medium"
+            style={{ background: 'var(--color-primary)', color: '#fff', opacity: (saving || !hasChanges) ? 0.5 : 1 }}
+          >
+            {saving ? 'Saving…' : 'Save mapping'}
+          </button>
+        </Tooltip>
+        {hasChanges && !saving && (
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Unsaved changes</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 // Settings-tab-only: the once-a-year method + rate policy for Vehicle & Home Office (moved out of
 // the data-entry screen — see docs/finance.md). Shows the current FY's locked method/rate
@@ -4696,6 +4845,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const [testMsg, setTestMsg]             = useState('');
   const addToast = useToastStore(s => s.addToast);
   const vhoSectionRef = useRef(null);
+  const exportMapSectionRef = useRef(null);
 
   useEffect(() => {
     api.get('/api/finance/settings')
@@ -4707,6 +4857,9 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   useEffect(() => {
     if (focusSection === 'vehicleHomeOffice' && vhoSectionRef.current) {
       vhoSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      onFocusHandled?.();
+    } else if (focusSection === 'exportAccountMap' && exportMapSectionRef.current) {
+      exportMapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       onFocusHandled?.();
     }
   }, [focusSection]);
@@ -4830,6 +4983,12 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
 
         <AssetsSettingsSection />
 
+        {/* Export account mapping */}
+        <div ref={exportMapSectionRef} className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>Export Account Mapping</p>
+          <ExportAccountMapPanel />
+        </div>
+
         {/* Export history — nuclear option */}
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>Export History</p>
@@ -4845,7 +5004,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
 }
 
 // ── Export Modal ──────────────────────────────────────────────────────────────
-function ExportModal({ type, history, onClose, onSuccess }) {
+function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
   const typeHistory = history[type] || null;
   const minFrom = typeHistory?.lastTo ? plusDays(typeHistory.lastTo, 1) : null;
   const defaultFrom = minFrom || `${new Date().getFullYear()}-01-01`;
@@ -4854,10 +5013,27 @@ function ExportModal({ type, history, onClose, onSuccess }) {
   const [to, setTo]           = useState(todayStr());
   const [stage, setStage]     = useState('setup'); // 'setup' | 'confirm'
   const [loading, setLoading] = useState(false);
+  const [accountMap, setAccountMap]         = useState(null); // null while loading
+  const [totalAccounts, setTotalAccounts]   = useState(0);
   const addToast = useToastStore(s => s.addToast);
 
   const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : type === 'sheets' ? 'Google Sheets' : 'Excel';
   const cutoffBlocked = minFrom && from < minFrom;
+  const needsAccountMap = type === 'myob' || type === 'xero';
+
+  useEffect(() => {
+    if (!needsAccountMap) return;
+    api.get('/api/finance/export/account-map')
+      .then(r => r.json())
+      .then(data => {
+        setAccountMap(data.map || {});
+        setTotalAccounts((data.accounts || []).length);
+      })
+      .catch(() => setAccountMap({}));
+  }, [needsAccountMap]);
+
+  const mappedCount = accountMap ? Object.values(accountMap).filter(v => v && v.code).length : 0;
+  const unmappedCount = totalAccounts - mappedCount;
 
   const fmtAU = (dateStr) => {
     if (!dateStr) return '—';
@@ -4963,6 +5139,28 @@ function ExportModal({ type, history, onClose, onSuccess }) {
             <p style={{ color: 'var(--color-text)' }}>
               Downloads a single CSV file combining all invoices, expenses, and wages in date order. Import it into Google Sheets via <strong>File → Import</strong>, then select "Replace spreadsheet" or "Insert new sheet".
             </p>
+          </div>
+        )}
+
+        {/* Unmapped account codes nag */}
+        {needsAccountMap && accountMap !== null && unmappedCount > 0 && (
+          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)' }}>
+            <p className="font-medium mb-1" style={{ color: '#a16207' }}>
+              {unmappedCount} of {totalAccounts} accounts not mapped to your accountant's codes
+            </p>
+            <p style={{ color: 'var(--color-text)' }}>
+              This export will use the app's internal account codes and an auto-detected tax code —
+              your accountant's {typeName} file almost certainly won't already have those and will
+              likely need to map or reject some lines. Map your accounts once and every future export
+              uses it automatically.
+            </p>
+            <button
+              onClick={onGoToAccountMap}
+              className="mt-2 text-xs px-3 py-1.5 rounded font-medium"
+              style={{ background: '#a16207', color: '#fff' }}
+            >
+              Map accounts now
+            </button>
           </div>
         )}
 
@@ -6304,6 +6502,11 @@ export default function FinancePage() {
             ...prev,
             [type]: { lastTo, exportedAt: new Date().toISOString() },
           }))}
+          onGoToAccountMap={() => {
+            setExportModal(null);
+            setSettingsFocusSection('exportAccountMap');
+            setTab('Settings');
+          }}
         />
       )}
 
