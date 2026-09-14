@@ -2043,6 +2043,31 @@ async function initSchema() {
     )
   `);
 
+  // Trace which diary rows a periodic bulk-posted deduction actually rolled up, so an audit
+  // question ("show me how you got to $X") can be answered by pointing at specific diary rows,
+  // not just a lump total. NULL = not yet posted (still "pending"); set once, on posting, and
+  // never changed again — a diary row belongs to at most one posted expense for its lifetime.
+  await pool.query(`ALTER TABLE fin_home_office_daily_log ADD COLUMN IF NOT EXISTS "postedExpenseId" INTEGER REFERENCES fin_expenses(id) ON DELETE SET NULL`);
+
+  // Per-trip vehicle diary — mirrors fin_home_office_daily_log's role for cents-per-km: a
+  // contemporaneous substantiation record, separate from the ledger. Multiple trips per day are
+  // normal (no UNIQUE constraint, unlike the home-office diary which is one row per day). Only
+  // used by the cents_per_km method — logbook substantiation is odometer readings + logbook
+  // sample, already handled elsewhere, not per-trip logging. "postedExpenseId" NULL = pending
+  // (not yet rolled into a bulk Vehicle Expense posting); set once when posted, never re-posted.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_vehicle_trip_log (
+      id                 SERIAL PRIMARY KEY,
+      "userId"           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "tripDate"         DATE NOT NULL,
+      km                 NUMERIC(10,2) NOT NULL CHECK(km >= 0),
+      purpose            TEXT,
+      description        TEXT,
+      "postedExpenseId"  INTEGER REFERENCES fin_expenses(id) ON DELETE SET NULL,
+      "createdAt"        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
 

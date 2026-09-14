@@ -1725,12 +1725,55 @@ router.get('/home-office-daily-log/gaps', async (req, res) => {
 router.get('/home-office-daily-log', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, date::text AS date, hours, source, "createdAt", "updatedAt"
+      `SELECT id, date::text AS date, hours, source, "postedExpenseId", "createdAt", "updatedAt"
        FROM fin_home_office_daily_log WHERE "userId"=$1 AND date >= (CURRENT_DATE - INTERVAL '60 days')
        ORDER BY date DESC`,
       [req.user.id]
     );
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Diary hours not yet rolled into a posted deduction (postedExpenseId IS NULL) — this, not a
+// date comparison, is the source of truth for what the periodic "Save Hours" card should
+// pre-fill, since it correctly counts a backdated diary entry even if it's older than the last
+// posted date. Read-only, no side effects.
+router.get('/home-office-daily-log/pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(SUM(hours),0)::float AS hours, COUNT(*)::int AS count, MIN(date)::text AS "oldestDate"
+       FROM fin_home_office_daily_log WHERE "userId"=$1 AND "postedExpenseId" IS NULL`,
+      [req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Full-history CSV of the daily diary — the actual document to hand an accountant/ATO if asked
+// to substantiate hours worked from home, since the card UI only ever shows a rolled-up summary.
+router.get('/home-office-daily-log/export', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT date::text AS date, hours, source, "postedExpenseId", "createdAt"
+       FROM fin_home_office_daily_log WHERE "userId"=$1 ORDER BY date ASC`,
+      [req.user.id]
+    );
+    const header = 'Date,Hours,Source,Posted,LoggedAt';
+    const lines = rows.map(r => [
+      r.date,
+      r.hours,
+      r.source,
+      r.postedExpenseId ? 'Yes' : 'No',
+      new Date(r.createdAt).toISOString(),
+    ].join(','));
+    const csv = [header, ...lines].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="home-office-hours-diary.csv"`);
+    res.send(csv);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2131,6 +2174,81 @@ const VEHICLE_PURPOSES = [
   'Other (describe)',
 ];
 
+// ── Vehicle trip diary (cents_per_km only) ──────────────────────────────────
+// Mirrors the home-office daily diary: a per-trip substantiation record, separate from the
+// ledger. Logbook method doesn't use this — its substantiation is odometer readings + a
+// logbook sample, handled elsewhere. Zero journal impact; the periodic "Save Vehicle Expense"
+// post below is what actually posts a deduction.
+
+router.get('/vehicle-trip-log/pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(SUM(km),0)::float AS km, COUNT(*)::int AS count, MIN("tripDate")::text AS "oldestDate"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "postedExpenseId" IS NULL`,
+      [req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/vehicle-trip-log/export', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 ORDER BY "tripDate" ASC, id ASC`,
+      [req.user.id]
+    );
+    const header = 'Date,Km,Purpose,Description,Posted,LoggedAt';
+    const esc = (v) => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
+    const lines = rows.map(r => [
+      r.date, r.km, esc(r.purpose), esc(r.description), r.postedExpenseId ? 'Yes' : 'No', new Date(r.createdAt).toISOString(),
+    ].join(','));
+    const csv = [header, ...lines].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="vehicle-trip-diary.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/vehicle-trip-log', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "tripDate" >= (CURRENT_DATE - INTERVAL '60 days')
+       ORDER BY "tripDate" DESC, id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vehicle-trip-log', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { date, km, purpose, description } = req.body;
+    if (!date) return res.status(400).json({ error: 'date is required' });
+    const kmNum = parseFloat(km);
+    if (!Number.isFinite(kmNum) || kmNum <= 0) {
+      return res.status(400).json({ error: 'km must be a number greater than 0' });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO fin_vehicle_trip_log ("userId","tripDate",km,purpose,description)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"`,
+      [userId, date, kmNum, purpose || null, description || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/expenses/vehicle', async (req, res) => {
   const dbClient = await pool.connect();
   try {
@@ -2207,6 +2325,15 @@ router.post('/expenses/vehicle', async (req, res) => {
       });
     }
 
+    // Same traceability as home office: mark every currently-pending trip-diary row as rolled
+    // into this posting, so the deduction can be traced back to the specific trips behind it.
+    if (useMethod === 'cents_per_km') {
+      await dbClient.query(
+        `UPDATE fin_vehicle_trip_log SET "postedExpenseId"=$1 WHERE "userId"=$2 AND "postedExpenseId" IS NULL`,
+        [expense.id, userId]
+      );
+    }
+
     await dbClient.query('COMMIT');
     res.json({ ...expense, deductible, method: useMethod, purpose: purpose || null });
   } catch (err) {
@@ -2214,24 +2341,6 @@ router.post('/expenses/vehicle', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     dbClient.release();
-  }
-});
-
-// Latest date a home-office deduction was actually posted — lets the client auto-sum
-// daily-log hours since that date instead of asking the user to re-enter the same
-// hours twice (once via the daily popup, again here). Read-only, no side effects.
-router.get('/home-office-last-posted-date', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT MAX(e.date)::text AS date
-       FROM fin_home_office_expenses ho
-       JOIN fin_expenses e ON e.id = ho."expenseId"
-       WHERE ho."userId"=$1`,
-      [req.user.id]
-    );
-    res.json({ date: rows[0]?.date || null });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2302,6 +2411,16 @@ router.post('/expenses/home-office', async (req, res) => {
           { accountId: creditId, debit: 0,           credit: deductible },
         ],
       });
+    }
+
+    // Mark every currently-pending diary row as rolled into this posting, so the deduction can
+    // be traced back to specific diary entries later (an audit question, or just curiosity about
+    // "what did this $X cover") — not just a lump total with no link to the substantiation record.
+    if (useMethod === 'fixed_rate') {
+      await dbClient.query(
+        `UPDATE fin_home_office_daily_log SET "postedExpenseId"=$1 WHERE "userId"=$2 AND "postedExpenseId" IS NULL`,
+        [expense.id, userId]
+      );
     }
 
     await dbClient.query('COMMIT');
