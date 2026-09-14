@@ -2023,6 +2023,26 @@ async function initSchema() {
   // logbook/diary substantiation record is still the user's own, this doesn't replace it).
   await pool.query(`ALTER TABLE fin_vehicle_expenses ADD COLUMN IF NOT EXISTS purpose TEXT`);
 
+  // Daily WFH hours diary — a SEPARATE, purely-substantiation record from fin_home_office_expenses
+  // above. This table has zero journal/accounting impact; it exists only so the global daily popup
+  // (and the Home Office card's "unfilled days" list) can track a genuine contemporaneous
+  // hours-worked-from-home diary, as distinct from the periodic dollar-deduction entries the user
+  // still enters manually via the existing "Save Hours" flow. UNIQUE(userId, date) so re-answering
+  // the same date updates rather than duplicates. `hours` allows 0 ("didn't work from home that
+  // day" is a valid, explicitly saveable answer, distinct from "not yet answered" i.e. no row).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_home_office_daily_log (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date         DATE NOT NULL,
+      hours        NUMERIC(5,2) NOT NULL CHECK(hours >= 0),
+      source       TEXT NOT NULL DEFAULT 'manual',
+      "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("userId", date)
+    )
+  `);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
 

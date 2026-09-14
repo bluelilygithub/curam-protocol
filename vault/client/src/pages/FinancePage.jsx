@@ -2414,6 +2414,12 @@ const HOME_OFFICE_EVIDENCE_CATEGORIES = [
   { id: 'stationery', label: 'Stationery/consumables' },
 ];
 
+// Short display date for the daily-diary "unfilled days" list, e.g. "Wed 10 Sep".
+function formatFriendlyDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 function Select({ value, onChange, children, className = '' }) {
   return (
     <select
@@ -2505,6 +2511,18 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [hEvidence, setHEvidence] = useState({}); // { electricity: { fileName, uploadedAt }, ... }
   const [hEvidenceUploading, setHEvidenceUploading] = useState(null); // category mid-upload
 
+  // Daily WFH hours diary (fin_home_office_daily_log) — a SEPARATE, purely-substantiation record
+  // from the periodic dollar-deduction entries above (see docs/finance.md). This card only reads
+  // it to show a lightweight "connected" summary + any older unfilled days; it never writes to it
+  // itself — the global WfhHoursPrompt popup (Layout.jsx) is what writes daily entries.
+  const [hDailyLog, setHDailyLog] = useState([]); // last 60 days, from server
+
+  const loadHDailyLog = () => {
+    api.get('/api/finance/home-office-daily-log').then(r => r.json()).then(rows => {
+      setHDailyLog(Array.isArray(rows) ? rows : []);
+    }).catch(() => {});
+  };
+
   const loadHEvidence = () => {
     api.get('/api/finance/home-office-evidence').then(r => r.json()).then(rows => {
       const map = {};
@@ -2544,12 +2562,41 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     api.get('/api/finance/vehicle-method').then(r => r.json()).then(setVYearMethods).catch(() => {});
     api.get('/api/finance/home-office-method').then(r => r.json()).then(setHYearMethods).catch(() => {});
     loadHEvidence();
+    loadHDailyLog();
   }, []);
 
   const vFy = finYearForDate(vForm.date);
   const hFy = finYearForDate(hForm.date);
   const lockedVMethod = vYearMethods[vFy] || null;
   const lockedHMethod = hYearMethods[hFy] || null;
+
+  // Daily diary summary for the card header — hours + day count logged over the last 14
+  // calendar days (matches the popup's own backfill window), plus any weekday gaps OLDER than
+  // that 14-day window (not force-prompted via the popup, just surfaced here as a plain list so
+  // nothing is silently lost — see docs/finance.md). Purely informational: read-only, no writes.
+  const hDailySummary = (() => {
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+    const loggedByDate = new Map(hDailyLog.map(r => [r.date, parseFloat(r.hours) || 0]));
+
+    let recentHours = 0, recentDays = 0;
+    const olderGaps = [];
+    for (let i = 1; i <= 60; i++) {
+      const d = new Date(todayUTC);
+      d.setUTCDate(d.getUTCDate() - i);
+      const dow = d.getUTCDay();
+      if (dow === 0 || dow === 6) continue; // weekends never counted/queued
+      const dateStr = d.toISOString().slice(0, 10);
+      if ((hYearMethods[finYearForDate(dateStr)] || null) !== 'fixed_rate') continue;
+      const logged = loggedByDate.get(dateStr);
+      if (i <= 14) {
+        if (logged != null) { recentHours += logged; recentDays += 1; }
+      } else if (logged == null) {
+        olderGaps.push(dateStr);
+      }
+    }
+    return { recentHours, recentDays, olderGaps: olderGaps.sort() };
+  })();
 
   const vehicleDeductible = lockedVMethod === 'cents_per_km'
     ? (parseFloat(vForm.km) || 0) * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
@@ -2682,6 +2729,23 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             <MethodLockDisplay fy={hFy} claimTypeLabel="Home office" methodLabel={lockedHMethod === 'fixed_rate' ? 'Fixed rate' : 'Actual cost'} />
           ) : (
             <NoMethodLockedNotice fy={hFy} claimTypeLabel="home office" onGoToSettings={onGoToSettings} />
+          )}
+
+          {lockedHMethod === 'fixed_rate' && (
+            <Tooltip text="From the separate daily WFH hours diary (the global daily popup) — a substantiation record only, distinct from the periodic totals you enter below via 'Save Hours' to post the actual deduction.">
+              <p className="text-xs mb-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                Daily log: {hDailySummary.recentHours.toFixed(2)} hours recorded over the last 14 days across {hDailySummary.recentDays} day{hDailySummary.recentDays === 1 ? '' : 's'}
+              </p>
+            </Tooltip>
+          )}
+
+          {lockedHMethod === 'fixed_rate' && hDailySummary.olderGaps.length > 0 && (
+            <Tooltip text="These weekdays are older than the 14-day popup backfill window, so they're not force-prompted — but they're still unfilled in the daily diary if you want to log them manually.">
+              <div className="text-xs mb-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                {hDailySummary.olderGaps.length} earlier day{hDailySummary.olderGaps.length === 1 ? '' : 's'} still unfilled in the daily diary:{' '}
+                {hDailySummary.olderGaps.map(d => formatFriendlyDate(d)).join(', ')}
+              </div>
+            </Tooltip>
           )}
 
           {lockedHMethod === 'fixed_rate' && (

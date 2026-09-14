@@ -13,6 +13,7 @@ import InquirySession from './mood/InquirySession';
 import TourButton from './TourButton';
 import Toast from './Toast';
 import AppsLauncher from './AppsLauncher';
+import WfhHoursPrompt from './WfhHoursPrompt';
 import useSettingsStore from '../store/settingsStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
@@ -555,6 +556,7 @@ function Layout() {
       <Toast />
       <QuickCapture />
       <MorningDigest />
+      <WfhHoursPrompt enabled={canUseFeature('finance')} />
       {reminderModal && (
         <TaskReminderModal
           time={reminderModal.time}

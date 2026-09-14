@@ -1681,6 +1681,83 @@ router.delete('/home-office-evidence/:category', async (req, res) => {
   }
 });
 
+// ── Home office daily WFH hours log (diary/substantiation only, no journal impact) ───────────
+// SEPARATE from fin_home_office_expenses above: this is a pure daily diary record for ATO
+// contemporaneous-record substantiation of the fixed-rate method. It never posts a journal entry
+// and has no interaction with fin_expenses/fin_journal_entries — the existing periodic "Save
+// Hours" flow (POST /expenses/home-office above) is what actually posts the deduction, unchanged.
+// Backs the global daily popup (client/src/components/WfhHoursPrompt.jsx, mounted in Layout.jsx).
+
+// Weekdays (Mon–Fri) in the last 14 calendar days (excluding today, since a day isn't "unfilled"
+// until it's over) that have no fin_home_office_daily_log row for this user, but only for dates
+// whose financial year has `fixed_rate` locked as the home-office method — if no method is locked,
+// or the locked method is actual_cost, the diary is irrelevant and gaps is always [].
+router.get('/home-office-daily-log/gaps', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const methodMap = await getMethodByYearMap(userId, 'fin_home_office_method_by_year');
+
+    // Build the last 14 calendar days (excluding today), oldest first, then keep weekdays only.
+    const candidates = [];
+    for (let i = 14; i >= 1; i--) {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - i);
+      const dow = d.getUTCDay(); // 0=Sun, 6=Sat
+      if (dow === 0 || dow === 6) continue;
+      const dateStr = d.toISOString().slice(0, 10);
+      if (methodMap[finYearForDate(dateStr)] !== 'fixed_rate') continue;
+      candidates.push(dateStr);
+    }
+    if (!candidates.length) return res.json([]);
+
+    const { rows } = await pool.query(
+      `SELECT date::text AS date FROM fin_home_office_daily_log WHERE "userId"=$1 AND date = ANY($2::date[])`,
+      [userId, candidates]
+    );
+    const logged = new Set(rows.map(r => r.date));
+    res.json(candidates.filter(d => !logged.has(d)));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/home-office-daily-log', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, date::text AS date, hours, source, "createdAt", "updatedAt"
+       FROM fin_home_office_daily_log WHERE "userId"=$1 AND date >= (CURRENT_DATE - INTERVAL '60 days')
+       ORDER BY date DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/home-office-daily-log', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { date, hours, source } = req.body;
+    if (!date) return res.status(400).json({ error: 'date is required' });
+    const hoursNum = parseFloat(hours);
+    if (!Number.isFinite(hoursNum) || hoursNum < 0) {
+      return res.status(400).json({ error: 'hours must be a number >= 0 (0 is valid — it means logged, no WFH that day)' });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO fin_home_office_daily_log ("userId", date, hours, source)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT ("userId", date) DO UPDATE SET hours=EXCLUDED.hours, source=EXCLUDED.source, "updatedAt"=NOW()
+       RETURNING id, date::text AS date, hours, source, "createdAt", "updatedAt"`,
+      [userId, date, hoursNum, source === 'popup' ? 'popup' : 'manual']
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Wages ─────────────────────────────────────────────────────────────────────
 
 router.get('/wages', async (req, res) => {
