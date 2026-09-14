@@ -2174,81 +2174,6 @@ const VEHICLE_PURPOSES = [
   'Other (describe)',
 ];
 
-// ── Vehicle trip diary (cents_per_km only) ──────────────────────────────────
-// Mirrors the home-office daily diary: a per-trip substantiation record, separate from the
-// ledger. Logbook method doesn't use this — its substantiation is odometer readings + a
-// logbook sample, handled elsewhere. Zero journal impact; the periodic "Save Vehicle Expense"
-// post below is what actually posts a deduction.
-
-router.get('/vehicle-trip-log/pending', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT COALESCE(SUM(km),0)::float AS km, COUNT(*)::int AS count, MIN("tripDate")::text AS "oldestDate"
-       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "postedExpenseId" IS NULL`,
-      [req.user.id]
-    );
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get('/vehicle-trip-log/export', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"
-       FROM fin_vehicle_trip_log WHERE "userId"=$1 ORDER BY "tripDate" ASC, id ASC`,
-      [req.user.id]
-    );
-    const header = 'Date,Km,Purpose,Description,Posted,LoggedAt';
-    const esc = (v) => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
-    const lines = rows.map(r => [
-      r.date, r.km, esc(r.purpose), esc(r.description), r.postedExpenseId ? 'Yes' : 'No', new Date(r.createdAt).toISOString(),
-    ].join(','));
-    const csv = [header, ...lines].join('\n');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="vehicle-trip-diary.csv"`);
-    res.send(csv);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get('/vehicle-trip-log', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"
-       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "tripDate" >= (CURRENT_DATE - INTERVAL '60 days')
-       ORDER BY "tripDate" DESC, id DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/vehicle-trip-log', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { date, km, purpose, description } = req.body;
-    if (!date) return res.status(400).json({ error: 'date is required' });
-    const kmNum = parseFloat(km);
-    if (!Number.isFinite(kmNum) || kmNum <= 0) {
-      return res.status(400).json({ error: 'km must be a number greater than 0' });
-    }
-    const { rows } = await pool.query(
-      `INSERT INTO fin_vehicle_trip_log ("userId","tripDate",km,purpose,description)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, "tripDate"::text AS date, km, purpose, description, "postedExpenseId", "createdAt"`,
-      [userId, date, kmNum, purpose || null, description || null]
-    );
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.post('/expenses/vehicle', async (req, res) => {
   const dbClient = await pool.connect();
   try {
@@ -2323,15 +2248,6 @@ router.post('/expenses/vehicle', async (req, res) => {
           { accountId: creditId, debit: 0,           credit: deductible },
         ],
       });
-    }
-
-    // Same traceability as home office: mark every currently-pending trip-diary row as rolled
-    // into this posting, so the deduction can be traced back to the specific trips behind it.
-    if (useMethod === 'cents_per_km') {
-      await dbClient.query(
-        `UPDATE fin_vehicle_trip_log SET "postedExpenseId"=$1 WHERE "userId"=$2 AND "postedExpenseId" IS NULL`,
-        [expense.id, userId]
-      );
     }
 
     await dbClient.query('COMMIT');
