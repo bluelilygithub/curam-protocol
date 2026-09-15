@@ -32,13 +32,14 @@ from .transforms import glyph_edit
 from .transforms.sidebearings import capture_original_rsb, recalc_sidebearings_with_rsb
 from .transforms.validate import ValidationIssue, validate_glyph_contours
 
-# Default glyph target set: base Latin letters + digits — the common case
-# for a "customize this Google Font" tool. Composite glyphs (most
-# accented letters) are skipped automatically by glyph_edit regardless of
-# whether they're named here.
+# Default glyph target set: base Latin letters + digits, plus the common
+# accented Latin-1/Latin Extended-A letters (café, résumé, naïve, ñoño) —
+# most of these are composite glyphs in a typical Google Fonts TTF and are
+# fully transformed (not skipped), see glyph_edit.py.
 DEFAULT_GLYPH_CHARS = [chr(c) for c in range(ord('A'), ord('Z') + 1)] \
     + [chr(c) for c in range(ord('a'), ord('z') + 1)] \
-    + [chr(c) for c in range(ord('0'), ord('9') + 1)]
+    + [chr(c) for c in range(ord('0'), ord('9') + 1)] \
+    + list('ÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑÇáàâäãåéèêëíìîïóòôöõúùûüñç')
 
 NOMINAL_STEM_UNITS_FRACTION = 0.04  # of unitsPerEm, per 100% of the stemThickness control
 
@@ -46,9 +47,22 @@ NOMINAL_STEM_UNITS_FRACTION = 0.04  # of unitsPerEm, per 100% of the stemThickne
 @dataclass
 class StructuralEditReport:
     glyphs_edited: list[str] = field(default_factory=list)
-    glyphs_skipped: list[tuple[str, str]] = field(default_factory=list)  # (glyph_name, reason)
+    composite_glyphs_reassembled: list[str] = field(default_factory=list)  # subset of glyphs_edited that were composite
+    glyphs_skipped: list[tuple[str, str]] = field(default_factory=list)  # (glyph_name, reason) — never silent
     validation_issues: list[ValidationIssue] = field(default_factory=list)
     kerning: KerningBuildReport | None = None
+
+
+def transform_contours(contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units):
+    """The actual per-glyph transform pipeline, factored out so it can be
+    called identically for a standalone glyph's contours and for one
+    component's slice of a decomposed composite glyph's contours (tests
+    use this to verify the two produce identical results)."""
+    contours = glyph_edit.apply_proportional_width(contours, width_factor)
+    contours = glyph_edit.apply_extend_ascender_descender(contours, baseline_y, cap_height_y, extend_factor)
+    contours = glyph_edit.apply_counter_width(contours, counter_percent)
+    contours = glyph_edit.apply_stem_thickness(contours, stem_delta_units)
+    return contours
 
 
 def _cap_height_units(font) -> float:
@@ -98,19 +112,23 @@ def apply_transform_recipe(font, recipe: dict, glyph_names: list[str] | None = N
                 continue
 
             glyph = glyf[glyph_name]
-            original_contours = glyph_edit.get_glyph_contours(glyph, glyf)
+            was_composite = glyph_edit.is_composite(glyph)
+
+            try:
+                original_contours = glyph_edit.get_glyph_contours(glyph, glyf)
+            except Exception as exc:  # e.g. a component referencing a missing glyph name
+                report.glyphs_skipped.append((glyph_name, f'decompose_failed: {exc}'))
+                continue
+
             if original_contours is None:
-                reason = 'composite_glyph' if glyph.numberOfContours < 0 else 'empty_glyph'
-                report.glyphs_skipped.append((glyph_name, reason))
+                report.glyphs_skipped.append((glyph_name, 'empty_glyph'))
                 continue
 
             original_rsb = capture_original_rsb(font, glyph_name)
 
-            contours = original_contours
-            contours = glyph_edit.apply_proportional_width(contours, width_factor)
-            contours = glyph_edit.apply_extend_ascender_descender(contours, baseline_y, cap_height_y, extend_factor)
-            contours = glyph_edit.apply_counter_width(contours, counter_percent)
-            contours = glyph_edit.apply_stem_thickness(contours, stem_delta_units)
+            contours = transform_contours(
+                original_contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units
+            )
 
             issues = validate_glyph_contours(glyph_name, original_contours, contours)
             report.validation_issues.extend(issues)
@@ -118,6 +136,8 @@ def apply_transform_recipe(font, recipe: dict, glyph_names: list[str] | None = N
             glyph_edit.set_glyph_contours(glyph, glyf, contours)
             recalc_sidebearings_with_rsb(font, glyph_name, original_rsb)
             report.glyphs_edited.append(glyph_name)
+            if was_composite:
+                report.composite_glyphs_reassembled.append(glyph_name)
 
     if kerning_recipe:
         report.kerning = apply_kerning_recipe(font, kerning_recipe)

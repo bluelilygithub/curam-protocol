@@ -25,11 +25,16 @@ class SidebearingUpdate:
 
 
 def capture_original_rsb(font, glyph_name: str) -> int | None:
-    """Call BEFORE transforming the glyph's outline."""
+    """
+    Call BEFORE transforming the glyph's outline. Works for composite
+    glyphs too — they carry a valid bounding box (xMin/xMax) even though
+    numberOfContours is negative; only a genuinely empty glyph (no bbox at
+    all, e.g. space) has nothing to compute an RSB from.
+    """
     glyf = font['glyf']
     hmtx = font['hmtx']
     glyph = glyf[glyph_name]
-    if glyph.numberOfContours <= 0:
+    if getattr(glyph, 'xMax', None) is None:
         return None
     advance, _lsb = hmtx[glyph_name]
     return advance - glyph.xMax
@@ -40,7 +45,7 @@ def recalc_sidebearings_with_rsb(font, glyph_name: str, original_rsb: int) -> Si
     glyf = font['glyf']
     hmtx = font['hmtx']
     glyph = glyf[glyph_name]
-    if glyph.numberOfContours <= 0:
+    if original_rsb is None or getattr(glyph, 'xMax', None) is None:
         return None
 
     old_advance, old_lsb = hmtx[glyph_name]

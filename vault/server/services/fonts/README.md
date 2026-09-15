@@ -97,12 +97,25 @@ port of the Phase 2 preview's shortcuts:
   ahead of the class (`format2`) rules in the same feature block, so they
   correctly override rather than stack with the class adjustment.
 
-**Known limitation — composite glyphs.** Most accented Latin letters
-(e.g. `Á`, `é`) are TrueType *composite* glyphs (a base glyph + a mark
-component) and are skipped by the outline transforms (reported in
-`StructuralEditReport.glyphs_skipped`) rather than risking incorrect
-decomposition. Base A-Z/a-z/0-9 are simple glyphs in virtually every
-Google Fonts TTF and are fully supported.
+**Composite glyphs (accented letters) are fully supported.** `Á`, `é`,
+`ñ`, `ü`, `ç` etc. are typically TrueType *composite* glyphs (a base glyph
++ a mark component at a fixed offset). `transforms/glyph_edit.py` detects
+them (`is_composite`), flattens them to absolute-coordinate contours via
+fontTools' own recursive `Glyph.getCoordinates()`, and runs them through
+the *exact same* transform pipeline as a simple glyph — the base and the
+accent are literally the same list of contours by that point, so the
+base's contours transform identically to the standalone base glyph, and
+the accent mark inherits the same width scale / ascender-descender warp /
+stem offset, keeping it correctly positioned relative to the transformed
+base without any separate repositioning heuristic. The glyph is
+reassembled as a plain simple glyph afterward (`set_glyph_contours` clears
+`.components`, sets `numberOfContours`) since it can no longer be
+described as untouched components at fixed offsets. `DEFAULT_GLYPH_CHARS`
+in `structural.py` includes the common accented Latin-1 letters by
+default. A composite whose component references a missing glyph name is
+skipped with a `decompose_failed: ...` reason in
+`StructuralEditReport.glyphs_skipped` — never silently dropped. See
+`tests/test_composites.py` for acute/grave/umlaut/tilde/cedilla coverage.
 
 **Known limitation — Advanced Pairs unit scaling.** Phase 2 stores an
 advanced-pair kerning value as raw pixels at whatever preview font size

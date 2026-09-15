@@ -1,10 +1,28 @@
 """
 Bridge between fontTools' glyf coordinate storage and the plain-point
 geometry helpers in geometry.py, plus the four structural transforms
-themselves. Composite glyphs (accented letters built from a base + mark)
-are skipped with a clear reason — decomposing them correctly is out of
-scope for this phase; the vast majority of a Latin font's editable letters
-(a-z, A-Z, digits, common punctuation) are simple (non-composite) glyphs.
+themselves.
+
+Composite glyphs (accented letters built from a base + mark component,
+e.g. 'e' + 'acute' -> 'é') are decomposed via `Glyph.getCoordinates()`,
+which fontTools already resolves recursively into absolute, glyph-space
+coordinates (each component's own outline placed at its stored offset).
+Because every transform in this module already operates in that same
+absolute coordinate space (width scale around x=0, ascender/descender warp
+around the font's shared baseline/cap-height, counter classification by
+winding across ALL contours, stem offset per contour), applying them to
+the flattened composite is not a special case — it's the same function
+call as for a simple glyph, and the accent mark comes along for the ride
+already correctly positioned relative to the transformed base: the same
+width scale moves it proportionally, the same y-warp stretches it if it
+sits above cap-height, the same per-contour stem offset weights it, and
+counter-hole detection runs across the true combined contour set (so a
+counter belonging to the base, e.g. the bowl of 'e', is still found
+correctly even with the accent's contour(s) mixed in).
+
+The glyph is reassembled as a plain simple glyph afterward — see
+`set_glyph_contours` — since a transformed outline can no longer be
+described as unmodified components at fixed offsets.
 """
 
 from __future__ import annotations
@@ -49,16 +67,41 @@ def _flatten_contours(contours: list[list[geo.Point]]):
     return coords, flags, end_pts
 
 
+def is_composite(glyph: Glyph) -> bool:
+    return glyph.isComposite()
+
+
 def get_glyph_contours(glyph: Glyph, glyf_table) -> list[list[geo.Point]] | None:
-    """Returns None (with the caller expected to skip) for composite glyphs or empty glyphs."""
-    if glyph.numberOfContours <= 0:
-        return None  # composite (<0) or empty (0, e.g. space)
+    """
+    Returns None (caller should skip and report why) only for a genuinely
+    empty glyph (e.g. space, numberOfContours == 0). Composite glyphs are
+    flattened to their absolute-coordinate contours via
+    `Glyph.getCoordinates()`, which fontTools resolves recursively —
+    nested composites (component-of-a-component) come out flat too.
+    """
+    if glyph.numberOfContours == 0:
+        return None  # empty glyph, e.g. space — nothing to transform
     coords, end_pts, flags = glyph.getCoordinates(glyf_table)
+    if not end_pts:
+        return None
     return _split_contours(coords, flags, end_pts)
 
 
 def set_glyph_contours(glyph: Glyph, glyf_table, contours: list[list[geo.Point]]) -> None:
+    """
+    Writes `contours` back as a plain SIMPLE glyph. If `glyph` was a
+    composite, this is where it gets reassembled into one real outline —
+    a transformed glyph can't stay described as untouched components at
+    fixed offsets, since the components no longer match the font's
+    unmodified originals (requirement: composites must not remain "live"
+    references after a transform).
+    """
     coords, flags, end_pts = _flatten_contours(contours)
+    if hasattr(glyph, 'components'):
+        del glyph.components
+    if hasattr(glyph, 'program'):
+        del glyph.program  # any composite/hinting bytecode is invalid against the new outline
+    glyph.numberOfContours = len(end_pts)
     glyph.coordinates = GlyphCoordinates(coords)
     glyph.flags = bytearray(flags)
     glyph.endPtsOfContours = end_pts
