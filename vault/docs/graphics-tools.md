@@ -3,7 +3,17 @@
 The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles forty-two tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
-**Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
+**Backend:** `vault/server/routes/graphics.js` (thin index, mounted at `/api/graphics`) requiring per-group route modules under `vault/server/routes/graphics/`:
+- `shared.js` — comfy/FAL/Replicate generation core, upscale/background-removal helpers, cross-cutting utilities (`clampInt`, `outputFormatFor`, `GRAVITY_MAP`, `SOCIAL_PRESETS`, `CONVERT_FORMATS`, `dataUrlToBuffer`, etc.), and the shared `/fetch-url` import-by-URL route
+- `create.js` — Generate, Animate (+ `/models`, `/status`, `/refine`, `/preflight`, `/gallery`)
+- `optimise.js` — Upscale, Convert (+`runConvert`), Compress (+`runCompress`), Batch, Export for Social, Print Ready, Auto-enhance
+- `transform.js` — Social presets, Crop/Resize (+`runResize`), Canvas Extend, Perspective, Smart Crop
+- `enhance.js` — Pipeline, Effects, Adjust, Color Grading
+- `compose.js` — Watermark (+`runWatermark`), Text, Composite, Collage, Favicon, Vectorize, AI Icon Library, Batch Text
+- `retouch.js` — Extract, Inpaint, Background, Recolor
+- `analyse.js` — Diff, Metadata/Strip-metadata, Blur Detection
+
+`runConvert`/`runResize`/`runCompress`/`runWatermark` are each defined once in their owning module and imported by `optimise.js`'s batch/export-social paths — single-image and batch routes never duplicate logic. Route paths, methods, and request/response shapes are unchanged from the previous single-file layout; this was a pure file-organization split (2026-09-15).
 **Local dev:** `npm run dev` from `vault/` (Vite `5173` + Vault server `3001`).
 
 ---
