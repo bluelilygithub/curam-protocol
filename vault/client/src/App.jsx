@@ -32,6 +32,7 @@ import NewsDigestPage from './pages/NewsDigestPage';
 import SharesPage from './pages/SharesPage';
 import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
+import FontsPage from './pages/FontsPage';
 import VideosPage from './pages/VideosPage';
 import RecipesPage from './pages/RecipesPage';
 import PdfPage from './pages/PdfPage';
@@ -160,6 +161,7 @@ function App() {
               <Route path="/shares" element={<SharesPage />} />
               <Route path="/youtube" element={<YoutubePage />} />
               <Route path="/graphics" element={<GraphicsPage />} />
+              <Route path="/fonts" element={<FontsPage />} />
               <Route path="/videos" element={<VideosPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/pdf" element={<PdfPage />} />
