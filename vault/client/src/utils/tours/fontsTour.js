@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_fonts_completed';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 10;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -113,19 +113,36 @@ export function startFontsTour() {
   });
 
   tour.addStep({
-    id: 'fonts-download',
-    title: 'Download — Give It a Real Name',
-    text: "Type a genuinely new family name (required — the font's OFL license forbids redistributing it under its own name) and download. This reuses the settings you're already previewing — no transform is re-run, just the final rename + your chosen file formats. Nothing is saved anywhere else, so download before you navigate away.",
-    attachTo: { element: '[data-tour="fonts-download"]', on: 'left' },
+    id: 'fonts-effect',
+    title: 'Text Effect (Optional)',
+    text: "A small set of Google's own CSS text effects — fire, neon, emboss, outline, layered shadow — applied on top of the preview. Pure CSS, saved with the font project below, never baked into the exported file itself.",
+    attachTo: { element: '[data-tour="fonts-effect"]', on: 'left' },
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
-    id: 'fonts-presets',
-    title: 'Saved Settings (Optional)',
-    text: "Save your current Transforms + Kerning as a named preset under \"Saved settings\" — it stores the recipe, not a rendered result, so you can reapply it to a completely different font later.",
+    id: 'fonts-my-fonts',
+    title: 'My Fonts — Save & Come Back Later',
+    text: "\"Save this font\" (below) stores the Google Font + your Transforms/Kerning/Effect to your account for real — reopen it anytime from My Fonts, above the search box, on any device. Unlike the browser-only preset below it, this remembers WHICH font too, not just the slider values.",
     when: { show() { injectStepCounter(8); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
+    id: 'fonts-download',
+    title: 'Download — Give It a Real Name',
+    text: "Type a genuinely new family name (required — the font's OFL license forbids redistributing it under its own name) and download. This reuses the settings you're already previewing — no transform is re-run, just the final rename + your chosen file formats. Nothing is downloaded automatically, so do this before you navigate away.",
+    attachTo: { element: '[data-tour="fonts-download"]', on: 'left' },
+    when: { show() { injectStepCounter(9); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
+    id: 'fonts-presets',
+    title: 'Saved Settings (Browser-Only, Optional)',
+    text: "Save your current Transforms + Kerning as a named preset under \"Saved settings\" — recipe only, no font, stored in this browser. Reapplicable to any font you load. For something that follows you across devices, use \"Save this font\" / My Fonts instead.",
+    when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),
       {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
+import { loadGoogleFontPreview } from './loadGoogleFontPreview';
 
 let catalogCache = null; // module-level — shared across mounts within this tab session, avoids refetch on every open
 
@@ -12,17 +13,20 @@ async function loadCatalog() {
   return data;
 }
 
-const MAX_RESULTS = 20;
+const MAX_RESULTS = 30;
 
 /**
- * Search/autocomplete over the server-cached, OFL-filtered Google Fonts
- * catalog (see server/services/fontGoogleCatalog.js). Selecting a result
- * just sets the family name text — the actual fetch/freeze/license-check
- * still runs for real at load time via the existing fetch/freeze pipeline,
- * unchanged; this is a discovery layer in front of it, not a new source
- * of truth. Free-text entry (not just picking a suggestion) still works,
- * since this cache is a convenience, not authoritative — a font added to
- * google/fonts after the cache was last built just won't autocomplete.
+ * A visual, always-browsable dropdown over the server-cached, OFL-filtered
+ * Google Fonts catalog (see server/services/fontGoogleCatalog.js) — each
+ * row is rendered in its OWN typeface (lazily loaded per visible row via
+ * loadGoogleFontPreview), not plain text, so you can see what a font
+ * looks like before picking it. Opens on focus even with no text typed
+ * (browse mode, alphabetical); typing narrows it. Selecting a result just
+ * sets the family name — the actual fetch/freeze/license-check still runs
+ * for real at load time via the existing fetch/freeze pipeline, unchanged;
+ * this is a discovery layer in front of it, not a new source of truth.
+ * Free-text entry (not just picking a suggestion) still works, since this
+ * cache is a convenience, not authoritative.
  */
 export default function FontPicker({ value, onChange, onSelect, placeholder = 'e.g. PT Serif' }) {
   const [catalog, setCatalog] = useState(null);
@@ -43,8 +47,9 @@ export default function FontPicker({ value, onChange, onSelect, placeholder = 'e
   }, []);
 
   const matches = useMemo(() => {
-    if (!catalog || !value.trim()) return [];
+    if (!catalog) return [];
     const q = value.trim().toLowerCase();
+    if (!q) return catalog.families.slice(0, MAX_RESULTS); // browse mode — already alphabetical from cli_catalog.py
     return catalog.families
       .filter((f) => f.family.toLowerCase().includes(q))
       .sort((a, b) => {
@@ -54,6 +59,12 @@ export default function FontPicker({ value, onChange, onSelect, placeholder = 'e
       })
       .slice(0, MAX_RESULTS);
   }, [catalog, value]);
+
+  // Lazily load the actual webfont for every row currently on screen, so each renders in its own face.
+  useEffect(() => {
+    if (!open) return;
+    matches.forEach((f) => loadGoogleFontPreview(f.family));
+  }, [open, matches]);
 
   const select = (family) => {
     onChange(family);
@@ -88,16 +99,21 @@ export default function FontPicker({ value, onChange, onSelect, placeholder = 'e
       {open && matches.length > 0 && (
         <ul
           className="absolute z-20 left-0 right-0 mt-1 rounded overflow-y-auto"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: 260 }}
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: 340 }}
         >
           {matches.map((f) => (
             <li key={f.slug}>
               <button
                 onClick={() => select(f.family)}
-                className="w-full text-left px-3 py-2 text-sm hover:opacity-70 transition-all duration-200 flex items-center justify-between gap-2"
-                style={{ color: 'var(--color-text)' }}
+                className="w-full text-left px-3 py-2.5 hover:opacity-70 transition-all duration-200 flex items-center justify-between gap-2"
+                style={{ color: 'var(--color-text)', borderBottom: '1px solid var(--color-border)' }}
               >
-                <span>{f.family}</span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-lg leading-tight truncate" style={{ fontFamily: `'${f.family}', sans-serif` }}>
+                    {f.family}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{f.family}</span>
+                </span>
                 <span className="flex items-center gap-1.5 flex-shrink-0">
                   <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{f.category}</span>
                   <span

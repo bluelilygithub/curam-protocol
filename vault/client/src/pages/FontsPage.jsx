@@ -12,6 +12,10 @@ import { PROOFING_PRESETS, DEFAULT_PROOFING_TEXT } from './fonts/proofingPresets
 import { loadPresets, savePreset, deletePreset } from './fonts/fontPresetsStorage';
 import { findUncoveredChars } from './fonts/coverageCheck';
 import { startFontsTour, TOUR_KEY as FONTS_TOUR_KEY } from '../utils/tours/fontsTour';
+import FontTutorialModal, { DRAMATIC_DEMO, TUTORIAL_SEEN_KEY } from './fonts/FontTutorialModal';
+import { FONT_EFFECTS, effectClassName, ensureEffectLoaded } from './fonts/fontEffects';
+
+const PREVIEW_SCOPE_SELECTOR = '.font-customizer-preview-text';
 
 const PREVIEW_DEBOUNCE_MS = 700;
 let previewFontFaceCounter = 0; // each preview gets its OWN font-family name — never reuse one, to rule out any browser repaint-caching-by-family-name ambiguity
@@ -88,6 +92,18 @@ export default function FontsPage() {
   const [activeProjectId, setActiveProjectId] = useState(null); // the saved project currently loaded, if any — lets "Save" update it instead of always creating a new one
   const [loadedProjectName, setLoadedProjectName] = useState(''); // the name it had when loaded — if the user changes the name field, Save creates a new one instead of renaming the original
 
+  // Text effect (Google's font-effect CSS classes — rendering-layer only, never touches the font file; see fontEffects.js)
+  const [effect, setEffect] = useState('none');
+
+  // Tutorial modal — auto-shows on first visit, always reachable via the header button
+  const [showTutorial, setShowTutorial] = useState(() => {
+    try { return !localStorage.getItem(TUTORIAL_SEEN_KEY); } catch { return false; }
+  });
+  const closeTutorial = () => {
+    setShowTutorial(false);
+    try { localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch { /* private window — just won't remember */ }
+  };
+
   const uncoveredChars = parsedFont ? findUncoveredChars(parsedFont, coverageReport, previewText) : [];
 
   /** @returns {Promise<object|null>} the session meta on success, or null on failure — callers that need to chain (e.g. loading a saved project's recipe) await this. */
@@ -109,6 +125,7 @@ export default function FontsPage() {
       if (resetSettings) {
         setTransforms(DEFAULT_TRANSFORMS);
         setKerning(DEFAULT_KERNING);
+        setEffect('none');
       }
       setNewFamilyName('');
       setFinalBuffers({});
@@ -147,7 +164,7 @@ export default function FontsPage() {
     setSaveError('');
     setSavingProject(true);
     try {
-      const recipe = { transforms, kerning };
+      const recipe = { transforms, kerning, effect };
       const isUpdatingSameProject = activeProjectId && savingProjectName.trim() === loadedProjectName;
       const res = isUpdatingSameProject
         ? await api.put(`/api/fonts/projects/${activeProjectId}`, { name: savingProjectName.trim(), recipe })
@@ -169,6 +186,7 @@ export default function FontsPage() {
     if (!meta) return; // createSession already surfaced sessionError
     setTransforms(project.recipe?.transforms || DEFAULT_TRANSFORMS);
     setKerning(project.recipe?.kerning || DEFAULT_KERNING);
+    setEffect(project.recipe?.effect || 'none');
     setActiveProjectId(project.id);
     setSavingProjectName(project.name);
     setLoadedProjectName(project.name);
@@ -249,6 +267,23 @@ export default function FontsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, transforms, kerning]);
 
+  // Load the selected effect's CSS whenever it changes.
+  useEffect(() => {
+    ensureEffectLoaded(effect, PREVIEW_SCOPE_SELECTOR).catch(() => { /* effect just won't render — not fatal */ });
+  }, [effect]);
+
+  const runDramaticDemo = async () => {
+    setActiveProjectId(null);
+    setSavingProjectName('');
+    setSearchValue(DRAMATIC_DEMO.family);
+    const meta = await createSession(DRAMATIC_DEMO.family, { resetSettings: false });
+    if (!meta) return;
+    setTransforms(DRAMATIC_DEMO.transforms);
+    setKerning(DRAMATIC_DEMO.kerning);
+    setEffect(DRAMATIC_DEMO.effect);
+    setActivePresetId(PROOFING_PRESETS[0].id);
+  };
+
   const handleSavePreset = (name) => setPresets(savePreset(name, { transforms, kerning }));
   const handleApplyPreset = (preset) => { setTransforms(preset.transforms); setKerning(preset.kerning); };
   const handleDeletePreset = (id) => setPresets(deletePreset(id));
@@ -308,7 +343,18 @@ export default function FontsPage() {
         >
           {getIcon('compass', { size: 13 })}
         </button>
+        <button
+          onClick={() => setShowTutorial(true)}
+          title="How this works (dramatic example)"
+          style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+        >
+          {getIcon('sparkles', { size: 13 })}
+        </button>
       </div>
+
+      {showTutorial && <FontTutorialModal onClose={closeTutorial} onRunDemo={runDramaticDemo} />}
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
@@ -428,7 +474,16 @@ export default function FontsPage() {
                   </div>
                 )}
                 {previewReady ? (
-                  <span style={{ fontSize: 56, lineHeight: 1.2, color: 'var(--color-text)', fontFamily: `'${activeFontFamily}', sans-serif` }}>
+                  <span
+                    className={`font-customizer-preview-text ${effectClassName(effect)}`}
+                    style={{
+                      fontSize: 56,
+                      lineHeight: 1.2,
+                      fontFamily: `'${activeFontFamily}', sans-serif`,
+                      // An active effect supplies its own color/background-clip — don't fight it with an inline color.
+                      ...(effect === 'none' ? { color: 'var(--color-text)' } : {}),
+                    }}
+                  >
                     {previewText || DEFAULT_PROOFING_TEXT}
                   </span>
                 ) : (
@@ -449,6 +504,22 @@ export default function FontsPage() {
           <div className="w-80 flex-shrink-0 overflow-y-auto p-5 space-y-6" style={{ background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border)' }}>
             <FontTransformControls transforms={transforms} onChange={setTransforms} />
             <FontKerningPanel kerning={kerning} onChange={setKerning} />
+
+            <div data-tour="fonts-effect">
+              <Tooltip text="A small set of Google's own CSS text effects (fire, neon, emboss, outline, layered shadow) applied on top of the preview — CSS only, saved with the font project, never baked into the exported file itself.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Text effect</span>
+              </Tooltip>
+              <select
+                value={effect}
+                onChange={(e) => setEffect(e.target.value)}
+                className="w-full rounded px-2 py-1.5 text-sm mt-1"
+                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {FONT_EFFECTS.map((e) => (
+                  <option key={e.id} value={e.id}>{e.label}</option>
+                ))}
+              </select>
+            </div>
 
             <div data-tour="fonts-save-project">
               <Tooltip text="Saves this exact font + Transforms + Kerning to your account — reopen it anytime from My Fonts above, on any device. Unlike Saved settings below, this remembers WHICH font too, not just the slider values.">
