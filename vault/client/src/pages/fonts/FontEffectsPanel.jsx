@@ -49,6 +49,7 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
   const [parsedFont, setParsedFont] = useState(null); // the same opentype.js Font used for coverage checking — reused for SVG export, never re-parsed separately
   const [svgMarkup, setSvgMarkup] = useState('');
   const [svgError, setSvgError] = useState('');
+  const [downloadBuffers, setDownloadBuffers] = useState({}); // { ttf?, woff2?, otf?: ArrayBuffer } — actual font file bytes, kept so they can be saved (nothing is persisted server-side)
 
   // Load the real exported font via FontFace + @font-face — never opentype.js/canvas rendering here.
   const loadFontFromBuffer = useCallback(async (buffer, fallbackName, via) => {
@@ -86,6 +87,8 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
   const handleFontFile = useCallback(async (file) => {
     if (!file) return;
     const buffer = await file.arrayBuffer();
+    const ext = (file.name.match(/\.(ttf|otf|woff2)$/i)?.[1] || 'ttf').toLowerCase();
+    setDownloadBuffers({ [ext]: buffer }); // only the one file dropped — the others (if any) were never sent to the browser on this path
     await loadFontFromBuffer(buffer, file.name.replace(/\.[^.]+$/, ''), 'manual');
   }, [loadFontFromBuffer]);
 
@@ -99,6 +102,13 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
     const dataUrl = pendingExport.formats.ttf || pendingExport.formats.otf || pendingExport.formats.woff2;
     if (!dataUrl) return;
     (async () => {
+      // Keep every format the export produced — this is the ONLY chance to
+      // save them; nothing is persisted server-side (see the header note).
+      const buffers = {};
+      for (const [fmt, url] of Object.entries(pendingExport.formats)) {
+        buffers[fmt] = dataUrlToArrayBuffer(url);
+      }
+      setDownloadBuffers(buffers);
       await loadFontFromBuffer(dataUrlToArrayBuffer(dataUrl), 'exported-font', 'export');
       setCoverageReport(pendingExport.report);
       setReportError('');
@@ -196,6 +206,20 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
     URL.revokeObjectURL(url);
   };
 
+  const FORMAT_MIME = { ttf: 'font/ttf', otf: 'font/otf', woff2: 'font/woff2' };
+
+  const downloadFontFile = (fmt) => {
+    const buffer = downloadBuffers[fmt];
+    if (!buffer) return;
+    const blob = new Blob([buffer], { type: FORMAT_MIME[fmt] || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slugify(familyName)}.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex h-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
@@ -206,6 +230,25 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
             Color, shadow, and image-fill here are CSS only; they never touch the font file.
           </p>
         </div>
+
+        {fontReady && Object.keys(downloadBuffers).length > 0 && (
+          <div className="rounded-lg p-3 flex flex-wrap items-center gap-2" style={{ background: 'rgba(204,120,92,0.08)', border: '1px solid var(--color-primary)' }} data-tour="fonts-effects-download">
+            <Tooltip text="Nothing here is saved on the server — this is your only chance to keep these files. Download now, before you navigate away or close this tab.">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Download your font:</span>
+            </Tooltip>
+            {['ttf', 'woff2', 'otf'].filter((fmt) => downloadBuffers[fmt]).map((fmt) => (
+              <Tooltip key={fmt} text={`Save the .${fmt} file to your computer.`}>
+                <button
+                  onClick={() => downloadFontFile(fmt)}
+                  className="text-xs px-3 py-1 rounded uppercase hover:opacity-70 transition-all duration-200"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}
+                >
+                  .{fmt}
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-tour="fonts-effects-loader">
           <div className="rounded-lg p-4 flex items-center gap-3" style={{ background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}>

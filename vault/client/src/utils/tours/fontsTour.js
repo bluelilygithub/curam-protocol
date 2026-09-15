@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_fonts_completed';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -177,33 +177,43 @@ export function startFontsTour(setPageMode, setActiveTab) {
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 12: Fill & Shadows ───────────────────────────────────────────────
+  // ── Step 12: Download the font ───────────────────────────────────────────
+  tour.addStep({
+    id: 'fonts-effects-download',
+    title: 'Download Your Font — Do This Now',
+    text: "Nothing in this tool is saved on the server — no library, no history. This is your only chance to keep the .ttf/.woff2/.otf files. Download them now, before you navigate away or close the tab.",
+    attachTo: { element: '[data-tour="fonts-effects-download"]', on: 'bottom' },
+    when: { show() { injectStepCounter(12); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  // ── Step 13: Fill & Shadows ───────────────────────────────────────────────
   tour.addStep({
     id: 'fonts-effects-fill',
     title: 'Fill & Shadows',
     text: "Solid color, gradient, or an image/texture clipped to the text — plus layered shadows for depth. All CSS, applied live; none of this touches the font file itself.",
     attachTo: { element: '[data-tour="fonts-effects-fill"]', on: 'left' },
-    when: { show() { injectStepCounter(12); } },
+    when: { show() { injectStepCounter(13); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 13: CSS snippet ─────────────────────────────────────────────────
+  // ── Step 14: CSS snippet ─────────────────────────────────────────────────
   tour.addStep({
     id: 'fonts-effects-css',
     title: 'Copy the CSS',
     text: "Once you're happy with the look, Copy CSS grabs a ready-to-paste snippet — the real @font-face rule plus your fill/shadow styling — for a web project.",
     attachTo: { element: '[data-tour="fonts-effects-css"]', on: 'top' },
-    when: { show() { injectStepCounter(13); } },
+    when: { show() { injectStepCounter(14); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 14: Print handoff ───────────────────────────────────────────────
+  // ── Step 15: Print handoff ───────────────────────────────────────────────
   tour.addStep({
     id: 'fonts-print-handoff',
     title: 'Print Handoff — Outlined SVG',
     text: "For a print vendor or Illustrator/InDesign, Export Outlined SVG flattens your text to vector paths with the color/shadow baked in — no font installation needed on the other end. It's complementary to the real font file, not a replacement: install the actual font if you still need editable text in a layout.",
     attachTo: { element: '[data-tour="fonts-print-handoff"]', on: 'top' },
-    when: { show() { injectStepCounter(14); } },
+    when: { show() { injectStepCounter(15); } },
     buttons: [
       btnBack(),
       {
