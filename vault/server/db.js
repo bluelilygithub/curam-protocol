@@ -725,6 +725,21 @@ async function initSchema() {
     `);
     await client.query(`ALTER TABLE student_quiz_attempts ADD COLUMN IF NOT EXISTS "performanceSummary" JSONB`);
 
+    // ── Font Customizer saved projects ──────────────────────────────────────
+    // Stores the transform/kerning RECIPE, not a rendered font file — reopening
+    // re-runs fetch+freeze against the same Google Font family and reapplies it.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS font_projects (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        "googleFont"    TEXT NOT NULL,
+        recipe          JSONB NOT NULL DEFAULT '{}',
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ── Graphics gallery ──────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS graphics_gallery (

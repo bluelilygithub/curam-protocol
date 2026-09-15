@@ -1,13 +1,17 @@
 'use strict';
 
 /**
- * Font Customizer API. Bridges Phase 5's frontend (client/src/pages/fonts/)
- * to the Phase 1-4 Python pipeline (server/services/fonts/) via
- * fontExportPipeline.js. Stateless, dataUrl-in/dataUrl-out — same
- * convention as PDF Tools — no DB table, no persistence.
+ * Font Customizer API. Bridges the frontend (client/src/pages/fonts/) to
+ * the Python pipeline (server/services/fonts/) via fontExportPipeline.js.
+ * The transform/export calls themselves are stateless, dataUrl-in/
+ * dataUrl-out — same convention as PDF Tools. Saved projects (below) are
+ * the one piece of real persistence: they store the recipe (Google Font
+ * name + transform/kerning settings), not a rendered font file — reopening
+ * one re-fetches the font fresh and reapplies the saved recipe.
  */
 
 const express = require('express');
+const { pool } = require('../db');
 const { runFontExport, runFontFetchFreeze } = require('../services/fontExportPipeline');
 const { getCatalog } = require('../services/fontGoogleCatalog');
 const sessionCache = require('../services/fontSessionCache');
@@ -42,6 +46,77 @@ router.post('/catalog/refresh', async (req, res) => {
   } catch (err) {
     console.error('Font catalog refresh:', err);
     res.status(500).json({ error: err.message || 'Could not refresh the font catalog.' });
+  }
+});
+
+// ── Saved projects (real persistence — recipe only, not a rendered font) ──
+
+// GET /api/fonts/projects — list the caller's saved projects, newest first.
+router.get('/projects', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, "googleFont", recipe, "createdAt", "updatedAt"
+       FROM font_projects WHERE "userId" = $1 ORDER BY "updatedAt" DESC`,
+      [req.user.id],
+    );
+    res.json({ projects: rows });
+  } catch (err) {
+    console.error('Font projects list:', err);
+    res.status(500).json({ error: 'Could not load saved fonts.' });
+  }
+});
+
+// POST /api/fonts/projects — { name, googleFont, recipe } → creates a new saved project.
+router.post('/projects', async (req, res) => {
+  try {
+    const { name, googleFont, recipe } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'A name is required to save.' });
+    if (!googleFont?.trim()) return res.status(400).json({ error: 'No font to save — load one first.' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO font_projects ("userId", name, "googleFont", recipe)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, "googleFont", recipe, "createdAt", "updatedAt"`,
+      [req.user.id, name.trim(), googleFont.trim(), JSON.stringify(recipe || {})],
+    );
+    res.json({ project: rows[0] });
+  } catch (err) {
+    console.error('Font project save:', err);
+    res.status(500).json({ error: 'Could not save this font.' });
+  }
+});
+
+// PUT /api/fonts/projects/:id — { name?, recipe? } → updates an existing saved project (e.g. after further edits).
+router.put('/projects/:id', async (req, res) => {
+  try {
+    const { name, recipe } = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE font_projects
+       SET name = COALESCE($1, name), recipe = COALESCE($2, recipe), "updatedAt" = NOW()
+       WHERE id = $3 AND "userId" = $4
+       RETURNING id, name, "googleFont", recipe, "createdAt", "updatedAt"`,
+      [name?.trim() || null, recipe ? JSON.stringify(recipe) : null, req.params.id, req.user.id],
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Saved font not found.' });
+    res.json({ project: rows[0] });
+  } catch (err) {
+    console.error('Font project update:', err);
+    res.status(500).json({ error: 'Could not update this saved font.' });
+  }
+});
+
+// DELETE /api/fonts/projects/:id
+router.delete('/projects/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM font_projects WHERE id = $1 AND "userId" = $2`,
+      [req.params.id, req.user.id],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Saved font not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Font project delete:', err);
+    res.status(500).json({ error: 'Could not delete this saved font.' });
   }
 });
 

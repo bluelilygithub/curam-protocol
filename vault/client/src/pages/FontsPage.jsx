@@ -78,10 +78,21 @@ export default function FontsPage() {
   const [downloading, setDownloading] = useState(false);
   const [finalBuffers, setFinalBuffers] = useState({}); // { ttf?, woff2?, otf? } from the last Download-with-real-name call
 
+  // Saved projects (server-persisted — the actual "save this font, come back to it later" feature)
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState('');
+  const [savingProjectName, setSavingProjectName] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [activeProjectId, setActiveProjectId] = useState(null); // the saved project currently loaded, if any — lets "Save" update it instead of always creating a new one
+  const [loadedProjectName, setLoadedProjectName] = useState(''); // the name it had when loaded — if the user changes the name field, Save creates a new one instead of renaming the original
+
   const uncoveredChars = parsedFont ? findUncoveredChars(parsedFont, coverageReport, previewText) : [];
 
-  const createSession = useCallback(async (family) => {
-    if (!family || !family.trim()) return;
+  /** @returns {Promise<object|null>} the session meta on success, or null on failure — callers that need to chain (e.g. loading a saved project's recipe) await this. */
+  const createSession = useCallback(async (family, { resetSettings = true } = {}) => {
+    if (!family || !family.trim()) return null;
     setSessionError('');
     setSessionLoading(true);
     setPreviewReady(false);
@@ -95,16 +106,84 @@ export default function FontsPage() {
       if (!res.ok) throw new Error(data.error || 'Could not load this font.');
       setSessionId(data.sessionId);
       setSessionMeta(data.meta);
-      setTransforms(DEFAULT_TRANSFORMS);
-      setKerning(DEFAULT_KERNING);
+      if (resetSettings) {
+        setTransforms(DEFAULT_TRANSFORMS);
+        setKerning(DEFAULT_KERNING);
+      }
       setNewFamilyName('');
       setFinalBuffers({});
+      return data.meta;
     } catch (err) {
       setSessionError(err.message || 'Could not load this font.');
+      return null;
     } finally {
       setSessionLoading(false);
     }
   }, []);
+
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    setProjectsError('');
+    try {
+      const res = await api.get('/api/fonts/projects');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load saved fonts.');
+      setProjects(data.projects || []);
+    } catch (err) {
+      setProjectsError(err.message || 'Could not load saved fonts.');
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  const saveProject = async () => {
+    if (!sessionMeta?.family) return;
+    if (!savingProjectName.trim()) {
+      setSaveError('Give it a name to save.');
+      return;
+    }
+    setSaveError('');
+    setSavingProject(true);
+    try {
+      const recipe = { transforms, kerning };
+      const isUpdatingSameProject = activeProjectId && savingProjectName.trim() === loadedProjectName;
+      const res = isUpdatingSameProject
+        ? await api.put(`/api/fonts/projects/${activeProjectId}`, { name: savingProjectName.trim(), recipe })
+        : await api.post('/api/fonts/projects', { name: savingProjectName.trim(), googleFont: sessionMeta.family, recipe });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save this font.');
+      setActiveProjectId(data.project.id);
+      setLoadedProjectName(data.project.name);
+      await loadProjects();
+    } catch (err) {
+      setSaveError(err.message || 'Could not save this font.');
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const loadProject = async (project) => {
+    const meta = await createSession(project.googleFont, { resetSettings: false });
+    if (!meta) return; // createSession already surfaced sessionError
+    setTransforms(project.recipe?.transforms || DEFAULT_TRANSFORMS);
+    setKerning(project.recipe?.kerning || DEFAULT_KERNING);
+    setActiveProjectId(project.id);
+    setSavingProjectName(project.name);
+    setLoadedProjectName(project.name);
+  };
+
+  const deleteProject = async (id) => {
+    try {
+      const res = await api.delete(`/api/fonts/projects/${id}`);
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error); }
+      if (activeProjectId === id) setActiveProjectId(null);
+      await loadProjects();
+    } catch (err) {
+      setProjectsError(err.message || 'Could not delete this saved font.');
+    }
+  };
 
   // Debounced real preview — runs transform+export against the cached
   // base font (fast: no re-fetch) every time transforms/kerning settle.
@@ -233,16 +312,50 @@ export default function FontsPage() {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
+          {(projects.length > 0 || projectsLoading) && (
+            <div data-tour="fonts-my-fonts">
+              <Tooltip text="Fonts you've saved — reopening re-fetches the Google Font fresh and reapplies these exact settings. This is real, server-side persistence, not a browser-only preset.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>My Fonts</span>
+              </Tooltip>
+              {projectsError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{projectsError}</p>}
+              <div className="flex flex-wrap gap-2 mt-1">
+                {projects.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-1.5 rounded px-2 py-1.5"
+                    style={{ background: activeProjectId === p.id ? 'var(--color-primary)' : 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+                  >
+                    <button
+                      onClick={() => loadProject(p)}
+                      className="text-sm hover:opacity-70 transition-all duration-200"
+                      style={{ color: activeProjectId === p.id ? '#fff' : 'var(--color-text)' }}
+                    >
+                      {p.name} <span className="text-xs" style={{ color: activeProjectId === p.id ? 'rgba(255,255,255,0.7)' : 'var(--color-muted)' }}>({p.googleFont})</span>
+                    </button>
+                    <button
+                      onClick={() => deleteProject(p.id)}
+                      className="hover:opacity-70 transition-all duration-200"
+                      style={{ color: activeProjectId === p.id ? '#fff' : 'var(--color-muted)' }}
+                      title="Delete"
+                    >
+                      {getIcon('trash', { size: 12 })}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div data-tour="fonts-search">
             <Tooltip text="Search Google Fonts (OFL-licensed only) — click a result or press Enter to load it. Variable fonts are automatically frozen to a static instance before editing.">
               <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Google Font</span>
             </Tooltip>
             <div className="flex items-start gap-2 mt-1">
               <div className="flex-1">
-                <FontPicker value={searchValue} onChange={setSearchValue} onSelect={createSession} />
+                <FontPicker value={searchValue} onChange={setSearchValue} onSelect={(f) => { setActiveProjectId(null); setSavingProjectName(''); createSession(f); }} />
               </div>
               <button
-                onClick={() => createSession(searchValue)}
+                onClick={() => { setActiveProjectId(null); setSavingProjectName(''); createSession(searchValue); }}
                 disabled={!searchValue.trim() || sessionLoading}
                 className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)', color: '#fff' }}
@@ -337,8 +450,35 @@ export default function FontsPage() {
             <FontTransformControls transforms={transforms} onChange={setTransforms} />
             <FontKerningPanel kerning={kerning} onChange={setKerning} />
 
+            <div data-tour="fonts-save-project">
+              <Tooltip text="Saves this exact font + Transforms + Kerning to your account — reopen it anytime from My Fonts above, on any device. Unlike Saved settings below, this remembers WHICH font too, not just the slider values.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Save this font</span>
+              </Tooltip>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  value={savingProjectName}
+                  onChange={(e) => setSavingProjectName(e.target.value)}
+                  placeholder="e.g. Bold Roboto Draft"
+                  className="flex-1 rounded px-2 py-1.5 text-sm"
+                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                />
+                <button
+                  onClick={saveProject}
+                  disabled={savingProject || !savingProjectName.trim()}
+                  className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}
+                >
+                  {savingProject ? '…' : (activeProjectId && savingProjectName.trim() === loadedProjectName ? 'Update' : 'Save')}
+                </button>
+              </div>
+              {saveError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{saveError}</p>}
+              {activeProjectId && savingProjectName.trim() === loadedProjectName && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Updating "{loadedProjectName}" — or change the name to save as a separate copy instead.</p>
+              )}
+            </div>
+
             <details>
-              <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>Saved settings</summary>
+              <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>Saved settings (recipe only, no font)</summary>
               <div className="mt-2">
                 <FontPresetsPanel presets={presets} onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset} />
               </div>

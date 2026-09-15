@@ -151,15 +151,89 @@ def apply_extend_ascender_descender(contours: list[list[geo.Point]], baseline_y:
     return [geo.warp_y_ascender_descender(c, baseline_y, cap_height_y, factor) for c in contours]
 
 
+def _max_safe_counter_scale(counter_bounds, outer_bounds, cx, cy, margin=0.85) -> float:
+    """
+    The largest scale factor (>=1) a counter can grow to, around its own
+    centroid (cx, cy), before its bounding box would reach the outer
+    shape's bounding box — with `margin` headroom so it stops short of
+    touching, not just short of crossing. `margin < 1` is real, deliberate
+    conservatism: even "not crossing" can leave a stroke too thin to read
+    cleanly once rasterized, and the alternative failure (a bowl visibly
+    severed from its stem — see the real bug this guards against) is far
+    worse than a counter that grows slightly less than requested.
+    Returns a very large number (effectively unbounded) if there's no
+    outer contour to clamp against, or if the counter has zero extent on
+    every side (degenerate) — callers should already guard the latter case.
+    """
+    cx0, cy0, cx1, cy1 = counter_bounds
+    ox0, oy0, ox1, oy1 = outer_bounds
+
+    limits = []
+    # For each side, how far can the counter's edge move before it reaches
+    # the outer boundary on that side, expressed as a scale factor on the
+    # centroid-to-edge distance: edge_dist * s = room at the boundary
+    # itself (s = room / edge_dist), so blend from "no growth" (s=1) to
+    # "exactly touching" (s = room/edge_dist) by `margin`.
+    for edge_dist, room in (
+        (cx - cx0, cx - ox0),   # left
+        (cx1 - cx, ox1 - cx),   # right
+        (cy - cy0, cy - oy0),   # bottom
+        (cy1 - cy, oy1 - cy),   # top
+    ):
+        if edge_dist > 1e-6 and room > 0:
+            touch_scale = room / edge_dist
+            limits.append(1 + (touch_scale - 1) * margin)
+    return min(limits) if limits else 1e9
+
+
+def _find_enclosing_outer_bounds(counter_bounds, outer_contours):
+    """
+    The specific outer contour that actually encloses this counter (e.g.
+    'b's bowl, not its stem — a glyph can have multiple unrelated outer
+    contours, and clamping against their combined bounding box is too
+    permissive: the union spans both, so it doesn't reflect the tight
+    boundary that actually matters for THIS counter). Prefers a contour
+    whose bbox strictly contains the counter's; falls back to the
+    smallest-area outer contour whose bbox overlaps it at all.
+    """
+    cx0, cy0, cx1, cy1 = counter_bounds
+    containing = []
+    overlapping = []
+    for oc in outer_contours:
+        ob = geo.bounds(oc)
+        ox0, oy0, ox1, oy1 = ob
+        area = (ox1 - ox0) * (oy1 - oy0)
+        if ox0 <= cx0 and oy0 <= cy0 and ox1 >= cx1 and oy1 >= cy1:
+            containing.append((area, ob))
+        elif ox0 < cx1 and ox1 > cx0 and oy0 < cy1 and oy1 > cy0:
+            overlapping.append((area, ob))
+    if containing:
+        return min(containing, key=lambda t: t[0])[1]
+    if overlapping:
+        return min(overlapping, key=lambda t: t[0])[1]
+    return None
+
+
 def apply_counter_width(contours: list[list[geo.Point]], factor: float) -> list[list[geo.Point]]:
     if factor == 0 or len(contours) < 2:
         return contours
     roles = classify_outer_vs_counter(contours)
+    outer_contours = [c for c, r in zip(contours, roles) if r == 'outer']
+
+    requested_scale = 1 + factor / 100
     out = []
     for contour, role in zip(contours, roles):
         if role == 'outer':
             out.append(contour)
             continue
         cx, cy = geo.centroid(contour)
-        out.append(geo.scale_around(contour, cx, cy, 1 + factor / 100))
+        scale = requested_scale
+        # Only clamp growth (>1) toward the outer boundary — shrinking a
+        # counter (factor < 0, scale < 1) can never collide with it.
+        if scale > 1 and outer_contours:
+            enclosing_bounds = _find_enclosing_outer_bounds(geo.bounds(contour), outer_contours)
+            if enclosing_bounds is not None:
+                max_safe = _max_safe_counter_scale(geo.bounds(contour), enclosing_bounds, cx, cy)
+                scale = min(scale, max(1.0, max_safe))
+        out.append(geo.scale_around(contour, cx, cy, scale))
     return out
