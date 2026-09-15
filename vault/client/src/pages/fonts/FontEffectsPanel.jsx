@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { findUncoveredChars } from './coverageCheck';
 import { DEFAULT_FILL, DEFAULT_SHADOW, buildCssSnippet, buildPreviewStyle } from './effectsCss';
+import { buildOutlinedSvg } from './svgExport';
 
 const PREVIEW_DEFAULT_TEXT = 'Handgloves';
 
@@ -45,6 +46,9 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
   const [shadows, setShadows] = useState([]);
   const [uncoveredChars, setUncoveredChars] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [parsedFont, setParsedFont] = useState(null); // the same opentype.js Font used for coverage checking — reused for SVG export, never re-parsed separately
+  const [svgMarkup, setSvgMarkup] = useState('');
+  const [svgError, setSvgError] = useState('');
 
   // Load the real exported font via FontFace + @font-face — never opentype.js/canvas rendering here.
   const loadFontFromBuffer = useCallback(async (buffer, fallbackName, via) => {
@@ -56,6 +60,7 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
       // Read the real renamed family name straight from the exported
       // font's own name table (metadata inspection, not rendering).
       const parsed = opentype.parse(buffer.slice(0));
+      setParsedFont(parsed); // same parsed object reused by coverage check AND SVG export — one source of truth
       const family = parsed.names?.fontFamily?.en || fallbackName;
       setFamilyName(family);
 
@@ -64,6 +69,8 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
       document.fonts.add(fontFace);
       setFontReady(true);
       setLoadedVia(via);
+      setSvgMarkup('');
+      setSvgError('');
     } catch (err) {
       setLoadError(`Could not load this font file: ${err.message}`);
       setFontReady(false);
@@ -113,12 +120,17 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
 
   // Coverage check re-runs whenever the font, report, or preview text changes.
   useEffect(() => {
-    if (!fontBuffer) {
+    if (!parsedFont) {
       setUncoveredChars([]);
       return;
     }
-    setUncoveredChars(findUncoveredChars(fontBuffer.slice(0), coverageReport, previewText));
-  }, [fontBuffer, coverageReport, previewText]);
+    setUncoveredChars(findUncoveredChars(parsedFont, coverageReport, previewText));
+  }, [parsedFont, coverageReport, previewText]);
+
+  // Invalidate a previously-generated SVG once its inputs change, rather than leaving a stale export on screen.
+  useEffect(() => {
+    setSvgMarkup('');
+  }, [previewText, fill, shadows, parsedFont]);
 
   const updateShadow = (index, patch) => {
     setShadows((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
@@ -146,6 +158,33 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
     } catch {
       // clipboard blocked (permissions) — snippet is still selectable/visible in the <pre>
     }
+  };
+
+  const generateSvg = () => {
+    setSvgError('');
+    if (uncoveredChars.length > 0) return; // belt-and-suspenders — button is already disabled in this state
+    if (!parsedFont) {
+      setSvgError('Font not loaded yet.');
+      return;
+    }
+    try {
+      const svg = buildOutlinedSvg(parsedFont, previewText || PREVIEW_DEFAULT_TEXT, 120, fill, shadows);
+      setSvgMarkup(svg);
+    } catch (err) {
+      setSvgError(`Could not generate SVG: ${err.message}`);
+      setSvgMarkup('');
+    }
+  };
+
+  const downloadSvg = () => {
+    if (!svgMarkup) return;
+    const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slugify(familyName)}-outlined.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -248,6 +287,50 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
               Update the <code>src url()</code> to wherever you host <code>{woff2Filename}</code> — this is your exported Phase 4 file, unchanged.
             </p>
+          </div>
+        )}
+
+        {fontReady && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Tooltip text="Flattens the current text + effects to vector paths — no font installation needed by whoever opens the file. Complementary to the real font file, not a replacement: for editable text in a layout (e.g. InDesign before final flatten), install and use the actual .otf/.ttf instead.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Print handoff — Outlined SVG</span>
+              </Tooltip>
+              <button
+                onClick={generateSvg}
+                disabled={uncoveredChars.length > 0}
+                className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                Export Outlined SVG
+              </button>
+            </div>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              For a print vendor or Illustrator/InDesign import — glyph outlines as flattened vector paths, color/
+              shadow/image-fill baked in. Complementary to the real font file above; use the actual font when you
+              still need editable text.
+            </p>
+            {uncoveredChars.length > 0 && (
+              <p className="text-xs" style={{ color: '#ef4444' }}>
+                Fix the character coverage issue above before exporting — an outlined SVG can't fall back for a
+                missing glyph either.
+              </p>
+            )}
+            {svgError && <p className="text-xs" style={{ color: '#ef4444' }}>{svgError}</p>}
+            {svgMarkup && (
+              <div>
+                <div
+                  className="rounded p-4 flex items-center justify-center overflow-hidden"
+                  style={{ background: '#fff', border: '1px solid var(--color-border)', minHeight: 100 }}
+                  dangerouslySetInnerHTML={{ __html: svgMarkup }}
+                />
+                <div className="flex gap-2 mt-2">
+                  <button onClick={downloadSvg} className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                    Download .svg
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

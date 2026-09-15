@@ -6,23 +6,20 @@
  *
  * Reading the exported font's cmap here (via opentype.js) is metadata
  * inspection only, not rendering — the visual preview itself always uses
- * the real @font-face, per spec.
+ * the real @font-face, per spec. Takes the already-parsed `Font` object
+ * (the same one FontEffectsPanel loaded for the live preview / SVG
+ * export) rather than re-parsing the bytes a second time — one source of
+ * truth, so this check can never disagree with what's actually rendered.
  */
-import * as opentype from 'opentype.js';
 
 /**
- * @param {ArrayBuffer} fontBuffer - the exported .woff2/.ttf/.otf bytes
+ * @param {import('opentype.js').Font | null} font - already-parsed exported font
  * @param {object} coverageReport - ExportReport.summary() JSON
  * @param {string} text - the designer's preview/output text
  * @returns {{ char: string, reason: 'skipped_at_export' | 'not_in_font', detail?: string }[]}
  */
-export function findUncoveredChars(fontBuffer, coverageReport, text) {
-  let font;
-  try {
-    font = opentype.parse(fontBuffer);
-  } catch {
-    return []; // can't inspect — caller should already be surfacing a load error separately
-  }
+export function findUncoveredChars(font, coverageReport, text) {
+  if (!font) return []; // no font loaded yet — caller is already showing that state separately
 
   const skippedByReason = new Map(
     (coverageReport?.structural_transforms_applied?.glyphs_skipped || []).map(([name, reason]) => [name, reason])
