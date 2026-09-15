@@ -112,6 +112,46 @@ async function runFontExport({ family, fontBuffer, fontExt = '.ttf', recipe, ren
 }
 
 /**
+ * Runs Phase 1's fetch+freeze ONLY (no transform, no export) — used once
+ * per font selection to populate fontSessionCache. Never accepts an
+ * uploaded font buffer (that path has no license to verify against; see
+ * the known OFL-bypass gap noted in server/services/fonts/README.md).
+ * @param {string} family - Google Fonts family name
+ * @returns {Promise<{ fontBuffer: Buffer, meta: object }>}
+ */
+async function runFontFetchFreeze(family) {
+  if (!family || !family.trim()) throw new Error('A Google Fonts family name is required.');
+
+  const id = crypto.randomUUID();
+  const tmpDir = path.join(os.tmpdir(), `vault_fonts_fetch_${id}`);
+  await fsp.mkdir(tmpDir, { recursive: true });
+
+  try {
+    const { result, triedErrors } = await runPythonModuleWithFallback(
+      ['-m', 'fonts.cli_fetch_freeze', '--family', family.trim(), '--output-dir', tmpDir],
+    );
+
+    if (!result) {
+      const err = new Error(triedErrors.join(' | ') || 'Python font pipeline is not available on this server.');
+      err.code = 'ENOENT';
+      throw err;
+    }
+    if (!result.ok) {
+      const err = new Error(result.error || 'Could not fetch this font.');
+      err.pythonErrorType = result.error_type;
+      err.code = USER_ERROR_TYPES.has(result.error_type) ? 'FONT_EXPORT_USER_ERROR' : 'FONT_EXPORT_FAILED';
+      throw err;
+    }
+
+    const fontBuffer = await fsp.readFile(path.join(tmpDir, 'frozen.ttf'));
+    const meta = JSON.parse(await fsp.readFile(path.join(tmpDir, 'meta.json'), 'utf8'));
+    return { fontBuffer, meta };
+  } finally {
+    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
  * Tries each candidate Python binary in turn (ENOENT = "not installed",
  * try the next one) running `<bin> <args>` with cwd = server/services.
  * Shared by fontExportPipeline.js and fontGoogleCatalog.js so both talk
@@ -159,4 +199,4 @@ function parseLastJsonLine(stdout) {
   }
 }
 
-module.exports = { runFontExport, runPythonModuleWithFallback, parseLastJsonLine, SERVICES_DIR };
+module.exports = { runFontExport, runFontFetchFreeze, runPythonModuleWithFallback, parseLastJsonLine, SERVICES_DIR };

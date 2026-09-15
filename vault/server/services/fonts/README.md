@@ -1,9 +1,24 @@
-# Font Customizer — Phase 1 (fetch / license / inspect / freeze)
+# Font Customizer — fetch / license / structural edit / export
 
-Standalone Python module, no server/UI wiring yet. See `vault/CLAUDE.md`'s
-architecture principle: structural edits (this phase and later phase 3)
-live here in fontTools; color/shadow/image-fill stay in the rendering layer
-(CSS/SVG), added in later phases.
+The Python pipeline described in this file is unchanged and fully wired to
+the UI. **Current architecture (see `vault/CLAUDE.md` for the exact
+routes):** the Node layer fetches+freezes a font ONCE per selection and
+caches the bytes server-side (`fontSessionCache.js`), then a lightweight
+preview endpoint runs only transform+export against those cached bytes —
+this is what the single-screen `/fonts` UI's debounced live preview calls.
+A CSS effects panel and an SVG print-export feature were built and then
+deliberately removed from the UI as over-engineered relative to the
+actual goal (search → adjust real structural properties → see real
+results → export a real file); their code remains in the repo, unused.
+
+Architecture principle unchanged: structural edits (kerning, letterform
+shape) live here in fontTools; color/shadow/image-fill belong in the
+rendering layer (CSS/SVG), not the font binary.
+
+**Known open gap:** the OFL license check only runs on the Google Fonts
+fetch path. `cli_export.py`'s `font_file` branch (an already-fetched or
+uploaded font) skips it — nothing currently stops a non-OFL font being
+renamed and exported through that path. Not fixed yet.
 
 ## Setup
 
@@ -205,12 +220,35 @@ search/autocomplete (`GET /api/fonts/catalog`, `POST /api/fonts/catalog/refresh`
   free-text entry still works for anything not yet in the cache. Used by
   `FontExportTrigger.jsx`'s "Google Font name" field.
 
+## Session cache + debounced preview (`cli_fetch_freeze.py` + `fontSessionCache.js`)
+
+The current `/fonts` UI's actual request pattern: **fetch once, preview
+many times fast.** `POST /api/fonts/session` runs `cli_fetch_freeze.py`
+(Phase 1 fetch+freeze, unmodified — the ~3-4s network-bound step) and
+caches the resulting static font bytes server-side
+(`server/services/fontSessionCache.js`, an in-memory `Map`, TTL default
+45min via `FONTS_SESSION_TTL_MS`, sliding idle window, periodic sweep —
+a server restart is just a cache miss, not an error). Every subsequent
+`POST /api/fonts/session/:id/preview` call (the debounced live preview,
+~700ms after a slider settles) reuses those cached bytes and only runs
+`apply_transform_recipe` + `export_font` — no re-fetch, ~0.3-1.2s per
+call, verified via `fontSessionCache.test.js`'s real-fontTools glyph-width
+checks. A missing/expired session returns `{code: 'SESSION_EXPIRED'}` so
+the frontend can transparently re-run `/session`, not a silent failure.
+
+The same preview endpoint serves the final download too (`formats`
+including `woff2`/`otf`, a real family name instead of a placeholder) —
+download never re-runs the transform, it reuses the identical cached
+base + recipe and only (re)generates the requested output containers;
+`fontSessionCache.test.js` asserts the download's glyph shapes are
+byte-identical to the preview they were based on.
+
 ## Node integration (`cli_export.py` + `server/services/fontExportPipeline.js` + `server/routes/fonts.js`)
 
-Closes the gap between this Python pipeline and the Phase 5 frontend
-(`client/src/pages/fonts/FontExportTrigger.jsx`): a designer's transform/
-kerning/rename choices reach this pipeline over HTTP instead of requiring
-someone to run Python by hand and drag the result into the browser.
+The single-shot path (`POST /api/fonts/customize-export`, fetch-or-upload
++ full export in one call, no caching) still exists and still works, but
+the current UI doesn't call it — superseded by the session/preview flow
+above for anything that benefits from caching. Kept for direct API use.
 
 - **`cli_export.py`** — module entrypoint (`python -m fonts.cli_export
   --params-file <json> --output-dir <dir>`, run with cwd =

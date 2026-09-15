@@ -1,288 +1,361 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as opentype from 'opentype.js';
+import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import Tooltip from '../components/Tooltip';
-import FontProofingText from './fonts/FontProofingText';
+import FontPicker from './fonts/FontPicker';
 import FontTransformControls, { DEFAULT_TRANSFORMS } from './fonts/FontTransformControls';
 import FontKerningPanel, { DEFAULT_KERNING } from './fonts/FontKerningPanel';
 import FontPresetsPanel from './fonts/FontPresetsPanel';
+import FontProofingText from './fonts/FontProofingText';
 import { PROOFING_PRESETS, DEFAULT_PROOFING_TEXT } from './fonts/proofingPresets';
-import { drawProof, drawAffectedPairHighlights } from './fonts/fontCanvasRenderer';
 import { loadPresets, savePreset, deletePreset } from './fonts/fontPresetsStorage';
-import FontEffectsPanel from './fonts/FontEffectsPanel';
-import FontExportTrigger from './fonts/FontExportTrigger';
+import { findUncoveredChars } from './fonts/coverageCheck';
 import { startFontsTour, TOUR_KEY as FONTS_TOUR_KEY } from '../utils/tours/fontsTour';
 
-const PAGE_MODES = [
-  { id: 'structural', label: 'Structural Preview' },
-  { id: 'effects', label: 'Effects & Export' },
-];
+const PREVIEW_DEBOUNCE_MS = 700;
+const PREVIEW_FONT_FAMILY = 'FontCustomizerLivePreview'; // fixed label for the registered FontFace — we swap its source bytes each preview cycle
 
-const TABS = [
-  { id: 'transforms', label: 'Transforms' },
-  { id: 'kerning', label: 'Kerning' },
-  { id: 'presets', label: 'Stylesheets' },
-  { id: 'export', label: 'Export' },
-];
+const FORMAT_MIME = { ttf: 'font/ttf', otf: 'font/otf', woff2: 'font/woff2' };
 
+function slugify(name) {
+  return (name || 'custom-font').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function dataUrlToArrayBuffer(dataUrl) {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/**
+ * Single-screen Font Customizer: search a Google Font, adjust real
+ * structural properties, see the real transformed font (not a
+ * client-side approximation), download the real file. That's the whole
+ * tool — no separate preview-vs-export modes, no CSS effects panel, no
+ * SVG print export (those still exist server-side if ever wanted back,
+ * just not surfaced here).
+ */
 export default function FontsPage() {
   const getIcon = useIcon();
-  const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const fontFaceRef = useRef(null); // the currently-registered FontFace, so we can remove it before adding the next preview
+  const debounceRef = useRef(null);
 
-  const [font, setFont] = useState(null);
-  const [fontMeta, setFontMeta] = useState(null); // { family, isVariable, axes }
-  const [loadError, setLoadError] = useState('');
+  // Font selection / session
+  const [searchValue, setSearchValue] = useState('');
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionMeta, setSessionMeta] = useState(null); // { family, license, was_variable, original_axes, ... }
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionError, setSessionError] = useState('');
 
-  const [activePresetId, setActivePresetId] = useState(PROOFING_PRESETS[0].id);
-  const [customText, setCustomText] = useState(DEFAULT_PROOFING_TEXT);
-  const [fontSize, setFontSize] = useState(72);
-
+  // Settings
   const [transforms, setTransforms] = useState(DEFAULT_TRANSFORMS);
   const [kerning, setKerning] = useState(DEFAULT_KERNING);
-  const [activeTab, setActiveTab] = useState('transforms');
   const [presets, setPresets] = useState(() => loadPresets());
-  const [affectedPairs, setAffectedPairs] = useState([]);
-  const [pageMode, setPageMode] = useState('structural');
-  const [fontFileBuffer, setFontFileBuffer] = useState(null);
-  const [pendingExport, setPendingExport] = useState(null);
 
-  const proofingText = activePresetId === 'custom'
+  // Live preview (real pipeline output)
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [previewReady, setPreviewReady] = useState(false);
+  const [parsedFont, setParsedFont] = useState(null);
+  const [coverageReport, setCoverageReport] = useState(null);
+  const [downloadBuffers, setDownloadBuffers] = useState({}); // { ttf?: ArrayBuffer } from the latest preview — reused for download, transform not re-run
+
+  // Preview text
+  const [activePresetId, setActivePresetId] = useState(PROOFING_PRESETS[0].id);
+  const [customText, setCustomText] = useState(DEFAULT_PROOFING_TEXT);
+  const previewText = activePresetId === 'custom'
     ? customText
     : (PROOFING_PRESETS.find((p) => p.id === activePresetId)?.text || DEFAULT_PROOFING_TEXT);
 
-  const handleFile = useCallback(async (file) => {
-    if (!file) return;
-    setLoadError('');
+  // Download
+  const [newFamilyName, setNewFamilyName] = useState('');
+  const [downloadError, setDownloadError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [finalBuffers, setFinalBuffers] = useState({}); // { ttf?, woff2?, otf? } from the last Download-with-real-name call
+
+  const uncoveredChars = parsedFont ? findUncoveredChars(parsedFont, coverageReport, previewText) : [];
+
+  const createSession = useCallback(async (family) => {
+    if (!family || !family.trim()) return;
+    setSessionError('');
+    setSessionLoading(true);
+    setPreviewReady(false);
+    setSessionMeta(null);
+    setSessionId(null);
     try {
-      const buffer = await file.arrayBuffer();
-      setFontFileBuffer(buffer);
-      const parsed = opentype.parse(buffer.slice(0));
-      setFont(parsed);
-      const isVariable = !!(parsed.tables && parsed.tables.fvar);
-      setFontMeta({
-        family: parsed.names?.fontFamily?.en || file.name.replace(/\.[^.]+$/, ''),
-        isVariable,
-        axes: isVariable ? parsed.tables.fvar.axes.map((a) => ({
-          tag: a.tag,
-          name: a.name?.en || a.tag,
-          min: a.minValue,
-          default: a.defaultValue,
-          max: a.maxValue,
-        })) : [],
-      });
+      const res = await api.post('/api/fonts/session', { family: family.trim() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load this font.');
+      setSessionId(data.sessionId);
+      setSessionMeta(data.meta);
+      setTransforms(DEFAULT_TRANSFORMS);
+      setKerning(DEFAULT_KERNING);
+      setNewFamilyName('');
+      setFinalBuffers({});
     } catch (err) {
-      setLoadError(`Could not load this font file: ${err.message}`);
-      setFont(null);
-      setFontMeta(null);
+      setSessionError(err.message || 'Could not load this font.');
+    } finally {
+      setSessionLoading(false);
     }
   }, []);
 
-  const onFileInputChange = (e) => handleFile(e.target.files?.[0]);
-  const onDrop = (e) => {
-    e.preventDefault();
-    handleFile(e.dataTransfer.files?.[0]);
-  };
-
-  // Re-render canvas whenever font, text, size, or any control changes.
+  // Debounced real preview — runs transform+export against the cached
+  // base font (fast: no re-fetch) every time transforms/kerning settle.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!sessionId) return undefined;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (!font) {
-      setAffectedPairs([]);
+    debounceRef.current = setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError('');
+      try {
+        const res = await api.post(`/api/fonts/session/${sessionId}/preview`, {
+          recipe: { transforms, kerning },
+          rename: { familyName: `${sessionMeta?.family || 'Custom'} Draft` }, // placeholder — the real name is only required at Download
+          rangeIds: ['basic-latin', 'latin-1-supplement'],
+          formats: ['ttf'],
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          if (data.code === 'SESSION_EXPIRED') {
+            // Requirement: a missing/expired session re-triggers fetch+freeze, not a silent failure or dead end.
+            setPreviewError('This session expired — reloading the font…');
+            await createSession(sessionMeta?.family);
+            return;
+          }
+          throw new Error(data.error || 'Preview failed.');
+        }
+
+        const buffer = dataUrlToArrayBuffer(data.formats.ttf);
+        const parsed = opentype.parse(buffer.slice(0));
+        setParsedFont(parsed);
+        setCoverageReport(data.report);
+        setDownloadBuffers({ ttf: buffer });
+
+        if (fontFaceRef.current) document.fonts.delete(fontFaceRef.current);
+        const fontFace = new FontFace(PREVIEW_FONT_FAMILY, buffer);
+        await fontFace.load();
+        document.fonts.add(fontFace);
+        fontFaceRef.current = fontFace;
+
+        setPreviewReady(true);
+      } catch (err) {
+        setPreviewError(err.message || 'Preview failed.');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => clearTimeout(debounceRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, transforms, kerning]);
+
+  const handleSavePreset = (name) => setPresets(savePreset(name, { transforms, kerning }));
+  const handleApplyPreset = (preset) => { setTransforms(preset.transforms); setKerning(preset.kerning); };
+  const handleDeletePreset = (id) => setPresets(deletePreset(id));
+
+  const runDownload = async (formats) => {
+    if (!sessionId) return;
+    if (!newFamilyName.trim()) {
+      setDownloadError('A new family name is required — required by the font\'s OFL license before redistributing a modified copy.');
       return;
     }
-
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || '#F5F5F0';
-    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--color-text').trim() || '#1A1A1A';
-    ctx.fillStyle = bg || '#F5F5F0';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const padding = 24;
-    const baselineY = padding + fontSize;
-
+    setDownloadError('');
+    setDownloading(true);
     try {
-      const result = drawProof(ctx, font, proofingText, padding, baselineY, fontSize, {
-        transforms,
-        kerning,
-        color: textColor || '#1A1A1A',
+      const res = await api.post(`/api/fonts/session/${sessionId}/preview`, {
+        recipe: { transforms, kerning },
+        rename: { familyName: newFamilyName.trim() },
+        rangeIds: ['basic-latin', 'latin-1-supplement'],
+        formats,
       });
-      drawAffectedPairHighlights(ctx, result.affectedPairs, result.baselineY, fontSize);
-      setAffectedPairs(result.affectedPairs);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Download failed.');
+
+      const buffers = {};
+      for (const [fmt, url] of Object.entries(data.formats)) buffers[fmt] = dataUrlToArrayBuffer(url);
+      setFinalBuffers((prev) => ({ ...prev, ...buffers }));
+
+      // Trigger a save for whichever formats were just (re)generated.
+      for (const fmt of Object.keys(buffers)) {
+        const blob = new Blob([buffers[fmt]], { type: FORMAT_MIME[fmt] || 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${slugify(newFamilyName)}.${fmt}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
-      setLoadError(`Render error: ${err.message}`);
+      setDownloadError(err.message || 'Download failed.');
+    } finally {
+      setDownloading(false);
     }
-  }, [font, proofingText, fontSize, transforms, kerning]);
-
-  const handleSavePreset = (name) => {
-    const next = savePreset(name, { transforms, kerning });
-    setPresets(next);
   };
-  const handleApplyPreset = (preset) => {
-    setTransforms(preset.transforms);
-    setKerning(preset.kerning);
-  };
-  const handleDeletePreset = (id) => {
-    setPresets(deletePreset(id));
-  };
-
-  const handleExported = (formats, report) => {
-    setPendingExport({ formats, report });
-    setPageMode('effects');
-  };
-
-  const header = (
-    <div className="flex items-center gap-2 px-6 pt-4" style={{ background: 'var(--color-bg)' }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
-        {getIcon('type', { size: 16 })}
-      </div>
-      <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Font Customizer</h1>
-      <button
-        onClick={() => { localStorage.removeItem(FONTS_TOUR_KEY); startFontsTour(setPageMode, setActiveTab); }}
-        title="Take the Font Customizer tour"
-        style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
-      >
-        {getIcon('compass', { size: 13 })}
-      </button>
-    </div>
-  );
-
-  const modeSwitch = (
-    <div className="flex gap-1 px-6 pt-2" style={{ background: 'var(--color-bg)' }} data-tour="fonts-mode-switch">
-      {PAGE_MODES.map((mode) => (
-        <button
-          key={mode.id}
-          onClick={() => setPageMode(mode.id)}
-          className="text-sm px-3 py-1.5 rounded-t hover:opacity-70 transition-all duration-200"
-          style={{
-            background: pageMode === mode.id ? 'var(--color-surface)' : 'transparent',
-            color: pageMode === mode.id ? 'var(--color-text)' : 'var(--color-muted)',
-            border: '1px solid var(--color-border)',
-            borderBottom: pageMode === mode.id ? '1px solid var(--color-surface)' : '1px solid var(--color-border)',
-          }}
-        >
-          {mode.label}
-        </button>
-      ))}
-    </div>
-  );
-
-  if (pageMode === 'effects') {
-    return (
-      <div className="flex flex-col h-full overflow-hidden">
-        {header}
-        {modeSwitch}
-        <div className="flex-1 overflow-hidden">
-          <FontEffectsPanel pendingExport={pendingExport} onPendingExportConsumed={() => setPendingExport(null)} />
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {header}
-      {modeSwitch}
-    <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
-      <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
-        <div>
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            Live in-browser preview — nothing here is sent to a server. Structural edits export separately
-            (Phase 3/4 backend) into a real, OFL-compliant font file; load that export under "Effects & Export".
-          </p>
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+      <div className="flex items-center gap-2 px-6 pt-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
+          {getIcon('type', { size: 16 })}
         </div>
-
-        <div
-          onDrop={onDrop}
-          onDragOver={(e) => e.preventDefault()}
-          className="rounded-lg p-4 flex items-center gap-3"
-          style={{ background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}
-          data-tour="fonts-file-loader"
+        <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Font Customizer</h1>
+        <button
+          onClick={() => { localStorage.removeItem(FONTS_TOUR_KEY); startFontsTour(); }}
+          title="Take the Font Customizer tour"
+          style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
         >
-          {getIcon('type', { size: 20 })}
-          <div className="flex-1">
-            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              {fontMeta ? fontMeta.family : 'Drop a .ttf/.otf/.woff file, or choose one'}
-            </p>
-            {fontMeta && (
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                {fontMeta.isVariable
-                  ? `Variable font — axes: ${fontMeta.axes.map((a) => a.tag).join(', ')}. Load the Phase 1 backend's frozen static output for editing; this preview renders the file as-is.`
-                  : 'Static font.'}
+          {getIcon('compass', { size: 13 })}
+        </button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
+          <div data-tour="fonts-search">
+            <Tooltip text="Search Google Fonts (OFL-licensed only) — click a result or press Enter to load it. Variable fonts are automatically frozen to a static instance before editing.">
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Google Font</span>
+            </Tooltip>
+            <div className="flex items-start gap-2 mt-1">
+              <div className="flex-1">
+                <FontPicker value={searchValue} onChange={setSearchValue} onSelect={createSession} />
+              </div>
+              <button
+                onClick={() => createSession(searchValue)}
+                disabled={!searchValue.trim() || sessionLoading}
+                className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                {sessionLoading ? 'Loading…' : 'Load'}
+              </button>
+            </div>
+            {sessionError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{sessionError}</p>}
+            {sessionMeta && (
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                {sessionMeta.family} — {sessionMeta.license}
+                {sessionMeta.was_variable ? ' — variable font, frozen to a static instance for editing.' : ' — static font.'}
               </p>
             )}
-            {loadError && <p className="text-xs" style={{ color: '#ef4444' }}>{loadError}</p>}
           </div>
-          <input ref={fileInputRef} type="file" accept=".ttf,.otf,.woff" onChange={onFileInputChange} className="hidden" />
-          <Tooltip text="Any .ttf/.otf/.woff — this is only for the parametric preview below, nothing is uploaded. To customize a Google Font, use the Export tab instead.">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}
-            >
-              Choose file
-            </button>
-          </Tooltip>
+
+          {!sessionId && !sessionLoading && (
+            <div className="rounded-lg p-10 flex items-center justify-center text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+              Search and load a font above to get started.
+            </div>
+          )}
+
+          {sessionId && (
+            <>
+              <FontProofingText
+                activePresetId={activePresetId}
+                customText={customText}
+                onSelectPreset={setActivePresetId}
+                onCustomTextChange={setCustomText}
+              />
+
+              {uncoveredChars.length > 0 && (
+                <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid #ef4444', color: '#ef4444' }}>
+                  <strong>Character coverage issue:</strong>{' '}
+                  {uncoveredChars.map((u, i) => (
+                    <span key={u.char + i}>
+                      {i > 0 && ', '}
+                      "{u.char}" {u.reason === 'skipped_at_export' ? `(skipped — ${u.detail})` : '(not in this font\'s subset)'}
+                    </span>
+                  ))}
+                  . These characters won't render correctly.
+                </div>
+              )}
+
+              <div
+                className="rounded-lg flex items-center justify-center p-10 overflow-hidden relative"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minHeight: 160 }}
+                data-tour="fonts-preview"
+              >
+                {previewLoading && (
+                  <div className="absolute top-2 right-3 text-xs px-2 py-1 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    Updating preview…
+                  </div>
+                )}
+                {previewReady ? (
+                  <span style={{ fontSize: 56, lineHeight: 1.2, color: 'var(--color-text)', fontFamily: `'${PREVIEW_FONT_FAMILY}', sans-serif` }}>
+                    {previewText || DEFAULT_PROOFING_TEXT}
+                  </span>
+                ) : (
+                  <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                    {previewLoading ? 'Generating first preview…' : 'Adjust a setting to generate a preview.'}
+                  </span>
+                )}
+              </div>
+              {previewError && <p className="text-xs" style={{ color: '#ef4444' }}>{previewError}</p>}
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                This is the real exported font, rendered via an actual @font-face — not an approximation. Every
+                change above runs the real structural transform on the server.
+              </p>
+            </>
+          )}
         </div>
 
-        <FontProofingText
-          activePresetId={activePresetId}
-          customText={customText}
-          onSelectPreset={setActivePresetId}
-          onCustomTextChange={setCustomText}
-        />
+        {sessionId && (
+          <div className="w-80 flex-shrink-0 overflow-y-auto p-5 space-y-6" style={{ background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border)' }}>
+            <FontTransformControls transforms={transforms} onChange={setTransforms} />
+            <FontKerningPanel kerning={kerning} onChange={setKerning} />
 
-        <Tooltip text="Zoom the preview canvas below — doesn't affect the exported font's actual size.">
-          <div className="flex items-center gap-3">
-            <span className="text-sm" style={{ color: 'var(--color-text)' }}>Preview size</span>
-            <input type="range" min={24} max={160} step={2} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-40" />
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fontSize}px</span>
-          </div>
-        </Tooltip>
+            <details>
+              <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--color-text)' }}>Saved settings</summary>
+              <div className="mt-2">
+                <FontPresetsPanel presets={presets} onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset} />
+              </div>
+            </details>
 
-        <div className="rounded-lg overflow-x-auto" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-tour="fonts-canvas">
-          <canvas ref={canvasRef} width={900} height={220} className="block" />
-        </div>
-
-        {affectedPairs.length > 0 && (
-          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Kerning-adjusted pairs in this text: {affectedPairs.map((p) => `${p.leftChar}${p.rightChar}`).join(', ')}
+            <div data-tour="fonts-download">
+              <Tooltip text="OFL's Reserved Font Name clause requires a genuinely different name from the original before you can redistribute a modified copy.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Download — new family name (required)</span>
+              </Tooltip>
+              <input
+                value={newFamilyName}
+                onChange={(e) => setNewFamilyName(e.target.value)}
+                placeholder="e.g. My Custom Roboto"
+                className="w-full rounded px-2 py-1.5 text-sm mt-1"
+                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              />
+              {downloadError && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{downloadError}</p>}
+              <div className="flex gap-2 mt-2">
+                <Tooltip text="Saves the .ttf file — reuses what you're already previewing, only renames it for real. No transform is re-run.">
+                  <button
+                    onClick={() => runDownload(['ttf'])}
+                    disabled={downloading || !previewReady}
+                    className="flex-1 text-xs px-2 py-2 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}
+                  >
+                    .ttf
+                  </button>
+                </Tooltip>
+                <Tooltip text="Also generates .woff2 (web) and .otf (CFF conversion) with the same settings.">
+                  <button
+                    onClick={() => runDownload(['ttf', 'woff2', 'otf'])}
+                    disabled={downloading || !previewReady}
+                    className="flex-1 text-xs px-2 py-2 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    All formats
+                  </button>
+                </Tooltip>
+              </div>
+              {downloading && <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Generating…</p>}
+              {Object.keys(finalBuffers).length > 0 && !downloading && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Downloaded: {Object.keys(finalBuffers).join(', ')}. Nothing is saved here — re-download if you need it again.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      <div className="w-80 flex-shrink-0 overflow-y-auto p-5" style={{ background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border)' }}>
-        <div className="flex gap-1 mb-4" data-tour="fonts-tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 text-sm px-2 py-1.5 rounded hover:opacity-70 transition-all duration-200"
-              style={{
-                background: activeTab === tab.id ? 'var(--color-primary)' : 'transparent',
-                color: activeTab === tab.id ? '#fff' : 'var(--color-text)',
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === 'transforms' && <FontTransformControls transforms={transforms} onChange={setTransforms} />}
-        {activeTab === 'kerning' && <FontKerningPanel kerning={kerning} onChange={setKerning} />}
-        {activeTab === 'presets' && (
-          <FontPresetsPanel presets={presets} onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset} />
-        )}
-        {activeTab === 'export' && (
-          <FontExportTrigger transforms={transforms} kerning={kerning} fontFileBuffer={fontFileBuffer} onExported={handleExported} />
-        )}
-      </div>
-    </div>
     </div>
   );
 }

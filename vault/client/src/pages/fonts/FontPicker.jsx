@@ -18,13 +18,13 @@ const MAX_RESULTS = 20;
  * Search/autocomplete over the server-cached, OFL-filtered Google Fonts
  * catalog (see server/services/fontGoogleCatalog.js). Selecting a result
  * just sets the family name text — the actual fetch/freeze/license-check
- * still runs for real at export time via the existing Phase 1 pipeline,
+ * still runs for real at load time via the existing fetch/freeze pipeline,
  * unchanged; this is a discovery layer in front of it, not a new source
  * of truth. Free-text entry (not just picking a suggestion) still works,
  * since this cache is a convenience, not authoritative — a font added to
  * google/fonts after the cache was last built just won't autocomplete.
  */
-export default function FontPicker({ value, onChange, placeholder = 'e.g. PT Serif' }) {
+export default function FontPicker({ value, onChange, onSelect, placeholder = 'e.g. PT Serif' }) {
   const [catalog, setCatalog] = useState(null);
   const [loadErr, setLoadErr] = useState('');
   const [open, setOpen] = useState(false);
@@ -57,6 +57,7 @@ export default function FontPicker({ value, onChange, placeholder = 'e.g. PT Ser
 
   const select = (family) => {
     onChange(family);
+    onSelect?.(family);
     setOpen(false);
   };
 
@@ -66,6 +67,12 @@ export default function FontPicker({ value, onChange, placeholder = 'e.g. PT Ser
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && value.trim()) {
+            onSelect?.(value.trim());
+            setOpen(false);
+          }
+        }}
         placeholder={placeholder}
         className="w-full rounded px-2 py-1.5 text-sm"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}

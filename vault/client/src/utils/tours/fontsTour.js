@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_fonts_completed';
 
-const TOTAL_STEPS = 15;
+const TOTAL_STEPS = 8;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -29,22 +29,8 @@ function safeBeforeShow(tour, stepId, selector) {
   }
 }
 
-/** Switches page mode/tab, then waits a beat for the DOM to update before attaching the step. */
-function switchTo(tour, stepId, selector, fn) {
-  return () => new Promise((resolve) => {
-    fn();
-    setTimeout(() => {
-      safeBeforeShow(tour, stepId, selector);
-      resolve();
-    }, 200);
-  });
-}
-
-/**
- * @param {(mode: 'structural'|'effects') => void} setPageMode
- * @param {(tab: 'transforms'|'kerning'|'presets'|'export') => void} setActiveTab
- */
-export function startFontsTour(setPageMode, setActiveTab) {
+/** Single-screen tool now — one linear tour, no mode-switching needed. */
+export function startFontsTour() {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
 
   const tour = new Shepherd.Tour({
@@ -62,12 +48,10 @@ export function startFontsTour(setPageMode, setActiveTab) {
   const btnBack = () => btnSecondary('← Back', () => tour.back());
   const btnNext = { text: 'Next →', action: () => tour.next() };
 
-  // ── Step 1: Welcome ──────────────────────────────────────────────────────
   tour.addStep({
     id: 'fonts-welcome',
     title: 'Font Customizer — Quick Tour',
-    text: "This tool has two modes: Structural Preview, where you pick a Google Font and reshape its letterforms (weight, width, kerning) and export a real, OFL-compliant custom font file — and Effects & Export, where you style that exported font with color/shadow/image-fill CSS and grab a print-ready outlined SVG. This tour walks through the full flow.",
-    beforeShowPromise: switchTo(tour, 'fonts-welcome', null, () => setPageMode('structural')),
+    text: "Search a Google Font, adjust real structural properties, and download a real, OFL-compliant font file. Every preview you see is the actual exported font — not an approximation.",
     when: { show() { injectStepCounter(1); } },
     buttons: [
       btnSecondary('Skip Tour', () => tour.cancel()),
@@ -75,145 +59,73 @@ export function startFontsTour(setPageMode, setActiveTab) {
     ],
   });
 
-  // ── Step 2: Mode switch ──────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-mode-switch',
-    title: 'Two Modes',
-    text: "Structural Preview (letterform edits, live in your browser) and Effects & Export (color/shadow on the real exported font) are separate tabs here — switch anytime. We'll start in Structural Preview.",
-    attachTo: { element: '[data-tour="fonts-mode-switch"]', on: 'bottom' },
+    id: 'fonts-search',
+    title: 'Search & Load a Font',
+    text: "Type a few letters, pick a match (OFL-licensed only), or press Enter/click Load to fetch it. A variable font is automatically frozen to a static instance before editing — this step takes a few seconds since it's a real fetch from Google Fonts.",
+    attachTo: { element: '[data-tour="fonts-search"]', on: 'bottom' },
+    beforeShowPromise() {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          safeBeforeShow(tour, 'fonts-search', '[data-tour="fonts-search"]');
+          resolve();
+        }, 200);
+      });
+    },
     when: { show() { injectStepCounter(2); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 3: File loader ──────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-file-loader',
-    title: 'Load a Font to Preview',
-    text: "Drop any .ttf/.otf/.woff here for the live preview below — this is optional. If you're customizing a Google Font, you don't need this step at all; just go straight to the Export tab and pick it from the search box there.",
-    attachTo: { element: '[data-tour="fonts-file-loader"]', on: 'bottom' },
+    id: 'fonts-proofing',
+    title: 'Preview Text',
+    text: "These presets aren't lorem ipsum — each exposes a specific issue: kerning/spacing, ascender/descender height, or counter and stem shape. Switch presets or type your own text; this only appears once a font is loaded.",
+    attachTo: { element: '[data-tour="fonts-proofing"]', on: 'bottom' },
     when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 4: Proofing text ────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-proofing',
-    title: 'Proofing Text',
-    text: "These presets aren't lorem ipsum — each is designed to expose a specific issue: kerning/spacing, ascender/descender height, or counter and stem shape. Switch presets to see how your edits affect different letter combinations, or type your own text.",
-    attachTo: { element: '[data-tour="fonts-proofing"]', on: 'bottom' },
+    id: 'fonts-preview',
+    title: 'Real Live Preview',
+    text: "About a second after you stop adjusting a slider, this updates with the actual transformed font — the server runs the real structural edit and sends back a real font file, loaded via an actual @font-face. \"Updating preview…\" shows while that's in flight.",
+    attachTo: { element: '[data-tour="fonts-preview"]', on: 'top' },
     when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 5: Canvas preview ───────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-canvas',
-    title: 'Live Preview',
-    text: "Every slider you touch in the panel on the right redraws here instantly — entirely in your browser, no server calls. This is an approximation for fast iteration; the real structural edit happens for real when you export.",
-    attachTo: { element: '[data-tour="fonts-canvas"]', on: 'top' },
+    id: 'fonts-transforms-panel',
+    title: 'Transforms — Reshape the Letterforms',
+    text: "Stem Thickness, Proportional Width, Extend Ascenders/Descenders, Counter Width. Hover any label for exactly what it does. Each change triggers the real preview above after a short pause.",
+    attachTo: { element: '[data-tour="fonts-transforms-panel"]', on: 'left' },
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 6: Tabs overview ────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-tabs',
-    title: 'The Right-Hand Panel',
-    text: "Four tabs: Transforms (letterform sliders), Kerning (spacing), Stylesheets (save/reuse your settings), and Export (the actual button that customizes and exports your font). We'll go through each.",
-    attachTo: { element: '[data-tour="fonts-tabs"]', on: 'left' },
+    id: 'fonts-kerning-panel',
+    title: 'Kerning — Fix Loose Spacing',
+    text: "Check a group (e.g. diagonal caps like AV/AW) then use Visual Balance & Rhythm to tighten or loosen every pair in that group. Advanced Pairs below lets you override one specific pair manually.",
+    attachTo: { element: '[data-tour="fonts-kerning-panel"]', on: 'left' },
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 7: Transforms ───────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-transforms-panel',
-    title: 'Transforms — Reshape the Letterforms',
-    text: "Stem Thickness (bolder/lighter strokes), Proportional Width (wider/narrower), Extend Ascenders/Descenders (taller/shorter b/d/g/y), and Counter Width (wider/narrower bowls in o/e/a). Hover any label for what it actually does under the hood.",
-    beforeShowPromise: switchTo(tour, 'fonts-transforms-panel', '[data-tour="fonts-transforms-panel"]', () => setActiveTab('transforms')),
+    id: 'fonts-download',
+    title: 'Download — Give It a Real Name',
+    text: "Type a genuinely new family name (required — the font's OFL license forbids redistributing it under its own name) and download. This reuses the settings you're already previewing — no transform is re-run, just the final rename + your chosen file formats. Nothing is saved anywhere else, so download before you navigate away.",
+    attachTo: { element: '[data-tour="fonts-download"]', on: 'left' },
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
-  // ── Step 8: Kerning ──────────────────────────────────────────────────────
   tour.addStep({
-    id: 'fonts-kerning-panel',
-    title: 'Kerning — Fix Loose Spacing',
-    text: "Check a group (e.g. diagonal caps like AV/AW) then use the Visual Balance & Rhythm slider to tighten or loosen every pair in that group at once. Need to fix one specific pair like \"To\"? Use Advanced Pairs below for a manual override.",
-    beforeShowPromise: switchTo(tour, 'fonts-kerning-panel', '[data-tour="fonts-kerning-panel"]', () => setActiveTab('kerning')),
+    id: 'fonts-presets',
+    title: 'Saved Settings (Optional)',
+    text: "Save your current Transforms + Kerning as a named preset under \"Saved settings\" — it stores the recipe, not a rendered result, so you can reapply it to a completely different font later.",
     when: { show() { injectStepCounter(8); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 9: Stylesheets ──────────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-presets-panel',
-    title: 'Stylesheets — Save Your Settings',
-    text: "Save your current Transforms + Kerning as a named preset — it stores the *recipe* (the slider values), not a rendered result, so you can apply it to a completely different Google Font later.",
-    beforeShowPromise: switchTo(tour, 'fonts-presets-panel', '[data-tour="fonts-presets-panel"]', () => setActiveTab('presets')),
-    when: { show() { injectStepCounter(9); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 10: Export ──────────────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-export-panel',
-    title: 'Export — Where It Actually Happens',
-    text: "This is the key step: search for an OFL-licensed Google Font (or use whatever you loaded above), give it a genuinely new family name — required, since a font's original license forbids redistributing it under its own name — then Customize → Export. This runs the real pipeline server-side and takes you straight into Effects & Export with the result loaded.",
-    attachTo: { element: '[data-tour="fonts-export-panel"]', on: 'left' },
-    beforeShowPromise: switchTo(tour, 'fonts-export-panel', '[data-tour="fonts-export-panel"]', () => setActiveTab('export')),
-    when: { show() { injectStepCounter(10); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 11: Effects loader ──────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-effects-loader',
-    title: 'Effects & Export — Your Real Exported Font',
-    text: "After Customize → Export, you land here automatically with your real font file loaded via an actual @font-face — not a preview approximation. You can also drop a file here manually if you ran the export pipeline outside the app.",
-    attachTo: { element: '[data-tour="fonts-effects-loader"]', on: 'bottom' },
-    beforeShowPromise: switchTo(tour, 'fonts-effects-loader', '[data-tour="fonts-effects-loader"]', () => setPageMode('effects')),
-    when: { show() { injectStepCounter(11); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 12: Download the font ───────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-effects-download',
-    title: 'Download Your Font — Do This Now',
-    text: "Nothing in this tool is saved on the server — no library, no history. This is your only chance to keep the .ttf/.woff2/.otf files. Download them now, before you navigate away or close the tab.",
-    attachTo: { element: '[data-tour="fonts-effects-download"]', on: 'bottom' },
-    when: { show() { injectStepCounter(12); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 13: Fill & Shadows ───────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-effects-fill',
-    title: 'Fill & Shadows',
-    text: "Solid color, gradient, or an image/texture clipped to the text — plus layered shadows for depth. All CSS, applied live; none of this touches the font file itself.",
-    attachTo: { element: '[data-tour="fonts-effects-fill"]', on: 'left' },
-    when: { show() { injectStepCounter(13); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 14: CSS snippet ─────────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-effects-css',
-    title: 'Copy the CSS',
-    text: "Once you're happy with the look, Copy CSS grabs a ready-to-paste snippet — the real @font-face rule plus your fill/shadow styling — for a web project.",
-    attachTo: { element: '[data-tour="fonts-effects-css"]', on: 'top' },
-    when: { show() { injectStepCounter(14); } },
-    buttons: [btnBack(), btnNext],
-  });
-
-  // ── Step 15: Print handoff ───────────────────────────────────────────────
-  tour.addStep({
-    id: 'fonts-print-handoff',
-    title: 'Print Handoff — Outlined SVG',
-    text: "For a print vendor or Illustrator/InDesign, Export Outlined SVG flattens your text to vector paths with the color/shadow baked in — no font installation needed on the other end. It's complementary to the real font file, not a replacement: install the actual font if you still need editable text in a layout.",
-    attachTo: { element: '[data-tour="fonts-print-handoff"]', on: 'top' },
-    when: { show() { injectStepCounter(15); } },
     buttons: [
       btnBack(),
       {
