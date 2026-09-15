@@ -41,7 +41,19 @@ DEFAULT_GLYPH_CHARS = [chr(c) for c in range(ord('A'), ord('Z') + 1)] \
     + [chr(c) for c in range(ord('0'), ord('9') + 1)] \
     + list('ÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑÇáàâäãåéèêëíìîïóòôöõúùûüñç')
 
-NOMINAL_STEM_UNITS_FRACTION = 0.04  # of unitsPerEm, per 100% of the stemThickness control
+NOMINAL_STEM_UNITS_FRACTION = 0.15  # of unitsPerEm, per 100% of the stemThickness control
+# Recalibrated from 0.04: at the original value, stemThickness=15 (a
+# realistic slider setting) offset each side of a stem by ~12 units out of
+# a 2048 UPM em — well under a pixel at typical preview sizes (48-72px),
+# so the control was technically real but visually undetectable. 0.15
+# puts a 15% setting at ~46 units/side, ~1-2px at those sizes.
+EXTEND_ASCDESC_BOOST = 3.0  # multiplies extendAscDesc's effective factor before warping
+# extendAscDesc only stretches the small "overshoot" sliver of a glyph
+# that already sits above cap-height (e.g. a lowercase ascender's natural
+# overshoot, typically <100 units) — even a correctly-applied 27% stretch
+# of an ~80-unit sliver is only ~22 units, sub-pixel on screen. Boosting
+# the effective factor keeps the same UI slider range meaningful without
+# changing what portion of the glyph is affected.
 
 
 @dataclass
@@ -97,7 +109,7 @@ def apply_transform_recipe(font, recipe: dict, glyph_names: list[str] | None = N
 
     stem_delta_units = (stem_percent / 100) * upm * NOMINAL_STEM_UNITS_FRACTION
     width_factor = width_percent / 100
-    extend_factor = extend_percent / 100
+    extend_factor = (extend_percent / 100) * EXTEND_ASCDESC_BOOST
 
     if glyph_names is None:
         glyph_names = [cmap[ord(ch)] for ch in DEFAULT_GLYPH_CHARS if ord(ch) in cmap]

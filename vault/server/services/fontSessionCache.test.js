@@ -117,6 +117,40 @@ async function main() {
     assert.ok(thick.hWidth > thin.hWidth, "positive stemThickness should widen 'H' relative to negative");
   });
 
+  await test('moderate slider values (real user report: 15/105/27/16) produce a change visible at typical preview size, not just nonzero', async () => {
+    // Regression test for a real report: sliders at these exact values
+    // looked visually identical to stock Roboto in the UI. The transform
+    // WAS applying (confirmed non-identical bytes) but the per-percent
+    // coefficients were calibrated so small that the change was
+    // sub-pixel at normal preview sizes (~50-70px) — technically real,
+    // functionally invisible. Assert a clearly visible px delta at a
+    // representative preview size, not just "the numbers changed".
+    const session = sessionCache.getSession(sessionId);
+    const PREVIEW_PX = 56;
+
+    const { outputs: zeroOut } = await runFontExport({
+      fontBuffer: session.fontBuffer,
+      recipe: { transforms: { stemThickness: 0, proportionalWidth: 100, extendAscDesc: 0, counterWidth: 0 }, kerning: {} },
+      rename: { familyName: 'Calibration Zero' },
+      rangeIds: ['basic-latin'],
+      formats: ['ttf'],
+    });
+    const { outputs: userOut } = await runFontExport({
+      fontBuffer: session.fontBuffer,
+      recipe: { transforms: { stemThickness: 15, proportionalWidth: 105, extendAscDesc: 27, counterWidth: 16 }, kerning: {} },
+      rename: { familyName: 'Calibration UserVals' },
+      rangeIds: ['basic-latin'],
+      formats: ['ttf'],
+    });
+
+    const zero = await inspectFont(zeroOut.ttf);
+    const user = await inspectFont(userOut.ttf);
+    const upm = 2048; // Roboto's unitsPerEm
+    const mWidthDeltaPx = Math.abs(user.hWidth - zero.hWidth) / upm * PREVIEW_PX;
+
+    assert.ok(mWidthDeltaPx >= 1.5, `'H' width changed only ${mWidthDeltaPx.toFixed(2)}px at ${PREVIEW_PX}px preview size — too subtle to notice, same failure mode as the original report`);
+  });
+
   await test('download (final rename) matches the preview it was based on — same transform, only naming differs', async () => {
     const session = sessionCache.getSession(sessionId);
     const recipe = { transforms: { stemThickness: 15, proportionalWidth: 108, extendAscDesc: -10, counterWidth: 5 }, kerning: { enabledGroupIds: ['round-pairs'], balance: 20, advancedPairs: {} } };

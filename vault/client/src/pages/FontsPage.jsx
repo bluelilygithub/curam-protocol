@@ -14,7 +14,7 @@ import { findUncoveredChars } from './fonts/coverageCheck';
 import { startFontsTour, TOUR_KEY as FONTS_TOUR_KEY } from '../utils/tours/fontsTour';
 
 const PREVIEW_DEBOUNCE_MS = 700;
-const PREVIEW_FONT_FAMILY = 'FontCustomizerLivePreview'; // fixed label for the registered FontFace — we swap its source bytes each preview cycle
+let previewFontFaceCounter = 0; // each preview gets its OWN font-family name — never reuse one, to rule out any browser repaint-caching-by-family-name ambiguity
 
 const FORMAT_MIME = { ttf: 'font/ttf', otf: 'font/otf', woff2: 'font/woff2' };
 
@@ -59,6 +59,8 @@ export default function FontsPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [previewReady, setPreviewReady] = useState(false);
+  const [previewStale, setPreviewStale] = useState(false); // true whenever what's DISPLAYED no longer matches the current slider state (a newer preview is pending or failed)
+  const [activeFontFamily, setActiveFontFamily] = useState('');
   const [parsedFont, setParsedFont] = useState(null);
   const [coverageReport, setCoverageReport] = useState(null);
   const [downloadBuffers, setDownloadBuffers] = useState({}); // { ttf?: ArrayBuffer } from the latest preview — reused for download, transform not re-run
@@ -83,8 +85,10 @@ export default function FontsPage() {
     setSessionError('');
     setSessionLoading(true);
     setPreviewReady(false);
+    setPreviewStale(false);
     setSessionMeta(null);
     setSessionId(null);
+    if (fontFaceRef.current) { document.fonts.delete(fontFaceRef.current); fontFaceRef.current = null; }
     try {
       const res = await api.post('/api/fonts/session', { family: family.trim() });
       const data = await res.json();
@@ -107,6 +111,7 @@ export default function FontsPage() {
   useEffect(() => {
     if (!sessionId) return undefined;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    setPreviewStale(true); // the moment a slider changes, whatever's on screen is stale until the next successful preview lands
 
     debounceRef.current = setTimeout(async () => {
       setPreviewLoading(true);
@@ -136,15 +141,26 @@ export default function FontsPage() {
         setCoverageReport(data.report);
         setDownloadBuffers({ ttf: buffer });
 
-        if (fontFaceRef.current) document.fonts.delete(fontFaceRef.current);
-        const fontFace = new FontFace(PREVIEW_FONT_FAMILY, buffer);
+        // A fresh, never-before-used family name every time — rules out any
+        // browser repaint-caching keyed on font-family (the old code reused
+        // one fixed name and relied on delete-then-add, which should work
+        // per spec but is a needless risk to carry when a unique name costs nothing).
+        previewFontFaceCounter += 1;
+        const familyForThisLoad = `FontCustomizerPreview-${previewFontFaceCounter}`;
+        const fontFace = new FontFace(familyForThisLoad, buffer);
         await fontFace.load();
         document.fonts.add(fontFace);
+        if (fontFaceRef.current) document.fonts.delete(fontFaceRef.current); // drop the previous one only after the new one is confirmed loaded
         fontFaceRef.current = fontFace;
+        setActiveFontFamily(familyForThisLoad);
 
         setPreviewReady(true);
+        setPreviewStale(false);
       } catch (err) {
         setPreviewError(err.message || 'Preview failed.');
+        // previewStale stays true — the font shown below (if any) is from
+        // an older slider state, and the banner makes that unmistakable
+        // rather than silently leaving a stale render looking current.
       } finally {
         setPreviewLoading(false);
       }
@@ -271,9 +287,21 @@ export default function FontsPage() {
                 </div>
               )}
 
+              {previewError && (
+                <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid #ef4444', color: '#ef4444' }}>
+                  <strong>Preview failed to update:</strong> {previewError} The text below is from an older setting,
+                  not what the sliders currently show — it will not match until a preview succeeds.
+                </div>
+              )}
+
               <div
                 className="rounded-lg flex items-center justify-center p-10 overflow-hidden relative"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minHeight: 160 }}
+                style={{
+                  background: 'var(--color-surface)',
+                  border: previewStale && previewReady ? '1px dashed #f59e0b' : '1px solid var(--color-border)',
+                  minHeight: 160,
+                  opacity: previewStale && previewReady ? 0.55 : 1,
+                }}
                 data-tour="fonts-preview"
               >
                 {previewLoading && (
@@ -281,8 +309,13 @@ export default function FontsPage() {
                     Updating preview…
                   </div>
                 )}
+                {!previewLoading && previewStale && previewReady && !previewError && (
+                  <div className="absolute top-2 right-3 text-xs px-2 py-1 rounded" style={{ background: '#f59e0b', color: '#fff' }}>
+                    Out of date
+                  </div>
+                )}
                 {previewReady ? (
-                  <span style={{ fontSize: 56, lineHeight: 1.2, color: 'var(--color-text)', fontFamily: `'${PREVIEW_FONT_FAMILY}', sans-serif` }}>
+                  <span style={{ fontSize: 56, lineHeight: 1.2, color: 'var(--color-text)', fontFamily: `'${activeFontFamily}', sans-serif` }}>
                     {previewText || DEFAULT_PROOFING_TEXT}
                   </span>
                 ) : (
@@ -291,7 +324,6 @@ export default function FontsPage() {
                   </span>
                 )}
               </div>
-              {previewError && <p className="text-xs" style={{ color: '#ef4444' }}>{previewError}</p>}
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 This is the real exported font, rendered via an actual @font-face — not an approximation. Every
                 change above runs the real structural transform on the server.
