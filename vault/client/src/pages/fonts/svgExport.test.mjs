@@ -121,11 +121,13 @@ async function main() {
     // Simulate a Phase 4 export where 'A' was reported as skipped —
     // findUncoveredChars must surface it; the UI's Export button gates on
     // this list being non-empty (FontEffectsPanel.jsx generateSvg/disabled),
-    // so it's never silently exported as a glyph gap.
+    // so it's never silently exported as a glyph gap. Matches by CHARACTER
+    // via glyphs_skipped_chars, not by glyph name — see the post-format-3
+    // regression test below for why.
     const aGlyphName = font.charToGlyph('A').name;
     const coverageReport = {
       structural_transforms_applied: {
-        glyphs_skipped: [[aGlyphName, 'decompose_failed: missing component']],
+        glyphs_skipped_chars: [{ glyph: aGlyphName, reason: 'decompose_failed: missing component', chars: ['A'] }],
       },
     };
     const issues = findUncoveredChars(font, coverageReport, 'CAT');
@@ -135,8 +137,30 @@ async function main() {
     assert.ok(issues[0].detail.includes('decompose_failed'));
   });
 
+  test('does not misfire on a font whose post table has no glyph names (regression)', () => {
+    // opentype.js reports glyph.name === undefined for a post-format-3.0
+    // font (common webfont size optimization, e.g. real Google Fonts
+    // Roboto) — a real user hit this: every basic-Latin character was
+    // wrongly flagged "not in this exported font". The check must use
+    // glyph.index (0 === .notdef, format-independent) not glyph.name.
+    for (const ch of 'Handgloves') {
+      const glyph = font.charToGlyph(ch);
+      // Simulate a nameless post table exactly like the real bug, without
+      // needing a second network fixture — deleting .name reproduces what
+      // opentype.js itself returns for a real post-format-3.0 font.
+      const originalName = glyph.name;
+      glyph.name = undefined;
+      try {
+        const issues = findUncoveredChars(font, { structural_transforms_applied: {} }, ch);
+        assert.strictEqual(issues.length, 0, `'${ch}' was wrongly flagged as missing when glyph.name is undefined`);
+      } finally {
+        glyph.name = originalName;
+      }
+    }
+  });
+
   test('text with no coverage issues generates a valid SVG (control case for the above)', () => {
-    const issues = findUncoveredChars(font, { structural_transforms_applied: { glyphs_skipped: [] } }, 'CAT');
+    const issues = findUncoveredChars(font, { structural_transforms_applied: { glyphs_skipped_chars: [] } }, 'CAT');
     assert.strictEqual(issues.length, 0);
     const svg = buildOutlinedSvg(font, 'CAT', 100, { mode: 'solid', solidColor: '#111' }, []);
     assert.ok(/<path/.test(svg));

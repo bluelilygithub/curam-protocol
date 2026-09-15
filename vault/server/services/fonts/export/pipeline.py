@@ -30,6 +30,7 @@ class ExportReport:
     structural: StructuralEditReport | None = None  # Phase 3.5's own report, carried through unmodified
     formats_produced: list[str] = field(default_factory=list)
     incomplete: bool = False  # True if any requested glyph was skipped/failed anywhere in the pipeline
+    glyphs_skipped_chars: list[dict] = field(default_factory=list)  # structural.glyphs_skipped enriched with the actual character(s), for coverage checks that can't rely on post-table glyph names (see coverageCheck.js — many production webfonts ship post format 3.0, no names at all)
 
     def summary(self) -> dict:
         """A flat, JSON-serializable version of everything requirement 4 asks the export summary to include."""
@@ -55,6 +56,7 @@ class ExportReport:
                 'glyphs_edited': list(self.structural.glyphs_edited) if self.structural else [],
                 'composite_glyphs_reassembled': list(self.structural.composite_glyphs_reassembled) if self.structural else [],
                 'glyphs_skipped': list(self.structural.glyphs_skipped) if self.structural else [],
+                'glyphs_skipped_chars': list(self.glyphs_skipped_chars),
                 'validation_issues': [
                     {'glyph_name': i.glyph_name, 'contour_index': i.contour_index, 'kind': i.kind, 'detail': i.detail}
                     for i in (self.structural.validation_issues if self.structural else [])
@@ -125,6 +127,26 @@ def export_font(
 
     incomplete = bool(structural_report and structural_report.glyphs_skipped)
 
+    # Enrich Phase 3.5's name-keyed skip list with the actual character(s)
+    # each skipped glyph name maps to, via the FINAL (post-subset) cmap —
+    # some production webfonts (this one included, found via a real user
+    # report) ship a post table format with no glyph names at all, so
+    # anything downstream matching by name alone (e.g. the browser-side
+    # coverage check) would silently misfire. Codepoint is a reliable key
+    # regardless of post table format.
+    glyphs_skipped_chars: list[dict] = []
+    if structural_report and structural_report.glyphs_skipped:
+        cmap = font.getBestCmap()
+        name_to_chars: dict[str, list[str]] = {}
+        for codepoint, glyph_name in cmap.items():
+            name_to_chars.setdefault(glyph_name, []).append(chr(codepoint))
+        for glyph_name, reason in structural_report.glyphs_skipped:
+            glyphs_skipped_chars.append({
+                'glyph': glyph_name,
+                'reason': reason,
+                'chars': name_to_chars.get(glyph_name, []),
+            })
+
     report = ExportReport(
         rename=rename_report,
         subset=subset_report,
@@ -136,6 +158,7 @@ def export_font(
         structural=structural_report,
         formats_produced=list(outputs.keys()),
         incomplete=incomplete,
+        glyphs_skipped_chars=glyphs_skipped_chars,
     )
 
     return outputs, report

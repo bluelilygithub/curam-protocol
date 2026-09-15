@@ -14,9 +14,16 @@ from fontTools.ttLib import TTFont
 
 from ..export.pipeline import export_font
 from ..export.rename import OFLComplianceError
+from ..freeze import freeze_to_static
 from ..structural import apply_transform_recipe
 
 RAW_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/ptserif/PT_Serif-Web-Regular.ttf"
+# Roboto ships `post` format 3.0 (no glyph names in the binary at all) —
+# the real-world case that broke browser-side coverage checking when it
+# matched by glyph name instead of Unicode codepoint. PT Serif's post
+# format 2.0 (has names) is why that bug went unnoticed until a real user
+# picked Roboto specifically.
+ROBOTO_VARIABLE_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto[wdth,wght].ttf"
 
 RECIPE = {
     "transforms": {"stemThickness": 20, "proportionalWidth": 110, "extendAscDesc": 10, "counterWidth": -5},
@@ -127,6 +134,40 @@ def test_export_surfaces_incomplete_when_glyphs_skipped():
     assert report.incomplete is True
     assert report.summary()["incomplete"] is True
     assert ("someglyph", "decompose_failed: missing component") in report.summary()["structural_transforms_applied"]["glyphs_skipped"]
+
+
+@pytest.mark.network
+def test_glyphs_skipped_chars_enriches_name_based_skip_list_with_real_characters():
+    """
+    Regression test for a real user report: Roboto's `post` table format
+    3.0 carries no glyph names at all, so a browser-side check matching
+    skipped glyphs by name (opentype.js's `glyph.name`) silently misfires —
+    every glyph looked "not in font" since names came back undefined.
+    `glyphs_skipped_chars` must give a codepoint-based alternative that
+    doesn't depend on the post table having names.
+    """
+    resp = requests.get(ROBOTO_VARIABLE_URL, timeout=30)
+    resp.raise_for_status()
+    font = TTFont(BytesIO(freeze_to_static(resp.content)))
+
+    assert font['post'].formatType == 3.0, "test fixture assumption broken: Roboto no longer ships post format 3.0"
+
+    structural_report = apply_transform_recipe(font, RECIPE)
+    assert structural_report.glyphs_skipped == [], "expected a clean transform for this assertion to be meaningful"
+
+    # Force a skip entry the way Phase 3.5 would for a real failure, keyed
+    # by a glyph name we know maps to a real character in this font.
+    cmap = font.getBestCmap()
+    h_glyph_name = cmap[ord('H')]
+    structural_report.glyphs_skipped.append((h_glyph_name, "decompose_failed: forced for this test"))
+
+    _outputs, report = export_font(font, "Curam Roboto Test", structural_report=structural_report)
+    summary = report.summary()
+
+    skipped_chars = summary["structural_transforms_applied"]["glyphs_skipped_chars"]
+    assert any(entry["glyph"] == h_glyph_name and 'H' in entry["chars"] for entry in skipped_chars), (
+        f"'H' should be recoverable from glyphs_skipped_chars even though post format 3.0 has no names: {skipped_chars}"
+    )
 
 
 def test_rename_blocks_case_insensitive_match():
