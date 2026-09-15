@@ -127,10 +127,66 @@ exact* pixel-for-pixel match between the Phase 2 preview and this
 backend's output, Phase 2's storage format would need to record font size
 too — flagged here rather than silently assumed correct.
 
+## Phase 4 — export (`export/`)
+
+Takes a font already transformed by `structural.apply_transform_recipe`
+and produces `.ttf` / `.woff2` / `.otf` bytes plus one `ExportReport`:
+
+- **`export/rename.py`** — OFL Reserved Font Name compliance. Rewrites
+  name IDs 0 (Copyright), 1 (Family), 4 (Full name), 6 (PostScript name),
+  7 (Trademark), and 16/17 if the source font used them. **Raises
+  `OFLComplianceError` and blocks export outright** if the new family
+  name is empty or matches the original (case-insensitively) — this is a
+  hard stop, not a warning, since redistributing under the font's
+  Reserved Font Name is exactly what that OFL clause forbids.
+- **`export/cleanup.py`** — strips `gasp`/`hdmx`, prunes the `name` table
+  down to one real locale (Windows en-US + Mac default — the two
+  `rename.py` actually writes).
+- **`export/subsetting.py`** — a thin wrapper around `fontTools.subset`.
+  Deliberately thin: glyph selection is entirely `Subsetter.populate()` +
+  `.subset()`'s own cmap→glyph→component closure, not custom code. This
+  is the audit point from the Phase 3.5 gap report — nothing here (or
+  anywhere else in the export path) filters glyphs by `numberOfContours`,
+  which is exactly the kind of assumption that broke sidebearing recalc
+  for composites before. A composite's base + mark are always pulled in
+  or dropped together correctly.
+- **`export/otf_convert.py`** — genuine glyf (quadratic) → CFF (cubic)
+  conversion via `Qu2CuPen` + `T2CharStringPen` + `FontBuilder.setupCFF`,
+  not a renamed `.ttf`. GPOS/GDEF (Phase 3's compiled kerning) are copied
+  over directly since glyph names/order match exactly between the two.
+  Documented limitation: OS/2/hhea/post metadata is re-derived from the
+  source's key fields rather than exhaustively mapped field-by-field —
+  noted, not silently gapped.
+- **`export/pipeline.py`** — `export_font(font, new_family_name, ...)`
+  orchestrates the above and returns `(outputs, ExportReport)`.
+  `ExportReport` **carries Phase 3.5's `StructuralEditReport` through
+  unmodified** (`report.structural`) rather than building a parallel
+  reporting mechanism — `report.summary()` flattens both into one dict:
+  renamed fields, stripped tables, subset before/after glyph counts, file
+  size before/after per format, and the full transforms/kerning/coverage
+  breakdown (`glyphs_edited`, `composite_glyphs_reassembled`,
+  `glyphs_skipped`, `validation_issues`). `report.incomplete` is `True`
+  whenever `glyphs_skipped` is non-empty — surfaced explicitly rather than
+  silently shipping a font missing glyphs the designer asked for.
+
+**`GITHUB_TOKEN`** (optional env var): api.github.com's unauthenticated
+rate limit (60/hr) is easy to burn through in a dev session running these
+tests repeatedly — raw.githubusercontent.com (the actual font bytes) has
+no such limit, only the license-check directory listing does. Set
+`GITHUB_TOKEN` to any GitHub personal access token (no special scope
+needed, it only reads a public repo) to raise that to 5000/hr.
+
 ## Tests
 
 `tests/test_structural.py` fetches a real OFL font via `pipeline.run()`
 and exercises: sidebearing recalculation, stem thickness in both
 directions, winding-based counter classification, and GPOS class +
-advanced-pair kerning compilation. `tests/test_pipeline.py` covers Phase 1.
-Run `pytest -m "not network"` for the offline-only subset.
+advanced-pair kerning compilation. `tests/test_pipeline.py` covers Phase
+1. `tests/test_composites.py` covers composite-glyph decomposition
+(acute/grave/umlaut/tilde/cedilla). `tests/test_export.py` runs the full
+Phase 1 → 3 → 4 pipeline: OFL rename blocking, field rewrites, file-size
+reduction after subsetting, composite glyphs surviving subsetting, and
+kerning surviving into both `.ttf` and `.otf`. The composite/export tests
+fetch fixture bytes directly via `raw.githubusercontent.com` with an
+in-process cache to stay clear of the api.github.com rate limit
+entirely. Run `pytest -m "not network"` for the offline-only subset.

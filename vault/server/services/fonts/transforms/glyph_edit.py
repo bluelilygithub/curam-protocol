@@ -30,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
+from fontTools.ttLib.tables.ttProgram import Program
 
 from . import geometry as geo
 
@@ -99,8 +100,11 @@ def set_glyph_contours(glyph: Glyph, glyf_table, contours: list[list[geo.Point]]
     coords, flags, end_pts = _flatten_contours(contours)
     if hasattr(glyph, 'components'):
         del glyph.components
-    if hasattr(glyph, 'program'):
-        del glyph.program  # any composite/hinting bytecode is invalid against the new outline
+    # Any prior hinting bytecode is invalid against the new outline. A simple
+    # TrueType glyph's compile() path requires `.program` to exist (glyf
+    # unconditionally calls program.getBytecode()) — an empty Program is the
+    # correct "no hinting" state, not deleting the attribute entirely.
+    glyph.program = Program()
     glyph.numberOfContours = len(end_pts)
     glyph.coordinates = GlyphCoordinates(coords)
     glyph.flags = bytearray(flags)

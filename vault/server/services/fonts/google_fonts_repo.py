@@ -11,6 +11,7 @@ project's "OFL only" non-negotiable).
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -18,6 +19,18 @@ import requests
 
 GITHUB_API = "https://api.github.com/repos/google/fonts/contents"
 RAW_BASE = "https://raw.githubusercontent.com/google/fonts/main"
+
+
+def _api_headers() -> dict:
+    """
+    Unauthenticated api.github.com calls are capped at 60/hr, which a dev
+    session running this pipeline's tests repeatedly can burn through fast
+    (raw.githubusercontent.com, used for the actual font bytes, has no such
+    limit). Set GITHUB_TOKEN (any scope — this only reads a public repo) to
+    raise that to 5000/hr.
+    """
+    token = os.environ.get('GITHUB_TOKEN')
+    return {'Authorization': f'Bearer {token}'} if token else {}
 
 LICENSE_DIRS = {
     "ofl": "OFL",
@@ -64,7 +77,7 @@ def family_to_slug(family: str) -> str:
 
 
 def _list_dir(path: str) -> list[dict] | None:
-    resp = requests.get(f"{GITHUB_API}/{path}", timeout=20)
+    resp = requests.get(f"{GITHUB_API}/{path}", headers=_api_headers(), timeout=20)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
