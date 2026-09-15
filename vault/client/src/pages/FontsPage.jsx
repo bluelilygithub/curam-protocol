@@ -9,6 +9,12 @@ import FontPresetsPanel from './fonts/FontPresetsPanel';
 import { PROOFING_PRESETS, DEFAULT_PROOFING_TEXT } from './fonts/proofingPresets';
 import { drawProof, drawAffectedPairHighlights } from './fonts/fontCanvasRenderer';
 import { loadPresets, savePreset, deletePreset } from './fonts/fontPresetsStorage';
+import FontEffectsPanel from './fonts/FontEffectsPanel';
+
+const PAGE_MODES = [
+  { id: 'structural', label: 'Structural Preview' },
+  { id: 'effects', label: 'Effects & Export' },
+];
 
 const TABS = [
   { id: 'transforms', label: 'Transforms' },
@@ -34,6 +40,7 @@ export default function FontsPage() {
   const [activeTab, setActiveTab] = useState('transforms');
   const [presets, setPresets] = useState(() => loadPresets());
   const [affectedPairs, setAffectedPairs] = useState([]);
+  const [pageMode, setPageMode] = useState('structural');
 
   const proofingText = activePresetId === 'custom'
     ? customText
@@ -116,14 +123,47 @@ export default function FontsPage() {
     setPresets(deletePreset(id));
   };
 
+  const modeSwitch = (
+    <div className="flex gap-1 px-6 pt-4" style={{ background: 'var(--color-bg)' }}>
+      {PAGE_MODES.map((mode) => (
+        <button
+          key={mode.id}
+          onClick={() => setPageMode(mode.id)}
+          className="text-sm px-3 py-1.5 rounded-t hover:opacity-70 transition-all duration-200"
+          style={{
+            background: pageMode === mode.id ? 'var(--color-surface)' : 'transparent',
+            color: pageMode === mode.id ? 'var(--color-text)' : 'var(--color-muted)',
+            border: '1px solid var(--color-border)',
+            borderBottom: pageMode === mode.id ? '1px solid var(--color-surface)' : '1px solid var(--color-border)',
+          }}
+        >
+          {mode.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (pageMode === 'effects') {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        {modeSwitch}
+        <div className="flex-1 overflow-hidden">
+          <FontEffectsPanel />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex flex-col h-full overflow-hidden">
+      {modeSwitch}
+    <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
         <div>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Font Customizer</h1>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            Live in-browser preview — nothing here is sent to a server. Export (a later phase) will freeze these
-            settings into a real, OFL-compliant font file via the Phase 1 backend.
+            Live in-browser preview — nothing here is sent to a server. Structural edits export separately
+            (Phase 3/4 backend) into a real, OFL-compliant font file; load that export under "Effects & Export".
           </p>
         </div>
 
@@ -204,6 +244,7 @@ export default function FontsPage() {
           <FontPresetsPanel presets={presets} onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset} />
         )}
       </div>
+    </div>
     </div>
   );
 }
