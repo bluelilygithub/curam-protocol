@@ -176,6 +176,48 @@ no such limit, only the license-check directory listing does. Set
 `GITHUB_TOKEN` to any GitHub personal access token (no special scope
 needed, it only reads a public repo) to raise that to 5000/hr.
 
+## Node integration (`cli_export.py` + `server/services/fontExportPipeline.js` + `server/routes/fonts.js`)
+
+Closes the gap between this Python pipeline and the Phase 5 frontend
+(`client/src/pages/fonts/FontExportTrigger.jsx`): a designer's transform/
+kerning/rename choices reach this pipeline over HTTP instead of requiring
+someone to run Python by hand and drag the result into the browser.
+
+- **`cli_export.py`** — module entrypoint (`python -m fonts.cli_export
+  --params-file <json> --output-dir <dir>`, run with cwd =
+  `server/services/` since this package uses relative imports throughout).
+  Runs fetch (if a Google Fonts family name is given) → structural
+  transforms/kerning → export, writes `export.<fmt>` files + `report.json`
+  to `--output-dir`, and prints exactly one JSON status line to stdout:
+  `{"ok": true, "formats": [...]}` or `{"ok": false, "error_type": "...",
+  "error": "..."}` (exit code 1 on failure) — Node parses that line rather
+  than relying on the exit code alone, since the actual message lives there.
+- **`server/services/fontExportPipeline.js`** — `runFontExport()`. Same
+  subprocess/temp-dir/cleanup pattern as `officeConvert.js`
+  (LibreOffice)/`videoFfmpeg.js` (ffmpeg): tries candidate Python binaries
+  (`FONTS_PYTHON_BIN` env var, then `python3`, then `python`; ENOENT on one
+  falls through to the next), writes a per-request temp dir, always
+  cleans it up in `finally`. `OFLComplianceError`/`LicenseNotAllowedError`/
+  `FontNotFoundError`/bad-input `ValueError` from Python are tagged
+  `err.code = 'FONT_EXPORT_USER_ERROR'` (→ HTTP 400: the designer needs to
+  change something); anything else is `'FONT_EXPORT_FAILED'` (→ 500); no
+  Python binary at all is `'ENOENT'` (→ 500 with a clear "pipeline not
+  available" message, same convention as PDF Tools' missing-LibreOffice case).
+- **`server/routes/fonts.js`** — `POST /api/fonts/customize-export`
+  (feature flag `fonts`). Body: `{ family?, fontDataUrl?, recipe, rename,
+  rangeIds?, formats? }` — exactly one of `family` (Google Fonts name,
+  fetched+license-checked by Phase 1) or `fontDataUrl` (an already-loaded
+  font, e.g. from Phase 2's file drop) is required. Returns `{ formats: {
+  ttf?, woff2?, otf?: dataUrl }, report }`. Stateless dataUrl-in/dataUrl-out,
+  same convention as PDF Tools — no DB table.
+- Requires `server/services/fonts/requirements.txt` installed for whichever
+  Python binary Node finds — add that `pip install` step to the Dockerfile
+  alongside the existing ffmpeg/LibreOffice installs before this route can
+  work in production.
+
+The manual drag-in path (Phase 5's own file/report upload) still works
+independently — this is an additional automatic path, not a replacement.
+
 ## Tests
 
 `tests/test_structural.py` fetches a real OFL font via `pipeline.run()`
@@ -190,3 +232,9 @@ kerning surviving into both `.ttf` and `.otf`. The composite/export tests
 fetch fixture bytes directly via `raw.githubusercontent.com` with an
 in-process cache to stay clear of the api.github.com rate limit
 entirely. Run `pytest -m "not network"` for the offline-only subset.
+
+`server/services/fontExportPipeline.test.js` (`npm run test:fonts-export`)
+is the Node-side end-to-end test: fontBuffer → `runFontExport()` → Python
+subprocess (this same CLI, unmodified) → returned files/report, plus the
+unchanged-family-name failure path surfacing as a typed, catchable error
+rather than a hang or a generic crash.

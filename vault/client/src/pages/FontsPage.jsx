@@ -10,6 +10,7 @@ import { PROOFING_PRESETS, DEFAULT_PROOFING_TEXT } from './fonts/proofingPresets
 import { drawProof, drawAffectedPairHighlights } from './fonts/fontCanvasRenderer';
 import { loadPresets, savePreset, deletePreset } from './fonts/fontPresetsStorage';
 import FontEffectsPanel from './fonts/FontEffectsPanel';
+import FontExportTrigger from './fonts/FontExportTrigger';
 
 const PAGE_MODES = [
   { id: 'structural', label: 'Structural Preview' },
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'transforms', label: 'Transforms' },
   { id: 'kerning', label: 'Kerning' },
   { id: 'presets', label: 'Stylesheets' },
+  { id: 'export', label: 'Export' },
 ];
 
 export default function FontsPage() {
@@ -41,6 +43,8 @@ export default function FontsPage() {
   const [presets, setPresets] = useState(() => loadPresets());
   const [affectedPairs, setAffectedPairs] = useState([]);
   const [pageMode, setPageMode] = useState('structural');
+  const [fontFileBuffer, setFontFileBuffer] = useState(null);
+  const [pendingExport, setPendingExport] = useState(null);
 
   const proofingText = activePresetId === 'custom'
     ? customText
@@ -51,7 +55,8 @@ export default function FontsPage() {
     setLoadError('');
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = opentype.parse(buffer);
+      setFontFileBuffer(buffer);
+      const parsed = opentype.parse(buffer.slice(0));
       setFont(parsed);
       const isVariable = !!(parsed.tables && parsed.tables.fvar);
       setFontMeta({
@@ -123,6 +128,11 @@ export default function FontsPage() {
     setPresets(deletePreset(id));
   };
 
+  const handleExported = (formats, report) => {
+    setPendingExport({ formats, report });
+    setPageMode('effects');
+  };
+
   const modeSwitch = (
     <div className="flex gap-1 px-6 pt-4" style={{ background: 'var(--color-bg)' }}>
       {PAGE_MODES.map((mode) => (
@@ -148,7 +158,7 @@ export default function FontsPage() {
       <div className="flex flex-col h-full overflow-hidden">
         {modeSwitch}
         <div className="flex-1 overflow-hidden">
-          <FontEffectsPanel />
+          <FontEffectsPanel pendingExport={pendingExport} onPendingExportConsumed={() => setPendingExport(null)} />
         </div>
       </div>
     );
@@ -242,6 +252,9 @@ export default function FontsPage() {
         {activeTab === 'kerning' && <FontKerningPanel kerning={kerning} onChange={setKerning} />}
         {activeTab === 'presets' && (
           <FontPresetsPanel presets={presets} onSave={handleSavePreset} onApply={handleApplyPreset} onDelete={handleDeletePreset} />
+        )}
+        {activeTab === 'export' && (
+          <FontExportTrigger transforms={transforms} kerning={kerning} fontFileBuffer={fontFileBuffer} onExported={handleExported} />
         )}
       </div>
     </div>

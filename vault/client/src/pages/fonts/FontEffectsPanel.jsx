@@ -11,7 +11,21 @@ function slugify(name) {
   return (name || 'custom-font').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
-export default function FontEffectsPanel() {
+function dataUrlToArrayBuffer(dataUrl) {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/**
+ * @param {object} [props.pendingExport] - { formats: {ttf?,woff2?,otf?: dataUrl}, report } from
+ *   FontExportTrigger's server-side "Customize → Export" flow. When set, loads that result
+ *   automatically — the manual drag-in below still works independently as a fallback/advanced path.
+ * @param {() => void} [props.onPendingExportConsumed] - clears the parent's pendingExport state once loaded.
+ */
+export default function FontEffectsPanel({ pendingExport, onPendingExportConsumed }) {
   const getIcon = useIcon();
   const fontInputRef = useRef(null);
   const reportInputRef = useRef(null);
@@ -21,6 +35,7 @@ export default function FontEffectsPanel() {
   const [familyName, setFamilyName] = useState('');
   const [loadError, setLoadError] = useState('');
   const [fontReady, setFontReady] = useState(false);
+  const [loadedVia, setLoadedVia] = useState(''); // 'manual' | 'export' — shown in the UI so it's clear which source is live
 
   const [coverageReport, setCoverageReport] = useState(null);
   const [reportError, setReportError] = useState('');
@@ -32,29 +47,49 @@ export default function FontEffectsPanel() {
   const [copied, setCopied] = useState(false);
 
   // Load the real exported font via FontFace + @font-face — never opentype.js/canvas rendering here.
-  const handleFontFile = useCallback(async (file) => {
-    if (!file) return;
+  const loadFontFromBuffer = useCallback(async (buffer, fallbackName, via) => {
     setLoadError('');
     setFontReady(false);
     try {
-      const buffer = await file.arrayBuffer();
       setFontBuffer(buffer);
 
       // Read the real renamed family name straight from the exported
       // font's own name table (metadata inspection, not rendering).
       const parsed = opentype.parse(buffer.slice(0));
-      const family = parsed.names?.fontFamily?.en || file.name.replace(/\.[^.]+$/, '');
+      const family = parsed.names?.fontFamily?.en || fallbackName;
       setFamilyName(family);
 
       const fontFace = new FontFace(family, buffer);
       await fontFace.load();
       document.fonts.add(fontFace);
       setFontReady(true);
+      setLoadedVia(via);
     } catch (err) {
       setLoadError(`Could not load this font file: ${err.message}`);
       setFontReady(false);
     }
   }, []);
+
+  const handleFontFile = useCallback(async (file) => {
+    if (!file) return;
+    const buffer = await file.arrayBuffer();
+    await loadFontFromBuffer(buffer, file.name.replace(/\.[^.]+$/, ''), 'manual');
+  }, [loadFontFromBuffer]);
+
+  // Automatic path: FontExportTrigger's server round-trip handed us a
+  // finished export directly — no drag-and-drop needed.
+  useEffect(() => {
+    if (!pendingExport) return;
+    const dataUrl = pendingExport.formats.woff2 || pendingExport.formats.ttf || pendingExport.formats.otf;
+    if (!dataUrl) return;
+    (async () => {
+      await loadFontFromBuffer(dataUrlToArrayBuffer(dataUrl), 'exported-font', 'export');
+      setCoverageReport(pendingExport.report);
+      setReportError('');
+      onPendingExportConsumed?.();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingExport]);
 
   const handleReportFile = useCallback(async (file) => {
     if (!file) return;
@@ -130,8 +165,14 @@ export default function FontEffectsPanel() {
             <div className="flex-1 min-w-0">
               <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>
                 {fontReady ? familyName : 'Load your exported .woff2/.ttf/.otf'}
+                {fontReady && loadedVia === 'export' && (
+                  <span className="text-xs ml-2" style={{ color: 'var(--color-primary)' }}>(from Customize → Export)</span>
+                )}
               </p>
               {loadError && <p className="text-xs" style={{ color: '#ef4444' }}>{loadError}</p>}
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Manual drag-in — advanced/fallback path if you ran the Python pipeline yourself.
+              </p>
             </div>
             <input ref={fontInputRef} type="file" accept=".woff2,.ttf,.otf" className="hidden" onChange={(e) => handleFontFile(e.target.files?.[0])} />
             <button onClick={() => fontInputRef.current?.click()} className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-primary)', color: '#fff' }}>
