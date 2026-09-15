@@ -2625,6 +2625,34 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [hDailyLog, setHDailyLog] = useState([]); // last 60 days, from server
   const [hPending, setHPending] = useState({ hours: 0, count: 0, oldestDate: null }); // unposted diary rows
 
+  // Vehicle trip diary (fin_vehicle_trip_log) — same substantiation-record pattern as the home
+  // office daily log above, for the cents_per_km method. Logging a trip has zero journal impact.
+  const [vTripForm, setVTripForm] = useState({ tripDate: todayStr(), km: '', purpose: VEHICLE_PURPOSES[0], description: '' });
+  const [vTripLogging, setVTripLogging] = useState(false);
+  const [vPending, setVPending] = useState({ km: 0, count: 0, oldestDate: null }); // unposted diary rows
+
+  const loadVPending = () => {
+    api.get('/api/finance/vehicle-trip-log/pending').then(r => r.json())
+      .then(d => setVPending({ km: d.km || 0, count: d.count || 0, oldestDate: d.oldestDate || null })).catch(() => {});
+  };
+
+  const logTrip = async () => {
+    const kmNum = parseFloat(vTripForm.km);
+    if (!Number.isFinite(kmNum) || kmNum <= 0) { addToast('Enter km greater than zero', 'error'); return; }
+    setVTripLogging(true);
+    try {
+      const description = vTripForm.purpose === 'Other (describe)' ? vTripForm.description : vTripForm.purpose;
+      const res = await api.post('/api/finance/vehicle-trip-log', {
+        tripDate: vTripForm.tripDate, km: kmNum, purpose: vTripForm.purpose, description,
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to log trip');
+      addToast('Trip logged');
+      setVTripForm({ tripDate: todayStr(), km: '', purpose: VEHICLE_PURPOSES[0], description: '' });
+      loadVPending();
+    } catch (e) { addToast(e.message, 'error'); } finally { setVTripLogging(false); }
+  };
+
   // Today's posted $ total for each card — same scope on both, unlike the mismatch that existed
   // before (Vehicle showed nothing, Home Office effectively showed FY-scoped figures elsewhere).
   const [todaySummary, setTodaySummary] = useState({ Vehicle: { total: 0, count: 0 }, 'Home Office': { total: 0, count: 0 } });
@@ -2675,6 +2703,18 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     } catch (e) { addToast(e.message, 'error'); }
   };
 
+  const downloadHEvidence = async (category, fileName) => {
+    try {
+      const res = await api.get(`/api/finance/home-office-evidence/${category}/file`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName || category; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
   useEffect(() => {
     api.get('/api/finance/settings').then(r => r.json()).then(d => {
       setRates(p => ({
@@ -2687,6 +2727,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     loadHEvidence();
     loadHDailyLog();
     loadHPending();
+    loadVPending();
     loadTodaySummary();
   }, []);
 
@@ -2723,8 +2764,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     return { recentHours, recentDays, olderGaps: olderGaps.sort() };
   })();
 
+  // cents_per_km no longer takes manual km entry — the number posted is always exactly what's
+  // pending in the trip diary (vPending.km), same pattern as home office's hPending.hours.
   const vehicleDeductible = lockedVMethod === 'cents_per_km'
-    ? (parseFloat(vForm.km) || 0) * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
+    ? vPending.km * (parseFloat(rates.fin_vehicle_rate_per_km) || 0)
     : lockedVMethod === 'logbook'
     ? (parseFloat(vForm.actualCost) || 0) * ((parseFloat(vForm.businessUsePercent) || 0) / 100)
     : 0;
@@ -2743,13 +2786,15 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     setVSaving(true); setVError('');
     try {
       // No `method` or rate field is sent — the server resolves and applies FY${vFy}'s locked
-      // method + the current ATO rate from Settings itself. See docs/finance.md.
+      // method + the current ATO rate from Settings itself. See docs/finance.md. For cents_per_km,
+      // there's no Business km/Purpose entry on this form any more — km is always exactly the
+      // pending trip-diary total, and purpose/description come from the individually logged trips.
       const description = vForm.purpose === 'Other (describe)' ? vForm.description : vForm.purpose;
       const res = await api.post('/api/finance/expenses/vehicle', {
-        date: vForm.date,
-        purpose: vForm.purpose,
-        description,
-        km: vForm.km,
+        date: lockedVMethod === 'cents_per_km' ? todayStr() : vForm.date,
+        purpose: lockedVMethod === 'cents_per_km' ? 'Vehicle km deduction' : vForm.purpose,
+        description: lockedVMethod === 'cents_per_km' ? 'Vehicle km deduction (from trip diary)' : description,
+        km: lockedVMethod === 'cents_per_km' ? vPending.km : vForm.km,
         businessUsePercent: vForm.businessUsePercent,
         actualCost: vForm.actualCost,
       });
@@ -2757,6 +2802,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       if (!res.ok) throw new Error(body.error || 'Failed to save');
       addToast(`Vehicle expense saved — ${fmt(vehicleDeductible)} deductible`);
       setVForm({ date: todayStr(), purpose: VEHICLE_PURPOSES[0], description: '', km: '', businessUsePercent: '', actualCost: '' });
+      loadVPending();
       loadTodaySummary();
     } catch (e) { setVError(e.message); } finally { setVSaving(false); }
   };
@@ -2810,34 +2856,73 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             <NoMethodLockedNotice fy={vFy} claimTypeLabel="vehicle" onGoToSettings={onGoToSettings} />
           )}
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Tooltip></Field>
-            <Field label="Purpose" hint="For description/organization — your own logbook/diary is still the substantiation record">
-              <Tooltip text="Common ATO-accepted business-travel purposes, for description/organization only — this dropdown doesn't replace your logbook/diary substantiation">
-                <Select value={vForm.purpose} onChange={v => setVForm(p => ({...p, purpose: v}))}>
-                  {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
-                </Select>
+          {lockedVMethod === 'cents_per_km' && (
+            <button type="button" onClick={() => exportDiaryCsv('/api/finance/vehicle-trip-log/export', 'vehicle-trip-diary.csv')}
+              className="text-xs underline mb-2 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+              Export full trip diary (CSV)
+            </button>
+          )}
+
+          {lockedVMethod === 'cents_per_km' && (
+            <div className="p-3 rounded-lg border mb-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <Tooltip text="Logging a trip here has zero journal/accounting impact — it's the substantiation record only. The actual km posted below is the pending total, not this form.">
+                <p className="flex items-center gap-1.5 text-xs font-semibold mb-2 cursor-help" style={{ color: 'var(--color-text)' }}>
+                  {getIcon('info', { size: 12 })} Log Trip (trip diary — not per-claim)
+                </p>
               </Tooltip>
-            </Field>
-            {vForm.purpose === 'Other (describe)' && (
-              <Field label="Describe purpose"><Tooltip text="Free-text description of the business purpose for this travel."><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Tooltip></Field>
-            )}
-            {lockedVMethod === 'cents_per_km' && (
-              <Field label="Business km"><Tooltip text="Total business kilometres travelled this period"><Input type="number" value={vForm.km} onChange={v => setVForm(p => ({...p, km: v}))} placeholder="0" /></Tooltip></Field>
-            )}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <Field label="Date"><Input type="date" value={vTripForm.tripDate} onChange={v => setVTripForm(p => ({...p, tripDate: v}))} /></Field>
+                <Field label="Km"><Input type="number" value={vTripForm.km} onChange={v => setVTripForm(p => ({...p, km: v}))} placeholder="0" /></Field>
+                <Field label="Purpose">
+                  <Select value={vTripForm.purpose} onChange={v => setVTripForm(p => ({...p, purpose: v}))}>
+                    {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+                </Field>
+                {vTripForm.purpose === 'Other (describe)' && (
+                  <Field label="Describe"><Input value={vTripForm.description} onChange={v => setVTripForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Field>
+                )}
+              </div>
+              <Btn onClick={logTrip} disabled={vTripLogging}>{vTripLogging ? 'Logging…' : 'Log Trip'}</Btn>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
             {lockedVMethod === 'logbook' && (
               <>
+                <Field label="Date"><Tooltip text="The date this expense is recorded against — also determines which financial year's locked method applies."><Input type="date" value={vForm.date} onChange={v => setVForm(p => ({...p, date: v}))} /></Tooltip></Field>
+                <Field label="Purpose" hint="For description/organization — your own logbook/diary is still the substantiation record">
+                  <Tooltip text="Common ATO-accepted business-travel purposes, for description/organization only — this dropdown doesn't replace your logbook/diary substantiation">
+                    <Select value={vForm.purpose} onChange={v => setVForm(p => ({...p, purpose: v}))}>
+                      {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </Select>
+                  </Tooltip>
+                </Field>
+                {vForm.purpose === 'Other (describe)' && (
+                  <Field label="Describe purpose"><Tooltip text="Free-text description of the business purpose for this travel."><Input value={vForm.description} onChange={v => setVForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Tooltip></Field>
+                )}
                 <Field label="Business use %"><Tooltip text="Percentage of total vehicle use that was for business, per your logbook"><Input type="number" value={vForm.businessUsePercent} onChange={v => setVForm(p => ({...p, businessUsePercent: v}))} placeholder="0" /></Tooltip></Field>
                 <Field label="Actual cost ($)"><Tooltip text="Total actual running cost (fuel, rego, insurance, servicing) for the period"><Input type="number" value={vForm.actualCost} onChange={v => setVForm(p => ({...p, actualCost: v}))} placeholder="0.00" /></Tooltip></Field>
               </>
             )}
           </div>
-          <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
-            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</p>
-          </Tooltip>
+          {lockedVMethod === 'cents_per_km' && (
+            <Tooltip text="All km logged in the trip diary since the last posted deduction — captured via 'Log Trip' above, not editable here. Deductible is this × the current ATO rate.">
+              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 cursor-help" style={{ color: 'var(--color-text)' }}>
+                <span>{vPending.km.toFixed(2)} km pending posting</span>
+                <span style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</span>
+              </p>
+            </Tooltip>
+          )}
+          {lockedVMethod === 'logbook' && (
+            <Tooltip text="Calculated live from the locked FY method and the current ATO rate set in Settings — not editable here.">
+              <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</p>
+            </Tooltip>
+          )}
           <ErrMsg msg={vError} />
-          <Tooltip text="Post this as an expense — it will flow into P&L/BAS through the normal expense journal">
-            <Btn onClick={saveVehicle} disabled={vSaving || !lockedVMethod}>{vSaving ? 'Saving…' : 'Save Vehicle Expense'}</Btn>
+          <Tooltip text={lockedVMethod === 'cents_per_km' ? "Posts the diary's pending km as a deduction — it will flow into P&L/BAS through the normal expense journal. Km is already recorded via Log Trip; this only posts it." : "Post this as an expense — it will flow into P&L/BAS through the normal expense journal"}>
+            <Btn onClick={saveVehicle} disabled={vSaving || !lockedVMethod || (lockedVMethod === 'cents_per_km' && vPending.km <= 0)}>
+              {vSaving ? 'Saving…' : (lockedVMethod === 'cents_per_km' ? 'Post Deduction' : 'Save Vehicle Expense')}
+            </Btn>
           </Tooltip>
         </div>
 
@@ -2861,7 +2946,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           {lockedHMethod === 'fixed_rate' && (
             <Tooltip text="From the separate daily WFH hours diary (the global daily popup) — a substantiation record only, distinct from the periodic totals you enter below via 'Save Hours' to post the actual deduction.">
               <p className="text-xs mb-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                Daily log: {hDailySummary.recentHours.toFixed(2)} hours recorded over the last 14 days across {hDailySummary.recentDays} day{hDailySummary.recentDays === 1 ? '' : 's'}
+                Daily log (last 14 days only): {hDailySummary.recentHours.toFixed(2)} hours recorded across {hDailySummary.recentDays} day{hDailySummary.recentDays === 1 ? '' : 's'} — see "hours pending posting" below for the full unposted total
               </p>
             </Tooltip>
           )}
@@ -2896,6 +2981,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
                         <Tooltip text={`Uploaded ${new Date(hEvidence[cat.id].uploadedAt).toLocaleDateString('en-AU')}`}>
                           <span style={{ color: 'var(--color-muted)' }}>✓ Saved</span>
                         </Tooltip>
+                        <Tooltip text={`Download the saved ${cat.label.toLowerCase()} evidence`}>
+                          <button type="button" onClick={() => downloadHEvidence(cat.id, hEvidence[cat.id].fileName)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>⬇</button>
+                        </Tooltip>
                         <Tooltip text={`Remove the saved ${cat.label.toLowerCase()} evidence`}>
                           <button type="button" onClick={() => deleteHEvidence(cat.id)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
                         </Tooltip>
@@ -2928,9 +3016,9 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </div>
           )}
           {lockedHMethod === 'fixed_rate' && (
-            <Tooltip text="Hours worked from home, unposted, since the last posted deduction — captured entirely by the daily reminder popup, not editable here. Deductible is this × the current ATO rate.">
+            <Tooltip text="All hours logged in the diary since the last posted deduction (not capped at 14 days, unlike the summary line above) — captured entirely by the daily reminder popup, not editable here. Deductible is this × the current ATO rate.">
               <p className="flex items-baseline justify-between text-sm font-semibold mb-3 cursor-help" style={{ color: 'var(--color-text)' }}>
-                <span>{hPending.hours.toFixed(2)} hours</span>
+                <span>{hPending.hours.toFixed(2)} hours pending posting</span>
                 <span style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</span>
               </p>
             </Tooltip>

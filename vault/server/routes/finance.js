@@ -2323,6 +2323,16 @@ router.post('/expenses/vehicle', async (req, res) => {
       });
     }
 
+    // Mark every currently-pending trip-log row as rolled into this posting — same traceability
+    // pattern as the home-office daily log, so a posted km deduction can be traced back to the
+    // specific logged trips behind it.
+    if (useMethod === 'cents_per_km') {
+      await dbClient.query(
+        `UPDATE fin_vehicle_trip_log SET "postedExpenseId"=$1 WHERE "userId"=$2 AND "postedExpenseId" IS NULL`,
+        [expense.id, userId]
+      );
+    }
+
     await dbClient.query('COMMIT');
     res.json({ ...expense, deductible, method: useMethod, purpose: purpose || null });
   } catch (err) {
@@ -2330,6 +2340,100 @@ router.post('/expenses/vehicle', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     dbClient.release();
+  }
+});
+
+// ── Vehicle trip diary ──────────────────────────────────────────────────────
+// Substantiation record for the cents_per_km method — logging a trip here has zero
+// journal/accounting impact; nothing here touches fin_expenses or fin_journal_entries.
+// Same two-layer pattern as the home office daily log (see docs/finance.md).
+
+router.get('/vehicle-trip-log', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "tripDate"::text AS "tripDate", km, purpose, description, "postedExpenseId", "createdAt"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "tripDate" >= (CURRENT_DATE - INTERVAL '60 days')
+       ORDER BY "tripDate" DESC, id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Diary km not yet rolled into a posted deduction (postedExpenseId IS NULL) — source of truth
+// for what the periodic Vehicle card pre-fills into Business km. Read-only, no side effects.
+router.get('/vehicle-trip-log/pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(SUM(km),0)::float AS km, COUNT(*)::int AS count, MIN("tripDate")::text AS "oldestDate"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 AND "postedExpenseId" IS NULL`,
+      [req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Full-history CSV — the actual document to hand an accountant/produce under audit.
+router.get('/vehicle-trip-log/export', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT "tripDate"::text AS "tripDate", km, purpose, description, "postedExpenseId", "createdAt"
+       FROM fin_vehicle_trip_log WHERE "userId"=$1 ORDER BY "tripDate" ASC, id ASC`,
+      [req.user.id]
+    );
+    const header = 'Date,Km,Purpose,Description,Posted,LoggedAt';
+    const lines = rows.map(r => [
+      r.tripDate,
+      r.km,
+      JSON.stringify(r.purpose || ''),
+      JSON.stringify(r.description || ''),
+      r.postedExpenseId ? 'Yes' : 'No',
+      new Date(r.createdAt).toISOString(),
+    ].join(','));
+    const csv = [header, ...lines].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="vehicle-trip-diary.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vehicle-trip-log', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { tripDate, km, purpose, description } = req.body;
+    if (!tripDate) return res.status(400).json({ error: 'tripDate is required' });
+    const kmNum = parseFloat(km);
+    if (!Number.isFinite(kmNum) || kmNum < 0) {
+      return res.status(400).json({ error: 'km must be a number >= 0' });
+    }
+    // No UNIQUE per date — multiple trips per day are normal, so always insert, never upsert.
+    const { rows } = await pool.query(
+      `INSERT INTO fin_vehicle_trip_log ("userId", "tripDate", km, purpose, description)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, "tripDate"::text AS "tripDate", km, purpose, description, "createdAt"`,
+      [userId, tripDate, kmNum, purpose || null, description || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/vehicle-trip-log/:id', async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM fin_vehicle_trip_log WHERE id=$1 AND "userId"=$2 AND "postedExpenseId" IS NULL`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
