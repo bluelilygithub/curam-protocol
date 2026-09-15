@@ -9,8 +9,38 @@
 
 const express = require('express');
 const { runFontExport } = require('../services/fontExportPipeline');
+const { getCatalog } = require('../services/fontGoogleCatalog');
 
 const router = express.Router();
+
+// GET /api/fonts/catalog — the OFL-filtered, cached Google Fonts list for the picker's
+// search/autocomplete. Search convenience only; POST /customize-export below still runs
+// the real fetch/freeze/license-check against the live repo on selection, unconditionally.
+router.get('/catalog', async (req, res) => {
+  try {
+    const catalog = await getCatalog();
+    res.json(catalog);
+  } catch (err) {
+    console.error('Font catalog:', err);
+    if (err.code === 'ENOENT') {
+      return res.status(500).json({
+        error: 'The font catalog builder is not available on this server (Python/fontTools not installed). The server image may still be deploying — please try again shortly.',
+      });
+    }
+    res.status(500).json({ error: err.message || 'Could not load the font catalog.' });
+  }
+});
+
+// POST /api/fonts/catalog/refresh — force-rebuild the cache now, instead of waiting out the TTL.
+router.post('/catalog/refresh', async (req, res) => {
+  try {
+    const catalog = await getCatalog({ forceRefresh: true });
+    res.json(catalog);
+  } catch (err) {
+    console.error('Font catalog refresh:', err);
+    res.status(500).json({ error: err.message || 'Could not refresh the font catalog.' });
+  }
+});
 
 const MIME_BY_FORMAT = {
   ttf: 'font/ttf',

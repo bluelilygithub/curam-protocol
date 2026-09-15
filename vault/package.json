@@ -32,7 +32,8 @@
     "test:property-scenario-insights": "node server/services/propertyScenario/insights/insights.test.js",
     "test:property-scenario-insights-live": "node server/services/propertyScenario/insights/live.probe.js",
     "test:fonts-export": "node server/services/fontExportPipeline.test.js",
-    "test:fonts-svg-export": "node client/src/pages/fonts/svgExport.test.mjs"
+    "test:fonts-svg-export": "node client/src/pages/fonts/svgExport.test.mjs",
+    "test:fonts-catalog": "node server/services/fontGoogleCatalog.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

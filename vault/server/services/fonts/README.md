@@ -176,6 +176,35 @@ no such limit, only the license-check directory listing does. Set
 `GITHUB_TOKEN` to any GitHub personal access token (no special scope
 needed, it only reads a public repo) to raise that to 5000/hr.
 
+## Font picker / catalog (`cli_catalog.py` + `server/services/fontGoogleCatalog.js`)
+
+Server-cached, OFL-filtered Google Fonts catalog for the `/fonts` picker's
+search/autocomplete (`GET /api/fonts/catalog`, `POST /api/fonts/catalog/refresh`):
+
+- **`cli_catalog.py`** — `google_fonts_repo.list_ofl_family_slugs()` (one
+  Git Trees API call, `ofl/` directory entries — the exact same rule
+  `find_family()` uses per-family, not a second implementation) filters
+  family/category/variable-axes metadata pulled from Google's public
+  `fonts.google.com/metadata/fonts` endpoint (no API key, this phase's
+  "webfonts.json equivalent"). Writes `catalog.json`: `[{family, slug,
+  category, isVariable, axisTags}, ...]`.
+- **`server/services/fontGoogleCatalog.js`** — `getCatalog()` caches the
+  built list in memory with a TTL (`FONTS_CATALOG_TTL_MS`, default 24h —
+  "changes infrequently" per spec), concurrent callers share one in-flight
+  build, `warmCatalog()` triggers a background build at server boot so the
+  first real request isn't the one paying for it.
+- **This cache is a search convenience only.** Selecting a family from the
+  picker just fills in the family-name field — `POST
+  /customize-export`'s real `fetch_and_freeze()` (Phase 1, unmodified)
+  still runs at export time regardless of what the cache says. If the
+  live repo disagrees with the cache (the Merriweather-went-variable
+  finding from Phase 1), that real check is what the designer actually
+  gets.
+- **Frontend:** `client/src/pages/fonts/FontPicker.jsx` — type-ahead
+  filter over the cached list, shows category + a Variable/Static badge,
+  free-text entry still works for anything not yet in the cache. Used by
+  `FontExportTrigger.jsx`'s "Google Font name" field.
+
 ## Node integration (`cli_export.py` + `server/services/fontExportPipeline.js` + `server/routes/fonts.js`)
 
 Closes the gap between this Python pipeline and the Phase 5 frontend
@@ -238,3 +267,9 @@ is the Node-side end-to-end test: fontBuffer → `runFontExport()` → Python
 subprocess (this same CLI, unmodified) → returned files/report, plus the
 unchanged-family-name failure path surfacing as a typed, catchable error
 rather than a hang or a generic crash.
+
+`tests/test_catalog.py` (Python) and `server/services/fontGoogleCatalog.test.js`
+(`npm run test:fonts-catalog`, Node) both verify: Roboto Slab (Apache-2.0)
+is excluded from the OFL-filtered catalog, PT Serif/Roboto Flex are
+present with correct static/variable flags, and `list_ofl_family_slugs()`
+agrees with `find_family()`'s per-family determination for both.

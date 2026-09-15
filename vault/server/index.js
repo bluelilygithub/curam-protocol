@@ -133,6 +133,7 @@ app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), require('./routes/graphics'));
 app.use('/api/fonts', requireFeature('fonts'), require('./routes/fonts'));
+require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
 app.use('/api/videos', requireFeature('videos'), require('./routes/videos'));
 app.use('/api/recipes', requireFeature('recipes'), require('./routes/recipes'));
 app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));

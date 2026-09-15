@@ -141,3 +141,38 @@ def download_file(repo_file: RepoFile) -> bytes:
     resp = requests.get(repo_file.download_url, timeout=30)
     resp.raise_for_status()
     return resp.content
+
+
+def list_ofl_family_slugs() -> set[str]:
+    """
+    Every family slug currently under ofl/ in google/fonts, in one request
+    via the Git Trees API (recursive, single call — the per-family Contents
+    API `find_family()` uses would take ~2000 requests to enumerate the
+    whole catalog, which is not the same problem `find_family()` solves).
+
+    This is the SAME rule `find_family()` uses (presence under ofl/ is the
+    license proof) applied to the whole repo at once — the catalog picker
+    (cli_catalog.py) uses this only to pre-filter what's *searchable*; the
+    real, authoritative check still runs per-family via `find_family()` at
+    selection time (the repo can change between a cache build and a pick).
+    """
+    resp = requests.get(
+        "https://api.github.com/repos/google/fonts/git/trees/main",
+        params={"recursive": "1"},
+        headers=_api_headers(),
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("truncated"):
+        raise RuntimeError(
+            "google/fonts git tree response was truncated — the catalog would be incomplete. "
+            "GitHub's tree API has a size cap; this repo may have grown past it."
+        )
+
+    slugs: set[str] = set()
+    for entry in data.get("tree", []):
+        path = entry.get("path", "")
+        if entry.get("type") == "tree" and path.startswith("ofl/") and path.count("/") == 1:
+            slugs.add(path.split("/", 1)[1])
+    return slugs

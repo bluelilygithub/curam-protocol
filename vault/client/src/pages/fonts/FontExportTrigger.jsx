@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../../utils/apiClient';
 import Tooltip from '../../components/Tooltip';
 import useProcessingStore from '../../store/processingStore';
+import FontPicker from './FontPicker';
 
 const RANGE_OPTIONS = [
   { id: 'basic-latin', label: 'Basic Latin (A-Z, a-z, 0-9, punctuation)' },
@@ -94,13 +95,7 @@ export default function FontExportTrigger({ transforms, kerning, fontFileBuffer,
           </button>
         </div>
         {useGoogleFont ? (
-          <input
-            value={googleFontFamily}
-            onChange={(e) => setGoogleFontFamily(e.target.value)}
-            placeholder="e.g. PT Serif"
-            className="w-full rounded px-2 py-1.5 text-sm"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <FontPicker value={googleFontFamily} onChange={setGoogleFontFamily} />
         ) : (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             {fontFileBuffer ? 'Using the font file loaded in Structural Preview.' : 'Load a font file in Structural Preview first, or type a Google Font name above.'}

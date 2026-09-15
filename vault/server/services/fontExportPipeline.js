@@ -81,7 +81,9 @@ async function runFontExport({ family, fontBuffer, fontExt = '.ttf', recipe, ren
     const outputDir = path.join(tmpDir, 'out');
     await fsp.mkdir(outputDir, { recursive: true });
 
-    const { result, triedErrors } = await runCliWithFallback(paramsPath, outputDir);
+    const { result, triedErrors } = await runPythonModuleWithFallback(
+      ['-m', 'fonts.cli_export', '--params-file', paramsPath, '--output-dir', outputDir],
+    );
 
     if (!result) {
       const err = new Error(triedErrors.join(' | ') || 'Python font export pipeline is not available on this server.');
@@ -109,15 +111,20 @@ async function runFontExport({ family, fontBuffer, fontExt = '.ttf', recipe, ren
   }
 }
 
-/** Tries each candidate Python binary in turn; ENOENT means "not installed", try the next one. */
-async function runCliWithFallback(paramsPath, outputDir) {
+/**
+ * Tries each candidate Python binary in turn (ENOENT = "not installed",
+ * try the next one) running `<bin> <args>` with cwd = server/services.
+ * Shared by fontExportPipeline.js and fontGoogleCatalog.js so both talk
+ * to the fonts/ package the same way.
+ */
+async function runPythonModuleWithFallback(args, { timeout = CLI_TIMEOUT_MS } = {}) {
   const triedErrors = [];
   for (const bin of PYTHON_BINS) {
     try {
       const { stdout } = await execFileAsync(
         bin,
-        ['-m', 'fonts.cli_export', '--params-file', paramsPath, '--output-dir', outputDir],
-        { cwd: SERVICES_DIR, timeout: CLI_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 },
+        args,
+        { cwd: SERVICES_DIR, timeout, maxBuffer: 10 * 1024 * 1024 },
       );
       const result = parseLastJsonLine(stdout);
       if (!result) {
@@ -152,4 +159,4 @@ function parseLastJsonLine(stdout) {
   }
 }
 
-module.exports = { runFontExport };
+module.exports = { runFontExport, runPythonModuleWithFallback, parseLastJsonLine, SERVICES_DIR };
