@@ -11,6 +11,7 @@ import { drawProof, drawAffectedPairHighlights } from './fonts/fontCanvasRendere
 import { loadPresets, savePreset, deletePreset } from './fonts/fontPresetsStorage';
 import FontEffectsPanel from './fonts/FontEffectsPanel';
 import FontExportTrigger from './fonts/FontExportTrigger';
+import { startFontsTour, TOUR_KEY as FONTS_TOUR_KEY } from '../utils/tours/fontsTour';
 
 const PAGE_MODES = [
   { id: 'structural', label: 'Structural Preview' },
@@ -133,8 +134,26 @@ export default function FontsPage() {
     setPageMode('effects');
   };
 
+  const header = (
+    <div className="flex items-center gap-2 px-6 pt-4" style={{ background: 'var(--color-bg)' }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
+        {getIcon('type', { size: 16 })}
+      </div>
+      <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Font Customizer</h1>
+      <button
+        onClick={() => { localStorage.removeItem(FONTS_TOUR_KEY); startFontsTour(setPageMode, setActiveTab); }}
+        title="Take the Font Customizer tour"
+        style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+      >
+        {getIcon('compass', { size: 13 })}
+      </button>
+    </div>
+  );
+
   const modeSwitch = (
-    <div className="flex gap-1 px-6 pt-4" style={{ background: 'var(--color-bg)' }}>
+    <div className="flex gap-1 px-6 pt-2" style={{ background: 'var(--color-bg)' }} data-tour="fonts-mode-switch">
       {PAGE_MODES.map((mode) => (
         <button
           key={mode.id}
@@ -156,6 +175,7 @@ export default function FontsPage() {
   if (pageMode === 'effects') {
     return (
       <div className="flex flex-col h-full overflow-hidden">
+        {header}
         {modeSwitch}
         <div className="flex-1 overflow-hidden">
           <FontEffectsPanel pendingExport={pendingExport} onPendingExportConsumed={() => setPendingExport(null)} />
@@ -166,11 +186,11 @@ export default function FontsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {header}
       {modeSwitch}
     <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-5">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Font Customizer</h1>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
             Live in-browser preview — nothing here is sent to a server. Structural edits export separately
             (Phase 3/4 backend) into a real, OFL-compliant font file; load that export under "Effects & Export".
@@ -182,6 +202,7 @@ export default function FontsPage() {
           onDragOver={(e) => e.preventDefault()}
           className="rounded-lg p-4 flex items-center gap-3"
           style={{ background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}
+          data-tour="fonts-file-loader"
         >
           {getIcon('type', { size: 20 })}
           <div className="flex-1">
@@ -198,13 +219,15 @@ export default function FontsPage() {
             {loadError && <p className="text-xs" style={{ color: '#ef4444' }}>{loadError}</p>}
           </div>
           <input ref={fileInputRef} type="file" accept=".ttf,.otf,.woff" onChange={onFileInputChange} className="hidden" />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200"
-            style={{ background: 'var(--color-primary)', color: '#fff' }}
-          >
-            Choose file
-          </button>
+          <Tooltip text="Any .ttf/.otf/.woff — this is only for the parametric preview below, nothing is uploaded. To customize a Google Font, use the Export tab instead.">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+            >
+              Choose file
+            </button>
+          </Tooltip>
         </div>
 
         <FontProofingText
@@ -214,13 +237,15 @@ export default function FontsPage() {
           onCustomTextChange={setCustomText}
         />
 
-        <div className="flex items-center gap-3">
-          <span className="text-sm" style={{ color: 'var(--color-text)' }}>Preview size</span>
-          <input type="range" min={24} max={160} step={2} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-40" />
-          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fontSize}px</span>
-        </div>
+        <Tooltip text="Zoom the preview canvas below — doesn't affect the exported font's actual size.">
+          <div className="flex items-center gap-3">
+            <span className="text-sm" style={{ color: 'var(--color-text)' }}>Preview size</span>
+            <input type="range" min={24} max={160} step={2} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="w-40" />
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fontSize}px</span>
+          </div>
+        </Tooltip>
 
-        <div className="rounded-lg overflow-x-auto" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="rounded-lg overflow-x-auto" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} data-tour="fonts-canvas">
           <canvas ref={canvasRef} width={900} height={220} className="block" />
         </div>
 
@@ -232,7 +257,7 @@ export default function FontsPage() {
       </div>
 
       <div className="w-80 flex-shrink-0 overflow-y-auto p-5" style={{ background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border)' }}>
-        <div className="flex gap-1 mb-4">
+        <div className="flex gap-1 mb-4" data-tour="fonts-tabs">
           {TABS.map((tab) => (
             <button
               key={tab.id}

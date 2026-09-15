@@ -207,7 +207,7 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-tour="fonts-effects-loader">
           <div className="rounded-lg p-4 flex items-center gap-3" style={{ background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}>
             {getIcon('type', { size: 18 })}
             <div className="flex-1 min-w-0">
@@ -223,9 +223,11 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
               </p>
             </div>
             <input ref={fontInputRef} type="file" accept=".woff2,.ttf,.otf" className="hidden" onChange={(e) => handleFontFile(e.target.files?.[0])} />
-            <button onClick={() => fontInputRef.current?.click()} className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-primary)', color: '#fff' }}>
-              Choose file
-            </button>
+            <Tooltip text="Manual fallback: use this only if you ran the Python export pipeline yourself, outside the app. Pick .ttf or .otf — this app's preview parser can't read .woff2.">
+              <button onClick={() => fontInputRef.current?.click()} className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                Choose file
+              </button>
+            </Tooltip>
           </div>
 
           <div className="rounded-lg p-4 flex items-center gap-3" style={{ background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}>
@@ -237,20 +239,24 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
               {reportError && <p className="text-xs" style={{ color: '#ef4444' }}>{reportError}</p>}
             </div>
             <input ref={reportInputRef} type="file" accept=".json" className="hidden" onChange={(e) => handleReportFile(e.target.files?.[0])} />
-            <button onClick={() => reportInputRef.current?.click()} className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-              Choose file
-            </button>
+            <Tooltip text="Only needed with the manual file path above — Customize → Export already attaches this automatically. Lets the coverage check below know which glyphs were skipped/failed during export.">
+              <button onClick={() => reportInputRef.current?.click()} className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                Choose file
+              </button>
+            </Tooltip>
           </div>
         </div>
 
         <div>
-          <input
-            value={previewText}
-            onChange={(e) => setPreviewText(e.target.value)}
-            placeholder="Preview text…"
-            className="w-full rounded px-3 py-2 text-sm"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <Tooltip text="Whatever you type here drives the live preview below, the CSS snippet's example, and the outlined SVG export — change it any time.">
+            <input
+              value={previewText}
+              onChange={(e) => setPreviewText(e.target.value)}
+              placeholder="Preview text…"
+              className="w-full rounded px-3 py-2 text-sm"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
         </div>
 
         {uncoveredChars.length > 0 && (
@@ -269,6 +275,7 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
         <div
           className="rounded-lg flex items-center justify-center p-10 overflow-hidden"
           style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minHeight: 160 }}
+          data-tour="fonts-effects-preview"
         >
           {fontReady ? (
             <span style={{ fontSize: 64, lineHeight: 1.2, ...buildPreviewStyle(familyName, fill, shadows) }}>
@@ -280,9 +287,11 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
         </div>
 
         {fontReady && (
-          <div>
+          <div data-tour="fonts-effects-css">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>CSS snippet</span>
+              <Tooltip text="Includes the @font-face rule (pointing at your real renamed family) plus the fill/shadow CSS from the panel on the right — ready to paste into a web project.">
+                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>CSS snippet</span>
+              </Tooltip>
               <button onClick={copyCss} className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-primary)', color: '#fff' }}>
                 {copied ? 'Copied!' : 'Copy CSS'}
               </button>
@@ -300,7 +309,7 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
         )}
 
         {fontReady && (
-          <div>
+          <div data-tour="fonts-print-handoff">
             <div className="flex items-center justify-between mb-1">
               <Tooltip text="Flattens the current text + effects to vector paths — no font installation needed by whoever opens the file. Complementary to the real font file, not a replacement: for editable text in a layout (e.g. InDesign before final flatten), install and use the actual .otf/.ttf instead.">
                 <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Print handoff — Outlined SVG</span>
@@ -334,9 +343,11 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
                   dangerouslySetInnerHTML={{ __html: svgMarkup }}
                 />
                 <div className="flex gap-2 mt-2">
-                  <button onClick={downloadSvg} className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    Download .svg
-                  </button>
+                  <Tooltip text="Saves the flattened outline SVG to your computer — ready to send to a print vendor or open in Illustrator/InDesign.">
+                    <button onClick={downloadSvg} className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                      Download .svg
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )}
@@ -345,8 +356,10 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
       </div>
 
       <div className="w-80 flex-shrink-0 overflow-y-auto p-5 space-y-5" style={{ background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border)' }}>
-        <div>
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Fill</span>
+        <div data-tour="fonts-effects-fill">
+          <Tooltip text="How the letterforms are colored — a flat color, a gradient (via CSS background-clip: text), or an image/texture clipped to the text shape.">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Fill</span>
+          </Tooltip>
           <div className="flex gap-1 mt-2 mb-2">
             {['solid', 'gradient', 'image'].map((mode) => (
               <button
@@ -361,39 +374,47 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
           </div>
 
           {fill.mode === 'solid' && (
-            <input type="color" value={fill.solidColor} onChange={(e) => setFill((f) => ({ ...f, solidColor: e.target.value }))} className="w-full h-9 rounded" />
+            <Tooltip text="Pick a flat fill color for the text.">
+              <input type="color" value={fill.solidColor} onChange={(e) => setFill((f) => ({ ...f, solidColor: e.target.value }))} className="w-full h-9 rounded" />
+            </Tooltip>
           )}
 
           {fill.mode === 'gradient' && (
             <div className="space-y-2">
               {fill.gradientStops.map((stop, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input type="color" value={stop.color} onChange={(e) => updateGradientStop(i, { color: e.target.value })} className="w-9 h-9 rounded" />
-                  <input
-                    type="range" min={0} max={100} value={stop.position}
-                    onChange={(e) => updateGradientStop(i, { position: Number(e.target.value) })}
-                    className="flex-1"
-                  />
-                </div>
+                <Tooltip key={i} text={`Gradient stop ${i + 1}: color + its position along the gradient (0-100%).`}>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={stop.color} onChange={(e) => updateGradientStop(i, { color: e.target.value })} className="w-9 h-9 rounded" />
+                    <input
+                      type="range" min={0} max={100} value={stop.position}
+                      onChange={(e) => updateGradientStop(i, { position: Number(e.target.value) })}
+                      className="flex-1"
+                    />
+                  </div>
+                </Tooltip>
               ))}
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Angle</span>
-                <input type="range" min={0} max={360} value={fill.gradientAngle} onChange={(e) => setFill((f) => ({ ...f, gradientAngle: Number(e.target.value) }))} className="flex-1" />
-                <span className="text-xs w-10 text-right" style={{ color: 'var(--color-muted)' }}>{fill.gradientAngle}°</span>
-              </div>
+              <Tooltip text="Direction of the gradient across the text, in degrees (CSS linear-gradient convention: 0° = bottom to top).">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Angle</span>
+                  <input type="range" min={0} max={360} value={fill.gradientAngle} onChange={(e) => setFill((f) => ({ ...f, gradientAngle: Number(e.target.value) }))} className="flex-1" />
+                  <span className="text-xs w-10 text-right" style={{ color: 'var(--color-muted)' }}>{fill.gradientAngle}°</span>
+                </div>
+              </Tooltip>
             </div>
           )}
 
           {fill.mode === 'image' && (
             <div>
               <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageFile(e.target.files?.[0])} />
-              <button
-                onClick={() => imageInputRef.current?.click()}
-                className="w-full text-sm px-3 py-2 rounded hover:opacity-70 transition-all duration-200"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-              >
-                {fill.imageDataUrl ? 'Change image' : 'Choose image/texture'}
-              </button>
+              <Tooltip text="Upload any image or texture — it's clipped to fill the text shape (CSS background-clip: text), like the fill were a photo or pattern.">
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="w-full text-sm px-3 py-2 rounded hover:opacity-70 transition-all duration-200"
+                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {fill.imageDataUrl ? 'Change image' : 'Choose image/texture'}
+                </button>
+              </Tooltip>
               {fill.imageDataUrl && (
                 <img src={fill.imageDataUrl} alt="fill texture" className="w-full h-16 object-cover rounded mt-2" />
               )}
@@ -401,14 +422,16 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
           )}
         </div>
 
-        <div>
+        <div data-tour="fonts-effects-shadows">
           <div className="flex items-center justify-between">
             <Tooltip text="Layer multiple shadows for depth — e.g. a tight dark shadow plus a soft wide one.">
               <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Shadows</span>
             </Tooltip>
-            <button onClick={addShadow} className="text-xs hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-primary)' }}>
-              + Add layer
-            </button>
+            <Tooltip text="Adds a new shadow layer with default offset/blur/color — edit its values below, or remove it with the trash icon.">
+              <button onClick={addShadow} className="text-xs hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-primary)' }}>
+                + Add layer
+              </button>
+            </Tooltip>
           </div>
 
           <div className="space-y-3 mt-2">
@@ -417,27 +440,37 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
               <div key={i} className="rounded p-2 space-y-1.5" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Layer {i + 1}</span>
-                  <button onClick={() => removeShadow(i)} className="hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-muted)' }}>
-                    {getIcon('trash', { size: 12 })}
-                  </button>
+                  <Tooltip text="Remove this shadow layer.">
+                    <button onClick={() => removeShadow(i)} className="hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-muted)' }}>
+                      {getIcon('trash', { size: 12 })}
+                    </button>
+                  </Tooltip>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
-                    X
-                    <input type="number" value={shadow.offsetX} onChange={(e) => updateShadow(i, { offsetX: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                  </label>
-                  <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
-                    Y
-                    <input type="number" value={shadow.offsetY} onChange={(e) => updateShadow(i, { offsetY: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                  </label>
-                  <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
-                    Blur
-                    <input type="number" min={0} value={shadow.blur} onChange={(e) => updateShadow(i, { blur: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                  </label>
-                  <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
-                    Color
-                    <input type="text" value={shadow.color} onChange={(e) => updateShadow(i, { color: e.target.value })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                  </label>
+                  <Tooltip text="Horizontal shadow offset in pixels — positive moves right.">
+                    <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
+                      X
+                      <input type="number" value={shadow.offsetX} onChange={(e) => updateShadow(i, { offsetX: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                    </label>
+                  </Tooltip>
+                  <Tooltip text="Vertical shadow offset in pixels — positive moves down.">
+                    <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
+                      Y
+                      <input type="number" value={shadow.offsetY} onChange={(e) => updateShadow(i, { offsetY: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                    </label>
+                  </Tooltip>
+                  <Tooltip text="Blur radius in pixels — 0 is a hard-edged shadow, higher softens it.">
+                    <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
+                      Blur
+                      <input type="number" min={0} value={shadow.blur} onChange={(e) => updateShadow(i, { blur: Number(e.target.value) })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                    </label>
+                  </Tooltip>
+                  <Tooltip text="Any valid CSS color — hex (#000), rgba() for transparency, or a named color.">
+                    <label className="flex flex-col gap-0.5" style={{ color: 'var(--color-muted)' }}>
+                      Color
+                      <input type="text" value={shadow.color} onChange={(e) => updateShadow(i, { color: e.target.value })} className="rounded px-1.5 py-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                    </label>
+                  </Tooltip>
                 </div>
               </div>
             ))}

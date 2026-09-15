@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
 
 export default function FontPresetsPanel({ presets, onSave, onApply, onDelete }) {
   const getIcon = useIcon();
@@ -12,15 +13,17 @@ export default function FontPresetsPanel({ presets, onSave, onApply, onDelete })
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour="fonts-presets-panel">
       <div className="flex items-center gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Display Heavy"
-          className="flex-1 rounded px-2 py-1.5 text-sm"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-        />
+        <Tooltip text="Name this combination of Transforms + Kerning settings so you can reapply it later, to this or any other font.">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Display Heavy"
+            className="flex-1 rounded px-2 py-1.5 text-sm"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </Tooltip>
         <button
           onClick={save}
           className="text-sm px-3 py-1.5 rounded hover:opacity-70 transition-all duration-200"
@@ -45,12 +48,16 @@ export default function FontPresetsPanel({ presets, onSave, onApply, onDelete })
             >
               <span className="text-sm" style={{ color: 'var(--color-text)' }}>{preset.name}</span>
               <div className="flex items-center gap-3">
-                <button onClick={() => onApply(preset)} className="text-xs hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-primary)' }}>
-                  Apply
-                </button>
-                <button onClick={() => onDelete(preset.id)} className="hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-muted)' }}>
-                  {getIcon('trash', { size: 14 })}
-                </button>
+                <Tooltip text="Load this preset's Transforms + Kerning values into the sliders, replacing your current settings.">
+                  <button onClick={() => onApply(preset)} className="text-xs hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-primary)' }}>
+                    Apply
+                  </button>
+                </Tooltip>
+                <Tooltip text="Delete this saved preset — cannot be undone.">
+                  <button onClick={() => onDelete(preset.id)} className="hover:opacity-70 transition-all duration-200" style={{ color: 'var(--color-muted)' }}>
+                    {getIcon('trash', { size: 14 })}
+                  </button>
+                </Tooltip>
               </div>
             </div>
           ))}

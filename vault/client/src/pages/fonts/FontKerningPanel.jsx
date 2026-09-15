@@ -32,7 +32,7 @@ export default function FontKerningPanel({ kerning, onChange }) {
   const activeAdvancedPairs = Object.keys(kerning.advancedPairs || {});
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-tour="fonts-kerning-panel">
       <div>
         <Tooltip text="Class-based kerning: adjusts groups of classically-loose letter pairs together (e.g. A next to V/W/Y) rather than one pair at a time.">
           <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Visual Balance &amp; Rhythm</span>
@@ -56,21 +56,23 @@ export default function FontKerningPanel({ kerning, onChange }) {
 
       <div className="space-y-2">
         {KERNING_PAIR_GROUPS.map((group) => (
-          <label key={group.id} className="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={kerning.enabledGroupIds.includes(group.id)}
-              onChange={() => toggleGroup(group.id)}
-              className="mt-0.5"
-            />
-            <span>
-              <span style={{ color: 'var(--color-text)' }}>{group.label}</span>
-              <br />
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                {group.description} · pairs: {group.pairs.join(', ')}
+          <Tooltip key={group.id} text={`Enable to apply the Visual Balance & Rhythm slider to this group's pairs: ${group.pairs.join(', ')}.`}>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={kerning.enabledGroupIds.includes(group.id)}
+                onChange={() => toggleGroup(group.id)}
+                className="mt-0.5"
+              />
+              <span>
+                <span style={{ color: 'var(--color-text)' }}>{group.label}</span>
+                <br />
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {group.description} · pairs: {group.pairs.join(', ')}
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          </Tooltip>
         ))}
       </div>
 
@@ -101,14 +103,16 @@ export default function FontKerningPanel({ kerning, onChange }) {
           ))}
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <input
-            value={newPairInput}
-            onChange={(e) => setNewPairInput(e.target.value)}
-            placeholder="e.g. AV"
-            maxLength={2}
-            className="w-20 rounded px-2 py-1 text-sm"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <Tooltip text="Exactly two characters, e.g. AV — creates a row above to set its kerning override in px.">
+            <input
+              value={newPairInput}
+              onChange={(e) => setNewPairInput(e.target.value)}
+              placeholder="e.g. AV"
+              maxLength={2}
+              className="w-20 rounded px-2 py-1 text-sm"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
           <button
             onClick={addPairRow}
             className="text-xs px-2 py-1 rounded hover:opacity-70 transition-all duration-200"

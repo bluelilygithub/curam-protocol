@@ -42,7 +42,7 @@ const CONTROLS = [
 
 export default function FontTransformControls({ transforms, onChange }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="fonts-transforms-panel">
       {CONTROLS.map((c) => (
         <div key={c.key}>
           <div className="flex items-center justify-between mb-1">

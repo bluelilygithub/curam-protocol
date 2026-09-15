@@ -74,25 +74,29 @@ export default function FontExportTrigger({ transforms, kerning, fontFileBuffer,
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="fonts-export-panel">
       <div>
         <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Source font</span>
         <div className="flex gap-1 mt-1 mb-2">
-          <button
-            onClick={() => setUseGoogleFont(false)}
-            disabled={!fontFileBuffer}
-            className="flex-1 text-xs px-2 py-1.5 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
-            style={{ background: !useGoogleFont ? 'var(--color-primary)' : 'transparent', color: !useGoogleFont ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
-          >
-            Loaded file
-          </button>
-          <button
-            onClick={() => setUseGoogleFont(true)}
-            className="flex-1 text-xs px-2 py-1.5 rounded hover:opacity-70 transition-all duration-200"
-            style={{ background: useGoogleFont ? 'var(--color-primary)' : 'transparent', color: useGoogleFont ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
-          >
-            Google Font name
-          </button>
+          <Tooltip text="Re-export the font file already loaded in the drop zone above (Structural Preview) — the same server pipeline still applies your Transforms/Kerning recipe to it.">
+            <button
+              onClick={() => setUseGoogleFont(false)}
+              disabled={!fontFileBuffer}
+              className="flex-1 text-xs px-2 py-1.5 rounded hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+              style={{ background: !useGoogleFont ? 'var(--color-primary)' : 'transparent', color: !useGoogleFont ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
+            >
+              Loaded file
+            </button>
+          </Tooltip>
+          <Tooltip text="Fetch a font by name straight from Google Fonts (OFL-licensed only) — search below, or type an exact name.">
+            <button
+              onClick={() => setUseGoogleFont(true)}
+              className="flex-1 text-xs px-2 py-1.5 rounded hover:opacity-70 transition-all duration-200"
+              style={{ background: useGoogleFont ? 'var(--color-primary)' : 'transparent', color: useGoogleFont ? '#fff' : 'var(--color-text)', border: '1px solid var(--color-border)' }}
+            >
+              Google Font name
+            </button>
+          </Tooltip>
         </div>
         {useGoogleFont ? (
           <FontPicker value={googleFontFamily} onChange={setGoogleFontFamily} />
@@ -125,7 +129,9 @@ export default function FontExportTrigger({ transforms, kerning, fontFileBuffer,
       </details>
 
       <div>
-        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Character set</span>
+        <Tooltip text="Which characters the exported font keeps (subsetting) — smaller file, but anything outside these ranges won't be in the font at all. Pick Latin-1 Supplement too if your text uses accents (café, résumé, naïve).">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Character set</span>
+        </Tooltip>
         <div className="space-y-1 mt-1">
           {RANGE_OPTIONS.map((r) => (
             <label key={r.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
@@ -137,7 +143,9 @@ export default function FontExportTrigger({ transforms, kerning, fontFileBuffer,
       </div>
 
       <div>
-        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Formats</span>
+        <Tooltip text="Which file formats to generate. .ttf/.otf for desktop/print, .woff2 for the web — Effects & Export's live preview needs .ttf or .otf (opentype.js can't read .woff2).">
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Formats</span>
+        </Tooltip>
         <div className="flex gap-3 mt-1">
           {FORMAT_OPTIONS.map((fmt) => (
             <label key={fmt} className="flex items-center gap-1.5 text-xs uppercase cursor-pointer" style={{ color: 'var(--color-text)' }}>
