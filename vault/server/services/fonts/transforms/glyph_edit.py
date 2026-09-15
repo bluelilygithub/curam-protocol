@@ -145,10 +145,10 @@ def apply_proportional_width(contours: list[list[geo.Point]], scale_factor: floa
     return [geo.scale_x(c, scale_factor, origin_x=0.0) for c in contours]
 
 
-def apply_extend_ascender_descender(contours: list[list[geo.Point]], baseline_y: float, cap_height_y: float, factor: float) -> list[list[geo.Point]]:
+def apply_extend_ascender_descender(contours: list[list[geo.Point]], baseline_y: float, cap_height_y: float, factor: float, blend_margin: float = 0.0, max_depth: float | None = None) -> list[list[geo.Point]]:
     if factor == 0:
         return contours
-    return [geo.warp_y_ascender_descender(c, baseline_y, cap_height_y, factor) for c in contours]
+    return [geo.warp_y_ascender_descender(c, baseline_y, cap_height_y, factor, blend_margin, max_depth) for c in contours]
 
 
 def _max_safe_counter_scale(counter_bounds, outer_bounds, cx, cy, margin=0.85) -> float:

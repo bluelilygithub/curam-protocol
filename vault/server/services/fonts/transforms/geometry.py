@@ -121,18 +121,69 @@ def scale_x(points: list[Point], factor: float, origin_x: float = 0.0) -> list[P
     return [Point(origin_x + (p.x - origin_x) * factor, p.y, p.on_curve) for p in points]
 
 
-def warp_y_ascender_descender(points: list[Point], baseline_y: float, cap_height_y: float, factor: float) -> list[Point]:
+def _smooth_ramp(d: float, factor: float, margin: float, max_depth: float | None = None) -> float:
+    """
+    Extra Y displacement for a point `d` units past a threshold (always
+    d >= 0), ramping smoothly from 0 rather than jumping straight into
+    `factor * d`. Matches `factor * d` slope-for-slope once d exceeds
+    `margin`, but starts with zero slope at d=0 so the transform's
+    derivative is continuous across the threshold, not just its value.
+
+    Why this matters: a hard "no change below this line, factor*distance
+    above it" step has a KINK in slope exactly at the threshold — for a
+    single simple outline that's invisible, but a glyph built from
+    multiple overlapping contours whose geometry straddles that exact
+    line (e.g. Roboto's 'g': its descender tail is a separate contour
+    from the bowl, and they visually join right around the baseline) can
+    have that kink pull the two contours apart, since each contour's own
+    points land on either side of the threshold differently. A smooth
+    (C1-continuous) ramp keeps points that were close together near the
+    threshold close together after the warp too.
+
+    `max_depth`, if given, additionally caps how far past the threshold a
+    point's OWN distance counts before computing the ramp (the point still
+    moves, at whatever `d` it actually has, but the DISPLACEMENT amount
+    saturates). Smoothing the seam alone isn't sufficient for a glyph
+    whose two overlapping contours sit at very different depths past the
+    threshold — e.g. 'g's descender tail can reach ~400+ units below
+    baseline while its bowl barely crosses it (~20 units): even a smooth
+    ramp still stretches the deep tail by an order of magnitude more than
+    the shallow bowl edge, which visually separates them just as badly as
+    the original kink did. Capping the effective depth bounds how far any
+    single point's push can diverge from its neighbors', at the cost of
+    very deep excursions (like that tail) stretching proportionally less
+    than a naive linear rule would give them.
+    """
+    if margin <= 0:
+        return factor * d
+    if d <= 0:
+        return 0.0
+    effective_d = min(d, max_depth) if max_depth is not None else d
+    if effective_d >= margin:
+        return factor * (effective_d - margin / 2)
+    return factor * (effective_d * effective_d) / (2 * margin)
+
+
+def warp_y_ascender_descender(points: list[Point], baseline_y: float, cap_height_y: float, factor: float, blend_margin: float = 0.0, max_depth: float | None = None) -> list[Point]:
     """
     Stretch only the parts of the outline above cap-height and below the
-    baseline, in font design units (baseline_y is typically 0).
+    baseline, in font design units (baseline_y is typically 0). The
+    transition into the stretched region is smoothed over `blend_margin`
+    units (see `_smooth_ramp`) rather than a hard cutoff, so multi-contour
+    glyphs whose geometry straddles the threshold don't visually separate.
     """
     def map_y(y: float) -> float:
+        # y + smooth_ramp(...): the point's own position, PLUS a smoothed
+        # extra displacement — not a replacement for its position. (An
+        # earlier version of this fix mistakenly returned just
+        # cap_height_y + smooth_ramp(...), dropping the identity term
+        # entirely, which could move a point BACKWARD past its own
+        # original position for a small overshoot — caught by
+        # test_extend_still_has_a_real_visible_effect_after_smoothing.)
         if y >= cap_height_y:
-            dist_above = y - cap_height_y
-            return cap_height_y + dist_above * (1 + factor)
+            return y + _smooth_ramp(y - cap_height_y, factor, blend_margin, max_depth)
         if y <= baseline_y:
-            dist_below = baseline_y - y
-            return baseline_y - dist_below * (1 + factor)
+            return y - _smooth_ramp(baseline_y - y, factor, blend_margin, max_depth)
         return y
 
     return [Point(p.x, map_y(p.y), p.on_curve) for p in points]

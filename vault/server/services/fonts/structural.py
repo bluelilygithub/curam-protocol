@@ -54,6 +54,31 @@ EXTEND_ASCDESC_BOOST = 3.0  # multiplies extendAscDesc's effective factor before
 # of an ~80-unit sliver is only ~22 units, sub-pixel on screen. Boosting
 # the effective factor keeps the same UI slider range meaningful without
 # changing what portion of the glyph is affected.
+EXTEND_BLEND_MARGIN_FRACTION = 0.05  # of unitsPerEm — how wide a smoothing zone to blend the extend-ascender/descender transition over
+# A hard cutoff (0 change below the baseline/cap-height line, then
+# suddenly proportional to distance beyond it) has a slope DISCONTINUITY
+# right at that line. For a glyph built from a single simple outline
+# that's invisible; for one built from multiple overlapping contours
+# whose geometry straddles that exact line (found via a real user
+# report: Roboto's 'g' draws its descender tail as a separate contour
+# from the bowl, joining right around the baseline) the kink can pull
+# them visibly apart. Blending the transition smoothly over a small
+# margin keeps the transform's derivative continuous, at the cost of
+# the extend effect ramping in slightly more gradually right at the
+# threshold — imperceptible in practice, and the asymptotic behavior
+# far from the threshold (e.g. a tall ascender) is unchanged.
+EXTEND_MAX_DEPTH_FRACTION = 0.075  # of unitsPerEm — caps how far past the baseline/cap-height a point's OWN distance counts toward its displacement
+# Smoothing the seam (above) isn't enough on its own for a glyph whose
+# overlapping contours sit at very different depths past the threshold —
+# found via a real report: Roboto's 'g' descender tail reaches ~400+
+# units below baseline while its bowl barely crosses it (~20 units), so
+# even a smooth ramp still stretched the tail an order of magnitude more
+# than the bowl, visibly separating them just as badly as the original
+# hard-threshold kink did. Capping the effective depth bounds how far any
+# single point's push can diverge from its neighbors' — the tradeoff is
+# that very deep excursions (a long descender) stretch proportionally
+# less than a naive linear rule would give them, in exchange for staying
+# visually attached to the rest of the glyph.
 
 
 @dataclass
@@ -65,13 +90,13 @@ class StructuralEditReport:
     kerning: KerningBuildReport | None = None
 
 
-def transform_contours(contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units):
+def transform_contours(contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units, extend_blend_margin=0.0, extend_max_depth=None):
     """The actual per-glyph transform pipeline, factored out so it can be
     called identically for a standalone glyph's contours and for one
     component's slice of a decomposed composite glyph's contours (tests
     use this to verify the two produce identical results)."""
     contours = glyph_edit.apply_proportional_width(contours, width_factor)
-    contours = glyph_edit.apply_extend_ascender_descender(contours, baseline_y, cap_height_y, extend_factor)
+    contours = glyph_edit.apply_extend_ascender_descender(contours, baseline_y, cap_height_y, extend_factor, extend_blend_margin, extend_max_depth)
     contours = glyph_edit.apply_counter_width(contours, counter_percent)
     contours = glyph_edit.apply_stem_thickness(contours, stem_delta_units)
     return contours
@@ -110,6 +135,8 @@ def apply_transform_recipe(font, recipe: dict, glyph_names: list[str] | None = N
     stem_delta_units = (stem_percent / 100) * upm * NOMINAL_STEM_UNITS_FRACTION
     width_factor = width_percent / 100
     extend_factor = (extend_percent / 100) * EXTEND_ASCDESC_BOOST
+    extend_blend_margin = upm * EXTEND_BLEND_MARGIN_FRACTION
+    extend_max_depth = upm * EXTEND_MAX_DEPTH_FRACTION
 
     if glyph_names is None:
         glyph_names = [cmap[ord(ch)] for ch in DEFAULT_GLYPH_CHARS if ord(ch) in cmap]
@@ -139,7 +166,8 @@ def apply_transform_recipe(font, recipe: dict, glyph_names: list[str] | None = N
             original_rsb = capture_original_rsb(font, glyph_name)
 
             contours = transform_contours(
-                original_contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units
+                original_contours, width_factor, baseline_y, cap_height_y, extend_factor, counter_percent, stem_delta_units,
+                extend_blend_margin=extend_blend_margin, extend_max_depth=extend_max_depth,
             )
 
             issues = validate_glyph_contours(glyph_name, original_contours, contours)
