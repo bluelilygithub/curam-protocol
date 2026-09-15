@@ -63,6 +63,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/recipeGroceryService.js` — Coles/Woolworths prices sourced from Google Shopping / site-restricted search (`webSearchService.shoppingSearch`), no AI guessing — cites source + link, or "Not found"
 - `server/services/graphicsImageService.js` — shared FAL image generation using admin `graphics_model` (Graphics + Recipes)
 - `client/src/pages/RecipesPage.jsx` — Create (leftovers, by name) · Shop (grocery prices) · library at `/recipes`
+- `server/services/fonts/` — Google Font Customizer (Phase 1: fetch from `google/fonts` GitHub repo + OFL license check + fontTools variable/static inspection + freeze-to-static). Standalone Python module, no server route/UI yet — see `server/services/fonts/README.md`. Architecture: structural edits (kerning, letterform shape) belong in the font binary via fontTools; color/shadow/image-fill stay in the CSS/SVG rendering layer, never baked into color-font formats (COLRv1/sbix/CBDT deliberately unsupported).
 - `server/routes/pdf.js` — PDF Tools API (`/api/pdf/*`): stateless dataUrl-in/dataUrl-out — merge/split/rotate/watermark/page numbers/metadata, AcroForm inspect/fill/flatten/addfields, image↔PDF, Office↔PDF (LibreOffice), Google Drive↔PDF, chat over an uploaded file
 - `client/src/pages/PdfPage.jsx` — PDF Tools UI at `/pdf`, incl. AcroForm field designer (canvas-based drag-to-place, grouped Google Font picker with live sample text)
 - `docs/pdf-agent.md` — PDF Tools endpoint reference + field designer typography details
