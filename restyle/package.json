@@ -1,0 +1,22 @@
+{
+  "name": "restyle",
+  "version": "1.0.0",
+  "description": "Non-technical-friendly CSS editor with live preview and plain-English AI edits.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsdom": "^24.1.1",
+    "multer": "^2.0.0",
+    "pg": "^8.13.1",
+    "postcss": "^8.4.47",
+    "postcss-selector-parser": "^6.1.2"
+  }
+}
