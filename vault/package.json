@@ -85,6 +85,7 @@
     "lucide-react": "^0.363.0",
     "nodemon": "^3.1.0",
     "postcss": "^8.4.38",
+    "postcss-selector-parser": "^6.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.1",

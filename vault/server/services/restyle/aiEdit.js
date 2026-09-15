@@ -1,7 +1,11 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
-const { getRestyleModelId } = require('./vaultModel');
+// Plain-English AI style edit for Restyle. Uses the shared callModel()/getModelsForUser()
+// path like every other Vault feature — no separate Anthropic client, no separate model
+// setting. Resolves to the workspace's 'standard' model, same as primary chat/PDF analysis/etc.
+
+const { callModel } = require('../callModel');
+const { getModelsForUser } = require('../modelResolver');
 
 // Allow-list matching exactly what the property panel supports — the model is constrained to
 // these so the frontend never receives a change it doesn't know how to apply.
@@ -28,18 +32,17 @@ Rules:
 - Never return a property outside the allowed list. Never return prose outside the JSON array.`;
 
 /**
+ * @param {number} userId - resolves which model to call, same as any other Vault AI feature
  * @param {object} element - { tag, classList, inlineStyles, computedStyles }
  * @param {string} userRequest - plain-English request
  * @returns {Promise<Array<{property:string, value:string, explanation:string}>>}
  */
-async function requestAiEdit(element, userRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('The AI editor isn’t set up yet — an API key is missing on the server.');
+async function requestAiEdit(userId, element, userRequest) {
+  const tiers = await getModelsForUser(userId);
+  const modelId = tiers.standard;
+  if (!modelId) {
+    throw new Error('No AI model is configured for this workspace yet — ask your admin to set one up in Settings.');
   }
-
-  const model = await getRestyleModelId();
-  const client = new Anthropic({ apiKey });
 
   const userMessage = JSON.stringify({
     element: {
@@ -51,18 +54,7 @@ async function requestAiEdit(element, userRequest) {
     request: userRequest,
   }, null, 2);
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const text = response.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('')
-    .trim();
+  const text = await callModel(modelId, userMessage, { system: SYSTEM_PROMPT, maxTokens: 1024 });
 
   let changes;
   try {

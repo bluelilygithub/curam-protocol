@@ -33,6 +33,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   guitar: true,
   webExtractor: true,
   fonts: true,
+  restyle: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -73,6 +74,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },
       { key: 'fonts', label: 'Font Customizer' },
+      { key: 'restyle', label: 'Restyle' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

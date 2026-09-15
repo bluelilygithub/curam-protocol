@@ -1816,6 +1816,16 @@ function UserGuidePage() {
           rendered read-only in a sandboxed frame.
         </P>
 
+        <SubHeading>Restyle</SubHeading>
+        <P>
+          Change how a website looks without touching any code. Upload or paste your page's HTML and one or more
+          style files, reorder them if two disagree, and see a live, click-to-edit preview. Click anything on the
+          page to select it, then adjust it with simple sliders and color pickers, or just type what you want in
+          plain English (e.g. "make this bigger and give it rounded corners") and Claude applies a sensible
+          change. Every automatic fix or edit is explained in one plain sentence — never technical terms. Download
+          the finished page as a single file when you're done.
+        </P>
+
         <SubHeading>WP Theme Builder</SubHeading>
         <P>
           A separate mini-app (mounted at <code>/tb</code>) for designing a WordPress theme: Stage 1 produces a

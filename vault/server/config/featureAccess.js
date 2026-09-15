@@ -33,6 +33,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   searchConsole: true,
   webExtractor: true,
   fonts: true,
+  restyle: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
