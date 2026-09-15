@@ -72,7 +72,13 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
       setSvgMarkup('');
       setSvgError('');
     } catch (err) {
-      setLoadError(`Could not load this font file: ${err.message}`);
+      const sig = new Uint8Array(buffer.slice(0, 4));
+      const isWoff2 = sig[0] === 0x77 && sig[1] === 0x4f && sig[2] === 0x46 && sig[3] === 0x32; // 'wOF2'
+      setLoadError(
+        isWoff2
+          ? 'This app can’t read .woff2 directly for preview (opentype.js has no WOFF2 decompressor). Use the .ttf or .otf from the same export instead — or use Customize → Export, which picks .ttf automatically.'
+          : `Could not load this font file: ${err.message}`
+      );
       setFontReady(false);
     }
   }, []);
@@ -87,7 +93,10 @@ export default function FontEffectsPanel({ pendingExport, onPendingExportConsume
   // finished export directly — no drag-and-drop needed.
   useEffect(() => {
     if (!pendingExport) return;
-    const dataUrl = pendingExport.formats.woff2 || pendingExport.formats.ttf || pendingExport.formats.otf;
+    // opentype.js can't decode WOFF2 (no Brotli decompressor built in) — prefer
+    // .ttf/.otf for in-app parsing/preview/SVG export; woff2 is still the file
+    // named in the generated CSS snippet for production hosting, unaffected.
+    const dataUrl = pendingExport.formats.ttf || pendingExport.formats.otf || pendingExport.formats.woff2;
     if (!dataUrl) return;
     (async () => {
       await loadFontFromBuffer(dataUrlToArrayBuffer(dataUrl), 'exported-font', 'export');
