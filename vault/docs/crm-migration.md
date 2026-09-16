@@ -63,7 +63,9 @@ node server/scripts/dropFinClients.js              # applies
 
 `server/db.js` already updated for fresh installs: `fin_clients` CREATE TABLE removed, `fin_invoices` no longer declares a `clientId` column, the bridge-column ALTER removed. Existing/production databases still have the old column/table until the script above is run against them — that's expected, matches the "add schema first, migrate data, then drop" sequence used throughout this migration.
 
-**Irreversible** — once run, the only way back is restoring from a database backup. Only run after Phase 2 has been verified in production (done: old invoices/quotes linked, new invoice create/edit, quote→invoice convert, backfill of pre-merge invoices — see Phase 2 follow-up above). Not yet verified: a full send→paid cycle and the reminders cron — optional to check first, your call.
+**Irreversible** — once run, the only way back is restoring from a database backup. Run against production 2026-09-16: 3 `fin_clients` rows (all linked), 6 `fin_invoices` rows with the old `clientId` set — constraint `fin_invoices_clientId_fkey`, `fin_invoices."clientId"` column, and `fin_clients` table all dropped cleanly.
+
+**Migration complete.** `clients` is now the single canonical client table across Projects, Tasks, and Finance.
 
 Also: sweep `fin_recurring.template` JSONB rows for leftover `clientId` keys after (informational only, not FK-enforced, safe to leave — but tidy to strip once confirmed unused). Not done by the script above.
 
@@ -78,5 +80,5 @@ Also: sweep `fin_recurring.template` JSONB rows for leftover `clientId` keys aft
 - [x] Phase 0 — bridge schema in `server/db.js`
 - [x] Phase 1 — migration script run against production 2026-09-16. 3 `fin_clients` rows, 0 matched (expected — `clients` was empty), all 3 flagged unmatched.
 - [x] Phase 1b — `createClientsForUnmatched.js` run against production 2026-09-16. All 3 created + linked. Every `fin_clients` row now has `clientId` set.
-- [x] Phase 2 — Finance queries repointed to `clients`/`client_contacts`/`client_billing_details` (server + frontend). Not yet run/verified in production.
-- [ ] Phase 3 — drop `fin_clients` + `fin_invoices.clientId`
+- [x] Phase 2 — Finance queries repointed to `clients`/`client_contacts`/`client_billing_details` (server + frontend). Verified in production, incl. a follow-up backfill for pre-merge invoices/quotes.
+- [x] Phase 3 — `fin_clients` + `fin_invoices.clientId` dropped from production 2026-09-16. Migration complete.
