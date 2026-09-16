@@ -1985,10 +1985,10 @@ function UserGuidePage() {
           with metric cards, filters, and search — a fast way to triage a full inbox without opening every message.
         </P>
 
-        <SubHeading>Clients</SubHeading>
+        <SubHeading>CRM</SubHeading>
         <P>
-          A simple client directory that projects can be attached to, so you can see all projects, chats, and
-          activity for a given client in one place.
+          A client directory — contacts, deals/pipeline, touchpoints (calls, emails, meetings), and Gmail search —
+          with projects, tasks, and invoices attached, so you can see everything tied to a given client in one place.
         </P>
 
         <SubHeading>Admin Dashboard</SubHeading>

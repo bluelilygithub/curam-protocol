@@ -376,7 +376,7 @@ export default function ClientsPage() {
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Clients</h1>
+        <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>CRM</h1>
         <Btn onClick={() => setModal('new')}>+ New Client</Btn>
       </div>
 

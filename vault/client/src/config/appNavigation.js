@@ -84,7 +84,7 @@ export const APP_NAV_GROUPS = [
     label: 'Admin',
     items: [
       { id: 'suggestions', label: 'Suggestions', path: '/suggestions', icon: 'inbox', featureKey: null, badgeKey: 'suggestions' },
-      { id: 'clients', label: 'Clients', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+      { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
       { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
     ],
   },
@@ -119,7 +119,7 @@ export const SIDEBAR_WORKSPACE_LINKS = [
   { id: 'tasks', label: 'Tasks', path: '/tasks', icon: 'list-checks' },
   { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line' },
   { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals' },
-  { id: 'clients', label: 'Clients', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+  { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
 ];
 
 /** 7 Habits shortcuts — shown in Apps launcher when habitsSidebar + goals are enabled. */

@@ -358,7 +358,7 @@ export default function ClientDetailPage() {
           className="inline-flex items-center gap-1 text-sm mb-5 hover:opacity-70 transition-opacity"
           style={{ color: 'var(--color-muted)' }}
         >
-          ← Clients
+          ← CRM
         </Link>
 
         {/* Header */}
