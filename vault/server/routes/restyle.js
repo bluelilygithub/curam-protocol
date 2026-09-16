@@ -11,6 +11,7 @@ const { pool } = require('../db');
 const { sanitizeHtml } = require('../services/restyle/sanitizeHtml');
 const { processStylesheets } = require('../services/restyle/cssProcessor');
 const { requestAiEdit } = require('../services/restyle/aiEdit');
+const { inlineImagesInHtml, inlineImagesInCss } = require('../services/restyle/inlineImages');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ function extOf(filename) {
 
 // Server-side extension check — the accept="" attribute on the client is only a UX hint,
 // never trusted as validation.
-router.post('/upload-html', upload.single('file'), (req, res) => {
+router.post('/upload-html', upload.single('file'), async (req, res) => {
   try {
     let rawHtml;
     if (req.file) {
@@ -45,12 +46,21 @@ router.post('/upload-html', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'No HTML was provided.' });
     }
     const { html, bodyInnerHTML, headInnerHTML } = sanitizeHtml(rawHtml);
-    res.json({
-      html,
-      bodyInnerHTML,
-      headInnerHTML,
-      changeLog: ['Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.'],
-    });
+
+    // The preview iframe can't load remote images directly — Vault's own Content-Security-Policy
+    // (which srcdoc inherits, having no origin of its own) only allows img-src 'self'/data:/blob:,
+    // so any http(s) image is silently blocked by the browser. Fetch each one server-side instead
+    // and inline it as a data: URI, which the CSP already permits. Best-effort: an image that
+    // fails to fetch just stays as its original URL (same as before this existed).
+    const { bodyInnerHTML: bodyWithImages, inlinedCount, failedCount } = await inlineImagesInHtml(bodyInnerHTML);
+
+    const changeLog = ['Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.'];
+    if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from your page so they show up in the preview.`);
+    const flags = failedCount > 0
+      ? [`${failedCount} image${failedCount === 1 ? '' : 's'} in your page couldn't be loaded (the link may be broken, blocked, or the file too large) — ${failedCount === 1 ? "it" : "they"} may not show up in the preview.`]
+      : [];
+
+    res.json({ html, bodyInnerHTML: bodyWithImages, headInnerHTML, changeLog, flags });
   } catch (err) {
     res.status(500).json({ error: 'We couldn\'t read that HTML file. Please check it and try again.' });
   }
@@ -58,7 +68,7 @@ router.post('/upload-html', upload.single('file'), (req, res) => {
 
 // Accepts one or more CSS files/snippets in a given order and returns the auto-fixed,
 // merged stylesheet plus a plain-English change log and a list of flagged issues.
-router.post('/process-css', upload.array('files', 20), (req, res) => {
+router.post('/process-css', upload.array('files', 20), async (req, res) => {
   try {
     const droppedSheets = (req.files || []).map(f => {
       const ext = extOf(f.originalname);
@@ -98,6 +108,14 @@ router.post('/process-css', upload.array('files', 20), (req, res) => {
     }
 
     const result = processStylesheets(ordered);
+
+    // Same CSP problem as upload-html (see there) applies to any background-image: url(...) in
+    // the CSS itself — inline those as data: URIs too, best-effort.
+    const { css: cssWithImages, inlinedCount, failedCount } = await inlineImagesInCss(result.css);
+    result.css = cssWithImages;
+    if (inlinedCount > 0) result.changeLog.push(`Loaded ${inlinedCount} background image${inlinedCount === 1 ? '' : 's'} from your styles so they show up in the preview.`);
+    if (failedCount > 0) result.flags.push(`${failedCount} background image${failedCount === 1 ? '' : 's'} in your styles couldn't be loaded (the link may be broken, blocked, or the file too large) — ${failedCount === 1 ? 'it' : 'they'} may not show up in the preview.`);
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'We couldn\'t read one of those style files. Please check it and try again.' });
