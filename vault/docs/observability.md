@@ -25,7 +25,7 @@ Both are mounted in `server/index.js` before `helmet` and before route registrat
 - Failed queries log an `error` with the query text and error message, then rethrow (behavior unchanged).
 - Both are tagged with the current request's `requestId`/`userId` via `getLogger()`.
 
-**Known gap:** this only covers `pool.query()`. Transactions using `pool.connect()` → `client.query()` → `COMMIT`/`ROLLBACK` (the pattern described in the main `CLAUDE.md` Database Patterns section) bypass the wrapped `pool.query` entirely, since they call `client.query` directly on a checked-out client. Not yet instrumented.
+**Closed:** `pool.connect()` is also wrapped, so `client.query()` inside the `BEGIN`/`COMMIT`/`ROLLBACK` transaction pattern gets the same tracing as `pool.query()`. Had to support pg-pool's dual callback/promise `connect()` contract — pg-pool's own `Pool.prototype.query()` calls `this.connect(callback)` internally, so a promise-only wrapper broke `pool.query()` itself.
 
 ## Rate limiting
 
@@ -62,5 +62,4 @@ Not rate-limited: recipes (grocery pricing is live-search only, no model call), 
 ## What's not done yet
 
 - Error-rate / 429-count / slow-query-count are not yet surfaced in the existing admin dashboard (`server/routes/admin.js` monitor stats) — they only go to logs + Sentry today.
-- Transaction queries (`client.query()` inside `pool.connect()`) aren't traced (see Slow-query section above).
 - No log aggregation/shipping configured beyond Railway's own stdout capture — `requestId` correlation works via `grep`/Railway's log search today, not a dedicated log platform.
