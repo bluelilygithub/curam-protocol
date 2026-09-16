@@ -15,8 +15,7 @@ async function getClientMoodSummary(clientId, userId) {
   const { rows } = await pool.query(`
     SELECT mc.core_emotion, COUNT(*)::int AS cnt
     FROM mood_checkins mc
-    JOIN projects p ON p.id = mc.entity_id
-      AND mc.entity_type = 'project'
+    JOIN projects p ON p.id = (CASE WHEN mc.entity_type = 'project' AND mc.entity_id ~ '^[0-9]+$' THEN mc.entity_id::int END)
     WHERE p."clientId" = $1
       AND mc.user_id = $2
     GROUP BY mc.core_emotion
@@ -64,8 +63,7 @@ router.get('/', async (req, res) => {
         (
           SELECT mc.core_emotion
           FROM mood_checkins mc
-          JOIN projects mp ON mp.id = mc.entity_id
-            AND mc.entity_type = 'project'
+          JOIN projects mp ON mp.id = (CASE WHEN mc.entity_type = 'project' AND mc.entity_id ~ '^[0-9]+$' THEN mc.entity_id::int END)
           WHERE mp."clientId" = c.id
             AND mc.user_id = c."userId"
           GROUP BY mc.core_emotion
