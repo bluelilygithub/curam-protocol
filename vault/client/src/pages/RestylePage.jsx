@@ -244,8 +244,6 @@ export default function RestylePage() {
   const sanitizedRef = useRef({ head: '', body: '' });
   const htmlFileInputRef = useRef(null);
   const [htmlDragOver, setHtmlDragOver] = useState(false);
-  const [scrapeUrl, setScrapeUrl] = useState('');
-  const [scraping, setScraping] = useState(false);
 
   // ---------- CSS input ----------
   const [cssTab, setCssTab] = useState('file');
@@ -330,35 +328,6 @@ export default function RestylePage() {
   const handleHtmlFile = (file) => {
     if (!file) return;
     submitHtml({ file });
-  };
-
-  // Scrapes a public URL: loads the page's HTML AND any style sheets it links to, in one step —
-  // never its scripts (see the note above the button). Populates both the HTML and CSS list at
-  // once, so there's no separate "now go add your CSS too" step for this path.
-  const handleScrapeUrl = async () => {
-    if (!scrapeUrl.trim()) { setHtmlStatus({ text: 'Paste a web address first.', kind: 'error' }); return; }
-    setScraping(true);
-    setHtmlStatus({ text: 'Loading that page…', kind: '' });
-    try {
-      const res = await api.post('/api/restyle/scrape-url', { url: scrapeUrl.trim() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Couldn't load that page.");
-      sanitizedRef.current = { head: data.headInnerHTML, body: data.bodyInnerHTML };
-      setHtmlLoaded(true);
-      (data.changeLog || []).forEach(addLogEntry);
-      if (data.flags?.length) setFlags((prev) => [...prev, ...data.flags]);
-      if (data.cssFiles?.length) {
-        setCssEntries((prev) => [
-          ...prev,
-          ...data.cssFiles.map((f) => ({ id: ++cssIdRef.current, filename: f.filename, css: f.css, source: 'paste' })),
-        ]);
-      }
-      setHtmlStatus({ text: 'Page loaded — click "Build the preview" below.', kind: 'ok' });
-    } catch (err) {
-      setHtmlStatus({ text: err.message, kind: 'error' });
-    } finally {
-      setScraping(false);
-    }
   };
 
   // ---------- CSS handlers ----------
@@ -807,7 +776,6 @@ export default function RestylePage() {
             <div className="flex gap-1 mb-2">
               <button style={tabBtn(htmlTab === 'file')} onClick={() => setHtmlTab('file')}>Upload a file</button>
               <button style={tabBtn(htmlTab === 'paste')} onClick={() => setHtmlTab('paste')}>Paste it in</button>
-              <button style={tabBtn(htmlTab === 'url')} onClick={() => setHtmlTab('url')}>From a web address</button>
             </div>
             {htmlTab === 'file' && (
               <div
@@ -826,13 +794,6 @@ export default function RestylePage() {
               <div>
                 <textarea className="w-full text-sm rounded-md border p-2 mb-2" style={{ ...FIELD, minHeight: 90 }} placeholder="Paste your page's HTML here..." value={htmlPaste} onChange={(e) => setHtmlPaste(e.target.value)} />
                 <button className="px-3 py-1.5 rounded-md text-xs font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={() => submitHtml({ html: htmlPaste })}>Use this HTML</button>
-              </div>
-            )}
-            {htmlTab === 'url' && (
-              <div>
-                <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Loads the page's HTML and any style sheets it links to. It never runs that page's own code — no scripts are loaded, same as everywhere else in this tool.</p>
-                <input type="text" className="w-full text-sm rounded-md border p-2 mb-2" style={FIELD} placeholder="e.g. example.com/page" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} />
-                <button className="px-3 py-1.5 rounded-md text-xs font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: scraping ? 0.6 : 1 }} disabled={scraping} onClick={handleScrapeUrl}>{scraping ? 'Loading…' : 'Load this page'}</button>
               </div>
             )}
             {htmlStatus.text && <p className="text-xs mt-1.5" style={{ color: htmlStatus.kind === 'error' ? '#b3452c' : htmlStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{htmlStatus.text}</p>}

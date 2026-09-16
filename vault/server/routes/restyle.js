@@ -12,9 +12,6 @@ const { sanitizeHtml } = require('../services/restyle/sanitizeHtml');
 const { processStylesheets } = require('../services/restyle/cssProcessor');
 const { requestAiEdit } = require('../services/restyle/aiEdit');
 const { inlineImagesInHtmlFragment, inlineImagesInCss } = require('../services/restyle/inlineImages');
-const { fetchDirect, normaliseHttpUrl } = require('../services/htmlFetch');
-const { fetchBinary } = require('../services/webExtractorService');
-const { JSDOM } = require('jsdom');
 
 const router = express.Router();
 
@@ -89,103 +86,6 @@ router.post('/upload-html', upload.single('file'), async (req, res) => {
     res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags });
   } catch (err) {
     res.status(500).json({ error: 'We couldn\'t read that HTML file. Please check it and try again.' });
-  }
-});
-
-const MAX_SCRAPED_STYLESHEETS = 10;
-
-// Fetches a public URL and returns it in the same shape as /upload-html, plus any linked
-// <link rel="stylesheet"> CSS files it can find, fetched alongside — so pasting a URL gets you
-// both the page AND its real stylesheets in one step, instead of hunting them down by hand.
-// Deliberately does NOT fetch or execute any <script> — same security stance as the rest of this
-// tool (no allow-scripts, scripts always stripped): loading arbitrary third-party JS would mean
-// running untrusted code, which this tool guarantees it never does.
-router.post('/scrape-url', async (req, res) => {
-  try {
-    const { url } = req.body || {};
-    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Paste a web address first.' });
-
-    let normalised;
-    try { normalised = normaliseHttpUrl(url); } catch { return res.status(400).json({ error: "That doesn't look like a valid web address." }); }
-
-    // Deliberately fetchDirect(), not fetchHtml() — fetchHtml's multi-strategy fallback chain
-    // (Serper/WordPress-API/Jina readability) exists for SEO/text-extraction use cases where a
-    // lossy reconstruction beats nothing. For a CSS editor that's the wrong trade: a Jina/Serper
-    // result rewrites the markup into a stripped-down readable-text reconstruction, which is
-    // exactly why a real user report compared this unfavourably to just pasting real page
-    // source — that fallback path could silently kick in even when the direct fetch "worked" but
-    // merely looked thin to the heuristic. fetchDirect returns the actual raw HTML byte-for-byte,
-    // same as View Source, with no substitution.
-    const page = await fetchDirect(normalised);
-    if (!page?.body) return res.status(502).json({ error: "Couldn't load that page — it may be down or blocking automated requests. Try pasting its page source directly instead." });
-    if (page.statusCode >= 400) return res.status(502).json({ error: `That page returned an error (status ${page.statusCode}) — try pasting its page source directly instead.` });
-    const baseUrl = page.finalUrl || normalised;
-
-    // Discover <link rel="stylesheet" href> before sanitizing (sanitize doesn't touch <link>,
-    // but working from the raw fetched HTML avoids any ambiguity either way).
-    const linkDom = new JSDOM(page.body);
-    const stylesheetHrefs = [...linkDom.window.document.querySelectorAll('link[rel~="stylesheet"][href]')]
-      .map((el) => {
-        try { return new URL(el.getAttribute('href'), baseUrl).toString(); } catch { return null; }
-      })
-      .filter(Boolean)
-      .slice(0, MAX_SCRAPED_STYLESHEETS);
-
-    const scriptCount = linkDom.window.document.querySelectorAll('script[src], script:not([src])').length;
-
-    const { html, bodyInnerHTML, headInnerHTML, embeddedCss } = sanitizeHtml(page.body);
-
-    const [headResult, bodyResult, embeddedCssResult, cssResults] = await Promise.all([
-      // baseUrl passed through so relative image paths (the norm on a scraped page — src="/img/
-      // logo.png" only ever makes sense relative to its own site) resolve to something fetchable.
-      inlineImagesInHtmlFragment(headInnerHTML, baseUrl),
-      inlineImagesInHtmlFragment(bodyInnerHTML, baseUrl),
-      inlineImagesInCss(embeddedCss, baseUrl),
-      Promise.all(stylesheetHrefs.map(async (href) => {
-        try {
-          const { buffer } = await fetchBinary(href);
-          // url(...) inside a stylesheet resolves relative to THAT FILE's own location, not the
-          // page's — pass href (the stylesheet's own URL), not baseUrl.
-          const { css } = await inlineImagesInCss(buffer.toString('utf8'), href);
-          const filename = (() => {
-            try { return new URL(href).pathname.split('/').pop() || 'stylesheet.css'; } catch { return 'stylesheet.css'; }
-          })();
-          return { filename: filename.endsWith('.css') ? filename : `${filename || 'stylesheet'}.css`, css, ok: true };
-        } catch {
-          return { href, ok: false };
-        }
-      })),
-    ]);
-
-    // Embedded <style> blocks first — they're usually the primary styling on a modern page
-    // (component-scoped CSS, critical-CSS inlining, etc.), so they should win cascade priority
-    // by default same as they would on the real live page (later = higher priority).
-    const cssFiles = [
-      ...(embeddedCssResult.css.trim() ? [{ filename: 'Embedded styles from that page', css: embeddedCssResult.css }] : []),
-      ...cssResults.filter((r) => r.ok).map(({ filename, css }) => ({ filename, css })),
-    ];
-    const failedStylesheets = cssResults.filter((r) => !r.ok).length;
-    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount + embeddedCssResult.inlinedCount;
-    const failedImages = headResult.failedCount + bodyResult.failedCount + embeddedCssResult.failedCount;
-
-    const changeLog = [
-      `Loaded the page from ${new URL(baseUrl).hostname}.`,
-      'Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.',
-    ];
-    if (embeddedCssResult.css.trim()) changeLog.push('Found styles written directly inside that page and added them to your style list below.');
-    if (cssResults.length > 0) changeLog.push(`Loaded ${cssResults.filter((r) => r.ok).length} style sheet${cssResults.filter((r) => r.ok).length === 1 ? '' : 's'} linked from that page.`);
-    if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from that page so they show up in the preview.`);
-    if (scriptCount > 0) changeLog.push(`That page uses ${scriptCount} script${scriptCount === 1 ? '' : 's'} for behaviour (like menus or sliders) — those are intentionally not loaded here, since this tool only ever changes how a page looks, never runs code from it.`);
-    if (!cssFiles.length) changeLog.push("This page doesn't seem to reference any styles the tool could find — it may load its CSS in a way this tool can't detect. You can still add style files yourself below.");
-
-    const flags = [];
-    if (failedStylesheets > 0) flags.push(`${failedStylesheets} style sheet${failedStylesheets === 1 ? '' : 's'} linked from that page couldn't be loaded.`);
-    if (failedImages > 0) flags.push(`${failedImages} image${failedImages === 1 ? '' : 's'} from that page couldn't be loaded.`);
-
-    res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags });
-  } catch (err) {
-    console.error('[restyle] scrape-url:', err);
-    res.status(500).json({ error: err.message || "Couldn't load that page. Please check the address and try again." });
   }
 });
 
