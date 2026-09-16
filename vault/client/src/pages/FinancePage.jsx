@@ -798,7 +798,7 @@ function ClientsTab() {
         <div className="flex flex-col gap-2 max-w-2xl">
           {clients.map(c => (
             <div
-              key={`${c.source || 'fin'}-${c.id}`}
+              key={c.id}
               className="flex items-center justify-between p-3 rounded-lg border"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
@@ -809,29 +809,24 @@ function ClientsTab() {
                 </div>
               </div>
               <div className="flex gap-2">
-                {c.source === 'crm' ? (
-                  <Tooltip text="Open this client's full record in the Clients module."><Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link></Tooltip>
-                ) : (
-                  <>
-                    <Tooltip text={c.isActive ? 'Hide this client from the picker when creating new invoices — existing invoices are unaffected.' : 'Make this client selectable again when creating new invoices.'}>
-                      <button
-                        onClick={() => toggleActive(c)}
-                        className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                        style={c.isActive
-                          ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
-                          : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
-                      >{c.isActive ? 'Deactivate' : 'Set active'}</button>
-                    </Tooltip>
-                    <Tooltip text="Edit this client's contact details."><Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn></Tooltip>
-                    <Tooltip text="Permanently remove this client record — existing invoices keep their saved client name.">
-                      <button
-                        onClick={() => del(c.id, c.name)}
-                        className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                        style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-                      >Delete</button>
-                    </Tooltip>
-                  </>
-                )}
+                <Tooltip text="Open this client's full record in the Clients module."><Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link></Tooltip>
+                <Tooltip text={c.isActive ? 'Hide this client from the picker when creating new invoices — existing invoices are unaffected.' : 'Make this client selectable again when creating new invoices.'}>
+                  <button
+                    onClick={() => toggleActive(c)}
+                    className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                    style={c.isActive
+                      ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
+                      : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
+                  >{c.isActive ? 'Deactivate' : 'Set active'}</button>
+                </Tooltip>
+                <Tooltip text="Edit this client's billing details (name, contact, ABN, address)."><Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn></Tooltip>
+                <Tooltip text="Permanently remove this client record — existing invoices keep their saved client name.">
+                  <button
+                    onClick={() => del(c.id, c.name)}
+                    className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                    style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                  >Delete</button>
+                </Tooltip>
               </div>
             </div>
           ))}
@@ -942,7 +937,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
     if (inv.isLocked) return;
     const data = await api.get(`/api/finance/invoices/${inv.id}`).then(r => r.json());
     setForm({
-      clientRef: data.clientRef ? `crm:${data.clientRef}` : data.clientId ? `fin:${data.clientId}` : '',
+      clientRef: data.clientRef ? String(data.clientRef) : '',
       issueDate: data.issueDate ? String(data.issueDate).slice(0,10) : todayStr(),
       dueDate:   data.dueDate  ? String(data.dueDate).slice(0,10)  : '',
       notes:     data.notes || '',
@@ -969,10 +964,8 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
     setSaving(true);
     setError('');
     try {
-      const [src, rawId] = form.clientRef ? form.clientRef.split(':') : [null, null];
-      const clientId  = src === 'fin' ? parseInt(rawId, 10) : null;
-      const clientRef = src === 'crm' ? parseInt(rawId, 10) : null;
-      const payload = { ...form, clientRef, clientId, paidAt: form.paidAt || null };
+      const clientRef = form.clientRef ? parseInt(form.clientRef, 10) : null;
+      const payload = { ...form, clientRef, paidAt: form.paidAt || null };
       const label = form.docType === 'quote' ? 'Quote' : 'Invoice';
       if (modal === 'new') {
         const res = await api.post('/api/finance/invoices', payload);
@@ -1245,7 +1238,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                 <Tooltip text="Who this is billed to — pick an existing client or leave blank for an ad-hoc record.">
                   <Sel value={form.clientRef} onChange={v => setForm(p => ({...p, clientRef: v}))}>
                     <option value="">— No client —</option>
-                    {clients.map(c => <option key={`${c.source}:${c.id}`} value={`${c.source}:${c.id}`}>{c.name}</option>)}
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </Sel>
                 </Tooltip>
               </Field>

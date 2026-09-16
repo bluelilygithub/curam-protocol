@@ -326,17 +326,24 @@ router.delete('/accounts/:id', async (req, res) => {
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 
+// Post-merge: these read/write the CRM `clients` table (+ its primary
+// `client_contacts` row + `client_billing_details` extension) instead of the
+// retired `fin_clients` table. See docs/crm-migration.md.
+const CLIENT_SELECT = `
+  SELECT c.id, c.name, pc.name AS "contactName", pc.email, pc.phone,
+         b.address, b.abn, (c.status != 'archived') AS "isActive"
+  FROM clients c
+  LEFT JOIN client_contacts pc ON pc."clientId" = c.id AND pc."isPrimary" = TRUE
+  LEFT JOIN client_billing_details b ON b."clientId" = c.id
+`;
+
 router.get('/clients', async (req, res) => {
   const activeOnly = req.query.activeOnly === 'true';
   try {
-    let query = `
-      SELECT id, name, "contactName", email, phone, address, abn, "isActive", 'fin' AS source FROM fin_clients WHERE "userId"=$1
-        ${activeOnly ? 'AND "isActive" = TRUE' : ''}
-      UNION ALL
-      SELECT id, name, NULL AS "contactName", NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, TRUE AS "isActive", 'crm' AS source
-        FROM clients WHERE "userId"=$1 ${activeOnly ? "AND status = 'active'" : ''}
-      ORDER BY name`;
-    const { rows } = await pool.query(query, [req.user.id]);
+    const { rows } = await pool.query(
+      `${CLIENT_SELECT} WHERE c."userId"=$1 ${activeOnly ? "AND c.status = 'active'" : ''} ORDER BY c.name`,
+      [req.user.id]
+    );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -344,31 +351,81 @@ router.get('/clients', async (req, res) => {
 });
 
 router.post('/clients', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
     const { name, contactName, email, phone, address, abn } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-    const { rows } = await pool.query(
-      `INSERT INTO fin_clients ("userId", name, "contactName", email, phone, address, abn) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [req.user.id, name.trim(), contactName||null, email||null, phone||null, address||null, abn||null]
+
+    await dbClient.query('BEGIN');
+    const { rows: [c] } = await dbClient.query(
+      `INSERT INTO clients ("userId", name) VALUES ($1,$2) RETURNING id`,
+      [req.user.id, name.trim()]
     );
+    if (contactName || email || phone) {
+      await dbClient.query(
+        `INSERT INTO client_contacts ("clientId", name, email, phone, "isPrimary") VALUES ($1,$2,$3,$4,TRUE)`,
+        [c.id, contactName || name.trim(), email || null, phone || null]
+      );
+    }
+    if (address || abn) {
+      await dbClient.query(
+        `INSERT INTO client_billing_details ("clientId", abn, address) VALUES ($1,$2,$3)`,
+        [c.id, abn || null, address || null]
+      );
+    }
+    await dbClient.query('COMMIT');
+
+    const { rows } = await pool.query(`${CLIENT_SELECT} WHERE c.id=$1`, [c.id]);
     res.json(rows[0]);
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
 router.put('/clients/:id', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
     const { name, contactName, email, phone, address, abn } = req.body;
-    const { rows } = await pool.query(
-      `UPDATE fin_clients SET name=$1, "contactName"=$2, email=$3, phone=$4, address=$5, abn=$6, "updatedAt"=NOW()
-       WHERE id=$7 AND "userId"=$8 RETURNING *`,
-      [name, contactName||null, email||null, phone||null, address||null, abn||null, req.params.id, req.user.id]
+    await dbClient.query('BEGIN');
+
+    const { rows: [c] } = await dbClient.query(
+      `UPDATE clients SET name=$1, "updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING id`,
+      [name, req.params.id, req.user.id]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (!c) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+
+    const { rows: [existingContact] } = await dbClient.query(
+      `SELECT id FROM client_contacts WHERE "clientId"=$1 AND "isPrimary"=TRUE`, [c.id]
+    );
+    if (existingContact) {
+      await dbClient.query(
+        `UPDATE client_contacts SET name=$1, email=$2, phone=$3 WHERE id=$4`,
+        [contactName || name, email || null, phone || null, existingContact.id]
+      );
+    } else if (contactName || email || phone) {
+      await dbClient.query(
+        `INSERT INTO client_contacts ("clientId", name, email, phone, "isPrimary") VALUES ($1,$2,$3,$4,TRUE)`,
+        [c.id, contactName || name, email || null, phone || null]
+      );
+    }
+
+    await dbClient.query(
+      `INSERT INTO client_billing_details ("clientId", abn, address) VALUES ($1,$2,$3)
+       ON CONFLICT ("clientId") DO UPDATE SET abn=EXCLUDED.abn, address=EXCLUDED.address, "updatedAt"=NOW()`,
+      [c.id, abn || null, address || null]
+    );
+
+    await dbClient.query('COMMIT');
+    const { rows } = await pool.query(`${CLIENT_SELECT} WHERE c.id=$1`, [c.id]);
     res.json(rows[0]);
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
@@ -377,11 +434,12 @@ router.patch('/clients/:id', async (req, res) => {
     const { isActive } = req.body;
     if (typeof isActive !== 'boolean') return res.status(400).json({ error: 'isActive must be boolean' });
     const { rows } = await pool.query(
-      `UPDATE fin_clients SET "isActive"=$1, "updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING *`,
-      [isActive, req.params.id, req.user.id]
+      `UPDATE clients SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING id`,
+      [isActive ? 'active' : 'archived', req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    const { rows: full } = await pool.query(`${CLIENT_SELECT} WHERE c.id=$1`, [rows[0].id]);
+    res.json(full[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -389,7 +447,9 @@ router.patch('/clients/:id', async (req, res) => {
 
 router.delete('/clients/:id', async (req, res) => {
   try {
-    await pool.query(`DELETE FROM fin_clients WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    // Cascades to client_contacts/client_touchpoints/client_billing_details;
+    // fin_invoices."clientRef" is ON DELETE SET NULL, so past invoices survive.
+    await pool.query(`DELETE FROM clients WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -547,11 +607,10 @@ router.delete('/tx-codes/:id', async (req, res) => {
 router.get('/invoices', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
-              COALESCE(fc.email,
-                (SELECT cc.email FROM client_contacts cc
-                 WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
-                 ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+      `SELECT i.*, cr.name AS "clientName",
+              (SELECT cc.email FROM client_contacts cc
+               WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+               ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1
               ) AS "clientEmail",
               EXISTS (
                 SELECT 1 FROM fin_bas_quarters q
@@ -560,7 +619,6 @@ router.get('/invoices', async (req, res) => {
                   AND q.status != 'open'
               ) AS "isLocked"
        FROM fin_invoices i
-       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
        WHERE i."userId"=$1
        ORDER BY i."issueDate" DESC, i.id DESC`,
@@ -577,7 +635,7 @@ router.post('/invoices', async (req, res) => {
   try {
     await client.query('BEGIN');
     const userId = req.user.id;
-    const { clientId, clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
+    const { clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
 
     let subtotal = 0, gst = 0;
     for (const item of items) {
@@ -600,9 +658,9 @@ router.post('/invoices', async (req, res) => {
 
     const number = await nextInvoiceNumber(userId, docType);
     const { rows } = await client.query(
-      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
-       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [userId, clientId||null, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null, docType]
+      `INSERT INTO fin_invoices ("userId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
+       VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [userId, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null, docType]
     );
     const invoice = rows[0];
 
@@ -628,13 +686,14 @@ router.post('/invoices', async (req, res) => {
 router.get('/invoices/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
-              COALESCE(fc.email, NULL) AS "clientEmail",
-              COALESCE(fc.address, NULL) AS "clientAddress",
-              COALESCE(fc.abn, NULL) AS "clientAbn"
+      `SELECT i.*, cr.name AS "clientName",
+              pc.email   AS "clientEmail",
+              cb.address AS "clientAddress",
+              cb.abn     AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
+       LEFT JOIN client_contacts pc ON pc."clientId" = cr.id AND pc."isPrimary" = TRUE
+       LEFT JOIN client_billing_details cb ON cb."clientId" = cr.id
        WHERE i.id=$1 AND i."userId"=$2`,
       [req.params.id, req.user.id]
     );
@@ -656,14 +715,15 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     const invoiceId = req.params.id;
 
     const { rows } = await pool.query(
-      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
-              fc."contactName"                  AS "clientContactName",
-              COALESCE(fc.email, NULL)           AS "clientEmail",
-              COALESCE(fc.address, NULL)         AS "clientAddress",
-              COALESCE(fc.abn, NULL)             AS "clientAbn"
+      `SELECT i.*, cr.name AS "clientName",
+              pc.name    AS "clientContactName",
+              pc.email   AS "clientEmail",
+              cb.address AS "clientAddress",
+              cb.abn     AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
+       LEFT JOIN client_contacts pc ON pc."clientId" = cr.id AND pc."isPrimary" = TRUE
+       LEFT JOIN client_billing_details cb ON cb."clientId" = cr.id
        WHERE i.id=$1 AND i."userId"=$2`,
       [invoiceId, userId]
     );
@@ -708,7 +768,7 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query('BEGIN');
     const userId    = req.user.id;
     const invoiceId = req.params.id;
-    const { clientId, clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
+    const { clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
 
     const { rows: check } = await client.query(
       `SELECT id, number, status, "paidAt", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
@@ -754,10 +814,10 @@ router.put('/invoices/:id', async (req, res) => {
 
     await client.query(
       `UPDATE fin_invoices
-       SET "clientId"=$1,"clientRef"=$2,"issueDate"=$3,"dueDate"=$4,subtotal=$5,gst=$6,total=$7,
-           notes=$8,status=$9,"paidAt"=$10,"updatedAt"=NOW()
-       WHERE id=$11 AND "userId"=$12`,
-      [clientId||null, clientRef||null, issueDate, dueDate||null, subtotal, gst, total,
+       SET "clientRef"=$1,"issueDate"=$2,"dueDate"=$3,subtotal=$4,gst=$5,total=$6,
+           notes=$7,status=$8,"paidAt"=$9,"updatedAt"=NOW()
+       WHERE id=$10 AND "userId"=$11`,
+      [clientRef||null, issueDate, dueDate||null, subtotal, gst, total,
        notes||null, newStatus, newPaidAt, invoiceId, userId]
     );
     await client.query(`DELETE FROM fin_invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
@@ -833,17 +893,16 @@ router.post('/invoices/:id/send', async (req, res) => {
     // Load invoice + items + client
     const { rows } = await pool.query(
       `SELECT i.*,
-              COALESCE(fc.name, cr.name) AS "clientName",
-              COALESCE(fc.email,
-                (SELECT cc.email FROM client_contacts cc
-                 WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
-                 ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+              cr.name AS "clientName",
+              (SELECT cc.email FROM client_contacts cc
+               WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+               ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1
               ) AS "clientEmail",
-              fc.address AS "clientAddress",
-              COALESCE(fc.abn, NULL) AS "clientAbn"
+              cb.address AS "clientAddress",
+              cb.abn     AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
+       LEFT JOIN client_billing_details cb ON cb."clientId" = cr.id
        WHERE i.id=$1 AND i."userId"=$2`,
       [invoiceId, userId]
     );
@@ -1227,9 +1286,9 @@ router.post('/invoices/:id/convert', async (req, res) => {
     const notes = quote.notes ? `${convertedNote}\n${quote.notes}` : convertedNote;
 
     const { rows: invRows } = await dbClient.query(
-      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
-       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,'invoice') RETURNING *`,
-      [userId, quote.clientId, quote.clientRef, number, today, dueDate, quote.subtotal, quote.gst, quote.total, notes]
+      `INSERT INTO fin_invoices ("userId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
+       VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,'invoice') RETURNING *`,
+      [userId, quote.clientRef, number, today, dueDate, quote.subtotal, quote.gst, quote.total, notes]
     );
     const invoice = invRows[0];
 
@@ -3435,7 +3494,7 @@ router.get('/bas/:quarterId/warnings', async (req, res) => {
     const { rows: unpaidInvoices } = await pool.query(
       `SELECT i.id, i.number, c.name AS "clientName", i.total, i.status, i."dueDate"
        FROM fin_invoices i
-       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientRef"
        WHERE i."userId"=$1 AND i."issueDate"::date BETWEEN $2 AND $3
          AND i."docType" != 'quote' AND i.status IN ('draft','sent')
        ORDER BY i."issueDate", i.id`,
@@ -3875,9 +3934,8 @@ router.get('/export/excel', async (req, res) => {
          WHERE ${expWhere} ORDER BY e.date ASC, e.id ASC`, expParams),
       pool.query(
         `SELECT i.number, i."issueDate", i."dueDate", i.status, i.subtotal, i.gst, i.total,
-                COALESCE(fc.name, cr.name) AS "clientName"
+                cr.name AS "clientName"
          FROM fin_invoices i
-         LEFT JOIN fin_clients fc ON fc.id = i."clientId"
          LEFT JOIN clients cr ON cr.id = i."clientRef"
          WHERE ${invWhere} ORDER BY i."issueDate" ASC, i.id ASC`, invParams),
       pool.query(
@@ -4029,12 +4087,11 @@ router.get('/export/sheets', async (req, res) => {
       ),
       pool.query(
         `SELECT i."issueDate" AS date,
-                COALESCE(fc.name, cr.name) AS party,
+                cr.name AS party,
                 i.number AS description, i.subtotal AS amount, i.gst,
                 i.total, i.notes,
                 CASE WHEN i."docType"='quote' THEN 'Quote' ELSE 'Invoice' END AS type
          FROM fin_invoices i
-         LEFT JOIN fin_clients fc ON fc.id = i."clientId"
          LEFT JOIN clients cr ON cr.id = i."clientRef"
          WHERE ${inv.where.replace(/%COL%/g, 'i."issueDate"').replace('"userId"', 'i."userId"')}
          ORDER BY i."issueDate" ASC, i.id ASC`,

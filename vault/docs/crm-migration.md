@@ -35,29 +35,31 @@ node server/scripts/migrateFinClientsToClients.js              # apply
 
 `server/scripts/createClientsForUnmatched.js` — for the 3 `fin_clients` rows that had no candidate in `clients` at all (expected: `clients` was empty pre-migration), creates a new `clients` row + `client_contacts` row + `client_billing_details` row per unmatched row, transactionally, and links the bridge column. Run against production 2026-09-16 — all 3 rows (`Diamond Plate`, `BTMB pty ltd`, `NZL Supply`) created and linked cleanly, zero failures. Every `fin_clients` row now has a non-null `clientId`.
 
-## Phase 2 — Repoint Finance queries (not started)
+## Phase 2 — Repoint Finance queries (done)
 
-Once every `fin_clients` row has a `clientId`:
+Went with `clientRef` (already meaning "→ `clients`" everywhere, including `server/routes/clients.js`'s existing revenue-summary queries) as the single surviving FK, rather than repurposing `clientId` — avoids touching `clients.js` at all and avoids a live column rename/retarget.
 
-1. `server/routes/finance.js`:
-   - Delete the `UNION ALL source:'fin'/'crm'` query in `GET /clients` — replace with `SELECT c.*, b.abn, b.address FROM clients c LEFT JOIN client_billing_details b ON b."clientId"=c.id WHERE c."userId"=$1`.
-   - Every invoice/quote read/write currently branching on `clientId` (→ `fin_clients`) vs `clientRef` (→ `clients`) collapses to one FK. Backfill `fin_invoices.clientId` from `fin_clients.clientId` (a straight join-and-update), then drop `fin_invoices.clientRef` — keep the column named `clientId`, now pointing at `clients` instead of `fin_clients`.
-   - Repeat for whatever recurring-invoice-template table `recurringCron.js` reads (`t.clientId`/`t.clientRef`).
-   - Delete the `POST/PUT/PATCH/DELETE /clients` routes' writes to `fin_clients` — they become plain proxies to the `clients`/`client_billing_details` tables (or get removed if `client/src/pages/ClientsPage.jsx` already covers client CRUD and Finance only needs a picker).
-2. `server/cron/financeRemindersCron.js`: drop the `fin_clients` join branch, use `clients` + `client_billing_details` directly.
-3. `client/src/pages/FinancePage.jsx`: point client picker/management UI at `/api/clients`; surface `abn`/`address` fields (now on `client_billing_details`) in whatever inline client form it has.
+- `server/routes/finance.js`: `GET /clients` now reads straight from `clients` + `client_contacts` (primary) + `client_billing_details` (`CLIENT_SELECT` helper). `POST`/`PUT`/`PATCH`/`DELETE /clients` write to those three tables transactionally instead of `fin_clients`. Every invoice/quote read (list, single, PDF, email-send, BAS unpaid-list, reports/ledger) dropped the `fin_clients fc` join and `COALESCE(fc.x, cr.x)` pattern — single join on `clients cr` (+ `client_contacts`/`client_billing_details` where contact/billing fields are needed). Invoice create/update no longer accepts a `clientId` field, only `clientRef`.
+- `server/cron/financeRemindersCron.js`: same simplification, single `clients cr` join.
+- `server/cron/recurringCron.js`: writes only `clientRef` on new recurring-generated invoices now. Reads `t.clientRef` from the template; if an old template only has `t.clientId` (pre-merge), resolves it through the `fin_clients."clientId"` bridge column at run time rather than losing the link — one-time compatibility shim, safe to remove once all recurring templates have been re-saved.
+- `client/src/pages/FinancePage.jsx`: dropped the `crm:<id>`/`fin:<id>` prefix scheme in the client picker and save/load logic — `form.clientRef` is now a plain client id. Billing-records list (the finance-specific client management UI) no longer branches on `c.source` (removed from the API response) — every row now gets the same actions (View in Clients module, Deactivate/Edit/Delete), since they're all real `clients` rows now.
 
-**Verify**: run a full invoice create → send → paid cycle, and the finance reminders cron, against the repointed queries before Phase 3.
+**Not yet done**: dropping the now-unused `fin_invoices.clientId` / `fin_recurring` template `clientId` values — left in place as historical/compat data, cleaned up in Phase 3 alongside `fin_clients` itself.
 
-## Phase 3 — Drop `fin_clients` (not started, do last)
+**Verify before Phase 3**: run a full invoice create → send → paid cycle, a quote → convert-to-invoice, the finance reminders cron, and at least one recurring-invoice firing, against the repointed queries in production.
+
+## Phase 3 — Drop `fin_clients` + leftover columns (not started, do last)
 
 Only after Phase 2 has run clean through at least one full billing/reporting cycle in production:
 
 ```sql
-ALTER TABLE fin_invoices DROP CONSTRAINT IF EXISTS fin_invoices_clientid_fkey; -- old FK to fin_clients, if named differently check \d fin_invoices
--- (clientId column already repointed to clients in Phase 2 — this just drops the stale constraint if it wasn't already replaced)
+-- fin_invoices.clientId is now unused (superseded by clientRef) — drop it and its FK
+ALTER TABLE fin_invoices DROP CONSTRAINT IF EXISTS fin_invoices_clientid_fkey; -- check \d fin_invoices for actual name if this doesn't match
+ALTER TABLE fin_invoices DROP COLUMN IF EXISTS "clientId";
 DROP TABLE IF EXISTS fin_clients;
 ```
+
+Also: sweep `fin_recurring.template` JSONB rows for leftover `clientId` keys (informational only, not FK-enforced, safe to leave — but tidy to strip once confirmed unused).
 
 ## Rollback
 
@@ -70,5 +72,5 @@ DROP TABLE IF EXISTS fin_clients;
 - [x] Phase 0 — bridge schema in `server/db.js`
 - [x] Phase 1 — migration script run against production 2026-09-16. 3 `fin_clients` rows, 0 matched (expected — `clients` was empty), all 3 flagged unmatched.
 - [x] Phase 1b — `createClientsForUnmatched.js` run against production 2026-09-16. All 3 created + linked. Every `fin_clients` row now has `clientId` set.
-- [ ] Phase 2 — repoint Finance queries
-- [ ] Phase 3 — drop `fin_clients`
+- [x] Phase 2 — Finance queries repointed to `clients`/`client_contacts`/`client_billing_details` (server + frontend). Not yet run/verified in production.
+- [ ] Phase 3 — drop `fin_clients` + `fin_invoices.clientId`

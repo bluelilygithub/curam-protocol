@@ -145,15 +145,13 @@ async function runFinanceReminders(onlyUserId = null) {
   // Fix overdue-quotes query: only include sent quotes (not drafts that were never sent)
   const { rows: overdueQuotes } = await pool.query(`
       SELECT i.number, i.total, i."dueDate", i.id,
-             COALESCE(fc.name, cr.name) AS "clientName",
-             COALESCE(fc.email,
-               (SELECT cc.email FROM client_contacts cc
-                WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
-                ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+             cr.name AS "clientName",
+             (SELECT cc.email FROM client_contacts cc
+              WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+              ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1
              ) AS "clientEmail"
       FROM fin_invoices i
-      LEFT JOIN fin_clients fc ON fc.id = i."clientId"
-      LEFT JOIN clients cr     ON cr.id = i."clientRef"
+      LEFT JOIN clients cr ON cr.id = i."clientRef"
       WHERE i."userId" = $1
         AND i."docType" = 'quote'
         AND i.status = 'sent'
@@ -165,15 +163,13 @@ async function runFinanceReminders(onlyUserId = null) {
     // Overdue invoices: sent but not paid, past due date
     const { rows: overdueInvoices } = await pool.query(`
       SELECT i.number, i.total, i."dueDate", i.id,
-             COALESCE(fc.name, cr.name) AS "clientName",
-             COALESCE(fc.email,
-               (SELECT cc.email FROM client_contacts cc
-                WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
-                ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1)
+             cr.name AS "clientName",
+             (SELECT cc.email FROM client_contacts cc
+              WHERE cc."clientId" = cr.id AND cc.email IS NOT NULL
+              ORDER BY cc."isPrimary" DESC, cc.id ASC LIMIT 1
              ) AS "clientEmail"
       FROM fin_invoices i
-      LEFT JOIN fin_clients fc ON fc.id = i."clientId"
-      LEFT JOIN clients cr     ON cr.id = i."clientRef"
+      LEFT JOIN clients cr ON cr.id = i."clientRef"
       WHERE i."userId" = $1
         AND i."docType" = 'invoice'
         AND i.status = 'sent'

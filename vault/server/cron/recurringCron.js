@@ -70,10 +70,22 @@ async function runRecurring() {
         const total   = parseFloat((subtotal + gst).toFixed(2));
         const dueDate = addDays(today, termDays);
 
+        // Old templates saved before the fin_clients merge may only carry
+        // t.clientId (a retired fin_clients id) — resolve it via the bridge
+        // column rather than losing the client link. New templates only
+        // ever set t.clientRef (see FinancePage.jsx BLANK_REC).
+        let resolvedClientRef = t.clientRef || null;
+        if (!resolvedClientRef && t.clientId) {
+          const { rows: bridge } = await dbClient.query(
+            `SELECT "clientId" FROM fin_clients WHERE id=$1`, [t.clientId]
+          );
+          resolvedClientRef = bridge[0]?.clientId || null;
+        }
+
         const { rows: invRows } = await dbClient.query(
-          `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
-           VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10,'invoice') RETURNING *`,
-          [rec.userId, t.clientId||null, t.clientRef||null, number, today, dueDate, subtotal, gst, total, t.notes||null]
+          `INSERT INTO fin_invoices ("userId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
+           VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,'invoice') RETURNING *`,
+          [rec.userId, resolvedClientRef, number, today, dueDate, subtotal, gst, total, t.notes||null]
         );
         const invoice = invRows[0];
         for (const item of items) {
