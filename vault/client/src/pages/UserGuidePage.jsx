@@ -1816,14 +1816,16 @@ function UserGuidePage() {
           rendered read-only in a sandboxed frame.
         </P>
 
-        <SubHeading>Restyle</SubHeading>
+        <SubHeading>CSS</SubHeading>
         <P>
-          Change how a website looks without touching any code. Upload or paste your page's HTML and one or more
-          style files, reorder them if two disagree, and see a live, click-to-edit preview. Click anything on the
-          page to select it, then adjust it with simple sliders and color pickers, or just type what you want in
-          plain English (e.g. "make this bigger and give it rounded corners") and Claude applies a sensible
-          change. Every automatic fix or edit is explained in one plain sentence — never technical terms. Download
-          the finished page as a single file when you're done.
+          Change how a website looks without touching any code. Try the built-in demo page (Header, Paragraph,
+          Card, Image) to get a feel for it, or upload/paste your own HTML and one or more style files, reorder
+          them if two disagree, and see a live, click-to-edit preview. Click anything on the page to select it,
+          then adjust it with simple sliders and color pickers — including text capitalization, letter spacing,
+          alignment, and animation effects — or just type (or speak, using the mic button) what you want in plain
+          English (e.g. "make this bigger and give it rounded corners") and Claude applies a sensible change.
+          Every automatic fix or edit is explained in one plain sentence — never technical terms. Save a page to
+          revisit later, or download the finished page as a single file when you're done.
         </P>
 
         <SubHeading>WP Theme Builder</SubHeading>

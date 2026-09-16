@@ -74,7 +74,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'recipes', label: 'Recipes' },
       { key: 'pdf', label: 'PDF Tools' },
       { key: 'fonts', label: 'Font Customizer' },
-      { key: 'restyle', label: 'Restyle' },
+      { key: 'restyle', label: 'CSS' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

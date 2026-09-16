@@ -3,9 +3,12 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
+import { useVoice } from '../hooks/useVoice';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
-// Restyle — non-technical-friendly CSS editor. See docs/restyle.md.
+// CSS tool (displayed as "CSS"; internal feature key/route/files still say "restyle" — pure
+// code-organization continuity, invisible to the user). Non-technical-friendly CSS editor.
+// See docs/restyle.md.
 //
 // No CSS jargon anywhere in this file's UI copy or change-log text — "the space around it",
 // not "padding"; "the rounded corners", not "border-radius". Every automatic action (fix, AI
@@ -22,6 +25,10 @@ const PLAIN = {
   borderRadius: 'the rounded corners',
   padding: 'the space around the content',
   boxShadow: 'the shadow',
+  textTransform: 'the text capitalization',
+  letterSpacing: 'the spacing between letters',
+  textAlign: 'the text alignment',
+  animation: 'the animation',
 };
 
 const FONT_OPTIONS = [
@@ -40,6 +47,32 @@ const SHADOW_OPTIONS = [
   { value: '0 0 0 3px rgba(59,130,246,0.5)', label: 'Outline glow' },
 ];
 
+const TEXT_TRANSFORM_OPTIONS = [
+  { value: 'none', label: 'Normal' },
+  { value: 'uppercase', label: 'ALL CAPS' },
+  { value: 'lowercase', label: 'all lowercase' },
+  { value: 'capitalize', label: 'Title Case' },
+];
+
+const TEXT_ALIGN_OPTIONS = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'right', label: 'Right' },
+  { value: 'justify', label: 'Justify' },
+];
+
+// Animation presets — the dropdown shows a plain-English label; the actual CSS value names one
+// of the @keyframes rules injected once into the preview (ANIMATION_DEFS_CSS below). Keep this
+// list in sync with ALLOWED_ANIMATION_VALUES in server/services/restyle/aiEdit.js.
+const ANIMATION_PRESETS = [
+  { value: 'none', label: 'None' },
+  { value: 'restyleFadeIn 0.6s ease both', label: 'Fade in' },
+  { value: 'restyleSlideUp 0.6s ease both', label: 'Slide up' },
+  { value: 'restyleZoomIn 0.5s ease both', label: 'Pop in' },
+  { value: 'restylePulse 1s ease-in-out 2', label: 'Pulse' },
+  { value: 'restyleBounce 0.8s ease', label: 'Bounce' },
+];
+
 // Outline styles for hover/selected states — injected as a SEPARATE <style> tag inside the
 // iframe, never merged into the user's own CSS, so nothing about their actual design is
 // touched just to show selection state.
@@ -47,6 +80,37 @@ const OUTLINE_CSS = `
   [data-restyle-hover] { outline: 2px dashed #3b82f6 !important; outline-offset: 1px; cursor: pointer; }
   [data-restyle-selected] { outline: 2px solid #cc785c !important; outline-offset: 1px; }
 `;
+
+// Named keyframes backing the animation presets above — injected once into the preview,
+// separate from the user's own merged CSS, same reasoning as OUTLINE_CSS.
+const ANIMATION_DEFS_CSS = `
+  @keyframes restyleFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes restyleSlideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes restyleZoomIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+  @keyframes restylePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes restyleBounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-12px); } 60% { transform: translateY(-6px); } }
+`;
+
+// Demo page — Header, Paragraph, Card, Image — loaded via the same sanitize/auto-fix pipeline
+// as a real upload, so "Load a demo" exercises the exact same code path a real page would.
+const DEMO_HTML = `<header class="site-header"><h1>Welcome to Acme Co.</h1><p class="tagline">Tools that just work.</p></header>
+<main>
+  <p class="intro">This is a short paragraph of body text you can click on and restyle. Try changing its color, size, or font using the panel on the right, or just describe what you want in plain English.</p>
+  <div class="card">
+    <h2>Feature card</h2>
+    <p>Cards like this one are a common building block on real websites — click the card itself, its heading, or this paragraph to try editing each one separately.</p>
+  </div>
+  <img class="demo-image" alt="A simple placeholder graphic" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='220'%3E%3Crect width='400' height='220' fill='%23cc785c'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='22' fill='white' text-anchor='middle' dominant-baseline='middle'%3EImage placeholder%3C/text%3E%3C/svg%3E" />
+</main>`;
+
+const DEMO_CSS = `.site-header { background: #1a1a1a; color: #ffffff; padding: 32px; text-align: center; }
+.site-header h1 { margin: 0 0 8px; font-size: 32px; }
+.tagline { margin: 0; opacity: 0.8; }
+main { max-width: 640px; margin: 0 auto; padding: 24px; font-family: system-ui, sans-serif; }
+.intro { font-size: 16px; line-height: 1.6; color: #333333; }
+.card { background: #f5f5f0; border: 1px solid #d8d8d0; border-radius: 8px; padding: 20px; margin: 20px 0; }
+.card h2 { margin-top: 0; }
+.demo-image { display: block; max-width: 100%; border-radius: 8px; margin-top: 20px; }`;
 
 function matchFontOption(fontFamily) {
   const known = ['Inter', 'Roboto', 'Merriweather', 'Poppins'];
@@ -86,6 +150,7 @@ export default function RestylePage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
+  const { isSTTAvailable, isLocalSTTAvailable, isListening, isTranscribing, transcript, interimText, voiceError, startListening, stopListening } = useVoice();
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.restyle !== false;
@@ -96,6 +161,13 @@ export default function RestylePage() {
       .then((d) => { if (d?.flags) setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...d.flags }); })
       .catch(() => {});
   }, []);
+
+  // Voice input for the plain-English request box — same useVoice() hook as chat elsewhere.
+  useEffect(() => {
+    if (transcript) {
+      setAiRequest((prev) => (prev.trim() ? prev.trim() + ' ' + transcript.trim() : transcript.trim()));
+    }
+  }, [transcript]);
 
   // ---------- HTML input ----------
   const [htmlTab, setHtmlTab] = useState('file');
@@ -135,6 +207,7 @@ export default function RestylePage() {
   const [ctrl, setCtrl] = useState({
     fontFamily: '', fontSize: 16, fontWeight: '400', color: '#000000',
     lineHeight: 1.2, backgroundColor: '#ffffff', borderRadius: 0, padding: 0, boxShadow: 'none',
+    textTransform: 'none', letterSpacing: 0, textAlign: 'left', animation: 'none',
   });
 
   // ---------- AI request ----------
@@ -222,6 +295,11 @@ export default function RestylePage() {
     outlineStyle.textContent = OUTLINE_CSS;
     idoc.head.appendChild(outlineStyle);
 
+    const animationDefs = idoc.createElement('style');
+    animationDefs.id = 'restyle-animation-defs';
+    animationDefs.textContent = ANIMATION_DEFS_CSS;
+    idoc.head.appendChild(animationDefs);
+
     let hovered = null;
     idoc.body.addEventListener('mouseover', (e) => {
       if (hovered) hovered.removeAttribute('data-restyle-hover');
@@ -250,6 +328,13 @@ export default function RestylePage() {
       borderRadius: parseFloat(cs.borderRadius) || 0,
       padding: parseFloat(cs.paddingTop) || 0,
       boxShadow: cs.boxShadow && cs.boxShadow !== 'none' ? cs.boxShadow : 'none',
+      textTransform: cs.textTransform && cs.textTransform !== 'none' ? cs.textTransform : 'none',
+      letterSpacing: cs.letterSpacing && cs.letterSpacing !== 'normal' ? parseFloat(cs.letterSpacing) || 0 : 0,
+      textAlign: TEXT_ALIGN_OPTIONS.some((o) => o.value === cs.textAlign) ? cs.textAlign : 'left',
+      // Animation isn't reliably readable back from getComputedStyle in a form that maps to our
+      // presets, so this reflects only an animation WE set inline — a page's own CSS-driven
+      // animation (if any) shows as "None" here without being touched or removed.
+      animation: ANIMATION_PRESETS.some((o) => o.value === target.style.animation) ? target.style.animation : 'none',
     });
     setTimeout(() => { suppressControlEvents.current = false; }, 0);
   }, []);
@@ -282,14 +367,21 @@ export default function RestylePage() {
     setPreviewBuilt(true);
   }, [attachIframeInteractivity, resetSelection]);
 
-  const buildPreview = async () => {
-    if (!htmlLoaded) { setCssStatus({ text: 'Add your HTML first.', kind: 'error' }); return; }
-    if (!cssEntries.length) { setCssStatus({ text: 'Add at least one style file first.', kind: 'error' }); return; }
+  // Accepts an explicit entries list so the demo loader can build a preview immediately without
+  // waiting on a setCssEntries() re-render; the real "Build the preview" button just passes the
+  // current state.
+  const runBuildPreview = async (entries) => {
+    // Checked via the ref (always current the instant submitHtml() sets it), not the htmlLoaded
+    // state flag — loadDemo() calls this synchronously right after submitHtml() resolves, before
+    // React necessarily re-renders with the new state, which would otherwise make this a stale
+    // closure read of an old "false".
+    if (!sanitizedRef.current.body && !sanitizedRef.current.head) { setCssStatus({ text: 'Add your HTML first.', kind: 'error' }); return; }
+    if (!entries.length) { setCssStatus({ text: 'Add at least one style file first.', kind: 'error' }); return; }
     setCssStatus({ text: 'Checking your styles…', kind: '' });
     try {
       const fd = new FormData();
       const pasted = [];
-      cssEntries.forEach((entry) => {
+      entries.forEach((entry) => {
         if (entry.source === 'file') {
           fd.append('files', new Blob([entry.css], { type: 'text/css' }), entry.filename);
         } else {
@@ -297,7 +389,7 @@ export default function RestylePage() {
         }
       });
       fd.append('pasted', JSON.stringify(pasted));
-      fd.append('order', JSON.stringify(cssEntries.map((e) => e.filename)));
+      fd.append('order', JSON.stringify(entries.map((e) => e.filename)));
 
       const res = await api.postForm('/api/restyle/process-css', fd);
       const data = await res.json();
@@ -311,6 +403,20 @@ export default function RestylePage() {
     } catch (err) {
       setCssStatus({ text: err.message, kind: 'error' });
     }
+  };
+
+  const buildPreview = () => runBuildPreview(cssEntries);
+
+  // ---------- Demo ----------
+  const loadDemo = async () => {
+    setChangeLog([]);
+    setFlags([]);
+    await submitHtml({ html: DEMO_HTML });
+    cssIdRef.current += 1;
+    const demoEntries = [{ id: cssIdRef.current, filename: 'demo-styles.css', css: DEMO_CSS, source: 'paste' }];
+    setCssEntries(demoEntries);
+    await runBuildPreview(demoEntries);
+    addToast('Demo page loaded — click the header, paragraph, card, or image to try editing it.');
   };
 
   // ---------- Applying changes ----------
@@ -332,6 +438,23 @@ export default function RestylePage() {
     const value = unit ? `${rawValue}${unit}` : rawValue;
     setCtrl((prev) => ({ ...prev, [property]: rawValue }));
     applyChange(property, value, explanation);
+  };
+
+  // Animations don't replay just by setting the same CSS value again — the standard trick is to
+  // clear it, force the browser to notice (reading offsetWidth), then set the real value on the
+  // next tick, so picking "Pulse" a second time still visibly pulses.
+  const handleAnimationChange = (value, label) => {
+    if (suppressControlEvents.current) return;
+    const target = selectedElRef.current;
+    if (!target) return;
+    setCtrl((prev) => ({ ...prev, animation: value }));
+    const previousValue = target.style.animation || '';
+    target.style.animation = 'none';
+    void target.offsetWidth; // eslint-disable-line no-unused-expressions
+    target.style.animation = value === 'none' ? '' : value;
+    undoStackRef.current.push({ target, property: 'animation', previousValue });
+    setCanUndo(true);
+    addLogEntry(value === 'none' ? 'Removed the animation.' : `Added a "${label}" animation.`);
   };
 
   const handleUndo = () => {
@@ -361,6 +484,8 @@ export default function RestylePage() {
         fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight,
         color: cs.color, lineHeight: cs.lineHeight, backgroundColor: cs.backgroundColor,
         borderRadius: cs.borderRadius, padding: cs.paddingTop, boxShadow: cs.boxShadow,
+        textTransform: cs.textTransform, letterSpacing: cs.letterSpacing, textAlign: cs.textAlign,
+        animation: target.style.animation || 'none',
       };
       const res = await api.post('/api/restyle/ai-edit', {
         element: {
@@ -401,10 +526,94 @@ export default function RestylePage() {
     addLogEntry('Downloaded your finished page with all your changes included.');
   };
 
+  // ---------- Saved pages (revisit later) ----------
+  const [savedProjects, setSavedProjects] = useState([]);
+  const [savedListOpen, setSavedListOpen] = useState(false);
+  const [saveNameInput, setSaveNameInput] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
+  const [loadingProjectId, setLoadingProjectId] = useState(null);
+
+  const loadSavedProjectsList = useCallback(() => {
+    api.get('/api/restyle/projects').then((r) => r.json()).then((d) => {
+      if (Array.isArray(d?.projects)) setSavedProjects(d.projects);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadSavedProjectsList(); }, [loadSavedProjectsList]);
+
+  const handleSaveProject = async () => {
+    const idoc = iframeRef.current?.contentDocument;
+    if (!idoc) { addToast('Build a preview first, then save.', 'error'); return; }
+    const name = saveNameInput.trim();
+    if (!name) { addToast('Give this page a name first.', 'error'); return; }
+    setSavingProject(true);
+    try {
+      // Save the LIVE edited DOM, not the original sanitizedRef snapshot — every inline-style
+      // edit (panel, AI, undo-adjusted) already lives on the elements themselves, so this is
+      // what makes "revisit later" actually restore what you left it looking like.
+      const clone = idoc.cloneNode(true);
+      clone.querySelectorAll('[data-restyle-hover],[data-restyle-selected]').forEach((n) => {
+        n.removeAttribute('data-restyle-hover');
+        n.removeAttribute('data-restyle-selected');
+      });
+      clone.getElementById('restyle-outline-css')?.remove();
+      clone.getElementById('restyle-animation-defs')?.remove();
+      clone.getElementById('restyle-merged-css')?.remove();
+      const html = { head: clone.head ? clone.head.innerHTML : '', body: clone.body ? clone.body.innerHTML : '' };
+
+      const res = await api.post('/api/restyle/projects', { name, html, cssEntries });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save this page.');
+      addToast(`Saved "${name}".`);
+      setSaveNameInput('');
+      loadSavedProjectsList();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const handleLoadProject = async (id) => {
+    setLoadingProjectId(id);
+    try {
+      const res = await api.get(`/api/restyle/projects/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not load this page.');
+      const { html, cssEntries: savedEntries } = data.project;
+      sanitizedRef.current = { head: html.head || '', body: html.body || '' };
+      setHtmlLoaded(true);
+      setHtmlStatus({ text: 'Loaded from your saved pages.', kind: 'ok' });
+      // Bump past the highest id in the loaded set (not just += length) so a later addCssFiles/
+      // addCssPaste can never collide with an id that was already saved under a prior session's
+      // higher counter.
+      cssIdRef.current = Math.max(cssIdRef.current, ...savedEntries.map((e) => e.id || 0)) + 1;
+      setCssEntries(savedEntries);
+      setChangeLog([`Loaded your saved page "${data.project.name}".`]);
+      setFlags([]);
+      await runBuildPreview(savedEntries);
+      setSavedListOpen(false);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setLoadingProjectId(null);
+    }
+  };
+
+  const handleDeleteProject = async (id, name) => {
+    try {
+      await api.delete(`/api/restyle/projects/${id}`);
+      addToast(`Deleted "${name}".`);
+      loadSavedProjectsList();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
   if (!canUse) {
     return (
       <div className="p-6" style={{ color: 'var(--color-muted)' }}>
-        Restyle isn't available for your account. Ask a workspace admin to turn it on in Settings → Feature Access.
+        CSS isn't available for your account. Ask a workspace admin to turn it on in Settings → Feature Access.
       </div>
     );
   }
@@ -422,9 +631,35 @@ export default function RestylePage() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
       <div className="flex items-baseline gap-3 px-5 py-3 border-b flex-wrap" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Restyle</h1>
+        <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>CSS</h1>
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Change how your website looks — no code needed.</p>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
+          <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={loadDemo}>Load a demo</button>
+          <div className="relative">
+            <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={() => setSavedListOpen((v) => !v)}>My saved pages ({savedProjects.length})</button>
+            {savedListOpen && (
+              <div className="absolute right-0 mt-1 rounded-lg border shadow-lg z-20" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: 260 }}>
+                {savedProjects.length === 0 ? (
+                  <p className="text-xs p-3" style={{ color: 'var(--color-muted)' }}>Nothing saved yet. Build a preview, then use "Save this page" below.</p>
+                ) : (
+                  <ul className="max-h-64 overflow-y-auto">
+                    {savedProjects.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+                        <button className="flex-1 text-left truncate hover:opacity-70" style={{ color: 'var(--color-text)' }} disabled={loadingProjectId === p.id} onClick={() => handleLoadProject(p.id)}>
+                          {loadingProjectId === p.id ? 'Loading…' : p.name}
+                        </button>
+                        <button className="hover:opacity-60" title="Delete" style={{ color: 'var(--color-muted)' }} onClick={() => handleDeleteProject(p.id, p.name)}>{getIcon('x', { size: 14 })}</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex gap-1 p-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <input type="text" className="flex-1 text-xs rounded-md border p-1.5" style={FIELD} placeholder="Name this page…" value={saveNameInput} onChange={(e) => setSaveNameInput(e.target.value)} />
+                  <button className="px-2 py-1 rounded-md text-xs font-semibold" style={{ background: 'var(--color-primary)', color: '#fff', opacity: previewBuilt && !savingProject ? 1 : 0.45 }} disabled={!previewBuilt || savingProject} onClick={handleSaveProject}>{savingProject ? 'Saving…' : 'Save this page'}</button>
+                </div>
+              </div>
+            )}
+          </div>
           <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: canUndo ? 1 : 0.45 }} disabled={!canUndo} onClick={handleUndo}>Undo last change</button>
           <button className="px-3 py-2 rounded-md text-sm font-semibold" style={{ background: 'var(--color-primary)', color: '#fff', opacity: previewBuilt ? 1 : 0.45 }} disabled={!previewBuilt} onClick={handleExport}>Download my page</button>
         </div>
@@ -549,13 +784,32 @@ export default function RestylePage() {
             <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Plain-English request</h2>
             <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Click something in the preview first, then describe what you want.</p>
             <textarea
-              className="w-full text-sm rounded-md border p-2 mb-2"
+              className="w-full text-sm rounded-md border p-2 mb-1"
               style={{ ...FIELD, minHeight: 70 }}
               placeholder="e.g. make this bigger and give it rounded corners"
               disabled={!hasSelection}
               value={aiRequest}
               onChange={(e) => setAiRequest(e.target.value)}
             />
+            <div className="flex items-center gap-2 mb-2">
+              {(isSTTAvailable || isLocalSTTAvailable) && (
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={!hasSelection || isTranscribing}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg relative"
+                  style={{ color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)', background: 'transparent', opacity: hasSelection ? 1 : 0.4 }}
+                  title={isListening ? 'Stop listening' : 'Speak your request'}
+                >
+                  {getIcon('mic', { size: 14 })}
+                  {(isListening || isTranscribing) && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />}
+                </button>
+              )}
+              {(isListening || isTranscribing) && (
+                <span className="text-xs" style={{ color: '#ef4444' }}>{interimText || (isTranscribing ? 'Transcribing…' : 'Listening…')}</span>
+              )}
+              {!isListening && voiceError && <span className="text-xs truncate" style={{ color: '#b3452c' }} title={voiceError}>{voiceError}</span>}
+            </div>
             <button
               className="px-3 py-1.5 rounded-md text-xs font-semibold"
               style={{ background: 'var(--color-primary)', color: '#fff', opacity: hasSelection && !aiBusy ? 1 : 0.45 }}
@@ -596,6 +850,33 @@ export default function RestylePage() {
                 Space between lines
                 <input type="range" min={0.8} max={3} step={0.1} value={ctrl.lineHeight} onChange={(e) => handleCtrlChange('lineHeight', Number(e.target.value), null, 'Changed the spacing between lines of text.')} />
                 <span style={{ color: 'var(--color-text)' }}>{ctrl.lineHeight}</span>
+              </label>
+
+              <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Text enhancements</h2>
+              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                Capitalization
+                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.textTransform} onChange={(e) => handleCtrlChange('textTransform', e.target.value, null, e.target.value === 'none' ? 'Changed the text capitalization back to normal.' : 'Changed the text capitalization.')}>
+                  {TEXT_TRANSFORM_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                Space between letters
+                <input type="range" min={-2} max={12} step={0.5} value={ctrl.letterSpacing} onChange={(e) => handleCtrlChange('letterSpacing', Number(e.target.value), 'px', 'Changed the spacing between letters.')} />
+                <span style={{ color: 'var(--color-text)' }}>{ctrl.letterSpacing}px</span>
+              </label>
+              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                Alignment
+                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.textAlign} onChange={(e) => handleCtrlChange('textAlign', e.target.value, null, 'Changed the text alignment.')}>
+                  {TEXT_ALIGN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+
+              <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Animation</h2>
+              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                Effect
+                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.animation} onChange={(e) => handleAnimationChange(e.target.value, e.target.selectedOptions[0]?.text || '')}>
+                  {ANIMATION_PRESETS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </label>
 
               <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Box</h2>

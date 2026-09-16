@@ -46,7 +46,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'searchConsole', label: 'Search',      path: '/search-console', enabled: true },
   { id: 'html',      label: 'Lighthouse',      path: '/html',        enabled: true },
   { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', enabled: true },
-  { id: 'restyle',   label: 'Restyle',          path: '/restyle',     enabled: true },
+  { id: 'restyle',   label: 'CSS',              path: '/restyle',     enabled: true },
   { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', enabled: true },
   { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing',   enabled: true },
   { id: 'gmailIntel', label: 'Inbox Intel',   path: '/gmail-intel', enabled: true },

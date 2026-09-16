@@ -12,7 +12,21 @@ const { getModelsForUser } = require('../modelResolver');
 const ALLOWED_PROPERTIES = [
   'fontFamily', 'fontSize', 'fontWeight', 'color', 'lineHeight',
   'backgroundColor', 'borderRadius', 'padding', 'boxShadow',
+  'textTransform', 'letterSpacing', 'textAlign', 'animation',
 ];
+
+// Animation is special-cased: the value must be one of these exact CSS strings, each naming a
+// @keyframes rule injected once into the preview (see ANIMATION_PRESETS in RestylePage.jsx —
+// keep this list in sync with that one). Anything else is a no-op keyframe name the browser
+// would silently ignore, so it's rejected server-side rather than passed through.
+const ALLOWED_ANIMATION_VALUES = new Set([
+  'none',
+  'restyleFadeIn 0.6s ease both',
+  'restyleSlideUp 0.6s ease both',
+  'restyleZoomIn 0.5s ease both',
+  'restylePulse 1s ease-in-out 2',
+  'restyleBounce 0.8s ease',
+]);
 
 const SYSTEM_PROMPT = `You edit the visual style of a single HTML element based on a plain-English request from a non-technical user.
 
@@ -28,6 +42,7 @@ Rules:
 - Only include properties the user's request actually implies changing. Don't add unrelated changes.
 - "value" must be a real, valid CSS value for that property (e.g. backgroundColor: "#0F172A", padding: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", borderRadius: "12px", fontWeight: "600", fontFamily: "'Inter', sans-serif").
 - "explanation" must be one short sentence a non-developer would understand — no words like "padding", "specificity", "hex", "rem/em", "flexbox". Say things like "the space around it", "the rounded corners", "the text size".
+- For "animation", the value MUST be exactly one of these strings (nothing else is recognized): ${[...ALLOWED_ANIMATION_VALUES].map(v => `"${v}"`).join(', ')}. Pick "none" to remove an animation, or the closest match to what the user described (e.g. "make it pop in" → the zoom one; "fade it in" → the fade one; "slide it up" → the slide one; "make it pulse/attention-grabbing" → the pulse one; "bounce" → the bounce one).
 - If the request is ambiguous, make a reasonable, visually sensible choice rather than asking a question — you cannot ask follow-up questions.
 - Never return a property outside the allowed list. Never return prose outside the JSON array.`;
 
@@ -73,7 +88,8 @@ async function requestAiEdit(userId, element, userRequest) {
     c && typeof c === 'object' &&
     ALLOWED_PROPERTIES.includes(c.property) &&
     typeof c.value === 'string' && c.value.trim() &&
-    typeof c.explanation === 'string' && c.explanation.trim()
+    typeof c.explanation === 'string' && c.explanation.trim() &&
+    (c.property !== 'animation' || ALLOWED_ANIMATION_VALUES.has(c.value.trim()))
   );
 
   if (!safeChanges.length) {

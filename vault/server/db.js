@@ -740,6 +740,21 @@ async function initSchema() {
       )
     `);
 
+    // ── CSS tool (Restyle) saved projects ────────────────────────────────────
+    // Stores the sanitized HTML (head/body) + the ordered CSS entries as uploaded/pasted —
+    // reopening re-runs them through the same auto-fix pass, never a rendered snapshot.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS restyle_projects (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        html            JSONB NOT NULL DEFAULT '{}',
+        "cssEntries"    JSONB NOT NULL DEFAULT '[]',
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ── Graphics gallery ──────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS graphics_gallery (

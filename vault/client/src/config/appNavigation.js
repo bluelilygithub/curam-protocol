@@ -36,7 +36,7 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'fonts', label: 'Font Customizer', path: '/fonts', icon: 'type', featureKey: 'fonts' },
-      { id: 'restyle', label: 'Restyle', path: '/restyle', icon: 'brush', featureKey: 'restyle' },
+      { id: 'restyle', label: 'CSS', path: '/restyle', icon: 'brush', featureKey: 'restyle' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'translate', label: 'Translate', path: '/translate', icon: 'languages', featureKey: 'translate' },
       { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'guitar',    featureKey: 'guitar'    },
