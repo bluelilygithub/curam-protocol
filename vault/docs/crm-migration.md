@@ -52,18 +52,20 @@ Deploying Phase 2 surfaced a gap: existing invoices/quotes created before the me
 
 **Verify before Phase 3**: run a full invoice create → send → paid cycle, a quote → convert-to-invoice, the finance reminders cron, and at least one recurring-invoice firing, against the repointed queries in production.
 
-## Phase 3 — Drop `fin_clients` + leftover columns (not started, do last)
+## Phase 3 — Drop `fin_clients` + leftover columns (ready to run)
 
-Only after Phase 2 has run clean through at least one full billing/reporting cycle in production:
+`server/scripts/dropFinClients.js` — finds the real FK constraint name via `information_schema` (no guessing), refuses to proceed if any `fin_clients` row still has no `clientId` bridge value (would silently lose data), then transactionally drops the FK, `fin_invoices."clientId"`, and `fin_clients` itself.
 
-```sql
--- fin_invoices.clientId is now unused (superseded by clientRef) — drop it and its FK
-ALTER TABLE fin_invoices DROP CONSTRAINT IF EXISTS fin_invoices_clientid_fkey; -- check \d fin_invoices for actual name if this doesn't match
-ALTER TABLE fin_invoices DROP COLUMN IF EXISTS "clientId";
-DROP TABLE IF EXISTS fin_clients;
+```bash
+node server/scripts/dropFinClients.js --dry-run   # reports counts + FK name, changes nothing
+node server/scripts/dropFinClients.js              # applies
 ```
 
-Also: sweep `fin_recurring.template` JSONB rows for leftover `clientId` keys (informational only, not FK-enforced, safe to leave — but tidy to strip once confirmed unused).
+`server/db.js` already updated for fresh installs: `fin_clients` CREATE TABLE removed, `fin_invoices` no longer declares a `clientId` column, the bridge-column ALTER removed. Existing/production databases still have the old column/table until the script above is run against them — that's expected, matches the "add schema first, migrate data, then drop" sequence used throughout this migration.
+
+**Irreversible** — once run, the only way back is restoring from a database backup. Only run after Phase 2 has been verified in production (done: old invoices/quotes linked, new invoice create/edit, quote→invoice convert, backfill of pre-merge invoices — see Phase 2 follow-up above). Not yet verified: a full send→paid cycle and the reminders cron — optional to check first, your call.
+
+Also: sweep `fin_recurring.template` JSONB rows for leftover `clientId` keys after (informational only, not FK-enforced, safe to leave — but tidy to strip once confirmed unused). Not done by the script above.
 
 ## Rollback
 

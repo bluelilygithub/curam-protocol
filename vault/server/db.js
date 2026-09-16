@@ -907,29 +907,13 @@ async function initSchema() {
       )
     `);
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS fin_clients (
-        id              SERIAL PRIMARY KEY,
-        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name            TEXT NOT NULL,
-        "contactName"   TEXT,
-        email           TEXT,
-        phone           TEXT,
-        address         TEXT,
-        abn             TEXT,
-        "isActive"      BOOLEAN NOT NULL DEFAULT TRUE,
-        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
-        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT TRUE`);
-    await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "contactName" TEXT`);
-
+    // fin_clients retired — merged into the CRM `clients` table. See
+    // docs/crm-migration.md. fin_invoices links to clients via "clientRef",
+    // added further below once the `clients` table exists.
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_invoices (
         id           SERIAL PRIMARY KEY,
         "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        "clientId"   INTEGER REFERENCES fin_clients(id) ON DELETE SET NULL,
         number       TEXT NOT NULL,
         status       TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','sent','paid','void')),
         "issueDate"  DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -1112,11 +1096,8 @@ async function initSchema() {
       )
     `);
 
-    // ── clients / fin_clients merge (bridge phase — see docs/crm-migration.md) ──
-    // Bridge column: lets fin_clients rows point at their matched CRM client
-    // before fin_invoices is repointed and fin_clients is dropped. Nullable —
-    // unmatched fin_clients rows stay NULL until manually reconciled.
-    await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+    // ── clients / fin_clients merge — see docs/crm-migration.md (complete: ──
+    // fin_clients dropped, fin_invoices links to clients via "clientRef") ──
 
     // Finance-only fields (abn, postal address) live here, 1:1 on the CRM
     // client, instead of merging them into the core `clients` table.
