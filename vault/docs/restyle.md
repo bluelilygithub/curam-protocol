@@ -18,7 +18,21 @@ Every automatic action (auto-fix, AI edit, undo) still produces a one-sentence, 
 
 A real bug found via user report: images with correct, working URLs still didn't render in the preview. Cause — Vault's own Content-Security-Policy (which the `srcdoc` iframe inherits, since `srcdoc` has no origin of its own to carry a separate CSP) restricts `img-src` to `'self' data: blob:`, so the browser silently blocks any `http(s)` image request the iframe tries to make, sandbox attribute notwithstanding. Confirmed via the browser's own console error (`Loading the image '<URL>' violates the following Content Security Policy directive: "img-src 'self' data: blob:"`).
 
-Fix: never ask the iframe to fetch a remote image at all. `server/services/restyle/inlineImages.js` fetches every `http(s)` `<img src>`/`<img srcset>` (in `/upload-html`) and CSS `url(...)` (in `/process-css`, e.g. `background-image`) server-side — reusing the same SSRF-safe `fetchBinary()` as Web Extractor — and rewrites it to a `data:` URI, which the CSP already permits. Best-effort and capped (40 images per call): a URL that fails to fetch (404, blocked host, too large, timeout) just stays as the original URL and remains broken in the preview, same as before this existed, and the response's `flags` array says how many failed. A side benefit: the exported/downloaded page is now fully self-contained — its images don't depend on the original site staying up.
+Fix: never ask the iframe to fetch a remote image at all. `server/services/restyle/inlineImages.js` fetches every `http(s)` image reference server-side — reusing the same SSRF-safe `fetchBinary()` as Web Extractor — and rewrites it to a `data:` URI, which the CSP already permits. Covers all four places a remote image can appear (an earlier version only caught the first one, which is why some images kept getting blocked even after the initial fix):
+1. `<img src>` / `<img srcset>` — `inlineImagesInHtmlFragment()`, called on both the sanitized head AND body in `/upload-html` (and in `/scrape-url`, below).
+2. an inline `style="background-image:url(...)"` attribute on any element — same function, same call.
+3. a `<style>...</style>` block embedded directly in the page — same function, same call; distinct from an uploaded/pasted CSS **file**.
+4. `url(...)` inside an uploaded/pasted CSS file — `inlineImagesInCss()`, called on the merged stylesheet in `/process-css`.
+
+Best-effort and capped (40 images per call): a URL that fails to fetch (404, blocked host, too large, timeout) just stays as the original URL and remains broken in the preview, and the response's `flags` array says how many failed. A side benefit: the exported/downloaded page is now fully self-contained — its images don't depend on the original site staying up.
+
+## Load from a web address
+
+A third HTML-source tab ("From a web address") alongside Upload/Paste. `POST /api/restyle/scrape-url` reuses `htmlFetch.fetchHtml()` (the same SSRF-safe, bot-detection-aware fetcher as Web Extractor/SEO/Translate) to load a public URL, discovers every `<link rel="stylesheet" href>` it references (resolved to absolute URLs, capped at 10) and fetches each one alongside, sanitizes and image-inlines the HTML exactly like a normal upload, and returns both the page AND the fetched stylesheets in one response — the client adds the stylesheets straight into the CSS list, so there's no separate "now go find and paste the CSS" step. **Never fetches or executes `<script>`** — this is the one hard line in the whole tool (no `allow-scripts`, scripts always stripped) and scrape-url doesn't relax it; the change log tells the user how many scripts existed on the source page and that they were intentionally skipped.
+
+## Why "Build the preview" can look stuck
+
+Fielded from a user report: the button is disabled purely on `cssEntries.length === 0` — it has no dependency on whether HTML was loaded. If someone pastes/uploads HTML but hasn't added a style file yet, the button stays disabled with no visible reason, which reads as broken rather than as "one more required step." Fixed with a plain-English hint line under the button ("Add your HTML above, and at least one style file, to enable this" / "Add at least one style file above to enable this") that appears whenever `cssEntries` is empty, plus a native `title` tooltip on the button itself. The "From a web address" tab above also sidesteps this for that path specifically, since it populates the CSS list automatically.
 
 ## Detected fonts/colors/sizes
 

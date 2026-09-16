@@ -11,7 +11,10 @@ const { pool } = require('../db');
 const { sanitizeHtml } = require('../services/restyle/sanitizeHtml');
 const { processStylesheets } = require('../services/restyle/cssProcessor');
 const { requestAiEdit } = require('../services/restyle/aiEdit');
-const { inlineImagesInHtml, inlineImagesInCss } = require('../services/restyle/inlineImages');
+const { inlineImagesInHtmlFragment, inlineImagesInCss } = require('../services/restyle/inlineImages');
+const { fetchHtml, normaliseHttpUrl } = require('../services/htmlFetch');
+const { fetchBinary } = require('../services/webExtractorService');
+const { JSDOM } = require('jsdom');
 
 const router = express.Router();
 
@@ -50,9 +53,16 @@ router.post('/upload-html', upload.single('file'), async (req, res) => {
     // The preview iframe can't load remote images directly — Vault's own Content-Security-Policy
     // (which srcdoc inherits, having no origin of its own) only allows img-src 'self'/data:/blob:,
     // so any http(s) image is silently blocked by the browser. Fetch each one server-side instead
-    // and inline it as a data: URI, which the CSP already permits. Best-effort: an image that
-    // fails to fetch just stays as its original URL (same as before this existed).
-    const { bodyInnerHTML: bodyWithImages, inlinedCount, failedCount } = await inlineImagesInHtml(bodyInnerHTML);
+    // and inline it as a data: URI, which the CSP already permits. Covers <img> tags, inline
+    // style="" attributes, AND <style> blocks embedded in the page itself (head or body) — an
+    // earlier version only handled <img>, which is why some images still got blocked. Best-effort:
+    // an image that fails to fetch just stays as its original URL, same as before this existed.
+    const [headResult, bodyResult] = await Promise.all([
+      inlineImagesInHtmlFragment(headInnerHTML),
+      inlineImagesInHtmlFragment(bodyInnerHTML),
+    ]);
+    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount;
+    const failedCount = headResult.failedCount + bodyResult.failedCount;
 
     const changeLog = ['Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.'];
     if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from your page so they show up in the preview.`);
@@ -60,9 +70,84 @@ router.post('/upload-html', upload.single('file'), async (req, res) => {
       ? [`${failedCount} image${failedCount === 1 ? '' : 's'} in your page couldn't be loaded (the link may be broken, blocked, or the file too large) — ${failedCount === 1 ? "it" : "they"} may not show up in the preview.`]
       : [];
 
-    res.json({ html, bodyInnerHTML: bodyWithImages, headInnerHTML, changeLog, flags });
+    res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, changeLog, flags });
   } catch (err) {
     res.status(500).json({ error: 'We couldn\'t read that HTML file. Please check it and try again.' });
+  }
+});
+
+const MAX_SCRAPED_STYLESHEETS = 10;
+
+// Fetches a public URL and returns it in the same shape as /upload-html, plus any linked
+// <link rel="stylesheet"> CSS files it can find, fetched alongside — so pasting a URL gets you
+// both the page AND its real stylesheets in one step, instead of hunting them down by hand.
+// Deliberately does NOT fetch or execute any <script> — same security stance as the rest of this
+// tool (no allow-scripts, scripts always stripped): loading arbitrary third-party JS would mean
+// running untrusted code, which this tool guarantees it never does.
+router.post('/scrape-url', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Paste a web address first.' });
+
+    let normalised;
+    try { normalised = normaliseHttpUrl(url); } catch { return res.status(400).json({ error: "That doesn't look like a valid web address." }); }
+
+    const page = await fetchHtml(normalised);
+    if (!page?.body) return res.status(502).json({ error: "Couldn't load that page — it may be down or blocking automated requests." });
+    const baseUrl = page.finalUrl || normalised;
+
+    // Discover <link rel="stylesheet" href> before sanitizing (sanitize doesn't touch <link>,
+    // but working from the raw fetched HTML avoids any ambiguity either way).
+    const linkDom = new JSDOM(page.body);
+    const stylesheetHrefs = [...linkDom.window.document.querySelectorAll('link[rel~="stylesheet"][href]')]
+      .map((el) => {
+        try { return new URL(el.getAttribute('href'), baseUrl).toString(); } catch { return null; }
+      })
+      .filter(Boolean)
+      .slice(0, MAX_SCRAPED_STYLESHEETS);
+
+    const scriptCount = linkDom.window.document.querySelectorAll('script[src], script:not([src])').length;
+
+    const { html, bodyInnerHTML, headInnerHTML } = sanitizeHtml(page.body);
+
+    const [headResult, bodyResult, cssResults] = await Promise.all([
+      inlineImagesInHtmlFragment(headInnerHTML),
+      inlineImagesInHtmlFragment(bodyInnerHTML),
+      Promise.all(stylesheetHrefs.map(async (href) => {
+        try {
+          const { buffer } = await fetchBinary(href);
+          const { css } = await inlineImagesInCss(buffer.toString('utf8'));
+          const filename = (() => {
+            try { return new URL(href).pathname.split('/').pop() || 'stylesheet.css'; } catch { return 'stylesheet.css'; }
+          })();
+          return { filename: filename.endsWith('.css') ? filename : `${filename || 'stylesheet'}.css`, css, ok: true };
+        } catch {
+          return { href, ok: false };
+        }
+      })),
+    ]);
+
+    const cssFiles = cssResults.filter((r) => r.ok).map(({ filename, css }) => ({ filename, css }));
+    const failedStylesheets = cssResults.filter((r) => !r.ok).length;
+    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount;
+    const failedImages = headResult.failedCount + bodyResult.failedCount;
+
+    const changeLog = [
+      `Loaded the page from ${new URL(baseUrl).hostname}.`,
+      'Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.',
+    ];
+    if (cssFiles.length > 0) changeLog.push(`Loaded ${cssFiles.length} style sheet${cssFiles.length === 1 ? '' : 's'} linked from that page.`);
+    if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from that page so they show up in the preview.`);
+    if (scriptCount > 0) changeLog.push(`That page uses ${scriptCount} script${scriptCount === 1 ? '' : 's'} for behaviour (like menus or sliders) — those are intentionally not loaded here, since this tool only ever changes how a page looks, never runs code from it.`);
+
+    const flags = [];
+    if (failedStylesheets > 0) flags.push(`${failedStylesheets} style sheet${failedStylesheets === 1 ? '' : 's'} linked from that page couldn't be loaded.`);
+    if (failedImages > 0) flags.push(`${failedImages} image${failedImages === 1 ? '' : 's'} from that page couldn't be loaded.`);
+
+    res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags });
+  } catch (err) {
+    console.error('[restyle] scrape-url:', err);
+    res.status(500).json({ error: err.message || "Couldn't load that page. Please check the address and try again." });
   }
 });
 

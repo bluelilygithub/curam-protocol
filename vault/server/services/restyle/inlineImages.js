@@ -8,10 +8,18 @@
 // (reusing the same SSRF-safe fetch as Web Extractor) and inline it as a data: URI, which the
 // CSP already permits.
 //
+// A remote image can show up in FOUR places in an uploaded page, and all four are covered here —
+// an earlier version only handled the first two, which is why some images still got blocked:
+//   1. <img src="...">  / <img srcset="...">
+//   2. an inline style="background-image: url(...)" attribute on any element
+//   3. a <style>...</style> block embedded directly in the page (head or body) — separate from
+//      the user's uploaded/pasted CSS FILES, which inlineImagesInCss (below) already covers
+//   4. url(...) inside an uploaded/pasted CSS file (handled by inlineImagesInCss, called from
+//      the /process-css route on the merged stylesheet)
+//
 // This is best-effort, not required for the tool to otherwise work — an image that fails to
 // fetch (404, blocked host, too large, timeout) is just left as its original URL and stays
-// broken in the preview exactly as before, rather than failing the whole build. Split into two
-// entry points (HTML vs CSS) since the two are processed by separate endpoints/requests.
+// broken in the preview exactly as before, rather than failing the whole build.
 
 const { JSDOM } = require('jsdom');
 const { fetchBinary } = require('../webExtractorService');
@@ -40,13 +48,20 @@ async function fetchAllAsDataUris(urls) {
   return { urlToDataUri, inlinedCount, failedCount };
 }
 
+function rewriteCssText(css, urlToDataUri) {
+  return (css || '').replace(CSS_URL_RE, (match, quote, url) =>
+    urlToDataUri.has(url) ? `url(${quote}${urlToDataUri.get(url)}${quote})` : match
+  );
+}
+
 /**
- * Rewrites every http(s) <img src> / <img srcset> reference in the given body HTML to a
- * data: URI.
- * @returns {Promise<{ bodyInnerHTML: string, inlinedCount: number, failedCount: number }>}
+ * Rewrites every http(s) image reference found in an HTML fragment (an <img> tag's src/srcset,
+ * an inline style="" attribute's url(...), or an embedded <style> block's url(...)) to a
+ * data: URI. Call once for the sanitized head and once for the sanitized body.
+ * @returns {Promise<{ html: string, inlinedCount: number, failedCount: number }>}
  */
-async function inlineImagesInHtml(bodyInnerHTML) {
-  const dom = new JSDOM(`<!DOCTYPE html><body>${bodyInnerHTML || ''}</body>`);
+async function inlineImagesInHtmlFragment(htmlFragment) {
+  const dom = new JSDOM(`<!DOCTYPE html><body>${htmlFragment || ''}</body>`);
   const doc = dom.window.document;
 
   const collect = new Set();
@@ -60,8 +75,14 @@ async function inlineImagesInHtml(bodyInnerHTML) {
       if (/^https?:\/\//i.test(url)) collect.add(url);
     });
   });
+  doc.querySelectorAll('[style]').forEach((el) => {
+    for (const m of el.getAttribute('style').matchAll(CSS_URL_RE)) collect.add(m[2]);
+  });
+  doc.querySelectorAll('style').forEach((styleTag) => {
+    for (const m of styleTag.textContent.matchAll(CSS_URL_RE)) collect.add(m[2]);
+  });
 
-  if (!collect.size) return { bodyInnerHTML: bodyInnerHTML || '', inlinedCount: 0, failedCount: 0 };
+  if (!collect.size) return { html: htmlFragment || '', inlinedCount: 0, failedCount: 0 };
   const { urlToDataUri, inlinedCount, failedCount } = await fetchAllAsDataUris([...collect]);
 
   doc.querySelectorAll('img[src]').forEach((img) => {
@@ -77,23 +98,26 @@ async function inlineImagesInHtml(bodyInnerHTML) {
     }).join(', ');
     img.setAttribute('srcset', rewritten);
   });
+  doc.querySelectorAll('[style]').forEach((el) => {
+    el.setAttribute('style', rewriteCssText(el.getAttribute('style'), urlToDataUri));
+  });
+  doc.querySelectorAll('style').forEach((styleTag) => {
+    styleTag.textContent = rewriteCssText(styleTag.textContent, urlToDataUri);
+  });
 
-  return { bodyInnerHTML: doc.body.innerHTML, inlinedCount, failedCount };
+  return { html: doc.body.innerHTML, inlinedCount, failedCount };
 }
 
 /**
- * Rewrites every http(s) url(...) reference (e.g. background-image) in the given CSS text to a
- * data: URI.
+ * Rewrites every http(s) url(...) reference (e.g. background-image) in a CSS FILE's text
+ * (uploaded/pasted, merged by cssProcessor) to a data: URI.
  * @returns {Promise<{ css: string, inlinedCount: number, failedCount: number }>}
  */
 async function inlineImagesInCss(css) {
   const urls = [...new Set([...(css || '').matchAll(CSS_URL_RE)].map((m) => m[2]))];
   if (!urls.length) return { css: css || '', inlinedCount: 0, failedCount: 0 };
   const { urlToDataUri, inlinedCount, failedCount } = await fetchAllAsDataUris(urls);
-  const rewrittenCss = (css || '').replace(CSS_URL_RE, (match, quote, url) =>
-    urlToDataUri.has(url) ? `url(${quote}${urlToDataUri.get(url)}${quote})` : match
-  );
-  return { css: rewrittenCss, inlinedCount, failedCount };
+  return { css: rewriteCssText(css, urlToDataUri), inlinedCount, failedCount };
 }
 
-module.exports = { inlineImagesInHtml, inlineImagesInCss };
+module.exports = { inlineImagesInHtmlFragment, inlineImagesInCss };
