@@ -79,6 +79,10 @@ const ANIMATION_PRESETS = [
 const OUTLINE_CSS = `
   [data-restyle-hover] { outline: 2px dashed #3b82f6 !important; outline-offset: 1px; cursor: pointer; }
   [data-restyle-selected] { outline: 2px solid #cc785c !important; outline-offset: 1px; }
+  /* box-shadow, not outline, so this coexists visibly with the selected/hover outlines above
+     instead of one silently overriding the other — the selected element is normally also one of
+     the scope matches, and both indicators should show at once. */
+  [data-restyle-scope-preview] { box-shadow: 0 0 0 2px #f59e0b !important; }
 `;
 
 // Named keyframes backing the animation presets above — injected once into the preview,
@@ -498,6 +502,22 @@ export default function RestylePage() {
     }
   }, [editScopeSelector]);
 
+  // Live-highlights every element the current scope choice would affect — a distinct amber
+  // box-shadow (see OUTLINE_CSS) on each match, cleared and reapplied whenever the scope changes,
+  // so picking "every <a> inside .greenboxsection" immediately shows exactly what that means
+  // before any change is actually made.
+  const scopePreviewElsRef = useRef([]);
+  useEffect(() => {
+    scopePreviewElsRef.current.forEach((el) => el.removeAttribute('data-restyle-scope-preview'));
+    scopePreviewElsRef.current = [];
+    if (!editScopeSelector || !selectedElRef.current) return;
+    try {
+      const matches = [...selectedElRef.current.ownerDocument.querySelectorAll(editScopeSelector)];
+      matches.forEach((el) => el.setAttribute('data-restyle-scope-preview', ''));
+      scopePreviewElsRef.current = matches;
+    } catch { /* invalid selector — nothing to preview */ }
+  }, [editScopeSelector, hasSelection]);
+
   const renderIframe = useCallback(() => {
     resetSelection();
     const frame = iframeRef.current;
@@ -724,9 +744,10 @@ export default function RestylePage() {
     const idoc = iframeRef.current?.contentDocument;
     if (!idoc) return;
     const clone = idoc.cloneNode(true);
-    clone.querySelectorAll('[data-restyle-hover],[data-restyle-selected]').forEach((n) => {
+    clone.querySelectorAll('[data-restyle-hover],[data-restyle-selected],[data-restyle-scope-preview]').forEach((n) => {
       n.removeAttribute('data-restyle-hover');
       n.removeAttribute('data-restyle-selected');
+      n.removeAttribute('data-restyle-scope-preview');
     });
     clone.getElementById('restyle-outline-css')?.remove();
     const fullHtml = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML;
