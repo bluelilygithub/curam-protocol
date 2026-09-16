@@ -31,6 +31,10 @@ node server/scripts/migrateFinClientsToClients.js              # apply
 
 **Run this now, on Railway's DB, before Phase 2.** Check the "Unmatched" list — reconcile every row by hand before moving on. Do not proceed to Phase 2 with unmatched rows; they'll silently drop off invoices once queries are repointed.
 
+## Phase 1b — Create clients for unmatched rows (done)
+
+`server/scripts/createClientsForUnmatched.js` — for the 3 `fin_clients` rows that had no candidate in `clients` at all (expected: `clients` was empty pre-migration), creates a new `clients` row + `client_contacts` row + `client_billing_details` row per unmatched row, transactionally, and links the bridge column. Run against production 2026-09-16 — all 3 rows (`Diamond Plate`, `BTMB pty ltd`, `NZL Supply`) created and linked cleanly, zero failures. Every `fin_clients` row now has a non-null `clientId`.
+
 ## Phase 2 — Repoint Finance queries (not started)
 
 Once every `fin_clients` row has a `clientId`:
@@ -64,6 +68,7 @@ DROP TABLE IF EXISTS fin_clients;
 ## Status
 
 - [x] Phase 0 — bridge schema in `server/db.js`
-- [x] Phase 1 — migration script written (`server/scripts/migrateFinClientsToClients.js`) — **needs to be run against Railway's DB and unmatched rows reconciled**
+- [x] Phase 1 — migration script run against production 2026-09-16. 3 `fin_clients` rows, 0 matched (expected — `clients` was empty), all 3 flagged unmatched.
+- [x] Phase 1b — `createClientsForUnmatched.js` run against production 2026-09-16. All 3 created + linked. Every `fin_clients` row now has `clientId` set.
 - [ ] Phase 2 — repoint Finance queries
 - [ ] Phase 3 — drop `fin_clients`
