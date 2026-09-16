@@ -490,7 +490,18 @@ export default function RestylePage() {
     // React necessarily re-renders with the new state, which would otherwise make this a stale
     // closure read of an old "false".
     if (!sanitizedRef.current.body && !sanitizedRef.current.head) { setCssStatus({ text: 'Add your HTML first.', kind: 'error' }); return; }
-    if (!entries.length) { setCssStatus({ text: 'Add at least one style file first.', kind: 'error' }); return; }
+    // CSS is optional, not required — a page can be previewed and edited with no style file at
+    // all (plain HTML, or one whose embedded <style> already got pulled into this list). Repeated
+    // user reports of "Build the preview never enables" traced back to this being a hard
+    // requirement; it no longer is. Skip the network round trip entirely when there's nothing to
+    // process, rather than erroring.
+    if (!entries.length) {
+      mergedCssRef.current = '';
+      setCssStatus({ text: 'Your preview is ready below.', kind: 'ok' });
+      setDetectedAssets(scanCssAssets('', `${sanitizedRef.current.head}\n${sanitizedRef.current.body}`));
+      renderIframe();
+      return;
+    }
     setCssStatus({ text: 'Checking your styles…', kind: '' });
     try {
       const fd = new FormData();
@@ -867,15 +878,13 @@ export default function RestylePage() {
 
             <button
               className="px-3 py-1.5 rounded-md text-xs font-semibold"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: cssEntries.length ? 1 : 0.45 }}
-              disabled={!cssEntries.length}
-              title={!cssEntries.length ? 'Add at least one style file above first' : undefined}
+              style={{ background: 'var(--color-primary)', color: '#fff', opacity: htmlLoaded ? 1 : 0.45 }}
+              disabled={!htmlLoaded}
+              title={!htmlLoaded ? 'Add your HTML above first' : undefined}
               onClick={buildPreview}
             >Build the preview</button>
-            {!cssEntries.length && (
-              <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
-                {htmlLoaded ? 'Add at least one style file above to enable this.' : 'Add your HTML above, and at least one style file, to enable this.'}
-              </p>
+            {!htmlLoaded && (
+              <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>Add your HTML above to enable this — style files are optional.</p>
             )}
             {cssStatus.text && <p className="text-xs mt-1.5" style={{ color: cssStatus.kind === 'error' ? '#b3452c' : cssStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{cssStatus.text}</p>}
           </section>
@@ -901,7 +910,7 @@ export default function RestylePage() {
             <iframe ref={iframeRef} title="Live preview" sandbox="allow-same-origin" style={{ width: '100%', height: '100%', border: 'none', display: previewBuilt ? 'block' : 'none' }} />
             {!previewBuilt && (
               <div className="absolute inset-0 flex items-center justify-center text-center p-5" style={{ color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
-                <p>Add your HTML and at least one style file, then click "Build the preview."</p>
+                <p>Add your HTML above, then click "Build the preview." Style files are optional.</p>
               </div>
             )}
           </div>
