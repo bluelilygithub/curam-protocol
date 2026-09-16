@@ -665,7 +665,7 @@ export default function RestylePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 flex-1" style={{ gridTemplateColumns: '320px 1fr 300px', alignItems: 'start' }}>
+      <div className="grid gap-4 p-4 flex-1" style={{ gridTemplateColumns: '320px 1fr 300px', minHeight: 0 }}>
         {/* LEFT: source panel */}
         <aside className="rounded-xl border p-3 flex flex-col gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
           <section>
@@ -787,8 +787,13 @@ export default function RestylePage() {
               className="w-full text-sm rounded-md border p-2 mb-1"
               style={{ ...FIELD, minHeight: 70 }}
               placeholder="e.g. make this bigger and give it rounded corners"
-              disabled={!hasSelection}
-              value={aiRequest}
+              disabled={!hasSelection || isListening || isTranscribing}
+              // While listening/transcribing, show the live caption directly in the box (appended
+              // to whatever was already typed) so it's obvious speech is actually being captured —
+              // previously this only appeared in a separate line below, which read as "nothing is
+              // being input." The box is read-only during this (see disabled above); typing resumes
+              // once the mic is stopped and the final transcript has been merged into aiRequest.
+              value={(isListening || isTranscribing) ? (aiRequest ? `${aiRequest} ${interimText}` : interimText) : aiRequest}
               onChange={(e) => setAiRequest(e.target.value)}
             />
             <div className="flex items-center gap-2 mb-2">
@@ -799,21 +804,23 @@ export default function RestylePage() {
                   disabled={!hasSelection || isTranscribing}
                   className="w-7 h-7 flex items-center justify-center rounded-lg relative"
                   style={{ color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)', background: 'transparent', opacity: hasSelection ? 1 : 0.4 }}
-                  title={isListening ? 'Stop listening' : 'Speak your request'}
+                  title={isListening ? 'Stop listening and use what was said' : 'Speak your request'}
                 >
                   {getIcon('mic', { size: 14 })}
                   {(isListening || isTranscribing) && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />}
                 </button>
               )}
-              {(isListening || isTranscribing) && (
-                <span className="text-xs" style={{ color: '#ef4444' }}>{interimText || (isTranscribing ? 'Transcribing…' : 'Listening…')}</span>
+              {isListening && (
+                <button type="button" onClick={stopListening} className="text-xs font-semibold px-2 py-1 rounded-md" style={{ background: '#fee2e2', color: '#ef4444' }}>Stop &amp; use this</button>
               )}
+              {isTranscribing && <span className="text-xs" style={{ color: '#ef4444' }}>Transcribing…</span>}
               {!isListening && voiceError && <span className="text-xs truncate" style={{ color: '#b3452c' }} title={voiceError}>{voiceError}</span>}
             </div>
             <button
               className="px-3 py-1.5 rounded-md text-xs font-semibold"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: hasSelection && !aiBusy ? 1 : 0.45 }}
-              disabled={!hasSelection || aiBusy}
+              style={{ background: 'var(--color-primary)', color: '#fff', opacity: hasSelection && !aiBusy && !isListening && !isTranscribing ? 1 : 0.45 }}
+              disabled={!hasSelection || aiBusy || isListening || isTranscribing}
+              title={isListening ? 'Stop the mic first to use what was said' : undefined}
               onClick={handleAiRequest}
             >{aiBusy ? 'Asking…' : 'Ask for this change'}</button>
             {aiStatus.text && <p className="text-xs mt-1.5" style={{ color: aiStatus.kind === 'error' ? '#b3452c' : aiStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{aiStatus.text}</p>}
