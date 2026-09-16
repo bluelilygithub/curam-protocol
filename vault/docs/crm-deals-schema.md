@@ -93,6 +93,12 @@ Both fixes land in the same PR as the column addition — not deferred, since th
 
 Once `client_deals` has real data: pipeline value by stage, win rate, stale-deal flag (`stage` not `won`/`lost` and `updatedAt` > N days ago → `SuggestionService.captureIf`, matching the mandatory-suggestions convention already in this codebase).
 
+## 8. AI agent layer
+
+**MVP done:** `POST /api/clients/:id/summary` (`server/routes/clients.js`) — on-demand only, not cached. Assembles a compact context (client, contacts, up to 15 recent deals, up to 10 recent touchpoints, YTD finance snapshot) and sends it to `getModelsForUser().light` via `callModel()` for a plain-prose 3-5 sentence relationship-health brief (active deals, anything overdue, a suggested next step if obvious). Frontend: "Summarize" button on `ClientDetailPage` header — `ProcessingModal` while generating (per convention for AI calls), result shown in a dismissible panel. `/api/clients` now carries an AI-cost route, so `aiLimiter` was added to its mount in `index.js` — shared budget with the router's CRUD, 30/min is generous enough not to affect normal use.
+
+Later phases, not started: suggest next action / draft follow-up email; auto-qualify leads / predictive scoring (explicitly out of scope per the original "don't build Salesforce's speculative complexity" call).
+
 ## Sequencing
 
 1. `client_deals` + `deal_contacts` + basic CRUD routes — the actual missing concept, do this first.

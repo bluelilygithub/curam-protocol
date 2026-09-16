@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
@@ -285,6 +286,8 @@ export default function ClientDetailPage() {
   const [gmailStatus, setGmailStatus] = useState(null);
   const [editModal,   setEditModal]   = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
+  const [summary,     setSummary]     = useState(null); // { summary, generatedAt } | null
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const [sections, setSections] = useState({
     deals:          true,
@@ -333,6 +336,20 @@ export default function ClientDetailPage() {
       navigate('/clients');
     } catch {
       addToast('Delete failed', 'error');
+    }
+  };
+
+  const generateSummary = async () => {
+    startProcessing('Summarizing client activity…', 'Reading deals, touchpoints, and finance history.');
+    try {
+      const res = await api.post(`/api/clients/${id}/summary`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Summary failed');
+      setSummary(json);
+    } catch (e) {
+      addToast(e.message || 'Summary failed', 'error');
+    } finally {
+      stopProcessing();
     }
   };
 
@@ -386,6 +403,9 @@ export default function ClientDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 flex-shrink-0">
+            <Btn variant="secondary" size="sm" onClick={generateSummary}>
+              {getIcon('sparkles', { size: 14, style: { marginRight: 4 } })}Summarize
+            </Btn>
             <Btn variant="secondary" size="sm" onClick={() => setEditModal(true)}>Edit</Btn>
             <button
               onClick={() => setConfirmDel(true)}
@@ -396,6 +416,19 @@ export default function ClientDetailPage() {
             </button>
           </div>
         </div>
+
+        {/* AI summary */}
+        {summary && (
+          <div className="rounded-xl border p-4 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
+                {getIcon('sparkles', { size: 12 })} AI summary
+              </p>
+              <button onClick={() => setSummary(null)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>{summary.summary}</p>
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

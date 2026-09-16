@@ -6,6 +6,7 @@ const { pool } = require('../db');
 const { translateToGmailQuery } = require('../services/gmailNLP');
 const { getModelsForUser } = require('../services/modelResolver');
 const { getGmailClient, getHeader } = require('./gmail');
+const { callModel } = require('../services/callModel');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -515,6 +516,88 @@ router.delete('/:id/touchpoints/:touchpointId', async (req, res) => {
     res.json({ deleted: true });
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── AI activity summary ──────────────────────────────────────────────────────
+// MVP of the CRM agent layer (docs/crm-deals-schema.md, AI agent layer /
+// "summarize a client's activity history on demand"). On-demand only, not
+// cached — later phases (suggest next action, draft follow-up) build on
+// this same assembled-context pattern.
+
+// POST /api/clients/:id/summary
+router.post('/:id/summary', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const userId = req.user.id;
+
+  try {
+    const { rows: [client] } = await pool.query(
+      `SELECT * FROM clients WHERE id=$1 AND "userId"=$2`, [clientId, userId]
+    );
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const { rows: contacts } = await pool.query(
+      `SELECT name, role, "isPrimary" FROM client_contacts WHERE "clientId"=$1 ORDER BY "isPrimary" DESC`,
+      [clientId]
+    );
+    const { rows: deals } = await pool.query(
+      `SELECT title, stage, value, "expectedCloseDate", "actualCloseDate", "lostReason"
+       FROM client_deals WHERE "clientId"=$1 ORDER BY "updatedAt" DESC LIMIT 15`,
+      [clientId]
+    );
+    const { rows: touchpoints } = await pool.query(
+      `SELECT type, date, note FROM client_touchpoints WHERE "clientId"=$1 ORDER BY date DESC, "createdAt" DESC LIMIT 10`,
+      [clientId]
+    );
+    const { rows: [finance] } = await pool.query(
+      `SELECT
+         COALESCE(SUM(total) FILTER (WHERE status != 'void'), 0) AS "invoicedYTD",
+         COALESCE(SUM(total) FILTER (WHERE status = 'sent'), 0)  AS "outstanding",
+         MAX("issueDate") FILTER (WHERE status != 'void')        AS "lastInvoiceDate"
+       FROM fin_invoices
+       WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote'
+         AND EXTRACT(year FROM "issueDate") = EXTRACT(year FROM NOW())`,
+      [clientId, userId]
+    );
+
+    if (!deals.length && !touchpoints.length && Number(finance?.invoicedYTD || 0) === 0) {
+      return res.json({ summary: 'Not enough activity yet to summarize — no deals, touchpoints, or invoices logged for this client.' });
+    }
+
+    const lines = [];
+    lines.push(`Client: ${client.name}${client.company ? ` (${client.company})` : ''} — status: ${client.status}`);
+    if (contacts.length) {
+      lines.push(`Contacts: ${contacts.map(c => `${c.name}${c.role ? ` (${c.role})` : ''}${c.isPrimary ? ' [primary]' : ''}`).join(', ')}`);
+    }
+    if (deals.length) {
+      lines.push('Deals:');
+      for (const d of deals) {
+        const close = d.actualCloseDate || d.expectedCloseDate;
+        lines.push(`- ${d.title} [${d.stage}]${d.value ? ` $${d.value}` : ''}${close ? ` (${String(close).slice(0, 10)})` : ''}${d.lostReason ? ` — lost: ${d.lostReason}` : ''}`);
+      }
+    }
+    if (touchpoints.length) {
+      lines.push('Recent touchpoints (newest first):');
+      for (const t of touchpoints) {
+        lines.push(`- ${String(t.date).slice(0, 10)} [${t.type}]${t.note ? `: ${t.note}` : ''}`);
+      }
+    }
+    lines.push(`Finance (this year): invoiced $${finance.invoicedYTD}, outstanding $${finance.outstanding}${finance.lastInvoiceDate ? `, last invoice ${String(finance.lastInvoiceDate).slice(0, 10)}` : ''}`);
+
+    const { light: lightModel } = await getModelsForUser(userId);
+    const summary = await callModel(
+      lightModel,
+      lines.join('\n'),
+      {
+        system: 'You summarize CRM client activity for a busy account owner. Write a tight 3-5 sentence brief: overall relationship health, what\'s active (deals/pipeline), anything overdue or needing attention (outstanding invoices, stale deals, no recent contact), and one suggested next step if obvious. Plain prose, no headers or bullet points, no preamble.',
+        maxTokens: 300,
+      }
+    );
+
+    res.json({ summary: summary.trim(), generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[clients] summary error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -140,7 +140,10 @@ app.use('/api/graph', requireFeature('graph'), require('./routes/graph'));
 app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
-app.use('/api/clients', requireFeature('clients'), require('./routes/clients'));
+// aiLimiter applies to the whole router — clients.js now has an AI-cost
+// route (POST /:id/summary); CRUD on the same router shares the budget,
+// which is generous enough (30/min) not to affect normal use.
+app.use('/api/clients', requireFeature('clients'), aiLimiter, require('./routes/clients'));
 app.use('/api/deals', requireFeature('clients'), require('./routes/deals'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
 // /api/shares/news must be registered before /api/shares to prevent prefix match interception
