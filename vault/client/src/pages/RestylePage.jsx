@@ -164,6 +164,16 @@ const GENERIC_FONT_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'sans-seri
 function scanCssAssets(cssText, htmlText) {
   const combined = `${cssText || ''}\n${htmlText || ''}`;
 
+  // Real regression, found via user report: these used to break out of the scan loop the
+  // moment the display cap was hit (16 colors, 12 fonts). Merged CSS is built with "Embedded
+  // styles from your page" FIRST, ahead of separately uploaded/pasted files (see
+  // docs/restyle.md) — so if the embedded styles alone had >= 16 distinct colors, the color
+  // scan stopped right there and never even reached whatever came later in the merged text,
+  // silently hiding every color from a separately uploaded file. Fonts happened to not hit this
+  // in practice since there are usually far fewer than 12 distinct font stacks total. Fixed by
+  // always scanning the FULL text for distinct values first, and applying the display cap only
+  // as a final slice — the cap still limits how many quick-picks are shown, but never which
+  // SOURCE they can come from.
   const fonts = [];
   const fontSeen = new Set();
   for (const m of combined.matchAll(/font-family\s*:\s*([^;"'}]+(?:['"][^'"]*['"][^;}]*)?)/gi)) {
@@ -175,7 +185,6 @@ function scanCssAssets(cssText, htmlText) {
     fontSeen.add(key);
     const label = raw.split(',')[0].replace(/['"]/g, '').trim();
     fonts.push({ value: raw, label });
-    if (fonts.length >= 12) break;
   }
 
   const colors = [];
@@ -186,10 +195,9 @@ function scanCssAssets(cssText, htmlText) {
     if (colorSeen.has(key)) continue;
     colorSeen.add(key);
     colors.push(value);
-    if (colors.length >= 16) break;
   }
 
-  const extractSizes = (prop, limit) => {
+  const extractSizes = (prop) => {
     const out = [];
     const seen = new Set();
     const re = new RegExp(`${prop}\\s*:\\s*([\\d.]+(?:px|rem|em|pt|%))`, 'gi');
@@ -198,16 +206,18 @@ function scanCssAssets(cssText, htmlText) {
       if (seen.has(value)) continue;
       seen.add(value);
       out.push(value);
-      if (out.length >= limit) break;
     }
     return out.sort((a, b) => parseFloat(a) - parseFloat(b));
   };
 
-  const sizes = extractSizes('font-size', 10);
-  const paddings = extractSizes('padding(?:-top|-right|-bottom|-left)?', 10);
-  const radii = extractSizes('border-radius', 10);
+  const sizes = extractSizes('font-size').slice(0, 20);
+  const paddings = extractSizes('padding(?:-top|-right|-bottom|-left)?').slice(0, 20);
+  const radii = extractSizes('border-radius').slice(0, 20);
 
-  return { fonts, colors, sizes, paddings, radii };
+  // Caps raised well above realistic totals (was 12/16, which is exactly what a real page's
+  // embedded styles alone could already exceed) — the display row wraps, so a higher cap costs
+  // nothing but guards against a truly pathological page with hundreds of distinct values.
+  return { fonts: fonts.slice(0, 40), colors: colors.slice(0, 60), sizes, paddings, radii };
 }
 
 const FIELD = {
