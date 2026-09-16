@@ -41,15 +41,6 @@ const TOOL_HELP = {
       'Send as PDF, with send history',
     ],
   },
-  Clients: {
-    title: 'Clients',
-    description: 'Lightweight billing-only client records used by Invoices and Quotes. Full contact and relationship management lives in the separate Clients module.',
-    features: [
-      'Quick client records for invoicing when you don\'t need the full CRM',
-      'Activate/deactivate without deleting history',
-      'Link through to the full Clients module record when available',
-    ],
-  },
   Suppliers: {
     title: 'Suppliers',
     description: 'Who you buy from — a simple directory so you can reuse supplier details on expenses instead of retyping them.',
@@ -719,148 +710,6 @@ function DashboardTab({ from, to }) {
           </Tooltip>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── Clients ────────────────────────────────────────────────────────────────────
-
-function ClientsTab() {
-  const [clients, setClients] = useState([]);
-  const [modal, setModal] = useState(null);
-  const [confirmModal, setConfirmModal] = useState(null);
-  const [form, setForm] = useState({ name: '', contactName: '', email: '', phone: '', address: '', abn: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const addToast = useToastStore(s => s.addToast);
-
-  const load = useCallback(() => {
-    api.get('/api/finance/clients').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const openNew  = () => { setForm({ name: '', contactName: '', email: '', phone: '', address: '', abn: '' }); setError(''); setModal('new'); };
-  const openEdit = (c) => { setForm({ name: c.name, contactName: c.contactName||'', email: c.email||'', phone: c.phone||'', address: c.address||'', abn: c.abn||'' }); setError(''); setModal(c); };
-
-  const save = async () => {
-    if (!form.name.trim()) { setError('Name required'); return; }
-    setSaving(true);
-    try {
-      if (modal === 'new') {
-        await api.post('/api/finance/clients', form);
-      } else {
-        await api.put(`/api/finance/clients/${modal.id}`, form);
-      }
-      load();
-      setModal(null);
-      addToast(modal === 'new' ? 'Client created' : 'Client updated');
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleActive = async (c) => {
-    const next = !c.isActive;
-    await api.patch(`/api/finance/clients/${c.id}`, { isActive: next });
-    setClients(prev => prev.map(x => x.id === c.id ? { ...x, isActive: next } : x));
-    addToast(next ? 'Client set to active' : 'Client deactivated');
-  };
-
-  const del = (id, name) => {
-    setConfirmModal({
-      message: `Delete "${name}"? This cannot be undone.`,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        await api.delete(`/api/finance/clients/${id}`);
-        setClients(prev => prev.filter(c => c.id !== id));
-        addToast('Client deleted');
-      },
-    });
-  };
-
-  return (
-    <div className="p-6">
-      <div className="mb-4 px-3 py-2.5 rounded-lg text-xs flex items-center justify-between" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-        <span>Client relationships are now managed in the Clients module.</span>
-        <Link to="/clients" className="font-medium hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>Go to Clients →</Link>
-      </div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Billing records</h2>
-        <Tooltip text="Add a client used only for invoicing here — full contact/relationship management lives in the Clients module."><Btn onClick={openNew}>+ New</Btn></Tooltip>
-      </div>
-
-      {clients.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No clients yet.</p>
-      ) : (
-        <div className="flex flex-col gap-2 max-w-2xl">
-          {clients.map(c => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between p-3 rounded-lg border"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <div>
-                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{c.name}</div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {[c.contactName, c.email, c.abn && `ABN ${c.abn}`].filter(Boolean).join(' · ') || 'No contact info'}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Tooltip text="Open this client's full record in the Clients module."><Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link></Tooltip>
-                <Tooltip text={c.isActive ? 'Hide this client from the picker when creating new invoices — existing invoices are unaffected.' : 'Make this client selectable again when creating new invoices.'}>
-                  <button
-                    onClick={() => toggleActive(c)}
-                    className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                    style={c.isActive
-                      ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
-                      : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
-                  >{c.isActive ? 'Deactivate' : 'Set active'}</button>
-                </Tooltip>
-                <Tooltip text="Edit this client's billing details (name, contact, ABN, address)."><Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn></Tooltip>
-                <Tooltip text="Permanently remove this client record — existing invoices keep their saved client name.">
-                  <button
-                    onClick={() => del(c.id, c.name)}
-                    className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                    style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-                  >Delete</button>
-                </Tooltip>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {modal && (
-        <Modal title={modal === 'new' ? 'New Client' : 'Edit Client'} onClose={() => setModal(null)}>
-          <div className="flex flex-col gap-3">
-            <Field label="Name *"><Tooltip text="Required — the name shown on invoices and quotes."><Input value={form.name} onChange={v => setForm(p => ({...p, name: v}))} placeholder="Client name" /></Tooltip></Field>
-            <Field label="Contact Name"><Tooltip text="Optional — a person to address, if different from the client/business name."><Input value={form.contactName} onChange={v => setForm(p => ({...p, contactName: v}))} placeholder="Primary contact person" /></Tooltip></Field>
-            <Field label="Email"><Tooltip text="Used when sending invoices/quotes to this client."><Input type="email" value={form.email} onChange={v => setForm(p => ({...p, email: v}))} placeholder="email@example.com" /></Tooltip></Field>
-            <Field label="Phone"><Tooltip text="Optional contact number, shown on the client record only."><Input value={form.phone} onChange={v => setForm(p => ({...p, phone: v}))} placeholder="+61 4xx xxx xxx" /></Tooltip></Field>
-            <Field label="ABN"><Tooltip text="Client's Australian Business Number — optional, useful for B2B invoices."><Input value={form.abn} onChange={v => setForm(p => ({...p, abn: v}))} placeholder="12 345 678 901" /></Tooltip></Field>
-            <Field label="Address"><Tooltip text="Postal or billing address, printed on invoices if set."><Input value={form.address} onChange={v => setForm(p => ({...p, address: v}))} placeholder="Street, City, State" /></Tooltip></Field>
-            <ErrMsg msg={error} />
-            <div className="flex gap-2 justify-end pt-1">
-              <Tooltip text="Discard changes without saving."><Btn variant="secondary" onClick={() => setModal(null)}>Cancel</Btn></Tooltip>
-              <Tooltip text="Save this client."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Btn></Tooltip>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {confirmModal && (
-        <ConfirmModal
-          title="Delete Client"
-          message={confirmModal.message}
-          confirmLabel="Delete"
-          danger
-          onConfirm={confirmModal.onConfirm}
-          onCancel={() => setConfirmModal(null)}
-        />
-      )}
     </div>
   );
 }
@@ -6464,8 +6313,8 @@ function ReportTable({ title, rows, total, totalLabel }) {
 
 function fmtNum2(n) { return (parseFloat(n) || 0).toFixed(2); }
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Clients', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -6555,7 +6404,6 @@ export default function FinancePage() {
         {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
         {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" />}
         {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" />}
-        {tab === 'Clients'   && <ClientsTab />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Drawings'  && <DrawingsTab  from={from} to={to} />}
