@@ -162,11 +162,12 @@ router.get('/:id', async (req, res) => {
       [clientId]
     );
 
-    // Touchpoints (newest first) with contact name joined in
+    // Touchpoints (newest first) with contact name + deal title joined in
     const { rows: touchpoints } = await pool.query(`
-      SELECT tp.*, cc.name AS "contactName"
+      SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
       FROM client_touchpoints tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
+      LEFT JOIN client_deals cd ON cd.id = tp."dealId"
       WHERE tp."clientId" = $1
       ORDER BY tp.date DESC, tp."createdAt" DESC
     `, [clientId]);
@@ -486,11 +487,12 @@ router.post('/:id/touchpoints', async (req, res) => {
       RETURNING *
     `, [clientId, contactId||null, dealId||null, type, date, note||null]);
 
-    // Return with contact name
+    // Return with contact name + deal title
     const { rows: [tp] } = await pool.query(`
-      SELECT tp.*, cc.name AS "contactName"
+      SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
       FROM client_touchpoints tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
+      LEFT JOIN client_deals cd ON cd.id = tp."dealId"
       WHERE tp.id = $1
     `, [rows[0].id]);
 

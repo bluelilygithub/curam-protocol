@@ -45,6 +45,25 @@ const STATUS_MAP = {
 };
 
 const STATUS_OPTS   = Object.entries(STATUS_MAP).map(([v, { label }]) => ({ value: v, label }));
+
+const DEAL_STAGE_MAP = {
+  lead:        { label: 'Lead',        bg: 'var(--color-border)', color: 'var(--color-muted)' },
+  qualified:   { label: 'Qualified',   bg: '#dbeafe', color: '#1e40af' },
+  proposal:    { label: 'Proposal',    bg: '#fef3c7', color: '#92400e' },
+  negotiation: { label: 'Negotiation', bg: '#fde68a', color: '#78350f' },
+  won:         { label: 'Won',         bg: '#d1fae5', color: '#065f46' },
+  lost:        { label: 'Lost',        bg: '#fee2e2', color: '#991b1b' },
+};
+const DEAL_STAGE_OPTS = Object.entries(DEAL_STAGE_MAP).map(([v, { label }]) => ({ value: v, label }));
+
+function DealStageBadge({ stage }) {
+  const s = DEAL_STAGE_MAP[stage] || DEAL_STAGE_MAP.lead;
+  return (
+    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
+  );
+}
 const COMM_PREFS    = ['Email', 'Phone', 'Video', 'In person', 'Slack'];
 const TOUCHPOINT_TYPES = [
   { value: 'call',      label: '📞 Call'      },
@@ -268,6 +287,7 @@ export default function ClientDetailPage() {
   const [confirmDel,  setConfirmDel]  = useState(false);
 
   const [sections, setSections] = useState({
+    deals:          true,
     contacts:       true,
     projects:       false,
     touchpoints:    false,
@@ -300,7 +320,10 @@ export default function ClientDetailPage() {
   }
   if (!data) return null;
 
-  const { client, contacts, touchpoints, projects, tasks, finance, mood } = data;
+  const { client, contacts, touchpoints, projects, tasks, deals, finance, mood } = data;
+  const openPipelineValue = (deals || [])
+    .filter(d => d.stage !== 'won' && d.stage !== 'lost')
+    .reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
   const tags = Array.isArray(client.tags) ? client.tags : (client.tags ? JSON.parse(client.tags) : []);
 
   const handleDelete = async () => {
@@ -375,7 +398,9 @@ export default function ClientDetailPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+          <StatCard label="Open pipeline" value={fmt(openPipelineValue)}
+                    sub={`${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length} open deal${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length !== 1 ? 's' : ''}`} />
           <StatCard label="Projects"      value={projects?.length ?? 0}                          />
           <StatCard label="Invoiced YTD"  value={fmt(finance?.invoicedYTD)}
                     sub={`${finance?.invoiceCount || 0} invoices`} />
@@ -405,6 +430,15 @@ export default function ClientDetailPage() {
         {/* Sections */}
         <div className="flex flex-col gap-3">
 
+          {/* 0. Deals */}
+          <Section title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
+            <DealsSection
+              clientId={id}
+              deals={deals || []}
+              onRefresh={load}
+            />
+          </Section>
+
           {/* 1. Contacts */}
           <Section title={`Contacts${contacts?.length ? ` (${contacts.length})` : ''}`} open={sections.contacts} onToggle={() => toggleSection('contacts')}>
             <ContactsSection
@@ -431,6 +465,7 @@ export default function ClientDetailPage() {
               clientId={id}
               touchpoints={touchpoints || []}
               contacts={contacts || []}
+              deals={deals || []}
               onRefresh={load}
             />
           </Section>
@@ -476,6 +511,143 @@ function StatCard({ label, value, sub, warn }) {
       <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{label}</div>
       <div className="text-lg font-bold" style={{ color: warn ? '#f59e0b' : 'var(--color-text)' }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Deals section ──────────────────────────────────────────────────────────────
+
+const BLANK_DEAL = { title: '', stage: 'lead', value: '', expectedCloseDate: '', notes: '' };
+
+function DealsSection({ clientId, deals, onRefresh }) {
+  const [showForm, setShowForm]     = useState(false);
+  const [editTarget, setEditTarget] = useState(null); // deal being edited
+  const [form, setForm]             = useState(BLANK_DEAL);
+  const [saving, setSaving]         = useState(false);
+  const [lostReason, setLostReason] = useState('');
+  const addToast = useToastStore(s => s.addToast);
+
+  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+
+  const openNew = () => { setForm(BLANK_DEAL); setEditTarget(null); setLostReason(''); setShowForm(true); };
+  const openEdit = (d) => {
+    setForm({
+      title: d.title,
+      stage: d.stage,
+      value: d.value != null ? String(d.value) : '',
+      expectedCloseDate: d.expectedCloseDate ? String(d.expectedCloseDate).slice(0, 10) : '',
+      notes: d.notes || '',
+    });
+    setLostReason(d.lostReason || '');
+    setEditTarget(d);
+    setShowForm(true);
+  };
+  const cancel = () => { setShowForm(false); setEditTarget(null); };
+
+  const save = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    const payload = { ...form, value: form.value ? parseFloat(form.value) : null, lostReason: form.stage === 'lost' ? lostReason : null };
+    try {
+      if (editTarget) {
+        await api.put(`/api/deals/${editTarget.id}`, payload).then(r => r.json());
+        addToast('Deal updated');
+      } else {
+        await api.post('/api/deals', { ...payload, clientId }).then(r => r.json());
+        addToast('Deal created');
+      }
+      onRefresh();
+      cancel();
+    } catch (e) {
+      addToast(e.message || 'Save failed', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = async (deal) => {
+    try {
+      await api.delete(`/api/deals/${deal.id}`);
+      addToast('Deal deleted');
+      onRefresh();
+    } catch {
+      addToast('Delete failed', 'error');
+    }
+  };
+
+  return (
+    <div className="pt-3">
+      {deals.length === 0 && !showForm && (
+        <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No deals yet.</p>
+      )}
+
+      {deals.map(d => (
+        <div
+          key={d.id}
+          className="group flex items-start justify-between py-2.5 border-b last:border-b-0"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{d.title}</span>
+              <DealStageBadge stage={d.stage} />
+            </div>
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+              {d.value != null && (
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{fmt(d.value)}</span>
+              )}
+              {d.expectedCloseDate && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {d.stage === 'won' || d.stage === 'lost' ? 'Closed' : 'Expected'} {fmtDate(d.actualCloseDate || d.expectedCloseDate)}
+                </span>
+              )}
+              {d.stage === 'lost' && d.lostReason && (
+                <span className="text-xs italic" style={{ color: 'var(--color-muted)' }}>{d.lostReason}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <button onClick={() => openEdit(d)} className="text-xs px-2 py-1 rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Edit</button>
+            <button onClick={() => del(d)} className="text-xs px-2 py-1 rounded hover:opacity-60" style={{ color: '#ef4444' }}>✕</button>
+          </div>
+        </div>
+      ))}
+
+      {showForm && (
+        <div
+          className="mt-3 p-3 rounded-lg border flex flex-col gap-2"
+          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        >
+          <Input value={form.title} onChange={set('title')} placeholder="Deal title *" />
+          <div className="grid grid-cols-2 gap-2">
+            <Sel value={form.stage} onChange={set('stage')}>
+              {DEAL_STAGE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Sel>
+            <Input type="number" value={form.value} onChange={set('value')} placeholder="Value ($ AUD)" />
+          </div>
+          <Field label="Expected close date"><Input type="date" value={form.expectedCloseDate} onChange={set('expectedCloseDate')} /></Field>
+          {form.stage === 'lost' && (
+            <Input value={lostReason} onChange={setLostReason} placeholder="Why was this lost? (optional)" />
+          )}
+          <Input rows={2} value={form.notes} onChange={set('notes')} placeholder="Notes" />
+          <div className="flex gap-2 justify-end">
+            <button onClick={cancel} className="text-xs px-3 py-1.5 rounded-lg border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>Cancel</button>
+            <button onClick={save} disabled={saving || !form.title.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showForm && (
+        <button
+          onClick={openNew}
+          className="mt-3 text-sm hover:opacity-70 transition-opacity"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          + Add deal
+        </button>
+      )}
     </div>
   );
 }
@@ -747,9 +919,9 @@ function ProjectsSection({ clientId, projects, tasks, projectStatus, onRefresh }
 
 // ── Touchpoints section ────────────────────────────────────────────────────────
 
-const BLANK_TP = { type: 'call', date: '', contactId: '', note: '' };
+const BLANK_TP = { type: 'call', date: '', contactId: '', dealId: '', note: '' };
 
-function TouchpointsSection({ clientId, touchpoints, contacts, onRefresh }) {
+function TouchpointsSection({ clientId, touchpoints, contacts, deals, onRefresh }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ ...BLANK_TP, date: todayStr() });
   const [saving, setSaving]     = useState(false);
@@ -763,6 +935,7 @@ function TouchpointsSection({ clientId, touchpoints, contacts, onRefresh }) {
       await api.post(`/api/clients/${clientId}/touchpoints`, {
         ...form,
         contactId: form.contactId || null,
+        dealId: form.dealId || null,
       }).then(r => r.json());
       addToast('Touchpoint logged');
       onRefresh();
@@ -803,6 +976,7 @@ function TouchpointsSection({ clientId, touchpoints, contacts, onRefresh }) {
               <span>·</span>
               <span>{fmtRelative(tp.date)}</span>
               {tp.contactName && <><span>·</span><span>{tp.contactName}</span></>}
+              {tp.dealTitle && <><span>·</span><span>🤝 {tp.dealTitle}</span></>}
             </div>
             {tp.note && (
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{tp.note}</p>
@@ -830,6 +1004,12 @@ function TouchpointsSection({ clientId, touchpoints, contacts, onRefresh }) {
             <Sel value={form.contactId} onChange={set('contactId')}>
               <option value="">— No specific contact —</option>
               {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Sel>
+          )}
+          {deals.length > 0 && (
+            <Sel value={form.dealId} onChange={set('dealId')}>
+              <option value="">— Not tied to a deal —</option>
+              {deals.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </Sel>
           )}
           <Input rows={3} value={form.note} onChange={set('note')} placeholder="What happened or was decided…" />
