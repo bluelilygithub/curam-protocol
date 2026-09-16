@@ -27,28 +27,54 @@ const pool = new Pool({
 // client's client.query (see below) — one implementation, two call sites,
 // so `pool.query(...)` and `const client = await pool.connect(); client.query(...)`
 // get identical tracing with no call-site changes needed anywhere.
+//
+// Must preserve pg's full query() call contract, not just the (text, params)
+// promise shape app code uses — pg-pool's OWN internal single-shot query
+// implementation calls `client.query(text, values, callback)` (3-arg
+// callback style) to run POOL.query(). An earlier version of this wrapper
+// only forwarded (text, params) to the real query fn, silently dropping
+// that callback — the real query still ran but pg-pool's internal resolver
+// never got its result, so pool.query() (and the whole app on boot) hung
+// forever. Detecting a trailing callback and preserving it exactly is what
+// fixes that.
 const SLOW_QUERY_MS = 200;
+function logQueryOutcome(queryText, start, err, result) {
+  const duration = Date.now() - start;
+  if (err) {
+    getLogger().error({ query: (queryText || '').slice(0, 200), err: err.message }, 'query failed');
+  } else if (duration > SLOW_QUERY_MS) {
+    getLogger().warn({ query: (queryText || '').slice(0, 200), duration, rows: result?.rowCount }, 'slow query');
+  }
+}
 function tracedQueryFn(rawQueryFn) {
-  return async function tracedQuery(text, params) {
-    const start = Date.now();
+  return function tracedQuery(...args) {
+    const text = args[0];
     const queryText = typeof text === 'string' ? text : text?.text;
-    try {
-      const result = await rawQueryFn(text, params);
-      const duration = Date.now() - start;
-      if (duration > SLOW_QUERY_MS) {
-        getLogger().warn(
-          { query: (queryText || '').slice(0, 200), duration, rows: result.rowCount },
-          'slow query'
-        );
-      }
-      return result;
-    } catch (err) {
-      getLogger().error(
-        { query: (queryText || '').slice(0, 200), err: err.message },
-        'query failed'
-      );
-      throw err;
+    const start = Date.now();
+    const lastArg = args[args.length - 1];
+
+    if (typeof lastArg === 'function') {
+      // Callback style — pass everything through unchanged except wrapping
+      // the callback itself, so pg-pool's internal usage keeps working.
+      const cb = lastArg;
+      const wrappedCb = (err, result) => {
+        logQueryOutcome(queryText, start, err, result);
+        cb(err, result);
+      };
+      return rawQueryFn(...args.slice(0, -1), wrappedCb);
     }
+
+    // Promise style (every app call site).
+    return (async () => {
+      try {
+        const result = await rawQueryFn(...args);
+        logQueryOutcome(queryText, start, null, result);
+        return result;
+      } catch (err) {
+        logQueryOutcome(queryText, start, err);
+        throw err;
+      }
+    })();
   };
 }
 
