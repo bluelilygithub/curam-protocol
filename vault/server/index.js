@@ -1,9 +1,13 @@
 require('dotenv').config();
+// Sentry must init before anything else is required so it can instrument
+// them (http, express, pg, etc) automatically. No-op until SENTRY_DSN is set.
+const Sentry = require('./lib/sentry');
 const express = require('express');
 const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const { runtimeConfig } = require('./config/runtime');
+const logger = require('./lib/logger');
 
 // Security check — warn if gmail token encryption key is absent
 try {
@@ -21,6 +25,14 @@ const PORT = process.env.PORT || 3001;
 
 // Trust Railway's proxy — required for rate-limiter to work correctly
 app.set('trust proxy', 1);
+
+// Request-id correlation + one-line-per-request logging. Mounted before
+// everything else so even a request helmet/a limiter rejects still gets an
+// id and shows up in the log.
+const { requestContext, getLogger } = require('./middleware/requestContext');
+const { httpLogger } = require('./middleware/httpLogger');
+app.use(requestContext);
+app.use(httpLogger);
 
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
@@ -87,10 +99,14 @@ app.use('/api/calendar', require('./routes/calendar'));
 const { requireAuth, requireAdmin, requireFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
+// Per-user cap on AI-cost endpoints — chat streams and generation calls hit
+// paid Anthropic/Gemini/Replicate/FAL/Rainforest APIs directly.
+const { aiLimiter } = require('./middleware/aiRateLimit');
+
 app.use('/api/user', requireAuth, require('./routes/user'));
 app.use('/api/health', require('./routes/health'));
 app.use('/api/projects', require('./routes/projects'));
-app.use('/api/chat', require('./routes/chat'));
+app.use('/api/chat', aiLimiter, require('./routes/chat'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/search', require('./routes/search'));
@@ -106,8 +122,8 @@ app.use('/api/prompts', require('./routes/prompts'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/pinned-urls', require('./routes/pinnedUrls'));
-app.use('/api/compare', requireFeature('compare'), require('./routes/compare'));
-app.use('/api/debate', requireFeature('debate'), require('./routes/debate'));
+app.use('/api/compare', requireFeature('compare'), aiLimiter, require('./routes/compare'));
+app.use('/api/debate', requireFeature('debate'), aiLimiter, require('./routes/debate'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/admin', requireAdmin, require('./routes/admin'));
 app.use('/api/local-audio', require('./routes/localAudio'));
@@ -131,22 +147,22 @@ app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNe
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
-app.use('/api/graphics', requireFeature('graphics'), require('./routes/graphics'));
+app.use('/api/graphics', requireFeature('graphics'), aiLimiter, require('./routes/graphics'));
 app.use('/api/fonts', requireFeature('fonts'), require('./routes/fonts'));
 app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
-app.use('/api/videos', requireFeature('videos'), require('./routes/videos'));
+app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));
 app.use('/api/recipes', requireFeature('recipes'), require('./routes/recipes'));
 app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
-app.use('/api/product-scout', requireFeature('productScout'), require('./routes/productScout'));
-app.use('/api/property-scenario', requireFeature('propertyScenario'), require('./routes/propertyScenario'));
-app.use('/api/document-redaction', requireFeature('documentRedaction'), require('./routes/documentRedaction'));
-app.use('/api/google-ads', requireFeature('googleAds'), require('./routes/seo'));
-app.use('/api/seo', requireFeature('seo'), require('./routes/seoAudit'));
+app.use('/api/product-scout', requireFeature('productScout'), aiLimiter, require('./routes/productScout'));
+app.use('/api/property-scenario', requireFeature('propertyScenario'), aiLimiter, require('./routes/propertyScenario'));
+app.use('/api/document-redaction', requireFeature('documentRedaction'), aiLimiter, require('./routes/documentRedaction'));
+app.use('/api/google-ads', requireFeature('googleAds'), aiLimiter, require('./routes/seo'));
+app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit'));
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
-app.use('/api/translate', requireFeature('translate'), require('./routes/translate'));
+app.use('/api/translate', requireFeature('translate'), aiLimiter, require('./routes/translate'));
 app.use('/api/guitar',    requireFeature('guitar'),    require('./routes/guitar'));
 
 if (process.env.NODE_ENV === 'production') {
@@ -157,11 +173,29 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Sentry's own error handler must sit after all routes but before the
+// final error-handling middleware below, per its Express integration
+// contract. No-op until SENTRY_DSN is set.
+Sentry.setupExpressErrorHandler(app);
+
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  getLogger().error({ err, requestId: req.requestId }, 'unhandled route error');
+  Sentry.captureException(err, { requestId: req.requestId, userId: req.user?.id });
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
   });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'unhandled rejection');
+  Sentry.captureException(reason);
+});
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught exception');
+  Sentry.captureException(err);
+  // Give the Sentry transport a moment to actually send before the process
+  // dies — captureException only enqueues, it doesn't flush.
+  Sentry.flush(2000).finally(() => process.exit(1));
 });
 
 // Start cron jobs

@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const { runtimeConfig } = require('./config/runtime');
+const { getLogger } = require('./middleware/requestContext');
 
 // Enable SSL for any non-localhost host (Railway, Render, Supabase, etc.)
 function sslConfig() {
@@ -21,6 +22,35 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
+// Wrap pool.query in place — every existing call site (`pool.query(...)`
+// across ~100 route/service files) gets slow-query + failure logging for
+// free, tagged with the request's requestId/userId where one exists. Does
+// NOT cover queries run against a client checked out via pool.connect() for
+// a transaction (BEGIN/COMMIT/ROLLBACK) — those call client.query directly.
+const SLOW_QUERY_MS = 200;
+const rawQuery = pool.query.bind(pool);
+pool.query = async function tracedQuery(text, params) {
+  const start = Date.now();
+  const queryText = typeof text === 'string' ? text : text?.text;
+  try {
+    const result = await rawQuery(text, params);
+    const duration = Date.now() - start;
+    if (duration > SLOW_QUERY_MS) {
+      getLogger().warn(
+        { query: (queryText || '').slice(0, 200), duration, rows: result.rowCount },
+        'slow query'
+      );
+    }
+    return result;
+  } catch (err) {
+    getLogger().error(
+      { query: (queryText || '').slice(0, 200), err: err.message },
+      'query failed'
+    );
+    throw err;
+  }
+};
 
 // ── Schema initialisation ──────────────────────────────────────────────────────
 

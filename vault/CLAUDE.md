@@ -35,6 +35,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/seo/` — Google Ads campaign starter (`docs/google-ads-agent.md`) + on-page SEO audit (`docs/seo-agent.md`)
 - `server/services/SuggestionService.js` — **all services/crons/agents call this** to emit inbox findings
 - `server/routes/suggestions.js` — agent suggestion inbox API
+- `server/lib/logger.js` + `server/middleware/requestContext.js` — pino-based structured logging; `getLogger()` returns the current request's child logger (tagged `requestId`/`userId`), use this instead of `console.log`/`console.error` in new/touched code. `server/middleware/httpLogger.js` logs one line per request. `server/lib/sentry.js` — error tracking, no-op unless `SENTRY_DSN` is set. `server/middleware/aiRateLimit.js` — per-user rate limit for AI-cost routes. See **`docs/observability.md`**.
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
@@ -419,6 +420,9 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `GITHUB_TOKEN` | Font Customizer — optional, raises the Google Fonts repo license-check lookup from 60/hr to 5000/hr |
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
 | `GSC_REDIRECT_URI` | Search Console OAuth callback (default `{APP_URL}/api/gsc/callback`) |
+| `SENTRY_DSN` | Error tracking — unset disables Sentry entirely (no-op). See **`docs/observability.md`** |
+| `SENTRY_TRACES_SAMPLE_RATE` | Sentry performance trace sample rate (default `0.1`); only relevant if `SENTRY_DSN` is set |
+| `LOG_LEVEL` | pino log level (default `info`) |
 
 ---
 

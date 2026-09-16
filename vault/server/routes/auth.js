@@ -17,6 +17,22 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later.' },
 });
 
+// Registration is gated by INVITE_CODE, but the code is a single shared
+// secret — without a limiter here it can still be brute-forced.
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many registration attempts, please try again later.' },
+});
+
+// Password reset emails are a spam/cost vector (and an email-enumeration
+// side channel) if unlimited.
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many password reset attempts, please try again later.' },
+});
+
 function makeToken() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -28,7 +44,7 @@ function makeExpiry() {
 }
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { email, password, inviteCode } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -103,7 +119,7 @@ router.post('/logout', async (req, res) => {
 });
 
 // POST /api/auth/reset-password-request
-router.post('/reset-password-request', async (req, res) => {
+router.post('/reset-password-request', resetLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'email required' });
 
@@ -147,7 +163,7 @@ router.post('/reset-password-request', async (req, res) => {
 });
 
 // POST /api/auth/reset-password-confirm
-router.post('/reset-password-confirm', async (req, res) => {
+router.post('/reset-password-confirm', resetLimiter, async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'token and password required' });
 

@@ -2,6 +2,7 @@
 
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
+const { attachUserToLogContext } = require('./requestContext');
 
 async function requireAuth(req, res, next) {
   // Skip auth for health check and auth routes
@@ -29,6 +30,7 @@ async function requireAuth(req, res, next) {
     if (!user) return res.status(401).json({ error: 'User not found' });
 
     req.user = user;
+    attachUserToLogContext(user.id);
     next();
   } catch (err) {
     next(err);
