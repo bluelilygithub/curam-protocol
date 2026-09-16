@@ -311,6 +311,16 @@ export default function RestylePage() {
       setHtmlLoaded(true);
       (data.changeLog || []).forEach(addLogEntry);
       if (data.flags?.length) setFlags((prev) => [...prev, ...data.flags]);
+      // A page with styles written directly inside it (a <style> block, most often in <head>)
+      // has real CSS the tool didn't know about before — the server pulls it out and hands it
+      // back here so it lands in the style list like any uploaded file, instead of the page
+      // rendering unstyled and "Build the preview" staying disabled with no CSS in the list.
+      if (data.cssFiles?.length) {
+        setCssEntries((prev) => [
+          ...prev,
+          ...data.cssFiles.map((f) => ({ id: ++cssIdRef.current, filename: f.filename, css: f.css, source: 'paste' })),
+        ]);
+      }
       setHtmlStatus({ text: 'Your page is ready.', kind: 'ok' });
     } catch (err) {
       setHtmlStatus({ text: err.message, kind: 'error' });

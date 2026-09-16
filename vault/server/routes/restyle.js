@@ -12,7 +12,7 @@ const { sanitizeHtml } = require('../services/restyle/sanitizeHtml');
 const { processStylesheets } = require('../services/restyle/cssProcessor');
 const { requestAiEdit } = require('../services/restyle/aiEdit');
 const { inlineImagesInHtmlFragment, inlineImagesInCss } = require('../services/restyle/inlineImages');
-const { fetchHtml, normaliseHttpUrl } = require('../services/htmlFetch');
+const { fetchDirect, normaliseHttpUrl } = require('../services/htmlFetch');
 const { fetchBinary } = require('../services/webExtractorService');
 const { JSDOM } = require('jsdom');
 
@@ -48,29 +48,37 @@ router.post('/upload-html', upload.single('file'), async (req, res) => {
     } else {
       return res.status(400).json({ error: 'No HTML was provided.' });
     }
-    const { html, bodyInnerHTML, headInnerHTML } = sanitizeHtml(rawHtml);
+    const { html, bodyInnerHTML, headInnerHTML, embeddedCss } = sanitizeHtml(rawHtml);
 
     // The preview iframe can't load remote images directly — Vault's own Content-Security-Policy
     // (which srcdoc inherits, having no origin of its own) only allows img-src 'self'/data:/blob:,
     // so any http(s) image is silently blocked by the browser. Fetch each one server-side instead
-    // and inline it as a data: URI, which the CSP already permits. Covers <img> tags, inline
-    // style="" attributes, AND <style> blocks embedded in the page itself (head or body) — an
-    // earlier version only handled <img>, which is why some images still got blocked. Best-effort:
-    // an image that fails to fetch just stays as its original URL, same as before this existed.
-    const [headResult, bodyResult] = await Promise.all([
+    // and inline it as a data: URI, which the CSP already permits. Covers <img> tags and inline
+    // style="" attributes. Best-effort: an image that fails to fetch just stays as its original
+    // URL, same as before this existed.
+    const [headResult, bodyResult, embeddedCssResult] = await Promise.all([
       inlineImagesInHtmlFragment(headInnerHTML),
       inlineImagesInHtmlFragment(bodyInnerHTML),
+      inlineImagesInCss(embeddedCss),
     ]);
-    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount;
-    const failedCount = headResult.failedCount + bodyResult.failedCount;
+    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount + embeddedCssResult.inlinedCount;
+    const failedCount = headResult.failedCount + bodyResult.failedCount + embeddedCssResult.failedCount;
 
     const changeLog = ['Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.'];
+    // A <style> block embedded directly in the page is real CSS the tool didn't know about
+    // before — surfaced as its own entry in the style list (below) rather than left inert inside
+    // the HTML, since "Build the preview" only ever runs the separate style-file list through the
+    // auto-fix pass.
+    const cssFiles = embeddedCssResult.css.trim()
+      ? [{ filename: 'Embedded styles from your page', css: embeddedCssResult.css }]
+      : [];
+    if (cssFiles.length) changeLog.push('Found styles written directly inside your page and added them to your style list below, so they go through the same checks as an uploaded file.');
     if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from your page so they show up in the preview.`);
     const flags = failedCount > 0
       ? [`${failedCount} image${failedCount === 1 ? '' : 's'} in your page couldn't be loaded (the link may be broken, blocked, or the file too large) — ${failedCount === 1 ? "it" : "they"} may not show up in the preview.`]
       : [];
 
-    res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, changeLog, flags });
+    res.json({ html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags });
   } catch (err) {
     res.status(500).json({ error: 'We couldn\'t read that HTML file. Please check it and try again.' });
   }
@@ -92,8 +100,17 @@ router.post('/scrape-url', async (req, res) => {
     let normalised;
     try { normalised = normaliseHttpUrl(url); } catch { return res.status(400).json({ error: "That doesn't look like a valid web address." }); }
 
-    const page = await fetchHtml(normalised);
-    if (!page?.body) return res.status(502).json({ error: "Couldn't load that page — it may be down or blocking automated requests." });
+    // Deliberately fetchDirect(), not fetchHtml() — fetchHtml's multi-strategy fallback chain
+    // (Serper/WordPress-API/Jina readability) exists for SEO/text-extraction use cases where a
+    // lossy reconstruction beats nothing. For a CSS editor that's the wrong trade: a Jina/Serper
+    // result rewrites the markup into a stripped-down readable-text reconstruction, which is
+    // exactly why a real user report compared this unfavourably to just pasting real page
+    // source — that fallback path could silently kick in even when the direct fetch "worked" but
+    // merely looked thin to the heuristic. fetchDirect returns the actual raw HTML byte-for-byte,
+    // same as View Source, with no substitution.
+    const page = await fetchDirect(normalised);
+    if (!page?.body) return res.status(502).json({ error: "Couldn't load that page — it may be down or blocking automated requests. Try pasting its page source directly instead." });
+    if (page.statusCode >= 400) return res.status(502).json({ error: `That page returned an error (status ${page.statusCode}) — try pasting its page source directly instead.` });
     const baseUrl = page.finalUrl || normalised;
 
     // Discover <link rel="stylesheet" href> before sanitizing (sanitize doesn't touch <link>,
@@ -108,11 +125,12 @@ router.post('/scrape-url', async (req, res) => {
 
     const scriptCount = linkDom.window.document.querySelectorAll('script[src], script:not([src])').length;
 
-    const { html, bodyInnerHTML, headInnerHTML } = sanitizeHtml(page.body);
+    const { html, bodyInnerHTML, headInnerHTML, embeddedCss } = sanitizeHtml(page.body);
 
-    const [headResult, bodyResult, cssResults] = await Promise.all([
+    const [headResult, bodyResult, embeddedCssResult, cssResults] = await Promise.all([
       inlineImagesInHtmlFragment(headInnerHTML),
       inlineImagesInHtmlFragment(bodyInnerHTML),
+      inlineImagesInCss(embeddedCss),
       Promise.all(stylesheetHrefs.map(async (href) => {
         try {
           const { buffer } = await fetchBinary(href);
@@ -127,18 +145,26 @@ router.post('/scrape-url', async (req, res) => {
       })),
     ]);
 
-    const cssFiles = cssResults.filter((r) => r.ok).map(({ filename, css }) => ({ filename, css }));
+    // Embedded <style> blocks first — they're usually the primary styling on a modern page
+    // (component-scoped CSS, critical-CSS inlining, etc.), so they should win cascade priority
+    // by default same as they would on the real live page (later = higher priority).
+    const cssFiles = [
+      ...(embeddedCssResult.css.trim() ? [{ filename: 'Embedded styles from that page', css: embeddedCssResult.css }] : []),
+      ...cssResults.filter((r) => r.ok).map(({ filename, css }) => ({ filename, css })),
+    ];
     const failedStylesheets = cssResults.filter((r) => !r.ok).length;
-    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount;
-    const failedImages = headResult.failedCount + bodyResult.failedCount;
+    const inlinedCount = headResult.inlinedCount + bodyResult.inlinedCount + embeddedCssResult.inlinedCount;
+    const failedImages = headResult.failedCount + bodyResult.failedCount + embeddedCssResult.failedCount;
 
     const changeLog = [
       `Loaded the page from ${new URL(baseUrl).hostname}.`,
       'Removed anything in your page that could run code, to keep the preview safe — this doesn\'t affect how your page looks.',
     ];
-    if (cssFiles.length > 0) changeLog.push(`Loaded ${cssFiles.length} style sheet${cssFiles.length === 1 ? '' : 's'} linked from that page.`);
+    if (embeddedCssResult.css.trim()) changeLog.push('Found styles written directly inside that page and added them to your style list below.');
+    if (cssResults.length > 0) changeLog.push(`Loaded ${cssResults.filter((r) => r.ok).length} style sheet${cssResults.filter((r) => r.ok).length === 1 ? '' : 's'} linked from that page.`);
     if (inlinedCount > 0) changeLog.push(`Loaded ${inlinedCount} image${inlinedCount === 1 ? '' : 's'} from that page so they show up in the preview.`);
     if (scriptCount > 0) changeLog.push(`That page uses ${scriptCount} script${scriptCount === 1 ? '' : 's'} for behaviour (like menus or sliders) — those are intentionally not loaded here, since this tool only ever changes how a page looks, never runs code from it.`);
+    if (!cssFiles.length) changeLog.push("This page doesn't seem to reference any styles the tool could find — it may load its CSS in a way this tool can't detect. You can still add style files yourself below.");
 
     const flags = [];
     if (failedStylesheets > 0) flags.push(`${failedStylesheets} style sheet${failedStylesheets === 1 ? '' : 's'} linked from that page couldn't be loaded.`);
