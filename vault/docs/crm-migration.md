@@ -46,6 +46,10 @@ Went with `clientRef` (already meaning "→ `clients`" everywhere, including `se
 
 **Not yet done**: dropping the now-unused `fin_invoices.clientId` / `fin_recurring` template `clientId` values — left in place as historical/compat data, cleaned up in Phase 3 alongside `fin_clients` itself.
 
+### Phase 2 follow-up fix (done)
+
+Deploying Phase 2 surfaced a gap: existing invoices/quotes created before the merge had `clientId` set but `clientRef` NULL (never backfilled), so they showed as unlinked once Finance's queries switched to reading `clientRef` only. Fixed via `server/scripts/backfillInvoiceClientRef.js` — maps `clientId` → `clientRef` through the `fin_clients."clientId"` bridge column, also covers `fin_recurring` templates with the same gap. Run against production 2026-09-16: 6 invoices/quotes backfilled cleanly (all 3 clients represented), 0 recurring templates affected.
+
 **Verify before Phase 3**: run a full invoice create → send → paid cycle, a quote → convert-to-invoice, the finance reminders cron, and at least one recurring-invoice firing, against the repointed queries in production.
 
 ## Phase 3 — Drop `fin_clients` + leftover columns (not started, do last)
