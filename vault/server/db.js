@@ -1112,6 +1112,24 @@ async function initSchema() {
       )
     `);
 
+    // ── clients / fin_clients merge (bridge phase — see docs/crm-migration.md) ──
+    // Bridge column: lets fin_clients rows point at their matched CRM client
+    // before fin_invoices is repointed and fin_clients is dropped. Nullable —
+    // unmatched fin_clients rows stay NULL until manually reconciled.
+    await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+
+    // Finance-only fields (abn, postal address) live here, 1:1 on the CRM
+    // client, instead of merging them into the core `clients` table.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_billing_details (
+        "clientId"  INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+        abn         TEXT,
+        address     TEXT,
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // ── Mission Statements (versioned) ───────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS mission_statements (
