@@ -227,17 +227,19 @@ router.get('/morning-digest', async (req, res) => {
     const todayStart = new Date().toISOString().slice(0, 10);
     const todayEnd = todayStart + 'T23:59:59';
     const { rows: overdueRows } = await pool.query(
-      `SELECT t.*, c.name AS "clientName" FROM tasks t
+      `SELECT t.*, COALESCE(c.name, c2.name) AS "clientName" FROM tasks t
        LEFT JOIN projects p ON p.id = t."projectId"
        LEFT JOIN clients c ON c.id = p."clientId"
+       LEFT JOIN clients c2 ON c2.id = t."clientId"
        WHERE t."parentTaskId" IS NULL AND t."userId"=$1 AND t.status IN ('todo','in-progress') AND t."dueDate" IS NOT NULL AND t."dueDate" < $2
        ORDER BY t."dueDate" ASC, CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10`,
       [req.user.id, todayStart]
     );
     const { rows: todayRows } = await pool.query(
-      `SELECT t.*, c.name AS "clientName" FROM tasks t
+      `SELECT t.*, COALESCE(c.name, c2.name) AS "clientName" FROM tasks t
        LEFT JOIN projects p ON p.id = t."projectId"
        LEFT JOIN clients c ON c.id = p."clientId"
+       LEFT JOIN clients c2 ON c2.id = t."clientId"
        WHERE t."parentTaskId" IS NULL AND t."userId"=$1 AND t.status IN ('todo','in-progress') AND t."dueDate" >= $2 AND t."dueDate" <= $3
        ORDER BY t."dueDate" ASC, CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10`,
       [req.user.id, todayStart, todayEnd]

@@ -179,23 +179,23 @@ router.get('/:id', async (req, res) => {
       ORDER BY "archived_at" ASC NULLS FIRST, "updatedAt" DESC
     `, [clientId, userId]);
 
-    // Open tasks across active linked projects
+    // Open tasks: across active linked projects, OR directly linked to this
+    // client/a deal on it (a task doesn't need a project wrapper — see
+    // docs/crm-deals-schema.md §5). LEFT JOIN projects since a directly
+    // linked task may have no project at all.
     const activeProjectIds = projects.filter(p => !p.archived_at).map(p => p.id);
-    let tasks = [];
-    if (activeProjectIds.length > 0) {
-      const { rows: taskRows } = await pool.query(
-        `SELECT t.id, t.title, t.status, t.priority, t."dueDate", t."isUrgent",
-                t."projectId", p.name AS "projectName"
-         FROM tasks t
-         JOIN projects p ON t."projectId" = p.id
-         WHERE t."projectId" = ANY($1::int[]) AND t.status != 'done'
-         ORDER BY
-           CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
-           t."dueDate" ASC NULLS LAST`,
-        [activeProjectIds]
-      );
-      tasks = taskRows;
-    }
+    const { rows: tasks } = await pool.query(
+      `SELECT t.id, t.title, t.status, t.priority, t."dueDate", t."isUrgent",
+              t."projectId", p.name AS "projectName", t."clientId", t."dealId"
+       FROM tasks t
+       LEFT JOIN projects p ON t."projectId" = p.id
+       WHERE t.status != 'done'
+         AND (t."projectId" = ANY($1::int[]) OR t."clientId" = $2)
+       ORDER BY
+         CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+         t."dueDate" ASC NULLS LAST`,
+      [activeProjectIds, clientId]
+    );
 
     // Finance summary
     const { rows: [finSummary] } = await pool.query(`
@@ -212,12 +212,21 @@ router.get('/:id', async (req, res) => {
     // Mood summary
     const moodSummary = await getClientMoodSummary(clientId, userId);
 
+    // Deals
+    const { rows: deals } = await pool.query(
+      `SELECT * FROM client_deals WHERE "clientId"=$1 ORDER BY
+         CASE stage WHEN 'won' THEN 1 WHEN 'lost' THEN 1 ELSE 0 END,
+         "expectedCloseDate" ASC NULLS LAST, "updatedAt" DESC`,
+      [clientId]
+    );
+
     res.json({
       client,
       contacts,
       touchpoints,
       projects,
       tasks,
+      deals,
       finance: finSummary,
       mood: moodSummary,
     });
@@ -454,7 +463,7 @@ router.get('/:id/touchpoints', async (req, res) => {
 // POST /api/clients/:id/touchpoints
 router.post('/:id/touchpoints', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
-  const { contactId, type, date, note } = req.body;
+  const { contactId, dealId, type, date, note } = req.body;
 
   if (!date) return res.status(400).json({ error: 'date is required' });
   if (!type) return res.status(400).json({ error: 'type is required' });
@@ -463,11 +472,19 @@ router.post('/:id/touchpoints', async (req, res) => {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
 
+    // A dealId must belong to this same client — no cross-client tagging.
+    if (dealId) {
+      const { rows: [deal] } = await pool.query(
+        `SELECT id FROM client_deals WHERE id=$1 AND "clientId"=$2`, [dealId, clientId]
+      );
+      if (!deal) return res.status(400).json({ error: 'dealId does not belong to this client' });
+    }
+
     const { rows } = await pool.query(`
-      INSERT INTO client_touchpoints ("clientId", "contactId", type, date, note)
-      VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO client_touchpoints ("clientId", "contactId", "dealId", type, date, note)
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING *
-    `, [clientId, contactId||null, type, date, note||null]);
+    `, [clientId, contactId||null, dealId||null, type, date, note||null]);
 
     // Return with contact name
     const { rows: [tp] } = await pool.query(`

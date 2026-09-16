@@ -1096,6 +1096,52 @@ async function initSchema() {
       )
     `);
 
+    // ── CRM: Deals — see docs/crm-deals-schema.md ─────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_deals (
+        id                   SERIAL PRIMARY KEY,
+        "userId"             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "clientId"           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        title                VARCHAR(255) NOT NULL,
+        stage                VARCHAR(20) NOT NULL DEFAULT 'lead'
+                             CHECK (stage IN ('lead','qualified','proposal','negotiation','won','lost')),
+        value                NUMERIC(12,2),
+        "expectedCloseDate"  DATE,
+        "actualCloseDate"    DATE,
+        "lostReason"         TEXT,
+        notes                TEXT,
+        "createdAt"          TIMESTAMP DEFAULT NOW(),
+        "updatedAt"          TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_client ON client_deals("clientId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_user ON client_deals("userId")`);
+
+    // Optional many-to-many: which contacts are stakeholders on a deal. Empty
+    // = implicitly all of the client's contacts (current default behavior).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS deal_contacts (
+        "dealId"    INTEGER NOT NULL REFERENCES client_deals(id) ON DELETE CASCADE,
+        "contactId" INTEGER NOT NULL REFERENCES client_contacts(id) ON DELETE CASCADE,
+        PRIMARY KEY ("dealId", "contactId")
+      )
+    `);
+
+    // Additive tag only — client_touchpoints."clientId" is always set at
+    // creation (every touchpoint is created via a client-scoped route), so
+    // this never becomes an alternative path to the client; no query needs
+    // to change to account for it. See docs/crm-deals-schema.md §4.
+    await client.query(`ALTER TABLE client_touchpoints ADD COLUMN IF NOT EXISTS "dealId" INTEGER REFERENCES client_deals(id) ON DELETE SET NULL`);
+
+    // Direct client/deal link, independent of projects."clientId" — lets a
+    // task attach to a client/deal without needing a project wrapper.
+    // Queries that reach a client only via projects."clientId" were updated
+    // to also check these (see docs/crm-deals-schema.md §5):
+    //   - server/routes/clients.js client-detail "open tasks" list
+    //   - server/routes/tasks.js morning-digest queries
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "dealId" INTEGER REFERENCES client_deals(id) ON DELETE SET NULL`);
+
     // ── clients / fin_clients merge — see docs/crm-migration.md (complete: ──
     // fin_clients dropped, fin_invoices links to clients via "clientRef") ──
 

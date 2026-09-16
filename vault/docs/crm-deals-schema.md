@@ -1,6 +1,8 @@
 # CRM Phase 3 schema: deals, contact roles, activity, tasks
 
-Scope only — no DDL run yet. Builds on the completed `clients`/`client_contacts`/`client_touchpoints`/`client_billing_details` foundation (`docs/crm-migration.md`).
+Builds on the completed `clients`/`client_contacts`/`client_touchpoints`/`client_billing_details` foundation (`docs/crm-migration.md`).
+
+**Status: items 1, 3 (partial), 4, 5 built** (schema + CRUD routes in `server/db.js`/`server/routes/deals.js`, code-complete, not yet run against production — the DDL runs automatically on next boot since it's idempotent `CREATE TABLE IF NOT EXISTS`/`ADD COLUMN IF NOT EXISTS`, same as every other table in this app). Item 2 (contact roles) needs no schema change, already true today. Items 6 (dashboard/reporting beyond the basic `/api/deals/pipeline` summary) and the `ClientDetailPage.jsx`/deal-CRUD-UI frontend are not started.
 
 ---
 
