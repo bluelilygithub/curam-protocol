@@ -23,33 +23,64 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-// Wrap pool.query in place — every existing call site (`pool.query(...)`
-// across ~100 route/service files) gets slow-query + failure logging for
-// free, tagged with the request's requestId/userId where one exists. Does
-// NOT cover queries run against a client checked out via pool.connect() for
-// a transaction (BEGIN/COMMIT/ROLLBACK) — those call client.query directly.
+// Slow-query + failure logging, shared by pool.query and every transaction
+// client's client.query (see below) — one implementation, two call sites,
+// so `pool.query(...)` and `const client = await pool.connect(); client.query(...)`
+// get identical tracing with no call-site changes needed anywhere.
 const SLOW_QUERY_MS = 200;
-const rawQuery = pool.query.bind(pool);
-pool.query = async function tracedQuery(text, params) {
-  const start = Date.now();
-  const queryText = typeof text === 'string' ? text : text?.text;
-  try {
-    const result = await rawQuery(text, params);
-    const duration = Date.now() - start;
-    if (duration > SLOW_QUERY_MS) {
-      getLogger().warn(
-        { query: (queryText || '').slice(0, 200), duration, rows: result.rowCount },
-        'slow query'
+function tracedQueryFn(rawQueryFn) {
+  return async function tracedQuery(text, params) {
+    const start = Date.now();
+    const queryText = typeof text === 'string' ? text : text?.text;
+    try {
+      const result = await rawQueryFn(text, params);
+      const duration = Date.now() - start;
+      if (duration > SLOW_QUERY_MS) {
+        getLogger().warn(
+          { query: (queryText || '').slice(0, 200), duration, rows: result.rowCount },
+          'slow query'
+        );
+      }
+      return result;
+    } catch (err) {
+      getLogger().error(
+        { query: (queryText || '').slice(0, 200), err: err.message },
+        'query failed'
       );
+      throw err;
     }
-    return result;
-  } catch (err) {
-    getLogger().error(
-      { query: (queryText || '').slice(0, 200), err: err.message },
-      'query failed'
-    );
-    throw err;
+  };
+}
+
+// Wrap pool.query in place — every existing call site (`pool.query(...)`
+// across ~100 route/service files) gets this for free.
+pool.query = tracedQueryFn(pool.query.bind(pool));
+
+// Wrap pool.connect() so every transaction client's own .query() (the
+// BEGIN/INSERT/COMMIT pattern used throughout finance.js, deals.js, etc.)
+// gets the same tracing — previously this bypassed it entirely since
+// client.query is a separate method from pool.query.
+//
+// pg-pool's connect(cb) has a dual contract: promise-based when called with
+// no args (what every app call site here does), but pg-pool's OWN internal
+// Pool.prototype.query() calls `this.connect(callback)` in callback style to
+// implement single-shot queries — so both styles must be supported, or
+// pool.query() itself breaks (its internal connect() call would receive a
+// promise-shaped return value it doesn't expect, and never receive its
+// client via the callback it passed).
+function patchClient(client) {
+  if (client && !client.__traced) {
+    client.query = tracedQueryFn(client.query.bind(client));
+    client.__traced = true;
   }
+  return client;
+}
+const rawConnect = pool.connect.bind(pool);
+pool.connect = function tracedConnect(cb) {
+  if (typeof cb === 'function') {
+    return rawConnect((err, client, done) => cb(err, patchClient(client), done));
+  }
+  return rawConnect().then(patchClient);
 };
 
 // ── Schema initialisation ──────────────────────────────────────────────────────
