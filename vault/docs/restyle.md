@@ -34,6 +34,14 @@ Once CSS with inlined base64 background images got sent from the client to `/pro
 - `multer({ limits: { fieldSize: 25 * 1024 * 1024 } })` — 25MB comfortably covers a real page's CSS even with several inlined images.
 - The `JSON.parse()` catch block no longer swallows the failure — it 400s with a clear message and logs the field length server-side.
 
+## Scope: this element vs. every element with a class, and Reset
+
+When something is selected, a "What should changes apply to?" panel appears above the request box: **Just this element** (default, always resets to this on a fresh selection — never carried over from a previous one) or **Every element with class `.foo`** (a `<select>` if the element has more than one class). `getScopeTargets()` is the single choke point every change goes through — panel controls, detected-asset quick picks, animation presets, and AI edits alike — so scope applies uniformly regardless of how the change was made; nothing bypasses it. Choosing the class-wide option shows an explicit warning line ("Changes below will apply to every matching element on the page, not just this one") since it's a materially bigger action than editing one element.
+
+**Reset** (same panel) clears every property this tool manages (the `PLAIN` map's keys — text/box/animation properties) back to blank on the current scope's target(s), restoring whatever the page's own CSS/inline style already had — it never touches properties the tool doesn't track, so a pre-existing `style="width:200px"` on the source page is left alone.
+
+**Undo groups by action, not by element**: the undo stack holds one entry per logical action (`{ changes: [...] }`), not one per affected element — a class-wide change to 40 elements is a single Undo click, not 40. This applies equally to Reset (however many properties/elements it touched is one undo step).
+
 ## "Build the preview" no longer requires a style file at all
 
 CSS is optional. The button is enabled as soon as `htmlLoaded` is true, full stop — no dependency on `cssEntries`. `runBuildPreview()` skips the `/process-css` network call entirely when the style list is empty (`mergedCssRef.current = ''`) and renders the sanitized HTML as-is.

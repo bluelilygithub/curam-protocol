@@ -226,3 +226,10 @@ Two real-data-loss bugs found and fixed, restored to live code w/ regression tes
 - `PUT /api/admin/users/:id/password` — reset user password and revoke sessions
 - `PUT /api/admin/users/:id/admin` — grant/revoke admin role
 - `DELETE /api/admin/users/:id` — delete user (cannot delete self or last admin)
+
+## CSS tool (nav label "CSS", internal key/route "restyle") — known limitations, stop iterating
+Non-technical CSS editor at `client/src/pages/RestylePage.jsx` / `server/routes/restyle.js`. Two rounds of user feedback landed hard requests to stop fixing:
+1. **Remote images often don't render in the preview** — investigated and partially fixed (Vault's CSP blocking iframe image fetches → server-side data-URI inlining in `server/services/restyle/inlineImages.js`; then extended coverage to style attrs/embedded `<style>`/relative URLs; then fixed a real multer `fieldSize` truncation bug that was silently corrupting large CSS payloads). Despite all of that, user still reported images broken and said explicitly to leave it — **do not re-attempt without being asked**.
+2. **"Load from a web address" (scrape a URL + auto-fetch stylesheets) was removed entirely** — built, then iterated on (fetchHtml→fetchDirect, relative-URL resolution) after quality complaints, never reached acceptable fidelity vs. pasting real page source. User said "you've tried too many times... just remove it." Removed the `/api/restyle/scrape-url` route and the client tab. Only Upload/Paste remain as HTML sources.
+
+Fixes that did land and are solid: CSS is now optional (Build the preview only requires HTML), and embedded `<style>` blocks get auto-extracted into the style list.

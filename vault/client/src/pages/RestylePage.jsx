@@ -271,9 +271,16 @@ export default function RestylePage() {
   const [selectionLabel, setSelectionLabel] = useState('Click anything in your page below to start editing it.');
   const selectedElRef = useRef(null);
   const [hasSelection, setHasSelection] = useState(false);
-  const undoStackRef = useRef([]); // { target, property, previousValue }
+  const undoStackRef = useRef([]); // { changes: [{ target, property, previousValue }, ...] } — one entry per logical action
   const [canUndo, setCanUndo] = useState(false);
   const suppressControlEvents = useRef(false);
+
+  // Who a change applies to: just the clicked element, or every element sharing one of its
+  // classes (e.g. every ".card" on the page) — a real, deliberate choice, not a hidden default,
+  // since applying to a whole class is a much bigger action than editing one element.
+  const [selectedClasses, setSelectedClasses] = useState([]); // classes on the current selection
+  const [editScope, setEditScope] = useState('element'); // 'element' | 'class'
+  const [editScopeClass, setEditScopeClass] = useState('');
 
   // ---------- Property panel control values ----------
   const [ctrl, setCtrl] = useState({
@@ -370,6 +377,9 @@ export default function RestylePage() {
     setCanUndo(false);
     setHasSelection(false);
     setSelectionLabel('Click anything in your page below to start editing it.');
+    setSelectedClasses([]);
+    setEditScope('element');
+    setEditScopeClass('');
   }, []);
 
   const attachIframeInteractivity = useCallback((idoc) => {
@@ -434,8 +444,26 @@ export default function RestylePage() {
     const classes = [...target.classList].filter((c) => !c.startsWith('data-restyle'));
     const label = target.tagName.toLowerCase() + (classes.length ? '.' + classes.join('.') : '');
     setSelectionLabel(`Editing: ${label}`);
+    setSelectedClasses(classes);
+    // A fresh selection always starts scoped to just that element — applying to a whole class is
+    // something the user opts into each time, never carried over from a previous selection.
+    setEditScope('element');
+    setEditScopeClass(classes[0] || '');
     populateControlsFromComputed(target);
   }, [populateControlsFromComputed, resetSelection]);
+
+  // Every element a change should apply to, given the current scope choice — just the selected
+  // element, or every element in the preview sharing the chosen class.
+  const getScopeTargets = useCallback(() => {
+    const target = selectedElRef.current;
+    if (!target) return [];
+    if (editScope !== 'class' || !editScopeClass) return [target];
+    try {
+      return [...target.ownerDocument.querySelectorAll(`.${CSS.escape(editScopeClass)}`)];
+    } catch {
+      return [target];
+    }
+  }, [editScope, editScopeClass]);
 
   const renderIframe = useCallback(() => {
     resetSelection();
@@ -515,18 +543,31 @@ export default function RestylePage() {
   };
 
   // ---------- Applying changes ----------
+  // The undo stack holds one entry per LOGICAL action (one Undo click = one action fully
+  // reverted), not one per affected element — a class-wide change to 40 elements is still a
+  // single entry with 40 {target,property,previousValue} changes inside it.
   const applyChange = useCallback((property, value, explanation) => {
-    const target = selectedElRef.current;
-    if (!target) return;
-    const previousValue = target.style[property] || '';
-    if (previousValue === value) return;
-    target.style[property] = value;
-    undoStackRef.current.push({ target, property, previousValue });
+    const targets = getScopeTargets();
+    if (!targets.length) return;
+    const changes = [];
+    targets.forEach((target) => {
+      const previousValue = target.style[property] || '';
+      if (previousValue === value) return;
+      target.style[property] = value;
+      changes.push({ target, property, previousValue });
+    });
+    if (!changes.length) return;
+    undoStackRef.current.push({ changes });
     setCanUndo(true);
-    const classes = [...target.classList].filter((c) => !c.startsWith('data-restyle'));
-    const label = target.tagName.toLowerCase() + (classes.length ? '.' + classes.join('.') : '');
-    addLogEntry(explanation || `Changed ${PLAIN[property] || property} of ${label}.`);
-  }, [addLogEntry]);
+    if (editScope === 'class' && editScopeClass) {
+      addLogEntry(`Changed ${PLAIN[property] || property} for every ".${editScopeClass}" element (${changes.length} of them).`);
+    } else {
+      const target = selectedElRef.current;
+      const classes = [...target.classList].filter((c) => !c.startsWith('data-restyle'));
+      const label = target.tagName.toLowerCase() + (classes.length ? '.' + classes.join('.') : '');
+      addLogEntry(explanation || `Changed ${PLAIN[property] || property} of ${label}.`);
+    }
+  }, [addLogEntry, getScopeTargets, editScope, editScopeClass]);
 
   const handleCtrlChange = (property, rawValue, unit, explanation) => {
     if (suppressControlEvents.current) return;
@@ -548,24 +589,59 @@ export default function RestylePage() {
   // next tick, so picking "Pulse" a second time still visibly pulses.
   const handleAnimationChange = (value, label) => {
     if (suppressControlEvents.current) return;
-    const target = selectedElRef.current;
-    if (!target) return;
+    const targets = getScopeTargets();
+    if (!targets.length) return;
     setCtrl((prev) => ({ ...prev, animation: value }));
-    const previousValue = target.style.animation || '';
-    target.style.animation = 'none';
-    void target.offsetWidth; // eslint-disable-line no-unused-expressions
-    target.style.animation = value === 'none' ? '' : value;
-    undoStackRef.current.push({ target, property: 'animation', previousValue });
+    const changes = [];
+    targets.forEach((target) => {
+      const previousValue = target.style.animation || '';
+      target.style.animation = 'none';
+      void target.offsetWidth; // eslint-disable-line no-unused-expressions
+      target.style.animation = value === 'none' ? '' : value;
+      changes.push({ target, property: 'animation', previousValue });
+    });
+    undoStackRef.current.push({ changes });
     setCanUndo(true);
-    addLogEntry(value === 'none' ? 'Removed the animation.' : `Added a "${label}" animation.`);
+    const scopeNote = editScope === 'class' && editScopeClass ? ` for every ".${editScopeClass}" element (${targets.length} of them)` : '';
+    addLogEntry(value === 'none' ? `Removed the animation${scopeNote}.` : `Added a "${label}" animation${scopeNote}.`);
+  };
+
+  // Reverts the current selection (or every element in the class, if that's the chosen scope)
+  // back to how it looked before any editing here — clears just the properties this tool
+  // manages, never anything the original page's own CSS/inline style was already doing.
+  const handleResetSelection = () => {
+    const targets = getScopeTargets();
+    if (!targets.length) return;
+    const changes = [];
+    targets.forEach((target) => {
+      Object.keys(PLAIN).forEach((prop) => {
+        const previousValue = target.style[prop] || '';
+        if (!previousValue) return;
+        target.style[prop] = '';
+        changes.push({ target, property: prop, previousValue });
+      });
+    });
+    if (!changes.length) { addLogEntry('Nothing to reset — no changes had been made yet.'); return; }
+    undoStackRef.current.push({ changes });
+    setCanUndo(true);
+    if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current);
+    addLogEntry(editScope === 'class' && editScopeClass
+      ? `Reset every ".${editScopeClass}" element back to how it looked originally.`
+      : 'Reset this element back to how it looked originally.');
   };
 
   const handleUndo = () => {
     const entry = undoStackRef.current.pop();
     if (!entry) return;
-    entry.target.style[entry.property] = entry.previousValue;
-    addLogEntry(`Undid the last change (${PLAIN[entry.property] || entry.property}).`);
-    if (entry.target === selectedElRef.current) populateControlsFromComputed(selectedElRef.current);
+    let touchedSelection = false;
+    entry.changes.forEach(({ target, property, previousValue }) => {
+      target.style[property] = previousValue;
+      if (target === selectedElRef.current) touchedSelection = true;
+    });
+    const properties = [...new Set(entry.changes.map((c) => PLAIN[c.property] || c.property))];
+    const scopeNote = entry.changes.length > 1 ? ` (${entry.changes.length} elements affected)` : '';
+    addLogEntry(`Undid the last change (${properties.join(', ')})${scopeNote}.`);
+    if (touchedSelection) populateControlsFromComputed(selectedElRef.current);
     setCanUndo(undoStackRef.current.length > 0);
   };
 
@@ -879,6 +955,41 @@ export default function RestylePage() {
 
         {/* RIGHT: property panel */}
         <aside className="rounded-xl border p-3 flex flex-col gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+          {hasSelection && (
+            <section className="rounded-lg border p-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <h2 className="text-sm font-semibold mb-1.5" style={{ color: 'var(--color-text)' }}>What should changes apply to?</h2>
+              <label className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
+                <input type="radio" name="editScope" checked={editScope === 'element'} onChange={() => setEditScope('element')} />
+                Just this element
+              </label>
+              {selectedClasses.length > 0 ? (
+                <label className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--color-text)' }}>
+                  <input type="radio" name="editScope" checked={editScope === 'class'} onChange={() => setEditScope('class')} />
+                  Every element with class{' '}
+                  {selectedClasses.length > 1 ? (
+                    <select className="text-xs rounded border px-1 py-0.5" style={FIELD} value={editScopeClass} onChange={(e) => { setEditScopeClass(e.target.value); setEditScope('class'); }}>
+                      {selectedClasses.map((c) => <option key={c} value={c}>.{c}</option>)}
+                    </select>
+                  ) : (
+                    <strong>.{selectedClasses[0]}</strong>
+                  )}
+                </label>
+              ) : (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This element has no class, so it can only be edited on its own.</p>
+              )}
+              {editScope === 'class' && (
+                <p className="text-xs mt-1" style={{ color: '#b3452c' }}>Changes below will apply to every matching element on the page, not just this one.</p>
+              )}
+              <button
+                type="button"
+                className="text-xs font-semibold px-2 py-1 rounded-md border mt-2"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                title="Clear every change made here, back to how it looked when the preview was built"
+                onClick={handleResetSelection}
+              >Reset {editScope === 'class' && editScopeClass ? `all ".${editScopeClass}" elements` : 'this element'}</button>
+            </section>
+          )}
+
           <section>
             <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Plain-English request</h2>
             <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Click something in the preview first, then describe what you want.</p>
