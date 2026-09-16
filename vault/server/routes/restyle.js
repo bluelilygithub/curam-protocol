@@ -22,9 +22,17 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB per file
 const ALLOWED_HTML_EXT = new Set(['.html', '.htm']);
 const ALLOWED_CSS_EXT = new Set(['.css']);
 
+// fieldSize matters here in a way it doesn't for most multer uses: the `pasted`/`order` fields
+// in /process-css carry CSS text that can include base64-inlined background images (see
+// inlineImages.js) — busboy's default fieldSize is 1MB, so a real page's embedded/linked CSS
+// with even one inlined background image could silently exceed it. Multer/busboy's default
+// behavior on overflow is to TRUNCATE the field, not reject the request — so this was silently
+// corrupting the JSON payload (JSON.parse then failing, swallowed by the catch below) rather
+// than erroring, which is why it looked like "the button does nothing." 25MB covers any
+// realistic page; MAX_FILE_BYTES still caps actual uploaded FILES separately.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_BYTES },
+  limits: { fileSize: MAX_FILE_BYTES, fieldSize: 25 * 1024 * 1024 },
 });
 
 function extOf(filename) {
@@ -128,13 +136,17 @@ router.post('/scrape-url', async (req, res) => {
     const { html, bodyInnerHTML, headInnerHTML, embeddedCss } = sanitizeHtml(page.body);
 
     const [headResult, bodyResult, embeddedCssResult, cssResults] = await Promise.all([
-      inlineImagesInHtmlFragment(headInnerHTML),
-      inlineImagesInHtmlFragment(bodyInnerHTML),
-      inlineImagesInCss(embeddedCss),
+      // baseUrl passed through so relative image paths (the norm on a scraped page — src="/img/
+      // logo.png" only ever makes sense relative to its own site) resolve to something fetchable.
+      inlineImagesInHtmlFragment(headInnerHTML, baseUrl),
+      inlineImagesInHtmlFragment(bodyInnerHTML, baseUrl),
+      inlineImagesInCss(embeddedCss, baseUrl),
       Promise.all(stylesheetHrefs.map(async (href) => {
         try {
           const { buffer } = await fetchBinary(href);
-          const { css } = await inlineImagesInCss(buffer.toString('utf8'));
+          // url(...) inside a stylesheet resolves relative to THAT FILE's own location, not the
+          // page's — pass href (the stylesheet's own URL), not baseUrl.
+          const { css } = await inlineImagesInCss(buffer.toString('utf8'), href);
           const filename = (() => {
             try { return new URL(href).pathname.split('/').pop() || 'stylesheet.css'; } catch { return 'stylesheet.css'; }
           })();
@@ -196,7 +208,13 @@ router.post('/process-css', upload.array('files', 20), async (req, res) => {
             .filter(p => p && typeof p.css === 'string')
             .map(p => ({ filename: p.filename || 'Pasted styles', css: p.css }));
         }
-      } catch { /* ignore malformed pasted payload */ }
+      } catch (err) {
+        // Previously swallowed silently — that's exactly what made a truncated multer field
+        // (see fieldSize note above) look like "the button does nothing" instead of a real
+        // error. A field that failed to parse as JSON almost always means it was cut off.
+        console.error('[restyle] process-css: pasted field failed to parse as JSON', { length: req.body.pasted.length, err: err.message });
+        return res.status(400).json({ error: 'One of your style entries was too large to process in one go — try splitting it into smaller files.' });
+      }
     }
 
     const allSheets = [...droppedSheets, ...pastedSheets];
