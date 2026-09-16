@@ -112,11 +112,16 @@ main { max-width: 640px; margin: 0 auto; padding: 24px; font-family: system-ui, 
 .card h2 { margin-top: 0; }
 .demo-image { display: block; max-width: 100%; border-radius: 8px; margin-top: 20px; }`;
 
-function matchFontOption(fontFamily) {
+// Checks the curated list first, then any font stacks detected in the uploaded CSS/HTML, so the
+// dropdown can reflect an element's real current font even when it's not one of the four
+// curated choices.
+function matchFontOption(fontFamily, detectedFonts) {
   const known = ['Inter', 'Roboto', 'Merriweather', 'Poppins'];
   const found = known.find(f => fontFamily.includes(f));
-  if (!found) return '';
-  return FONT_OPTIONS.find(o => o.value.includes(found))?.value || '';
+  if (found) return FONT_OPTIONS.find(o => o.value.includes(found))?.value || '';
+  const primary = fontFamily.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+  const detected = (detectedFonts || []).find(f => f.label.toLowerCase() === primary || f.value.toLowerCase() === fontFamily.trim().toLowerCase());
+  return detected ? detected.value : '';
 }
 function normalizeWeight(w) {
   const n = parseInt(w, 10);
@@ -133,10 +138,72 @@ function parseLineHeight(lineHeight, fontSize) {
   if (String(lineHeight).endsWith('px')) return Math.round((lh / fs) * 10) / 10;
   return Math.round(lh * 10) / 10 || 1.2;
 }
+// Normalizes any CSS color (computed rgb()/rgba(), or a raw hex string of any length detected
+// in the uploaded CSS) into the exact 6-digit #rrggbb form the native <input type="color">
+// requires — it silently rejects anything else, including 3-digit and 8-digit (alpha) hex.
 function toHex(colorStr) {
-  const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(colorStr || '');
-  if (!m) return null;
-  return '#' + [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join('');
+  const s = (colorStr || '').trim();
+  const hex3 = /^#([0-9a-fA-F]{3})$/.exec(s);
+  if (hex3) return '#' + hex3[1].split('').map((c) => c + c).join('');
+  const hex6or8 = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(s);
+  if (hex6or8) return '#' + hex6or8[1];
+  const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s);
+  if (m) return '#' + [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join('');
+  return null;
+}
+
+const GENERIC_FONT_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'system-ui']);
+
+// Pulls every distinct font stack, color, and font-size actually used in the uploaded CSS/HTML
+// so they can be offered as quick picks, instead of only the fixed curated lists — "if my CSS
+// already names a font/color/size, let me pick it" rather than re-typing what's already there.
+function scanCssAssets(cssText, htmlText) {
+  const combined = `${cssText || ''}\n${htmlText || ''}`;
+
+  const fonts = [];
+  const fontSeen = new Set();
+  for (const m of combined.matchAll(/font-family\s*:\s*([^;"'}]+(?:['"][^'"]*['"][^;}]*)?)/gi)) {
+    const raw = m[1].replace(/!important/i, '').trim().replace(/;$/, '');
+    const primary = raw.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+    if (!raw || GENERIC_FONT_KEYWORDS.has(primary)) continue;
+    const key = raw.toLowerCase();
+    if (fontSeen.has(key)) continue;
+    fontSeen.add(key);
+    const label = raw.split(',')[0].replace(/['"]/g, '').trim();
+    fonts.push({ value: raw, label });
+    if (fonts.length >= 12) break;
+  }
+
+  const colors = [];
+  const colorSeen = new Set();
+  for (const m of combined.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)/g)) {
+    const value = m[0];
+    const key = value.toLowerCase();
+    if (colorSeen.has(key)) continue;
+    colorSeen.add(key);
+    colors.push(value);
+    if (colors.length >= 16) break;
+  }
+
+  const extractSizes = (prop, limit) => {
+    const out = [];
+    const seen = new Set();
+    const re = new RegExp(`${prop}\\s*:\\s*([\\d.]+(?:px|rem|em|pt|%))`, 'gi');
+    for (const m of combined.matchAll(re)) {
+      const value = m[1];
+      if (seen.has(value)) continue;
+      seen.add(value);
+      out.push(value);
+      if (out.length >= limit) break;
+    }
+    return out.sort((a, b) => parseFloat(a) - parseFloat(b));
+  };
+
+  const sizes = extractSizes('font-size', 10);
+  const paddings = extractSizes('padding(?:-top|-right|-bottom|-left)?', 10);
+  const radii = extractSizes('border-radius', 10);
+
+  return { fonts, colors, sizes, paddings, radii };
 }
 
 const FIELD = {
@@ -192,6 +259,11 @@ export default function RestylePage() {
   // ---------- Change log / flags ----------
   const [changeLog, setChangeLog] = useState([]);
   const [flags, setFlags] = useState([]);
+
+  // ---------- Detected fonts/colors/sizes from the uploaded CSS+HTML ----------
+  // Offered as extra quick picks alongside the curated lists, so "I used this font/color/size
+  // already" doesn't mean re-typing or re-picking it from scratch.
+  const [detectedAssets, setDetectedAssets] = useState({ fonts: [], colors: [], sizes: [], paddings: [], radii: [] });
 
   // ---------- Preview / selection ----------
   const iframeRef = useRef(null);
@@ -319,7 +391,7 @@ export default function RestylePage() {
     const cs = target.ownerDocument.defaultView.getComputedStyle(target);
     suppressControlEvents.current = true;
     setCtrl({
-      fontFamily: matchFontOption(cs.fontFamily),
+      fontFamily: matchFontOption(cs.fontFamily, detectedAssets.fonts),
       fontSize: parseFloat(cs.fontSize) || 16,
       fontWeight: normalizeWeight(cs.fontWeight),
       color: toHex(cs.color) || '#000000',
@@ -337,7 +409,7 @@ export default function RestylePage() {
       animation: ANIMATION_PRESETS.some((o) => o.value === target.style.animation) ? target.style.animation : 'none',
     });
     setTimeout(() => { suppressControlEvents.current = false; }, 0);
-  }, []);
+  }, [detectedAssets.fonts]);
 
   const selectElement = useCallback((target, idoc) => {
     if (selectedElRef.current) selectedElRef.current.removeAttribute('data-restyle-selected');
@@ -399,6 +471,7 @@ export default function RestylePage() {
       (data.changeLog || []).forEach(addLogEntry);
       if (data.flags?.length) setFlags((prev) => [...prev, ...data.flags]);
       setCssStatus({ text: 'Your preview is ready below.', kind: 'ok' });
+      setDetectedAssets(scanCssAssets(data.css, `${sanitizedRef.current.head}\n${sanitizedRef.current.body}`));
       renderIframe();
     } catch (err) {
       setCssStatus({ text: err.message, kind: 'error' });
@@ -437,6 +510,14 @@ export default function RestylePage() {
     if (suppressControlEvents.current) return;
     const value = unit ? `${rawValue}${unit}` : rawValue;
     setCtrl((prev) => ({ ...prev, [property]: rawValue }));
+    applyChange(property, value, explanation);
+  };
+
+  // For the detected color-swatch / size-chip quick picks — same as handleCtrlChange but the
+  // exact CSS value comes pre-formed (e.g. "1.2rem", "rgba(0,0,0,0.5)") rather than assembled
+  // from a slider + unit, so it applies the raw value directly.
+  const applyQuickPick = (property, value, explanation, ctrlUpdates) => {
+    setCtrl((prev) => ({ ...prev, ...ctrlUpdates }));
     applyChange(property, value, explanation);
   };
 
@@ -742,15 +823,6 @@ export default function RestylePage() {
             {cssStatus.text && <p className="text-xs mt-1.5" style={{ color: cssStatus.kind === 'error' ? '#b3452c' : cssStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{cssStatus.text}</p>}
           </section>
 
-          <section>
-            <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>What's happened so far</h2>
-            <ul className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
-              {changeLog.map((entry, i) => (
-                <li key={i} className="text-xs rounded-md p-1.5 pl-2" style={{ background: 'var(--color-bg)', borderLeft: '3px solid var(--color-primary)', color: 'var(--color-text)' }}>{entry}</li>
-              ))}
-            </ul>
-          </section>
-
           {flags.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Things worth a look</h2>
@@ -833,12 +905,27 @@ export default function RestylePage() {
                 Font
                 <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.fontFamily} onChange={(e) => handleCtrlChange('fontFamily', e.target.value, null, e.target.value ? 'Changed the font.' : 'Changed the font back to the default.')}>
                   {FONT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {detectedAssets.fonts.filter((f) => !FONT_OPTIONS.some((o) => o.value === f.value)).map((f) => (
+                    <option key={f.value} value={f.value}>{f.label} (used in your files)</option>
+                  ))}
                 </select>
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Size
                 <input type="range" min={8} max={96} step={1} value={ctrl.fontSize} onChange={(e) => handleCtrlChange('fontSize', Number(e.target.value), 'px', `Changed the text size to ${e.target.value}px.`)} />
                 <span style={{ color: 'var(--color-text)' }}>{ctrl.fontSize}px</span>
+                {detectedAssets.sizes.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {detectedAssets.sizes.map((size) => (
+                      <button key={size} type="button"
+                        className="px-1.5 py-0.5 rounded border text-xs"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                        title={`Used in your files: ${size}`}
+                        onClick={() => applyQuickPick('fontSize', size, `Changed the text size to ${size}.`, { fontSize: parseFloat(size) || ctrl.fontSize })}
+                      >{size}</button>
+                    ))}
+                  </div>
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Weight
@@ -852,6 +939,17 @@ export default function RestylePage() {
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Text color
                 <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.color} onChange={(e) => handleCtrlChange('color', e.target.value, null, 'Changed the text color.')} />
+                {detectedAssets.colors.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {detectedAssets.colors.map((c) => (
+                      <button key={c} type="button" title={`Used in your files: ${c}`}
+                        className="w-5 h-5 rounded border"
+                        style={{ background: c, borderColor: 'var(--color-border)' }}
+                        onClick={() => applyQuickPick('color', c, 'Changed the text color.', { color: toHex(c) || c })}
+                      />
+                    ))}
+                  </div>
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Space between lines
@@ -890,16 +988,51 @@ export default function RestylePage() {
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Background color
                 <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.backgroundColor} onChange={(e) => handleCtrlChange('backgroundColor', e.target.value, null, 'Changed the background color.')} />
+                {detectedAssets.colors.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {detectedAssets.colors.map((c) => (
+                      <button key={c} type="button" title={`Used in your files: ${c}`}
+                        className="w-5 h-5 rounded border"
+                        style={{ background: c, borderColor: 'var(--color-border)' }}
+                        onClick={() => applyQuickPick('backgroundColor', c, 'Changed the background color.', { backgroundColor: toHex(c) || c })}
+                      />
+                    ))}
+                  </div>
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Rounded corners
                 <input type="range" min={0} max={60} step={1} value={ctrl.borderRadius} onChange={(e) => handleCtrlChange('borderRadius', Number(e.target.value), 'px', 'Changed the rounded corners.')} />
                 <span style={{ color: 'var(--color-text)' }}>{ctrl.borderRadius}px</span>
+                {detectedAssets.radii.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {detectedAssets.radii.map((size) => (
+                      <button key={size} type="button"
+                        className="px-1.5 py-0.5 rounded border text-xs"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                        title={`Used in your files: ${size}`}
+                        onClick={() => applyQuickPick('borderRadius', size, 'Changed the rounded corners.', { borderRadius: parseFloat(size) || ctrl.borderRadius })}
+                      >{size}</button>
+                    ))}
+                  </div>
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Space around the content
                 <input type="range" min={0} max={80} step={1} value={ctrl.padding} onChange={(e) => handleCtrlChange('padding', Number(e.target.value), 'px', 'Changed the space around the content.')} />
                 <span style={{ color: 'var(--color-text)' }}>{ctrl.padding}px</span>
+                {detectedAssets.paddings.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {detectedAssets.paddings.map((size) => (
+                      <button key={size} type="button"
+                        className="px-1.5 py-0.5 rounded border text-xs"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                        title={`Used in your files: ${size}`}
+                        onClick={() => applyQuickPick('padding', size, 'Changed the space around the content.', { padding: parseFloat(size) || ctrl.padding })}
+                      >{size}</button>
+                    ))}
+                  </div>
+                )}
               </label>
               <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                 Shadow
