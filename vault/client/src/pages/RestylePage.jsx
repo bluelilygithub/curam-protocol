@@ -278,9 +278,15 @@ export default function RestylePage() {
   // Who a change applies to: just the clicked element, or every element sharing one of its
   // classes (e.g. every ".card" on the page) — a real, deliberate choice, not a hidden default,
   // since applying to a whole class is a much bigger action than editing one element.
-  const [selectedClasses, setSelectedClasses] = useState([]); // classes on the current selection
-  const [editScope, setEditScope] = useState('element'); // 'element' | 'class'
-  const [editScopeClass, setEditScopeClass] = useState('');
+  // scopeOptions covers two real cases: the selected element's OWN class ("every .card"), and a
+  // class on an ANCESTOR combined with this element's tag ("every <a> inside .greenboxsection") —
+  // the second one matters because a lot of real CSS styles elements this way (a class on a
+  // container, not on the element itself), and an earlier version only ever looked at the
+  // element's own classList, which read as flatly wrong to a user who could see the actual CSS
+  // rule targeting it via a class further up the tree.
+  const [scopeOptions, setScopeOptions] = useState([]); // [{ selector, label }]
+  const [editScopeSelector, setEditScopeSelector] = useState(''); // '' = just this element
+  const [editScopeLabel, setEditScopeLabel] = useState('');
 
   // ---------- Property panel control values ----------
   const [ctrl, setCtrl] = useState({
@@ -377,9 +383,9 @@ export default function RestylePage() {
     setCanUndo(false);
     setHasSelection(false);
     setSelectionLabel('Click anything in your page below to start editing it.');
-    setSelectedClasses([]);
-    setEditScope('element');
-    setEditScopeClass('');
+    setScopeOptions([]);
+    setEditScopeSelector('');
+    setEditScopeLabel('');
   }, []);
 
   const attachIframeInteractivity = useCallback((idoc) => {
@@ -441,29 +447,56 @@ export default function RestylePage() {
     target.setAttribute('data-restyle-selected', '');
     selectedElRef.current = target;
     setHasSelection(true);
+    const tag = target.tagName.toLowerCase();
     const classes = [...target.classList].filter((c) => !c.startsWith('data-restyle'));
-    const label = target.tagName.toLowerCase() + (classes.length ? '.' + classes.join('.') : '');
+    const label = tag + (classes.length ? '.' + classes.join('.') : '');
     setSelectionLabel(`Editing: ${label}`);
-    setSelectedClasses(classes);
-    // A fresh selection always starts scoped to just that element — applying to a whole class is
+
+    // Build the list of scope choices: this element's own classes ("every .card"), then classes
+    // on ancestors combined with this element's tag ("every <a> inside .greenboxsection") — very
+    // common in real CSS (a class on a container, descendant-selector styling on the actual
+    // element), and something an earlier version completely missed since it only ever looked at
+    // the selected element's own classList. Walk up to (not including) <body>, nearest first,
+    // capped so the list can't grow unreasonably long on a deeply nested page.
+    const safeClass = (c) => { try { return CSS.escape(c); } catch { return null; } };
+    const options = classes
+      .map((c) => ({ raw: c, escaped: safeClass(c) }))
+      .filter((c) => c.escaped)
+      .map(({ raw, escaped }) => ({ selector: `.${escaped}`, label: `Every element with class .${raw}` }));
+    let ancestor = target.parentElement;
+    const seenAncestorClasses = new Set();
+    while (ancestor && ancestor !== idoc.body && options.length < 8) {
+      [...ancestor.classList].filter((c) => !c.startsWith('data-restyle')).forEach((c) => {
+        if (seenAncestorClasses.has(c)) return;
+        seenAncestorClasses.add(c);
+        const escaped = safeClass(c);
+        if (!escaped) return;
+        options.push({ selector: `.${escaped} ${tag}`, label: `Every <${tag}> inside .${c}` });
+      });
+      ancestor = ancestor.parentElement;
+    }
+    setScopeOptions(options);
+    // A fresh selection always starts scoped to just that element — applying more broadly is
     // something the user opts into each time, never carried over from a previous selection.
-    setEditScope('element');
-    setEditScopeClass(classes[0] || '');
+    setEditScopeSelector('');
+    setEditScopeLabel('');
     populateControlsFromComputed(target);
   }, [populateControlsFromComputed, resetSelection]);
 
   // Every element a change should apply to, given the current scope choice — just the selected
-  // element, or every element in the preview sharing the chosen class.
+  // element, or every element in the preview matching the chosen selector (own class, or an
+  // ancestor's class + this element's tag).
   const getScopeTargets = useCallback(() => {
     const target = selectedElRef.current;
     if (!target) return [];
-    if (editScope !== 'class' || !editScopeClass) return [target];
+    if (!editScopeSelector) return [target];
     try {
-      return [...target.ownerDocument.querySelectorAll(`.${CSS.escape(editScopeClass)}`)];
+      const matches = [...target.ownerDocument.querySelectorAll(editScopeSelector)];
+      return matches.length ? matches : [target];
     } catch {
       return [target];
     }
-  }, [editScope, editScopeClass]);
+  }, [editScopeSelector]);
 
   const renderIframe = useCallback(() => {
     resetSelection();
@@ -559,15 +592,15 @@ export default function RestylePage() {
     if (!changes.length) return;
     undoStackRef.current.push({ changes });
     setCanUndo(true);
-    if (editScope === 'class' && editScopeClass) {
-      addLogEntry(`Changed ${PLAIN[property] || property} for every ".${editScopeClass}" element (${changes.length} of them).`);
+    if (editScopeSelector) {
+      addLogEntry(`Changed ${PLAIN[property] || property} for ${editScopeLabel.toLowerCase()} (${changes.length} of them).`);
     } else {
       const target = selectedElRef.current;
       const classes = [...target.classList].filter((c) => !c.startsWith('data-restyle'));
       const label = target.tagName.toLowerCase() + (classes.length ? '.' + classes.join('.') : '');
       addLogEntry(explanation || `Changed ${PLAIN[property] || property} of ${label}.`);
     }
-  }, [addLogEntry, getScopeTargets, editScope, editScopeClass]);
+  }, [addLogEntry, getScopeTargets, editScopeSelector, editScopeLabel]);
 
   const handleCtrlChange = (property, rawValue, unit, explanation) => {
     if (suppressControlEvents.current) return;
@@ -602,7 +635,7 @@ export default function RestylePage() {
     });
     undoStackRef.current.push({ changes });
     setCanUndo(true);
-    const scopeNote = editScope === 'class' && editScopeClass ? ` for every ".${editScopeClass}" element (${targets.length} of them)` : '';
+    const scopeNote = editScopeSelector ? ` for ${editScopeLabel.toLowerCase()} (${targets.length} of them)` : '';
     addLogEntry(value === 'none' ? `Removed the animation${scopeNote}.` : `Added a "${label}" animation${scopeNote}.`);
   };
 
@@ -625,8 +658,8 @@ export default function RestylePage() {
     undoStackRef.current.push({ changes });
     setCanUndo(true);
     if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current);
-    addLogEntry(editScope === 'class' && editScopeClass
-      ? `Reset every ".${editScopeClass}" element back to how it looked originally.`
+    addLogEntry(editScopeSelector
+      ? `Reset ${editScopeLabel.toLowerCase()} back to how they looked originally.`
       : 'Reset this element back to how it looked originally.');
   };
 
@@ -959,25 +992,20 @@ export default function RestylePage() {
             <section className="rounded-lg border p-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <h2 className="text-sm font-semibold mb-1.5" style={{ color: 'var(--color-text)' }}>What should changes apply to?</h2>
               <label className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
-                <input type="radio" name="editScope" checked={editScope === 'element'} onChange={() => setEditScope('element')} />
+                <input type="radio" name="editScope" checked={!editScopeSelector} onChange={() => { setEditScopeSelector(''); setEditScopeLabel(''); }} />
                 Just this element
               </label>
-              {selectedClasses.length > 0 ? (
-                <label className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--color-text)' }}>
-                  <input type="radio" name="editScope" checked={editScope === 'class'} onChange={() => setEditScope('class')} />
-                  Every element with class{' '}
-                  {selectedClasses.length > 1 ? (
-                    <select className="text-xs rounded border px-1 py-0.5" style={FIELD} value={editScopeClass} onChange={(e) => { setEditScopeClass(e.target.value); setEditScope('class'); }}>
-                      {selectedClasses.map((c) => <option key={c} value={c}>.{c}</option>)}
-                    </select>
-                  ) : (
-                    <strong>.{selectedClasses[0]}</strong>
-                  )}
-                </label>
+              {scopeOptions.length > 0 ? (
+                scopeOptions.map((opt) => (
+                  <label key={opt.selector} className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
+                    <input type="radio" name="editScope" checked={editScopeSelector === opt.selector} onChange={() => { setEditScopeSelector(opt.selector); setEditScopeLabel(opt.label); }} />
+                    {opt.label}
+                  </label>
+                ))
               ) : (
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This element has no class, so it can only be edited on its own.</p>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This element (and nothing around it) has a class, so it can only be edited on its own.</p>
               )}
-              {editScope === 'class' && (
+              {editScopeSelector && (
                 <p className="text-xs mt-1" style={{ color: '#b3452c' }}>Changes below will apply to every matching element on the page, not just this one.</p>
               )}
               <button
@@ -986,7 +1014,7 @@ export default function RestylePage() {
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 title="Clear every change made here, back to how it looked when the preview was built"
                 onClick={handleResetSelection}
-              >Reset {editScope === 'class' && editScopeClass ? `all ".${editScopeClass}" elements` : 'this element'}</button>
+              >Reset {editScopeSelector ? editScopeLabel.replace(/^Every/, 'every') : 'this element'}</button>
             </section>
           )}
 
