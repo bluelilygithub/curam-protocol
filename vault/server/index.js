@@ -138,6 +138,7 @@ app.use('/api/bookmarks', require('./routes/bookmarks'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/graph', requireFeature('graph'), require('./routes/graph'));
 app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
+app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/expenseReview'));
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 // aiLimiter applies to the whole router — clients.js now has an AI-cost
@@ -207,6 +208,7 @@ const { startNewsDigestCron } = require('./cron/newsDigestCron');
 const { startSharesCron } = require('./cron/sharesCron');
 const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
+const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -234,6 +236,7 @@ async function start() {
     startSharesCron();
     startFinanceRemindersCron();
     startRecurringCron();
+    startExpenseReviewCron();
   }
 
   // API key presence checks — visible in Railway logs

@@ -77,6 +77,7 @@ export const APP_NAV_GROUPS = [
       { id: 'mood', label: 'Mood', path: '/mood', icon: 'mood', featureKey: 'mood' },
       { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing', icon: 'heart-pulse', featureKey: 'wellbeing' },
       { id: 'gmailIntel', label: 'Inbox Intel', path: '/gmail-intel', icon: 'inbox', featureKey: 'gmailIntel' },
+      { id: 'expenseReview', label: 'Invoice Review', path: '/expense-review', icon: 'receipt', featureKey: 'gmailIntel' },
     ],
   },
   {

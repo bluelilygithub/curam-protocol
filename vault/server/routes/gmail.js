@@ -602,6 +602,89 @@ async function fetchInboxEmails(userId, maxResults = 100) {
     });
 }
 
+// Classify a batch of emails (category + is_expense) via the same prompt/model call used by
+// GET /inbox/classify, and upsert results into gmail_classifications. Shared with
+// server/services/expenseReviewService.js so the invoice review pipeline reuses Inbox Intel's
+// classifier instead of reimplementing it. `storedMap` (threadId -> stored row) is mutated in
+// place with newly-classified rows so callers can merge results without a second DB read.
+// Returns { classificationFailed, classificationError }.
+async function classifyEmailBatch(userId, needsClassification, storedMap, logPrefix = '[gmail/classify]') {
+  if (!needsClassification.length) return { classificationFailed: false, classificationError: null };
+  try {
+    const { standard } = await getModelsForUser(userId);
+    console.log(`${logPrefix} model: ${standard}, classifying ${needsClassification.length} threads`);
+
+    const lines = needsClassification.map((e, i) =>
+      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
+    ).join('\n\n');
+
+    const prompt = `Classify these ${needsClassification.length} inbox emails for a professional. Return ONLY a JSON array.
+
+Categories (pick one per email):
+- urgent: requires action soon, time-sensitive
+- waiting: sender is blocked on or waiting for a reply from me
+- fyi: informational, no action required
+- noise: newsletters, automated notifications, promotions
+
+Set is_expense: true for any email that represents a financial document — invoice, receipt, purchase confirmation, payment confirmation, order confirmation, donation receipt, subscription charge, tax receipt, or any document showing an amount paid, owed, or received. This includes when the subject, preview, or sender strongly suggests a financial transaction.
+
+${lines}
+
+Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>","is_expense":false},...]`;
+
+    const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 4096, returnUsage: true });
+    console.log(`${logPrefix} tokens in=${inputTokens} out=${outputTokens}`);
+
+    if (inputTokens || outputTokens) {
+      const cost = calculateCost(standard, inputTokens, outputTokens);
+      pool.query(
+        `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+         VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_intel')`,
+        [userId, standard, inputTokens, outputTokens, cost]
+      ).catch(err => console.error(`${logPrefix} usage log error:`, err.message));
+    }
+
+    const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const match = stripped.match(/\[[\s\S]*\]/);
+    if (match) {
+      const classifications = JSON.parse(match[0]);
+
+      const toStore = classifications
+        .map(c => ({ email: needsClassification[c.index - 1], category: c.category || 'fyi', oneLine: c.one_line_summary || '', isExpense: !!c.is_expense }))
+        .filter(r => r.email);
+
+      if (toStore.length > 0) {
+        const vals = toStore.map((_, i) => `($${i * 6 + 1},$${i * 6 + 2},$${i * 6 + 3},$${i * 6 + 4},$${i * 6 + 5},$${i * 6 + 6},NOW())`).join(',');
+        const params = toStore.flatMap(r => [userId, r.email.threadId, r.email.id, r.category, r.oneLine, r.isExpense]);
+        await pool.query(
+          `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,"oneLine","isExpense","classifiedAt")
+           VALUES ${vals}
+           ON CONFLICT ("userId","threadId") DO UPDATE SET
+             "lastMessageId"=EXCLUDED."lastMessageId",
+             category=EXCLUDED.category,
+             "oneLine"=EXCLUDED."oneLine",
+             "isExpense"=EXCLUDED."isExpense",
+             "classifiedAt"=EXCLUDED."classifiedAt"`,
+          params
+        ).catch(err => console.error(`${logPrefix} upsert error:`, err.message));
+
+        for (const r of toStore) {
+          const prev = storedMap.get(r.email.threadId);
+          storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine, isExpense: r.isExpense, acknowledged: prev?.acknowledged ?? false });
+        }
+      }
+      console.log(`${logPrefix} stored ${toStore.length} classifications`);
+      return { classificationFailed: false, classificationError: null };
+    }
+    console.warn(`${logPrefix} no JSON array found in response`);
+    return { classificationFailed: true, classificationError: null };
+  } catch (err) {
+    console.error(`${logPrefix} model error:`, err.message);
+    return { classificationFailed: true, classificationError: err.message };
+  }
+}
+
 // GET /api/gmail/inbox/classify — incremental: only classifies new/changed threads
 router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   const userId = req.user.id;
@@ -649,89 +732,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     return !s || s.lastMessageId !== e.id;
   });
 
-  let classificationFailed = false;
-  let classificationError = null;
-
-  if (needsClassification.length > 0) {
-    try {
-      const { standard } = await getModelsForUser(userId);
-      console.log(`[gmail/inbox/classify] model: ${standard}, classifying ${needsClassification.length}/${emails.length} new/updated threads`);
-
-      const lines = needsClassification.map((e, i) =>
-        `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
-      ).join('\n\n');
-
-      const prompt = `Classify these ${needsClassification.length} inbox emails for a professional. Return ONLY a JSON array.
-
-Categories (pick one per email):
-- urgent: requires action soon, time-sensitive
-- waiting: sender is blocked on or waiting for a reply from me
-- fyi: informational, no action required
-- noise: newsletters, automated notifications, promotions
-
-Set is_expense: true for any email that represents a financial document — invoice, receipt, purchase confirmation, payment confirmation, order confirmation, donation receipt, subscription charge, tax receipt, or any document showing an amount paid, owed, or received. This includes when the subject, preview, or sender strongly suggests a financial transaction.
-
-${lines}
-
-Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
-[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>","is_expense":false},...]`;
-
-      const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 4096, returnUsage: true });
-      console.log(`[gmail/inbox/classify] tokens in=${inputTokens} out=${outputTokens}`);
-
-      if (inputTokens || outputTokens) {
-        const cost = calculateCost(standard, inputTokens, outputTokens);
-        pool.query(
-          `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
-           VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_intel')`,
-          [userId, standard, inputTokens, outputTokens, cost]
-        ).catch(err => console.error('[gmail/inbox/classify] usage log error:', err.message));
-      }
-
-      const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-      const match = stripped.match(/\[[\s\S]*\]/);
-      if (match) {
-        const classifications = JSON.parse(match[0]);
-
-        // Batch upsert all new classifications in one query
-        const toStore = classifications
-          .map(c => ({ email: needsClassification[c.index - 1], category: c.category || 'fyi', oneLine: c.one_line_summary || '', isExpense: !!c.is_expense }))
-          .filter(r => r.email);
-
-        if (toStore.length > 0) {
-          const vals = toStore.map((_, i) => `($${i * 6 + 1},$${i * 6 + 2},$${i * 6 + 3},$${i * 6 + 4},$${i * 6 + 5},$${i * 6 + 6},NOW())`).join(',');
-          const params = toStore.flatMap(r => [userId, r.email.threadId, r.email.id, r.category, r.oneLine, r.isExpense]);
-          await pool.query(
-            `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,"oneLine","isExpense","classifiedAt")
-             VALUES ${vals}
-             ON CONFLICT ("userId","threadId") DO UPDATE SET
-               "lastMessageId"=EXCLUDED."lastMessageId",
-               category=EXCLUDED.category,
-               "oneLine"=EXCLUDED."oneLine",
-               "isExpense"=EXCLUDED."isExpense",
-               "classifiedAt"=EXCLUDED."classifiedAt"`,
-            params
-          ).catch(err => console.error('[gmail/inbox/classify] upsert error:', err.message));
-
-          // Merge into storedMap for the enrichment step below (preserve acknowledged — not reset by re-classify)
-          for (const r of toStore) {
-            const prev = storedMap.get(r.email.threadId);
-            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine, isExpense: r.isExpense, acknowledged: prev?.acknowledged ?? false });
-          }
-        }
-        console.log(`[gmail/inbox/classify] stored ${toStore.length} classifications`);
-      } else {
-        console.warn('[gmail/inbox/classify] no JSON array found in response');
-        classificationFailed = true;
-      }
-    } catch (err) {
-      console.error('[gmail/inbox/classify] model error:', err.message);
-      classificationFailed = true;
-      classificationError = err.message;
-    }
-  } else {
-    console.log(`[gmail/inbox/classify] all ${emails.length} threads already classified — skipping model call`);
-  }
+  const { classificationFailed, classificationError } = await classifyEmailBatch(userId, needsClassification, storedMap, '[gmail/inbox/classify]');
 
   const enriched = emails.map(e => {
     const s = storedMap.get(e.threadId);
@@ -750,62 +751,50 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
   res.json({ ...result, cachedAt: null, ...(classificationError ? { _debug: classificationError } : {}) });
 });
 
-// POST /api/gmail/threads/:threadId/extract-invoice — download PDF attachment + extract fields via LLM
-router.post('/threads/:threadId/extract-invoice', async (req, res) => {
-  const userId = req.user.id;
-  const { threadId } = req.params;
-  const logPrefix = `[gmail/extract-invoice] thread=${threadId}`;
-  try {
-    const oauth2Client = await getAuthClient(userId);
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+// Find the first PDF attachment across a thread's messages. Shared by the extract-invoice
+// route and server/services/expenseReviewService.js (invoice review queue) so both use the
+// exact same attachment-discovery logic.
+async function findFirstPdfAttachment(gmail, threadId, logPrefix) {
+  const threadRes = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
+  const messages = threadRes.data.messages || [];
+  console.log(`${logPrefix} messages=${messages.length}`);
 
-    // Get full thread to find PDF attachments
-    console.log(`${logPrefix} fetching thread (format=full)`);
-    const threadRes = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
-    const messages = threadRes.data.messages || [];
-    console.log(`${logPrefix} messages=${messages.length}`);
-
-    // Find first PDF part across all messages
-    let pdfBase64 = null;
-    let pdfFilename = null;
-    outer: for (const msg of messages) {
-      const parts = msg.payload?.parts || (msg.payload ? [msg.payload] : []);
-      for (const part of parts) {
-        console.log(`${logPrefix} part mimeType=${part.mimeType} filename=${part.filename || '(none)'} attachmentId=${part.body?.attachmentId || '(none)'}`);
-        if (part.mimeType === 'application/pdf' || part.filename?.toLowerCase().endsWith('.pdf')) {
-          if (part.body?.attachmentId) {
-            console.log(`${logPrefix} downloading attachment id=${part.body.attachmentId} filename=${part.filename}`);
-            const attRes = await gmail.users.messages.attachments.get({
-              userId: 'me', messageId: msg.id, id: part.body.attachmentId,
-            });
-            pdfBase64 = attRes.data.data;
-            pdfFilename = part.filename;
-            console.log(`${logPrefix} downloaded ${pdfFilename}, base64 length=${pdfBase64?.length}`);
-            break outer;
-          }
-        }
+  for (const msg of messages) {
+    const parts = msg.payload?.parts || (msg.payload ? [msg.payload] : []);
+    for (const part of parts) {
+      console.log(`${logPrefix} part mimeType=${part.mimeType} filename=${part.filename || '(none)'} attachmentId=${part.body?.attachmentId || '(none)'}`);
+      if ((part.mimeType === 'application/pdf' || part.filename?.toLowerCase().endsWith('.pdf')) && part.body?.attachmentId) {
+        console.log(`${logPrefix} downloading attachment id=${part.body.attachmentId} filename=${part.filename}`);
+        const attRes = await gmail.users.messages.attachments.get({
+          userId: 'me', messageId: msg.id, id: part.body.attachmentId,
+        });
+        console.log(`${logPrefix} downloaded ${part.filename}, base64 length=${attRes.data.data?.length}`);
+        return { pdfBase64: attRes.data.data, pdfFilename: part.filename };
       }
     }
+  }
+  return { pdfBase64: null, pdfFilename: null };
+}
 
-    if (!pdfBase64) {
-      console.log(`${logPrefix} no PDF attachment found — parts logged above`);
-      return res.json({ extracted: false, reason: 'No PDF attachment found' });
-    }
+// Resolve the Anthropic PDF model + run the same extraction prompt used by extract-invoice.
+// Shared with server/services/expenseReviewService.js. Returns { extracted, description,
+// amount, supplier, reason?, error? } — never throws (mirrors the route's try/catch shape).
+async function extractInvoiceFromPdf(userId, pdfBase64, logPrefix) {
+  const { standard } = await getModelsForUser(userId);
+  const { rows: settingRows } = await pool.query(
+    `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('gmail_pdf_model','branch_eval_model')`, [userId]
+  ).catch(() => ({ rows: [] }));
+  const settingMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
+  const pdfModel = settingMap.gmail_pdf_model
+    || (standard?.startsWith('claude-') ? standard : null)
+    || (settingMap.branch_eval_model?.startsWith('claude-') ? settingMap.branch_eval_model : null);
+  console.log(`${logPrefix} standard=${standard}, branch_eval=${settingMap.branch_eval_model}, pdf model resolved=${pdfModel}`);
+  if (!pdfModel || !pdfModel.startsWith('claude-')) {
+    console.log(`${logPrefix} skipping — pdf model "${pdfModel}" is not Anthropic. Set a PDF model in Settings → Inbox Intel.`);
+    return { extracted: false, reason: `PDF extraction requires an Anthropic model. Configured model: "${pdfModel}". Set one in Settings → Inbox Intel.` };
+  }
 
-    const { standard } = await getModelsForUser(userId);
-    const { rows: settingRows } = await pool.query(
-      `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('gmail_pdf_model','branch_eval_model')`, [userId]
-    ).catch(() => ({ rows: [] }));
-    const settingMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
-    const pdfModel = settingMap.gmail_pdf_model
-      || (standard?.startsWith('claude-') ? standard : null)
-      || (settingMap.branch_eval_model?.startsWith('claude-') ? settingMap.branch_eval_model : null);
-    console.log(`${logPrefix} standard=${standard}, branch_eval=${settingMap.branch_eval_model}, pdf model resolved=${pdfModel}`);
-    if (!pdfModel || !pdfModel.startsWith('claude-')) {
-      console.log(`${logPrefix} skipping — pdf model "${pdfModel}" is not Anthropic. Set a PDF model in Settings → Inbox Intel.`);
-      return res.json({ extracted: false, reason: `PDF extraction requires an Anthropic model. Configured model: "${pdfModel}". Set one in Settings → Inbox Intel.` });
-    }
-
+  try {
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
@@ -818,7 +807,7 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
         role: 'user',
         content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: standardBase64 } },
-          { type: 'text', text: 'Extract from this invoice: 1) a short description of the goods/services (max 80 chars), 2) total amount payable as a number (no currency symbol), 3) supplier/vendor name. Return only JSON: {"description":"...","amount":0.00,"supplier":""}' },
+          { type: 'text', text: 'Extract from this invoice: 1) a short description of the goods/services (max 80 chars), 2) total amount payable as a number (no currency symbol), 3) supplier/vendor name, 4) invoice date in YYYY-MM-DD format if shown, 5) a short expense category (e.g. Software, Utilities, Office Supplies, Travel, Professional Services). Return only JSON: {"description":"...","amount":0.00,"supplier":"","invoiceDate":"YYYY-MM-DD or null","category":"..."}' },
         ],
       }],
     });
@@ -837,11 +826,42 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {
       console.log(`${logPrefix} no JSON found in model response`);
-      return res.json({ extracted: false, reason: 'Model did not return JSON', rawResponse: text.slice(0, 300) });
+      return { extracted: false, reason: 'Model did not return JSON', rawResponse: text.slice(0, 300) };
     }
     const data = JSON.parse(match[0]);
     console.log(`${logPrefix} extracted description="${data.description}" amount=${data.amount} supplier="${data.supplier}"`);
-    res.json({ extracted: true, description: data.description || '', amount: data.amount || '', supplier: data.supplier || '' });
+    return {
+      extracted: true,
+      description: data.description || '',
+      amount: data.amount || '',
+      supplier: data.supplier || '',
+      invoiceDate: data.invoiceDate || null,
+      category: data.category || null,
+    };
+  } catch (err) {
+    console.error(`${logPrefix} ERROR:`, err.message);
+    return { extracted: false, error: err.message };
+  }
+}
+
+// POST /api/gmail/threads/:threadId/extract-invoice — download PDF attachment + extract fields via LLM
+router.post('/threads/:threadId/extract-invoice', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  const logPrefix = `[gmail/extract-invoice] thread=${threadId}`;
+  try {
+    const oauth2Client = await getAuthClient(userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    console.log(`${logPrefix} fetching thread (format=full)`);
+    const { pdfBase64 } = await findFirstPdfAttachment(gmail, threadId, logPrefix);
+    if (!pdfBase64) {
+      console.log(`${logPrefix} no PDF attachment found — parts logged above`);
+      return res.json({ extracted: false, reason: 'No PDF attachment found' });
+    }
+
+    const result = await extractInvoiceFromPdf(userId, pdfBase64, logPrefix);
+    res.json(result);
   } catch (err) {
     console.error(`${logPrefix} ERROR:`, err.message);
     res.json({ extracted: false, error: err.message });
@@ -1001,5 +1021,12 @@ Be concise and direct. When asked to count, count. When asked to summarise, summ
 });
 
 module.exports = router;
-module.exports.getGmailClient = getGmailClient;
-module.exports.getHeader      = getHeader;
+module.exports.getGmailClient           = getGmailClient;
+module.exports.getHeader                = getHeader;
+// Exposed for server/services/expenseReviewService.js (invoice review queue) so it reuses
+// Inbox Intel's own classifier, attachment lookup, and PDF extraction instead of reimplementing them.
+module.exports.getAuthClient            = getAuthClient;
+module.exports.fetchInboxEmails         = fetchInboxEmails;
+module.exports.classifyEmailBatch       = classifyEmailBatch;
+module.exports.findFirstPdfAttachment   = findFirstPdfAttachment;
+module.exports.extractInvoiceFromPdf    = extractInvoiceFromPdf;

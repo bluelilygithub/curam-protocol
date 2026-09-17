@@ -1030,6 +1030,34 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS expense_review_queue (
+        id               SERIAL PRIMARY KEY,
+        "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "gmailMessageId" TEXT NOT NULL,
+        "threadId"       TEXT,
+        vendor           TEXT,
+        amount           NUMERIC(10,2),
+        "invoiceDate"    DATE,
+        category         TEXT,
+        "s3Url"          TEXT, -- NOTE: despite the name, this is a local disk path under
+                                -- UPLOAD_DIR/invoices/{year}/{month}/... (no S3 in this app,
+                                -- see server/services/expenseReviewService.js) — column named
+                                -- s3Url to match the original spec, not an actual S3 URL.
+        "rawExtraction"  JSONB,
+        "reviewStatus"   TEXT NOT NULL DEFAULT 'pending'
+          CHECK ("reviewStatus" IN ('pending','approved','rejected','duplicate')),
+        "expenseCreated" BOOLEAN NOT NULL DEFAULT FALSE,
+        "expenseId"      INTEGER REFERENCES fin_expenses(id) ON DELETE SET NULL,
+        paid             BOOLEAN NOT NULL DEFAULT FALSE,
+        "paidDate"       DATE,
+        "createdAt"      TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_expense_review_gmail_msg ON expense_review_queue ("userId","gmailMessageId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expense_review_status ON expense_review_queue ("userId","reviewStatus")`);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS fin_wages (
         id             SERIAL PRIMARY KEY,
         "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

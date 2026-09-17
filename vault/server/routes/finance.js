@@ -1314,44 +1314,54 @@ router.get('/expenses', async (req, res) => {
   }
 });
 
+// Shared expense-create logic (insert + journal posting). Extracted so other features
+// (e.g. server/routes/expenseReview.js) can create a fin_expenses row through the exact
+// same accounting path instead of re-implementing the journal entry. Runs inside the
+// caller-managed transaction on dbClient — caller must BEGIN/COMMIT/ROLLBACK.
+async function createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset }) {
+  // amount = total paid (GST-inclusive when gstIncluded=true)
+  const totalPaid = parseFloat(amount) || 0;
+  const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
+  const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
+
+  const { rows } = await dbClient.query(
+    `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId", "isCapitalAsset")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset]
+  );
+  const expense = rows[0];
+
+  // Journal: DR Expenses (ex-GST), DR GST Paid, CR <paidVia account, defaults to Bank>
+  await ensureAccounts(userId);
+  const expId    = await accountByCode(userId, '5000');
+  const gstPaid  = await accountByCode(userId, '1200');
+  const bankId   = await accountByCode(userId, '1000');
+  const creditId = paidViaId || bankId;
+  if (expId && creditId) {
+    const lines = [
+      { accountId: expId,    debit: amt,      credit: 0 },
+      { accountId: creditId, debit: 0,        credit: totalPaid },
+    ];
+    if (gstAmt > 0 && gstPaid) lines.splice(1, 0, { accountId: gstPaid, debit: gstAmt, credit: 0 });
+    await createJournalEntry(dbClient, userId, {
+      date:        expense.date,
+      description: `Expense: ${description}`,
+      type:        'expense',
+      sourceId:    expense.id,
+      lines,
+    });
+  }
+
+  return { expense, amt, gstAmt, totalPaid };
+}
+
 router.post('/expenses', async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset } = req.body;
-    // amount = total paid (GST-inclusive when gstIncluded=true)
-    const totalPaid = parseFloat(amount) || 0;
-    const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
-    const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
-
-    const { rows } = await dbClient.query(
-      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId", "isCapitalAsset")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset]
-    );
-    const expense = rows[0];
-
-    // Journal: DR Expenses (ex-GST), DR GST Paid, CR <paidVia account, defaults to Bank>
-    await ensureAccounts(userId);
-    const expId    = await accountByCode(userId, '5000');
-    const gstPaid  = await accountByCode(userId, '1200');
-    const bankId   = await accountByCode(userId, '1000');
-    const creditId = paidViaId || bankId;
-    if (expId && creditId) {
-      const lines = [
-        { accountId: expId,    debit: amt,      credit: 0 },
-        { accountId: creditId, debit: 0,        credit: totalPaid },
-      ];
-      if (gstAmt > 0 && gstPaid) lines.splice(1, 0, { accountId: gstPaid, debit: gstAmt, credit: 0 });
-      await createJournalEntry(dbClient, userId, {
-        date:        expense.date,
-        description: `Expense: ${description}`,
-        type:        'expense',
-        sourceId:    expense.id,
-        lines,
-      });
-    }
+    const { expense, amt } = await createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset });
 
     await dbClient.query('COMMIT');
 
@@ -4538,5 +4548,9 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Exposed for server/routes/expenseReview.js so bulk expense creation from the invoice
+// review queue reuses the exact same insert+journal path as manual expense entry.
+router.createExpenseRecord = createExpenseRecord;
 
 module.exports = router;
