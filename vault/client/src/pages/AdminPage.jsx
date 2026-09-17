@@ -589,6 +589,135 @@ function SessionMonitor() {
   );
 }
 
+// ── Sentry overview sub-component ─────────────────────────────────────────
+
+function levelColor(level) {
+  if (level === 'fatal' || level === 'error') return '#ef4444';
+  if (level === 'warning') return '#f59e0b';
+  return 'var(--color-muted)';
+}
+
+function SentryPanel() {
+  const getIcon = useIcon();
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await api.get('/api/admin/sentry-overview');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load Sentry data');
+      setData(json);
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const projectUrl = data?.projectUrl || 'https://curam-ai.sentry.io/';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Errors (Sentry)</h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>Unresolved issues and event volume from Sentry.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={projectUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}
+          >
+            {getIcon('external-link', { size: 12 })}
+            Open in Sentry
+          </a>
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}
+          >
+            {getIcon('refresh-cw', { size: 12 })}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {loading && !data ? (
+        <div className="rounded-2xl border p-8 text-center text-sm animate-pulse"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+          Loading…
+        </div>
+      ) : data?.enabled === false ? (
+        <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+          Set <code>SENTRY_AUTH_TOKEN</code> on Railway to pull issue data here. Until then, use{' '}
+          <a href={projectUrl} target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--color-primary)' }}>the Sentry dashboard</a> directly.
+        </div>
+      ) : error || data?.error ? (
+        <p className="text-sm" style={{ color: '#ef4444' }}>{error || data.error}</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border p-4 space-y-1" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Unresolved issues</div>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>
+                {data.unresolvedCount != null ? data.unresolvedCount : '10+'}
+              </div>
+            </div>
+            <div className="rounded-2xl border p-4 space-y-1" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Events, last 24h</div>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{(data.events24h || 0).toLocaleString()}</div>
+            </div>
+          </div>
+
+          {data.issues?.length > 0 ? (
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                    {['Issue', 'Level', 'Events', 'Users', 'Last seen'].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.issues.map((iss, i) => (
+                    <tr key={iss.id} style={{ borderBottom: i < data.issues.length - 1 ? '1px solid var(--color-border)' : undefined, background: 'var(--color-surface)' }}>
+                      <td className="px-3 py-2.5 max-w-[260px]">
+                        <a href={iss.permalink} target="_blank" rel="noreferrer" className="truncate block font-medium hover:opacity-70" style={{ color: 'var(--color-text)' }}>
+                          {iss.title}
+                        </a>
+                        {iss.culprit && <div className="truncate text-xs" style={{ color: 'var(--color-muted)' }}>{iss.culprit}</div>}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: levelColor(iss.level) }}>{iss.level || '—'}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{iss.count.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-muted)' }}>{iss.userCount.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{relativeTime(iss.lastSeen)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+              No unresolved issues. 🎉
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function AdminPage() {
   const navigate = useNavigate();
   const { token, user } = useAuthStore();
@@ -838,6 +967,9 @@ function AdminPage() {
 
       {/* ── Session Monitor ───────────────────────────────────────────────── */}
       <SessionMonitor />
+
+      {/* ── Sentry ─────────────────────────────────────────────────────────── */}
+      <SentryPanel />
 
       {/* ── Users ─────────────────────────────────────────────────────────── */}
       <UsersAdminPanel title="Users" />

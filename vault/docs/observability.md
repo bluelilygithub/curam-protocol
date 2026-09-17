@@ -56,10 +56,17 @@ Not rate-limited: recipes (grocery pricing is live-search only, no model call), 
 |---|---|---|
 | `SENTRY_DSN` | Sentry project DSN. Unset = Sentry fully disabled (no-op). | No |
 | `SENTRY_TRACES_SAMPLE_RATE` | Fraction of requests traced for performance monitoring (default `0.1`). Only relevant if `SENTRY_DSN` is set. | No |
+| `SENTRY_AUTH_TOKEN` | Sentry internal integration token (`Settings → Auth Tokens`, scope `project:read`) — read-only pull of issues/stats into the admin dashboard overview panel. Unset = panel shows a "set this to see data" message with a link to Sentry instead. | No |
+| `SENTRY_ORG` | Sentry org slug for the dashboard API calls. Default `curam-ai`. | No |
+| `SENTRY_PROJECT` | Sentry project slug for the dashboard API calls. Default `python-flask` (the project's Sentry slug, unrelated to the actual Node stack). | No |
 | `LOG_LEVEL` | pino log level (default `info`). | No |
 | `NODE_ENV` | Already used elsewhere in the app (CSP, static serving); also tags Sentry events with the environment. | No |
 
+### Admin dashboard overview
+
+`server/services/sentryStats.js` (`getOverview()`) + `GET /api/admin/sentry-overview` + `SentryPanel` in `client/src/pages/AdminPage.jsx`: pulls unresolved-issue count/list and 24h event volume straight from the Sentry REST API (`/api/0/projects/{org}/{project}/issues/` + `/stats/`), read-only, gated on `SENTRY_AUTH_TOKEN`. Always shows an "Open in Sentry" link to the project regardless of token state. Issue list is capped at 10 (page limit) — beyond that the count badge shows `10+` rather than a false exact number.
+
 ## What's not done yet
 
-- Error-rate / 429-count / slow-query-count are not yet surfaced in the existing admin dashboard (`server/routes/admin.js` monitor stats) — they only go to logs + Sentry today.
+- Error-rate / 429-count / slow-query-count from the app's own request logs are not yet surfaced in the admin dashboard (only Sentry's own issue/event data is, via the panel above) — cross-referencing app-side rate-limit/slow-query metrics with Sentry issues is still a log-only exercise.
 - No log aggregation/shipping configured beyond Railway's own stdout capture — `requestId` correlation works via `grep`/Railway's log search today, not a dedicated log platform.

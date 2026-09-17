@@ -424,6 +424,8 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |
 | `GSC_REDIRECT_URI` | Search Console OAuth callback (default `{APP_URL}/api/gsc/callback`) |
 | `SENTRY_DSN` | Error tracking — unset disables Sentry entirely (no-op). See **`docs/observability.md`** |
+| `SENTRY_AUTH_TOKEN` | Admin dashboard Sentry overview panel (read-only issues/stats pull). Unset = panel links out to Sentry instead of showing data. |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Org/project slugs for the Sentry API calls above. Default `curam-ai` / `python-flask`. |
 | `SENTRY_TRACES_SAMPLE_RATE` | Sentry performance trace sample rate (default `0.1`); only relevant if `SENTRY_DSN` is set |
 | `LOG_LEVEL` | pino log level (default `info`) |
 

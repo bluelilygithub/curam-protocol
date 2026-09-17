@@ -5,6 +5,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
+const sentryStats = require('../services/sentryStats');
 const SALT_ROUNDS = 12;
 
 async function getAdminCount(client = pool) {
@@ -136,6 +137,20 @@ router.get('/monitor', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/sentry-overview — unresolved issues + 24h event count, or
+// { enabled: false } until SENTRY_AUTH_TOKEN is set on Railway.
+router.get('/sentry-overview', async (_req, res) => {
+  if (!sentryStats.enabled()) {
+    return res.json({ enabled: false, projectUrl: `https://${sentryStats.SENTRY_ORG}.sentry.io/projects/${sentryStats.SENTRY_PROJECT}/` });
+  }
+  try {
+    const overview = await sentryStats.getOverview();
+    res.json({ enabled: true, ...overview });
+  } catch (err) {
+    res.status(502).json({ enabled: true, error: err.message });
   }
 });
 
