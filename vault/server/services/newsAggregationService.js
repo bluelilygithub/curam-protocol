@@ -52,6 +52,12 @@ const DEFAULT_SOURCE_GROUPS = {
     { name: 'The Verge AI', url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', enabled: true, isSystem: true },
     { name: 'IEEE Spectrum Robotics', url: 'https://spectrum.ieee.org/feeds/topic/robotics.rss', enabled: true, isSystem: true },
   ],
+  'Middle East / Defense': [
+    { name: 'BBC Middle East', url: 'http://feeds.bbci.co.uk/news/world/middle_east/rss.xml', enabled: true, isSystem: true },
+    { name: 'Guardian — Middle East', url: 'https://www.theguardian.com/world/middleeast/rss', enabled: true, isSystem: true },
+    { name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', enabled: true, isSystem: true },
+    { name: 'Times of Israel', url: 'https://www.timesofisrael.com/feed/', enabled: true, isSystem: true },
+  ],
 };
 
 // Flattens {groupName: [source,...]} into a single array, the shape fetchArticlesForTopic
