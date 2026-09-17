@@ -49,7 +49,11 @@ app.use(helmet({
       // which loads its WASM module via a data: URI fetch, not a blob: URL. Without it the
       // browser blocks the fetch and the PDF preflight silently fails (nothing gets uploaded).
       'connect-src':["'self'", 'blob:', 'data:'],
-      'frame-src':  ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+      // 'blob:' is required for Finance's receipt/invoice preview, which loads a downloaded
+      // file into an <iframe src="blob:..."> (see FinancePage.jsx openViewReceipt) — without
+      // it the browser blocks the frame with a CSP violation even though the blob was created
+      // client-side from the app's own authenticated fetch response.
+      'frame-src':  ["'self'", 'blob:', 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'child-src':  ["'self'", 'blob:', 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'worker-src': ["'self'", 'blob:'],
     },

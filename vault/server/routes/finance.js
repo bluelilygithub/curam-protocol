@@ -2392,6 +2392,30 @@ router.post('/vehicle-trip-log', async (req, res) => {
   }
 });
 
+// Edit an unposted trip — same restriction as delete (postedExpenseId IS NULL): once a trip's
+// km has been rolled into a posted deduction it's part of that journal entry's substantiation
+// record and must not silently change under it.
+router.put('/vehicle-trip-log/:id', async (req, res) => {
+  try {
+    const { tripDate, km, purpose, description } = req.body;
+    if (!tripDate) return res.status(400).json({ error: 'tripDate is required' });
+    const kmNum = parseFloat(km);
+    if (!Number.isFinite(kmNum) || kmNum < 0) {
+      return res.status(400).json({ error: 'km must be a number >= 0' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE fin_vehicle_trip_log SET "tripDate"=$1, km=$2, purpose=$3, description=$4
+       WHERE id=$5 AND "userId"=$6 AND "postedExpenseId" IS NULL
+       RETURNING id, "tripDate"::text AS "tripDate", km, purpose, description, "createdAt"`,
+      [tripDate, kmNum, purpose || null, description || null, req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found, or already posted (posted trips cannot be edited)' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/vehicle-trip-log/:id', async (req, res) => {
   try {
     await pool.query(

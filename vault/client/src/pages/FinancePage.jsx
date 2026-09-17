@@ -2511,10 +2511,50 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
   const [vTripForm, setVTripForm] = useState({ tripDate: todayStr(), km: '', purpose: VEHICLE_PURPOSES[0], description: '' });
   const [vTripLogging, setVTripLogging] = useState(false);
   const [vPending, setVPending] = useState({ km: 0, count: 0, oldestDate: null }); // unposted diary rows
+  const [vTrips, setVTrips] = useState([]); // last 60 days, from server — used to list/edit/delete unposted rows
+  const [editingTripId, setEditingTripId] = useState(null);
+  const [editTripForm, setEditTripForm] = useState(null);
+  const [deleteTripConfirmId, setDeleteTripConfirmId] = useState(null);
 
   const loadVPending = () => {
     api.get('/api/finance/vehicle-trip-log/pending').then(r => r.json())
       .then(d => setVPending({ km: d.km || 0, count: d.count || 0, oldestDate: d.oldestDate || null })).catch(() => {});
+  };
+
+  const loadVTrips = () => {
+    api.get('/api/finance/vehicle-trip-log').then(r => r.json()).then(d => setVTrips(Array.isArray(d) ? d : [])).catch(() => {});
+  };
+
+  const startEditTrip = (t) => {
+    setEditingTripId(t.id);
+    setEditTripForm({ tripDate: t.tripDate, km: t.km, purpose: t.purpose || VEHICLE_PURPOSES[0], description: t.description || '' });
+  };
+
+  const cancelEditTrip = () => { setEditingTripId(null); setEditTripForm(null); };
+
+  const saveEditTrip = async (id) => {
+    const kmNum = parseFloat(editTripForm.km);
+    if (!Number.isFinite(kmNum) || kmNum <= 0) { addToast('Enter km greater than zero', 'error'); return; }
+    try {
+      const description = editTripForm.purpose === 'Other (describe)' ? editTripForm.description : editTripForm.purpose;
+      const res = await api.put(`/api/finance/vehicle-trip-log/${id}`, { ...editTripForm, km: kmNum, description });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to update trip');
+      addToast('Trip updated');
+      cancelEditTrip();
+      loadVTrips();
+      loadVPending();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const deleteTrip = async (id) => {
+    try {
+      await api.delete(`/api/finance/vehicle-trip-log/${id}`);
+      addToast('Trip deleted');
+      setDeleteTripConfirmId(null);
+      loadVTrips();
+      loadVPending();
+    } catch (e) { addToast(e.message, 'error'); }
   };
 
   const logTrip = async () => {
@@ -2531,6 +2571,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       addToast('Trip logged — not an expense yet. Use "Post Deduction" below when ready.');
       setVTripForm({ tripDate: todayStr(), km: '', purpose: VEHICLE_PURPOSES[0], description: '' });
       loadVPending();
+      loadVTrips();
     } catch (e) { addToast(e.message, 'error'); } finally { setVTripLogging(false); }
   };
 
@@ -2609,6 +2650,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
     loadHDailyLog();
     loadHPending();
     loadVPending();
+    loadVTrips();
     loadTodaySummary();
   }, []);
 
@@ -2684,6 +2726,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       addToast(`Vehicle expense saved — ${fmt(vehicleDeductible)} deductible`);
       setVForm({ date: todayStr(), purpose: VEHICLE_PURPOSES[0], description: '', km: '', businessUsePercent: '', actualCost: '' });
       loadVPending();
+      loadVTrips();
       loadTodaySummary();
     } catch (e) { setVError(e.message); } finally { setVSaving(false); }
   };
@@ -2764,6 +2807,52 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
                 )}
               </div>
               <Btn onClick={logTrip} disabled={vTripLogging}>{vTripLogging ? 'Logging…' : 'Log Trip'}</Btn>
+
+              {vTrips.filter(t => !t.postedExpenseId).length > 0 && (
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--color-muted)' }}>Unposted trips — edit or delete before posting</p>
+                  <div className="flex flex-col gap-1.5">
+                    {vTrips.filter(t => !t.postedExpenseId).map(t => (
+                      <div key={t.id} className="text-xs p-2 rounded-md" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                        {editingTripId === t.id ? (
+                          <div className="flex flex-col gap-1.5">
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <Input type="date" value={editTripForm.tripDate} onChange={v => setEditTripForm(p => ({...p, tripDate: v}))} />
+                              <Input type="number" value={editTripForm.km} onChange={v => setEditTripForm(p => ({...p, km: v}))} placeholder="Km" />
+                              <Select value={editTripForm.purpose} onChange={v => setEditTripForm(p => ({...p, purpose: v}))}>
+                                {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                              </Select>
+                              {editTripForm.purpose === 'Other (describe)' && (
+                                <Input value={editTripForm.description} onChange={v => setEditTripForm(p => ({...p, description: v}))} placeholder="Describe" />
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => saveEditTrip(t.id)} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Save</button>
+                              <button onClick={cancelEditTrip} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : deleteTripConfirmId === t.id ? (
+                          <div className="flex items-center justify-between">
+                            <span style={{ color: 'var(--color-text)' }}>Delete this trip?</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => deleteTrip(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Yes</button>
+                              <button onClick={() => setDeleteTripConfirmId(null)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>No</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span style={{ color: 'var(--color-text)' }}>{formatFriendlyDate(t.tripDate)} — {t.km} km — {t.purpose || 'No purpose'}</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => startEditTrip(t)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Edit</button>
+                              <button onClick={() => setDeleteTripConfirmId(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Delete</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
