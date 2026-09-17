@@ -1380,6 +1380,7 @@ const assetMethodOptions = (amountNum) => amountNum < LOW_VALUE_POOL_MAX ? ASSET
 const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false, businessUsePercent: '100', assetMethod: '', effectiveLifeYears: '' };
 
 function ExpensesTab({ from, to }) {
+  const getIcon = useIcon();
   const [expenses, setExpenses]     = useState([]);
   const [expenseCodes, setExpenseCodes] = useState([]);
   const [paymentAccounts, setPaymentAccounts] = useState([]);
@@ -1833,9 +1834,9 @@ function ExpensesTab({ from, to }) {
                     <Tooltip text={e.receipt_path ? 'View the attached receipt.' : 'Attach a receipt image or PDF to this expense.'}>
                       <button
                         onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}
-                        className="text-sm hover:opacity-60 transition-opacity"
+                        className="hover:opacity-60 transition-opacity"
                         style={{ color: e.receipt_path ? '#f59e0b' : 'var(--color-muted)' }}
-                      >📎</button>
+                      >{getIcon(e.receipt_path ? 'eye' : 'upload', { size: 15 })}</button>
                     </Tooltip>
                   </td>
                   <td className="py-2 px-2">
