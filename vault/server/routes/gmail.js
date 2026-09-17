@@ -843,7 +843,7 @@ async function extractInvoiceFromPdf(userId, pdfBase64, logPrefix) {
         role: 'user',
         content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: standardBase64 } },
-          { type: 'text', text: 'Extract from this invoice: 1) a short description of the goods/services (max 80 chars), 2) total amount payable as a number (no currency symbol), 3) supplier/vendor name, 4) invoice date in YYYY-MM-DD format if shown, 5) a short expense category (e.g. Software, Utilities, Office Supplies, Travel, Professional Services), 6) whether the total amount includes Australian GST (10%) — true only if the invoice shows a GST/tax line, says "GST included", or is from an Australian GST-registered supplier (ABN shown); false for overseas suppliers with no GST/tax line (e.g. most US SaaS invoices) or if genuinely unclear. Return only JSON: {"description":"...","amount":0.00,"supplier":"","invoiceDate":"YYYY-MM-DD or null","category":"...","gstIncluded":false}' },
+          { type: 'text', text: 'Extract from this invoice: 1) a short description of the goods/services (max 80 chars), 2) total amount payable as a number (no currency symbol), 3) the 3-letter currency code the total is actually denominated in (AUD, USD, NZD, etc — read the currency symbol/code shown on the invoice itself, do not assume AUD), 4) supplier/vendor name, 5) invoice date in YYYY-MM-DD format if shown, 6) a short expense category (e.g. Software, Utilities, Office Supplies, Travel, Professional Services), 7) whether the total amount includes Australian GST (10%) — true only if the invoice shows a GST/tax line, says "GST included", or is from an Australian GST-registered supplier (ABN shown); false for overseas suppliers with no GST/tax line (e.g. most US SaaS invoices) or if genuinely unclear. Return only JSON: {"description":"...","amount":0.00,"currency":"AUD","supplier":"","invoiceDate":"YYYY-MM-DD or null","category":"...","gstIncluded":false}' },
         ],
       }],
     });
@@ -870,6 +870,7 @@ async function extractInvoiceFromPdf(userId, pdfBase64, logPrefix) {
       extracted: true,
       description: data.description || '',
       amount: data.amount || '',
+      currency: (data.currency || 'AUD').toUpperCase().slice(0, 3),
       supplier: data.supplier || '',
       invoiceDate: data.invoiceDate || null,
       category: data.category || null,

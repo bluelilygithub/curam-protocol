@@ -56,7 +56,18 @@ export default function ExpenseReviewPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(new Set());
-  const [edits, setEdits] = useState({}); // id -> { vendor, amount, invoiceDate, category }
+  const [edits, setEdits] = useState({}); // id -> { vendor, amount, invoiceDate, category, gstIncluded, paidViaId, txCodeId }
+  const [paymentAccounts, setPaymentAccounts] = useState([]); // same accounts list Finance's own expense form uses
+  const [expenseCodes, setExpenseCodes] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/finance/accounts').then(r => r.json())
+      .then(d => setPaymentAccounts(Array.isArray(d) ? d.filter(a => a.type === 'asset' || a.type === 'liability') : []))
+      .catch(() => {}); // Finance flag may be off for this user — picker just won't show options
+    api.get('/api/finance/tx-codes?type=expense').then(r => r.json())
+      .then(d => setExpenseCodes(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async (status) => {
     setLoading(true);
@@ -208,6 +219,8 @@ export default function ExpenseReviewPage() {
               <th className="text-left py-2 px-2">Invoice date</th>
               <th className="text-left py-2 px-2">Category</th>
               <th className="text-left py-2 px-2">GST</th>
+              <th className="text-left py-2 px-2">Paid via</th>
+              <th className="text-left py-2 px-2">Code</th>
               <th className="text-left py-2 px-2">Source</th>
               <th className="text-left py-2 px-2">Status</th>
               <th className="text-left py-2 px-2"></th>
@@ -215,10 +228,10 @@ export default function ExpenseReviewPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={9} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</td></tr>
+              <tr><td colSpan={11} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={9} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No {tab} invoices.</td></tr>
+              <tr><td colSpan={11} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No {tab} invoices.</td></tr>
             )}
             {rows.map((row) => (
               <tr key={row.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -228,8 +241,13 @@ export default function ExpenseReviewPage() {
                 <td className="py-2 px-2 w-40">
                   <EditableCell value={getVal(row, 'vendor')} onChange={(v) => editField(row.id, 'vendor', v)} />
                 </td>
-                <td className="py-2 px-2 w-24">
+                <td className="py-2 px-2 w-28">
                   <EditableCell type="number" value={getVal(row, 'amount')} onChange={(v) => editField(row.id, 'amount', v)} />
+                  {row.rawExtraction?.currency && row.rawExtraction.currency !== 'AUD' && (
+                    <div className="text-xs mt-0.5 px-1.5 py-0.5 rounded" style={{ color: '#92400e', background: '#fef3c7' }} title="The invoice itself is in this currency — the true AUD amount is whatever your card statement shows (FX rate + fees aren't on the invoice). Enter that here.">
+                      Invoice: {row.rawExtraction.currency} {row.rawExtraction.amount != null ? Number(row.rawExtraction.amount).toFixed(2) : '?'} — enter actual AUD
+                    </div>
+                  )}
                 </td>
                 <td className="py-2 px-2 w-32">
                   <EditableCell type="date" value={getVal(row, 'invoiceDate') ? String(getVal(row, 'invoiceDate')).slice(0, 10) : ''} onChange={(v) => editField(row.id, 'invoiceDate', v)} />
@@ -244,6 +262,28 @@ export default function ExpenseReviewPage() {
                     onChange={(e) => editField(row.id, 'gstIncluded', e.target.checked)}
                     title="Amount includes 10% GST"
                   />
+                </td>
+                <td className="py-2 px-2 w-36">
+                  <select
+                    value={edits[row.id]?.paidViaId ?? row.paidViaId ?? ''}
+                    onChange={(e) => editField(row.id, 'paidViaId', e.target.value ? parseInt(e.target.value) : null)}
+                    className="text-xs px-1.5 py-1 rounded w-full"
+                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">Bank / Cash (default)</option>
+                    {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                  </select>
+                </td>
+                <td className="py-2 px-2 w-36">
+                  <select
+                    value={edits[row.id]?.txCodeId ?? row.txCodeId ?? ''}
+                    onChange={(e) => editField(row.id, 'txCodeId', e.target.value ? parseInt(e.target.value) : null)}
+                    className="text-xs px-1.5 py-1 rounded w-full"
+                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">— select —</option>
+                    {expenseCodes.map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+                  </select>
                 </td>
                 <td className="py-2 px-2">
                   <button onClick={() => openAttachment(row.id)} className="hover:opacity-70 transition-colors inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>

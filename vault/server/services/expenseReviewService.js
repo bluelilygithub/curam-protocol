@@ -111,7 +111,12 @@ async function extractAndQueue(userId, email) {
       [
         userId, email.id, email.threadId,
         extraction.supplier || null,
-        extraction.amount ? parseFloat(extraction.amount) : null,
+        // Foreign-currency invoices (USD, etc.) are NOT pre-filled into amount — the real AUD
+        // figure only exists on the actual credit-card statement (FX rate + fees the invoice
+        // itself doesn't show), so a raw USD number here would be silently wrong if approved
+        // as-is. Left null to force a manual entry in the review UI; the extracted foreign
+        // amount/currency is still visible via rawExtraction for reference.
+        (extraction.currency === 'AUD' && extraction.amount) ? parseFloat(extraction.amount) : null,
         extraction.invoiceDate || null,
         extraction.category || null,
         s3Url,

@@ -77,6 +77,8 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   const amount      = overrides.amount ?? queueRow.amount;
   const invoiceDate = overrides.invoiceDate ?? queueRow.invoiceDate;
   const category    = overrides.category ?? queueRow.category;
+  const paidViaId   = overrides.paidViaId ?? queueRow.paidViaId ?? null;
+  const txCodeId    = overrides.txCodeId ?? queueRow.txCodeId ?? null;
   // The extraction prompt (server/routes/gmail.js extractInvoiceFromPdf) now asks the model
   // whether the invoice total includes GST — stored on rawExtraction since expense_review_queue
   // has no dedicated column for it. Explicit user override (from the review UI) wins; otherwise
@@ -84,13 +86,27 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   // (older rows queued before this field existed).
   const gstIncluded = overrides.gstIncluded ?? queueRow.rawExtraction?.gstIncluded ?? false;
 
+  // Foreign-currency invoices are queued with amount=NULL on purpose (see
+  // expenseReviewService.extractAndQueue) — the real AUD figure only exists on the actual
+  // card statement, not the invoice. Refuse to silently post a $0 expense; require the
+  // reviewer to have entered it.
+  if (!amount || parseFloat(amount) <= 0) {
+    const currency = queueRow.rawExtraction?.currency;
+    const hint = currency && currency !== 'AUD'
+      ? ` This invoice is in ${currency} — enter the actual AUD amount charged on your card.`
+      : '';
+    throw new Error(`Amount is required before creating this expense.${hint}`);
+  }
+
   const { expense } = await financeRouter.createExpenseRecord(dbClient, userId, {
     date: invoiceDate,
     description: vendor ? `Invoice: ${vendor}` : `Invoice review #${queueRow.id}`,
-    amount: amount || 0,
+    amount,
     gstIncluded,
     category,
     supplier: vendor,
+    paidViaId,
+    txCodeId,
   });
 
   const receiptFilename = linkQueuePdfAsReceipt(queueRow);
@@ -108,7 +124,7 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   return expense;
 }
 
-// POST /api/expense-review/bulk-create-expenses  { items: [{ id, vendor?, amount?, invoiceDate?, category?, gstIncluded? }] }
+// POST /api/expense-review/bulk-create-expenses  { items: [{ id, vendor?, amount?, invoiceDate?, category?, gstIncluded?, paidViaId?, txCodeId? }] }
 router.post('/bulk-create-expenses', async (req, res) => {
   const userId = req.user.id;
   const items = Array.isArray(req.body.items) ? req.body.items : [];
