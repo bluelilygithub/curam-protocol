@@ -77,12 +77,18 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   const amount      = overrides.amount ?? queueRow.amount;
   const invoiceDate = overrides.invoiceDate ?? queueRow.invoiceDate;
   const category    = overrides.category ?? queueRow.category;
+  // The extraction prompt (server/routes/gmail.js extractInvoiceFromPdf) now asks the model
+  // whether the invoice total includes GST — stored on rawExtraction since expense_review_queue
+  // has no dedicated column for it. Explicit user override (from the review UI) wins; otherwise
+  // fall back to the model's per-invoice judgement; default false only if genuinely absent
+  // (older rows queued before this field existed).
+  const gstIncluded = overrides.gstIncluded ?? queueRow.rawExtraction?.gstIncluded ?? false;
 
   const { expense } = await financeRouter.createExpenseRecord(dbClient, userId, {
     date: invoiceDate,
     description: vendor ? `Invoice: ${vendor}` : `Invoice review #${queueRow.id}`,
     amount: amount || 0,
-    gstIncluded: false, // extracted "amount" is the total payable; no reliable GST split from a parsed PDF
+    gstIncluded,
     category,
     supplier: vendor,
   });
@@ -102,7 +108,7 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   return expense;
 }
 
-// POST /api/expense-review/bulk-create-expenses  { items: [{ id, vendor?, amount?, invoiceDate?, category? }] }
+// POST /api/expense-review/bulk-create-expenses  { items: [{ id, vendor?, amount?, invoiceDate?, category?, gstIncluded? }] }
 router.post('/bulk-create-expenses', async (req, res) => {
   const userId = req.user.id;
   const items = Array.isArray(req.body.items) ? req.body.items : [];

@@ -81,6 +81,11 @@ export default function ExpenseReviewPage() {
 
   const getVal = (row, field) => edits[row.id]?.[field] ?? row[field] ?? '';
 
+  // No dedicated column for this — it comes from the extraction's own judgement
+  // (rawExtraction.gstIncluded, set by the model reading the invoice), editable here before
+  // Create Expense since the model can get it wrong (e.g. a supplier that omits a clear GST line).
+  const getGst = (row) => edits[row.id]?.gstIncluded ?? row.rawExtraction?.gstIncluded ?? false;
+
   const toggleSelect = (id) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -202,6 +207,7 @@ export default function ExpenseReviewPage() {
               <th className="text-left py-2 px-2">Amount</th>
               <th className="text-left py-2 px-2">Invoice date</th>
               <th className="text-left py-2 px-2">Category</th>
+              <th className="text-left py-2 px-2">GST</th>
               <th className="text-left py-2 px-2">Source</th>
               <th className="text-left py-2 px-2">Status</th>
               <th className="text-left py-2 px-2"></th>
@@ -209,10 +215,10 @@ export default function ExpenseReviewPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</td></tr>
+              <tr><td colSpan={9} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={8} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No {tab} invoices.</td></tr>
+              <tr><td colSpan={9} className="py-4 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No {tab} invoices.</td></tr>
             )}
             {rows.map((row) => (
               <tr key={row.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -230,6 +236,14 @@ export default function ExpenseReviewPage() {
                 </td>
                 <td className="py-2 px-2 w-32">
                   <EditableCell value={getVal(row, 'category')} onChange={(v) => editField(row.id, 'category', v)} />
+                </td>
+                <td className="py-2 px-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={getGst(row)}
+                    onChange={(e) => editField(row.id, 'gstIncluded', e.target.checked)}
+                    title="Amount includes 10% GST"
+                  />
                 </td>
                 <td className="py-2 px-2">
                   <button onClick={() => openAttachment(row.id)} className="hover:opacity-70 transition-colors inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>

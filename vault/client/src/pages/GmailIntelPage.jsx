@@ -278,6 +278,7 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
             description: data.description || f.description,
             supplier: data.supplier || f.supplier,
             amount: data.amount != null ? String(data.amount) : f.amount,
+            gstIncluded: typeof data.gstIncluded === 'boolean' ? data.gstIncluded : f.gstIncluded,
           }));
         } else {
           console.warn('[extract-invoice] not extracted:', data.reason || data.error || 'unknown');
