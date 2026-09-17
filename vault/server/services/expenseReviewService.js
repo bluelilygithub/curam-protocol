@@ -12,7 +12,7 @@ const path = require('path');
 const { pool } = require('../db');
 const {
   getAuthClient,
-  fetchInboxEmails,
+  fetchAllInboxEmailsSince,
   classifyEmailBatch,
   findFirstPdfAttachment,
   extractInvoiceFromPdf,
@@ -45,13 +45,14 @@ function saveInvoicePdf(pdfBase64, { vendor, gmailMessageId, date }) {
   return path.relative(UPLOAD_DIR, fullPath).split(path.sep).join('/');
 }
 
-// Fetch inbox emails and run them through Inbox Intel's is_expense classifier, without
-// touching anything that isn't already flagged. Optionally restrict to emails newer than
-// `sinceMs` (epoch ms) for incremental cron polls.
-async function findInvoiceCandidates(userId, { maxResults = 200, sinceMs = null } = {}) {
+// Paginated sweep of inbox emails since `afterDate` ('YYYY-MM-DD', required), run through
+// Inbox Intel's is_expense classifier, without touching anything that isn't already flagged.
+// Uses fetchAllInboxEmailsSince (real Gmail pageToken pagination + server-side `after:` date
+// filter) rather than a single-page fetch-then-filter — a single page silently misses history
+// once the inbox has more threads than one page covers.
+async function findInvoiceCandidates(userId, { afterDate }) {
   const logPrefix = `[expense-review] user=${userId}`;
-  let emails = await fetchInboxEmails(userId, maxResults);
-  if (sinceMs) emails = emails.filter(e => e.internalDate > sinceMs);
+  const emails = await fetchAllInboxEmailsSince(userId, afterDate);
   if (!emails.length) return [];
 
   const threadIds = emails.map(e => e.threadId);
@@ -125,12 +126,12 @@ async function extractAndQueue(userId, email) {
   }
 }
 
-// Orchestrates candidates -> extractAndQueue for one user. `sinceMs` null means "no lower
-// bound" (used for the 6-month backfill window, applied by the caller via maxResults/date
-// filtering — see findInvoiceCandidates). Returns a summary used by both the backfill script
-// (for its printed report) and the cron job (for logging).
-async function runPoll(userId, { maxResults = 200, sinceMs = null, dryRun = false } = {}) {
-  const candidates = await findInvoiceCandidates(userId, { maxResults, sinceMs });
+// Orchestrates candidates -> extractAndQueue for one user. `afterDate` ('YYYY-MM-DD') is
+// required — both the backfill script and the cron's first-run lookback compute it explicitly
+// rather than relying on any implicit default here. Returns a summary used by both the
+// backfill script (for its printed report) and the cron job (for logging).
+async function runPoll(userId, { afterDate, dryRun = false }) {
+  const candidates = await findInvoiceCandidates(userId, { afterDate });
   let inserted = 0;
   let skippedDuplicate = 0;
   let skippedOther = 0;

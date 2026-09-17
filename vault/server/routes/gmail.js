@@ -558,7 +558,16 @@ function formatEmailAge(ms) {
   return `${Math.floor(hours / 24)}d`;
 }
 
-async function fetchInboxEmails(userId, maxResults = 100) {
+// `optsOrMaxResults` accepts either a bare number (legacy call shape — Inbox Intel's UI
+// routes always want page 1, no paging) or { maxResults, q, pageToken }. Returns
+// { emails, nextPageToken } — existing callers destructure only what they need (a positional
+// maxResults call effectively behaved like reading the array before; they now read `.emails`,
+// see call sites below). `q` is a raw Gmail search query (e.g. 'after:2026/07/01') layered on
+// top of the INBOX label filter, used by fetchAllInboxEmailsSince for real pagination.
+async function fetchInboxEmails(userId, optsOrMaxResults = 100) {
+  const opts = typeof optsOrMaxResults === 'number' ? { maxResults: optsOrMaxResults } : (optsOrMaxResults || {});
+  const { maxResults = 100, q, pageToken } = opts;
+
   const oauth2Client = await getAuthClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -567,16 +576,19 @@ async function fetchInboxEmails(userId, maxResults = 100) {
     userId: 'me',
     maxResults,
     labelIds: ['INBOX'],
+    ...(q ? { q } : {}),
+    ...(pageToken ? { pageToken } : {}),
   });
   const threadList = listRes.data.threads || [];
-  if (!threadList.length) return [];
+  const nextPageToken = listRes.data.nextPageToken || null;
+  if (!threadList.length) return { emails: [], nextPageToken: null };
 
   const { token: accessToken } = await oauth2Client.getAccessToken();
   // Batch fetch full thread metadata — gives reply count + attachment heuristic in 1 HTTP call
   const threads = await batchFetchThreads(accessToken, threadList.map(t => t.id));
 
   const now = Date.now();
-  return threads
+  const emails = threads
     .filter(t => t?.id && t?.messages?.length)
     .map(thread => {
       const messages = thread.messages;
@@ -600,6 +612,30 @@ async function fetchInboxEmails(userId, maxResults = 100) {
         age: formatEmailAge(now - internalDate),
       };
     });
+  return { emails, nextPageToken };
+}
+
+// Real paginated sweep of INBOX threads since a given date, for the invoice review
+// backfill/cron (server/services/expenseReviewService.js) — a single fetchInboxEmails call
+// only returns one page, which silently misses history once the inbox has more threads than
+// one page covers. Loops on nextPageToken via Gmail's own `after:YYYY/MM/DD` search query
+// (date-granularity, not time-of-day) until exhausted or `maxPages` hit (safety cap against
+// an unbounded loop on a very large or misconfigured window).
+async function fetchAllInboxEmailsSince(userId, afterDateStr, { maxPages = 20 } = {}) {
+  const q = `after:${afterDateStr.replace(/-/g, '/')}`;
+  const logPrefix = `[gmail/fetch-since] user=${userId} since=${afterDateStr}`;
+  let all = [];
+  let pageToken = undefined;
+  let page = 0;
+  do {
+    const { emails, nextPageToken } = await fetchInboxEmails(userId, { maxResults: 100, q, pageToken });
+    all = all.concat(emails);
+    pageToken = nextPageToken;
+    page++;
+    console.log(`${logPrefix} page=${page} fetched=${emails.length} total=${all.length} nextPage=${!!pageToken}`);
+  } while (pageToken && page < maxPages);
+  if (pageToken) console.warn(`${logPrefix} hit maxPages=${maxPages} with more mail remaining (nextPageToken still set) — increase maxPages if this backfill needs to go further back`);
+  return all;
 }
 
 // Classify a batch of emails (category + is_expense) via the same prompt/model call used by
@@ -704,7 +740,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
 
   let emails;
   try {
-    emails = await fetchInboxEmails(userId, maxResults);
+    ({ emails } = await fetchInboxEmails(userId, maxResults));
   } catch (err) {
     console.error('[gmail/inbox/classify] fetch error:', err.message);
     if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
@@ -935,7 +971,7 @@ router.post('/threads/:threadId/unacknowledge', async (req, res) => {
 // GET /api/gmail/inbox — raw fetch of last 50 inbox emails (no AI)
 router.get('/inbox', async (req, res) => {
   try {
-    const emails = await fetchInboxEmails(req.user.id);
+    const { emails } = await fetchInboxEmails(req.user.id);
     res.json(emails);
   } catch (err) {
     console.error('[gmail/inbox] error:', err.message);
@@ -1027,6 +1063,7 @@ module.exports.getHeader                = getHeader;
 // Inbox Intel's own classifier, attachment lookup, and PDF extraction instead of reimplementing them.
 module.exports.getAuthClient            = getAuthClient;
 module.exports.fetchInboxEmails         = fetchInboxEmails;
+module.exports.fetchAllInboxEmailsSince = fetchAllInboxEmailsSince;
 module.exports.classifyEmailBatch       = classifyEmailBatch;
 module.exports.findFirstPdfAttachment   = findFirstPdfAttachment;
 module.exports.extractInvoiceFromPdf    = extractInvoiceFromPdf;

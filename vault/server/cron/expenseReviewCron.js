@@ -13,7 +13,6 @@ const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 
 const LAST_POLLED_KEY = 'expense_review_last_polled_at';
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6;
-const GMAIL_INBOX_MAX = 200; // matches gmail.js's own cap for /inbox/classify
 
 let cronTask = null;
 
@@ -55,13 +54,16 @@ async function setLastPolledAt(userId, when) {
 // non-dry-run mode (it uses runPoll directly for dry-run reporting).
 async function pollUser(userId) {
   const last = await getLastPolledAt(userId);
-  const sinceMs = last ? last.getTime() : Date.now() - SIX_MONTHS_MS;
+  // Gmail's `after:` query is date-granularity, not time-of-day — re-scanning part of
+  // `last`'s own day on an hourly poll is harmless since expense_review_queue dedupes on
+  // (userId, gmailMessageId).
+  const afterDate = (last ? last : new Date(Date.now() - SIX_MONTHS_MS)).toISOString().slice(0, 10);
   const startedAt = new Date();
 
-  const summary = await runPoll(userId, { maxResults: GMAIL_INBOX_MAX, sinceMs });
+  const summary = await runPoll(userId, { afterDate });
   await setLastPolledAt(userId, startedAt);
 
-  console.log(`[expense-review-cron] user=${userId} matched=${summary.matched} inserted=${summary.inserted} dup=${summary.skippedDuplicate} other=${summary.skippedOther} since=${last ? last.toISOString() : '6-month-backfill'}`);
+  console.log(`[expense-review-cron] user=${userId} matched=${summary.matched} inserted=${summary.inserted} dup=${summary.skippedDuplicate} other=${summary.skippedOther} since=${last ? afterDate : '6-month-backfill:' + afterDate}`);
 
   await captureIf(summary.matched > 0 && summary.inserted === 0 && summary.skippedOther > 0, {
     userId,
