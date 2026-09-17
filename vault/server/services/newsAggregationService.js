@@ -3,16 +3,63 @@
 const Parser = require('rss-parser');
 const parser = new Parser({ timeout: 10000 });
 
-// Default RSS feeds — each returns recent articles regardless of topic;
-// we filter by keyword relevance after fetching.
+// Default RSS feeds, grouped for the Settings UI (server/routes/newsDigest.js,
+// client/src/pages/SettingsPage.jsx) — grouping is purely organizational (lets the user
+// toggle "Sports" off as a block, say) and does NOT map topics to groups; every enabled
+// source across every group is still checked against every topic's keywords, same as before.
 // The special url '__google_news__' triggers keyword-based Google News search.
-const DEFAULT_SOURCES = [
-  { name: 'ABC News',           url: 'https://www.abc.net.au/news/feed/51120/rss.xml',    enabled: true },
-  { name: 'Guardian Australia', url: 'https://www.theguardian.com/australia-news/rss',    enabled: true },
-  { name: 'Reuters',            url: 'https://feeds.reuters.com/reuters/topNews',          enabled: true },
-  { name: 'Sky News',           url: 'https://feeds.skynews.com/feeds/rss/world.xml',     enabled: true },
-  { name: 'Google News',        url: '__google_news__',                                    enabled: true },
-];
+// `isSystem: true` marks a built-in default (mirrors fin_accounts."isSystem") so the UI can
+// tell those apart from user-added custom feeds without a hardcoded name list.
+const DEFAULT_SOURCE_GROUPS = {
+  'General': [
+    { name: 'Google News', url: '__google_news__', enabled: true, isSystem: true },
+    { name: 'ABC News', url: 'https://www.abc.net.au/news/feed/51120/rss.xml', enabled: true, isSystem: true },
+  ],
+  'Australia': [
+    { name: 'Guardian Australia', url: 'https://www.theguardian.com/australia-news/rss', enabled: true, isSystem: true },
+    { name: 'SBS News — Australia', url: 'https://www.sbs.com.au/news/topic/australia/feed', enabled: true, isSystem: true },
+    { name: 'Guardian Australia — Politics', url: 'https://www.theguardian.com/australia-news/australian-politics/rss', enabled: true, isSystem: true },
+  ],
+  'Ireland': [
+    { name: 'RTÉ News', url: 'https://www.rte.ie/feeds/rss/?index=/news', enabled: true, isSystem: true },
+    { name: 'Guardian — Ireland', url: 'https://www.theguardian.com/world/ireland/rss', enabled: true, isSystem: true },
+  ],
+  'Current Affairs / World': [
+    { name: 'BBC World News', url: 'http://feeds.bbci.co.uk/news/world/rss.xml', enabled: true, isSystem: true },
+    { name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', enabled: true, isSystem: true },
+    { name: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml', enabled: true, isSystem: true },
+  ],
+  'Politics': [
+    { name: 'BBC Politics', url: 'http://feeds.bbci.co.uk/news/politics/rss.xml', enabled: true, isSystem: true },
+    { name: 'Guardian Politics', url: 'https://www.theguardian.com/politics/rss', enabled: true, isSystem: true },
+  ],
+  'Shares / Finance': [
+    { name: 'MarketWatch Top Stories', url: 'http://feeds.marketwatch.com/marketwatch/topstories/', enabled: true, isSystem: true },
+    { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/news/rssindex', enabled: true, isSystem: true },
+    { name: 'CNBC Markets', url: 'https://www.cnbc.com/id/20910258/device/rss/rss.html', enabled: true, isSystem: true },
+    { name: 'Sky News Business', url: 'https://feeds.skynews.com/feeds/rss/business.xml', enabled: true, isSystem: true },
+  ],
+  'Sports (general)': [
+    { name: 'BBC Sport', url: 'http://feeds.bbci.co.uk/sport/rss.xml', enabled: true, isSystem: true },
+    { name: 'ESPN Top Headlines', url: 'https://www.espn.com/espn/rss/news', enabled: true, isSystem: true },
+  ],
+  'Soccer': [
+    { name: 'BBC Football', url: 'http://feeds.bbci.co.uk/sport/football/rss.xml', enabled: true, isSystem: true },
+    { name: 'Guardian Football', url: 'https://www.theguardian.com/football/rss', enabled: true, isSystem: true },
+  ],
+  'AI (LLM & Robotics)': [
+    { name: 'TechCrunch AI', url: 'https://techcrunch.com/category/artificial-intelligence/feed/', enabled: true, isSystem: true },
+    { name: 'The Verge AI', url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', enabled: true, isSystem: true },
+    { name: 'IEEE Spectrum Robotics', url: 'https://spectrum.ieee.org/feeds/topic/robotics.rss', enabled: true, isSystem: true },
+  ],
+};
+
+// Flattens {groupName: [source,...]} into a single array, the shape fetchArticlesForTopic
+// actually consumes — grouping only exists for the Settings UI/storage layer.
+function flattenSourceGroups(groups) {
+  if (!groups || typeof groups !== 'object') return [];
+  return Object.values(groups).flat().filter(Boolean);
+}
 
 /**
  * Fetch and parse a single RSS feed, returning normalised article objects.
@@ -32,6 +79,27 @@ async function fetchFeed(feed) {
     console.warn(`[news] Failed to fetch ${feed.name}: ${err.message}`);
     return [];
   }
+}
+
+/**
+ * One-shot liveness check for a flat source list — HTTP fetch + parse, and "live" requires at
+ * least one <item> back, not just a 200. Used once per cron run (not per-topic, sources don't
+ * vary by topic) so a dead feed gets flagged as a suggestion-inbox alert instead of silently
+ * looking like "no news today" for every topic that happens to rely on it (see
+ * server/cron/newsDigestCron.js runDailyDigest). Google News is skipped — it's a keyword search,
+ * not a fixed feed, so "no results for this exact probe query" isn't a meaningful health signal.
+ */
+async function checkSourceHealth(sources) {
+  const feeds = (sources || []).filter(s => s.url !== '__google_news__' && s.enabled !== false);
+  return Promise.all(feeds.map(async (feed) => {
+    try {
+      const result = await parser.parseURL(feed.url);
+      const itemCount = (result.items || []).length;
+      return { name: feed.name, url: feed.url, ok: itemCount > 0, itemCount, error: itemCount > 0 ? null : 'Feed parsed but returned zero items' };
+    } catch (err) {
+      return { name: feed.name, url: feed.url, ok: false, itemCount: 0, error: err.message };
+    }
+  }));
 }
 
 /**
@@ -92,11 +160,12 @@ function isRecent(article, maxAgeHours = 48) {
  * @param {string} topicTitle   - e.g. "Climate policy Australia"
  * @param {string} keywords     - optional extra keywords
  * @param {number} maxArticles  - max results to return
- * @param {Array}  activeSources - override source list (uses DEFAULT_SOURCES if omitted)
+ * @param {Array}  activeSources - flat source list (use flattenSourceGroups on the grouped
+ *                                 settings value) — falls back to the flattened defaults if omitted.
  * @returns {Promise<Array>}
  */
 async function fetchArticlesForTopic(topicTitle, keywords, maxArticles = 20, activeSources = null) {
-  const sources = activeSources || DEFAULT_SOURCES;
+  const sources = activeSources || flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
   const searchTerms = keywords || topicTitle;
 
   const useGoogleNews = sources.some(s => s.url === '__google_news__' && s.enabled !== false);
@@ -141,4 +210,4 @@ async function fetchArticlesForTopic(topicTitle, keywords, maxArticles = 20, act
   return deduped.slice(0, maxArticles).map(({ _score, ...a }) => a);
 }
 
-module.exports = { fetchArticlesForTopic, DEFAULT_SOURCES };
+module.exports = { fetchArticlesForTopic, DEFAULT_SOURCE_GROUPS, flattenSourceGroups, checkSourceHealth };

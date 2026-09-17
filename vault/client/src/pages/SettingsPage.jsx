@@ -59,17 +59,13 @@ function SettingsPage() {
   const [inquiryDays,      setInquiryDays]      = useState([1, 3, 5]); // Mon/Wed/Fri default
   const [inquirySaved,     setInquirySaved]     = useState(false);
 
-  // News Digest settings
-  const DEFAULT_DIGEST_SOURCES = [
-    { name: 'ABC News',           url: 'https://www.abc.net.au/news/feed/51120/rss.xml',    enabled: true },
-    { name: 'Guardian Australia', url: 'https://www.theguardian.com/australia-news/rss',    enabled: true },
-    { name: 'Reuters',            url: 'https://feeds.reuters.com/reuters/topNews',          enabled: true },
-    { name: 'Sky News',           url: 'https://feeds.skynews.com/feeds/rss/world.xml',     enabled: true },
-    { name: 'Google News',        url: '__google_news__',                                    enabled: true },
-  ];
+  // News Digest settings — sources are grouped: { groupName: [{name,url,enabled,isSystem?}] }.
+  // Left empty until the GET /api/news-digest/settings effect below populates it from the
+  // server's own defaults (server/services/newsAggregationService.js DEFAULT_SOURCE_GROUPS) —
+  // no need to duplicate that list here too.
   const [digestTime,        setDigestTime]        = useState('07:00');
   const [digestDays,        setDigestDays]        = useState([0, 1, 2, 3, 4, 5, 6]);
-  const [digestSources,     setDigestSources]     = useState(DEFAULT_DIGEST_SOURCES);
+  const [digestSources,     setDigestSources]     = useState({});
   const [digestSaved,       setDigestSaved]       = useState(false);
   const [newFeedName,   setNewFeedName]   = useState('');
   const [newFeedUrl,    setNewFeedUrl]    = useState('');
@@ -2353,51 +2349,63 @@ function SettingsPage() {
           Toggle sources on or off, or add custom RSS feeds.
         </p>
 
-        <div className="space-y-2 mb-4">
-          {digestSources.map((source, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: source.enabled !== false ? 'var(--color-text)' : 'var(--color-muted)' }}>
-                  {source.name}
-                </p>
-                {source.url !== '__google_news__' && (
-                  <p className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>{source.url}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div
-                  onClick={() => setDigestSources(prev => prev.map((s, idx) =>
-                    idx === i ? { ...s, enabled: s.enabled === false } : s
-                  ))}
-                  className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
-                  style={{ background: source.enabled !== false ? 'var(--color-primary)' : 'var(--color-border)', cursor: 'pointer' }}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                    style={{ transform: source.enabled !== false ? 'translateX(17px)' : 'translateX(1px)' }}
-                  />
-                </div>
-                {/* Only allow deleting custom (non-default) sources */}
-                {!['ABC News', 'Guardian Australia', 'Reuters', 'Sky News', 'Google News'].includes(source.name) && (
-                  <button
-                    onClick={() => setDigestSources(prev => prev.filter((_, idx) => idx !== i))}
-                    className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-60"
-                    style={{ color: '#ef4444' }}
-                    title="Remove"
+        <div className="space-y-4 mb-4">
+          {Object.entries(digestSources).map(([groupName, groupSources]) => (
+            <div key={groupName}>
+              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--color-muted)' }}>{groupName}</p>
+              <div className="space-y-2">
+                {groupSources.map((source, i) => (
+                  <div
+                    key={source.url + i}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
                   >
-                    ✕
-                  </button>
-                )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium" style={{ color: source.enabled !== false ? 'var(--color-text)' : 'var(--color-muted)' }}>
+                        {source.name}
+                      </p>
+                      {source.url !== '__google_news__' && (
+                        <p className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>{source.url}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div
+                        onClick={() => setDigestSources(prev => ({
+                          ...prev,
+                          [groupName]: prev[groupName].map((s, idx) => idx === i ? { ...s, enabled: s.enabled === false } : s),
+                        }))}
+                        className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
+                        style={{ background: source.enabled !== false ? 'var(--color-primary)' : 'var(--color-border)', cursor: 'pointer' }}
+                      >
+                        <span
+                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                          style={{ transform: source.enabled !== false ? 'translateX(17px)' : 'translateX(1px)' }}
+                        />
+                      </div>
+                      {/* Only allow deleting custom (non-default) sources */}
+                      {!source.isSystem && (
+                        <button
+                          onClick={() => setDigestSources(prev => {
+                            const next = { ...prev, [groupName]: prev[groupName].filter((_, idx) => idx !== i) };
+                            if (!next[groupName].length) delete next[groupName];
+                            return next;
+                          })}
+                          className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-60"
+                          style={{ color: '#ef4444' }}
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Add custom RSS feed */}
+        {/* Add custom RSS feed — goes into its own "Custom" group */}
         <div
           className="p-3 rounded-xl border space-y-2 mb-5"
           style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
@@ -2423,7 +2431,10 @@ function SettingsPage() {
             <button
               onClick={() => {
                 if (!newFeedName.trim() || !newFeedUrl.trim()) return;
-                setDigestSources(prev => [...prev, { name: newFeedName.trim(), url: newFeedUrl.trim(), enabled: true }]);
+                setDigestSources(prev => ({
+                  ...prev,
+                  Custom: [...(prev.Custom || []), { name: newFeedName.trim(), url: newFeedUrl.trim(), enabled: true }],
+                }));
                 setNewFeedName('');
                 setNewFeedUrl('');
               }}

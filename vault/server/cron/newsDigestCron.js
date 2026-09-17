@@ -2,10 +2,10 @@
 
 const cron = require('node-cron');
 const { pool } = require('../db');
-const { fetchArticlesForTopic } = require('../services/newsAggregationService');
+const { fetchArticlesForTopic, DEFAULT_SOURCE_GROUPS, flattenSourceGroups, checkSourceHealth } = require('../services/newsAggregationService');
 const { analyseTopicArticles } = require('../services/newsAnalysisService');
 const { logUsage } = require('../utils/logUsage');
-const { reportNewsDigestRun } = require('../services/SuggestionService');
+const { reportNewsDigestRun, getPrimaryAdminUserId, capture, makeFingerprint } = require('../services/SuggestionService');
 
 let cronTask = null;
 
@@ -26,10 +26,16 @@ function estimateCost(inputTokens, outputTokens, model) {
   return inputTokens * inputRate + outputTokens * outputRate;
 }
 
+// Schedule + sources are workspace-global, stored on the primary admin's settings row — see
+// the same note in server/routes/newsDigest.js (settings' real PK is composite ("userId", key),
+// a bare "WHERE key=..." here previously matched every user's row indiscriminately).
 async function getScheduleSettings() {
   try {
+    const adminId = await getPrimaryAdminUserId();
+    if (!adminId) return { time: '07:00', days: [0, 1, 2, 3, 4, 5, 6] };
     const { rows } = await pool.query(
-      `SELECT key, value FROM settings WHERE key IN ('news_digest_time', 'news_digest_days')`
+      `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
+      [adminId, ['news_digest_time', 'news_digest_days']]
     );
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     return {
@@ -38,6 +44,26 @@ async function getScheduleSettings() {
     };
   } catch {
     return { time: '07:00', days: [0, 1, 2, 3, 4, 5, 6] };
+  }
+}
+
+// Resolves the actual flat source list to fetch from — reads the (grouped) admin-stored
+// setting, respects each source's enabled flag, falls back to the flattened defaults if unset
+// or unparseable. Previously generateDigestForUser never called this at all and always used
+// the hardcoded defaults regardless of what Settings showed — the toggles were a no-op.
+async function getActiveSources() {
+  try {
+    const adminId = await getPrimaryAdminUserId();
+    if (!adminId) return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
+    const { rows } = await pool.query(
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='news_digest_sources'`,
+      [adminId]
+    );
+    if (!rows.length) return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
+    const groups = JSON.parse(rows[0].value);
+    return flattenSourceGroups(groups);
+  } catch {
+    return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
   }
 }
 
@@ -111,6 +137,8 @@ async function generateDigestForUser(userId, dateStr, force = false) {
 
   if (!topics.length) return;
 
+  const activeSources = await getActiveSources();
+
   // Upsert digest row
   const { rows: digestRows } = await pool.query(
     `INSERT INTO news_digests ("userId", date) VALUES ($1, $2)
@@ -143,7 +171,7 @@ async function generateDigestForUser(userId, dateStr, force = false) {
     console.log(`[news-cron] Analysing topic "${topic.title}" for user ${userId}`);
 
     try {
-      const articles = await fetchArticlesForTopic(topic.title, topic.keywords);
+      const articles = await fetchArticlesForTopic(topic.title, topic.keywords, 20, activeSources);
       if (!articles.length) {
         runMeta.emptyTopics.push({ id: topic.id, title: topic.title });
       }
@@ -193,6 +221,34 @@ async function runDailyDigest() {
   console.log(`[news-cron] Starting daily digest for ${today}`);
 
   try {
+    // Source health is workspace-global (one shared list), so check once per run rather than
+    // once per user/topic — a dead feed otherwise just looks identical to "no news today" for
+    // every topic that happens to lean on it (see docs/CLAUDE.md's suggestion-inbox rule; this
+    // is the fix for the Reuters-shaped gap: nothing previously surfaced a feed dying at all).
+    const activeSources = await getActiveSources();
+    const health = await checkSourceHealth(activeSources);
+    const deadSources = health.filter(h => !h.ok);
+    if (deadSources.length) {
+      const adminId = await getPrimaryAdminUserId();
+      if (adminId) {
+        for (const s of deadSources) {
+          await capture({
+            userId: adminId,
+            source: 'newsDigestCron',
+            category: 'alert',
+            // No date in the fingerprint — this is a "still broken" condition, not a
+            // per-day variance like the empty-topic alerts, so it stays as one open
+            // suggestion that refreshes in place until the feed is fixed or removed.
+            fingerprint: makeFingerprint('newsDigestCron', `source-dead:${s.name}`),
+            title: `News Digest: source "${s.name}" appears dead`,
+            body: `${s.url} — ${s.error}. Remove or replace it in Settings → News Digest → Sources.`,
+            context: `date=${today}`,
+          });
+        }
+      }
+      console.warn(`[news-cron] ${deadSources.length} dead source(s): ${deadSources.map(s => s.name).join(', ')}`);
+    }
+
     const { rows: users } = await pool.query(
       `SELECT DISTINCT "userId" FROM news_topics WHERE active=true`
     );
@@ -202,7 +258,6 @@ async function runDailyDigest() {
     }
   } catch (err) {
     console.error('[news-cron] Daily digest run failed:', err.message);
-    const { capture, getPrimaryAdminUserId } = require('../services/SuggestionService');
     const adminId = await getPrimaryAdminUserId();
     if (adminId) {
       await capture({
@@ -225,4 +280,4 @@ function startNewsDigestCron() {
   scheduleDigestCron().catch(err => console.error('[news-cron] Schedule error:', err.message));
 }
 
-module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron };
+module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron, getActiveSources };

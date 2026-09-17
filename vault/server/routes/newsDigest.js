@@ -8,8 +8,9 @@ const { generateDigestForUser } = require('../cron/newsDigestCron');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const { getPrimaryAdminUserId } = require('../services/SuggestionService');
 
-const { DEFAULT_SOURCES } = require('../services/newsAggregationService');
+const { DEFAULT_SOURCE_GROUPS } = require('../services/newsAggregationService');
 
 function getGemini() {
   const key = process.env.GEMINI_API_KEY;
@@ -359,16 +360,25 @@ router.delete('/topics/:topicId/chat', async (req, res) => {
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 // GET /api/news-digest/settings
+// News Digest schedule/sources are workspace-global (one shared cron for everyone), stored on
+// the primary admin's settings row — same convention server/cron/sharesCron.js and others use
+// for workspace-wide values (settings' real PK is composite ("userId", key), see db.js's
+// migration around line 1424; there is no longer a standalone unique constraint on key alone).
 router.get('/settings', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT key, value FROM settings WHERE key IN ('news_digest_time', 'news_digest_days', 'news_digest_sources')`
-    );
+    const adminId = await getPrimaryAdminUserId();
+    let rows = [];
+    if (adminId) {
+      ({ rows } = await pool.query(
+        `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
+        [adminId, ['news_digest_time', 'news_digest_days', 'news_digest_sources']]
+      ));
+    }
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
       time:    map.news_digest_time    || '07:00',
       days:    map.news_digest_days    ? JSON.parse(map.news_digest_days)    : [0, 1, 2, 3, 4, 5, 6],
-      sources: map.news_digest_sources ? JSON.parse(map.news_digest_sources) : DEFAULT_SOURCES,
+      sources: map.news_digest_sources ? JSON.parse(map.news_digest_sources) : DEFAULT_SOURCE_GROUPS,
     });
   } catch (err) {
     console.error(err);
@@ -380,10 +390,18 @@ router.get('/settings', async (req, res) => {
 router.post('/settings', async (req, res) => {
   const { time, days, sources } = req.body;
   try {
+    const adminId = await getPrimaryAdminUserId();
+    if (!adminId) return res.status(400).json({ error: 'No workspace admin found — cannot save workspace-wide digest settings' });
+
+    const upsert = (key, value) => pool.query(
+      `INSERT INTO settings ("userId", key, value) VALUES ($1,$2,$3)
+       ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
+      [adminId, key, value]
+    );
     const updates = [];
-    if (time    !== undefined) updates.push(pool.query(`INSERT INTO settings (key,value) VALUES ('news_digest_time',$1)    ON CONFLICT (key) DO UPDATE SET value=$1`, [time]));
-    if (days    !== undefined) updates.push(pool.query(`INSERT INTO settings (key,value) VALUES ('news_digest_days',$1)    ON CONFLICT (key) DO UPDATE SET value=$1`, [JSON.stringify(days)]));
-    if (sources !== undefined) updates.push(pool.query(`INSERT INTO settings (key,value) VALUES ('news_digest_sources',$1) ON CONFLICT (key) DO UPDATE SET value=$1`, [JSON.stringify(sources)]));
+    if (time    !== undefined) updates.push(upsert('news_digest_time', time));
+    if (days    !== undefined) updates.push(upsert('news_digest_days', JSON.stringify(days)));
+    if (sources !== undefined) updates.push(upsert('news_digest_sources', JSON.stringify(sources)));
     await Promise.all(updates);
 
     // Reschedule cron to reflect any time/days change
