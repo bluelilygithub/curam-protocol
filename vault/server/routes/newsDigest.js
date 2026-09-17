@@ -23,7 +23,7 @@ function getGemini() {
 router.get('/topics', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, title, keywords, "sortOrder", active, "createdAt"
+      `SELECT id, title, keywords, "sourceGroups", "sortOrder", active, "createdAt"
        FROM news_topics WHERE "userId"=$1 ORDER BY "sortOrder" ASC, id ASC`,
       [req.user.id]
     );
@@ -36,7 +36,7 @@ router.get('/topics', async (req, res) => {
 
 // POST /api/news-digest/topics
 router.post('/topics', async (req, res) => {
-  const { title, keywords } = req.body;
+  const { title, keywords, sourceGroups } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
 
   try {
@@ -47,9 +47,9 @@ router.post('/topics', async (req, res) => {
     const sortOrder = maxRow[0].next;
 
     const { rows } = await pool.query(
-      `INSERT INTO news_topics ("userId", title, keywords, "sortOrder")
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.user.id, title.trim(), (keywords || '').trim(), sortOrder]
+      `INSERT INTO news_topics ("userId", title, keywords, "sourceGroups", "sortOrder")
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [req.user.id, title.trim(), (keywords || '').trim(), Array.isArray(sourceGroups) && sourceGroups.length ? JSON.stringify(sourceGroups) : null, sortOrder]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -79,20 +79,29 @@ router.put('/topics/reorder', async (req, res) => {
 
 // PUT /api/news-digest/topics/:id
 router.put('/topics/:id', async (req, res) => {
-  const { title, keywords, active } = req.body;
+  const { title, keywords, active, sourceGroups } = req.body;
+  // sourceGroups needs 3-way handling COALESCE can't express: "not sent" (leave alone) vs.
+  // "sent as [] / null" (explicitly unpin back to searching every source) are different
+  // requests, unlike title/keywords/active where COALESCE's "don't overwrite with null" is
+  // exactly the desired behavior.
+  const sourceGroupsProvided = sourceGroups !== undefined;
+  const sourceGroupsValue = Array.isArray(sourceGroups) && sourceGroups.length ? JSON.stringify(sourceGroups) : null;
   try {
     const { rows } = await pool.query(
       `UPDATE news_topics
-       SET title    = COALESCE($1, title),
-           keywords = COALESCE($2, keywords),
-           active   = COALESCE($3, active)
-       WHERE id=$4 AND "userId"=$5
+       SET title          = COALESCE($1, title),
+           keywords       = COALESCE($2, keywords),
+           active         = COALESCE($3, active),
+           "sourceGroups" = CASE WHEN $6 THEN $4::jsonb ELSE "sourceGroups" END
+       WHERE id=$5 AND "userId"=$7
        RETURNING *`,
       [
         title    !== undefined ? title.trim()          : null,
         keywords !== undefined ? (keywords || '').trim() : null,
         active   !== undefined ? active                : null,
+        sourceGroupsValue,
         req.params.id,
+        sourceGroupsProvided,
         req.user.id,
       ]
     );

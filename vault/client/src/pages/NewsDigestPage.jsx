@@ -335,9 +335,14 @@ function TopicCard({ result, date, onCommentarySave }) {
 
 // ── Topic management panel ────────────────────────────────────────────────────
 
-function TopicForm({ initial, onSave, onCancel }) {
+function TopicForm({ initial, availableGroups, onSave, onCancel }) {
   const [title, setTitle] = useState(initial?.title || '');
   const [keywords, setKeywords] = useState(initial?.keywords || '');
+  const [sourceGroups, setSourceGroups] = useState(initial?.sourceGroups || []);
+
+  const toggleGroup = (name) => {
+    setSourceGroups(prev => prev.includes(name) ? prev.filter(g => g !== name) : [...prev, name]);
+  };
 
   return (
     <div className="space-y-3">
@@ -370,6 +375,32 @@ function TopicForm({ initial, onSave, onCancel }) {
           outline: 'none',
         }}
       />
+      {availableGroups && availableGroups.length > 0 && (
+        <div>
+          <p className="text-xs mb-1.5" style={{ color: 'var(--color-muted)' }}>
+            News sources (optional — leave all unchecked to search every enabled source; check
+            one or more to restrict this topic to just those groups, e.g. an "Ireland" topic
+            pinned to the Ireland group instead of competing against every other topic's news)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {availableGroups.map(name => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => toggleGroup(name)}
+                className="px-2 py-1 rounded-lg border text-xs font-medium transition-all"
+                style={{
+                  background:  sourceGroups.includes(name) ? 'var(--color-primary)' : 'var(--color-surface)',
+                  borderColor: sourceGroups.includes(name) ? 'var(--color-primary)' : 'var(--color-border)',
+                  color:       sourceGroups.includes(name) ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
@@ -379,7 +410,7 @@ function TopicForm({ initial, onSave, onCancel }) {
           Cancel
         </button>
         <button
-          onClick={() => title.trim() && onSave({ title: title.trim(), keywords: keywords.trim() })}
+          onClick={() => title.trim() && onSave({ title: title.trim(), keywords: keywords.trim(), sourceGroups })}
           disabled={!title.trim()}
           className="px-3 py-1.5 rounded-lg text-sm font-medium text-white"
           style={{ background: title.trim() ? 'var(--color-primary)' : 'var(--color-border)' }}
@@ -397,11 +428,18 @@ function TopicsPanel({ topics, onTopicsChange }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const { addToast } = useToastStore();
 
-  const handleAdd = async ({ title, keywords }) => {
+  useEffect(() => {
+    api.get('/api/news-digest/settings').then(r => r.json())
+      .then(data => setAvailableGroups(data.sources ? Object.keys(data.sources) : []))
+      .catch(() => {});
+  }, []);
+
+  const handleAdd = async ({ title, keywords, sourceGroups }) => {
     try {
-      const res = await api.post('/api/news-digest/topics', { title, keywords });
+      const res = await api.post('/api/news-digest/topics', { title, keywords, sourceGroups });
       const topic = await res.json();
       onTopicsChange([...topics, topic]);
       setAdding(false);
@@ -411,9 +449,9 @@ function TopicsPanel({ topics, onTopicsChange }) {
     }
   };
 
-  const handleEdit = async (id, { title, keywords }) => {
+  const handleEdit = async (id, { title, keywords, sourceGroups }) => {
     try {
-      const res = await api.put(`/api/news-digest/topics/${id}`, { title, keywords });
+      const res = await api.put(`/api/news-digest/topics/${id}`, { title, keywords, sourceGroups });
       const updated = await res.json();
       onTopicsChange(topics.map(t => t.id === id ? updated : t));
       setEditingId(null);
@@ -485,7 +523,7 @@ function TopicsPanel({ topics, onTopicsChange }) {
           className="p-3 rounded-xl border"
           style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
         >
-          <TopicForm onSave={handleAdd} onCancel={() => setAdding(false)} />
+          <TopicForm availableGroups={availableGroups} onSave={handleAdd} onCancel={() => setAdding(false)} />
         </div>
       )}
 
@@ -509,6 +547,7 @@ function TopicsPanel({ topics, onTopicsChange }) {
           {editingId === topic.id ? (
             <TopicForm
               initial={topic}
+              availableGroups={availableGroups}
               onSave={data => handleEdit(topic.id, data)}
               onCancel={() => setEditingId(null)}
             />
@@ -525,6 +564,11 @@ function TopicsPanel({ topics, onTopicsChange }) {
                 {topic.keywords && (
                   <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                     Keywords: {topic.keywords}
+                  </p>
+                )}
+                {Array.isArray(topic.sourceGroups) && topic.sourceGroups.length > 0 && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    Sources: {topic.sourceGroups.join(', ')}
                   </p>
                 )}
               </div>

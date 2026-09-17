@@ -166,7 +166,11 @@ function isRecent(article, maxAgeHours = 48) {
  */
 async function fetchArticlesForTopic(topicTitle, keywords, maxArticles = 20, activeSources = null) {
   const sources = activeSources || flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
-  const searchTerms = keywords || topicTitle;
+  // Always anchor on the topic's own title, not just its keywords — previously a topic with
+  // vague/generic keywords (e.g. "news, sports, politics" on a topic literally titled
+  // "Ireland") never searched for "Ireland" at all once keywords existed, since
+  // `keywords || topicTitle` drops the title entirely the moment keywords are non-empty.
+  const searchTerms = [topicTitle, keywords].filter(Boolean).join(' ').trim();
 
   const useGoogleNews = sources.some(s => s.url === '__google_news__' && s.enabled !== false);
   const rssFeeds = sources.filter(s => s.url !== '__google_news__' && s.enabled !== false);

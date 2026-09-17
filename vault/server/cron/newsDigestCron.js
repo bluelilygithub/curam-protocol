@@ -47,24 +47,51 @@ async function getScheduleSettings() {
   }
 }
 
-// Resolves the actual flat source list to fetch from — reads the (grouped) admin-stored
-// setting, respects each source's enabled flag, falls back to the flattened defaults if unset
-// or unparseable. Previously generateDigestForUser never called this at all and always used
-// the hardcoded defaults regardless of what Settings showed — the toggles were a no-op.
-async function getActiveSources() {
+// Reads the raw (grouped) source setting, admin-scoped, falling back to the code defaults if
+// unset or unparseable. Shared by getActiveSources (all-groups flat list) and
+// getSourcesForTopic (a topic's own group subset), so both read the setting the same way.
+async function getSourceGroupsSetting() {
   try {
     const adminId = await getPrimaryAdminUserId();
-    if (!adminId) return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
+    if (!adminId) return DEFAULT_SOURCE_GROUPS;
     const { rows } = await pool.query(
       `SELECT value FROM settings WHERE "userId"=$1 AND key='news_digest_sources'`,
       [adminId]
     );
-    if (!rows.length) return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
-    const groups = JSON.parse(rows[0].value);
-    return flattenSourceGroups(groups);
+    if (!rows.length) return DEFAULT_SOURCE_GROUPS;
+    return JSON.parse(rows[0].value);
   } catch {
-    return flattenSourceGroups(DEFAULT_SOURCE_GROUPS);
+    return DEFAULT_SOURCE_GROUPS;
   }
+}
+
+// Resolves the actual flat source list to fetch from — every enabled source across every
+// group. Previously generateDigestForUser never called this at all and always used the
+// hardcoded defaults regardless of what Settings showed — the toggles were a no-op.
+async function getActiveSources() {
+  return flattenSourceGroups(await getSourceGroupsSetting());
+}
+
+// Resolves the flat source list for ONE topic, honoring its optional sourceGroups pin
+// (news_topics."sourceGroups", an array of group names). Google News is always included
+// alongside a group pin — it's a keyword search, not a fixed feed tied to any one group, and
+// excluding it would remove the topic's only source that actually reflects its own keywords
+// rather than a fixed group's general coverage. A topic with no pin (null/empty) gets every
+// enabled source, unchanged from before — this is opt-in, not a behavior change for existing
+// topics that never set it.
+async function getSourcesForTopic(sourceGroups) {
+  const groups = await getSourceGroupsSetting();
+  if (!Array.isArray(sourceGroups) || !sourceGroups.length) return flattenSourceGroups(groups);
+
+  const picked = {};
+  for (const name of sourceGroups) if (groups[name]) picked[name] = groups[name];
+  const flat = flattenSourceGroups(picked);
+  const hasGoogleNews = flat.some(s => s.url === '__google_news__');
+  if (!hasGoogleNews) {
+    const gn = flattenSourceGroups(groups).find(s => s.url === '__google_news__');
+    if (gn) flat.push(gn);
+  }
+  return flat;
 }
 
 async function getWorkspaceTimezone() {
@@ -131,13 +158,11 @@ async function fetchTopicContext(userId, topicId, beforeDate) {
 async function generateDigestForUser(userId, dateStr, force = false) {
   // Get all active topics for this user
   const { rows: topics } = await pool.query(
-    `SELECT id, title, keywords FROM news_topics WHERE "userId"=$1 AND active=true ORDER BY "sortOrder" ASC`,
+    `SELECT id, title, keywords, "sourceGroups" FROM news_topics WHERE "userId"=$1 AND active=true ORDER BY "sortOrder" ASC`,
     [userId]
   );
 
   if (!topics.length) return;
-
-  const activeSources = await getActiveSources();
 
   // Upsert digest row
   const { rows: digestRows } = await pool.query(
@@ -171,7 +196,8 @@ async function generateDigestForUser(userId, dateStr, force = false) {
     console.log(`[news-cron] Analysing topic "${topic.title}" for user ${userId}`);
 
     try {
-      const articles = await fetchArticlesForTopic(topic.title, topic.keywords, 20, activeSources);
+      const topicSources = await getSourcesForTopic(topic.sourceGroups);
+      const articles = await fetchArticlesForTopic(topic.title, topic.keywords, 20, topicSources);
       if (!articles.length) {
         runMeta.emptyTopics.push({ id: topic.id, title: topic.title });
       }
@@ -280,4 +306,4 @@ function startNewsDigestCron() {
   scheduleDigestCron().catch(err => console.error('[news-cron] Schedule error:', err.message));
 }
 
-module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron, getActiveSources };
+module.exports = { startNewsDigestCron, generateDigestForUser, runDailyDigest, scheduleDigestCron, getActiveSources, getSourceGroupsSetting };

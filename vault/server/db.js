@@ -255,15 +255,19 @@ async function initSchema() {
     // ── News Digest ───────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS news_topics (
-        id          SERIAL PRIMARY KEY,
-        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        title       TEXT NOT NULL,
-        keywords    TEXT DEFAULT '',
-        "sortOrder" INTEGER DEFAULT 0,
-        active      BOOLEAN DEFAULT true,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title         TEXT NOT NULL,
+        keywords      TEXT DEFAULT '',
+        "sourceGroups" JSONB, -- optional array of group names (server/services/newsAggregationService.js
+                              -- DEFAULT_SOURCE_GROUPS keys) to restrict this topic's article fetch to;
+                              -- NULL/empty = search every enabled source (original, unscoped behavior)
+        "sortOrder"   INTEGER DEFAULT 0,
+        active        BOOLEAN DEFAULT true,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE news_topics ADD COLUMN IF NOT EXISTS "sourceGroups" JSONB`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS news_digests (
