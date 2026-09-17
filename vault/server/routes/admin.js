@@ -150,7 +150,11 @@ router.get('/sentry-overview', async (_req, res) => {
     const overview = await sentryStats.getOverview();
     res.json({ enabled: true, ...overview });
   } catch (err) {
-    res.status(502).json({ enabled: true, error: err.message });
+    res.status(502).json({
+      enabled: true,
+      error: err.message,
+      projectUrl: `https://${sentryStats.SENTRY_ORG}.sentry.io/projects/${sentryStats.SENTRY_PROJECT}/`,
+    });
   }
 });
 
