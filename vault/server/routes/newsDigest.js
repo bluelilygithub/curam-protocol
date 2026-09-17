@@ -23,7 +23,7 @@ function getGemini() {
 router.get('/topics', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, title, keywords, "sourceGroups", "sortOrder", active, "createdAt"
+      `SELECT id, title, keywords, "sourceGroups", template, "sortOrder", active, "createdAt"
        FROM news_topics WHERE "userId"=$1 ORDER BY "sortOrder" ASC, id ASC`,
       [req.user.id]
     );
@@ -35,9 +35,14 @@ router.get('/topics', async (req, res) => {
 });
 
 // POST /api/news-digest/topics
+const VALID_TEMPLATES = ['perspectives', 'digest'];
+
 router.post('/topics', async (req, res) => {
-  const { title, keywords, sourceGroups } = req.body;
+  const { title, keywords, sourceGroups, template } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
+  if (template !== undefined && !VALID_TEMPLATES.includes(template)) {
+    return res.status(400).json({ error: `template must be one of: ${VALID_TEMPLATES.join(', ')}` });
+  }
 
   try {
     const { rows: maxRow } = await pool.query(
@@ -47,9 +52,9 @@ router.post('/topics', async (req, res) => {
     const sortOrder = maxRow[0].next;
 
     const { rows } = await pool.query(
-      `INSERT INTO news_topics ("userId", title, keywords, "sourceGroups", "sortOrder")
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.user.id, title.trim(), (keywords || '').trim(), Array.isArray(sourceGroups) && sourceGroups.length ? JSON.stringify(sourceGroups) : null, sortOrder]
+      `INSERT INTO news_topics ("userId", title, keywords, "sourceGroups", template, "sortOrder")
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.id, title.trim(), (keywords || '').trim(), Array.isArray(sourceGroups) && sourceGroups.length ? JSON.stringify(sourceGroups) : null, template || 'perspectives', sortOrder]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -79,6 +84,11 @@ router.put('/topics/reorder', async (req, res) => {
 
 // PUT /api/news-digest/topics/:id
 router.put('/topics/:id', async (req, res) => {
+  // template is deliberately NOT accepted here — set once at creation, immutable after. A
+  // topic's cached news_digest_topics rows are shaped by whichever template generated them
+  // (4-section perspectives vs. 2-section digest); allowing a later switch would need each
+  // cached day to carry its own generated-with template so the UI renders old days correctly,
+  // which this doesn't implement (deliberate scope decision, not an oversight).
   const { title, keywords, active, sourceGroups } = req.body;
   // sourceGroups needs 3-way handling COALESCE can't express: "not sent" (leave alone) vs.
   // "sent as [] / null" (explicitly unpin back to searching every source) are different
@@ -147,7 +157,7 @@ router.get('/', async (req, res) => {
 
     const { rows: topicResults } = await pool.query(
       `SELECT DISTINCT ON (ndt."topicId")
-              ndt.id, ndt."topicId", nt.title, nt.keywords, nt."sortOrder",
+              ndt.id, ndt."topicId", nt.title, nt.keywords, nt.template, nt."sortOrder",
               ndt.articles, ndt.analysis, ndt."createdAt"
        FROM news_digest_topics ndt
        JOIN news_topics nt ON nt.id = ndt."topicId"

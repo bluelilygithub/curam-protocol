@@ -145,7 +145,7 @@ function PerspectiveBlock({ emoji, label, color, data }) {
 }
 
 function TopicCard({ result, date, onCommentarySave }) {
-  const { topicId, title, analysis, articles, commentary: initCommentary } = result;
+  const { topicId, title, analysis, articles, template, commentary: initCommentary } = result;
   const [expanded, setExpanded] = useState(false);
   const [commentary, setCommentary] = useState(initCommentary || '');
   const [saving, setSaving] = useState(false);
@@ -175,9 +175,13 @@ function TopicCard({ result, date, onCommentarySave }) {
     }
 
     addBlock('Unbiased Summary', ana.unbiased);
-    addBlock('Left-leaning perspective', ana.left);
-    addBlock('Right-leaning perspective', ana.right);
-    addBlock('Common ground', ana.commonGround);
+    if (template === 'digest') {
+      addBlock('Key Storylines', ana.keyStorylines);
+    } else {
+      addBlock('Left-leaning perspective', ana.left);
+      addBlock('Right-leaning perspective', ana.right);
+      addBlock('Common ground', ana.commonGround);
+    }
 
     const articleList = Array.isArray(articles) ? articles : [];
     if (articleList.length > 0) {
@@ -274,10 +278,18 @@ function TopicCard({ result, date, onCommentarySave }) {
             data={ana.unbiased}
           />
 
-          {/* Left / Right / Common */}
-          <PerspectiveBlock emoji="🔵" label="Left-leaning perspective" color="#3b82f6" data={ana.left} />
-          <PerspectiveBlock emoji="🔴" label="Right-leaning perspective" color="#ef4444" data={ana.right} />
-          <PerspectiveBlock emoji="⚖️" label="Common ground" color="#10b981" data={ana.commonGround} />
+          {/* "perspectives" topics (default) get the full 4-section spread; "digest" topics
+              get a single Key Storylines block instead — set once at topic creation, immutable
+              after (see server/routes/newsDigest.js), so a cached day's shape always matches. */}
+          {template === 'digest' ? (
+            <PerspectiveBlock emoji="📰" label="Key Storylines" color="#8b5cf6" data={ana.keyStorylines} />
+          ) : (
+            <>
+              <PerspectiveBlock emoji="🔵" label="Left-leaning perspective" color="#3b82f6" data={ana.left} />
+              <PerspectiveBlock emoji="🔴" label="Right-leaning perspective" color="#ef4444" data={ana.right} />
+              <PerspectiveBlock emoji="⚖️" label="Common ground" color="#10b981" data={ana.commonGround} />
+            </>
+          )}
 
           {/* Sources */}
           {articleList.length > 0 && (
@@ -335,10 +347,16 @@ function TopicCard({ result, date, onCommentarySave }) {
 
 // ── Topic management panel ────────────────────────────────────────────────────
 
+const TEMPLATE_OPTIONS = [
+  { value: 'perspectives', label: 'Perspectives', hint: 'Unbiased summary + Left / Right framings + Common ground — for genuinely contested topics (politics, geopolitics).' },
+  { value: 'digest', label: 'Digest', hint: 'Unbiased summary + Key Storylines only — for topics where "left vs right" isn\'t a real axis (Soccer, AI/Robotics).' },
+];
+
 function TopicForm({ initial, availableGroups, onSave, onCancel }) {
   const [title, setTitle] = useState(initial?.title || '');
   const [keywords, setKeywords] = useState(initial?.keywords || '');
   const [sourceGroups, setSourceGroups] = useState(initial?.sourceGroups || []);
+  const [template, setTemplate] = useState(initial?.template || 'perspectives');
 
   const toggleGroup = (name) => {
     setSourceGroups(prev => prev.includes(name) ? prev.filter(g => g !== name) : [...prev, name]);
@@ -401,6 +419,43 @@ function TopicForm({ initial, availableGroups, onSave, onCancel }) {
           </div>
         </div>
       )}
+      {!initial && (
+        <div>
+          <p className="text-xs mb-1.5" style={{ color: 'var(--color-muted)' }}>
+            Format — set once, can't be changed later (a topic's saved days are shaped by whichever
+            format generated them)
+          </p>
+          <div className="space-y-1.5">
+            {TEMPLATE_OPTIONS.map(opt => (
+              <label
+                key={opt.value}
+                className="flex items-start gap-2 p-2 rounded-lg border cursor-pointer"
+                style={{
+                  borderColor: template === opt.value ? 'var(--color-primary)' : 'var(--color-border)',
+                  background:  template === opt.value ? 'var(--color-primary)11' : 'var(--color-surface)',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="template"
+                  checked={template === opt.value}
+                  onChange={() => setTemplate(opt.value)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-sm font-medium block" style={{ color: 'var(--color-text)' }}>{opt.label}</span>
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{opt.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {initial?.template && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Format: {TEMPLATE_OPTIONS.find(o => o.value === initial.template)?.label || initial.template} (set at creation, not editable)
+        </p>
+      )}
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
@@ -410,7 +465,7 @@ function TopicForm({ initial, availableGroups, onSave, onCancel }) {
           Cancel
         </button>
         <button
-          onClick={() => title.trim() && onSave({ title: title.trim(), keywords: keywords.trim(), sourceGroups })}
+          onClick={() => title.trim() && onSave({ title: title.trim(), keywords: keywords.trim(), sourceGroups, ...(!initial ? { template } : {}) })}
           disabled={!title.trim()}
           className="px-3 py-1.5 rounded-lg text-sm font-medium text-white"
           style={{ background: title.trim() ? 'var(--color-primary)' : 'var(--color-border)' }}
@@ -437,9 +492,9 @@ function TopicsPanel({ topics, onTopicsChange }) {
       .catch(() => {});
   }, []);
 
-  const handleAdd = async ({ title, keywords, sourceGroups }) => {
+  const handleAdd = async ({ title, keywords, sourceGroups, template }) => {
     try {
-      const res = await api.post('/api/news-digest/topics', { title, keywords, sourceGroups });
+      const res = await api.post('/api/news-digest/topics', { title, keywords, sourceGroups, template });
       const topic = await res.json();
       onTopicsChange([...topics, topic]);
       setAdding(false);

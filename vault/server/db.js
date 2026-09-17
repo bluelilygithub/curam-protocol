@@ -262,12 +262,27 @@ async function initSchema() {
         "sourceGroups" JSONB, -- optional array of group names (server/services/newsAggregationService.js
                               -- DEFAULT_SOURCE_GROUPS keys) to restrict this topic's article fetch to;
                               -- NULL/empty = search every enabled source (original, unscoped behavior)
+        template      TEXT NOT NULL DEFAULT 'perspectives'
+                        CHECK (template IN ('perspectives', 'digest')), -- set at creation, immutable
+                        -- after (see server/routes/newsDigest.js) since a topic's cached analysis days
+                        -- are shaped by whichever template generated them
         "sortOrder"   INTEGER DEFAULT 0,
         active        BOOLEAN DEFAULT true,
         "createdAt"   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await client.query(`ALTER TABLE news_topics ADD COLUMN IF NOT EXISTS "sourceGroups" JSONB`);
+    await client.query(`ALTER TABLE news_topics ADD COLUMN IF NOT EXISTS template TEXT NOT NULL DEFAULT 'perspectives'`);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'news_topics_template_check'
+        ) THEN
+          ALTER TABLE news_topics ADD CONSTRAINT news_topics_template_check CHECK (template IN ('perspectives', 'digest'));
+        END IF;
+      END $$
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS news_digests (

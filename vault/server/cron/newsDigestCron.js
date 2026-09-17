@@ -158,7 +158,7 @@ async function fetchTopicContext(userId, topicId, beforeDate) {
 async function generateDigestForUser(userId, dateStr, force = false) {
   // Get all active topics for this user
   const { rows: topics } = await pool.query(
-    `SELECT id, title, keywords, "sourceGroups" FROM news_topics WHERE "userId"=$1 AND active=true ORDER BY "sortOrder" ASC`,
+    `SELECT id, title, keywords, "sourceGroups", template FROM news_topics WHERE "userId"=$1 AND active=true ORDER BY "sortOrder" ASC`,
     [userId]
   );
 
@@ -202,7 +202,7 @@ async function generateDigestForUser(userId, dateStr, force = false) {
         runMeta.emptyTopics.push({ id: topic.id, title: topic.title });
       }
       const context  = await fetchTopicContext(userId, topic.id, dateStr);
-      const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, userId);
+      const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, userId, topic.template);
 
       totalInputTokens  += usage.inputTokens  || 0;
       totalOutputTokens += usage.outputTokens || 0;
