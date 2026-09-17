@@ -1036,6 +1036,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                               style={{ color: '#6b7280', borderColor: '#d1d5db' }}
                             >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
                           </Tooltip>
+                          <Tooltip text="View email send activity log."><button onClick={() => viewDetail(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#6b7280', borderColor: '#d1d5db' }}>Activity</button></Tooltip>
                         </>
                       ) : (
                         <>
@@ -1062,6 +1063,7 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
                               style={{ color: '#6b7280', borderColor: '#d1d5db' }}
                             >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
                           </Tooltip>
+                          <Tooltip text="View email send activity log."><button onClick={() => viewDetail(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#6b7280', borderColor: '#d1d5db' }}>Activity</button></Tooltip>
                         </>
                       )}
                     </div>
