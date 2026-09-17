@@ -12,11 +12,31 @@ export const APP_NAV_GROUPS = [
     ],
   },
   {
-    id: 'productivity',
-    label: 'Productivity',
+    // Things waiting for your attention/review — deliberately separate from Business, since
+    // these are triage inboxes (agent findings, flagged emails, extracted invoices pending
+    // approval), not the underlying business records themselves.
+    id: 'inbox',
+    label: 'Inbox',
     items: [
-      { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals', badgeKey: 'missionReminder' },
-      { id: 'student', label: 'Student', path: '/student/quiz', icon: 'graduation-cap', featureKey: 'student', matchPrefix: true },
+      { id: 'suggestions', label: 'Suggestions', path: '/suggestions', icon: 'inbox', featureKey: null, badgeKey: 'suggestions' },
+      { id: 'gmailIntel', label: 'Inbox Intel', path: '/gmail-intel', icon: 'inbox', featureKey: 'gmailIntel' },
+      { id: 'expenseReview', label: 'Invoice Review', path: '/expense-review', icon: 'receipt', featureKey: 'gmailIntel' },
+    ],
+  },
+  {
+    // Business operations — CRM/Pipeline (previously stranded under "Admin") and
+    // Finance/Shares (previously under a "Money & data" grab-bag with Usage/News, neither of
+    // which is actually money) now sit together as the coherent "running the business" set.
+    // Dashboard folded in here too rather than being a 1-item "Admin" group on its own — it
+    // stays admin-only via adminOnly, unrelated to which group it's filed under.
+    id: 'business',
+    label: 'Business',
+    items: [
+      { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+      { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
+      { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
+      { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
+      { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
     ],
   },
   {
@@ -31,24 +51,22 @@ export const APP_NAV_GROUPS = [
     ],
   },
   {
-    id: 'content-tools',
-    label: 'Content tools',
+    // Trimmed to genuine make/edit-a-document-or-media tools — Translate/Guitar/Recipes/
+    // YouTube moved out to Research & Utilities, where they're honestly labeled as a catch-all
+    // instead of pretending to be content-creation tools.
+    id: 'content-creation',
+    label: 'Content Creation',
     items: [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'fonts', label: 'Font Customizer', path: '/fonts', icon: 'type', featureKey: 'fonts' },
       { id: 'restyle', label: 'CSS', path: '/restyle', icon: 'brush', featureKey: 'restyle' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
-      { id: 'translate', label: 'Translate', path: '/translate', icon: 'languages', featureKey: 'translate' },
-      { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'guitar',    featureKey: 'guitar'    },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
-      { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
-      { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
-      { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
     ],
   },
   {
     id: 'website',
-    label: 'Website',
+    label: 'Web & SEO',
     items: [
       { id: 'seo', label: 'SEO', path: '/seo', icon: 'scan-search', featureKey: 'seo', matchPrefix: true },
       { id: 'searchConsole', label: 'Search', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole' },
@@ -60,34 +78,41 @@ export const APP_NAV_GROUPS = [
     ],
   },
   {
-    id: 'money-data',
-    label: 'Money & data',
+    // Honest catch-all — these never fit "content creation" or "business," so name the
+    // category for what it actually is instead of hiding them in a mismatched group.
+    id: 'research-utilities',
+    label: 'Research & Utilities',
     items: [
-      { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
-      { id: 'propertyScenario', label: 'Property', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
-      { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
-      { id: 'usage', label: 'Usage & Cost', path: '/usage', icon: 'usage', featureKey: 'usage' },
-      { id: 'newsDigest', label: 'News Digest', path: '/news-digest', icon: 'news', featureKey: 'newsDigest' },
+      { id: 'translate', label: 'Translate', path: '/translate', icon: 'languages', featureKey: 'translate' },
+      { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'guitar',    featureKey: 'guitar'    },
+      { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
+      { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
+      { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
     ],
   },
   {
+    // Genuinely personal only now — Inbox Intel/Invoice Review moved to Inbox (work triage,
+    // not personal wellbeing), News Digest and Property moved in from the old "Money & data"
+    // (News is reading, not finance; Property here is personal mortgage/property planning,
+    // not a business asset — confirm this stays true if that ever changes).
     id: 'personal',
     label: 'Personal',
     items: [
       { id: 'mood', label: 'Mood', path: '/mood', icon: 'mood', featureKey: 'mood' },
       { id: 'wellbeing', label: 'Wellbeing Check', path: '/wellbeing', icon: 'heart-pulse', featureKey: 'wellbeing' },
-      { id: 'gmailIntel', label: 'Inbox Intel', path: '/gmail-intel', icon: 'inbox', featureKey: 'gmailIntel' },
-      { id: 'expenseReview', label: 'Invoice Review', path: '/expense-review', icon: 'receipt', featureKey: 'gmailIntel' },
+      { id: 'newsDigest', label: 'News Digest', path: '/news-digest', icon: 'news', featureKey: 'newsDigest' },
+      { id: 'propertyScenario', label: 'Property', path: '/property-scenario', icon: 'home', featureKey: 'propertyScenario' },
     ],
   },
   {
-    id: 'admin',
-    label: 'Admin',
+    // Usage & Cost moved here from "Money & data" — it's app-cost monitoring, not personal
+    // finance.
+    id: 'productivity',
+    label: 'Productivity',
     items: [
-      { id: 'suggestions', label: 'Suggestions', path: '/suggestions', icon: 'inbox', featureKey: null, badgeKey: 'suggestions' },
-      { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
-      { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
-      { id: 'admin', label: 'Dashboard', path: '/admin', icon: 'bar-chart', featureKey: null, adminOnly: true },
+      { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals', badgeKey: 'missionReminder' },
+      { id: 'student', label: 'Student', path: '/student/quiz', icon: 'graduation-cap', featureKey: 'student', matchPrefix: true },
+      { id: 'usage', label: 'Usage & Cost', path: '/usage', icon: 'usage', featureKey: 'usage' },
     ],
   },
 ];
