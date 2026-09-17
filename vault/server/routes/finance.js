@@ -227,7 +227,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -246,7 +246,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
+    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
       await pool.query(
@@ -640,7 +640,7 @@ router.get('/invoices/:id/pdf', async (req, res) => {
       abn:         invoice.clientAbn,
     };
 
-    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number'];
+    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number'];
     const { rows: settingRows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [userId, settingKeys]
@@ -815,7 +815,7 @@ router.post('/invoices/:id/send', async (req, res) => {
     if (!to) return res.status(400).json({ error: 'No email address — supply one in the request body' });
 
     // Load finance settings
-    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_bsb','fin_account_number','fin_admin_email'];
+    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_bsb','fin_account_number','fin_admin_email'];
     const { rows: settings } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [userId, settingKeys]

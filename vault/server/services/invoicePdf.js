@@ -88,6 +88,7 @@ function buildDocument(deps, invoice, items, client, cfg) {
   const headerLeft = React.createElement(View, { style: styles.headerLeft },
     logoExists && React.createElement(Image, { src: LOGO_PATH, style: styles.logo }),
     cfg.fin_biz_name && React.createElement(Text, { style: styles.bizName }, cfg.fin_biz_name),
+    cfg.fin_website  && React.createElement(Text, { style: styles.bizDetail }, cfg.fin_website),
     cfg.fin_address  && React.createElement(Text, { style: styles.bizDetail }, cfg.fin_address),
     cfg.fin_abn      && React.createElement(Text, { style: [styles.bizDetail, { marginTop: 2 }] }, `ABN: ${cfg.fin_abn}`),
   );

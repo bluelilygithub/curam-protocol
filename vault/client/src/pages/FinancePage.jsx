@@ -4765,7 +4765,7 @@ function AssetsSettingsSection() {
 
 function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const [form, setForm] = useState({
-    fin_biz_name: '', fin_abn: '', fin_address: '',
+    fin_biz_name: '', fin_abn: '', fin_address: '', fin_website: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
     fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '',
     fin_reminder_hour: '8',
@@ -4839,6 +4839,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
         <Field label="Business Name"><Tooltip text="Shown on invoices, quotes, and emails sent to clients"><Input value={f('fin_biz_name')} onChange={set('fin_biz_name')} placeholder="Your Business Name Pty Ltd" /></Tooltip></Field>
         <Field label="ABN"><Tooltip text="Your Australian Business Number — printed on every invoice/quote"><Input value={f('fin_abn')} onChange={set('fin_abn')} placeholder="12 345 678 901" /></Tooltip></Field>
         <Field label="Business Address"><Tooltip text="Printed on invoices and quotes"><Input value={f('fin_address')} onChange={set('fin_address')} placeholder="Street, City, State, Postcode" /></Tooltip></Field>
+        <Field label="Website"><Tooltip text="Printed under your business name on invoices and quotes"><Input value={f('fin_website')} onChange={set('fin_website')} placeholder="https://yourbusiness.com" /></Tooltip></Field>
 
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Bank Details</p>
