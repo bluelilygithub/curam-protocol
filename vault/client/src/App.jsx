@@ -24,6 +24,7 @@ import ChainsPage from './pages/ChainsPage';
 import GraphPage from './pages/GraphPage';
 import FinancePage from './pages/FinancePage';
 import ClientsPage from './pages/ClientsPage';
+import PipelinePage from './pages/PipelinePage';
 import ClientDetailPage from './pages/ClientDetailPage';
 import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
@@ -155,6 +156,7 @@ function App() {
               <Route path="/graph"    element={<GraphPage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:id" element={<ClientDetailPage />} />
+              <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />

@@ -36,10 +36,19 @@ async function assertDealOwner(dealId, userId, res) {
 
 // ── Deals ──────────────────────────────────────────────────────────────────────
 
-// GET /api/deals?clientId=&stage=&open=true
+// Whitelisted sort columns — never interpolate req.query directly into ORDER BY.
+const SORT_COLUMNS = {
+  closeDate: `COALESCE(d."actualCloseDate", d."expectedCloseDate")`,
+  value: `d.value`,
+  stage: `d.stage`,
+};
+
+// GET /api/deals?clientId=&stage=lead,qualified&open=true&sortBy=closeDate&order=asc
+// clientId omitted = every deal across every client (workspace-wide Deals/
+// Pipeline view), joined to client name so the caller can display it.
 router.get('/', async (req, res) => {
   try {
-    const { clientId, stage, open } = req.query;
+    const { clientId, stage, open, sortBy, order } = req.query;
     const where = ['d."userId" = $1'];
     const params = [req.user.id];
 
@@ -48,12 +57,20 @@ router.get('/', async (req, res) => {
       where.push(`d."clientId" = $${params.length}`);
     }
     if (stage) {
-      params.push(stage);
-      where.push(`d.stage = $${params.length}`);
+      // Accepts one stage ("lead") or several ("lead,qualified") — the
+      // workspace-wide view's multi-select filter uses the latter.
+      const stages = stage.split(',').map(s => s.trim()).filter(Boolean);
+      if (stages.length) {
+        params.push(stages);
+        where.push(`d.stage = ANY($${params.length})`);
+      }
     }
     if (open === 'true') {
       where.push(`d.stage NOT IN ('won','lost')`);
     }
+
+    const sortCol = SORT_COLUMNS[sortBy] || SORT_COLUMNS.closeDate;
+    const sortDir = order === 'desc' ? 'DESC' : 'ASC';
 
     const { rows } = await pool.query(
       `SELECT d.*, c.name AS "clientName"
@@ -62,7 +79,7 @@ router.get('/', async (req, res) => {
        WHERE ${where.join(' AND ')}
        ORDER BY
          CASE d.stage WHEN 'won' THEN 1 WHEN 'lost' THEN 1 ELSE 0 END,
-         d."expectedCloseDate" ASC NULLS LAST, d."updatedAt" DESC`,
+         ${sortCol} ${sortDir} NULLS LAST, d."updatedAt" DESC`,
       params
     );
     res.json(rows);

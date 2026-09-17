@@ -54,6 +54,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'history',   label: 'Chat History',    path: '/history',     enabled: true },
   { id: 'studentSection', label: 'Student',    path: '/student/quiz', enabled: true },
   { id: 'clients',   label: 'CRM',             path: '/clients',     enabled: true },
+  { id: 'pipeline',  label: 'Pipeline',        path: '/pipeline',    enabled: true },
   { id: 'memory',    label: 'Memory',          path: '/memory',      enabled: true },
   { id: 'suggestions', label: 'Suggestions',   path: '/suggestions', enabled: true },
   { id: 'prompts',   label: 'Prompts',         path: '/prompts',     enabled: true },
