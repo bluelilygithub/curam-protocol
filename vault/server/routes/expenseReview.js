@@ -77,7 +77,19 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
   const amount      = overrides.amount ?? queueRow.amount;
   const invoiceDate = overrides.invoiceDate ?? queueRow.invoiceDate;
   const category    = overrides.category ?? queueRow.category;
-  const paidViaId   = overrides.paidViaId ?? queueRow.paidViaId ?? null;
+  // Default to the Credit Card account (2100) rather than Bank/Cash — invoices arriving via
+  // the mail agent are, in practice, always paid by card, not straight bank transfer. Explicit
+  // override (from the review UI picker) still wins.
+  let paidViaId = overrides.paidViaId ?? queueRow.paidViaId ?? null;
+  if (paidViaId == null) {
+    await dbClient.query(
+      `INSERT INTO fin_accounts ("userId", code, name, type, "isSystem") VALUES ($1,'2100','Credit Card','liability',true)
+       ON CONFLICT ("userId", code) DO NOTHING`,
+      [userId]
+    );
+    const { rows: ccRows } = await dbClient.query(`SELECT id FROM fin_accounts WHERE "userId"=$1 AND code='2100'`, [userId]);
+    paidViaId = ccRows[0]?.id ?? null;
+  }
   const txCodeId    = overrides.txCodeId ?? queueRow.txCodeId ?? null;
   // The extraction prompt (server/routes/gmail.js extractInvoiceFromPdf) now asks the model
   // whether the invoice total includes GST — stored on rawExtraction since expense_review_queue

@@ -270,7 +270,7 @@ export default function ExpenseReviewPage() {
                     className="text-xs px-1.5 py-1 rounded w-full"
                     style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                   >
-                    <option value="">Bank / Cash (default)</option>
+                    <option value="">Credit Card (default — invoices from the mail agent)</option>
                     {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
                   </select>
                 </td>
