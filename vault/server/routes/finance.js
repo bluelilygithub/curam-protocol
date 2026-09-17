@@ -4550,7 +4550,10 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
 });
 
 // Exposed for server/routes/expenseReview.js so bulk expense creation from the invoice
-// review queue reuses the exact same insert+journal path as manual expense entry.
+// review queue reuses the exact same insert+journal path as manual expense entry, and
+// (RECEIPT_DIR) so it can drop the already-downloaded invoice PDF straight into Finance's
+// existing receipt storage instead of inventing a second file location.
 router.createExpenseRecord = createExpenseRecord;
+router.RECEIPT_DIR = RECEIPT_DIR;
 
 module.exports = router;

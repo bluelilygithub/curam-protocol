@@ -1401,6 +1401,7 @@ function ExpensesTab({ from, to }) {
   const [viewReceiptModal, setViewReceiptModal] = useState(null); // { expense, url, isPdf }
   const [receiptUploading, setReceiptUploading] = useState(false);
   const receiptInputRef = useRef(null);
+  const [newExpenseFile, setNewExpenseFile] = useState(null); // invoice/receipt attached inline on the Add Expense form
   const addToast = useToastStore(s => s.addToast);
   const [poolElection, setPoolElection] = useState({ elected: false });
   useEffect(() => {
@@ -1430,6 +1431,7 @@ function ExpensesTab({ from, to }) {
   const openNew = () => {
     setEditing(null);
     setForm({ ...BLANK_EXPENSE, date: todayStr() });
+    setNewExpenseFile(null);
     setError('');
     setShowForm(true);
   };
@@ -1453,7 +1455,7 @@ function ExpensesTab({ from, to }) {
     setShowForm(true);
   };
 
-  const cancelForm = () => { setShowForm(false); setEditing(null); setError(''); };
+  const cancelForm = () => { setShowForm(false); setEditing(null); setNewExpenseFile(null); setError(''); };
 
   // A capital asset over $300 needs a depreciation schedule, not just a badge — route it
   // through the Assets register (same table/engine as the Assets tab) instead of a plain
@@ -1511,6 +1513,22 @@ function ExpensesTab({ from, to }) {
         // Split-purchase check — identical items bought the same day under $300 each that add
         // up past it may need treating as one capital purchase, not several immediate deductions.
         if (body.warning) addToast(body.warning, 'error');
+
+        // Invoice/receipt attached inline on this form — upload it via the same endpoint the
+        // existing per-row receipt icon already uses, now that we have the new expense's id.
+        // A failed upload doesn't undo the (already-saved) expense — just surfaces a toast so
+        // the user knows to attach it manually from the row afterward.
+        if (newExpenseFile && body.id) {
+          try {
+            const fd = new FormData();
+            fd.append('receipt', newExpenseFile);
+            const upRes = await api.postForm(`/api/finance/expenses/${body.id}/receipt`, fd);
+            const upBody = await upRes.json();
+            if (!upRes.ok || upBody.error) throw new Error(upBody.error || 'Failed to attach invoice');
+          } catch (upErr) {
+            addToast(`Expense saved, but invoice upload failed: ${upErr.message}`, 'error');
+          }
+        }
       }
       load();
       cancelForm();
@@ -1709,6 +1727,24 @@ function ExpensesTab({ from, to }) {
                 </div>
               </Tooltip>
             </Field>
+            {!editingExpense && !needsAssetFields && (
+              <div className="col-span-2">
+                <Field label="Invoice / Receipt (optional)">
+                  <Tooltip text="Attach the invoice or receipt for this expense now — same file you'd otherwise add afterward from the expense list. JPG, PNG, GIF, WebP, or PDF, max 5 MB.">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                      onChange={e => setNewExpenseFile(e.target.files?.[0] || null)}
+                      className="text-sm"
+                      style={{ color: 'var(--color-text)' }}
+                    />
+                  </Tooltip>
+                  {newExpenseFile && (
+                    <span className="text-xs block mt-1" style={{ color: 'var(--color-muted)' }}>{newExpenseFile.name}</span>
+                  )}
+                </Field>
+              </div>
+            )}
           </div>
           {needsAssetFields && (
             <div className="p-3 rounded-lg border mb-3 mt-1" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-bg)' }}>

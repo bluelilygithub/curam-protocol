@@ -8,10 +8,28 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 const { pool } = require('../db');
 const financeRouter = require('./finance');
 
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'duplicate'];
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+
+// Copies the invoice PDF already downloaded to expense_review_queue."s3Url" (a local disk
+// path, see the column comment in db.js) into Finance's own receipt storage and returns the
+// filename to store in fin_expenses.receipt_path — so the expense created from a queue row
+// shows up with a receipt link in Finance's existing expense-list UI, using the same storage
+// finance.js already reads/serves via GET/POST /expenses/:id/receipt, instead of inventing a
+// second attachment mechanism. Returns null (no throw) if the source file is missing.
+function linkQueuePdfAsReceipt(queueRow) {
+  if (!queueRow.s3Url) return null;
+  const srcPath = path.join(UPLOAD_DIR, queueRow.s3Url);
+  if (!fs.existsSync(srcPath)) return null;
+  fs.mkdirSync(financeRouter.RECEIPT_DIR, { recursive: true });
+  const filename = `expense-review-${queueRow.id}${path.extname(queueRow.s3Url) || '.pdf'}`;
+  fs.copyFileSync(srcPath, path.join(financeRouter.RECEIPT_DIR, filename));
+  return filename;
+}
 
 // GET /api/expense-review?reviewStatus=pending
 router.get('/', async (req, res) => {
@@ -68,6 +86,11 @@ async function createExpenseForQueueRow(dbClient, userId, queueRow, overrides = 
     category,
     supplier: vendor,
   });
+
+  const receiptFilename = linkQueuePdfAsReceipt(queueRow);
+  if (receiptFilename) {
+    await dbClient.query(`UPDATE fin_expenses SET receipt_path=$1 WHERE id=$2`, [receiptFilename, expense.id]);
+  }
 
   await dbClient.query(
     `UPDATE expense_review_queue
