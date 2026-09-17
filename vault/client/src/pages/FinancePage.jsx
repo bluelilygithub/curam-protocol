@@ -2528,7 +2528,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to log trip');
-      addToast('Trip logged');
+      addToast('Trip logged — not an expense yet. Use "Post Deduction" below when ready.');
       setVTripForm({ tripDate: todayStr(), km: '', purpose: VEHICLE_PURPOSES[0], description: '' });
       loadVPending();
     } catch (e) { addToast(e.message, 'error'); } finally { setVTripLogging(false); }
@@ -2787,10 +2787,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             )}
           </div>
           {lockedVMethod === 'cents_per_km' && (
-            <Tooltip text="All km logged in the trip diary since the last posted deduction — captured via 'Log Trip' above, not editable here. Deductible is this × the current ATO rate.">
-              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 cursor-help" style={{ color: 'var(--color-text)' }}>
-                <span>{vPending.km.toFixed(2)} km pending posting</span>
-                <span style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(vehicleDeductible)}</span>
+            <Tooltip text="All km logged in the trip diary since the last posted deduction — captured via 'Log Trip' above, not editable here. Deductible is this × the current ATO rate. It will not appear in the Expenses tab until you click Post Deduction below.">
+              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 px-3 py-2 rounded-lg cursor-help" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b' }}>
+                <span>{vPending.km.toFixed(2)} km logged, not yet posted</span>
+                <span>Deductible: {fmt(vehicleDeductible)}</span>
               </p>
             </Tooltip>
           )}
@@ -2897,10 +2897,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
             </div>
           )}
           {lockedHMethod === 'fixed_rate' && (
-            <Tooltip text="All hours logged in the diary since the last posted deduction (not capped at 14 days, unlike the summary line above) — captured entirely by the daily reminder popup, not editable here. Deductible is this × the current ATO rate.">
-              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 cursor-help" style={{ color: 'var(--color-text)' }}>
-                <span>{hPending.hours.toFixed(2)} hours pending posting</span>
-                <span style={{ color: 'var(--color-primary)' }}>Deductible: {fmt(homeOfficeDeductible)}</span>
+            <Tooltip text="All hours logged in the diary since the last posted deduction (not capped at 14 days, unlike the summary line above) — captured entirely by the daily reminder popup, not editable here. Deductible is this × the current ATO rate. It will not appear in the Expenses tab until you click Post Deduction below.">
+              <p className="flex items-baseline justify-between text-sm font-semibold mb-3 px-3 py-2 rounded-lg cursor-help" style={{ color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b' }}>
+                <span>{hPending.hours.toFixed(2)} hours logged, not yet posted</span>
+                <span>Deductible: {fmt(homeOfficeDeductible)}</span>
               </p>
             </Tooltip>
           )}
