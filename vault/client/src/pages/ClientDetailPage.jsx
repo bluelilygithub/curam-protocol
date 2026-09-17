@@ -1066,11 +1066,65 @@ function TouchpointsSection({ clientId, touchpoints, contacts, deals, onRefresh 
 
 // ── Communications section (Gmail) ────────────────────────────────────────────
 
+// Fetches and displays the full email thread (not just the search snippet)
+// via the existing GET /api/gmail/thread/:threadId endpoint (already used
+// by GmailIntelPage) — the read-more escape hatch for CRM email search.
+function EmailThreadModal({ threadId, subject, onClose }) {
+  const [thread,  setThread]  = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/api/gmail/thread/${threadId}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setThread(d); })
+      .catch(e => { if (!cancelled) setError(e.message || 'Failed to load thread'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [threadId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <div className="relative w-full max-w-2xl rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <span className="font-semibold text-sm truncate pr-3" style={{ color: 'var(--color-text)' }}>{subject || '(no subject)'}</span>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <a
+              href={`https://mail.google.com/mail/u/0/#all/${threadId}`}
+              target="_blank" rel="noreferrer"
+              className="text-xs hover:opacity-70 transition-opacity"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              Open in Gmail →
+            </a>
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded hover:opacity-60 text-base" style={{ color: 'var(--color-muted)' }}>✕</button>
+          </div>
+        </div>
+        <div className="p-5">
+          {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+          {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
+          {thread?.messages?.map(m => (
+            <div key={m.id} className="mb-4 last:mb-0 pb-4 last:pb-0 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
+                <span className="font-medium" style={{ color: 'var(--color-text)' }}>{m.from}</span> → {m.to}
+                <span className="ml-2">{m.date}</span>
+              </div>
+              <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{m.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CommunicationsSection({ clientId, clientName, contacts, gmailStatus }) {
   const [query,    setQuery]    = useState('');
   const [results,  setResults]  = useState(null);
   const [loading,  setLoading]  = useState(false);
   const [lastQ,    setLastQ]    = useState('');
+  const [openThread, setOpenThread] = useState(null); // { threadId, subject } | null
 
   const contactsWithEmail = contacts.filter(c => c.email);
 
@@ -1159,9 +1213,10 @@ function CommunicationsSection({ clientId, clientName, contacts, gmailStatus }) 
       {results?.results?.length > 0 && (
         <div className="flex flex-col rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
           {results.results.map(r => (
-            <div
+            <button
               key={r.id}
-              className="px-3 py-2.5 border-b last:border-b-0"
+              onClick={() => setOpenThread({ threadId: r.threadId, subject: r.subject })}
+              className="text-left w-full px-3 py-2.5 border-b last:border-b-0 hover:opacity-70 transition-opacity"
               style={{ borderColor: 'var(--color-border)' }}
             >
               <div className="flex items-start justify-between gap-2">
@@ -1174,7 +1229,7 @@ function CommunicationsSection({ clientId, clientName, contacts, gmailStatus }) 
               {r.snippet && (
                 <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -1184,6 +1239,14 @@ function CommunicationsSection({ clientId, clientName, contacts, gmailStatus }) 
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Searching {contactsWithEmail.length} contact email{contactsWithEmail.length !== 1 ? 's' : ''}. Leave blank to see all recent emails.
         </p>
+      )}
+
+      {openThread && (
+        <EmailThreadModal
+          threadId={openThread.threadId}
+          subject={openThread.subject}
+          onClose={() => setOpenThread(null)}
+        />
       )}
     </div>
   );
