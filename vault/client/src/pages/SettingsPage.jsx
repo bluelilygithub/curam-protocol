@@ -59,16 +59,9 @@ function SettingsPage() {
   const [inquiryDays,      setInquiryDays]      = useState([1, 3, 5]); // Mon/Wed/Fri default
   const [inquirySaved,     setInquirySaved]     = useState(false);
 
-  // News Digest settings — sources are grouped: { groupName: [{name,url,enabled,isSystem?}] }.
-  // Left empty until the GET /api/news-digest/settings effect below populates it from the
-  // server's own defaults (server/services/newsAggregationService.js DEFAULT_SOURCE_GROUPS) —
-  // no need to duplicate that list here too.
-  const [digestTime,        setDigestTime]        = useState('07:00');
-  const [digestDays,        setDigestDays]        = useState([0, 1, 2, 3, 4, 5, 6]);
-  const [digestSources,     setDigestSources]     = useState({});
-  const [digestSaved,       setDigestSaved]       = useState(false);
-  const [newFeedName,   setNewFeedName]   = useState('');
-  const [newFeedUrl,    setNewFeedUrl]    = useState('');
+  // News Digest schedule/sources settings moved to client/src/pages/NewsDigestPage.jsx
+  // (DigestSettingsPanel) — they belong next to the feature that uses them, not in this
+  // separate admin-only menu.
 
   const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
   const { token, user } = useAuthStore();
@@ -204,7 +197,6 @@ function SettingsPage() {
         'Tasks',
         'Goals',
         'Integrations',
-        'News Digest',
         'Shares',
         'Amazon Search',
         'Mobile',
@@ -233,7 +225,6 @@ function SettingsPage() {
           'Tasks',
           'Goals',
           'Integrations',
-          'News Digest',
           'Shares',
           'Amazon Search',
           'Mobile',
@@ -393,13 +384,6 @@ function SettingsPage() {
       if (Array.isArray(data?.marketplaces)) setProductScoutMarketplaces(data.marketplaces);
       if (data?.amazonDomainFromEnv) setProductScoutDomainFromEnv(true);
     }).catch(() => {});
-
-    api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
-      if (data.time)    setDigestTime(data.time);
-      if (data.days)    setDigestDays(data.days);
-      if (data.sources) setDigestSources(data.sources);
-    }).catch(() => {});
-
 
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
@@ -615,16 +599,6 @@ function SettingsPage() {
     ]);
     setInquirySaved(true);
     setTimeout(() => setInquirySaved(false), 2000);
-  }
-
-  async function saveDigestSettings() {
-    try {
-      await api.post('/api/news-digest/settings', { time: digestTime, days: digestDays, sources: digestSources });
-      setDigestSaved(true);
-      setTimeout(() => setDigestSaved(false), 2000);
-    } catch {
-      // silent
-    }
   }
 
   function updateContentRestriction(index, value) {
@@ -2284,175 +2258,6 @@ function SettingsPage() {
           style={{ background: inquirySaved ? '#22c55e' : 'var(--color-primary)' }}
         >
           {inquirySaved ? 'Saved ✓' : 'Save'}
-        </button>
-      </section>
-      )}
-
-      {/* News Digest tab */}
-      {tab === 'News Digest' && (
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
-          Schedule
-        </h2>
-        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          When the daily digest runs automatically. Uses the timezone set in your Profile.
-        </p>
-
-        <div className="mb-5">
-          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
-            Time
-          </label>
-          <input
-            type="time"
-            value={digestTime}
-            onChange={e => setDigestTime(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border text-sm outline-none"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
-            Days
-          </label>
-          <div className="flex gap-1.5 flex-wrap">
-            {[
-              { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
-              { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' },
-              { day: 0, label: 'Sun' },
-            ].map(({ day, label }) => {
-              const active = digestDays.includes(day);
-              return (
-                <button
-                  key={day}
-                  onClick={() => setDigestDays(prev =>
-                    prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
-                  )}
-                  className="px-2.5 py-1 rounded-lg border text-xs font-medium transition-all"
-                  style={{
-                    background:  active ? 'var(--color-primary)' : 'var(--color-surface)',
-                    borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-                    color:       active ? '#fff' : 'var(--color-text)',
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
-          Sources
-        </h2>
-        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          Toggle sources on or off, or add custom RSS feeds.
-        </p>
-
-        <div className="space-y-4 mb-4">
-          {Object.entries(digestSources).map(([groupName, groupSources]) => (
-            <div key={groupName}>
-              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--color-muted)' }}>{groupName}</p>
-              <div className="space-y-2">
-                {groupSources.map((source, i) => (
-                  <div
-                    key={source.url + i}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium" style={{ color: source.enabled !== false ? 'var(--color-text)' : 'var(--color-muted)' }}>
-                        {source.name}
-                      </p>
-                      {source.url !== '__google_news__' && (
-                        <p className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>{source.url}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div
-                        onClick={() => setDigestSources(prev => ({
-                          ...prev,
-                          [groupName]: prev[groupName].map((s, idx) => idx === i ? { ...s, enabled: s.enabled === false } : s),
-                        }))}
-                        className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
-                        style={{ background: source.enabled !== false ? 'var(--color-primary)' : 'var(--color-border)', cursor: 'pointer' }}
-                      >
-                        <span
-                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                          style={{ transform: source.enabled !== false ? 'translateX(17px)' : 'translateX(1px)' }}
-                        />
-                      </div>
-                      {/* Only allow deleting custom (non-default) sources */}
-                      {!source.isSystem && (
-                        <button
-                          onClick={() => setDigestSources(prev => {
-                            const next = { ...prev, [groupName]: prev[groupName].filter((_, idx) => idx !== i) };
-                            if (!next[groupName].length) delete next[groupName];
-                            return next;
-                          })}
-                          className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-60"
-                          style={{ color: '#ef4444' }}
-                          title="Remove"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Add custom RSS feed — goes into its own "Custom" group */}
-        <div
-          className="p-3 rounded-xl border space-y-2 mb-5"
-          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-        >
-          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Add custom RSS feed</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newFeedName}
-              onChange={e => setNewFeedName(e.target.value)}
-              placeholder="Name (e.g. BBC News)"
-              className="flex-1 px-3 py-1.5 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            <input
-              type="url"
-              value={newFeedUrl}
-              onChange={e => setNewFeedUrl(e.target.value)}
-              placeholder="RSS URL"
-              className="flex-1 px-3 py-1.5 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            <button
-              onClick={() => {
-                if (!newFeedName.trim() || !newFeedUrl.trim()) return;
-                setDigestSources(prev => ({
-                  ...prev,
-                  Custom: [...(prev.Custom || []), { name: newFeedName.trim(), url: newFeedUrl.trim(), enabled: true }],
-                }));
-                setNewFeedName('');
-                setNewFeedUrl('');
-              }}
-              disabled={!newFeedName.trim() || !newFeedUrl.trim()}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              Add
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={saveDigestSettings}
-          className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-          style={{ background: digestSaved ? '#22c55e' : 'var(--color-primary)' }}
-        >
-          {digestSaved ? 'Saved ✓' : 'Save'}
         </button>
       </section>
       )}
