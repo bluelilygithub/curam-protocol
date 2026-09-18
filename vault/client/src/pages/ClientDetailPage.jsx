@@ -994,6 +994,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
   const [saving, setSaving]     = useState(false);
   const [followUpId, setFollowUpId] = useState(null); // touchpoint id currently showing the follow-up picker
   const [followUpDate, setFollowUpDate] = useState('');
+  const [followUpNote, setFollowUpNote] = useState('');
   const [schedulingId, setSchedulingId] = useState(null);
   const addToast = useToastStore(s => s.addToast);
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
@@ -1001,6 +1002,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
   const openFollowUp = (tp) => {
     setFollowUpId(tp.id);
     setFollowUpDate(inOneWeek());
+    setFollowUpNote(tp.note || ''); // prefilled from the touchpoint, editable — not locked to it
   };
 
   // Bridge: touchpoint (past) → task (future). One direction only — the
@@ -1014,7 +1016,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
     try {
       await api.post('/api/tasks', {
         title: `Follow up: ${tp.contactName || clientName || 'client'}${tp.dealTitle ? ` — ${tp.dealTitle}` : ''}`,
-        notes: tp.note || null,
+        notes: followUpNote.trim() || null,
         dueDate: followUpDate,
         category: FOLLOW_UP_CATEGORY,
         clientId,
@@ -1083,19 +1085,22 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{tp.note}</p>
             )}
             {followUpId === tp.id && (
-              <div className="flex items-center gap-2 mt-2">
-                <Input type="date" value={followUpDate} onChange={setFollowUpDate} />
-                <button
-                  onClick={() => scheduleFollowUp(tp)}
-                  disabled={schedulingId === tp.id || !followUpDate}
-                  className="text-xs px-2 py-1 rounded-lg font-medium disabled:opacity-40"
-                  style={{ background: 'var(--color-primary)', color: '#fff' }}
-                >
-                  {schedulingId === tp.id ? 'Scheduling…' : 'Save'}
-                </button>
-                <button onClick={() => setFollowUpId(null)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
-                  Cancel
-                </button>
+              <div className="flex flex-col gap-2 mt-2">
+                <Input rows={2} value={followUpNote} onChange={setFollowUpNote} placeholder="What's this follow-up about…" />
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={followUpDate} onChange={setFollowUpDate} />
+                  <button
+                    onClick={() => scheduleFollowUp(tp)}
+                    disabled={schedulingId === tp.id || !followUpDate}
+                    className="text-xs px-2 py-1 rounded-lg font-medium disabled:opacity-40 flex-shrink-0"
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}
+                  >
+                    {schedulingId === tp.id ? 'Scheduling…' : 'Save'}
+                  </button>
+                  <button onClick={() => setFollowUpId(null)} className="text-xs hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
           </div>
