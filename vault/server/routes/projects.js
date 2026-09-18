@@ -192,7 +192,10 @@ router.put('/:id', async (req, res) => {
       ]
     );
 
-    const { rows: updated } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: updated } = await pool.query(
+      `SELECT p.*, c.name AS "clientName" FROM projects p LEFT JOIN clients c ON c.id = p."clientId" WHERE p.id=$1`,
+      [req.params.id]
+    );
     await syncSearchIndex(updated[0]);
     res.json(updated[0]);
   } catch (err) {
