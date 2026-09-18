@@ -151,7 +151,9 @@ function emptyAnalysis(template) {
 }
 
 /**
- * Analyse articles for a topic using Gemini if available, otherwise Claude/DeepSeek fallback.
+ * Analyse articles for a topic using Gemini if available, otherwise the user's "light" tier
+ * model (see getModelsForUser) — not "standard", since this is a recurring background job,
+ * not user-facing chat, and "standard" may be set to a reasoning-heavy model unsuited to it.
  * @param {string} topicTitle
  * @param {Array}  articles
  * @param {Array}  [context]  - optional [{date, unbiasedSummary, commentary}]
@@ -168,7 +170,14 @@ async function analyseTopicArticles(topicTitle, articles, context, userId, templ
   }
 
   const prompt = buildPrompt(topicTitle, articles, context, template);
-  const { gemini: geminiModelId, standard: standardModelId } = await getModelsForUser(userId);
+  // "light" tier, not "standard" — this fallback only fires when Gemini's own quota is
+  // exhausted (a recurring background/bulk job pattern, not user-facing chat), and "standard"
+  // resolving to a reasoning-heavy model (confirmed: DeepSeek's retry-on-reasoning-exhaustion
+  // behavior inflating output to 12-32k tokens per call, causing both cost spikes and
+  // "Unterminated string in JSON" truncation) makes it a poor fit here regardless of which
+  // model a given workspace has set as its chat default. Scoped to this file only — does not
+  // change what "standard" means anywhere else in the app.
+  const { gemini: geminiModelId, light: fallbackModelId } = await getModelsForUser(userId);
   let raw;
   let usage = { inputTokens: 0, outputTokens: 0, model: null };
 
@@ -186,7 +195,7 @@ async function analyseTopicArticles(topicTitle, articles, context, userId, templ
         model: geminiModelId,
       };
     } catch (err) {
-      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to ${standardModelId}: ${err.message}`);
+      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to ${fallbackModelId}: ${err.message}`);
     }
   }
 
@@ -197,12 +206,12 @@ async function analyseTopicArticles(topicTitle, articles, context, userId, templ
     // "Unterminated string in JSON" failures in the suggestions log whenever Gemini's free-tier
     // quota forced a fallback) and silently failing that topic for the day.
     const maxTokens = template === 'digest' ? 3000 : 6000;
-    const result = await callModel(standardModelId, prompt, { maxTokens, returnUsage: true });
+    const result = await callModel(fallbackModelId, prompt, { maxTokens, returnUsage: true });
     raw = parseJSON(result.text || '{}');
     usage = {
       inputTokens: result.inputTokens || 0,
       outputTokens: result.outputTokens || 0,
-      model: standardModelId,
+      model: fallbackModelId,
     };
   }
 
