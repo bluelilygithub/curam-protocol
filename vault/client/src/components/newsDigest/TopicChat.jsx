@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
+import { mdComponents } from '../../utils/mdComponents';
+
+const REMARK_PLUGINS = [remarkGfm, remarkBreaks];
 
 export default function TopicChat({ topicId }) {
   const [messages, setMessages]   = useState(null); // null = not yet loaded
@@ -138,7 +144,15 @@ export default function TopicChat({ topicId }) {
                   <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
                     {msg.role === 'user' ? 'You' : 'AI'}
                   </p>
-                  <p style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-sm max-w-none text-sm leading-relaxed">
+                      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={mdComponents}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                  )}
                 </div>
               </div>
             ))}
