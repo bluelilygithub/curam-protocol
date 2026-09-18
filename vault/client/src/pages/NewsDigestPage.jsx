@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import useAuthStore from '../store/authStore';
+import useProcessingStore from '../store/processingStore';
 import ConfirmModal from '../components/ConfirmModal';
 import TopicChat from '../components/newsDigest/TopicChat';
 
@@ -899,6 +900,7 @@ export default function NewsDigestPage() {
   const [availableDates, setAvailableDates] = useState([]);
   const { addToast } = useToastStore();
   const { user } = useAuthStore();
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   // Load topics once
   useEffect(() => {
@@ -934,9 +936,9 @@ export default function NewsDigestPage() {
 
   const handleGenerate = async () => {
     setGenerating(true);
+    startProcessing('Building digest…', 'Analysing each active topic — this can take a minute or two, and costs real API tokens per topic. Please don’t navigate away.');
     try {
       await api.post('/api/news-digest/generate', { date });
-      addToast('Digest generation started — this may take a minute');
       // Poll for completion
       let attempts = 0;
       const poll = setInterval(async () => {
@@ -948,15 +950,19 @@ export default function NewsDigestPage() {
             setDigestData(data);
             clearInterval(poll);
             setGenerating(false);
+            stopProcessing();
+            const cost = Number(data.digest?.approxCostUsd) || 0;
+            addToast(cost > 0 ? `Digest generated — ~$${cost.toFixed(4)}` : 'Digest generated');
             // Add date to available dates if not already present
             setAvailableDates(prev => prev.includes(date) ? prev : [date, ...prev].sort().reverse());
           }
         } catch {}
-        if (attempts > 30) { clearInterval(poll); setGenerating(false); }
+        if (attempts > 30) { clearInterval(poll); setGenerating(false); stopProcessing(); addToast('Still generating — check back shortly', 'error'); }
       }, 5000);
     } catch {
       addToast('Failed to start generation', 'error');
       setGenerating(false);
+      stopProcessing();
     }
   };
 
