@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
@@ -167,10 +167,10 @@ function TagInput({ tags, onChange }) {
 
 // ── Collapsible section wrapper ────────────────────────────────────────────────
 
-function Section({ title, open, onToggle, children, action }) {
+function Section({ title, open, onToggle, children, action, sectionRef }) {
   const getIcon = useIcon();
   return (
-    <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+    <div ref={sectionRef} className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-2 px-4 py-3 text-left"
@@ -298,6 +298,15 @@ export default function ClientDetailPage() {
   });
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
+
+  const dealsRef    = useRef(null);
+  const projectsRef = useRef(null);
+  const sectionRefs = { deals: dealsRef, projects: projectsRef };
+
+  const goToSection = (key) => {
+    setSections(s => ({ ...s, [key]: true }));
+    setTimeout(() => sectionRefs[key]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -433,12 +442,16 @@ export default function ClientDetailPage() {
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           <StatCard label="Open pipeline" value={fmt(openPipelineValue)}
-                    sub={`${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length} open deal${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length !== 1 ? 's' : ''}`} />
-          <StatCard label="Projects"      value={projects?.length ?? 0}                          />
+                    sub={`${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length} open deal${(deals || []).filter(d => d.stage !== 'won' && d.stage !== 'lost').length !== 1 ? 's' : ''}`}
+                    onClick={() => goToSection('deals')} />
+          <StatCard label="Projects"      value={projects?.length ?? 0}
+                    onClick={() => goToSection('projects')} />
           <StatCard label="Invoiced YTD"  value={fmt(finance?.invoicedYTD)}
-                    sub={`${finance?.invoiceCount || 0} invoices`} />
+                    sub={`${finance?.invoiceCount || 0} invoices`}
+                    onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
           <StatCard label="Outstanding"   value={fmt(finance?.outstanding)}
-                    warn={parseFloat(finance?.outstanding) > 0} />
+                    warn={parseFloat(finance?.outstanding) > 0}
+                    onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
           <StatCard label="Since"         value={client.startDate ? fmtDate(client.startDate) : '—'} />
         </div>
 
@@ -464,7 +477,7 @@ export default function ClientDetailPage() {
         <div className="flex flex-col gap-3">
 
           {/* 0. Deals */}
-          <Section title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
+          <Section sectionRef={dealsRef} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
             <DealsSection
               clientId={id}
               deals={deals || []}
@@ -482,7 +495,7 @@ export default function ClientDetailPage() {
           </Section>
 
           {/* 2. Projects */}
-          <Section title={`Projects${projects?.length ? ` (${projects.length})` : ''}`} open={sections.projects} onToggle={() => toggleSection('projects')}>
+          <Section sectionRef={projectsRef} title={`Projects${projects?.length ? ` (${projects.length})` : ''}`} open={sections.projects} onToggle={() => toggleSection('projects')}>
             <ProjectsSection
               clientId={id}
               projects={projects || []}
@@ -538,13 +551,18 @@ export default function ClientDetailPage() {
 
 // ── Stat card ──────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, warn }) {
+function StatCard({ label, value, sub, warn, onClick }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <Tag
+      onClick={onClick}
+      className={`p-4 rounded-xl border text-left w-full transition-opacity ${onClick ? 'hover:opacity-70 cursor-pointer' : ''}`}
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+    >
       <div className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{label}</div>
       <div className="text-lg font-bold" style={{ color: warn ? '#f59e0b' : 'var(--color-text)' }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sub}</div>}
-    </div>
+    </Tag>
   );
 }
 

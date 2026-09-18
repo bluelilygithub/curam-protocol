@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
@@ -729,7 +729,7 @@ function calcTotals(items) {
   return { subtotal: subtotal.toFixed(2), gst: gst.toFixed(2), total: (subtotal + gst).toFixed(2) };
 }
 
-function InvoicesTab({ from, to, docType = 'invoice' }) {
+function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFilter }) {
   const isQuoteTab = docType === 'quote';
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
@@ -964,10 +964,18 @@ function InvoicesTab({ from, to, docType = 'invoice' }) {
         ))}
       </div>
 
+      {clientId && (
+        <div className="flex items-center gap-2 mb-3 text-xs px-2.5 py-1.5 rounded-md w-fit" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+          Filtered to {clients.find(c => String(c.id) === String(clientId))?.name || 'client'}
+          <button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button>
+        </div>
+      )}
+
       {(() => {
         const filtered = invoices.filter(inv => {
           if (isQuoteTab ? inv.docType !== 'quote' : inv.docType === 'quote') return false;
           if (filterStatus !== 'all' && displayStatus(inv) !== filterStatus) return false;
+          if (clientId && String(inv.clientRef) !== String(clientId)) return false;
           const d = String(inv.issueDate).slice(0, 10);
           if (from && d < from) return false;
           if (to   && d > to)   return false;
@@ -6446,7 +6454,9 @@ const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Drawi
 const NO_DATE_FILTER_TABS = new Set(['Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
-  const [tab, setTab] = useState('Dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const clientFilter = searchParams.get('clientId') || null;
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard');
   const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
   const [exporting, setExporting] = useState(null);
   const [exportModal, setExportModal]   = useState(null); // { type: 'myob'|'xero'|'excel' } | null
@@ -6454,6 +6464,12 @@ export default function FinancePage() {
   const [showHelp, setShowHelp] = useState(false);
   const [settingsFocusSection, setSettingsFocusSection] = useState(null);
   const addToast = useToastStore(s => s.addToast);
+
+  const clearClientFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('clientId');
+    setSearchParams(next, { replace: true });
+  };
 
   const goToVehicleHomeOfficeSettings = () => {
     setSettingsFocusSection('vehicleHomeOffice');
@@ -6531,8 +6547,8 @@ export default function FinancePage() {
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
         {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
-        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" />}
-        {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" />}
+        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" clientId={clientFilter} onClearClientFilter={clearClientFilter} />}
+        {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" clientId={clientFilter} onClearClientFilter={clearClientFilter} />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Drawings'  && <DrawingsTab  from={from} to={to} />}
