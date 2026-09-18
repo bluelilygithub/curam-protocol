@@ -4,6 +4,22 @@ Builds on the completed `clients`/`client_contacts`/`client_touchpoints`/`client
 
 **Status: items 1, 3 (partial), 4, 5 built, frontend built.** Schema + CRUD routes (`server/db.js`/`server/routes/deals.js`) and the `ClientDetailPage.jsx` Deals section (create/edit/delete, stage badges, open-pipeline stat card, deal-tagged touchpoints) are code-complete, pushed, not yet exercised in production. Item 2 (contact roles) needs no schema change, already true today. Item 6 (dashboard/reporting beyond the basic `/api/deals/pipeline` summary and the per-client pipeline stat) is not started — a workspace-wide deals dashboard, not just per-client, would be the next piece.
 
+## 9. Communication history — phase 1 scoping decision (2026-09-18)
+
+Follows the touchpoint→task follow-up bridge (§5). User asked for something closer to a Salesforce-style communication history; scoped down to three separate initiatives rather than built as one ask — this entry covers only the first and smallest.
+
+**Decision: reuse `client_touchpoints.type` as the channel field. No new column, no migration.**
+
+Checked production data first rather than assuming: `SELECT type, COUNT(*) FROM client_touchpoints GROUP BY type` returned exactly one row (`call`, count 1) — the table is effectively unused so far, so there's no drift/inconsistency to clean up, but also nothing to validate reuse against. The decision is "no data cost either way," not "confirmed safe by volume." `type` already carries channel-shaped values (`call`/`email`/`meeting` mixed with non-channel `decision`/`milestone`/`other`, free text, no CHECK constraint) — good enough to filter/group a communication view on directly.
+
+**Other two phase-1 questions:**
+- **Manual-only for now.** No Gmail/calendar auto-ingest. Revisit only if the manual log actually gets used.
+- **UI placement: filter within the existing Touchpoints section on `ClientDetailPage`, not a new tab.** Lower cost, and the page is already dense with sections.
+
+**Explicitly deferred, not part of this decision:** auto-logging emails/calls, threading, read receipts (all imply an integration, not a data-model change); file attachments on touchpoints (own initiative, §10 candidate, sequenced after this since it depends on the channel view existing first); calendar export (independent, lowest complexity, sequenced last — see chat history for the one-way-export-first reasoning).
+
+**Not yet built:** the actual filter-by-channel UI on the Touchpoints section. This entry is the scoping decision only.
+
 ---
 
 ## 1. `client_deals` (new) — the actual gap vs. Salesforce/HubSpot
