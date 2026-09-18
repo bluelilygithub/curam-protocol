@@ -3,19 +3,12 @@
 const express   = require('express');
 const router    = express.Router();
 const { pool }  = require('../db');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { generateDigestForUser } = require('../cron/newsDigestCron');
+const { generateDigestForUser, getConfiguredModels } = require('../cron/newsDigestCron');
 const { callModel } = require('../services/callModel');
-const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { getPrimaryAdminUserId } = require('../services/SuggestionService');
 
 const { DEFAULT_SOURCE_GROUPS } = require('../services/newsAggregationService');
-
-function getGemini() {
-  const key = process.env.GEMINI_API_KEY;
-  return key ? new GoogleGenerativeAI(key) : null;
-}
 
 // ── Topics ────────────────────────────────────────────────────────────────────
 
@@ -326,30 +319,27 @@ router.post('/topics/:topicId/chat', async (req, res) => {
       systemPrompt += 'No recent digest history is available for this topic. Answer generally.';
     }
 
-    // Call AI
+    // Call AI — same configured Primary/Fallback models as the digest analysis itself
+    // (Settings → News Digest → Settings), via callModel() which routes gemini-*/claude-*/
+    // deepseek-* ids generically (server/services/callModel.js) — no separate hardcoded
+    // Gemini SDK path needed here either.
     let aiText;
-    const { gemini: geminiModelId, light: lightModel } = await getModelsForUser(req.user?.id);
-    const gemini = getGemini();
-    if (gemini) {
+    const { primaryModelId, fallbackModelId } = await getConfiguredModels();
+    if (primaryModelId) {
       try {
-        const model = gemini.getGenerativeModel({ model: geminiModelId });
-        const result = await model.generateContent(`${systemPrompt}\n\nUser: ${message.trim()}`);
-        aiText = result.response.text();
-        logUsage({
-          userId: req.user?.id,
-          model: geminiModelId,
-          inputTokens: result.response.usageMetadata?.promptTokenCount,
-          outputTokens: result.response.usageMetadata?.candidatesTokenCount,
-          feature: 'news_digest',
-        });
+        const result = await callModel(primaryModelId, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
+        if (result.text) {
+          aiText = result.text;
+          logUsage({ userId: req.user?.id, model: primaryModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
+        }
       } catch (err) {
-        console.warn('[news-chat] Gemini failed, falling back to Claude:', err.message);
+        console.warn(`[news-chat] Primary model (${primaryModelId}) failed, falling back to ${fallbackModelId}:`, err.message);
       }
     }
 
     if (!aiText) {
-      const result = await callModel(lightModel, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
-      logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
+      const result = await callModel(fallbackModelId, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
+      logUsage({ userId: req.user?.id, model: fallbackModelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
       aiText = result.text
         || 'Sorry, I could not generate a response.';
     }
@@ -392,23 +382,22 @@ router.get('/settings', async (req, res) => {
   try {
     const adminId = await getPrimaryAdminUserId();
     let rows = [];
-    let defaultPrimary = null, defaultFallback = null;
     if (adminId) {
       ({ rows } = await pool.query(
         `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
-        [adminId, ['news_digest_time', 'news_digest_days', 'news_digest_sources', 'news_digest_primary_model', 'news_digest_fallback_model']]
+        [adminId, ['news_digest_time', 'news_digest_days', 'news_digest_sources']]
       ));
-      const tiers = await getModelsForUser(adminId).catch(() => ({}));
-      defaultPrimary = tiers.gemini || null;
-      defaultFallback = tiers.light || null;
     }
+    // Same resolver used by the cron itself and by the per-topic chat route, so this always
+    // reflects what would actually run — not a separately-maintained default guess.
+    const { primaryModelId, fallbackModelId } = await getConfiguredModels();
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
       time:    map.news_digest_time    || '07:00',
       days:    map.news_digest_days    ? JSON.parse(map.news_digest_days)    : [0, 1, 2, 3, 4, 5, 6],
       sources: map.news_digest_sources ? JSON.parse(map.news_digest_sources) : DEFAULT_SOURCE_GROUPS,
-      primaryModel:  map.news_digest_primary_model  || defaultPrimary,
-      fallbackModel: map.news_digest_fallback_model || defaultFallback,
+      primaryModel:  primaryModelId,
+      fallbackModel: fallbackModelId,
     });
   } catch (err) {
     console.error(err);
