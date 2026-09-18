@@ -65,9 +65,17 @@ ALTER TABLE client_touchpoints ADD COLUMN IF NOT EXISTS "dealId" INTEGER REFEREN
 
 Auto-logging plan (Phase 2 of the CRM feature, not MVP): once Finance and Gmail-search touchpoints are wired to write here automatically (via `SuggestionService`-style capture, not `SuggestionService` itself — this is a direct data write, not an inbox suggestion), the client detail page's activity feed becomes real without extra UI work, since it already reads `client_touchpoints`.
 
-## 5. Tasks integration (new, small)
+## 5. Tasks integration (done)
 
-`tasks` currently has no direct client link — Tasks reaches a client only by joining through `projects.clientId`, which means a task not attached to a project can't be tied to a client at all.
+**Status: write gap closed.** The columns below were added and the read-path query fixes described here were made, but the create/update routes in `tasks.js` never accepted `clientId`/`dealId` in the request body — so nothing could ever populate them through the app. Fixed: `POST /api/tasks` and `PUT /api/tasks/:id` now accept both fields directly (`tasks.js` insert/update statements).
+
+**Touchpoint → task bridge:** `ClientDetailPage.jsx`'s `TouchpointsSection` has a "+ Follow up" action per touchpoint row (inline due-date picker, defaults one week out) that creates a task via `POST /api/tasks` with `clientId`, `dealId` (from the touchpoint if deal-tagged, else null), a title derived from the contact/deal, and `category: FOLLOW_UP_CATEGORY` (`'follow-up'`, `client/src/utils/taskCategories.js` — the one shared constant so the button, any future task-list filter, and digest logic can't drift on the literal). One direction only: touchpoints stay a pure past-tense log and never grow their own scheduling fields — scheduling always means "create a task."
+
+**Known gap, not solved by this pass:** a scheduled follow-up's due date only surfaces via `MorningDigest` (in-app, once per day, pulled on load) — there is no email/push reminder for tasks (Shares/Finance have cron emails, Tasks doesn't). Acceptable for now; revisit only if the follow-up flow sees real use and misses get reported.
+
+**Deliberately deferred:** an automated stale-contact/stale-deal nudge (`SuggestionService.captureIf` on N-days-no-touchpoint) was considered alongside this but cut — it's a different kind of work (a new heuristic/notification concern, not a data-model fix) and belongs in its own pass once usage of the follow-up flow above is observed.
+
+`tasks` previously had no direct client link — Tasks reached a client only by joining through `projects.clientId`, which meant a task not attached to a project couldn't be tied to a client at all.
 
 ```sql
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL;

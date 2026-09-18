@@ -6,6 +6,7 @@ import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
+import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -516,6 +517,7 @@ export default function ClientDetailPage() {
           <Section title={`Touchpoints${touchpoints?.length ? ` (${touchpoints.length})` : ''}`} open={sections.touchpoints} onToggle={() => toggleSection('touchpoints')}>
             <TouchpointsSection
               clientId={id}
+              clientName={client?.name}
               touchpoints={touchpoints || []}
               contacts={contacts || []}
               deals={deals || []}
@@ -979,12 +981,53 @@ function ProjectsSection({ clientId, projects, tasks, projectStatus, onRefresh }
 
 const BLANK_TP = { type: 'call', date: '', contactId: '', dealId: '', note: '' };
 
-function TouchpointsSection({ clientId, touchpoints, contacts, deals, onRefresh }) {
+// Default follow-up due date: one week out, editable in the inline picker.
+function inOneWeek() {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
+function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals, onRefresh }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ ...BLANK_TP, date: todayStr() });
   const [saving, setSaving]     = useState(false);
+  const [followUpId, setFollowUpId] = useState(null); // touchpoint id currently showing the follow-up picker
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [schedulingId, setSchedulingId] = useState(null);
   const addToast = useToastStore(s => s.addToast);
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+
+  const openFollowUp = (tp) => {
+    setFollowUpId(tp.id);
+    setFollowUpDate(inOneWeek());
+  };
+
+  // Bridge: touchpoint (past) → task (future). One direction only — the
+  // touchpoint itself never grows scheduling fields. Always sends both
+  // clientId and dealId (dealId null if the touchpoint isn't deal-tagged);
+  // both are already in scope here since this section only ever renders on
+  // ClientDetailPage. See docs/crm-migration.md / crm-deals-schema.md §5.
+  const scheduleFollowUp = async (tp) => {
+    if (!followUpDate) return;
+    setSchedulingId(tp.id);
+    try {
+      await api.post('/api/tasks', {
+        title: `Follow up: ${tp.contactName || clientName || 'client'}${tp.dealTitle ? ` — ${tp.dealTitle}` : ''}`,
+        notes: tp.note || null,
+        dueDate: followUpDate,
+        category: FOLLOW_UP_CATEGORY,
+        clientId,
+        dealId: tp.dealId || null,
+      }).then(r => r.json());
+      addToast('Follow-up scheduled');
+      setFollowUpId(null);
+    } catch (e) {
+      addToast(e.message || 'Failed to schedule follow-up', 'error');
+    } finally {
+      setSchedulingId(null);
+    }
+  };
 
   const save = async () => {
     if (!form.date || !form.type) return;
@@ -1039,7 +1082,32 @@ function TouchpointsSection({ clientId, touchpoints, contacts, deals, onRefresh 
             {tp.note && (
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{tp.note}</p>
             )}
+            {followUpId === tp.id && (
+              <div className="flex items-center gap-2 mt-2">
+                <Input type="date" value={followUpDate} onChange={setFollowUpDate} />
+                <button
+                  onClick={() => scheduleFollowUp(tp)}
+                  disabled={schedulingId === tp.id || !followUpDate}
+                  className="text-xs px-2 py-1 rounded-lg font-medium disabled:opacity-40"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}
+                >
+                  {schedulingId === tp.id ? 'Scheduling…' : 'Save'}
+                </button>
+                <button onClick={() => setFollowUpId(null)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
+          {followUpId !== tp.id && (
+            <button
+              onClick={() => openFollowUp(tp)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 rounded-lg border hover:opacity-60 flex-shrink-0"
+              style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+            >
+              + Follow up
+            </button>
+          )}
           <button
             onClick={() => del(tp)}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1 py-1 rounded hover:opacity-60 flex-shrink-0"
