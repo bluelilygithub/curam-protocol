@@ -167,10 +167,14 @@ function TagInput({ tags, onChange }) {
 
 // ── Collapsible section wrapper ────────────────────────────────────────────────
 
-function Section({ title, open, onToggle, children, action, sectionRef }) {
+function Section({ title, open, onToggle, children, action, sectionRef, flash }) {
   const getIcon = useIcon();
   return (
-    <div ref={sectionRef} className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+    <div
+      ref={sectionRef}
+      className="rounded-xl border transition-colors"
+      style={{ borderColor: flash ? 'var(--color-primary)' : 'var(--color-border)', boxShadow: flash ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent)' : 'none' }}
+    >
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-2 px-4 py-3 text-left"
@@ -302,10 +306,13 @@ export default function ClientDetailPage() {
   const dealsRef    = useRef(null);
   const projectsRef = useRef(null);
   const sectionRefs = { deals: dealsRef, projects: projectsRef };
+  const [flashSection, setFlashSection] = useState(null);
 
   const goToSection = (key) => {
     setSections(s => ({ ...s, [key]: true }));
     setTimeout(() => sectionRefs[key]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    setFlashSection(key);
+    setTimeout(() => setFlashSection(null), 1200);
   };
 
   const load = useCallback(async () => {
@@ -452,7 +459,7 @@ export default function ClientDetailPage() {
           <StatCard label="Outstanding"   value={fmt(finance?.outstanding)}
                     warn={parseFloat(finance?.outstanding) > 0}
                     onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
-          <StatCard label="Since"         value={client.startDate ? fmtDate(client.startDate) : '—'} />
+          <StatCard label="Client since"  value={client.startDate ? fmtDate(client.startDate) : '—'} />
         </div>
 
         {/* Notes / how they work */}
@@ -477,7 +484,7 @@ export default function ClientDetailPage() {
         <div className="flex flex-col gap-3">
 
           {/* 0. Deals */}
-          <Section sectionRef={dealsRef} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
+          <Section sectionRef={dealsRef} flash={flashSection === 'deals'} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
             <DealsSection
               clientId={id}
               deals={deals || []}
@@ -495,7 +502,7 @@ export default function ClientDetailPage() {
           </Section>
 
           {/* 2. Projects */}
-          <Section sectionRef={projectsRef} title={`Projects${projects?.length ? ` (${projects.length})` : ''}`} open={sections.projects} onToggle={() => toggleSection('projects')}>
+          <Section sectionRef={projectsRef} flash={flashSection === 'projects'} title={`Projects${projects?.length ? ` (${projects.length})` : ''}`} open={sections.projects} onToggle={() => toggleSection('projects')}>
             <ProjectsSection
               clientId={id}
               projects={projects || []}
