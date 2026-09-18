@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import useProcessingStore from '../store/processingStore';
 import ConfirmModal from '../components/ConfirmModal';
 import TopicChat from '../components/newsDigest/TopicChat';
+import { useModels } from '../hooks/useModels';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -364,21 +365,29 @@ function DigestSettingsPanel() {
   const [digestTime, setDigestTime] = useState('07:00');
   const [digestDays, setDigestDays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [digestSources, setDigestSources] = useState({});
+  const [primaryModel, setPrimaryModel] = useState('');
+  const [fallbackModel, setFallbackModel] = useState('');
   const [digestSaved, setDigestSaved] = useState(false);
   const [newFeedName, setNewFeedName] = useState('');
   const [newFeedUrl, setNewFeedUrl] = useState('');
+  const { models } = useModels();
 
   useEffect(() => {
     api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
-      if (data.time)    setDigestTime(data.time);
-      if (data.days)    setDigestDays(data.days);
-      if (data.sources) setDigestSources(data.sources);
+      if (data.time)          setDigestTime(data.time);
+      if (data.days)          setDigestDays(data.days);
+      if (data.sources)       setDigestSources(data.sources);
+      if (data.primaryModel)  setPrimaryModel(data.primaryModel);
+      if (data.fallbackModel) setFallbackModel(data.fallbackModel);
     }).catch(() => {});
   }, []);
 
   async function saveDigestSettings() {
     try {
-      await api.post('/api/news-digest/settings', { time: digestTime, days: digestDays, sources: digestSources });
+      await api.post('/api/news-digest/settings', {
+        time: digestTime, days: digestDays, sources: digestSources,
+        primaryModel, fallbackModel,
+      });
       setDigestSaved(true);
       setTimeout(() => setDigestSaved(false), 2000);
     } catch {
@@ -436,6 +445,45 @@ function DigestSettingsPanel() {
               </button>
             );
           })}
+        </div>
+      </div>
+
+      <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+        Models
+      </h2>
+      <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+        Primary is tried first for every topic each run (cheapest/fastest option is
+        recommended — this runs across every topic, every day). Fallback is used only if the
+        primary model errors or its quota is exhausted for the day.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Primary model</label>
+          <select
+            value={primaryModel}
+            onChange={e => setPrimaryModel(e.target.value)}
+            className="w-full px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {!models.some(m => m.id === primaryModel) && primaryModel && (
+              <option value={primaryModel}>{primaryModel}</option>
+            )}
+            {models.map(m => <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name || m.id}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Fallback model</label>
+          <select
+            value={fallbackModel}
+            onChange={e => setFallbackModel(e.target.value)}
+            className="w-full px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {!models.some(m => m.id === fallbackModel) && fallbackModel && (
+              <option value={fallbackModel}>{fallbackModel}</option>
+            )}
+            {models.map(m => <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ''}{m.name || m.id}</option>)}
+          </select>
         </div>
       </div>
 

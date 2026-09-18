@@ -392,17 +392,23 @@ router.get('/settings', async (req, res) => {
   try {
     const adminId = await getPrimaryAdminUserId();
     let rows = [];
+    let defaultPrimary = null, defaultFallback = null;
     if (adminId) {
       ({ rows } = await pool.query(
         `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
-        [adminId, ['news_digest_time', 'news_digest_days', 'news_digest_sources']]
+        [adminId, ['news_digest_time', 'news_digest_days', 'news_digest_sources', 'news_digest_primary_model', 'news_digest_fallback_model']]
       ));
+      const tiers = await getModelsForUser(adminId).catch(() => ({}));
+      defaultPrimary = tiers.gemini || null;
+      defaultFallback = tiers.light || null;
     }
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
       time:    map.news_digest_time    || '07:00',
       days:    map.news_digest_days    ? JSON.parse(map.news_digest_days)    : [0, 1, 2, 3, 4, 5, 6],
       sources: map.news_digest_sources ? JSON.parse(map.news_digest_sources) : DEFAULT_SOURCE_GROUPS,
+      primaryModel:  map.news_digest_primary_model  || defaultPrimary,
+      fallbackModel: map.news_digest_fallback_model || defaultFallback,
     });
   } catch (err) {
     console.error(err);
@@ -412,7 +418,7 @@ router.get('/settings', async (req, res) => {
 
 // POST /api/news-digest/settings
 router.post('/settings', async (req, res) => {
-  const { time, days, sources } = req.body;
+  const { time, days, sources, primaryModel, fallbackModel } = req.body;
   try {
     const adminId = await getPrimaryAdminUserId();
     if (!adminId) return res.status(400).json({ error: 'No workspace admin found — cannot save workspace-wide digest settings' });
@@ -423,9 +429,11 @@ router.post('/settings', async (req, res) => {
       [adminId, key, value]
     );
     const updates = [];
-    if (time    !== undefined) updates.push(upsert('news_digest_time', time));
-    if (days    !== undefined) updates.push(upsert('news_digest_days', JSON.stringify(days)));
-    if (sources !== undefined) updates.push(upsert('news_digest_sources', JSON.stringify(sources)));
+    if (time          !== undefined) updates.push(upsert('news_digest_time', time));
+    if (days          !== undefined) updates.push(upsert('news_digest_days', JSON.stringify(days)));
+    if (sources       !== undefined) updates.push(upsert('news_digest_sources', JSON.stringify(sources)));
+    if (primaryModel  !== undefined) updates.push(upsert('news_digest_primary_model', primaryModel));
+    if (fallbackModel !== undefined) updates.push(upsert('news_digest_fallback_model', fallbackModel));
     await Promise.all(updates);
 
     // Reschedule cron to reflect any time/days change

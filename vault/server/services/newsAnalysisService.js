@@ -1,14 +1,6 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { getModelsForUser } = require('./modelResolver');
 const { callModel } = require('./callModel');
-
-function getGemini() {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  return new GoogleGenerativeAI(key);
-}
 
 /**
  * Build the analysis prompt for a topic + articles + optional prior-day context.
@@ -151,17 +143,23 @@ function emptyAnalysis(template) {
 }
 
 /**
- * Analyse articles for a topic using Gemini if available, otherwise the user's "light" tier
- * model (see getModelsForUser) — not "standard", since this is a recurring background job,
- * not user-facing chat, and "standard" may be set to a reasoning-heavy model unsuited to it.
+ * Analyse articles for a topic using the configured primary model, falling back to the
+ * configured fallback model on failure. Both go through callModel() uniformly — it already
+ * routes by id prefix (gemini-* → Google SDK, else Anthropic/DeepSeek/Ollama, per
+ * server/services/callModel.js) — so either slot can be any connected vault_models entry,
+ * not just Gemini-vs-Anthropic. Model choice lives in Settings → News Digest → Settings
+ * (server/routes/newsDigest.js GET/POST /settings, news_digest_primary_model /
+ * news_digest_fallback_model), resolved once per cron run by the caller — this function takes
+ * the already-resolved ids rather than resolving them itself.
  * @param {string} topicTitle
  * @param {Array}  articles
  * @param {Array}  [context]  - optional [{date, unbiasedSummary, commentary}]
- * @param {number} userId
+ * @param {string} primaryModelId
+ * @param {string} fallbackModelId
  * @param {string} [template] - 'perspectives' (default) or 'digest'
  * @returns {Promise<Object>} analysis object with sources resolved
  */
-async function analyseTopicArticles(topicTitle, articles, context, userId, template = 'perspectives') {
+async function analyseTopicArticles(topicTitle, articles, context, primaryModelId, fallbackModelId, template = 'perspectives') {
   if (!articles || articles.length === 0) {
     return {
       analysis: emptyAnalysis(template),
@@ -170,42 +168,32 @@ async function analyseTopicArticles(topicTitle, articles, context, userId, templ
   }
 
   const prompt = buildPrompt(topicTitle, articles, context, template);
-  // "light" tier, not "standard" — this fallback only fires when Gemini's own quota is
-  // exhausted (a recurring background/bulk job pattern, not user-facing chat), and "standard"
-  // resolving to a reasoning-heavy model (confirmed: DeepSeek's retry-on-reasoning-exhaustion
-  // behavior inflating output to 12-32k tokens per call, causing both cost spikes and
-  // "Unterminated string in JSON" truncation) makes it a poor fit here regardless of which
-  // model a given workspace has set as its chat default. Scoped to this file only — does not
-  // change what "standard" means anywhere else in the app.
-  const { gemini: geminiModelId, light: fallbackModelId } = await getModelsForUser(userId);
+  // "digest" only asks for 2 sections (~half the JSON fields of "perspectives"), so it gets a
+  // smaller budget — both are sized well above the old flat 3000, which was cutting a full
+  // "perspectives" response off mid-string on the fallback model (confirmed: recurring
+  // "Unterminated string in JSON" failures in the suggestions log whenever the primary model's
+  // quota forced a fallback) and silently failing that topic for the day.
+  const maxTokens = template === 'digest' ? 3000 : 6000;
   let raw;
   let usage = { inputTokens: 0, outputTokens: 0, model: null };
 
-  // Try Gemini first (cheaper for bulk digest runs)
-  const gemini = getGemini();
-  if (gemini) {
+  // Try the primary model first (cheaper for bulk digest runs, typically Gemini)
+  if (primaryModelId) {
     try {
-      const model = gemini.getGenerativeModel({ model: geminiModelId });
-      const result = await model.generateContent(prompt);
-      raw = parseJSON(result.response.text());
-      const meta = result.response.usageMetadata;
+      const result = await callModel(primaryModelId, prompt, { maxTokens, returnUsage: true });
+      raw = parseJSON(result.text || '{}');
       usage = {
-        inputTokens:  meta?.promptTokenCount     || 0,
-        outputTokens: meta?.candidatesTokenCount || 0,
-        model: geminiModelId,
+        inputTokens: result.inputTokens || 0,
+        outputTokens: result.outputTokens || 0,
+        model: primaryModelId,
       };
     } catch (err) {
-      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to ${fallbackModelId}: ${err.message}`);
+      console.warn(`[news] Primary model (${primaryModelId}) analysis failed, falling back to ${fallbackModelId}: ${err.message}`);
+      raw = null;
     }
   }
 
   if (!raw) {
-    // "digest" only asks for 2 sections (~half the JSON fields of "perspectives"), so it gets a
-    // smaller budget — both are sized well above the old flat 3000, which was cutting a full
-    // "perspectives" response off mid-string on the fallback model (confirmed: recurring
-    // "Unterminated string in JSON" failures in the suggestions log whenever Gemini's free-tier
-    // quota forced a fallback) and silently failing that topic for the day.
-    const maxTokens = template === 'digest' ? 3000 : 6000;
     const result = await callModel(fallbackModelId, prompt, { maxTokens, returnUsage: true });
     raw = parseJSON(result.text || '{}');
     usage = {

@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const { fetchArticlesForTopic, DEFAULT_SOURCE_GROUPS, flattenSourceGroups, checkSourceHealth } = require('../services/newsAggregationService');
 const { analyseTopicArticles } = require('../services/newsAnalysisService');
+const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { reportNewsDigestRun, getPrimaryAdminUserId, capture, makeFingerprint } = require('../services/SuggestionService');
 
@@ -70,6 +71,30 @@ async function getSourceGroupsSetting() {
 // hardcoded defaults regardless of what Settings showed — the toggles were a no-op.
 async function getActiveSources() {
   return flattenSourceGroups(await getSourceGroupsSetting());
+}
+
+// Model choice for News Digest analysis — workspace-global (Settings → News Digest →
+// Settings, same admin-owned settings row as schedule/sources), stored as
+// news_digest_primary_model / news_digest_fallback_model. Falls back to the resolver's
+// gemini/light tiers (same defaults as before this was configurable) when unset, so an
+// un-configured workspace behaves exactly as it did previously.
+async function getConfiguredModels() {
+  const adminId = await getPrimaryAdminUserId();
+  const { gemini: defaultPrimary, light: defaultFallback } = await getModelsForUser(adminId || undefined);
+  if (!adminId) return { primaryModelId: defaultPrimary, fallbackModelId: defaultFallback };
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
+      [adminId, ['news_digest_primary_model', 'news_digest_fallback_model']]
+    );
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    return {
+      primaryModelId: map.news_digest_primary_model || defaultPrimary,
+      fallbackModelId: map.news_digest_fallback_model || defaultFallback,
+    };
+  } catch {
+    return { primaryModelId: defaultPrimary, fallbackModelId: defaultFallback };
+  }
 }
 
 // Resolves the flat source list for ONE topic, honoring its optional sourceGroups pin
@@ -164,6 +189,8 @@ async function generateDigestForUser(userId, dateStr, force = false) {
 
   if (!topics.length) return;
 
+  const { primaryModelId, fallbackModelId } = await getConfiguredModels();
+
   // Upsert digest row
   const { rows: digestRows } = await pool.query(
     `INSERT INTO news_digests ("userId", date) VALUES ($1, $2)
@@ -202,7 +229,7 @@ async function generateDigestForUser(userId, dateStr, force = false) {
         runMeta.emptyTopics.push({ id: topic.id, title: topic.title });
       }
       const context  = await fetchTopicContext(userId, topic.id, dateStr);
-      const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, userId, topic.template);
+      const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, primaryModelId, fallbackModelId, topic.template);
 
       totalInputTokens  += usage.inputTokens  || 0;
       totalOutputTokens += usage.outputTokens || 0;
