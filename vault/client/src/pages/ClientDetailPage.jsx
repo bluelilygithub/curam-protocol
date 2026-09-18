@@ -997,8 +997,51 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
   const [followUpNote, setFollowUpNote] = useState('');
   const [schedulingId, setSchedulingId] = useState(null);
   const [channelFilter, setChannelFilter] = useState('');
+  const [uploadTargetId, setUploadTargetId] = useState(null);
+  const [uploadingId, setUploadingId] = useState(null);
+  const fileInputRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Attachments (docs/crm-deals-schema.md §10). One hidden <input type=file>
+  // shared by every row — openAttach() records which touchpoint it's for,
+  // then programmatically clicks it.
+  const openAttach = (tp) => {
+    setUploadTargetId(tp.id);
+    fileInputRef.current?.click();
+  };
+
+  const onFileChosen = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same filename later
+    if (!file || !uploadTargetId) return;
+    setUploadingId(uploadTargetId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.postForm(`/api/clients/${clientId}/touchpoints/${uploadTargetId}/attachments`, formData);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Upload failed');
+      }
+      addToast('File attached');
+      onRefresh();
+    } catch (err) {
+      addToast(err.message || 'Upload failed', 'error');
+    } finally {
+      setUploadingId(null);
+      setUploadTargetId(null);
+    }
+  };
+
+  const deleteAttachment = async (attachment) => {
+    try {
+      await api.delete(`/api/clients/${clientId}/attachments/${attachment.id}`);
+      onRefresh();
+    } catch (e) {
+      addToast(e.message || 'Failed to remove attachment', 'error');
+    }
+  };
 
   // Communication-history phase 1 (docs/crm-deals-schema.md §9): filter the
   // existing log by type/channel, reusing the same field the log form
@@ -1073,6 +1116,8 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
 
   return (
     <div className="pt-3">
+      <input ref={fileInputRef} type="file" className="hidden" onChange={onFileChosen} />
+
       {touchpoints.length === 0 && !showForm && (
         <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No touchpoints logged.</p>
       )}
@@ -1125,6 +1170,26 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
             {tp.note && (
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-text)' }}>{tp.note}</p>
             )}
+            {tp.attachments?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {tp.attachments.map(a => (
+                  <span
+                    key={a.id}
+                    className="group/att inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
+                    style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+                  >
+                    📎 {a.filename}
+                    <button
+                      onClick={() => deleteAttachment(a)}
+                      className="opacity-0 group-hover/att:opacity-100 transition-opacity hover:opacity-60"
+                      style={{ color: '#ef4444' }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             {followUpId === tp.id && (
               <div className="flex flex-col gap-2 mt-2">
                 <Input rows={2} value={followUpNote} onChange={setFollowUpNote} placeholder="What's this follow-up about…" />
@@ -1154,6 +1219,15 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
               + Follow up
             </button>
           )}
+          <button
+            onClick={() => openAttach(tp)}
+            disabled={uploadingId === tp.id}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 rounded-lg hover:opacity-60 flex-shrink-0 disabled:opacity-100"
+            style={{ color: 'var(--color-muted)' }}
+            title="Attach a file"
+          >
+            {uploadingId === tp.id ? '…' : '📎'}
+          </button>
           <button
             onClick={() => del(tp)}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1 py-1 rounded hover:opacity-60 flex-shrink-0"

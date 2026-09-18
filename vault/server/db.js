@@ -1247,6 +1247,29 @@ async function initSchema() {
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "dealId" INTEGER REFERENCES client_deals(id) ON DELETE SET NULL`);
 
+    // Attachments — entity-agnostic on purpose (docs/crm-deals-schema.md §10):
+    // "entityType" is 'touchpoint' only for now, but the shape doesn't
+    // hardcode that so tasks/deals can get attachments later without a new
+    // table. Deliberately no FK to client_touchpoints(id) — cascading a
+    // touchpoint delete would drop the row but not the file on disk, which
+    // is worse than no cascade at all. Every touchpoint-delete path (single
+    // delete, and client delete's cascade) explicitly deletes matching
+    // attachment rows + files first — see server/routes/clients.js.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attachments (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "entityType" VARCHAR(30) NOT NULL,
+        "entityId"   INTEGER NOT NULL,
+        filename     TEXT NOT NULL,
+        "storedPath" TEXT NOT NULL,
+        "mimeType"   TEXT,
+        "sizeBytes"  INTEGER,
+        "createdAt"  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments("entityType","entityId")`);
+
     // ── clients / fin_clients merge — see docs/crm-migration.md (complete: ──
     // fin_clients dropped, fin_invoices links to clients via "clientRef") ──
 

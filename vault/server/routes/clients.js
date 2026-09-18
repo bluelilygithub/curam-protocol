@@ -2,11 +2,105 @@
 
 const express = require('express');
 const router  = express.Router();
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const { pool } = require('../db');
 const { translateToGmailQuery } = require('../services/gmailNLP');
 const { getModelsForUser } = require('../services/modelResolver');
 const { getGmailClient, getHeader } = require('./gmail');
 const { callModel } = require('../services/callModel');
+
+// ── Attachments (touchpoints only, for now — docs/crm-deals-schema.md §10) ──
+// Same policy as server/routes/files.js: disk under UPLOAD_DIR, allowlisted
+// MIME/extension, .env blocked, 50MB cap. Not shared code with files.js
+// (different upload target/shape) but deliberately the same convention.
+
+const ATTACHMENT_MIMES = [
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'text/plain', 'application/json', 'text/csv', 'text/markdown',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
+];
+const ATTACHMENT_EXTENSIONS = [
+  '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp',
+  '.txt', '.json', '.csv', '.md', '.xlsx', '.xls', '.docx', '.doc', '.pptx', '.ppt',
+];
+
+const attachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+    const dir = path.join(uploadDir, 'attachments', String(req.params.id));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${unique}-${safe}`);
+  },
+});
+
+const uploadAttachment = multer({
+  storage: attachmentStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const nameLower = file.originalname.toLowerCase();
+    if (ext === '.env' || nameLower === '.env' || nameLower.endsWith('/.env')) {
+      return cb(new Error('File type not accepted'));
+    }
+    if (ATTACHMENT_MIMES.includes(file.mimetype) || ATTACHMENT_EXTENSIONS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not accepted'));
+    }
+  },
+});
+
+// One bulk query for all given touchpoints' attachments, grouped in JS —
+// not a per-touchpoint query in a loop. Mirrors the existing pattern in
+// this file (contacts/deals/projects are each one query, joined in JS).
+async function withAttachments(touchpoints) {
+  if (!touchpoints.length) return touchpoints;
+  const ids = touchpoints.map(tp => tp.id);
+  const { rows } = await pool.query(
+    `SELECT id, "entityId", filename, "mimeType", "sizeBytes", "createdAt"
+     FROM attachments WHERE "entityType"='touchpoint' AND "entityId" = ANY($1::int[])
+     ORDER BY "createdAt" ASC`,
+    [ids]
+  );
+  const byTouchpoint = new Map();
+  for (const a of rows) {
+    if (!byTouchpoint.has(a.entityId)) byTouchpoint.set(a.entityId, []);
+    byTouchpoint.get(a.entityId).push(a);
+  }
+  return touchpoints.map(tp => ({ ...tp, attachments: byTouchpoint.get(tp.id) || [] }));
+}
+
+// Deletes attachment rows + their files for a set of touchpoint ids. Used by
+// both touchpoint-delete paths below (single delete, and client delete's
+// cascade) since client_touchpoints has no FK from attachments to ride on.
+async function deleteAttachmentsForTouchpoints(touchpointIds) {
+  if (!touchpointIds.length) return;
+  const { rows } = await pool.query(
+    `SELECT id, "storedPath" FROM attachments WHERE "entityType"='touchpoint' AND "entityId" = ANY($1::int[])`,
+    [touchpointIds]
+  );
+  for (const a of rows) {
+    try { if (fs.existsSync(a.storedPath)) fs.unlinkSync(a.storedPath); }
+    catch (e) { console.warn('[clients] attachment unlink failed:', e.message); }
+  }
+  await pool.query(
+    `DELETE FROM attachments WHERE "entityType"='touchpoint' AND "entityId" = ANY($1::int[])`,
+    [touchpointIds]
+  );
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -162,7 +256,7 @@ router.get('/:id', async (req, res) => {
     );
 
     // Touchpoints (newest first) with contact name + deal title joined in
-    const { rows: touchpoints } = await pool.query(`
+    const { rows: touchpointRows } = await pool.query(`
       SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
       FROM client_touchpoints tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
@@ -170,6 +264,7 @@ router.get('/:id', async (req, res) => {
       WHERE tp."clientId" = $1
       ORDER BY tp.date DESC, tp."createdAt" DESC
     `, [clientId]);
+    const touchpoints = await withAttachments(touchpointRows);
 
     // Linked projects
     const { rows: projects } = await pool.query(`
@@ -327,6 +422,14 @@ router.delete('/:id', async (req, res) => {
       [clientId]
     );
 
+    // client_touchpoints cascades from clients (ON DELETE CASCADE) with no
+    // app hook, and attachments have no FK to ride that cascade — so their
+    // files would be silently orphaned on disk if not cleaned up here first.
+    const { rows: tps } = await pool.query(
+      `SELECT id FROM client_touchpoints WHERE "clientId"=$1`, [clientId]
+    );
+    await deleteAttachmentsForTouchpoints(tps.map(t => t.id));
+
     await pool.query('DELETE FROM clients WHERE id=$1', [clientId]);
     res.json({ deleted: true });
   } catch (err) {
@@ -454,7 +557,7 @@ router.get('/:id/touchpoints', async (req, res) => {
       ORDER BY tp.date DESC, tp."createdAt" DESC
     `, [clientId]);
 
-    res.json(rows);
+    res.json(await withAttachments(rows));
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
@@ -509,10 +612,65 @@ router.delete('/:id/touchpoints/:touchpointId', async (req, res) => {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
 
+    await deleteAttachmentsForTouchpoints([touchpointId]);
+
     await pool.query(
       'DELETE FROM client_touchpoints WHERE id=$1 AND "clientId"=$2',
       [touchpointId, clientId]
     );
+    res.json({ deleted: true });
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/clients/:id/touchpoints/:touchpointId/attachments
+router.post('/:id/touchpoints/:touchpointId/attachments', uploadAttachment.single('file'), async (req, res) => {
+  const clientId     = parseInt(req.params.id, 10);
+  const touchpointId = parseInt(req.params.touchpointId, 10);
+  try {
+    await assertClientOwner(clientId, req.user.id, res);
+    if (res.headersSent) return;
+
+    const { rows: [tp] } = await pool.query(
+      `SELECT id FROM client_touchpoints WHERE id=$1 AND "clientId"=$2`, [touchpointId, clientId]
+    );
+    if (!tp) return res.status(404).json({ error: 'Touchpoint not found' });
+    if (!req.file) return res.status(400).json({ error: 'file is required' });
+
+    const { rows: [attachment] } = await pool.query(`
+      INSERT INTO attachments ("userId","entityType","entityId",filename,"storedPath","mimeType","sizeBytes")
+      VALUES ($1,'touchpoint',$2,$3,$4,$5,$6)
+      RETURNING id, filename, "mimeType", "sizeBytes", "createdAt"
+    `, [req.user.id, touchpointId, req.file.originalname, req.file.path, req.file.mimetype, req.file.size]);
+
+    res.status(201).json(attachment);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/clients/:id/attachments/:attachmentId
+router.delete('/:id/attachments/:attachmentId', async (req, res) => {
+  const clientId     = parseInt(req.params.id, 10);
+  const attachmentId = parseInt(req.params.attachmentId, 10);
+  try {
+    await assertClientOwner(clientId, req.user.id, res);
+    if (res.headersSent) return;
+
+    // Ownership check goes through the touchpoint, not attachments."userId"
+    // (that column is uploader-for-display only, not the auth gate).
+    const { rows: [attachment] } = await pool.query(`
+      SELECT a.* FROM attachments a
+      JOIN client_touchpoints tp ON tp.id = a."entityId" AND a."entityType" = 'touchpoint'
+      WHERE a.id = $1 AND tp."clientId" = $2
+    `, [attachmentId, clientId]);
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    try { if (fs.existsSync(attachment.storedPath)) fs.unlinkSync(attachment.storedPath); }
+    catch (e) { console.warn('[clients] attachment unlink failed:', e.message); }
+
+    await pool.query('DELETE FROM attachments WHERE id=$1', [attachmentId]);
     res.json({ deleted: true });
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
