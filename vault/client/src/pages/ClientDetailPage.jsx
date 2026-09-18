@@ -996,8 +996,19 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpNote, setFollowUpNote] = useState('');
   const [schedulingId, setSchedulingId] = useState(null);
+  const [channelFilter, setChannelFilter] = useState('');
   const addToast = useToastStore(s => s.addToast);
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Communication-history phase 1 (docs/crm-deals-schema.md §9): filter the
+  // existing log by type/channel, reusing the same field the log form
+  // already writes — no new column. Only offer chips for channels actually
+  // present, so the row doesn't show empty options for a client with no
+  // meetings logged, say.
+  const channelsPresent = [...new Set(touchpoints.map(tp => tp.type))];
+  const visibleTouchpoints = channelFilter
+    ? touchpoints.filter(tp => tp.type === channelFilter)
+    : touchpoints;
 
   const openFollowUp = (tp) => {
     setFollowUpId(tp.id);
@@ -1066,7 +1077,37 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
         <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No touchpoints logged.</p>
       )}
 
-      {touchpoints.map(tp => (
+      {channelsPresent.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <button
+            onClick={() => setChannelFilter('')}
+            className="text-xs px-2.5 py-1 rounded-full border capitalize"
+            style={channelFilter === ''
+              ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
+              : { color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+          >
+            All
+          </button>
+          {channelsPresent.map(ch => (
+            <button
+              key={ch}
+              onClick={() => setChannelFilter(ch === channelFilter ? '' : ch)}
+              className="text-xs px-2.5 py-1 rounded-full border capitalize"
+              style={channelFilter === ch
+                ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
+                : { color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+            >
+              {tpIcon(ch)} {ch}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {channelFilter && visibleTouchpoints.length === 0 && (
+        <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No {channelFilter} touchpoints.</p>
+      )}
+
+      {visibleTouchpoints.map(tp => (
         <div
           key={tp.id}
           className="group flex items-start gap-3 py-2.5 border-b last:border-b-0"
