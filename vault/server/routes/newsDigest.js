@@ -84,12 +84,15 @@ router.put('/topics/reorder', async (req, res) => {
 
 // PUT /api/news-digest/topics/:id
 router.put('/topics/:id', async (req, res) => {
-  // template is deliberately NOT accepted here — set once at creation, immutable after. A
-  // topic's cached news_digest_topics rows are shaped by whichever template generated them
-  // (4-section perspectives vs. 2-section digest); allowing a later switch would need each
-  // cached day to carry its own generated-with template so the UI renders old days correctly,
-  // which this doesn't implement (deliberate scope decision, not an oversight).
-  const { title, keywords, active, sourceGroups } = req.body;
+  // template is now editable (was create-time-only) — rendering was switched to key off what's
+  // actually in each day's stored analysis (left/right/commonGround vs keyStorylines) rather
+  // than the topic's current template setting, so a switch never breaks already-cached days:
+  // old days keep rendering by whatever shape they were actually generated with, new days pick
+  // up the new template. See client/src/pages/NewsDigestPage.jsx TopicCard.
+  const { title, keywords, active, sourceGroups, template } = req.body;
+  if (template !== undefined && !VALID_TEMPLATES.includes(template)) {
+    return res.status(400).json({ error: `template must be one of: ${VALID_TEMPLATES.join(', ')}` });
+  }
   // sourceGroups needs 3-way handling COALESCE can't express: "not sent" (leave alone) vs.
   // "sent as [] / null" (explicitly unpin back to searching every source) are different
   // requests, unlike title/keywords/active where COALESCE's "don't overwrite with null" is
@@ -102,13 +105,15 @@ router.put('/topics/:id', async (req, res) => {
        SET title          = COALESCE($1, title),
            keywords       = COALESCE($2, keywords),
            active         = COALESCE($3, active),
-           "sourceGroups" = CASE WHEN $6 THEN $4::jsonb ELSE "sourceGroups" END
-       WHERE id=$5 AND "userId"=$7
+           template       = COALESCE($4, template),
+           "sourceGroups" = CASE WHEN $7 THEN $5::jsonb ELSE "sourceGroups" END
+       WHERE id=$6 AND "userId"=$8
        RETURNING *`,
       [
         title    !== undefined ? title.trim()          : null,
         keywords !== undefined ? (keywords || '').trim() : null,
         active   !== undefined ? active                : null,
+        template || null,
         sourceGroupsValue,
         req.params.id,
         sourceGroupsProvided,

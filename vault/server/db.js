@@ -263,9 +263,10 @@ async function initSchema() {
                               -- DEFAULT_SOURCE_GROUPS keys) to restrict this topic's article fetch to;
                               -- NULL/empty = search every enabled source (original, unscoped behavior)
         template      TEXT NOT NULL DEFAULT 'perspectives'
-                        CHECK (template IN ('perspectives', 'digest')), -- set at creation, immutable
-                        -- after (see server/routes/newsDigest.js) since a topic's cached analysis days
-                        -- are shaped by whichever template generated them
+                        CHECK (template IN ('perspectives', 'digest')), -- editable any time (see
+                        -- server/routes/newsDigest.js PUT /topics/:id); rendering keys off what's
+                        -- actually in each cached day's analysis JSON, not this current setting,
+                        -- so a switch never breaks already-generated days
         "sortOrder"   INTEGER DEFAULT 0,
         active        BOOLEAN DEFAULT true,
         "createdAt"   TIMESTAMPTZ DEFAULT NOW()
