@@ -8,6 +8,8 @@ import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
 import AttachmentChip from '../components/AttachmentChip';
+import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
+import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -169,7 +171,7 @@ function TagInput({ tags, onChange }) {
 
 // ── Collapsible section wrapper ────────────────────────────────────────────────
 
-function Section({ title, open, onToggle, children, action, sectionRef, flash }) {
+function Section({ title, open, onToggle, children, action, sectionRef, flash, tourId }) {
   const getIcon = useIcon();
   return (
     <div
@@ -179,6 +181,7 @@ function Section({ title, open, onToggle, children, action, sectionRef, flash })
     >
       <button
         onClick={onToggle}
+        data-tour-toggle={tourId || undefined}
         className="w-full flex items-center gap-2 px-4 py-3 text-left"
         style={{ background: 'transparent', cursor: 'pointer' }}
       >
@@ -187,7 +190,7 @@ function Section({ title, open, onToggle, children, action, sectionRef, flash })
         {action && <span onClick={e => e.stopPropagation()}>{action}</span>}
       </button>
       {open && (
-        <div className="px-4 pb-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <div data-tour={tourId || undefined} className="px-4 pb-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
           {children}
         </div>
       )}
@@ -295,6 +298,15 @@ export default function ClientDetailPage() {
   const [summary,     setSummary]     = useState(null); // { summary, generatedAt } | null
   const { startProcessing, stopProcessing } = useProcessingStore();
 
+  // Info modal — auto-shows on first visit, always reachable via the header (i) button
+  const [showCrmInfo, setShowCrmInfo] = useState(() => {
+    try { return !localStorage.getItem(CRM_INFO_SEEN_KEY); } catch { return false; }
+  });
+  const closeCrmInfo = () => {
+    setShowCrmInfo(false);
+    try { localStorage.setItem(CRM_INFO_SEEN_KEY, '1'); } catch { /* private window — just won't remember */ }
+  };
+
   const [sections, setSections] = useState({
     deals:          true,
     contacts:       true,
@@ -398,13 +410,31 @@ export default function ClientDetailPage() {
         </Link>
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-4">
+        <div data-tour="crm-header" className="flex items-start justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <span style={{ color: 'var(--color-muted)' }}>
                 {getIcon(client.clientType === 'individual' ? 'user' : 'briefcase', { size: 18 })}
               </span>
               <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{client.name}</h1>
+              <button
+                onClick={() => { localStorage.removeItem(CRM_TOUR_KEY); startCrmTour(); }}
+                title="Take the CRM tour"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+              >
+                {getIcon('compass', { size: 13 })}
+              </button>
+              <button
+                onClick={() => setShowCrmInfo(true)}
+                title="How touchpoints, follow-ups, and tasks work here"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+              >
+                {getIcon('info', { size: 13 })}
+              </button>
             </div>
             {client.company && (
               <p className="text-sm mt-0.5 ml-7" style={{ color: 'var(--color-muted)' }}>{client.company}</p>
@@ -435,6 +465,8 @@ export default function ClientDetailPage() {
             </button>
           </div>
         </div>
+
+        {showCrmInfo && <CrmInfoModal onClose={closeCrmInfo} />}
 
         {/* AI summary */}
         {summary && (
@@ -521,12 +553,12 @@ export default function ClientDetailPage() {
                task.projectId, so a directly-linked task (no project) was
                otherwise invisible on this page even though the server has
                always returned it in data.tasks. */}
-          <Section title={`Tasks${tasks?.length ? ` (${tasks.length})` : ''}`} open={sections.tasks} onToggle={() => toggleSection('tasks')}>
+          <Section tourId="crm-tasks" title={`Tasks${tasks?.length ? ` (${tasks.length})` : ''}`} open={sections.tasks} onToggle={() => toggleSection('tasks')}>
             <ClientTasksSection tasks={tasks || []} onRefresh={load} />
           </Section>
 
           {/* 3. Touchpoints */}
-          <Section title={`Touchpoints${touchpoints?.length ? ` (${touchpoints.length})` : ''}`} open={sections.touchpoints} onToggle={() => toggleSection('touchpoints')}>
+          <Section tourId="crm-touchpoints" title={`Touchpoints${touchpoints?.length ? ` (${touchpoints.length})` : ''}`} open={sections.touchpoints} onToggle={() => toggleSection('touchpoints')}>
             <TouchpointsSection
               clientId={id}
               clientName={client?.name}
@@ -538,7 +570,7 @@ export default function ClientDetailPage() {
           </Section>
 
           {/* 4. Communications (Gmail) */}
-          <Section title="Communications" open={sections.communications} onToggle={() => toggleSection('communications')}>
+          <Section tourId="crm-communications" title="Communications" open={sections.communications} onToggle={() => toggleSection('communications')}>
             <CommunicationsSection
               clientId={id}
               clientName={client.name}

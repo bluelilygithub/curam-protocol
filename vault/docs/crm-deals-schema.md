@@ -153,3 +153,17 @@ Originally scoped as touchpoints-only, deferring tasks/thumbnails/quotas/scannin
 ## 11. Calendar export — one-way `.ics` (done)
 
 Confirmed one-way was the actual need (per `MorningDigest` being in-app-only, not a sync gap) before building. `GET /api/tasks/:id/ics` generates a minimal VCALENDAR/VEVENT from the task's title/notes/dueDate (all-day if the due date has no time component) and serves it as a download; no OAuth, no stored credentials, no cron, no new table. "Add to calendar" button in the task edit modal, shown only when the task has a due date. Two-way sync explicitly not built — different order of magnitude (OAuth, background sync, conflict handling), only worth scoping if one-way turns out insufficient after actual use.
+
+## 12. Client-page Tasks section (fix — real bug, not a request)
+
+Found from a user report: a scheduled follow-up (§5/§9's touchpoint→task bridge) was visible in the main Tasks page but not on the client's own CRM page. Root cause was two real bugs, not user error:
+
+1. `ClientDetailPage.jsx` had **no Tasks section at all**. The only task count anywhere on the page was inside Projects (`ProjectsSection`'s `taskCount()`), which matches `task.projectId` only — a task linked via `clientId` directly (no project, which is exactly what a follow-up is) had nowhere to render, even though the server has always returned it in the page's data (`GET /api/clients/:id`, per §5's read-path fix). Added a real `ClientTasksSection` — every open task for the client regardless of link path, with a done checkbox. `t.category` was also missing from that endpoint's task `SELECT` list (needed to show the follow-up category badge) — added.
+2. `scheduleFollowUp()` in `TouchpointsSection` never called `onRefresh()` after creating the task, so even with a Tasks section present, the newly-created follow-up wouldn't show without a manual page reload. Fixed.
+
+## 13. Client-page tour + info modal (new)
+
+Mirrors the Font Customizer's tour (`fontsTour.js`) and tutorial-modal (`FontTutorialModal.jsx`) pattern exactly, per explicit request to replicate it — icon choice adjusted since Summarize already uses the sparkles icon on this page:
+
+- `client/src/utils/tours/crmTour.js` — Shepherd tour (compass icon, header), 5 steps: welcome → Touchpoints (channel filter) → the "+ Follow up" bridge → Tasks section → Communications (Gmail search, explicitly distinguished from Touchpoints). Steps targeting a collapsed section (`Section`'s new `tourId` prop → `data-tour-toggle`/`data-tour` attributes) auto-open it first (`ensureSectionOpen()`) rather than skipping the step.
+- `client/src/components/CrmInfoModal.jsx` — info icon (not sparkles — reserved for the existing AI Summarize button on this page), "How This Works", auto-shows once per browser (`vault_crm_client_info_seen` in `localStorage`), always reachable via the header (i) button. Explains the touchpoint/follow-up/task relationship in one place, matching the model settled on in chat history (touchpoint = past log, "+ Follow up" = the one bridge, task = the scheduled thing, one direction only).
