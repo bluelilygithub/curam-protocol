@@ -345,6 +345,7 @@ export default function SharesPage() {
   const [workspaceTz, setWorkspaceTz] = useState('');
   const [generatingNews, setGeneratingNews] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [sendingObservation, setSendingObservation] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -440,6 +441,25 @@ export default function SharesPage() {
       addToast(err.message || 'Failed to generate summary', 'error');
     } finally {
       setGeneratingSummary(false);
+      stopProcessing();
+    }
+  };
+
+  // Generates + emails today's Portfolio Note on demand — same content/pipeline
+  // as the 7 AM cron and as the side-effect fired by "Refresh" on the Portfolio
+  // tab, just explicit and named instead of buried in a heavier action.
+  const handleSendObservation = async () => {
+    setSendingObservation(true);
+    startProcessing('Generating portfolio note…', 'Running the analysis pipeline and sending the email.');
+    try {
+      const res = await api.post('/api/shares/news/observe');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to send (${res.status})`);
+      addToast(data.message || 'Portfolio note sent', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to send portfolio note', 'error');
+    } finally {
+      setSendingObservation(false);
       stopProcessing();
     }
   };
@@ -1147,8 +1167,10 @@ export default function SharesPage() {
                 workspaceTz={workspaceTz}
                 generating={generatingNews}
                 generatingSummary={generatingSummary}
+                sendingObservation={sendingObservation}
                 onGenerate={handleGenerateNews}
                 onGenerateSummary={handleGenerateSummary}
+                onSendObservation={handleSendObservation}
               />
             )}
 
@@ -1980,7 +2002,7 @@ function QuestionsTab() {
 
 // ─── News tab ─────────────────────────────────────────────────────────────────
 
-function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGenerate, onGenerateSummary }) {
+function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendingObservation, onGenerate, onGenerateSummary, onSendObservation }) {
   const today = workspaceTz
     ? new Intl.DateTimeFormat('en-CA', { timeZone: workspaceTz }).format(new Date())
     : new Date().toLocaleDateString('en-CA');
@@ -2030,6 +2052,16 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onSendObservation}
+            disabled={sendingObservation || generating || generatingSummary}
+            title="Generate and email today's Portfolio Note now — same content as the 7 AM cron"
+            className="text-sm px-3 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {sendingObservation ? 'Sending…' : 'Send Portfolio Note'}
+          </button>
           <button
             type="button"
             onClick={onGenerateSummary}

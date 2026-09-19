@@ -886,6 +886,8 @@ If hasMetals is true, add after shares ONE-LINER:
 
 ## METALS & MINERALS
 
+Standing context (user-confirmed, not inferred): any small-denomination coin lot's cost basis includes a known numismatic/dealer premium over spot, accepted deliberately at purchase as a long-term hold-to-maturity hedge, not a trading position. When avg-cost sits above the tracked peak (premium baked into the entry), state that fact plainly once in RISK WATCH or POSITION CHECK — do not re-litigate it as a fresh loss, do not use "loss"/"deepest" framing for it, and do not repeat the same point across multiple sub-sections of the same note. The 🔴 flag stays mechanical (threshold-based, same rule as shares) — your prose should not add alarm on top of it for a cost basis that cannot change.
+
 ### CROSS-POSITION PATTERNS
 Metals/macro correlation only — spot beta vs macro news.
 
@@ -1296,6 +1298,21 @@ function inlineMd(text) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
+// The observation prompt produces long single-line bullets (one clause after
+// another joined by " — " / " · ", a trailing "Thesis:" sentence) rather than
+// short multi-line ones — readable as raw markdown, unreadable as one packed
+// <li>. Rather than rely on prompt compliance for line breaks (unenforceable),
+// break on the separators the model already consistently uses within a bullet.
+function breakBulletClauses(html) {
+  let out = html
+    .replace(/\s+—\s+/g, '<br/><br/>— ')
+    .replace(/\s+·\s+/g, '<br/><br/>&middot; ')
+    .replace(/(^|<br\/><br\/>)\s*Thesis:/g, '$1<br/><br/><strong>Thesis:</strong>');
+  out = out.replace(/(?:<br\/>){3,}/g, '<br/><br/>'); // collapse doubled-up breaks from adjacent rules
+  out = out.replace(/^(?:<br\/>)+/, ''); // no leading break if the clause opened the bullet
+  return out;
+}
+
 // Section headings that get distinct email styling.
 const OBS_CALLOUT_SECTIONS = new Set([]);
 const OBS_SECTION_LABELS = {
@@ -1402,7 +1419,7 @@ function markdownToObservationHtml(text) {
         else { parts.push(ul); listContainer = 'parts'; }
         inList = true;
       }
-      const li = `<li style="margin:4px 0;">${inlineMd(trimmed.slice(2))}</li>`;
+      const li = `<li style="margin:4px 0;">${breakBulletClauses(inlineMd(trimmed.slice(2)))}</li>`;
       if (listContainer === 'callout') calloutParts.push(li);
       else parts.push(li);
     } else if (trimmed.startsWith('|')) {
