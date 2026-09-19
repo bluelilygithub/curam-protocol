@@ -8,6 +8,13 @@ const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const crypto = require('crypto');
+const {
+  createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota,
+  insertAttachment, attachmentsForEntity, deleteAttachmentsForEntityIds,
+} = require('../utils/attachments');
+
+// docs/crm-deals-schema.md §11 — same shared policy as touchpoint attachments.
+const uploadTaskAttachment = createAttachmentUpload(req => `tasks/${req.params.id}`);
 
 const anthropic = new Anthropic();
 
@@ -77,14 +84,15 @@ async function getSourceSessionTitle(sessionId) {
 }
 
 async function buildTask(row) {
-  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle] = await Promise.all([
+  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle, attachments] = await Promise.all([
     getTags(row.id),
     getSubtaskStats(row.id),
     getKrInfo(row.keyResultId),
     getBlockerCount(row.id),
     getSourceSessionTitle(row.sourceSessionId),
+    attachmentsForEntity('task', row.id),
   ]);
-  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle };
+  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle, attachments };
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -200,6 +208,14 @@ router.delete('/bulk', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    // Attachments have no FK to tasks (same reasoning as touchpoints — see
+    // server/utils/attachments.js) so both this task's and its subtasks'
+    // attachments must be cleaned up explicitly before the rows go.
+    const { rows: subtaskRows } = await pool.query(
+      `SELECT id FROM tasks WHERE "parentTaskId" = ANY($1::int[])`, [ids]
+    );
+    await deleteAttachmentsForEntityIds('task', [...ids, ...subtaskRows.map(r => r.id)]);
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -750,6 +766,8 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/tasks/:id
 router.delete('/:id', async (req, res) => {
   try {
+    const idsToClean = [Number(req.params.id)];
+
     if (req.query.stopSeries === 'true') {
       // Find the recurrenceGroupId for this task, then delete all non-done tasks in the series
       const { rows } = await pool.query('SELECT "recurrenceGroupId" FROM tasks WHERE id=$1', [req.params.id]);
@@ -761,17 +779,99 @@ router.delete('/:id', async (req, res) => {
           [groupId, req.params.id]
         );
         for (const s of siblings) {
+          const { rows: subs } = await pool.query('SELECT id FROM tasks WHERE "parentTaskId"=$1', [s.id]);
+          idsToClean.push(s.id, ...subs.map(r => r.id));
           await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [s.id]);
         }
         await pool.query('DELETE FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\'', [groupId]);
       }
     }
+    const { rows: ownSubtasks } = await pool.query('SELECT id FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
+    idsToClean.push(...ownSubtasks.map(r => r.id));
+
+    // Attachments have no FK to tasks — clean up before the rows go (same
+    // reasoning as touchpoints, see server/utils/attachments.js).
+    await deleteAttachmentsForEntityIds('task', idsToClean);
+
     await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
     await pool.query('DELETE FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[tasks DELETE]', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tasks/:id/ics — one-way calendar export (docs/crm-deals-schema.md §12).
+// Deliberately not two-way sync: no OAuth, no stored credentials, no cron —
+// just a formatted download of this task's current dueDate. Any calendar
+// app that accepts .ics can import it.
+function escapeIcsText(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+function toIcsDate(dueDate) {
+  const hasTime = String(dueDate).includes('T');
+  const d = new Date(dueDate);
+  const pad = n => String(n).padStart(2, '0');
+  if (hasTime) {
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  }
+  // Date-only due dates become an all-day event (VALUE=DATE), not midnight UTC.
+  return String(dueDate).slice(0, 10).replace(/-/g, '');
+}
+
+router.get('/:id/ics', async (req, res) => {
+  try {
+    const { rows: [task] } = await pool.query(
+      'SELECT * FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]
+    );
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    if (!task.dueDate) return res.status(400).json({ error: 'Task has no due date to export' });
+
+    const isAllDay = !String(task.dueDate).includes('T');
+    const dtValue = toIcsDate(task.dueDate);
+    const dtLine = isAllDay ? `DTSTART;VALUE=DATE:${dtValue}` : `DTSTART:${dtValue}`;
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Curam Vault//Tasks//EN',
+      'BEGIN:VEVENT',
+      `UID:vault-task-${task.id}@curam-vault`,
+      dtLine,
+      `SUMMARY:${escapeIcsText(task.title)}`,
+      task.notes ? `DESCRIPTION:${escapeIcsText(task.notes)}` : null,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].filter(Boolean).join('\r\n');
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="task-${task.id}.ics"`);
+    res.send(ics);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/:id/attachments (docs/crm-deals-schema.md §11)
+// Delete/download live at the generic /api/attachments/:id (server/routes/attachments.js).
+router.post('/:id/attachments', uploadTaskAttachment.single('file'), async (req, res) => {
+  try {
+    const { rows: [task] } = await pool.query(
+      'SELECT id FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]
+    );
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    if (!req.file) return res.status(400).json({ error: 'file is required' });
+
+    await assertWithinQuota(req.user.id, req.file.size);
+    await rejectIfDisguisedExecutable(req.file.path);
+
+    const attachment = await insertAttachment({
+      userId: req.user.id, entityType: 'task', entityId: Number(req.params.id), file: req.file,
+    });
+    res.status(201).json(attachment);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

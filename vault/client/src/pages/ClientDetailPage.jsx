@@ -7,6 +7,7 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
+import AttachmentChip from '../components/AttachmentChip';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -1036,7 +1037,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
 
   const deleteAttachment = async (attachment) => {
     try {
-      await api.delete(`/api/clients/${clientId}/attachments/${attachment.id}`);
+      await api.delete(`/api/attachments/${attachment.id}`);
       onRefresh();
     } catch (e) {
       addToast(e.message || 'Failed to remove attachment', 'error');
@@ -1173,20 +1174,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
             {tp.attachments?.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {tp.attachments.map(a => (
-                  <span
-                    key={a.id}
-                    className="group/att inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
-                    style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
-                  >
-                    📎 {a.filename}
-                    <button
-                      onClick={() => deleteAttachment(a)}
-                      className="opacity-0 group-hover/att:opacity-100 transition-opacity hover:opacity-60"
-                      style={{ color: '#ef4444' }}
-                    >
-                      ✕
-                    </button>
-                  </span>
+                  <AttachmentChip key={a.id} attachment={a} onDelete={deleteAttachment} />
                 ))}
               </div>
             )}

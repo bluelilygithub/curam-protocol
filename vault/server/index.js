@@ -112,6 +112,10 @@ app.use('/api/health', require('./routes/health'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/chat', aiLimiter, require('./routes/chat'));
 app.use('/api/files', require('./routes/files'));
+// Cross-entity attachment download/delete (touchpoints + tasks) — auth is
+// per-attachment via its owning entity's chain, not a feature flag, since
+// it spans both the clients and tasks surfaces. See server/routes/attachments.js.
+app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/email', require('./routes/email'));

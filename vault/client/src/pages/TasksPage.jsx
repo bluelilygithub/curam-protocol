@@ -13,6 +13,7 @@ import TaskFilters from '../components/tasks/TaskFilters';
 import TasksTree from '../components/tasks/TasksTree';
 import TaskTimeline from '../components/tasks/TaskTimeline';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
+import AttachmentChip from '../components/AttachmentChip';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 import PageToolbar from '../components/PageToolbar';
 
@@ -579,6 +580,53 @@ export default function TasksPage() {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [goalsForForm, setGoalsForForm] = useState([]);
   const [formObjectiveId, setFormObjectiveId] = useState('');
+
+  // Attachments (docs/crm-deals-schema.md §11) — only meaningful once the
+  // task exists (editTask set), same restriction as touchpoint attachments.
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const attachmentInputRef = useRef(null);
+
+  const refreshEditTaskAttachments = useCallback(async (taskId) => {
+    try {
+      const fresh = await api.get('/api/tasks').then(r => r.json());
+      setTasks(fresh);
+      const match = fresh.find(t => t.id === taskId);
+      if (match) setEditTask(match);
+    } catch { /* best-effort refresh */ }
+  }, []);
+
+  const onAttachmentChosen = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !editTask) return;
+    setUploadingAttachment(true);
+    setAttachmentError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.postForm(`/api/tasks/${editTask.id}/attachments`, formData);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Upload failed');
+      }
+      await refreshEditTaskAttachments(editTask.id);
+    } catch (err) {
+      setAttachmentError(err.message || 'Upload failed');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const deleteTaskAttachment = async (attachment) => {
+    if (!editTask) return;
+    try {
+      await api.delete(`/api/attachments/${attachment.id}`);
+      await refreshEditTaskAttachments(editTask.id);
+    } catch (err) {
+      setAttachmentError(err.message || 'Failed to remove attachment');
+    }
+  };
 
   // Templates panel
   const [showTemplates, setShowTemplates] = useState(false);
@@ -2749,6 +2797,47 @@ export default function TasksPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Calendar export — one-way .ics download, docs/crm-deals-schema.md §12 */}
+              {editTask && form.dueDate && (
+                <div className="px-5 pt-1 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => api.download(`/api/tasks/${editTask.id}/ics`, `task-${editTask.id}.ics`)}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                  >
+                    📅 Add to calendar
+                  </button>
+                </div>
+              )}
+
+              {/* Attachments — only once the task exists (docs/crm-deals-schema.md §11) */}
+              {editTask && (
+                <div className="px-5 pt-1 pb-3">
+                  <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--color-muted)' }}>📎 Attachments</label>
+                  <input ref={attachmentInputRef} type="file" className="hidden" onChange={onAttachmentChosen} />
+                  {editTask.attachments?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {editTask.attachments.map(a => (
+                        <AttachmentChip key={a.id} attachment={a} onDelete={deleteTaskAttachment} />
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                  >
+                    {uploadingAttachment ? 'Uploading…' : '+ Attach file'}
+                  </button>
+                  {attachmentError && (
+                    <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{attachmentError}</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between gap-2 px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <button

@@ -136,3 +136,20 @@ Later phases, not started: suggest next action / draft follow-up email; auto-qua
 5. Dashboard/reporting.
 
 Nothing here requires touching the already-completed `clients`/`fin_clients` merge — nothing above is a repoint or a rename, every item is a pure addition (new tables, nullable FK columns). Lowest-risk phase of the whole CRM build so far.
+
+## 10. Attachments — touchpoints + tasks (done, built together)
+
+Originally scoped as touchpoints-only, deferring tasks/thumbnails/quotas/scanning until real usage justified them. User asked for all of it at once — built as one pass rather than staged, noted here so the "wait for a signal" reasoning in chat history isn't misread as still the live plan.
+
+- `attachments` table (`server/db.js`): entity-agnostic (`entityType`/`entityId`), no FK to either `client_touchpoints` or `tasks` — a cascading delete would drop the row but leave the file on disk, worse than no cascade. Every delete path for both entities explicitly cleans up attachment rows + files first (see `server/utils/attachments.js` `deleteAttachmentsForEntityIds`, called from `clients.js`'s touchpoint-delete and client-delete routes, and `tasks.js`'s single-delete, bulk-delete, and stop-series-recurrence paths — enumerated by grep, not assumed).
+- Shared policy in `server/utils/attachments.js` (extracted once tasks needed the same logic touchpoints already had): allowlist + 50MB cap matching `server/routes/files.js`'s existing convention, disk under `UPLOAD_DIR/attachments/<touchpoint|task>/...`.
+- **Quota**: per-user total across all attachments, default 500MB, `ATTACHMENT_QUOTA_MB` env override. Checked at upload time.
+- **"Virus scanning"**: no ClamAV/network scanning service available on Railway, so this is a magic-byte sniff rejecting a file whose actual content is a Windows PE, ELF binary, or shebang script regardless of claimed extension (`rejectIfDisguisedExecutable`) — catches a renamed executable, does **not** scan genuine PDF/DOCX/image content for embedded malware. Named honestly as that limited a control, not oversold.
+- **Ownership**: via the owning entity's chain (touchpoint→client, task→userId), never `attachments."userId"` (uploader-for-display only).
+- Generic cross-entity `GET /api/attachments/:id/download` and `DELETE /api/attachments/:id` (`server/routes/attachments.js`) — upload stays per-entity (`POST /api/clients/:id/touchpoints/:touchpointId/attachments`, `POST /api/tasks/:id/attachments`) since destination folder and creation-time ownership checks differ per entity.
+- Frontend: shared `AttachmentChip` component (`client/src/components/AttachmentChip.jsx`) — image thumbnails (fetched as a blob for the auth header, since `<img src>` can't carry one) or a filename chip otherwise, click to open/download, per-file delete. Used on touchpoints (`ClientDetailPage`) and the task edit modal (`TasksPage`, visible only for an existing task).
+- **Read-path convention differs by file on purpose**: `clients.js` bulk-joins attachments for a whole touchpoints array in one query (matches that file's existing contacts/deals/projects pattern); `tasks.js` fetches per-task inside `buildTask()` (matches that file's existing per-row `Promise.all` convention, already N+1 for tags/subtasks/etc. before this change — consistency with each file's own style over a cross-file "correct" pattern).
+
+## 11. Calendar export — one-way `.ics` (done)
+
+Confirmed one-way was the actual need (per `MorningDigest` being in-app-only, not a sync gap) before building. `GET /api/tasks/:id/ics` generates a minimal VCALENDAR/VEVENT from the task's title/notes/dueDate (all-day if the due date has no time component) and serves it as a download; no OAuth, no stored credentials, no cron, no new table. "Add to calendar" button in the task edit modal, shown only when the task has a due date. Two-way sync explicitly not built — different order of magnitude (OAuth, background sync, conflict handling), only worth scoping if one-way turns out insufficient after actual use.
