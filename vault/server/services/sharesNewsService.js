@@ -841,6 +841,7 @@ Lead with portfolio-level patterns — not single-stock vs benchmark anecdotes:
 - **Correlation / concentration:** Use patternHints.sameDirectionNoNews — if multiple positions moved the same direction with no ticker news in feed, state count and names as one correlation signal (not N separate unexplained stories).
 - **Recurring unexplained:** Use patternHints.recurringUnexplained + unexplainedMoveHistory — flag names with back-to-back material moves without news (e.g. NVDA ±4pp swings); carry forward from prior note.
 - **Shared macro lag:** Use patternHints.laggingCluster — if multiple "no negative catalyst" names lag together (TSM/ASML-type), frame as possible shared macro factor.
+- **Effective diversification:** When naming raw position count (e.g. "6 positions"), also state an approximate effective count adjusted for shared single-factor exposure — e.g. names that share the same underlying driver (same sector, same macro theme, same supply chain) count as partial overlap, not independent bets. State the shared factor explicitly (e.g. "AI capex") and which names load on it. This is a diversification-quality observation, not a new risk metric to compute precisely — approximate and label as inference.
 Label inference explicitly. No buy/sell recommendations.
 
 ## MOVERS & CAUSALITY
@@ -868,7 +869,9 @@ Forward-looking calendar (rules 14–15). One line per held ticker in allHolding
 Carry forward the catalyst calendar from priorPortfolioNote verbatim; only add/revise when upcomingEarnings or today's news confirms a date, or mark passed events as "passed — see Movers." Include supplier/customer/competitor earnings as read-throughs where relevant to semis/AI names. Do not regenerate the full calendar from scratch daily.
 
 ## DECISION TRIGGERS
-2–4 bullets. Concrete, falsifiable tripwires — level, event, or comparison. Carry forward prior triggers verbatim unless revising with explicit reason (see priorPortfolioNote). State baseline explicitly (% off peak, % off avg cost, vs sector, AUD price). No "monitor closely" without a level. Multi-day % only if in trailingMetrics with dataAvailable:true.
+2–4 bullets on individual positions, PLUS exactly one standing concentration/rebalancing trigger (see below). Concrete, falsifiable tripwires — level, event, or comparison. Carry forward prior triggers verbatim unless revising with explicit reason (see priorPortfolioNote). State baseline explicitly (% off peak, % off avg cost, vs sector, AUD price). No "monitor closely" without a level. Multi-day % only if in trailingMetrics with dataAvailable:true.
+
+**Concentration trigger (always include, carry forward the level verbatim once set):** a portfolio-level tripwire on the shared-factor exposure named in CROSS-POSITION PATTERNS — e.g. "if combined weight of [named AI-chain cluster] exceeds X% (currently Y%)" or "if any single position exceeds X% (currently the largest is Y%)". This is a standing level to watch, not a recommendation to trim — state it the same falsifiable way as a price trigger, and only revise the level with explicit reason, same rule as the others.
 
 ## INTERNAL CONSISTENCY CHECK
 Before finishing, audit this note:
