@@ -299,6 +299,7 @@ export default function ClientDetailPage() {
     deals:          true,
     contacts:       true,
     projects:       false,
+    tasks:          true,
     touchpoints:    false,
     communications: false,
   });
@@ -512,6 +513,16 @@ export default function ClientDetailPage() {
               projectStatus={projectStatus}
               onRefresh={load}
             />
+          </Section>
+
+          {/* 2b. Tasks — every open task linked to this client, whether via a
+               project or directly (tasks.clientId, e.g. a touchpoint
+               follow-up). ProjectsSection's own task counts only match
+               task.projectId, so a directly-linked task (no project) was
+               otherwise invisible on this page even though the server has
+               always returned it in data.tasks. */}
+          <Section title={`Tasks${tasks?.length ? ` (${tasks.length})` : ''}`} open={sections.tasks} onToggle={() => toggleSection('tasks')}>
+            <ClientTasksSection tasks={tasks || []} onRefresh={load} />
           </Section>
 
           {/* 3. Touchpoints */}
@@ -835,6 +846,68 @@ function ContactsSection({ clientId, contacts, onRefresh }) {
 
 // ── Projects section ──────────────────────────────────────────────────────────
 
+// All open tasks linked to this client — via a project or directly
+// (tasks.clientId). Read-only list + a done checkbox; full editing (due
+// date, notes, attachments, calendar export) stays in Tasks.
+function ClientTasksSection({ tasks, onRefresh }) {
+  const navigate = useNavigate();
+  const addToast = useToastStore(s => s.addToast);
+  const [togglingId, setTogglingId] = useState(null);
+
+  const toggleDone = async (task) => {
+    setTogglingId(task.id);
+    try {
+      await api.put(`/api/tasks/${task.id}`, { status: task.status === 'done' ? 'todo' : 'done' });
+      onRefresh();
+    } catch {
+      addToast('Failed to update task', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  if (!tasks.length) {
+    return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>No open tasks.</p>;
+  }
+
+  return (
+    <div className="pt-3">
+      {tasks.map(t => (
+        <div
+          key={t.id}
+          className="flex items-center gap-3 py-2.5 border-b last:border-b-0"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <input
+            type="checkbox"
+            checked={t.status === 'done'}
+            disabled={togglingId === t.id}
+            onChange={() => toggleDone(t)}
+            className="flex-shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <button
+              onClick={() => navigate('/tasks')}
+              className="text-sm text-left hover:opacity-70 transition-opacity truncate block"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {t.title}
+            </button>
+            <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+              {t.projectName && <span>{t.projectName}</span>}
+              {t.category && <><span>·</span><span className="capitalize">{t.category}</span></>}
+              {t.dueDate && <><span>·</span><span>Due {fmtDate(t.dueDate)}</span></>}
+            </div>
+          </div>
+          {t.priority === 'high' && (
+            <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>High</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProjectsSection({ clientId, projects, tasks, projectStatus, onRefresh }) {
   const navigate   = useNavigate();
   const addToast   = useToastStore(s => s.addToast);
@@ -1079,6 +1152,7 @@ function TouchpointsSection({ clientId, clientName, touchpoints, contacts, deals
       }).then(r => r.json());
       addToast('Follow-up scheduled');
       setFollowUpId(null);
+      onRefresh();
     } catch (e) {
       addToast(e.message || 'Failed to schedule follow-up', 'error');
     } finally {
