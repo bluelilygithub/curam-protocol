@@ -1728,6 +1728,74 @@ async function initSchema() {
     END $$
   `);
 
+  // Statement upload/reconciliation — schema step only (chat history: "Shares
+  // agent" statement-upload feature). Dividends/interest/fees previously had
+  // no home at all (share_cash_ledger was deposit/withdraw only) — that gap
+  // is fixed here regardless of whether the upload pipeline is built yet;
+  // logging a dividend by hand works from this point on.
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE share_cash_ledger DROP CONSTRAINT IF EXISTS share_cash_ledger_type_check;
+      ALTER TABLE share_cash_ledger
+        ADD CONSTRAINT share_cash_ledger_type_check
+        CHECK (type IN ('deposit', 'withdraw', 'dividend', 'interest', 'fee'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$
+  `);
+  // Dividend rows store the GROSS amount in amountAud + withholdingTaxAud
+  // separately — net received is always derived (amountAud - withholdingTaxAud),
+  // never stored, so the two numbers can't drift apart. Null for
+  // interest/fee/deposit/withdraw rows.
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "withholdingTaxAud" NUMERIC(18, 2)`);
+  // Set only on rows created via a statement import — lets an import be
+  // reverted (delete every row carrying its id) without touching manually
+  // entered trades/cash lines. No FK yet (share_statement_imports created
+  // below in the same migration pass, but keeping this decoupled — a
+  // reverted/deleted import shouldn't cascade-orphan the ledger rows it
+  // created; they just lose their provenance tag).
+  await pool.query(`ALTER TABLE share_trades ADD COLUMN IF NOT EXISTS "sourceImportId" INTEGER`);
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "sourceImportId" INTEGER`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_statement_imports (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filename      TEXT NOT NULL,
+      "brokerHint"  TEXT,
+      "periodStart" DATE,
+      "periodEnd"   DATE,
+      status        TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'reviewing', 'applied', 'reverted')),
+      "uploadedAt"  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_share_statement_imports_user ON share_statement_imports("userId")`);
+
+  // One row per extracted line, before anything touches share_trades/
+  // share_cash_ledger — the review-queue gate (docs/shares-statement-import.md
+  // once the pipeline itself is built). "drp" is its own lineType since a
+  // dividend-reinvestment line is both a dividend AND a trade at once.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_statement_lines (
+      id              SERIAL PRIMARY KEY,
+      "importId"      INTEGER NOT NULL REFERENCES share_statement_imports(id) ON DELETE CASCADE,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "lineType"      TEXT NOT NULL CHECK ("lineType" IN ('trade', 'dividend', 'interest', 'fee', 'drp', 'cash_balance', 'fx')),
+      "parsedFields"  JSONB NOT NULL DEFAULT '{}',
+      "dedupHash"     TEXT,
+      "matchStatus"   TEXT NOT NULL DEFAULT 'needs_review'
+                      CHECK ("matchStatus" IN ('needs_review', 'matches_existing', 'new', 'conflict', 'possible_correction', 'skipped_duplicate')),
+      "matchedTradeId"  INTEGER,
+      "matchedLedgerId" INTEGER,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_share_statement_lines_import ON share_statement_lines("importId")`);
+  // Dedup check (chat history: same line across two overlapping/re-uploaded
+  // statements must never both reach the queue as "new") scans this per user.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_share_statement_lines_dedup ON share_statement_lines("userId", "dedupHash")`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_news_briefings (
       id               BIGSERIAL PRIMARY KEY,
