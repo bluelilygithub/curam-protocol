@@ -551,6 +551,36 @@ function computePortfolioDayMovement(positions) {
   };
 }
 
+// Pre-computed server-side (not left for the model to sum) — same convention
+// as portfolioMove/alertStatus. share_cash_ledger has no symbol column (the
+// statement-import feature's dividend rows carry it only in free-text
+// "note"), so this is an aggregate total, not a per-holding breakdown.
+async function loadDividendIncomeSummary(userId, tz) {
+  const today = getDateInTz(tz);
+  const startOfYear = `${today.slice(0, 4)}-01-01`;
+  const { rows } = await pool.query(
+    `SELECT "amountAud", "withholdingTaxAud", note, "createdAt" FROM share_cash_ledger
+     WHERE "userId"=$1 AND type='dividend' AND "createdAt"::date >= $2
+     ORDER BY "createdAt" DESC`,
+    [userId, startOfYear]
+  );
+  const last30Cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const last30DaysAud = rows
+    .filter((r) => new Date(r.createdAt).getTime() >= last30Cutoff)
+    .reduce((sum, r) => sum + Number(r.amountAud), 0);
+  const yearToDateAud = rows.reduce((sum, r) => sum + Number(r.amountAud), 0);
+  const withholdingTaxYtdAud = rows.reduce((sum, r) => sum + Number(r.withholdingTaxAud || 0), 0);
+  return {
+    count: rows.length,
+    last30DaysAud: round2(last30DaysAud),
+    yearToDateAud: round2(yearToDateAud),
+    withholdingTaxYtdAud: round2(withholdingTaxYtdAud),
+    recent: rows.slice(0, 10).map((r) => ({
+      amountAud: round2(Number(r.amountAud)), date: String(r.createdAt).slice(0, 10), note: r.note,
+    })),
+  };
+}
+
 function enrichHoldingsForObservation(dash, indexPcts) {
   const holdingsValue = dash.holdingsValueAud || 0;
   return dash.positions.map((p) => {
@@ -852,6 +882,8 @@ Cover every holding in moversToCover (included if |day %| ≥ 1 OR |vs sector| �
 ## POSITION CHECK
 One line per holding in positionsNotInMovers (every other position — complete audit trail):
 - **TICKER** [±X.XX%] vs sector → **beat/lagged/matched** — [no notable move / no news / one-line status]
+
+If SHARES pre-computed summary's portfolio.dividendIncome.count > 0, add one final bullet here (state the numbers as given, don't recompute): "Dividend income: $X last 30 days, $Y this calendar year so far" — include withholding tax figure only if withholdingTaxYtdAud is nonzero. This is a factual running total, not a mover — do not repeat it in any other section of the note.
 
 ## SECTOR & MACRO CONTEXT
 Sector-wide drivers today (not stock-specific). Cite macro/sector items. Estimate how much of portfolio day move is sector beta vs stock-specific.
@@ -1246,6 +1278,7 @@ function buildObservationPrompt({
           positionCount: portfolio.holdings.length,
           unrealizedPnlPct: portfolio.unrealizedPnlPct,
           asOf: portfolio.asOf,
+          dividendIncome: portfolio.dividendIncome,
         },
         benchmarks: {
           nasdaqPct,
@@ -1531,6 +1564,7 @@ async function generateObservation(userId) {
         avgCostAud: round2(p.avgCostAud),
         totalReturnPct: p.pnlPct != null ? round2(p.pnlPct) : null,
       })),
+      dividendIncome: await loadDividendIncomeSummary(userId, tz),
     };
     portfolioMove = computePortfolioDayMovement(dash.positions);
   }

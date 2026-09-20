@@ -140,3 +140,10 @@ Observations are excluded from `getBriefingsForUser()` (News tab daily/monthly f
 | `enrichHoldingsForObservation()` | `sharesNewsService.js` |
 | `startSharesCron()` | `sharesCron.js` |
 | `checkDailyDropAlerts()` | `sharesCron.js` |
+| `loadDividendIncomeSummary()` | `sharesNewsService.js` |
+
+## Dividend income (2026-09-20)
+
+`portfolio.dividendIncome` — pre-computed server-side (same convention as `portfolioMove`/`alertStatus`, never left for the model to sum): last-30-days total, calendar-year-to-date total, YTD withholding tax, and up to 10 recent entries, all summed from `share_cash_ledger` type `'dividend'` rows. Aggregate only, not per-holding — `share_cash_ledger` has no `symbol` column (a statement-imported dividend's ticker lives only in its free-text `note`), so a per-symbol breakdown would mean parsing that text, not done.
+
+Surfaced as one bullet at the end of `## POSITION CHECK`, only when `count > 0` — explicitly told not to repeat elsewhere in the note (this app's own recurring pattern: a fact stated once cleanly beats the same number restated across three sections, per the earlier gold-cost-basis repetition fix in this same prompt).
