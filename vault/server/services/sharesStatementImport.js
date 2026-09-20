@@ -1,0 +1,341 @@
+'use strict';
+
+// Statement upload & reconciliation (docs/shares-statement-import.md).
+// Step 2: upload -> LLM extraction -> review queue -> apply. Every line is
+// gated behind explicit user approval before it touches share_trades or
+// share_cash_ledger — a misclassification costs a correction click, not a
+// corrupted ledger. See the doc for the decisions this implements verbatim
+// (dedup key, tolerance, DRP pairing, correction detection, no auto-apply).
+
+const crypto = require('crypto');
+const { pool } = require('../db');
+const { extractPdfText } = require('./studyUploadExtract');
+const { getModelsForUser } = require('./modelResolver');
+const { callModel } = require('./callModel');
+const { logUsage } = require('../utils/logUsage');
+
+const LINE_TYPES = ['trade', 'dividend', 'interest', 'fee', 'drp', 'cash_balance', 'fx'];
+
+// max(0.5%, AUD $1) — pinned per docs/shares-statement-import.md, not left
+// for the model to invent. Revisit the literal here if it proves too
+// noisy/quiet in practice; it's one constant, not a redesign.
+function withinTolerance(a, b) {
+  if (a == null || b == null) return false;
+  const diff = Math.abs(a - b);
+  return diff <= Math.max(Math.abs(a) * 0.005, 1);
+}
+
+function dedupHash({ date, symbol, lineType, amount }) {
+  const key = `${date || ''}|${(symbol || '').toUpperCase()}|${lineType}|${Number(amount || 0).toFixed(2)}`;
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
+const EXTRACTION_SYSTEM_PROMPT = `You extract structured line items from a brokerage trading statement (raw PDF text, formatting/whitespace may be irregular). Broker layout is not fixed — read the actual content, don't assume a template.
+
+For each distinct financial event on the statement, output one object:
+{
+  "lineType": "trade" | "dividend" | "interest" | "fee" | "drp" | "cash_balance" | "fx",
+  "date": "YYYY-MM-DD",
+  "symbol": "ticker if identifiable, else null",
+  "description": "the statement's own line text or a short paraphrase",
+  "amount": number (AUD if statement gives AUD, else the stated currency amount),
+  "currency": "AUD" | "USD" | other ISO code,
+  "quantity": number or null (trades/drp only),
+  "pricePerUnit": number or null (trades/drp only),
+  "fxRateToAud": number or null (if the statement shows a conversion rate),
+  "feesAud": number or null (trade-specific fee, if broken out),
+  "grossAmountAud": number or null (dividend/drp only, before withholding),
+  "withholdingTaxAud": number or null (dividend/drp only),
+  "side": "buy" | "sell" | null (trades only)
+}
+
+Rules:
+- "drp" = a dividend that was reinvested into new shares rather than paid as cash — the statement will show both a dividend amount and a share purchase together. Emit ONE drp object with both dividend and trade fields filled in, not two separate objects.
+- "cash_balance" = the statement's stated closing/opening cash balance (for drift-checking against the app's own ledger) — usually one or two lines per statement.
+- "fx" = an explicit currency-conversion line if the statement itemises one separately from a trade.
+- US dividends often show gross amount + withholding tax deducted (commonly 15-30%) before the net AUD hits the account — populate grossAmountAud and withholdingTaxAud separately when both are visible; if only a net figure is shown, put it in "amount" and leave the other two null rather than guessing a split.
+- If a field genuinely isn't present on the statement, use null. Do not invent values.
+- Output ONLY a JSON array of these objects, no prose, no markdown fences.`;
+
+async function extractLinesFromPdf(userId, filePath) {
+  const text = await extractPdfText(filePath);
+  if (!text || !text.trim()) {
+    const err = new Error('Could not extract any text from this PDF');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { standard: model } = await getModelsForUser(userId);
+  const result = await callModel(model, text.slice(0, 60000), {
+    system: EXTRACTION_SYSTEM_PROMPT,
+    maxTokens: 4096,
+    returnUsage: true,
+  });
+  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'sharesStatementImport' });
+
+  let parsed;
+  try {
+    const jsonText = result.text.trim().replace(/^```json?\s*/i, '').replace(/```\s*$/, '');
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    const err = new Error('Statement extraction did not return valid JSON — try again or a clearer scan');
+    err.statusCode = 502;
+    throw err;
+  }
+  if (!Array.isArray(parsed)) {
+    const err = new Error('Statement extraction returned an unexpected shape');
+    err.statusCode = 502;
+    throw err;
+  }
+  return parsed.filter((l) => l && LINE_TYPES.includes(l.lineType));
+}
+
+// Classifies one extracted line against existing data. Returns
+// { matchStatus, matchedTradeId, matchedLedgerId, dedupHash }.
+async function classifyLine(userId, line) {
+  const hash = dedupHash(line);
+
+  // Already imported (any prior import, not just this one) — never let the
+  // same line reach the queue as "new" twice.
+  const { rows: dupRows } = await pool.query(
+    `SELECT id FROM share_statement_lines WHERE "userId"=$1 AND "dedupHash"=$2 AND "reviewDecision"='approved' LIMIT 1`,
+    [userId, hash]
+  );
+  if (dupRows.length) return { matchStatus: 'skipped_duplicate', matchedTradeId: null, matchedLedgerId: null, dedupHash: hash };
+
+  if (line.lineType === 'trade' && line.symbol && line.quantity && line.date) {
+    const { rows } = await pool.query(
+      `SELECT id, "pricePerShare", "fxRateToAud", "feesAud" FROM share_trades
+       WHERE "userId"=$1 AND symbol=$2 AND quantity=$3 AND "tradedAt"::date=$4::date LIMIT 1`,
+      [userId, line.symbol, line.quantity, line.date]
+    );
+    if (rows.length) {
+      const t = rows[0];
+      const feeMatch = line.feesAud == null || withinTolerance(Number(t.feesAud), line.feesAud);
+      const fxMatch = line.fxRateToAud == null || t.fxRateToAud == null || withinTolerance(Number(t.fxRateToAud), line.fxRateToAud);
+      return {
+        matchStatus: feeMatch && fxMatch ? 'matches_existing' : 'conflict',
+        matchedTradeId: t.id, matchedLedgerId: null, dedupHash: hash,
+      };
+    }
+  }
+
+  if (['dividend', 'interest', 'fee'].includes(line.lineType) && line.date) {
+    const { rows } = await pool.query(
+      `SELECT id, "amountAud" FROM share_cash_ledger
+       WHERE "userId"=$1 AND type=$2 AND "createdAt"::date=$3::date LIMIT 5`,
+      [userId, line.lineType, line.date]
+    );
+    const exact = rows.find((r) => withinTolerance(Number(r.amountAud), line.amount));
+    if (exact) return { matchStatus: 'matches_existing', matchedTradeId: null, matchedLedgerId: exact.id, dedupHash: hash };
+    const sameDayDifferentAmount = rows.length > 0;
+    if (sameDayDifferentAmount) return { matchStatus: 'possible_correction', matchedTradeId: null, matchedLedgerId: rows[0].id, dedupHash: hash };
+  }
+
+  return { matchStatus: 'new', matchedTradeId: null, matchedLedgerId: null, dedupHash: hash };
+}
+
+async function createImport(userId, { filename, filePath, brokerHint }) {
+  const lines = await extractLinesFromPdf(userId, filePath);
+
+  const dates = lines.map((l) => l.date).filter(Boolean).sort();
+  const periodStart = dates[0] || null;
+  const periodEnd = dates[dates.length - 1] || null;
+
+  const { rows: [imp] } = await pool.query(
+    `INSERT INTO share_statement_imports ("userId", filename, "brokerHint", "periodStart", "periodEnd", status)
+     VALUES ($1,$2,$3,$4,$5,'reviewing') RETURNING *`,
+    [userId, filename, brokerHint || null, periodStart, periodEnd]
+  );
+
+  // Non-blocking overlap warning only — a corrected re-upload of the same
+  // period is legitimate (docs/shares-statement-import.md), never rejected.
+  let overlapWarning = null;
+  if (periodStart && periodEnd) {
+    const { rows: overlaps } = await pool.query(
+      `SELECT id, filename, "periodStart", "periodEnd" FROM share_statement_imports
+       WHERE "userId"=$1 AND id != $2 AND status != 'reverted'
+         AND "periodStart" IS NOT NULL AND "periodEnd" IS NOT NULL
+         AND "periodStart" <= $4::date AND "periodEnd" >= $3::date`,
+      [userId, imp.id, periodStart, periodEnd]
+    );
+    if (overlaps.length) overlapWarning = `Overlaps ${overlaps.length} prior import(s): ${overlaps.map((o) => o.filename).join(', ')}`;
+  }
+
+  const insertedLines = [];
+  for (const line of lines) {
+    const { matchStatus, matchedTradeId, matchedLedgerId, dedupHash: hash } = await classifyLine(userId, line);
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO share_statement_lines
+        ("importId","userId","lineType","parsedFields","dedupHash","matchStatus","matchedTradeId","matchedLedgerId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [imp.id, userId, line.lineType, JSON.stringify(line), hash, matchStatus, matchedTradeId, matchedLedgerId]
+    );
+    insertedLines.push(row);
+  }
+
+  return { import: imp, lines: insertedLines, overlapWarning };
+}
+
+async function getImports(userId) {
+  const { rows } = await pool.query(
+    `SELECT si.*,
+       COUNT(sl.id)::int AS "lineCount",
+       COUNT(sl.id) FILTER (WHERE sl."reviewDecision"='pending')::int AS "pendingCount"
+     FROM share_statement_imports si
+     LEFT JOIN share_statement_lines sl ON sl."importId" = si.id
+     WHERE si."userId"=$1
+     GROUP BY si.id
+     ORDER BY si."uploadedAt" DESC`,
+    [userId]
+  );
+  return rows;
+}
+
+async function getImportDetail(userId, importId) {
+  const { rows: [imp] } = await pool.query(
+    `SELECT * FROM share_statement_imports WHERE id=$1 AND "userId"=$2`, [importId, userId]
+  );
+  if (!imp) return null;
+  const { rows: lines } = await pool.query(
+    `SELECT * FROM share_statement_lines WHERE "importId"=$1 ORDER BY id ASC`, [importId]
+  );
+  return { import: imp, lines };
+}
+
+async function updateLineFields(userId, lineId, parsedFields) {
+  const { rows: [line] } = await pool.query(
+    `SELECT * FROM share_statement_lines WHERE id=$1 AND "userId"=$2`, [lineId, userId]
+  );
+  if (!line) return null;
+  if (line.reviewDecision !== 'pending') {
+    const err = new Error('Line already reviewed — cannot edit');
+    err.statusCode = 400;
+    throw err;
+  }
+  const merged = { ...line.parsedFields, ...parsedFields };
+  const { rows: [updated] } = await pool.query(
+    `UPDATE share_statement_lines SET "parsedFields"=$1 WHERE id=$2 RETURNING *`,
+    [JSON.stringify(merged), lineId]
+  );
+  return updated;
+}
+
+// Writes one approved line to the real ledger. DRP writes two rows (cash
+// ledger + trade), both tagged with sourceImportId/sourceStatementLineId,
+// reviewed and applied as a single unit.
+async function approveLine(userId, lineId) {
+  const { rows: [line] } = await pool.query(
+    `SELECT * FROM share_statement_lines WHERE id=$1 AND "userId"=$2`, [lineId, userId]
+  );
+  if (!line) return null;
+  if (line.reviewDecision !== 'pending') {
+    const err = new Error(`Line already ${line.reviewDecision}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  const f = line.parsedFields;
+
+  if (line.lineType === 'trade') {
+    if (!f.symbol || !f.quantity || !f.pricePerUnit || !f.date) {
+      const err = new Error('Trade line missing symbol/quantity/price/date — edit before approving');
+      err.statusCode = 400;
+      throw err;
+    }
+    await pool.query(
+      `INSERT INTO share_trades
+        ("userId",symbol,exchange,side,quantity,"pricePerShare",currency,"fxRateToAud","feesAud","tradedAt",notes,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [userId, f.symbol, f.exchange || 'ASX', f.side || 'buy', f.quantity, f.pricePerUnit,
+       f.currency || 'AUD', f.fxRateToAud || null, f.feesAud || 0, f.date,
+       f.description || 'Imported from statement', line.importId, line.id]
+    );
+  } else if (['dividend', 'interest', 'fee'].includes(line.lineType)) {
+    const amountAud = f.grossAmountAud != null ? f.grossAmountAud : f.amount;
+    if (!amountAud) {
+      const err = new Error('Line missing an amount — edit before approving');
+      err.statusCode = 400;
+      throw err;
+    }
+    await pool.query(
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [userId, line.lineType, amountAud, f.withholdingTaxAud || null,
+       f.description || `Imported from statement (${f.symbol || ''})`.trim(), line.importId, line.id]
+    );
+  } else if (line.lineType === 'drp') {
+    if (!f.symbol || !f.quantity || !f.pricePerUnit || !f.date) {
+      const err = new Error('DRP line missing symbol/quantity/price/date — edit before approving');
+      err.statusCode = 400;
+      throw err;
+    }
+    const amountAud = f.grossAmountAud != null ? f.grossAmountAud : f.amount;
+    await pool.query(
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,'dividend',$2,$3,$4,$5,$6)`,
+      [userId, amountAud || (f.quantity * f.pricePerUnit), f.withholdingTaxAud || null,
+       `DRP reinvestment (${f.symbol})`, line.importId, line.id]
+    );
+    await pool.query(
+      `INSERT INTO share_trades
+        ("userId",symbol,exchange,side,quantity,"pricePerShare",currency,"fxRateToAud","feesAud","tradedAt",notes,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,$2,$3,'buy',$4,$5,$6,$7,0,$8,$9,$10,$11)`,
+      [userId, f.symbol, f.exchange || 'ASX', f.quantity, f.pricePerUnit,
+       f.currency || 'AUD', f.fxRateToAud || null, f.date, 'DRP reinvestment', line.importId, line.id]
+    );
+  }
+  // cash_balance / fx lines are informational only — nothing to write, just mark reviewed.
+
+  const { rows: [updated] } = await pool.query(
+    `UPDATE share_statement_lines SET "reviewDecision"='approved', "appliedAt"=NOW() WHERE id=$1 RETURNING *`,
+    [lineId]
+  );
+  return updated;
+}
+
+async function rejectLine(userId, lineId) {
+  const { rows: [updated] } = await pool.query(
+    `UPDATE share_statement_lines SET "reviewDecision"='rejected'
+     WHERE id=$1 AND "userId"=$2 AND "reviewDecision"='pending' RETURNING *`,
+    [lineId, userId]
+  );
+  return updated || null;
+}
+
+// Deletes every share_trades/share_cash_ledger row this import wrote, and
+// marks the import reverted. Rows created manually keep sourceImportId NULL
+// so they're never touched by this.
+async function revertImport(userId, importId) {
+  const { rows: [imp] } = await pool.query(
+    `SELECT * FROM share_statement_imports WHERE id=$1 AND "userId"=$2`, [importId, userId]
+  );
+  if (!imp) return null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM share_trades WHERE "sourceImportId"=$1 AND "userId"=$2`, [importId, userId]);
+    await client.query(`DELETE FROM share_cash_ledger WHERE "sourceImportId"=$1 AND "userId"=$2`, [importId, userId]);
+    const { rows: [updated] } = await client.query(
+      `UPDATE share_statement_imports SET status='reverted' WHERE id=$1 RETURNING *`, [importId]
+    );
+    await client.query('COMMIT');
+    return updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = {
+  LINE_TYPES,
+  createImport,
+  getImports,
+  getImportDetail,
+  updateLineFields,
+  approveLine,
+  rejectLine,
+  revertImport,
+};

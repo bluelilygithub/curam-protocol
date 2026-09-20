@@ -41,6 +41,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
+- `server/services/sharesStatementImport.js` + `server/routes/sharesStatements.js` — broker PDF statement upload → LLM extraction → review-queue reconciliation against `share_trades`/`share_cash_ledger`, nothing auto-applied. See **`docs/shares-statement-import.md`**.
 - `server/routes/productScout.js` — Product Scout run/history/settings API
 - `server/services/productScoutService.js` — comparison pipeline (Rainforest + callModel + web search)
 - `server/services/productScoutSettings.js` — variance % + Amazon marketplace (`workspace_settings`)
@@ -375,7 +376,9 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 
 **Web Extractor** (`/web-extractor`): Pull content from any public URL, three modes — **Article content** (jsdom strips nav/header/footer/sidebar/ads/comments/images, returns readable text + title/byline, downloadable as PDF via `server/services/webExtractorPdf.js`), **Extract images** (dedup'd `<img>`/`<picture>` + `og:image`, prefers lazy-load attrs `data-src`/`data-lazy-src`/`data-original` over placeholder `src`, absolute URLs, alt text; per-image download or "Download all" as zip), **Exact scrape** (original HTML with relative asset/link URLs rewritten absolute, inline styles/`<style>` untouched, rendered read-only in a sandboxed iframe). No persistence — stateless single-shot API. Uses the same SSRF-safe `htmlFetch.fetchHtml()` as Translate/SEO/pinned URLs; image downloads use a binary-safe SSRF-checked fetch (`webExtractorService.fetchBinary`, htmlFetch decodes everything as utf8 text so it can't carry binary). Flag `webExtractor`. Route: `server/routes/webExtractor.js`. Service: `server/services/webExtractorService.js`.
 
-**Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
+**Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · **Statements** · Charts · News.
+
+- **Statements tab** — upload a broker PDF statement (CMC Markets primary, built broker-agnostic via LLM extraction rather than a positional parser); trades/dividends/interest/fees/DRP/cash-balance/fx lines extracted and shown in a review queue — **nothing auto-applies**, every line needs explicit approve/edit/reject before it writes to `share_trades`/`share_cash_ledger`. `server/services/sharesStatementImport.js` + `server/routes/sharesStatements.js` (`/api/shares/statements`, `aiLimiter`). Dedup across all prior imports (date+symbol+type+amount hash), tolerance `max(0.5%, AUD $1)` for match/conflict checks, corrections flagged not auto-resolved, imports revertible (deletes only the rows it created, via `sourceImportId`). Full spec: **`docs/shares-statement-import.md`**.
 
 - **Charts tab** — observation-aligned analytics: portfolio vs benchmark day move, beat/lag movers, HWM drawdown alerts, 5-day trailing returns, allocation by sector proxy, relative performance from stored observations, earnings timeline, move heatmap, metals spot/book. See **`docs/shares-charts.md`**. API: `GET /api/shares/charts?days=1|7|30|90`.
 

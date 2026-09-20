@@ -155,8 +155,11 @@ app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 app.use('/api/clients', requireFeature('clients'), aiLimiter, require('./routes/clients'));
 app.use('/api/deals', requireFeature('clients'), require('./routes/deals'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
-// /api/shares/news must be registered before /api/shares to prevent prefix match interception
+// /api/shares/news and /api/shares/statements must be registered before
+// /api/shares to prevent prefix match interception
 app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
+// Statement extraction is an AI-cost route (LLM parses the uploaded PDF) — aiLimiter.
+app.use('/api/shares/statements', requireFeature('shares'), aiLimiter, require('./routes/sharesStatements'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));

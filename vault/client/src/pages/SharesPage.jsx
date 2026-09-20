@@ -6,11 +6,13 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import SharesChartsTab from '../components/shares/SharesChartsTab';
+import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 
 const TABS = [
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'trades', label: 'Trades' },
   { id: 'cash', label: 'Cash' },
+  { id: 'statements', label: 'Statements' },
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
   { id: 'questions', label: 'Questions' },
@@ -1159,6 +1161,10 @@ export default function SharesPage() {
                 realized={dashboard?.realized || []}
                 PortfolioPnlBarChart={PortfolioPnlBarChart}
               />
+            )}
+
+            {tab === 'statements' && (
+              <SharesStatementsTab onImported={loadAll} />
             )}
 
             {tab === 'news' && (

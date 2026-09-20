@@ -1,6 +1,6 @@
 # Shares statement upload & reconciliation
 
-Scoped in chat (see session history), building in two steps. **Step 1 (schema) done. Step 2 (upload/parse/review pipeline) not started — blocked on nothing, just not built yet.**
+Scoped in chat (see session history), built in two steps. **Both done.** Not yet exercised against a real CMC Markets statement in production — extraction accuracy on CMC's exact terminology is a first pass, expected to need correction from real usage (see Step 2 below).
 
 ## Why
 
@@ -14,9 +14,14 @@ Scoped in chat (see session history), building in two steps. **Step 1 (schema) d
 - `share_statement_imports` (one row per uploaded PDF: filename, brokerHint, periodStart/periodEnd, status `pending|reviewing|applied|reverted`).
 - `share_statement_lines` (one row per extracted line, before anything touches real data — the review-queue gate): `lineType` (`trade|dividend|interest|fee|drp|cash_balance|fx`), `parsedFields` JSONB, `dedupHash`, `matchStatus` (`needs_review|matches_existing|new|conflict|possible_correction|skipped_duplicate`), `matchedTradeId`/`matchedLedgerId`.
 
-## Step 2 — pipeline (not built)
+## Step 2 — pipeline (done)
 
-Decisions already made, to build against when this is picked up:
+- `server/services/sharesStatementImport.js` — `extractLinesFromPdf()` (reuses `studyUploadExtract.js`'s `extractPdfText()`, pdfjs-dist — exported from there rather than duplicated), `classifyLine()` (dedup + match-existing + tolerance + correction detection), `createImport()`, `approveLine()`/`rejectLine()`, `revertImport()`.
+- `server/routes/sharesStatements.js`, mounted `/api/shares/statements` (before the broader `/api/shares` mount, same ordering rule as `/api/shares/news`), `aiLimiter` applied (extraction is an LLM call): `POST /upload` (multipart PDF), `GET /` (list imports), `GET /:id` (import + lines), `PUT /lines/:lineId` (edit before approving — refused once reviewed), `POST /lines/:lineId/approve`, `POST /lines/:lineId/reject`, `POST /:id/revert`.
+- Extraction model: `getModelsForUser().standard`, one call per upload, `maxTokens: 4096`, raw PDF text capped at 60k chars sent to the model. Logged via `logUsage()` under feature `sharesStatementImport`.
+- Frontend: `client/src/components/shares/SharesStatementsTab.jsx`, new **Statements** tab on `SharesPage.jsx`. Upload → `ProcessingModal` (LLM call, >2s) → import auto-expands into its review queue. Each line shows type/date/amount/match badge, Approve/Edit/Reject when pending; `possible_correction`/`conflict` lines get an explanatory warning line. Revert button appears on an import once any of its lines have been applied.
+
+Decisions this implements verbatim from scoping:
 
 - **PDF only**, broker: CMC Markets (primary), built flexible rather than CMC-specific — LLM-based extraction (raw PDF text → structured line-item JSON via prompt, same pattern as Document Redaction's candidate extraction / Property Scenario's field extraction) rather than a positional/regex parser tied to one broker's layout. No sample statement was reviewed before building this decision — extraction accuracy on CMC's exact terminology (brokerage vs commission wording, FX line labels, franking credit phrasing) is a first-pass guess, expected to need correction once run against a real statement. That's acceptable because of the next point:
 - **Full review queue, nothing auto-applied.** Every extracted line — matched or not — goes through `share_statement_lines` and requires explicit approve/edit/reject before anything writes to `share_trades`/`share_cash_ledger`. A misclassification costs a correction click, not a corrupted ledger.

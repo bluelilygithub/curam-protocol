@@ -110,4 +110,4 @@ async function extractStudyUploadFromPath(filePath, originalname, mimetype) {
   return { extractedText: text, name: originalname };
 }
 
-module.exports = { extractStudyUploadFromPath, isCodeFile };
+module.exports = { extractStudyUploadFromPath, isCodeFile, extractPdfText };

@@ -1795,6 +1795,29 @@ async function initSchema() {
   // Dedup check (chat history: same line across two overlapping/re-uploaded
   // statements must never both reach the queue as "new") scans this per user.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_share_statement_lines_dedup ON share_statement_lines("userId", "dedupHash")`);
+  // matchStatus is the system's automatic triage (set once, at extraction
+  // time); reviewDecision is the human verdict on that line (set by the
+  // review-queue UI) — kept as two separate fields rather than overloading
+  // matchStatus, since "the system found no existing match" and "the user
+  // approved it" are different facts that shouldn't share one column.
+  await pool.query(`ALTER TABLE share_statement_lines ADD COLUMN IF NOT EXISTS "reviewDecision" TEXT NOT NULL DEFAULT 'pending'`);
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE share_statement_lines DROP CONSTRAINT IF EXISTS share_statement_lines_review_decision_check;
+      ALTER TABLE share_statement_lines
+        ADD CONSTRAINT share_statement_lines_review_decision_check
+        CHECK ("reviewDecision" IN ('pending', 'approved', 'rejected'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$
+  `);
+  await pool.query(`ALTER TABLE share_statement_lines ADD COLUMN IF NOT EXISTS "appliedAt" TIMESTAMPTZ`);
+  // DRP pairing: a drp line's parsedFields carries both the dividend cash
+  // amount and the reinvestment trade fields; on approval two rows get
+  // written (one cash_ledger, one trade) sharing this line's id as a link
+  // back, not a second share_statement_lines row.
+  await pool.query(`ALTER TABLE share_trades ADD COLUMN IF NOT EXISTS "sourceStatementLineId" INTEGER`);
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "sourceStatementLineId" INTEGER`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_news_briefings (
