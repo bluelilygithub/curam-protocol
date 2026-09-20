@@ -35,7 +35,7 @@ const EXTRACTION_SYSTEM_PROMPT = `You extract structured line items from a broke
 For each distinct financial event on the statement, output one object:
 {
   "lineType": "trade" | "dividend" | "interest" | "fee" | "drp" | "cash_balance" | "fx",
-  "date": "YYYY-MM-DD",
+  "date": "YYYY-MM-DD — CONVERT FROM THE STATEMENT'S OWN FORMAT, see date rule below",
   "symbol": "ticker if identifiable, else null (strip any exchange/country suffix, e.g. \"TSM:US\" -> \"TSM\")",
   "exchange": "NASDAQ" | "NYSE" | "ASX" | null (null if not confidently determinable),
   "description": "the statement's own line text or a short paraphrase",
@@ -51,6 +51,7 @@ For each distinct financial event on the statement, output one object:
 }
 
 Rules:
+- **Date format**: Australian brokerage statements (observed: CMC Markets) write dates DD/MM/YYYY, not MM/DD/YYYY. "03/02/2026" is 3 February 2026, not March 2nd — do NOT default to US date-order assumptions. Many dates on a real statement are ambiguous-looking (day <=12) precisely where this matters; get it right for every line, not just the unambiguous ones (day >12), since a wrong date breaks matching against the user's existing records even when every other field is correct.
 - "drp" = a dividend that was reinvested into new shares rather than paid as cash — the statement will show both a dividend amount and a share purchase together. Emit ONE drp object with both dividend and trade fields filled in, not two separate objects.
 - "cash_balance" = the statement's stated closing/opening cash balance (for drift-checking against the app's own ledger) — usually one or two lines per statement.
 - "fx" = an explicit currency-conversion line if the statement itemises one separately from a trade.
