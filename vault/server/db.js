@@ -1748,6 +1748,11 @@ async function initSchema() {
   // never stored, so the two numbers can't drift apart. Null for
   // interest/fee/deposit/withdraw rows.
   await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "withholdingTaxAud" NUMERIC(18, 2)`);
+  // Nullable, not required — a manual deposit/withdraw has no symbol. Set by
+  // approveLine() for dividend/drp rows so a per-symbol income breakdown
+  // doesn't have to parse the free-text "note" field (chat history: "board
+  // view" of dividend income by holding).
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS symbol TEXT`);
   // Set only on rows created via a statement import — lets an import be
   // reverted (delete every row carrying its id) without touching manually
   // entered trades/cash lines. No FK yet (share_statement_imports created

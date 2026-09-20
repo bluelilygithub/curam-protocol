@@ -13,6 +13,22 @@ Real-usage testing surfaced repeated trade-matching problems even after several 
 
 **Re-enabling trades later**: needs the user's own trade data cleaned up first (accurate per-trade price and date, not averaged/estimated values) — that's a data-quality problem in their existing `share_trades` rows, not something this feature can fix by extracting harder. Once that's sorted, flip `LINE_TYPES` back to the full set and restore the fuller extraction prompt (kept in git history, not deleted).
 
+## Dividend income "board view" (2026-09-20)
+
+Once dividends started actually landing in `share_cash_ledger`, two real bugs surfaced immediately (neither had been exercised before — 0 dividends approved when found):
+
+1. **`computeCashFromActivity()`** (`sharesPortfolio.js`) treated anything that wasn't `'deposit'` as a subtraction — fine when only deposit/withdraw existed, wrong now: approving a dividend would have *subtracted* it from the portfolio cash total. Fixed with an explicit increasing (`deposit`/`dividend`/`interest`) vs decreasing (`withdraw`/`fee`) set.
+2. **`PUT /api/shares/cash/:id`** forced `type` to `'deposit'` for anything it didn't recognise as `'withdraw'` — editing an imported dividend row in the Cash tab (even without touching the type dropdown, which only lists deposit/withdraw) would have silently reclassified it. Fixed: only overwrites `type` when the request sent a valid one from the full set; otherwise keeps the row's existing type.
+
+**"Board view" additions, all built together on request:**
+
+- `share_cash_ledger.symbol` (nullable TEXT) — populated by `approveLine()` for dividend/drp rows from the extracted line's symbol, so a per-holding breakdown doesn't need to parse the free-text `note` field. 14 already-approved rows backfilled in production by parsing their note text (`/\b([A-Z]{1,6}):[A-Z]{2}\b/` against CMC's `"TICKER:US"` pattern) — one-off, not a general mechanism.
+- `server/services/sharesDividends.js` — `getDividendSummary(userId, today)`: last-30-days, calendar-YTD, **AU financial-year**-to-date (1 July–30 June — this app is AUD-only and the one real broker is AU-based, so FY is the meaningful boundary for a dividend summary, not calendar year) + YTD withholding tax, per-symbol totals, monthly totals, recent list. Shared by both the Portfolio Note prompt (`sharesNewsService.js`'s `loadDividendIncomeSummary` is now a thin adapter over this, removing the prior duplicate implementation) and the live UI.
+- `GET /api/shares/dividends/summary` (`shares.js`) — the UI's read path.
+- **Cash tab**: per-type subtotal + signed "Ledger net" total row at the foot of the list.
+- **Portfolio tab**: a 5th stat tile (only shown once `totalCount > 0`) — FY-to-date dividend income + a rough yield (FY income ÷ current holdings value — not annualised, not per-holding, just a quick "is this doing anything" signal).
+- **Charts tab**: "Dividend income" section — by-holding and by-month bars, only shown once dividends exist. Reused `HorizontalBars` rather than building a new bar component, but it hardcoded `%`-formatting and a `symbol`-based key — extended with a `format` prop (`'pct'` default, `'aud'` new) and a label-based key fallback, since dividend amounts and month labels are neither percentages nor symbol+exchange pairs.
+
 ## Real-statement findings (first upload)
 
 The user's actual CMC Markets export turned out to be a "Trading Account Statement" — a pure cash-ledger view, not a per-trade contract note. Two real bugs surfaced, both fixed:

@@ -6,7 +6,8 @@ const { pool } = require('../db');
 const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
 const { checkDailyDropAlerts } = require('../cron/sharesCron');
-const { generateObservation } = require('../services/sharesNewsService');
+const { generateObservation, getWorkspaceTimezone, getDateInTz } = require('../services/sharesNewsService');
+const { getDividendSummary } = require('../services/sharesDividends');
 const { answerSharesQuestion, listQa, deleteQa } = require('../services/sharesAskService');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
@@ -134,6 +135,19 @@ router.post('/refresh', async (req, res) => {
     generateObservation(req.user.id).catch((err) =>
       console.error('[shares] manual observation generation failed:', err.message)
     );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/shares/dividends/summary — aggregate + per-symbol + monthly
+// dividend income (docs/shares-statement-import.md). Named route, before
+// any /:id-shaped route in this file.
+router.get('/dividends/summary', async (req, res) => {
+  try {
+    const tz = await getWorkspaceTimezone();
+    const today = getDateInTz(tz);
+    res.json(await getDividendSummary(req.user.id, today));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

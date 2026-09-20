@@ -330,9 +330,9 @@ async function approveLine(userId, lineId) {
       throw err;
     }
     await pool.query(
-      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",note,"sourceImportId","sourceStatementLineId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [userId, line.lineType, amountAud, f.withholdingTaxAud || null,
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",symbol,note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [userId, line.lineType, amountAud, f.withholdingTaxAud || null, f.symbol || null,
        f.description || `Imported from statement (${f.symbol || ''})`.trim(), line.importId, line.id]
     );
   } else if (line.lineType === 'drp') {
@@ -343,9 +343,9 @@ async function approveLine(userId, lineId) {
     }
     const amountAud = f.grossAmountAud != null ? f.grossAmountAud : f.amount;
     await pool.query(
-      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",note,"sourceImportId","sourceStatementLineId")
-       VALUES ($1,'dividend',$2,$3,$4,$5,$6)`,
-      [userId, amountAud || (f.quantity * f.pricePerUnit), f.withholdingTaxAud || null,
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",symbol,note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,'dividend',$2,$3,$4,$5,$6,$7)`,
+      [userId, amountAud || (f.quantity * f.pricePerUnit), f.withholdingTaxAud || null, f.symbol,
        `DRP reinvestment (${f.symbol})`, line.importId, line.id]
     );
     const drpExchange = await resolveExchange(userId, f.symbol, f.exchange, f.currency || 'AUD');

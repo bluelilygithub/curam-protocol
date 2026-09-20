@@ -39,6 +39,7 @@ export default function SharesChartsTab({
   positions = [],
   realized = [],
   PortfolioPnlBarChart,
+  dividendSummary,
 }) {
   const [showCash, setShowCash] = useState(false);
 
@@ -326,6 +327,23 @@ export default function SharesChartsTab({
           {charts.metals.alertRows?.length > 0 && (
             <ChartSection title="Metals drawdown" subtitle="Same peak/cost alert logic as shares.">
               <DrawdownBars rows={charts.metals.alertRows} peakTrigger={-10} costTrigger={-4} />
+            </ChartSection>
+          )}
+        </>
+      )}
+
+      {dividendSummary?.totalCount > 0 && (
+        <>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2 mt-6" style={{ color: 'var(--color-primary)' }}>Dividend income</p>
+          <ChartSection
+            title="By holding"
+            subtitle={`All-time total across ${dividendSummary.totalCount} payment(s). FY to date (from ${dividendSummary.fyStart}) shown as the Portfolio tab stat tile.`}
+          >
+            <HorizontalBars items={dividendSummary.bySymbol} valueKey="totalAud" labelKey="symbol" format="aud" />
+          </ChartSection>
+          {dividendSummary.monthly.length > 1 && (
+            <ChartSection title="By month" subtitle="All-time, month received.">
+              <HorizontalBars items={dividendSummary.monthly} valueKey="totalAud" labelKey="month" format="aud" />
             </ChartSection>
           )}
         </>

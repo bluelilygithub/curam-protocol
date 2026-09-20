@@ -347,6 +347,7 @@ export default function SharesPage() {
   const [workspaceTz, setWorkspaceTz] = useState('');
   const [generatingNews, setGeneratingNews] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [dividendSummary, setDividendSummary] = useState(null);
   const [sendingObservation, setSendingObservation] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -385,19 +386,21 @@ export default function SharesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, tradesRes, cashRes, newsRes, tzRes] = await Promise.all([
+      const [dashRes, tradesRes, cashRes, newsRes, tzRes, divRes] = await Promise.all([
         api.get('/api/shares/dashboard'),
         api.get('/api/shares/trades'),
         api.get('/api/shares/cash'),
         api.get('/api/shares/news'),
         api.get('/api/settings/workspace-timezone'),
+        api.get('/api/shares/dividends/summary'),
       ]);
-      const [dash, tradeList, cashList, newsList, tzData] = await Promise.all([
+      const [dash, tradeList, cashList, newsList, tzData, divSummary] = await Promise.all([
         dashRes.json(),
         tradesRes.json(),
         cashRes.json(),
         newsRes.json(),
         tzRes.json(),
+        divRes.json().catch(() => null),
       ]);
       if (!dashRes.ok) throw new Error(dash.error || 'Failed to load dashboard');
       setDashboard(dash);
@@ -405,6 +408,7 @@ export default function SharesPage() {
       setCashRows(Array.isArray(cashList) ? cashList : []);
       setNewsBriefings(Array.isArray(newsList) ? newsList : []);
       if (tzData?.timezone) setWorkspaceTz(tzData.timezone);
+      if (divRes.ok && divSummary) setDividendSummary(divSummary);
     } catch (err) {
       addToast(err.message || 'Failed to load shares', 'error');
     } finally {
@@ -805,6 +809,15 @@ export default function SharesPage() {
                         ? `${fmtAud(dashboard.unrealizedPnlAud)} on ${fmtAud(dashboard.costBasisAud)} invested`
                         : null,
                     },
+                    ...(dividendSummary?.totalCount > 0 ? [{
+                      label: 'Dividend income (FY)',
+                      value: fmtAud(dividendSummary.fyToDateAud),
+                      // Rough yield: FY dividend income / current holdings value. Not
+                      // annualised, not per-holding — a quick "is this doing anything" signal.
+                      sub: dashboard?.holdingsValueAud
+                        ? `≈${fmtPct((dividendSummary.fyToDateAud / dashboard.holdingsValueAud) * 100)} of holdings value, FY to date`
+                        : `Since ${dividendSummary.fyStart}`,
+                    }] : []),
                   ].map((card) => (
                     <div
                       key={card.label}
@@ -1182,6 +1195,7 @@ export default function SharesPage() {
                 positions={dashboard?.positions || []}
                 realized={dashboard?.realized || []}
                 PortfolioPnlBarChart={PortfolioPnlBarChart}
+                dividendSummary={dividendSummary}
               />
             )}
 

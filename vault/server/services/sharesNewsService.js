@@ -18,6 +18,7 @@
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
+const sharesDividends = require('./sharesDividends');
 const { logUsage } = require('../utils/logUsage');
 const { parseModelJson } = require('../utils/parseModelJson');
 const sharesPortfolio = require('./sharesPortfolio');
@@ -555,29 +556,20 @@ function computePortfolioDayMovement(positions) {
 // as portfolioMove/alertStatus. share_cash_ledger has no symbol column (the
 // statement-import feature's dividend rows carry it only in free-text
 // "note"), so this is an aggregate total, not a per-holding breakdown.
+// Thin adapter over the shared sharesDividends service (also used by the
+// live GET /api/shares/dividends/summary endpoint and the Charts/Portfolio
+// UI) — kept here only to preserve this file's existing field names
+// (count/yearToDateAud/withholdingTaxYtdAud) so the prompt template didn't
+// need touching.
 async function loadDividendIncomeSummary(userId, tz) {
   const today = getDateInTz(tz);
-  const startOfYear = `${today.slice(0, 4)}-01-01`;
-  const { rows } = await pool.query(
-    `SELECT "amountAud", "withholdingTaxAud", note, "createdAt" FROM share_cash_ledger
-     WHERE "userId"=$1 AND type='dividend' AND "createdAt"::date >= $2
-     ORDER BY "createdAt" DESC`,
-    [userId, startOfYear]
-  );
-  const last30Cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const last30DaysAud = rows
-    .filter((r) => new Date(r.createdAt).getTime() >= last30Cutoff)
-    .reduce((sum, r) => sum + Number(r.amountAud), 0);
-  const yearToDateAud = rows.reduce((sum, r) => sum + Number(r.amountAud), 0);
-  const withholdingTaxYtdAud = rows.reduce((sum, r) => sum + Number(r.withholdingTaxAud || 0), 0);
+  const summary = await sharesDividends.getDividendSummary(userId, today);
   return {
-    count: rows.length,
-    last30DaysAud: round2(last30DaysAud),
-    yearToDateAud: round2(yearToDateAud),
-    withholdingTaxYtdAud: round2(withholdingTaxYtdAud),
-    recent: rows.slice(0, 10).map((r) => ({
-      amountAud: round2(Number(r.amountAud)), date: String(r.createdAt).slice(0, 10), note: r.note,
-    })),
+    count: summary.totalCount,
+    last30DaysAud: summary.last30DaysAud,
+    yearToDateAud: summary.calendarYtdAud,
+    withholdingTaxYtdAud: summary.fyWithholdingTaxAud,
+    recent: summary.recent,
   };
 }
 
@@ -1949,4 +1941,6 @@ module.exports = {
   getBriefingsForUser,
   generateObservation,
   getLatestObservation,
+  getWorkspaceTimezone,
+  getDateInTz,
 };
