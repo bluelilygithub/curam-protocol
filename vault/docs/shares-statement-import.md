@@ -1,6 +1,21 @@
 # Shares statement upload & reconciliation
 
-Scoped in chat (see session history), built in two steps. **Both done.** Not yet exercised against a real CMC Markets statement in production — extraction accuracy on CMC's exact terminology is a first pass, expected to need correction from real usage (see Step 2 below).
+Scoped in chat (see session history), built in two steps. **Both done, and step 2's extraction prompt updated once against a real CMC Markets statement** (below) — first real-usage correction, exactly as anticipated when this was scoped.
+
+## Real-statement findings (first upload)
+
+The user's actual CMC Markets export turned out to be a "Trading Account Statement" — a pure cash-ledger view, not a per-trade contract note. Two real bugs surfaced, both fixed:
+
+1. **`extractPdfText()` was broken for everyone, not just this feature.** `pdfjs-dist@6.1.200`'s `legacy/build/pdf.js` (CommonJS) no longer exists — the package moved to ESM-only (`pdf.mjs`) — so every PDF upload through this shared utility (`server/services/studyUploadExtract.js`, also used by Student Cards) was silently returning empty text. Fixed via dynamic `import()` from the CommonJS module. Pre-existing bug, unrelated to this feature's own code — this upload just happened to be the first thing to surface it in front of a user.
+2. **`approveLine()` defaulted a missing `exchange` to `'ASX'`.** CMC's format suffixes US tickers `:US` with no NASDAQ/NYSE distinction — that default would have silently booked every US trade as an ASX one. Fixed: `resolveExchange()` now looks up the user's own trade history for that symbol first (the app already knows TSM is NYSE, GOOG is NASDAQ, etc. from existing trades); only defaults to ASX when the currency is itself AUD; otherwise refuses and asks for a manual edit rather than guessing.
+
+Extraction prompt updated for what the real statement showed:
+- Each trade is one line (`Bght/Sold N SYMBOL:US @ PRICE AUD`); the `Wdl ACMM ...` / `Dep ACMM ...` lines immediately after it are internal settlement transfers tied to the same trade reference, not separate cash events — the model is now told to skip them entirely rather than emit them as spurious deposit/withdraw/fee lines.
+- Dividend lines (`JNL#### SYMBOL:US Intl Div Ex:DD/MM/YY`) show **net only** on this statement type — confirmed no gross/withholding breakdown exists on it at all. Not a parsing gap to fix; a real limit of this report. If withholding tracking matters, it'll need a different CMC report or manual entry — noted honestly rather than having the model estimate a split it can't see.
+- PDF column layout occasionally inserts a space as a thousands separator (`2 208.9010` = 2208.9010) — prompt now tells the model to strip it rather than misread two numbers.
+- Symbols are suffixed `:US`; prompt now strips it and asks for an explicit NASDAQ/NYSE/ASX guess only when confident, `null` otherwise (feeding `resolveExchange()`'s trade-history lookup above).
+
+Not yet re-tested against the corrected prompt with a live upload — the fixes above are argued from the real extracted text, not yet confirmed against the model's actual output on this statement.
 
 ## Why
 

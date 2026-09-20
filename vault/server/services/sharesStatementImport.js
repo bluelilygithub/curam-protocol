@@ -36,7 +36,8 @@ For each distinct financial event on the statement, output one object:
 {
   "lineType": "trade" | "dividend" | "interest" | "fee" | "drp" | "cash_balance" | "fx",
   "date": "YYYY-MM-DD",
-  "symbol": "ticker if identifiable, else null",
+  "symbol": "ticker if identifiable, else null (strip any exchange/country suffix, e.g. \"TSM:US\" -> \"TSM\")",
+  "exchange": "NASDAQ" | "NYSE" | "ASX" | null (null if not confidently determinable),
   "description": "the statement's own line text or a short paraphrase",
   "amount": number (AUD if statement gives AUD, else the stated currency amount),
   "currency": "AUD" | "USD" | other ISO code,
@@ -53,7 +54,11 @@ Rules:
 - "drp" = a dividend that was reinvested into new shares rather than paid as cash — the statement will show both a dividend amount and a share purchase together. Emit ONE drp object with both dividend and trade fields filled in, not two separate objects.
 - "cash_balance" = the statement's stated closing/opening cash balance (for drift-checking against the app's own ledger) — usually one or two lines per statement.
 - "fx" = an explicit currency-conversion line if the statement itemises one separately from a trade.
-- US dividends often show gross amount + withholding tax deducted (commonly 15-30%) before the net AUD hits the account — populate grossAmountAud and withholdingTaxAud separately when both are visible; if only a net figure is shown, put it in "amount" and leave the other two null rather than guessing a split.
+- US dividends often show gross amount + withholding tax deducted (commonly 15-30%) before the net AUD hits the account — populate grossAmountAud and withholdingTaxAud separately when both are visible; if only a net figure is shown, put it in "amount" and leave the other two null rather than guessing a split. Some statement types (e.g. a cash-ledger-style "Trading Account Statement") never show the gross/withholding split at all — that's a real limit of the report, not something to estimate; leave both null.
+- Some brokers (observed: CMC Markets) report a trading account as a pure cash ledger: each real trade is ONE line like "Bght 20 TSM:US @ 471.4695 AUD" (buy) or "Sold 136 INTC:US @ 61.5982 AUD" (sell) — extract quantity, symbol, price and side from that single line. It is typically followed by one or more separate lines (e.g. "Wdl ACMM ..." / "Dep ACMM ...", or similarly-named internal transfer/settlement lines) referencing the SAME reference number or trade — these are internal account-clearing mechanics, not a real economic event. Do not emit them as trade/deposit/withdraw/fee lines at all; skip them entirely. The same applies to a dividend's own internal settlement transfer line immediately following it — only emit the "JNL"/dividend line itself, skip its paired transfer line.
+- Numbers may contain an embedded space used as a thousands separator by the PDF's column layout (e.g. "2 208.9010" means 2208.9010, "2 736.3500" means 2736.3500) — strip internal spaces within a single number before returning it, don't misread it as two numbers or truncate it.
+- Symbols are often suffixed with an exchange/country hint (e.g. "TSM:US") — strip that suffix from "symbol" (return "TSM", not "TSM:US"). Separately, if you can determine the specific listing exchange (NASDAQ vs NYSE vs ASX) from context (well-known tickers, or the statement stating it explicitly), populate an "exchange" field with exactly "NASDAQ", "NYSE", or "ASX"; if you cannot be confident which of NASDAQ/NYSE it is, leave "exchange" null rather than guessing — the app will look up the user's own trade history for that symbol to fill it in, which is more reliable than a guess.
+- Ignore statement boilerplate: running headers/footers repeated on every page, disclaimers, and a final "Total" summary row — these are not line items.
 - If a field genuinely isn't present on the statement, use null. Do not invent values.
 - Output ONLY a JSON array of these objects, no prose, no markdown fences.`;
 
@@ -221,6 +226,24 @@ async function updateLineFields(userId, lineId, parsedFields) {
   return updated;
 }
 
+// A missing exchange must never silently default to 'ASX' — that would
+// mis-book every US trade whose extraction couldn't tell NASDAQ from NYSE
+// (found via a real CMC statement: symbols are suffixed ":US" with no
+// further disambiguation). Prefer the user's own trade history for that
+// symbol; if there's no prior trade to learn from, refuse rather than guess.
+async function resolveExchange(userId, symbol, extractedExchange, currency) {
+  if (extractedExchange) return extractedExchange;
+  const { rows } = await pool.query(
+    `SELECT exchange FROM share_trades WHERE "userId"=$1 AND symbol=$2 ORDER BY "tradedAt" DESC LIMIT 1`,
+    [userId, symbol]
+  );
+  if (rows.length) return rows[0].exchange;
+  if (currency === 'AUD') return 'ASX'; // only default when currency itself confirms it
+  const err = new Error(`Cannot determine exchange for ${symbol} — no prior trade to infer from. Edit the line and set it manually.`);
+  err.statusCode = 400;
+  throw err;
+}
+
 // Writes one approved line to the real ledger. DRP writes two rows (cash
 // ledger + trade), both tagged with sourceImportId/sourceStatementLineId,
 // reviewed and applied as a single unit.
@@ -242,11 +265,12 @@ async function approveLine(userId, lineId) {
       err.statusCode = 400;
       throw err;
     }
+    const exchange = await resolveExchange(userId, f.symbol, f.exchange, f.currency || 'AUD');
     await pool.query(
       `INSERT INTO share_trades
         ("userId",symbol,exchange,side,quantity,"pricePerShare",currency,"fxRateToAud","feesAud","tradedAt",notes,"sourceImportId","sourceStatementLineId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [userId, f.symbol, f.exchange || 'ASX', f.side || 'buy', f.quantity, f.pricePerUnit,
+      [userId, f.symbol, exchange, f.side || 'buy', f.quantity, f.pricePerUnit,
        f.currency || 'AUD', f.fxRateToAud || null, f.feesAud || 0, f.date,
        f.description || 'Imported from statement', line.importId, line.id]
     );
@@ -276,11 +300,12 @@ async function approveLine(userId, lineId) {
       [userId, amountAud || (f.quantity * f.pricePerUnit), f.withholdingTaxAud || null,
        `DRP reinvestment (${f.symbol})`, line.importId, line.id]
     );
+    const drpExchange = await resolveExchange(userId, f.symbol, f.exchange, f.currency || 'AUD');
     await pool.query(
       `INSERT INTO share_trades
         ("userId",symbol,exchange,side,quantity,"pricePerShare",currency,"fxRateToAud","feesAud","tradedAt",notes,"sourceImportId","sourceStatementLineId")
        VALUES ($1,$2,$3,'buy',$4,$5,$6,$7,0,$8,$9,$10,$11)`,
-      [userId, f.symbol, f.exchange || 'ASX', f.quantity, f.pricePerUnit,
+      [userId, f.symbol, drpExchange, f.quantity, f.pricePerUnit,
        f.currency || 'AUD', f.fxRateToAud || null, f.date, 'DRP reinvestment', line.importId, line.id]
     );
   }

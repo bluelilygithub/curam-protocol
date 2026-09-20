@@ -42,9 +42,14 @@ async function extractWordText(filePath) {
 
 async function extractPdfText(filePath) {
   try {
-    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+    // pdfjs-dist 6.x dropped the CommonJS legacy/build/pdf.js entry point —
+    // legacy/build now only ships ESM (.mjs). Load it via dynamic import
+    // from this CJS module rather than require(); found via a real upload
+    // failing silently (this function swallowed the error and returned '',
+    // surfacing as "no text could be extracted" instead of the real cause).
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const data = new Uint8Array(fs.readFileSync(filePath));
-    const doc = await pdfjsLib.getDocument({ data }).promise;
+    const doc = await pdfjsLib.getDocument({ data, disableWorker: true }).promise;
     let text = '';
     for (let i = 1; i <= doc.numPages; i += 1) {
       const page = await doc.getPage(i);
