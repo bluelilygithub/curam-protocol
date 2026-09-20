@@ -158,8 +158,17 @@ function ImportDetail({ importId, onClose, onChanged }) {
   const [detail, setDetail] = useState(null);
   const addToast = useToastStore((s) => s.addToast);
 
+  const [loadError, setLoadError] = useState('');
+
   const load = useCallback(() => {
-    api.get(`/api/shares/statements/${importId}`).then((r) => r.json()).then(setDetail).catch(() => {});
+    api.get(`/api/shares/statements/${importId}`)
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !data || !Array.isArray(data.lines)) throw new Error(data?.error || `Failed to load (${r.status})`);
+        setLoadError('');
+        setDetail(data);
+      })
+      .catch((e) => setLoadError(e.message || 'Failed to load statement detail'));
   }, [importId]);
 
   useEffect(() => { load(); }, [load]);
@@ -175,6 +184,7 @@ function ImportDetail({ importId, onClose, onChanged }) {
     }
   };
 
+  if (loadError) return <p className="text-sm py-4" style={{ color: '#ef4444' }}>{loadError} · <button onClick={load} className="underline hover:opacity-70">retry</button></p>;
   if (!detail) return <p className="text-sm py-4" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
 
   const anyApplied = detail.lines.some((l) => l.reviewDecision === 'approved');
@@ -215,9 +225,20 @@ export default function SharesStatementsTab({ onImported }) {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
+  // A non-array response (e.g. a rate-limit or error JSON body) must never
+  // reach setImports directly — found via a real 429 that crashed this
+  // page's render entirely (imports.map on a {error} object) with no
+  // visible cause to the user. Always land on an array, surface anything
+  // else as a toast.
   const loadImports = useCallback(() => {
-    api.get('/api/shares/statements').then((r) => r.json()).then(setImports).catch(() => {});
-  }, []);
+    api.get('/api/shares/statements')
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(data)) throw new Error(data?.error || `Failed to load statements (${r.status})`);
+        setImports(data);
+      })
+      .catch((e) => { addToast(e.message || 'Failed to load statements', 'error'); setImports([]); });
+  }, [addToast]);
 
   useEffect(() => { loadImports(); }, [loadImports]);
 

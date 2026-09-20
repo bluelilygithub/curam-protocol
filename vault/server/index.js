@@ -158,8 +158,11 @@ app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/news
 // /api/shares/news and /api/shares/statements must be registered before
 // /api/shares to prevent prefix match interception
 app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
-// Statement extraction is an AI-cost route (LLM parses the uploaded PDF) — aiLimiter.
-app.use('/api/shares/statements', requireFeature('shares'), aiLimiter, require('./routes/sharesStatements'));
+// aiLimiter applied inside sharesStatements.js to the upload route only —
+// GET (list/detail) and approve/reject/revert are not AI calls and must not
+// share that budget (found via a real 429 that crashed the list view, since
+// it starved plain page-loads whenever the AI budget was used up elsewhere).
+app.use('/api/shares/statements', requireFeature('shares'), require('./routes/sharesStatements'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));

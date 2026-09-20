@@ -5,6 +5,7 @@ const router  = express.Router();
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 const {
   createImport, getImports, getImportDetail, updateLineFields, approveLine, rejectLine, revertImport,
 } = require('../services/sharesStatementImport');
@@ -24,8 +25,9 @@ const upload = multer({
   },
 });
 
-// POST /api/shares/statements/upload
-router.post('/upload', upload.single('file'), async (req, res) => {
+// POST /api/shares/statements/upload — the only route on this router that
+// makes an LLM call, so aiLimiter applies here only, not to the whole router.
+router.post('/upload', aiLimiter, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'file is required' });
   try {
     const result = await createImport(req.user.id, {
