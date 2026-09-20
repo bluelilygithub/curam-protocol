@@ -62,6 +62,25 @@ Rules:
 - If a field genuinely isn't present on the statement, use null. Do not invent values.
 - Output ONLY a JSON array of these objects, no prose, no markdown fences.`;
 
+// If the model's output got cut off mid-array (a real risk on a long
+// statement with 50+ line items, especially on a reasoning model that also
+// spends budget on hidden reasoning tokens — found via a real upload:
+// deepseek-v4-flash consumed 4096 reasoning tokens before writing any
+// answer), salvage every complete object rather than discarding the whole
+// response. Tries progressively shorter truncations from the last '}'
+// backwards until one parses.
+function tryRepairTruncatedJsonArray(text) {
+  const closeIdxs = [];
+  for (let i = 0; i < text.length; i++) if (text[i] === '}') closeIdxs.push(i);
+  for (let i = closeIdxs.length - 1; i >= 0; i--) {
+    try {
+      const candidate = JSON.parse(`${text.slice(0, closeIdxs[i] + 1)}]`);
+      if (Array.isArray(candidate)) return candidate;
+    } catch { /* try a shorter truncation */ }
+  }
+  return null;
+}
+
 async function extractLinesFromPdf(userId, filePath) {
   const text = await extractPdfText(filePath);
   if (!text || !text.trim()) {
@@ -71,28 +90,39 @@ async function extractLinesFromPdf(userId, filePath) {
   }
 
   const { standard: model } = await getModelsForUser(userId);
+  // Sized for a long statement (50+ line items at ~150-250 JSON chars each)
+  // plus headroom for reasoning-capable models that spend part of the
+  // budget on hidden reasoning before the visible answer (callModel already
+  // auto-retries deepseek at up to 32768 if this still isn't enough).
   const result = await callModel(model, text.slice(0, 60000), {
     system: EXTRACTION_SYSTEM_PROMPT,
-    maxTokens: 4096,
+    maxTokens: 12000,
     returnUsage: true,
   });
   logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'sharesStatementImport' });
 
   let parsed;
+  let truncated = false;
   try {
     const jsonText = result.text.trim().replace(/^```json?\s*/i, '').replace(/```\s*$/, '');
     parsed = JSON.parse(jsonText);
   } catch (e) {
-    const err = new Error('Statement extraction did not return valid JSON — try again or a clearer scan');
-    err.statusCode = 502;
-    throw err;
+    parsed = tryRepairTruncatedJsonArray(result.text);
+    truncated = true;
+    if (!parsed) {
+      console.error('[sharesStatements] extraction returned unparseable JSON, raw text (first 2000 chars):', result.text.slice(0, 2000));
+      const err = new Error('Statement extraction did not return valid JSON — try again or a clearer scan');
+      err.statusCode = 502;
+      throw err;
+    }
+    console.warn(`[sharesStatements] extraction output was truncated — salvaged ${parsed.length} complete line(s), some lines at the end of the statement may be missing`);
   }
   if (!Array.isArray(parsed)) {
     const err = new Error('Statement extraction returned an unexpected shape');
     err.statusCode = 502;
     throw err;
   }
-  return parsed.filter((l) => l && LINE_TYPES.includes(l.lineType));
+  return { lines: parsed.filter((l) => l && LINE_TYPES.includes(l.lineType)), truncated };
 }
 
 // Classifies one extracted line against existing data. Returns
@@ -141,7 +171,7 @@ async function classifyLine(userId, line) {
 }
 
 async function createImport(userId, { filename, filePath, brokerHint }) {
-  const lines = await extractLinesFromPdf(userId, filePath);
+  const { lines, truncated } = await extractLinesFromPdf(userId, filePath);
 
   const dates = lines.map((l) => l.date).filter(Boolean).sort();
   const periodStart = dates[0] || null;
@@ -179,7 +209,11 @@ async function createImport(userId, { filename, filePath, brokerHint }) {
     insertedLines.push(row);
   }
 
-  return { import: imp, lines: insertedLines, overlapWarning };
+  const truncationWarning = truncated
+    ? 'The AI response was cut off before finishing — some line items near the end of the statement may be missing. Re-upload if the count looks short.'
+    : null;
+
+  return { import: imp, lines: insertedLines, overlapWarning, truncationWarning };
 }
 
 async function getImports(userId) {

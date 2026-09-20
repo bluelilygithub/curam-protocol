@@ -233,10 +233,12 @@ export default function SharesStatementsTab({ onImported }) {
       const res = await api.postForm('/api/shares/statements/upload', formData);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Upload failed');
+      const warnings = [data.truncationWarning, data.overlapWarning].filter(Boolean).join(' ');
       addToast(
-        data.overlapWarning
-          ? `Extracted ${data.lines.length} line(s). ${data.overlapWarning}`
-          : `Extracted ${data.lines.length} line(s) — review below`
+        warnings
+          ? `Extracted ${data.lines.length} line(s). ${warnings}`
+          : `Extracted ${data.lines.length} line(s) — review below`,
+        data.truncationWarning ? 'error' : 'success'
       );
       loadImports();
       setExpandedId(data.import.id);
