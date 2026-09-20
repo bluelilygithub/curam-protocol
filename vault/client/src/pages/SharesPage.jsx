@@ -801,12 +801,11 @@ export default function SharesPage() {
                       value: fmtAud(dashboard?.holdingsValueAud),
                       sub: 'True market value of all open positions',
                     },
-                    { label: 'Cash', value: fmtAud(dashboard?.cashAud) },
                     {
-                      label: 'Return vs cost',
+                      label: 'Return vs cost (open positions)',
                       value: fmtPct(dashboard?.unrealizedPnlPct),
                       sub: dashboard?.unrealizedPnlAud != null
-                        ? `${fmtAud(dashboard.unrealizedPnlAud)} on ${fmtAud(dashboard.costBasisAud)} invested`
+                        ? `${fmtAud(dashboard.unrealizedPnlAud)} unrealised, on ${fmtAud(dashboard.costBasisAud)} currently invested — excludes closed positions, see Realised P&L below`
                         : null,
                     },
                     ...(dividendSummary?.totalCount > 0 ? [{
@@ -833,11 +832,28 @@ export default function SharesPage() {
                   ))}
                 </div>
                 {dashboard?.totalRealizedPnlAud != null && (
-                  <div className="mb-4 px-3 py-2 rounded-lg border text-sm flex items-center gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                    <span style={{ color: 'var(--color-muted)' }}>Realised P&L</span>
-                    <span className="font-semibold" style={{ color: dashboard.totalRealizedPnlAud >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {fmtAud(dashboard.totalRealizedPnlAud)}
+                  <div className="mb-4 px-3 py-2 rounded-lg border text-sm flex flex-wrap items-center gap-x-6 gap-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <span>
+                      <span style={{ color: 'var(--color-muted)' }}>Realised P&L (closed positions)</span>{' '}
+                      <span className="font-semibold" style={{ color: dashboard.totalRealizedPnlAud >= 0 ? '#22c55e' : '#ef4444' }}>
+                        {fmtAud(dashboard.totalRealizedPnlAud)}
+                      </span>
                     </span>
+                    {dashboard?.unrealizedPnlAud != null && (() => {
+                      // The one true bottom-line number — realised (locked in from
+                      // sales) + unrealised (paper, on what's still held) can point
+                      // opposite ways and that's not a bug, but it reads as one
+                      // without a combined total to reconcile against.
+                      const total = dashboard.totalRealizedPnlAud + dashboard.unrealizedPnlAud;
+                      return (
+                        <span>
+                          <span style={{ color: 'var(--color-muted)' }}>Total P&L (realised + unrealised)</span>{' '}
+                          <span className="font-semibold" style={{ color: total >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {fmtAud(total)}
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </div>
                 )}
 
