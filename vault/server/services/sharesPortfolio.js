@@ -95,11 +95,19 @@ function computeHoldings(trades) {
   return computeHoldingsAndRealized(trades).holdings;
 }
 
+// 'deposit'/'withdraw' were the only two types this ever needed to handle
+// until the statement-import feature added dividend/interest/fee to
+// share_cash_ledger — a binary deposit-or-subtract ternary silently treated
+// every one of those three as a subtraction. A dividend/interest credit
+// increases cash same as a deposit; only fee (and withdraw) decreases it.
+// Found before it did real damage — no dividend has been approved yet.
+const CASH_INCREASING_TYPES = new Set(['deposit', 'dividend', 'interest']);
+
 function computeCashFromActivity(trades, ledgerRows) {
   let cash = 0;
   for (const row of ledgerRows) {
     const amt = num(row.amountAud);
-    cash += row.type === 'deposit' ? amt : -amt;
+    cash += CASH_INCREASING_TYPES.has(row.type) ? amt : -amt;
   }
   for (const t of trades) {
     const aud = tradeCashImpactAud(t);

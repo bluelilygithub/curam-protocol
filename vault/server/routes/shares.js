@@ -265,19 +265,31 @@ router.post('/cash', async (req, res) => {
 });
 
 // PUT /api/shares/cash/:id
+// The manual-entry form only offers deposit/withdraw, but rows created by
+// the statement-import feature can be dividend/interest/fee — this route
+// used to force type to 'deposit' for anything else it didn't recognise,
+// which would silently reclassify an imported dividend row the moment
+// someone clicked Edit on it without even changing the type dropdown.
+// Fixed: only overwrite type when the caller actually sent a valid one;
+// otherwise keep whatever the row already had.
+const VALID_CASH_LEDGER_TYPES = ['deposit', 'withdraw', 'dividend', 'interest', 'fee'];
 router.put('/cash/:id', async (req, res) => {
   try {
     const { type, amountAud, note } = req.body || {};
-    const t = type === 'withdraw' ? 'withdraw' : 'deposit';
     const amt = Number(amountAud);
     if (!amt || amt <= 0) return res.status(400).json({ error: 'amountAud must be positive' });
 
-    const { rows, rowCount } = await pool.query(
+    const { rows: existingRows } = await pool.query(
+      `SELECT type FROM share_cash_ledger WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]
+    );
+    if (!existingRows.length) return res.status(404).json({ error: 'Not found' });
+    const t = VALID_CASH_LEDGER_TYPES.includes(type) ? type : existingRows[0].type;
+
+    const { rows } = await pool.query(
       `UPDATE share_cash_ledger SET type=$1, "amountAud"=$2, note=$3
        WHERE id=$4 AND "userId"=$5 RETURNING *`,
       [t, amt, note || null, req.params.id, req.user.id]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
