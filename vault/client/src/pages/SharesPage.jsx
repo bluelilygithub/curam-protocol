@@ -1148,6 +1148,28 @@ export default function SharesPage() {
                     </li>
                   ))}
                 </ul>
+                {cashRows.length > 0 && (() => {
+                  // Signed net (deposit/dividend/interest add, withdraw/fee
+                  // subtract) — matches computeCashFromActivity's server-side
+                  // logic. Distinct from "Balance" above, which also nets
+                  // trade cashflows this list doesn't include.
+                  const CASH_INCREASING = new Set(['deposit', 'dividend', 'interest']);
+                  const byType = {};
+                  let net = 0;
+                  for (const c of cashRows) {
+                    const amt = Number(c.amountAud) || 0;
+                    byType[c.type] = (byType[c.type] || 0) + amt;
+                    net += CASH_INCREASING.has(c.type) ? amt : -amt;
+                  }
+                  return (
+                    <div className="mt-3 pt-3 border-t text-xs flex flex-wrap gap-x-4 gap-y-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                      {Object.entries(byType).map(([type, sum]) => (
+                        <span key={type} className="capitalize">{type}: {fmtAud(sum)}</span>
+                      ))}
+                      <span style={{ color: 'var(--color-text)' }}><strong>Ledger net: {fmtAud(net)}</strong></span>
+                    </div>
+                  );
+                })()}
               </>
             )}
 
