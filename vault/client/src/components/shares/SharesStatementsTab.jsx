@@ -124,7 +124,7 @@ function LineRow({ line, onChanged }) {
         <p className="text-xs mt-1" style={{ color: '#d97706' }}>
           {line.matchStatus === 'possible_correction'
             ? 'A different amount already exists for this date/type — check before approving; approving adds a second entry rather than replacing the old one.'
-            : 'A matching trade exists but fees or FX rate differ from this statement — review before approving.'}
+            : 'A matching trade exists but the price, fees, or FX rate differ from this statement — review before approving.'}
         </p>
       )}
 

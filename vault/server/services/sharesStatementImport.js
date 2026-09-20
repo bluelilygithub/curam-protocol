@@ -147,10 +147,16 @@ async function classifyLine(userId, line) {
     );
     if (rows.length) {
       const t = rows[0];
+      // Price itself, not just fees/FX — this was the actual original ask
+      // ("US to AUD trade price discrepancies") and was missing: a trade
+      // could match on symbol+quantity+date yet have a genuinely different
+      // recorded price (e.g. an averaged/rounded cost entered by hand) and
+      // this would have silently called it matches_existing.
+      const priceMatch = line.pricePerUnit == null || withinTolerance(Number(t.pricePerShare), line.pricePerUnit);
       const feeMatch = line.feesAud == null || withinTolerance(Number(t.feesAud), line.feesAud);
       const fxMatch = line.fxRateToAud == null || t.fxRateToAud == null || withinTolerance(Number(t.fxRateToAud), line.fxRateToAud);
       return {
-        matchStatus: feeMatch && fxMatch ? 'matches_existing' : 'conflict',
+        matchStatus: priceMatch && feeMatch && fxMatch ? 'matches_existing' : 'conflict',
         matchedTradeId: t.id, matchedLedgerId: null, dedupHash: hash,
       };
     }
