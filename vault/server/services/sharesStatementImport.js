@@ -14,7 +14,18 @@ const { getModelsForUser } = require('./modelResolver');
 const { callModel } = require('./callModel');
 const { logUsage } = require('../utils/logUsage');
 
-const LINE_TYPES = ['trade', 'dividend', 'interest', 'fee', 'drp', 'cash_balance', 'fx'];
+// Narrowed to dividends only (chat history: trade date/price matching proved
+// unreliable against real statements — some genuine trades kept classifying
+// as "new", and price wasn't even being checked). Dividends have no matching
+// problem at all: there was never anywhere for them to live before this
+// feature (docs/shares-statement-import.md "why"), so every one is purely
+// additive — nothing to get wrong by matching against the wrong existing row.
+// DB schema (share_statement_lines."lineType" CHECK) still allows the full
+// set — this is an application-level narrowing, not a schema rollback, so
+// trade/fee/interest/drp support can come back once trade matching is solid
+// without another migration.
+const LINE_TYPES = ['dividend'];
+const ALL_SCHEMA_LINE_TYPES = ['trade', 'dividend', 'interest', 'fee', 'drp', 'cash_balance', 'fx'];
 
 // max(0.5%, AUD $1) — pinned per docs/shares-statement-import.md, not left
 // for the model to invent. Revisit the literal here if it proves too
@@ -30,38 +41,34 @@ function dedupHash({ date, symbol, lineType, amount }) {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `You extract structured line items from a brokerage trading statement (raw PDF text, formatting/whitespace may be irregular). Broker layout is not fixed — read the actual content, don't assume a template.
+// Dividends only for now (see LINE_TYPES comment above — trade matching is
+// being reworked). Deliberately not asking the model to classify trades/fees/
+// interest/etc at all, even to skip them individually — a narrower ask is a
+// more reliable one, and none of those types have anywhere to write to
+// safely yet.
+const EXTRACTION_SYSTEM_PROMPT = `You extract ONLY dividend payment line items from a brokerage trading statement (raw PDF text, formatting/whitespace may be irregular). Broker layout is not fixed — read the actual content, don't assume a template. Ignore every other kind of line entirely — trades (buy/sell), internal transfers/settlements, fees, interest, cash balances — none of those should appear in your output at all right now, even to flag them.
 
-For each distinct financial event on the statement, output one object:
+For each dividend payment, output one object:
 {
-  "lineType": "trade" | "dividend" | "interest" | "fee" | "drp" | "cash_balance" | "fx",
+  "lineType": "dividend",
   "date": "YYYY-MM-DD — CONVERT FROM THE STATEMENT'S OWN FORMAT, see date rule below",
-  "symbol": "ticker if identifiable, else null (strip any exchange/country suffix, e.g. \"TSM:US\" -> \"TSM\")",
-  "exchange": "NASDAQ" | "NYSE" | "ASX" | null (null if not confidently determinable),
+  "symbol": "ticker (strip any exchange/country suffix, e.g. \"TSM:US\" -> \"TSM\")",
   "description": "the statement's own line text or a short paraphrase",
-  "amount": number (AUD if statement gives AUD, else the stated currency amount),
-  "currency": "AUD" | "USD" | other ISO code,
-  "quantity": number or null (trades/drp only),
-  "pricePerUnit": number or null (trades/drp only),
-  "fxRateToAud": number or null (if the statement shows a conversion rate),
-  "feesAud": number or null (trade-specific fee, if broken out),
-  "grossAmountAud": number or null (dividend/drp only, before withholding),
-  "withholdingTaxAud": number or null (dividend/drp only),
-  "side": "buy" | "sell" | null (trades only)
+  "amount": number, always in AUD,
+  "currency": "AUD",
+  "grossAmountAud": number or null (before withholding, only if the statement shows it),
+  "withholdingTaxAud": number or null (only if the statement shows it — many statement types show net only, see rule below)
 }
 
 Rules:
-- **Date format**: Australian brokerage statements (observed: CMC Markets) write dates DD/MM/YYYY, not MM/DD/YYYY. "03/02/2026" is 3 February 2026, not March 2nd — do NOT default to US date-order assumptions. Many dates on a real statement are ambiguous-looking (day <=12) precisely where this matters; get it right for every line, not just the unambiguous ones (day >12), since a wrong date breaks matching against the user's existing records even when every other field is correct.
-- "drp" = a dividend that was reinvested into new shares rather than paid as cash — the statement will show both a dividend amount and a share purchase together. Emit ONE drp object with both dividend and trade fields filled in, not two separate objects.
-- "cash_balance" = the statement's stated closing/opening cash balance (for drift-checking against the app's own ledger) — usually one or two lines per statement.
-- "fx" = an explicit currency-conversion line if the statement itemises one separately from a trade.
-- US dividends often show gross amount + withholding tax deducted (commonly 15-30%) before the net AUD hits the account — populate grossAmountAud and withholdingTaxAud separately when both are visible; if only a net figure is shown, put it in "amount" and leave the other two null rather than guessing a split. Some statement types (e.g. a cash-ledger-style "Trading Account Statement") never show the gross/withholding split at all — that's a real limit of the report, not something to estimate; leave both null.
-- Some brokers (observed: CMC Markets) report a trading account as a pure cash ledger: each real trade is ONE line like "Bght 20 TSM:US @ 471.4695 AUD" (buy) or "Sold 136 INTC:US @ 61.5982 AUD" (sell) — extract quantity, symbol, price and side from that single line. It is typically followed by one or more separate lines (e.g. "Wdl ACMM ..." / "Dep ACMM ...", or similarly-named internal transfer/settlement lines) referencing the SAME reference number or trade — these are internal account-clearing mechanics, not a real economic event. Do not emit them as trade/deposit/withdraw/fee lines at all; skip them entirely. The same applies to a dividend's own internal settlement transfer line immediately following it — only emit the "JNL"/dividend line itself, skip its paired transfer line.
-- Numbers may contain an embedded space used as a thousands separator by the PDF's column layout (e.g. "2 208.9010" means 2208.9010, "2 736.3500" means 2736.3500) — strip internal spaces within a single number before returning it, don't misread it as two numbers or truncate it.
-- Symbols are often suffixed with an exchange/country hint (e.g. "TSM:US") — strip that suffix from "symbol" (return "TSM", not "TSM:US"). Separately, if you can determine the specific listing exchange (NASDAQ vs NYSE vs ASX) from context (well-known tickers, or the statement stating it explicitly), populate an "exchange" field with exactly "NASDAQ", "NYSE", or "ASX"; if you cannot be confident which of NASDAQ/NYSE it is, leave "exchange" null rather than guessing — the app will look up the user's own trade history for that symbol to fill it in, which is more reliable than a guess.
-- Ignore statement boilerplate: running headers/footers repeated on every page, disclaimers, and a final "Total" summary row — these are not line items.
-- If a field genuinely isn't present on the statement, use null. Do not invent values.
-- Output ONLY a JSON array of these objects, no prose, no markdown fences.`;
+- **Date format**: Australian brokerage statements (observed: CMC Markets) write dates DD/MM/YYYY, not MM/DD/YYYY. "03/02/2026" is 3 February 2026, not March 2nd — do NOT default to US date-order assumptions. Many dates on a real statement are ambiguous-looking (day <=12) precisely where this matters.
+- A dividend line is typically labelled something like "Div", "Dividend", "Intl Div", or similar, often with an "Ex:" date reference — that "Ex:" date is the ex-dividend date, NOT the payment date; use the line's own payment/transaction date for "date".
+- US dividends often show gross amount + withholding tax deducted (commonly 15-30%) before the net AUD hits the account — populate grossAmountAud and withholdingTaxAud separately ONLY when both are visible on the statement; if only a net figure is shown, put it in "amount" and leave the other two null. Do not estimate or back-calculate a split that isn't shown — some statement types (e.g. a cash-ledger-style "Trading Account Statement") never show it at all, which is a real limit of that report, not something to guess around.
+- A dividend's own internal settlement/transfer line (e.g. a paired "Dep ..." line crediting the same amount into a different internal account) is NOT a separate dividend — it's the same payment's internal plumbing. Emit the dividend once, from its own line, not from the settlement line.
+- Numbers may contain an embedded space used as a thousands separator by the PDF's column layout (e.g. "2 208.9010" means 2208.9010) — strip internal spaces within a single number, don't misread it as two numbers.
+- Ignore statement boilerplate: running headers/footers repeated on every page, disclaimers, and a final "Total" summary row.
+- If a field genuinely isn't present, use null. Do not invent values.
+- Output ONLY a JSON array of these objects, no prose, no markdown fences. If there are no dividend lines on this statement, output an empty array [].`;
 
 // If the model's output got cut off mid-array (a real risk on a long
 // statement with 50+ line items, especially on a reasoning model that also

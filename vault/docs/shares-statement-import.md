@@ -1,6 +1,17 @@
 # Shares statement upload & reconciliation
 
-Scoped in chat (see session history), built in two steps. **Both done, and step 2's extraction prompt updated once against a real CMC Markets statement** (below) — first real-usage correction, exactly as anticipated when this was scoped.
+Scoped in chat (see session history), built in two steps. **Both done. Narrowed to dividends only after real-world testing (see "Scoped back to dividends" below)** — trade date/price matching against real CMC statements proved unreliable enough (even after fixes) that the user asked to limit the tool to dividends until trade data quality is sorted out separately.
+
+## Scoped back to dividends (2026-09-20)
+
+Real-usage testing surfaced repeated trade-matching problems even after several fixes (date-format DD/MM vs MM/DD, price never being compared, exchange defaulting wrongly to ASX). Genuine trades kept classifying as `new` when they existed, and the user suspects the root issue is upstream — imprecise price/date in their own manually-entered `share_trades` history, not purely an extraction bug. Rather than keep patching trade matching blind, scoped the tool back to what has no matching problem at all: **dividends only**.
+
+- `LINE_TYPES` (app-level filter) narrowed to `['dividend']`; `ALL_SCHEMA_LINE_TYPES` kept as a separate constant documenting the full set the DB schema still supports. **No schema rollback** — `share_statement_lines."lineType"` CHECK constraint is untouched, so re-enabling trade/fee/interest/drp later is a prompt + filter change, not another migration.
+- Extraction prompt rewritten to ask for dividend lines only, not "classify everything, skip most of it" — a narrower ask is a more reliable one. Trade/fee/interest/cash-balance/fx lines are no longer extracted at all, even to be filtered out.
+- `classifyLine`'s trade-matching branch (date/quantity/price/fee/FX comparison, `resolveExchange()`) is untouched in the code but currently unreachable — dividends take the separate `['dividend','interest','fee'].includes(...)` branch, which has no matching problem (nothing could exist before this feature, so every dividend is legitimately `new` or `possible_correction` against another import, never a false match).
+- All prior review-queue history wiped at the user's request once this was decided: 85 pending/rejected `share_statement_lines` rows and 2 `share_statement_imports` deleted for the account. Confirmed first: 0 rows had ever been approved to real `share_trades`/`share_cash_ledger` (nothing to revert, nothing lost).
+
+**Re-enabling trades later**: needs the user's own trade data cleaned up first (accurate per-trade price and date, not averaged/estimated values) — that's a data-quality problem in their existing `share_trades` rows, not something this feature can fix by extracting harder. Once that's sorted, flip `LINE_TYPES` back to the full set and restore the fuller extraction prompt (kept in git history, not deleted).
 
 ## Real-statement findings (first upload)
 

@@ -275,10 +275,12 @@ export default function SharesStatementsTab({ onImported }) {
     <div>
       <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Statement upload & reconciliation</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Statement upload — dividends</p>
           <p className="text-xs mt-0.5 max-w-lg" style={{ color: 'var(--color-muted)' }}>
-            Upload a broker PDF statement — trades, dividends, interest, and fees are extracted and shown here for
-            review. Nothing is added to your trades/cash records until you approve each line.
+            Upload a broker PDF statement — dividend payments are extracted and shown here for review. Nothing is
+            added to your cash records until you approve each line. Currently limited to dividends only: trade
+            matching (date/price against your existing trades) needs more accurate underlying data first — see
+            docs/shares-statement-import.md.
           </p>
         </div>
         <div>
