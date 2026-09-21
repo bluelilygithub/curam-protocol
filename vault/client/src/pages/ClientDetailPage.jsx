@@ -1012,11 +1012,16 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
   // Parents (or unrelated top-level tasks) first, each followed by its own
   // subtasks — a lightweight checklist, not a full tree (one level is enough
   // for "application steps" style tracking).
-  const parents  = tasks.filter(t => !t.parentTaskId);
-  const byParent = tasks.reduce((m, t) => {
+  const parents   = tasks.filter(t => !t.parentTaskId);
+  const parentIds = new Set(parents.map(p => p.id));
+  const byParent  = tasks.reduce((m, t) => {
     if (t.parentTaskId) (m[t.parentTaskId] = m[t.parentTaskId] || []).push(t);
     return m;
   }, {});
+  // A subtask whose parent isn't in `tasks` (the query only returns open
+  // tasks, so a done parent with a still-open subtask drops out) would
+  // otherwise vanish along with it — show it flat instead of losing it.
+  const orphanSubtasks = tasks.filter(t => t.parentTaskId && !parentIds.has(t.parentTaskId));
 
   const TaskRow = ({ t, indent }) => (
     <div className="flex items-center gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)', paddingLeft: indent ? 24 : 0 }}>
@@ -1088,6 +1093,8 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
           )}
         </React.Fragment>
       ))}
+
+      {orphanSubtasks.map(t => <TaskRow key={t.id} t={t} indent={false} />)}
 
       {showForm ? (
         <div className="mt-3 p-3 rounded-lg border flex flex-col gap-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
