@@ -833,18 +833,27 @@ router.get('/:id/activity', async (req, res) => {
     if (!ok) return;
 
     const [{ rows: interactions }, { rows: tasks }] = await Promise.all([
+      // "caseId IS NULL" — same reasoning as the tasks query below: a
+      // case-tagged interaction (e.g. a case's "Log an update" entry) is
+      // already shown in that case's own History. Both sections render on
+      // this same page at once, so an untagged row would appear twice.
       pool.query(`
         SELECT ci.*, cc.name AS "contactName", cd.title AS "dealTitle"
         FROM client_interactions ci
         LEFT JOIN client_contacts cc ON cc.id = ci."contactId"
         LEFT JOIN client_deals cd ON cd.id = ci."dealId"
-        WHERE ci."clientId"=$1
+        WHERE ci."clientId"=$1 AND ci."caseId" IS NULL
         ORDER BY ci.date DESC, ci."createdAt" DESC
         LIMIT 200
       `, [clientId]),
+      // "caseId IS NULL" — a Case's steps are tasks tagged to that case, and
+      // already shown in the Case's own view (CaseDetail's Steps/History).
+      // Without this exclusion the same task renders twice: once here as a
+      // generic "Task created", once there as "Step added" — same row, two
+      // places, exactly the duplication the CRM redesign was meant to kill.
       pool.query(`
         SELECT id, title, status, "createdAt", "updatedAt", "dueDate"
-        FROM tasks WHERE "clientId"=$1
+        FROM tasks WHERE "clientId"=$1 AND "caseId" IS NULL
       `, [clientId]),
     ]);
 
