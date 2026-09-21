@@ -1608,6 +1608,26 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_touchpoints_client ON client_touchpoints("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_client ON projects("clientId")`);
 
+  // ── CRM: audit log — records who created/edited/deleted a contact, deal,
+  // touchpoint, or client, and what it looked like before/after. Added after
+  // a user reported a contact vanishing with no way to tell whether it was
+  // deleted or never saved. See server/utils/crmAudit.js.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS crm_audit_log (
+      id           SERIAL PRIMARY KEY,
+      "userId"     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      "clientId"   INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+      "entityType" VARCHAR(20) NOT NULL CHECK ("entityType" IN ('contact','deal','touchpoint','client')),
+      "entityId"   INTEGER,
+      action       VARCHAR(10) NOT NULL CHECK (action IN ('create','update','delete')),
+      before       JSONB,
+      after        JSONB,
+      "createdAt"  TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_crm_audit_client ON crm_audit_log("clientId", "createdAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_crm_audit_entity ON crm_audit_log("entityType", "entityId")`);
+
   // ── Mission statements: trigger to enforce single current per user ─────────
   await pool.query(`
     CREATE OR REPLACE FUNCTION enforce_single_current_mission()

@@ -3,6 +3,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../db');
+const { logCrmAudit } = require('../utils/crmAudit');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,9 @@ router.post('/', async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
       [req.user.id, clientId, title.trim(), stage || 'lead', value || null, expectedCloseDate || null, notes || null]
     );
+
+    logCrmAudit({ userId: req.user.id, clientId, entityType: 'deal', entityId: rows[0].id, action: 'create', after: rows[0] });
+
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23514') return res.status(400).json({ error: 'Invalid stage' });
@@ -163,6 +167,8 @@ router.put('/:id', async (req, res) => {
   try {
     const deal = await assertDealOwner(req.params.id, req.user.id, res);
     if (!deal) return;
+
+    const { rows: beforeRows } = await pool.query(`SELECT * FROM client_deals WHERE id=$1`, [req.params.id]);
 
     const { title, stage, value, expectedCloseDate, actualCloseDate, lostReason, notes } = req.body;
 
@@ -178,6 +184,9 @@ router.put('/:id', async (req, res) => {
       [title, stage, value || null, expectedCloseDate || null, resolvedActualCloseDate,
        stage === 'lost' ? (lostReason || null) : null, notes || null, req.params.id, req.user.id]
     );
+
+    logCrmAudit({ userId: req.user.id, clientId: deal.clientId, entityType: 'deal', entityId: deal.id, action: 'update', before: beforeRows[0] || null, after: rows[0] });
+
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23514') return res.status(400).json({ error: 'Invalid stage' });
@@ -188,10 +197,19 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/deals/:id
 router.delete('/:id', async (req, res) => {
   try {
-    if (!(await assertDealOwner(req.params.id, req.user.id, res))) return;
+    const deal = await assertDealOwner(req.params.id, req.user.id, res);
+    if (!deal) return;
+
+    const { rows: beforeRows } = await pool.query(`SELECT * FROM client_deals WHERE id=$1`, [req.params.id]);
+
     // Cascades to deal_contacts; client_touchpoints."dealId" is ON DELETE SET NULL,
     // so past activity survives, just loses its deal tag.
     await pool.query(`DELETE FROM client_deals WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+
+    if (beforeRows.length) {
+      logCrmAudit({ userId: req.user.id, clientId: deal.clientId, entityType: 'deal', entityId: deal.id, action: 'delete', before: beforeRows[0] });
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

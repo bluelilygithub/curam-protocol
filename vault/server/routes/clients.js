@@ -11,6 +11,7 @@ const {
   createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota,
   insertAttachment, attachmentsForEntities, deleteAttachmentsForEntityIds,
 } = require('../utils/attachments');
+const { logCrmAudit } = require('../utils/crmAudit');
 
 // ── Attachments on touchpoints (docs/crm-deals-schema.md §10) ──────────────
 // Policy (allowlist, size cap, quota, disguised-executable check) lives in
@@ -405,6 +406,8 @@ router.post('/:id/contacts', async (req, res) => {
       RETURNING *
     `, [clientId, name.trim(), role||null, email||null, phone||null, !!isPrimary]);
 
+    logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: rows[0].id, action: 'create', after: rows[0] });
+
     res.status(201).json(rows[0]);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -425,6 +428,11 @@ router.put('/:id/contacts/:contactId', async (req, res) => {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
 
+    const { rows: beforeRows } = await pool.query(
+      `SELECT * FROM client_contacts WHERE id=$1 AND "clientId"=$2`,
+      [contactId, clientId]
+    );
+
     if (isPrimary) {
       await pool.query(
         `UPDATE client_contacts SET "isPrimary"=FALSE WHERE "clientId"=$1 AND id != $2`,
@@ -440,6 +448,9 @@ router.put('/:id/contacts/:contactId', async (req, res) => {
     `, [name.trim(), role||null, email||null, phone||null, !!isPrimary, contactId, clientId]);
 
     if (!rows.length) return res.status(404).json({ error: 'Contact not found' });
+
+    logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: contactId, action: 'update', before: beforeRows[0] || null, after: rows[0] });
+
     res.json(rows[0]);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -454,10 +465,20 @@ router.delete('/:id/contacts/:contactId', async (req, res) => {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
 
+    const { rows: beforeRows } = await pool.query(
+      `SELECT * FROM client_contacts WHERE id=$1 AND "clientId"=$2`,
+      [contactId, clientId]
+    );
+
     await pool.query(
       'DELETE FROM client_contacts WHERE id=$1 AND "clientId"=$2',
       [contactId, clientId]
     );
+
+    if (beforeRows.length) {
+      logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: contactId, action: 'delete', before: beforeRows[0] });
+    }
+
     res.json({ deleted: true });
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -522,6 +543,8 @@ router.post('/:id/touchpoints', async (req, res) => {
       WHERE tp.id = $1
     `, [rows[0].id]);
 
+    logCrmAudit({ userId: req.user.id, clientId, entityType: 'touchpoint', entityId: rows[0].id, action: 'create', after: tp });
+
     res.status(201).json(tp);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -536,12 +559,22 @@ router.delete('/:id/touchpoints/:touchpointId', async (req, res) => {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
 
+    const { rows: beforeRows } = await pool.query(
+      `SELECT * FROM client_touchpoints WHERE id=$1 AND "clientId"=$2`,
+      [touchpointId, clientId]
+    );
+
     await deleteAttachmentsForEntityIds('touchpoint', [touchpointId]);
 
     await pool.query(
       'DELETE FROM client_touchpoints WHERE id=$1 AND "clientId"=$2',
       [touchpointId, clientId]
     );
+
+    if (beforeRows.length) {
+      logCrmAudit({ userId: req.user.id, clientId, entityType: 'touchpoint', entityId: touchpointId, action: 'delete', before: beforeRows[0] });
+    }
+
     res.json({ deleted: true });
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -761,5 +794,108 @@ async function assertClientOwner(clientId, userId, res) {
   }
   return true;
 }
+
+// ── Activity feed ────────────────────────────────────────────────────────────
+// Merges touchpoints, deal stage-changes (from crm_audit_log), contact
+// create/remove, and client-linked task create/complete into one
+// chronological feed. Built in JS (three cheap queries + a sort) rather than
+// one gnarly UNION, matching this file's existing "one query per source,
+// joined in JS" pattern (see withAttachments/touchpoints above).
+const DEAL_STAGE_LABELS = {
+  lead: 'Lead', qualified: 'Qualified', proposal: 'Proposal',
+  negotiation: 'Negotiation', won: 'Won', lost: 'Lost',
+};
+const TOUCHPOINT_TYPE_LABELS = {
+  call: 'Call', email: 'Email', meeting: 'Meeting',
+  decision: 'Decision', milestone: 'Milestone', other: 'Touchpoint',
+};
+
+function parseMaybeJson(v) {
+  if (v == null) return null;
+  return typeof v === 'string' ? JSON.parse(v) : v;
+}
+
+// GET /api/clients/:id/activity
+router.get('/:id/activity', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+
+    const [{ rows: touchpoints }, { rows: auditRows }, { rows: tasks }] = await Promise.all([
+      pool.query(`
+        SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
+        FROM client_touchpoints tp
+        LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
+        LEFT JOIN client_deals cd ON cd.id = tp."dealId"
+        WHERE tp."clientId"=$1
+      `, [clientId]),
+      pool.query(`
+        SELECT * FROM crm_audit_log
+        WHERE "clientId"=$1 AND "entityType" IN ('deal','contact')
+        ORDER BY "createdAt" DESC
+        LIMIT 200
+      `, [clientId]),
+      pool.query(`
+        SELECT id, title, status, "createdAt", "updatedAt", "dueDate"
+        FROM tasks WHERE "clientId"=$1
+      `, [clientId]),
+    ]);
+
+    const items = [];
+
+    for (const tp of touchpoints) {
+      const label = TOUCHPOINT_TYPE_LABELS[tp.type] || tp.type;
+      items.push({
+        id: `touchpoint-${tp.id}`,
+        kind: 'touchpoint',
+        ts: tp.date,
+        title: `${label}${tp.contactName ? ` with ${tp.contactName}` : ''}`,
+        detail: tp.note || null,
+        meta: { dealTitle: tp.dealTitle || null, touchpointType: tp.type },
+      });
+    }
+
+    for (const row of auditRows) {
+      const before = parseMaybeJson(row.before);
+      const after  = parseMaybeJson(row.after);
+
+      if (row.entityType === 'deal') {
+        if (row.action === 'create') {
+          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `Deal created: ${after?.title || ''}`, detail: null, meta: { stage: after?.stage } });
+        } else if (row.action === 'delete') {
+          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `Deal deleted: ${before?.title || ''}`, detail: null, meta: {} });
+        } else if (row.action === 'update' && before?.stage !== after?.stage) {
+          const fromLabel = DEAL_STAGE_LABELS[before?.stage] || before?.stage;
+          const toLabel   = DEAL_STAGE_LABELS[after?.stage]  || after?.stage;
+          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `${after?.title || 'Deal'}: ${fromLabel} → ${toLabel}`, detail: null, meta: { stage: after?.stage } });
+        }
+        // Non-stage updates (value/notes edits) are noise for a relationship
+        // feed — skipped on purpose.
+      } else if (row.entityType === 'contact') {
+        if (row.action === 'create') {
+          items.push({ id: `audit-${row.id}`, kind: 'contact', ts: row.createdAt, title: `Contact added: ${after?.name || ''}`, detail: null, meta: {} });
+        } else if (row.action === 'delete') {
+          items.push({ id: `audit-${row.id}`, kind: 'contact', ts: row.createdAt, title: `Contact removed: ${before?.name || ''}`, detail: null, meta: {} });
+        }
+        // Contact edits (role/email/phone) are reference-data maintenance,
+        // not relationship activity — skipped on purpose.
+      }
+    }
+
+    for (const t of tasks) {
+      items.push({ id: `task-created-${t.id}`, kind: 'task', ts: t.createdAt, title: `Task created: ${t.title}`, detail: t.dueDate ? `Due ${String(t.dueDate).slice(0, 10)}` : null, meta: { status: t.status } });
+      if (t.status === 'done') {
+        items.push({ id: `task-done-${t.id}`, kind: 'task', ts: t.updatedAt, title: `Task completed: ${t.title}`, detail: null, meta: { status: 'done' } });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+    res.json(items.slice(0, 150));
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

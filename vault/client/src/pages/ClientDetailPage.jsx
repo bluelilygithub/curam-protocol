@@ -308,6 +308,7 @@ export default function ClientDetailPage() {
   };
 
   const [sections, setSections] = useState({
+    activity:       true,
     deals:          true,
     contacts:       true,
     projects:       false,
@@ -330,12 +331,18 @@ export default function ClientDetailPage() {
     setTimeout(() => setFlashSection(null), 1200);
   };
 
+  // Bumped on every load() so ActivityFeed (which fetches its own endpoint,
+  // since it merges sources GET /api/clients/:id doesn't return) knows to
+  // refetch whenever any section mutates something the feed would show.
+  const [activityRefresh, setActivityRefresh] = useState(0);
+
   const load = useCallback(async () => {
     try {
       const res  = await api.get(`/api/clients/${id}`);
       const json = await res.json();
       if (json.error) { navigate('/clients'); return; }
       setData(json);
+      setActivityRefresh(n => n + 1);
     } catch {
       navigate('/clients');
     } finally {
@@ -518,6 +525,13 @@ export default function ClientDetailPage() {
         {/* Sections */}
         <div className="flex flex-col gap-3">
 
+          {/* -1. Activity — merged touchpoints/deal stage-changes/contact
+               add-remove/task create-complete, one chronological feed. See
+               GET /api/clients/:id/activity in server/routes/clients.js. */}
+          <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
+            <ActivityFeed clientId={id} refreshKey={activityRefresh} />
+          </Section>
+
           {/* 0. Deals */}
           <Section sectionRef={dealsRef} flash={flashSection === 'deals'} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
             <DealsSection
@@ -598,6 +612,49 @@ export default function ClientDetailPage() {
           onCancel={() => setConfirmDel(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Activity feed ──────────────────────────────────────────────────────────────
+
+const ACTIVITY_ICON = { touchpoint: '💬', deal: '🤝', contact: '👤', task: '✓' };
+
+function ActivityFeed({ clientId, refreshKey }) {
+  const [items, setItems]     = useState(null); // null = loading
+  const [error, setError]     = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setItems(null);
+    api.get(`/api/clients/${clientId}/activity`)
+      .then(r => r.json())
+      .then(json => { if (!cancelled) setItems(Array.isArray(json) ? json : []); })
+      .catch(() => { if (!cancelled) setError('Failed to load activity'); });
+    return () => { cancelled = true; };
+  }, [clientId, refreshKey]);
+
+  if (error) return <p className="text-sm pt-3" style={{ color: '#ef4444' }}>{error}</p>;
+  if (items === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+  if (!items.length) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>No activity yet — log a touchpoint or create a deal to see it here.</p>;
+
+  return (
+    <div className="pt-3">
+      {items.map(it => (
+        <div key={it.id} className="flex items-start gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+          <span className="text-base flex-shrink-0 mt-0.5">{ACTIVITY_ICON[it.kind] || '•'}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm" style={{ color: 'var(--color-text)' }}>{it.title}</span>
+              {it.meta?.dealTitle && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>🤝 {it.meta.dealTitle}</span>
+              )}
+            </div>
+            {it.detail && <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
+          </div>
+          <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
+        </div>
+      ))}
     </div>
   );
 }
