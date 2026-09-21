@@ -285,6 +285,22 @@ router.get('/morning-digest', async (req, res) => {
   }
 });
 
+// GET /api/tasks/:id — was missing; needed by Addendum 2's outcome-logging
+// prompt (fetches a completed task's title to display, since it may no
+// longer be in any open-tasks list by the time the user gets there). Placed
+// after every plain named GET route (morning-digest above) per this file's
+// "named routes before /:id" convention — a /:id declared earlier would
+// shadow GET /morning-digest by matching "morning-digest" as an id.
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+    res.json(await buildTask(rows[0]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/tasks/weekly-review-suggestions — SSE stream — must be before /:id routes
 router.post('/weekly-review-suggestions', async (req, res) => {
   try {
@@ -602,6 +618,27 @@ router.delete('/comments/:commentId', async (req, res) => {
   }
 });
 
+// GET /api/tasks/:id/activity — CRM interactions logged against this task
+// (docs/crm-activity-model.md Addendum 2). Only meaningful for a
+// client-linked task, but harmless (empty array) otherwise.
+router.get('/:id/activity', async (req, res) => {
+  try {
+    const { rows: [task] } = await pool.query('SELECT id FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
+    if (!task) return res.status(404).json({ error: 'not found' });
+
+    const { rows } = await pool.query(`
+      SELECT ci.id, ci.type, ci.date, ci.title, ci.note, cc.name AS "contactName"
+      FROM client_interactions ci
+      LEFT JOIN client_contacts cc ON cc.id = ci."contactId"
+      WHERE ci."taskId"=$1
+      ORDER BY ci.date DESC, ci."createdAt" DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tasks/:id/dependencies
 router.get('/:id/dependencies', async (req, res) => {
   try {
@@ -756,7 +793,21 @@ router.put('/:id', async (req, res) => {
       }
     }
     const { rows: finalRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
-    res.json(await buildTask(finalRows[0]));
+    const built = await buildTask(finalRows[0]);
+
+    // Addendum 2 (docs/crm-activity-model.md): a CRM-linked task can be
+    // completed from any of ~20 surfaces (Kanban, Calendar, mobile, etc.),
+    // none of which know to prompt for a CRM outcome — so the prompt is
+    // surfaced generically here, the one place every completion passes
+    // through, and left to apiClient.js to act on.
+    if (isNowDone && !wasAlreadyDone && updatedTask.clientId) {
+      const { rows: [client] } = await pool.query('SELECT name FROM clients WHERE id=$1', [updatedTask.clientId]);
+      if (client) {
+        built.crmFollowUp = { clientId: updatedTask.clientId, clientName: client.name, taskId: updatedTask.id };
+      }
+    }
+
+    res.json(built);
   } catch (err) {
     console.error('[tasks PUT]', err);
     res.status(500).json({ error: err.message });

@@ -1233,6 +1233,7 @@ async function initSchema() {
         "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL,
         "dealId"    INTEGER,
         "needsFollowUp" BOOLEAN NOT NULL DEFAULT FALSE,
+        "taskId"    INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
         "createdAt" TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -1243,10 +1244,12 @@ async function initSchema() {
     // widening only, safe to run every boot. See docs/crm-activity-model.md.
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "source" VARCHAR(20) NOT NULL DEFAULT 'manual'`);
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "needsFollowUp" BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "taskId" INTEGER REFERENCES tasks(id) ON DELETE SET NULL`);
     // Below the ADD COLUMN above — on a pre-existing table (not the fresh
     // CREATE TABLE just above), "needsFollowUp" doesn't exist until that
     // ALTER runs; a partial index referencing it any earlier fails outright.
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_followup ON client_interactions("clientId") WHERE "needsFollowUp"`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_task ON client_interactions("taskId")`);
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE client_interactions ADD CONSTRAINT client_interactions_source_check

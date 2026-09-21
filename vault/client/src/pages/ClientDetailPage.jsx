@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import MoodDot from '../components/mood/MoodDot';
@@ -540,7 +540,7 @@ export default function ClientDetailPage() {
                See GET/POST /api/clients/:id/touchpoints and
                GET /api/clients/:id/activity in server/routes/clients.js. */}
           <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
-            <LogActivity clientId={id} contacts={contacts || []} onLogged={() => setActivityRefresh(n => n + 1)} />
+            <LogActivity clientId={id} contacts={contacts || []} tasks={tasks || []} onLogged={() => setActivityRefresh(n => n + 1)} />
             <ActivityFeed clientId={id} refreshKey={activityRefresh} />
           </Section>
 
@@ -620,12 +620,27 @@ export default function ClientDetailPage() {
 // unset = client-level) and a "needs follow-up" checkbox are the only two
 // choices offered, per docs/crm-activity-model.md's scope-down addendum.
 
-function LogActivity({ clientId, contacts, onLogged }) {
+function LogActivity({ clientId, contacts, tasks, onLogged }) {
   const [note, setNote]         = useState('');
   const [contactId, setContactId] = useState('');
   const [needsFollowUp, setNeedsFollowUp] = useState(false);
   const [saving, setSaving]     = useState(false);
   const addToast = useToastStore(s => s.addToast);
+
+  // Addendum 2: arriving via the "Log outcome in CRM" toast link
+  // (?logTask=<id>) pre-attaches that task. It may already be done, so it
+  // won't be in the `tasks` prop (open-tasks list) — fetch its title
+  // separately and show a fixed label instead of the normal dropdown.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const promptedTaskId = searchParams.get('logTask');
+  const [promptedTaskTitle, setPromptedTaskTitle] = useState(null);
+
+  useEffect(() => {
+    if (!promptedTaskId) { setPromptedTaskTitle(null); return; }
+    api.get(`/api/tasks/${promptedTaskId}`).then(r => r.json()).then(t => setPromptedTaskTitle(t?.title || 'task')).catch(() => setPromptedTaskTitle('task'));
+  }, [promptedTaskId]);
+
+  const [taskId, setTaskId] = useState('');
 
   const log = async () => {
     if (!note.trim()) return;
@@ -634,11 +649,17 @@ function LogActivity({ clientId, contacts, onLogged }) {
       await api.post(`/api/clients/${clientId}/touchpoints`, {
         note: note.trim(),
         contactId: contactId || null,
+        taskId: promptedTaskId || taskId || null,
         needsFollowUp,
       }).then(r => r.json());
       setNote('');
       setContactId('');
+      setTaskId('');
       setNeedsFollowUp(false);
+      if (promptedTaskId) {
+        searchParams.delete('logTask');
+        setSearchParams(searchParams, { replace: true });
+      }
       onLogged?.();
     } catch (e) {
       addToast(e.message || 'Failed to log activity', 'error');
@@ -649,6 +670,12 @@ function LogActivity({ clientId, contacts, onLogged }) {
 
   return (
     <div className="pt-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      {promptedTaskId && (
+        <p className="text-xs mb-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+          Logging outcome for: <strong style={{ color: 'var(--color-text)' }}>{promptedTaskTitle || '…'}</strong>
+          {' '}<button onClick={() => { searchParams.delete('logTask'); setSearchParams(searchParams, { replace: true }); }} className="hover:opacity-60 underline">cancel</button>
+        </p>
+      )}
       <Input rows={2} value={note} onChange={setNote} placeholder="Log a call, email, or note…" />
       <div className="flex items-center gap-3 mt-2 flex-wrap">
         <select
@@ -660,6 +687,17 @@ function LogActivity({ clientId, contacts, onLogged }) {
           <option value="">Whole client</option>
           {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {!promptedTaskId && tasks.length > 0 && (
+          <select
+            value={taskId}
+            onChange={e => setTaskId(e.target.value)}
+            className="text-xs px-2 py-1.5 rounded-lg border"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <option value="">No task</option>
+            {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+        )}
         <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
           <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
           Needs follow-up
@@ -1331,6 +1369,41 @@ function ContactsSection({ clientId, contacts, onRefresh }) {
 // stays in Tasks.
 const BLANK_TASK = { title: '', dueDate: '', notes: '' };
 
+// Addendum 2 (docs/crm-activity-model.md): every client_interactions row
+// logged against this task (taskId), read-only here — logging a new one
+// happens via the client-level LogActivity box (jumped to via ?logTask=).
+// There's no single app-wide "Task detail view" to hang this off (checked:
+// TasksPage/FocusMode/ClientDetailPage each render tasks inline, no shared
+// component) — scoped to CRM-linked tasks here, where this actually matters.
+function TaskActivityLog({ taskId, navigate }) {
+  const [items, setItems] = useState(null);
+
+  useEffect(() => {
+    api.get(`/api/tasks/${taskId}/activity`).then(r => r.json()).then(json => setItems(Array.isArray(json) ? json : [])).catch(() => setItems([]));
+  }, [taskId]);
+
+  return (
+    <div className="py-2 pl-6 pr-2" style={{ background: 'var(--color-surface)' }}>
+      {items === null && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+      {items?.length === 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing logged against this task yet.</p>}
+      {items?.map(it => (
+        <div key={it.id} className="py-1 text-xs" style={{ color: 'var(--color-text)' }}>
+          <span style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.date)}</span>
+          {it.contactName && <span style={{ color: 'var(--color-muted)' }}> · {it.contactName}</span>}
+          {' — '}{it.note || it.title}
+        </div>
+      ))}
+      <button
+        onClick={() => navigate(`${window.location.pathname}?logTask=${taskId}`)}
+        className="text-xs mt-1 hover:opacity-70 transition-opacity"
+        style={{ color: 'var(--color-primary)' }}
+      >
+        + Log update for this task
+      </button>
+    </div>
+  );
+}
+
 function ClientTasksSection({ clientId, tasks, onRefresh }) {
   const navigate = useNavigate();
   const addToast = useToastStore(s => s.addToast);
@@ -1340,6 +1413,7 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
   const [saving, setSaving] = useState(false);
   const [addingStepFor, setAddingStepFor] = useState(null); // parent task id
   const [stepTitle, setStepTitle] = useState('');
+  const [expandedActivityId, setExpandedActivityId] = useState(null); // Addendum 2
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
   const toggleDone = async (task) => {
@@ -1451,6 +1525,16 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
       </button>
       {!indent && (
         <button
+          onClick={() => setExpandedActivityId(expandedActivityId === t.id ? null : t.id)}
+          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
+          style={{ color: 'var(--color-muted)' }}
+          title="View activity logged against this task"
+        >
+          💬
+        </button>
+      )}
+      {!indent && (
+        <button
           onClick={() => setAddingStepFor(addingStepFor === t.id ? null : t.id)}
           className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
           style={{ color: 'var(--color-primary)' }}
@@ -1471,6 +1555,7 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
       {parents.map(t => (
         <React.Fragment key={t.id}>
           <TaskRow t={t} indent={false} />
+          {expandedActivityId === t.id && <TaskActivityLog taskId={t.id} navigate={navigate} />}
           {(byParent[t.id] || []).map(sub => <TaskRow key={sub.id} t={sub} indent />)}
           {addingStepFor === t.id && (
             <div className="flex items-center gap-2 py-2" style={{ paddingLeft: 24 }}>

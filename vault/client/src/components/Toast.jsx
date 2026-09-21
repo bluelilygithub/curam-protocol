@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import useToastStore from '../store/toastStore';
 
 export default function Toast() {
   const { toasts, removeToast } = useToastStore();
+  const navigate = useNavigate();
   if (!toasts.length) return null;
 
   return (
@@ -40,6 +42,17 @@ export default function Toast() {
           }}
         >
           {t.message}
+          {t.action && (
+            <>
+              {' '}
+              <span
+                onClick={(e) => { e.stopPropagation(); removeToast(t.id); navigate(t.action.href); }}
+                style={{ textDecoration: 'underline', fontWeight: 700 }}
+              >
+                {t.action.label}
+              </span>
+            </>
+          )}
         </div>
       ))}
       <style>{`@keyframes toast-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }`}</style>

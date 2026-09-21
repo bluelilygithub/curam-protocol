@@ -7,6 +7,25 @@
 > Tasks/Deals/Contacts/Projects unchanged. `client_interactions` gained
 > `needsFollowUp BOOLEAN`. Touchpoints/Communications sections retired
 > (folded into Activity); their component code is left unused, not deleted.
+>
+> **Addendum 2 (same day):** `client_interactions` gained `taskId` (nullable
+> FK -> `tasks`) so a saga spanning several log entries can be grouped under
+> one Task instead of scattering unrelated-looking rows. LogActivity gained
+> an optional "attach to task" picker. No `taskId` exclusion in the
+> client-wide feed (unlike `caseId`) — confirmed reasoning: no competing
+> "task history" view exists elsewhere on the page, so showing it in both
+> places isn't the Cases-style duplication bug. `GET /api/tasks/:id/activity`
+> (new) + a read-only log on each CRM task row (`TaskActivityLog`) is the
+> "Task detail view" called for — there's no single app-wide Task detail
+> component to hang it off (verified: TasksPage/FocusMode/ClientDetailPage
+> each render tasks inline, independently), so this is scoped to CRM-linked
+> tasks specifically, not retrofitted across all ~20 Task surfaces.
+> Completing a `clientId`-set task from any surface now returns
+> `crmFollowUp` in the `PUT /api/tasks/:id` response; `apiClient.js`'s `put()`
+> — the one function all ~20 surfaces already funnel through — surfaces it
+> as a toast linking to `/clients/:id?logTask=:taskId`, skipped if already on
+> that client's page. Toast gained an optional `action: {label, href}`
+> (`toastStore.js` + `Toast.jsx`) to support the link.
 
 # CRM Data Model — Activity/Case/Contact Unification
 

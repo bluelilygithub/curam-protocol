@@ -529,7 +529,7 @@ router.get('/:id/touchpoints', async (req, res) => {
 // POST /api/clients/:id/touchpoints
 router.post('/:id/touchpoints', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
-  const { contactId, dealId, type, date, note, needsFollowUp } = req.body;
+  const { contactId, dealId, taskId, type, date, note, needsFollowUp } = req.body;
 
   if (!note || !note.trim()) return res.status(400).json({ error: 'note is required' });
 
@@ -544,22 +544,32 @@ router.post('/:id/touchpoints', async (req, res) => {
       );
       if (!deal) return res.status(400).json({ error: 'dealId does not belong to this client' });
     }
+    // Same rule for an optional task attachment (Addendum 2) — the task
+    // must belong to this client, whether it's still open or was just
+    // marked done via the completion-prompt flow (no status filter here).
+    if (taskId) {
+      const { rows: [task] } = await pool.query(
+        `SELECT id FROM tasks WHERE id=$1 AND "clientId"=$2`, [taskId, clientId]
+      );
+      if (!task) return res.status(400).json({ error: 'taskId does not belong to this client' });
+    }
 
     // type/date now optional — the single-box Activity log (see
     // docs/crm-activity-model.md addendum) doesn't ask the user to pick a
     // type up front; it defaults to 'note' and "now", same table either way.
     const { rows } = await pool.query(`
-      INSERT INTO client_interactions ("clientId", "userId", "contactId", "dealId", type, date, note, "needsFollowUp")
-      VALUES ($1,$2,$3,$4,$5,COALESCE($6, NOW()),$7,$8)
+      INSERT INTO client_interactions ("clientId", "userId", "contactId", "dealId", "taskId", type, date, note, "needsFollowUp")
+      VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7, NOW()),$8,$9)
       RETURNING *
-    `, [clientId, req.user.id, contactId||null, dealId||null, type || 'note', date || null, note.trim(), !!needsFollowUp]);
+    `, [clientId, req.user.id, contactId||null, dealId||null, taskId||null, type || 'note', date || null, note.trim(), !!needsFollowUp]);
 
-    // Return with contact name + deal title
+    // Return with contact name + deal title + task title
     const { rows: [tp] } = await pool.query(`
-      SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
+      SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle", t.title AS "taskTitle"
       FROM client_interactions tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
       LEFT JOIN client_deals cd ON cd.id = tp."dealId"
+      LEFT JOIN tasks t ON t.id = tp."taskId"
       WHERE tp.id = $1
     `, [rows[0].id]);
 
@@ -862,11 +872,16 @@ router.get('/:id/activity', async (req, res) => {
       // case-tagged interaction (e.g. a case's "Log an update" entry) is
       // already shown in that case's own History. Both sections render on
       // this same page at once, so an untagged row would appear twice.
+      // No "taskId IS NULL" filter here, unlike caseId above — per
+      // docs/crm-activity-model.md Addendum 2, a task-linked activity has
+      // no competing "task history" view fighting for the same rows, so
+      // it's meant to appear in this client-wide feed as normal.
       pool.query(`
-        SELECT ci.*, cc.name AS "contactName", cd.title AS "dealTitle"
+        SELECT ci.*, cc.name AS "contactName", cd.title AS "dealTitle", t.title AS "taskTitle"
         FROM client_interactions ci
         LEFT JOIN client_contacts cc ON cc.id = ci."contactId"
         LEFT JOIN client_deals cd ON cd.id = ci."dealId"
+        LEFT JOIN tasks t ON t.id = ci."taskId"
         WHERE ci."clientId"=$1 AND ci."caseId" IS NULL
         ORDER BY ci.date DESC, ci."createdAt" DESC
         LIMIT 200
@@ -898,7 +913,7 @@ router.get('/:id/activity', async (req, res) => {
         detail: row.note || null,
         needsFollowUp: row.needsFollowUp,
         interactionId: row.id,
-        meta: { dealTitle: row.dealTitle || null, touchpointType: row.type },
+        meta: { dealTitle: row.dealTitle || null, touchpointType: row.type, taskTitle: row.taskTitle || null },
       });
     }
 

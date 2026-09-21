@@ -1,4 +1,29 @@
 import useAuthStore from '../store/authStore';
+import useToastStore from '../store/toastStore';
+
+// Addendum 2 (docs/crm-activity-model.md): a CRM-linked task can be marked
+// done from ~20 different surfaces (Kanban, Calendar, mobile tile, focus
+// mode, etc.) — none of which know anything about the CRM. Rather than
+// touch every one of those call sites, this is the one place all of them
+// already funnel through (per this file's own header comment: "use this
+// for all /api/ calls"). PUT /api/tasks/:id includes `crmFollowUp` in its
+// response only on the todo->done transition of a client-linked task (see
+// server/routes/tasks.js) — surfaced here as a toast with a link to log
+// the outcome, skipped if already on that client's page.
+function maybeShowCrmFollowUpToast(url, res) {
+  if (!/^\/api\/tasks\/\d+$/.test(url) || !res.ok) return;
+  res.clone().json().then(data => {
+    if (!data?.crmFollowUp) return;
+    const { clientId, clientName, taskId } = data.crmFollowUp;
+    if (window.location.pathname === `/clients/${clientId}`) return; // already there
+    useToastStore.getState().addToast(
+      `Task linked to ${clientName} completed.`,
+      'success',
+      undefined,
+      { label: 'Log outcome in CRM', href: `/clients/${clientId}?logTask=${taskId}` }
+    );
+  }).catch(() => {}); // never let this side-channel break the real response
+}
 
 function getHeaders(extra = {}) {
   const token = useAuthStore.getState().token;
@@ -39,6 +64,7 @@ const api = {
       body: JSON.stringify(body),
       signal: opts.signal,
     });
+    maybeShowCrmFollowUpToast(url, res);
     return handleResponse(res);
   },
   patch: async (url, body, opts = {}) => {
