@@ -1232,15 +1232,18 @@ async function initSchema() {
         note        TEXT,
         "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL,
         "dealId"    INTEGER,
+        "needsFollowUp" BOOLEAN NOT NULL DEFAULT FALSE,
         "createdAt" TIMESTAMP DEFAULT NOW()
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_client ON client_interactions("clientId", date DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_followup ON client_interactions("clientId") WHERE "needsFollowUp"`);
 
     // ── Migration for a pre-existing client_interactions (this table
     // shipped once already this session with a narrower shape) — additive/
     // widening only, safe to run every boot. See docs/crm-activity-model.md.
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "source" VARCHAR(20) NOT NULL DEFAULT 'manual'`);
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "needsFollowUp" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE client_interactions ADD CONSTRAINT client_interactions_source_check

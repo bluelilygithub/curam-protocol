@@ -1,3 +1,13 @@
+> **Superseded 2026-09-21 by a scope-down addendum**: Cases' Open/Waiting/
+> Closed workflow + Steps checklist is paused (schema stays, not extended
+> further). The client page now has one input box + one feed (Activity)
+> plus a `needsFollowUp` flag (Outstanding) instead of a state machine.
+> Sections §3 (Cases) and §6 (UI collapse) below are historical — the
+> resulting page shape is: Outstanding, Activity (single box + feed),
+> Tasks/Deals/Contacts/Projects unchanged. `client_interactions` gained
+> `needsFollowUp BOOLEAN`. Touchpoints/Communications sections retired
+> (folded into Activity); their component code is left unused, not deleted.
+
 # CRM Data Model — Activity/Case/Contact Unification
 
 Spec for the CRM's overlapping concepts (Touchpoints, Tasks, Communications, Cases), written to replace reactive per-feature additions with one design checked up front. Where old code conflicted with this spec, the spec won unless noted "fixed, unchanged." Decisions below are final for this phase — do not re-derive intent from old code or extend beyond what's written here without flagging the addition and reason first.

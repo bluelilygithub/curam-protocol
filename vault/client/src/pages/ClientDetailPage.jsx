@@ -308,14 +308,12 @@ export default function ClientDetailPage() {
   };
 
   const [sections, setSections] = useState({
-    activity:       true,
-    cases:          true,
-    deals:          true,
-    contacts:       true,
-    projects:       false,
-    tasks:          true,
-    touchpoints:    false,
-    communications: false,
+    outstanding: true,
+    activity:    true,
+    deals:       true,
+    contacts:    true,
+    projects:    false,
+    tasks:       true,
   });
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
@@ -526,19 +524,24 @@ export default function ClientDetailPage() {
         {/* Sections */}
         <div className="flex flex-col gap-3">
 
-          {/* -1. Activity — merged touchpoints/deal stage-changes/contact
-               add-remove/task create-complete, one chronological feed. See
-               GET /api/clients/:id/activity in server/routes/clients.js. */}
-          <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
-            <ActivityFeed clientId={id} refreshKey={activityRefresh} />
+          {/* Outstanding — activities flagged needsFollowUp, one-click clear.
+               Per docs/crm-activity-model.md scope-down addendum: replaces
+               Cases' Open/Waiting/Closed state machine with a flag instead
+               of a workflow. */}
+          <Section tourId="crm-outstanding" title="Outstanding" open={sections.outstanding} onToggle={() => toggleSection('outstanding')}>
+            <OutstandingSection clientId={id} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
           </Section>
 
-          {/* Cases — a multi-step process with this client (e.g. "Lodge
-               software application"): steps + its own update log, in one
-               place, instead of scattered across Tasks/Touchpoints. See
-               server/routes/cases.js. */}
-          <Section tourId="crm-cases" title="Cases" open={sections.cases} onToggle={() => toggleSection('cases')}>
-            <CasesSection clientId={id} onRefresh={() => setActivityRefresh(n => n + 1)} />
+          {/* Activity — one log, one input box (LogActivity), one
+               chronological list (ActivityFeed). Per the scope-down
+               addendum this replaces Touchpoints/Communications/Cases-
+               History as separate sections entirely — logging something
+               here is logging it, full stop, no type/section to pick.
+               See GET/POST /api/clients/:id/touchpoints and
+               GET /api/clients/:id/activity in server/routes/clients.js. */}
+          <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
+            <LogActivity clientId={id} contacts={contacts || []} onLogged={() => setActivityRefresh(n => n + 1)} />
+            <ActivityFeed clientId={id} refreshKey={activityRefresh} />
           </Section>
 
           {/* 0. Deals */}
@@ -580,27 +583,12 @@ export default function ClientDetailPage() {
             <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />
           </Section>
 
-          {/* 3. Touchpoints */}
-          <Section tourId="crm-touchpoints" title={`Touchpoints${touchpoints?.length ? ` (${touchpoints.length})` : ''}`} open={sections.touchpoints} onToggle={() => toggleSection('touchpoints')}>
-            <TouchpointsSection
-              clientId={id}
-              clientName={client?.name}
-              touchpoints={touchpoints || []}
-              contacts={contacts || []}
-              deals={deals || []}
-              onRefresh={load}
-            />
-          </Section>
-
-          {/* 4. Communications (Gmail) */}
-          <Section tourId="crm-communications" title="Communications" open={sections.communications} onToggle={() => toggleSection('communications')}>
-            <CommunicationsSection
-              clientId={id}
-              clientName={client.name}
-              contacts={contacts || []}
-              gmailStatus={gmailStatus}
-            />
-          </Section>
+          {/* Touchpoints and Communications sections retired per the
+               scope-down addendum — folded into Activity above (same
+               client_interactions table, one input box, one feed). Their
+               component code (TouchpointsSection, CommunicationsSection)
+               is left defined below, unused, rather than deleted — same
+               convention as the Font Customizer's retired panels. */}
 
         </div>
       </div>
@@ -621,6 +609,126 @@ export default function ClientDetailPage() {
           onCancel={() => setConfirmDel(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Log activity ───────────────────────────────────────────────────────────────
+// The single input box: no type picker — everything typed here becomes a
+// 'note'-type client_interactions row (POST /api/clients/:id/touchpoints
+// already accepts that as the default). Optional "who" picker (contactId,
+// unset = client-level) and a "needs follow-up" checkbox are the only two
+// choices offered, per docs/crm-activity-model.md's scope-down addendum.
+
+function LogActivity({ clientId, contacts, onLogged }) {
+  const [note, setNote]         = useState('');
+  const [contactId, setContactId] = useState('');
+  const [needsFollowUp, setNeedsFollowUp] = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const log = async () => {
+    if (!note.trim()) return;
+    setSaving(true);
+    try {
+      await api.post(`/api/clients/${clientId}/touchpoints`, {
+        note: note.trim(),
+        contactId: contactId || null,
+        needsFollowUp,
+      }).then(r => r.json());
+      setNote('');
+      setContactId('');
+      setNeedsFollowUp(false);
+      onLogged?.();
+    } catch (e) {
+      addToast(e.message || 'Failed to log activity', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="pt-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <Input rows={2} value={note} onChange={setNote} placeholder="Log a call, email, or note…" />
+      <div className="flex items-center gap-3 mt-2 flex-wrap">
+        <select
+          value={contactId}
+          onChange={e => setContactId(e.target.value)}
+          className="text-xs px-2 py-1.5 rounded-lg border"
+          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          <option value="">Whole client</option>
+          {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+          <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
+          Needs follow-up
+        </label>
+        <button
+          onClick={log}
+          disabled={saving || !note.trim()}
+          className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {saving ? 'Logging…' : 'Log'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Outstanding ────────────────────────────────────────────────────────────────
+// Activities flagged needsFollowUp — a flag, not a status machine. One-click
+// clear instead of a dropdown. Reads the same feed endpoint as ActivityFeed
+// and filters client-side rather than adding a second backend query.
+
+function OutstandingSection({ clientId, refreshKey, onChanged }) {
+  const [items, setItems] = useState(null);
+  const [clearingId, setClearingId] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/api/clients/${clientId}/activity`)
+      .then(r => r.json())
+      .then(json => { if (!cancelled) setItems((Array.isArray(json) ? json : []).filter(it => it.needsFollowUp)); })
+      .catch(() => { if (!cancelled) setItems([]); });
+    return () => { cancelled = true; };
+  }, [clientId, refreshKey]);
+
+  const clear = async (item) => {
+    setClearingId(item.id);
+    try {
+      await api.put(`/api/clients/${clientId}/touchpoints/${item.interactionId}`, { needsFollowUp: false });
+      onChanged?.();
+    } catch {
+      addToast('Failed to clear', 'error');
+    } finally {
+      setClearingId(null);
+    }
+  };
+
+  if (items === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+  if (!items.length) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Nothing outstanding.</p>;
+
+  return (
+    <div className="pt-3">
+      {items.map(it => (
+        <div key={it.id} className="flex items-start justify-between gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="min-w-0">
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>{it.title}</p>
+            {it.detail && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
+          </div>
+          <button
+            onClick={() => clear(it)}
+            disabled={clearingId === it.id}
+            className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity flex-shrink-0 disabled:opacity-40"
+            style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+          >
+            Clear
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

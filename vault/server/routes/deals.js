@@ -12,7 +12,7 @@ const DEAL_STAGE_LABELS = {
 };
 // See the matching constant/comment in server/routes/clients.js —
 // client_interactions holds deal_stage/contact rows too, filtered out here.
-const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other']`;
+const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other','note']`;
 
 // Writes the client_interactions row a deal event shows up as in the
 // Activity feed. Fire-and-forget like logCrmAudit — a feed-entry failure

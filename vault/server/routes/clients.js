@@ -18,7 +18,7 @@ const { getLogger } = require('../middleware/requestContext');
 // deal_stage/contact history for the Activity feed) — this literal picks
 // out just the manually-loggable "touchpoint" ones for the Touchpoints
 // section / summary / Gmail-search-adjacent queries below.
-const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other']`;
+const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other','note']`;
 
 // ── Attachments on touchpoints (docs/crm-deals-schema.md §10) ──────────────
 // Policy (allowlist, size cap, quota, disguised-executable check) lives in
@@ -529,10 +529,9 @@ router.get('/:id/touchpoints', async (req, res) => {
 // POST /api/clients/:id/touchpoints
 router.post('/:id/touchpoints', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
-  const { contactId, dealId, type, date, note } = req.body;
+  const { contactId, dealId, type, date, note, needsFollowUp } = req.body;
 
-  if (!date) return res.status(400).json({ error: 'date is required' });
-  if (!type) return res.status(400).json({ error: 'type is required' });
+  if (!note || !note.trim()) return res.status(400).json({ error: 'note is required' });
 
   try {
     await assertClientOwner(clientId, req.user.id, res);
@@ -546,11 +545,14 @@ router.post('/:id/touchpoints', async (req, res) => {
       if (!deal) return res.status(400).json({ error: 'dealId does not belong to this client' });
     }
 
+    // type/date now optional — the single-box Activity log (see
+    // docs/crm-activity-model.md addendum) doesn't ask the user to pick a
+    // type up front; it defaults to 'note' and "now", same table either way.
     const { rows } = await pool.query(`
-      INSERT INTO client_interactions ("clientId", "userId", "contactId", "dealId", type, date, note)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      INSERT INTO client_interactions ("clientId", "userId", "contactId", "dealId", type, date, note, "needsFollowUp")
+      VALUES ($1,$2,$3,$4,$5,COALESCE($6, NOW()),$7,$8)
       RETURNING *
-    `, [clientId, req.user.id, contactId||null, dealId||null, type, date, note||null]);
+    `, [clientId, req.user.id, contactId||null, dealId||null, type || 'note', date || null, note.trim(), !!needsFollowUp]);
 
     // Return with contact name + deal title
     const { rows: [tp] } = await pool.query(`
@@ -564,6 +566,29 @@ router.post('/:id/touchpoints', async (req, res) => {
     logCrmAudit({ userId: req.user.id, clientId, entityType: 'touchpoint', entityId: rows[0].id, action: 'create', after: tp });
 
     res.status(201).json(tp);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/clients/:id/touchpoints/:touchpointId — currently just clears/sets
+// needsFollowUp ("Outstanding" list's one-click clear). Not a general edit
+// endpoint yet — extend if a real need for editing note/type shows up.
+router.put('/:id/touchpoints/:touchpointId', async (req, res) => {
+  const clientId     = parseInt(req.params.id, 10);
+  const touchpointId = parseInt(req.params.touchpointId, 10);
+  try {
+    await assertClientOwner(clientId, req.user.id, res);
+    if (res.headersSent) return;
+
+    if (!('needsFollowUp' in req.body)) return res.status(400).json({ error: 'needsFollowUp is required' });
+
+    const { rows } = await pool.query(
+      `UPDATE client_interactions SET "needsFollowUp"=$1 WHERE id=$2 AND "clientId"=$3 RETURNING *`,
+      [!!req.body.needsFollowUp, touchpointId, clientId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
@@ -821,7 +846,7 @@ async function assertClientOwner(clientId, userId, res) {
 // legitimate second source (they're a cross-app feature, not CRM-only — see
 // server/db.js's client_interactions comment) and are merged in here.
 const TOUCHPOINT_TYPE_LABELS = {
-  call: 'Call', email: 'Email', meeting: 'Meeting',
+  call: 'Call', email: 'Email', meeting: 'Meeting', note: 'Note',
   decision: 'Decision', milestone: 'Milestone', other: 'Touchpoint',
 };
 
@@ -871,6 +896,8 @@ router.get('/:id/activity', async (req, res) => {
         ts: row.date,
         title: `${label}${row.contactName ? ` with ${row.contactName}` : ''}`,
         detail: row.note || null,
+        needsFollowUp: row.needsFollowUp,
+        interactionId: row.id,
         meta: { dealTitle: row.dealTitle || null, touchpointType: row.type },
       });
     }
