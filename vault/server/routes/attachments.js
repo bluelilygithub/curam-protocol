@@ -23,7 +23,7 @@ async function loadOwnedAttachment(attachmentId, userId) {
 
   if (attachment.entityType === 'touchpoint') {
     const { rows: [ok] } = await pool.query(
-      `SELECT 1 FROM client_touchpoints tp
+      `SELECT 1 FROM client_interactions tp
        JOIN clients c ON c.id = tp."clientId"
        WHERE tp.id=$1 AND c."userId"=$2`,
       [attachment.entityId, userId]

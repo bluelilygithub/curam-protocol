@@ -12,6 +12,13 @@ const {
   insertAttachment, attachmentsForEntities, deleteAttachmentsForEntityIds,
 } = require('../utils/attachments');
 const { logCrmAudit } = require('../utils/crmAudit');
+const { getLogger } = require('../middleware/requestContext');
+
+// client_interactions holds every interaction type (manual log entries PLUS
+// deal_stage/contact history for the Activity feed) — this literal picks
+// out just the manually-loggable "touchpoint" ones for the Touchpoints
+// section / summary / Gmail-search-adjacent queries below.
+const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other']`;
 
 // ── Attachments on touchpoints (docs/crm-deals-schema.md §10) ──────────────
 // Policy (allowlist, size cap, quota, disguised-executable check) lives in
@@ -180,13 +187,15 @@ router.get('/:id', async (req, res) => {
       [clientId]
     );
 
-    // Touchpoints (newest first) with contact name + deal title joined in
+    // Touchpoints (newest first) with contact name + deal title joined in.
+    // client_interactions also holds deal_stage/contact history rows (for
+    // the Activity feed) — filtered out here, this section is the manual log.
     const { rows: touchpointRows } = await pool.query(`
       SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
-      FROM client_touchpoints tp
+      FROM client_interactions tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
       LEFT JOIN client_deals cd ON cd.id = tp."dealId"
-      WHERE tp."clientId" = $1
+      WHERE tp."clientId" = $1 AND tp.type = ANY(${TOUCHPOINT_TYPES_SQL})
       ORDER BY tp.date DESC, tp."createdAt" DESC
     `, [clientId]);
     const touchpoints = await withAttachments(touchpointRows);
@@ -348,11 +357,11 @@ router.delete('/:id', async (req, res) => {
       [clientId]
     );
 
-    // client_touchpoints cascades from clients (ON DELETE CASCADE) with no
+    // client_interactions cascades from clients (ON DELETE CASCADE) with no
     // app hook, and attachments have no FK to ride that cascade — so their
     // files would be silently orphaned on disk if not cleaned up here first.
     const { rows: tps } = await pool.query(
-      `SELECT id FROM client_touchpoints WHERE "clientId"=$1`, [clientId]
+      `SELECT id FROM client_interactions WHERE "clientId"=$1 AND type = ANY(${TOUCHPOINT_TYPES_SQL})`, [clientId]
     );
     await deleteAttachmentsForEntityIds('touchpoint', tps.map(t => t.id));
 
@@ -408,6 +417,10 @@ router.post('/:id/contacts', async (req, res) => {
     `, [clientId, name.trim(), role||null, email||null, phone||null, !!isPrimary]);
 
     logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: rows[0].id, action: 'create', after: rows[0] });
+    pool.query(
+      `INSERT INTO client_interactions ("clientId", "userId", type, title, "contactId") VALUES ($1,$2,'contact',$3,$4)`,
+      [clientId, req.user.id, `Contact added: ${rows[0].name}`, rows[0].id]
+    ).catch(err => getLogger().error({ err }, 'client_interactions write failed (contact create)'));
 
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -478,6 +491,10 @@ router.delete('/:id/contacts/:contactId', async (req, res) => {
 
     if (beforeRows.length) {
       logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: contactId, action: 'delete', before: beforeRows[0] });
+      pool.query(
+        `INSERT INTO client_interactions ("clientId", "userId", type, title) VALUES ($1,$2,'contact',$3)`,
+        [clientId, req.user.id, `Contact removed: ${beforeRows[0].name}`]
+      ).catch(err => getLogger().error({ err }, 'client_interactions write failed (contact delete)'));
     }
 
     res.json({ deleted: true });
@@ -497,9 +514,9 @@ router.get('/:id/touchpoints', async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT tp.*, cc.name AS "contactName"
-      FROM client_touchpoints tp
+      FROM client_interactions tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
-      WHERE tp."clientId" = $1
+      WHERE tp."clientId" = $1 AND tp.type = ANY(${TOUCHPOINT_TYPES_SQL})
       ORDER BY tp.date DESC, tp."createdAt" DESC
     `, [clientId]);
 
@@ -530,15 +547,15 @@ router.post('/:id/touchpoints', async (req, res) => {
     }
 
     const { rows } = await pool.query(`
-      INSERT INTO client_touchpoints ("clientId", "contactId", "dealId", type, date, note)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      INSERT INTO client_interactions ("clientId", "userId", "contactId", "dealId", type, date, note)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING *
-    `, [clientId, contactId||null, dealId||null, type, date, note||null]);
+    `, [clientId, req.user.id, contactId||null, dealId||null, type, date, note||null]);
 
     // Return with contact name + deal title
     const { rows: [tp] } = await pool.query(`
       SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
-      FROM client_touchpoints tp
+      FROM client_interactions tp
       LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
       LEFT JOIN client_deals cd ON cd.id = tp."dealId"
       WHERE tp.id = $1
@@ -561,14 +578,14 @@ router.delete('/:id/touchpoints/:touchpointId', async (req, res) => {
     if (res.headersSent) return;
 
     const { rows: beforeRows } = await pool.query(
-      `SELECT * FROM client_touchpoints WHERE id=$1 AND "clientId"=$2`,
+      `SELECT * FROM client_interactions WHERE id=$1 AND "clientId"=$2`,
       [touchpointId, clientId]
     );
 
     await deleteAttachmentsForEntityIds('touchpoint', [touchpointId]);
 
     await pool.query(
-      'DELETE FROM client_touchpoints WHERE id=$1 AND "clientId"=$2',
+      'DELETE FROM client_interactions WHERE id=$1 AND "clientId"=$2',
       [touchpointId, clientId]
     );
 
@@ -594,7 +611,7 @@ router.post('/:id/touchpoints/:touchpointId/attachments', uploadAttachment.singl
     if (res.headersSent) return;
 
     const { rows: [tp] } = await pool.query(
-      `SELECT id FROM client_touchpoints WHERE id=$1 AND "clientId"=$2`, [touchpointId, clientId]
+      `SELECT id FROM client_interactions WHERE id=$1 AND "clientId"=$2`, [touchpointId, clientId]
     );
     if (!tp) return res.status(404).json({ error: 'Touchpoint not found' });
     if (!req.file) return res.status(400).json({ error: 'file is required' });
@@ -638,7 +655,7 @@ router.post('/:id/summary', async (req, res) => {
       [clientId]
     );
     const { rows: touchpoints } = await pool.query(
-      `SELECT type, date, note FROM client_touchpoints WHERE "clientId"=$1 ORDER BY date DESC, "createdAt" DESC LIMIT 10`,
+      `SELECT type, date, note FROM client_interactions WHERE "clientId"=$1 AND type = ANY(${TOUCHPOINT_TYPES_SQL}) ORDER BY date DESC, "createdAt" DESC LIMIT 10`,
       [clientId]
     );
     const { rows: [finance] } = await pool.query(
@@ -797,24 +814,16 @@ async function assertClientOwner(clientId, userId, res) {
 }
 
 // ── Activity feed ────────────────────────────────────────────────────────────
-// Merges touchpoints, deal stage-changes (from crm_audit_log), contact
-// create/remove, and client-linked task create/complete into one
-// chronological feed. Built in JS (three cheap queries + a sort) rather than
-// one gnarly UNION, matching this file's existing "one query per source,
-// joined in JS" pattern (see withAttachments/touchpoints above).
-const DEAL_STAGE_LABELS = {
-  lead: 'Lead', qualified: 'Qualified', proposal: 'Proposal',
-  negotiation: 'Negotiation', won: 'Won', lost: 'Lost',
-};
+// client_interactions is the single real timeline table — every touchpoint,
+// deal stage change, and contact add/remove is a row in it, written at the
+// time it happens (see the deals.js/contacts routes). No more reconstructing
+// history by diffing crm_audit_log JSONB after the fact. Tasks are the one
+// legitimate second source (they're a cross-app feature, not CRM-only — see
+// server/db.js's client_interactions comment) and are merged in here.
 const TOUCHPOINT_TYPE_LABELS = {
   call: 'Call', email: 'Email', meeting: 'Meeting',
   decision: 'Decision', milestone: 'Milestone', other: 'Touchpoint',
 };
-
-function parseMaybeJson(v) {
-  if (v == null) return null;
-  return typeof v === 'string' ? JSON.parse(v) : v;
-}
 
 // GET /api/clients/:id/activity
 router.get('/:id/activity', async (req, res) => {
@@ -823,18 +832,14 @@ router.get('/:id/activity', async (req, res) => {
     const ok = await assertClientOwner(clientId, req.user.id, res);
     if (!ok) return;
 
-    const [{ rows: touchpoints }, { rows: auditRows }, { rows: tasks }] = await Promise.all([
+    const [{ rows: interactions }, { rows: tasks }] = await Promise.all([
       pool.query(`
-        SELECT tp.*, cc.name AS "contactName", cd.title AS "dealTitle"
-        FROM client_touchpoints tp
-        LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
-        LEFT JOIN client_deals cd ON cd.id = tp."dealId"
-        WHERE tp."clientId"=$1
-      `, [clientId]),
-      pool.query(`
-        SELECT * FROM crm_audit_log
-        WHERE "clientId"=$1 AND "entityType" IN ('deal','contact')
-        ORDER BY "createdAt" DESC
+        SELECT ci.*, cc.name AS "contactName", cd.title AS "dealTitle"
+        FROM client_interactions ci
+        LEFT JOIN client_contacts cc ON cc.id = ci."contactId"
+        LEFT JOIN client_deals cd ON cd.id = ci."dealId"
+        WHERE ci."clientId"=$1
+        ORDER BY ci.date DESC, ci."createdAt" DESC
         LIMIT 200
       `, [clientId]),
       pool.query(`
@@ -845,43 +850,20 @@ router.get('/:id/activity', async (req, res) => {
 
     const items = [];
 
-    for (const tp of touchpoints) {
-      const label = TOUCHPOINT_TYPE_LABELS[tp.type] || tp.type;
-      items.push({
-        id: `touchpoint-${tp.id}`,
-        kind: 'touchpoint',
-        ts: tp.date,
-        title: `${label}${tp.contactName ? ` with ${tp.contactName}` : ''}`,
-        detail: tp.note || null,
-        meta: { dealTitle: tp.dealTitle || null, touchpointType: tp.type },
-      });
-    }
-
-    for (const row of auditRows) {
-      const before = parseMaybeJson(row.before);
-      const after  = parseMaybeJson(row.after);
-
-      if (row.entityType === 'deal') {
-        if (row.action === 'create') {
-          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `Deal created: ${after?.title || ''}`, detail: null, meta: { stage: after?.stage } });
-        } else if (row.action === 'delete') {
-          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `Deal deleted: ${before?.title || ''}`, detail: null, meta: {} });
-        } else if (row.action === 'update' && before?.stage !== after?.stage) {
-          const fromLabel = DEAL_STAGE_LABELS[before?.stage] || before?.stage;
-          const toLabel   = DEAL_STAGE_LABELS[after?.stage]  || after?.stage;
-          items.push({ id: `audit-${row.id}`, kind: 'deal', ts: row.createdAt, title: `${after?.title || 'Deal'}: ${fromLabel} → ${toLabel}`, detail: null, meta: { stage: after?.stage } });
-        }
-        // Non-stage updates (value/notes edits) are noise for a relationship
-        // feed — skipped on purpose.
-      } else if (row.entityType === 'contact') {
-        if (row.action === 'create') {
-          items.push({ id: `audit-${row.id}`, kind: 'contact', ts: row.createdAt, title: `Contact added: ${after?.name || ''}`, detail: null, meta: {} });
-        } else if (row.action === 'delete') {
-          items.push({ id: `audit-${row.id}`, kind: 'contact', ts: row.createdAt, title: `Contact removed: ${before?.name || ''}`, detail: null, meta: {} });
-        }
-        // Contact edits (role/email/phone) are reference-data maintenance,
-        // not relationship activity — skipped on purpose.
+    for (const row of interactions) {
+      if (row.type === 'deal_stage' || row.type === 'contact') {
+        items.push({ id: `interaction-${row.id}`, kind: row.type === 'deal_stage' ? 'deal' : 'contact', ts: row.createdAt, title: row.title, detail: row.note, meta: {} });
+        continue;
       }
+      const label = TOUCHPOINT_TYPE_LABELS[row.type] || row.type;
+      items.push({
+        id: `interaction-${row.id}`,
+        kind: 'touchpoint',
+        ts: row.date,
+        title: `${label}${row.contactName ? ` with ${row.contactName}` : ''}`,
+        detail: row.note || null,
+        meta: { dealTitle: row.dealTitle || null, touchpointType: row.type },
+      });
     }
 
     for (const t of tasks) {

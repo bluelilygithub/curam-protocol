@@ -4,6 +4,25 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../db');
 const { logCrmAudit } = require('../utils/crmAudit');
+const { getLogger } = require('../middleware/requestContext');
+
+const DEAL_STAGE_LABELS = {
+  lead: 'Lead', qualified: 'Qualified', proposal: 'Proposal',
+  negotiation: 'Negotiation', won: 'Won', lost: 'Lost',
+};
+// See the matching constant/comment in server/routes/clients.js —
+// client_interactions holds deal_stage/contact rows too, filtered out here.
+const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milestone','other']`;
+
+// Writes the client_interactions row a deal event shows up as in the
+// Activity feed. Fire-and-forget like logCrmAudit — a feed-entry failure
+// must never block the actual deal write.
+function logDealInteraction({ userId, clientId, dealId, title }) {
+  pool.query(
+    `INSERT INTO client_interactions ("clientId", "userId", type, title, "dealId") VALUES ($1,$2,'deal_stage',$3,$4)`,
+    [clientId, userId, title, dealId]
+  ).catch(err => getLogger().error({ err }, 'client_interactions write failed (deal)'));
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -125,9 +144,9 @@ router.get('/:id', async (req, res) => {
     );
     const { rows: touchpoints } = await pool.query(
       `SELECT tp.*, cc.name AS "contactName"
-       FROM client_touchpoints tp
+       FROM client_interactions tp
        LEFT JOIN client_contacts cc ON cc.id = tp."contactId"
-       WHERE tp."dealId"=$1
+       WHERE tp."dealId"=$1 AND tp.type = ANY(${TOUCHPOINT_TYPES_SQL})
        ORDER BY tp.date DESC, tp."createdAt" DESC`,
       [req.params.id]
     );
@@ -154,6 +173,7 @@ router.post('/', async (req, res) => {
     );
 
     logCrmAudit({ userId: req.user.id, clientId, entityType: 'deal', entityId: rows[0].id, action: 'create', after: rows[0] });
+    logDealInteraction({ userId: req.user.id, clientId, dealId: rows[0].id, title: `Deal created: ${rows[0].title}` });
 
     res.json(rows[0]);
   } catch (err) {
@@ -187,6 +207,12 @@ router.put('/:id', async (req, res) => {
 
     logCrmAudit({ userId: req.user.id, clientId: deal.clientId, entityType: 'deal', entityId: deal.id, action: 'update', before: beforeRows[0] || null, after: rows[0] });
 
+    if (beforeRows[0] && beforeRows[0].stage !== rows[0].stage) {
+      const fromLabel = DEAL_STAGE_LABELS[beforeRows[0].stage] || beforeRows[0].stage;
+      const toLabel   = DEAL_STAGE_LABELS[rows[0].stage] || rows[0].stage;
+      logDealInteraction({ userId: req.user.id, clientId: deal.clientId, dealId: deal.id, title: `${rows[0].title}: ${fromLabel} → ${toLabel}` });
+    }
+
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23514') return res.status(400).json({ error: 'Invalid stage' });
@@ -202,7 +228,13 @@ router.delete('/:id', async (req, res) => {
 
     const { rows: beforeRows } = await pool.query(`SELECT * FROM client_deals WHERE id=$1`, [req.params.id]);
 
-    // Cascades to deal_contacts; client_touchpoints."dealId" is ON DELETE SET NULL,
+    // Logged before the delete, while dealId is still valid — the FK is ON
+    // DELETE SET NULL, so this row survives the cascade, just loses its tag.
+    if (beforeRows.length) {
+      logDealInteraction({ userId: req.user.id, clientId: deal.clientId, dealId: deal.id, title: `Deal deleted: ${beforeRows[0].title}` });
+    }
+
+    // Cascades to deal_contacts; client_interactions."dealId" is ON DELETE SET NULL,
     // so past activity survives, just loses its deal tag.
     await pool.query(`DELETE FROM client_deals WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
 

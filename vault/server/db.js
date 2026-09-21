@@ -1189,6 +1189,11 @@ async function initSchema() {
       )
     `);
 
+    // client_touchpoints is superseded by client_interactions below (kept as
+    // a real single timeline table instead of one log table + a JS-side
+    // reconstruction from crm_audit_log — see docs/crm-migration.md). Table
+    // creation kept here so a pre-existing DB still boots; it holds no rows
+    // going forward and nothing reads/writes it.
     await client.query(`
       CREATE TABLE IF NOT EXISTS client_touchpoints (
         id          SERIAL PRIMARY KEY,
@@ -1200,6 +1205,32 @@ async function initSchema() {
         "createdAt" TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // ── CRM: single interaction timeline ────────────────────────────────────
+    // Replaces client_touchpoints + JS-side reconstruction of deal-stage/
+    // contact history from crm_audit_log. Every logged call/email/meeting,
+    // every deal stage change, and every contact add/remove is one row here
+    // — the activity feed is now a single ORDER BY, not a 3-source merge.
+    // Tasks stay in their own table (used well beyond the CRM — Kanban,
+    // calendar, matrix) and are joined into the feed by clientId, not moved.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_interactions (
+        id          SERIAL PRIMARY KEY,
+        "clientId"  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        "userId"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        type        VARCHAR(20) NOT NULL CHECK (type IN
+                      ('call','email','meeting','decision','milestone','other','deal_stage','contact')),
+        date        DATE NOT NULL DEFAULT CURRENT_DATE,
+        title       TEXT,
+        note        TEXT,
+        "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL,
+        "dealId"    INTEGER,
+        "createdAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_client ON client_interactions("clientId", date DESC)`);
+    // "dealId" FK added further down, once client_deals exists (that table
+    // is created after this one — see "CRM: Deals" below).
 
     // ── CRM: Deals — see docs/crm-deals-schema.md ─────────────────────────────
     await client.query(`
@@ -1221,6 +1252,16 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_client ON client_deals("clientId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_user ON client_deals("userId")`);
+
+    // client_interactions."dealId" FK — deferred to here since client_deals
+    // didn't exist yet when that table was created above.
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE client_interactions ADD CONSTRAINT client_interactions_dealid_fkey
+          FOREIGN KEY ("dealId") REFERENCES client_deals(id) ON DELETE SET NULL;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
 
     // Optional many-to-many: which contacts are stakeholders on a deal. Empty
     // = implicitly all of the client's contacts (current default behavior).
@@ -1627,6 +1668,48 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_crm_audit_client ON crm_audit_log("clientId", "createdAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_crm_audit_entity ON crm_audit_log("entityType", "entityId")`);
+
+  // ── CRM: one-time backfill into client_interactions ─────────────────────
+  // Runs once per environment (guarded by NOT EXISTS on client_interactions
+  // having any rows) — migrates any pre-existing client_touchpoints rows and
+  // any deal-stage/contact history already in crm_audit_log, so an
+  // environment that had real CRM activity before this table existed
+  // doesn't lose its timeline. Safe to leave in boot: a no-op once the table
+  // has rows or on a fresh DB with nothing to migrate.
+  await pool.query(`
+    INSERT INTO client_interactions ("clientId", type, date, note, "contactId", "dealId", "createdAt")
+    SELECT tp."clientId", tp.type, tp.date, tp.note, tp."contactId", tp."dealId", tp."createdAt"
+    FROM client_touchpoints tp
+    WHERE NOT EXISTS (SELECT 1 FROM client_interactions LIMIT 1)
+  `);
+  await pool.query(`
+    INSERT INTO client_interactions ("clientId", "userId", type, date, title, "dealId", "createdAt")
+    SELECT a."clientId", a."userId", 'deal_stage',
+           a."createdAt"::date,
+           CASE
+             WHEN a.action = 'create' THEN 'Deal created: ' || COALESCE(a.after->>'title','')
+             WHEN a.action = 'delete' THEN 'Deal deleted: ' || COALESCE(a.before->>'title','')
+             ELSE COALESCE(a.after->>'title','Deal') || ': ' || COALESCE(a.before->>'stage','?') || ' -> ' || COALESCE(a.after->>'stage','?')
+           END,
+           a."entityId", a."createdAt"
+    FROM crm_audit_log a
+    WHERE a."entityType" = 'deal'
+      AND (a.action IN ('create','delete') OR a.before->>'stage' IS DISTINCT FROM a.after->>'stage')
+      AND NOT EXISTS (SELECT 1 FROM client_interactions WHERE type = 'deal_stage')
+  `);
+  await pool.query(`
+    INSERT INTO client_interactions ("clientId", "userId", type, date, title, "contactId", "createdAt")
+    SELECT a."clientId", a."userId", 'contact',
+           a."createdAt"::date,
+           CASE
+             WHEN a.action = 'create' THEN 'Contact added: ' || COALESCE(a.after->>'name','')
+             ELSE 'Contact removed: ' || COALESCE(a.before->>'name','')
+           END,
+           a."entityId", a."createdAt"
+    FROM crm_audit_log a
+    WHERE a."entityType" = 'contact' AND a.action IN ('create','delete')
+      AND NOT EXISTS (SELECT 1 FROM client_interactions WHERE type = 'contact')
+  `);
 
   // ── Mission statements: trigger to enforce single current per user ─────────
   await pool.query(`
