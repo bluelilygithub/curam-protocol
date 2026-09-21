@@ -733,11 +733,13 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
         <input ref={fileInputRef} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
-          style={{ color: file ? 'var(--color-primary)' : 'var(--color-muted)' }}
+          className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity flex-shrink-0"
+          style={file
+            ? { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
+            : { color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
           title={file ? file.name : 'Attach a file'}
         >
-          📎{file ? ` ${file.name.length > 16 ? file.name.slice(0, 14) + '…' : file.name}` : ''}
+          📎 {file ? (file.name.length > 16 ? file.name.slice(0, 14) + '…' : file.name) : 'Attach file'}
         </button>
         {file && (
           <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
