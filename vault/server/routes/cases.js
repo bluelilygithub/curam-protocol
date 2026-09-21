@@ -38,9 +38,9 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT cc.*,
-        COUNT(t.id)::int FILTER (WHERE t.id IS NOT NULL)                 AS "stepCount",
-        COUNT(t.id)::int FILTER (WHERE t.status = 'done')                AS "stepsDone",
-        COUNT(t.id)::int FILTER (WHERE t."activityStatus" = 'waiting')   AS "stepsWaiting"
+        COUNT(t.id) FILTER (WHERE t.id IS NOT NULL)::int                 AS "stepCount",
+        COUNT(t.id) FILTER (WHERE t.status = 'done')::int                AS "stepsDone",
+        COUNT(t.id) FILTER (WHERE t."activityStatus" = 'waiting')::int   AS "stepsWaiting"
       FROM client_cases cc
       LEFT JOIN tasks t ON t."caseId" = cc.id
       WHERE cc."clientId" = $1
