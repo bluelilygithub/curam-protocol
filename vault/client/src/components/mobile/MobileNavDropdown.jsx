@@ -145,11 +145,14 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
               </React.Fragment>
             );
           }
+          const Tag = item.external ? 'a' : Link;
+          const linkProps = item.external
+            ? { href: item.path, target: '_blank', rel: 'noopener noreferrer' }
+            : { to: item.path, state: item.id === 'wellbeing' ? { dashboardNonce: Date.now() } : undefined };
           return (
-            <Link
+            <Tag
               key={item.id}
-              to={item.path}
-              state={item.id === 'wellbeing' ? { dashboardNonce: Date.now() } : undefined}
+              {...linkProps}
               onClick={onClose}
               className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
               style={{
@@ -160,7 +163,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
               }}
             >
               {item.label}
-            </Link>
+            </Tag>
           );
         })}
       </div>

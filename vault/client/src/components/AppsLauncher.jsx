@@ -98,11 +98,14 @@ export default function AppsLauncher({
                     const active = isNavItemActive(item, location.pathname, location.search);
                     const showMissionDot = item.badgeKey === 'missionReminder' && missionReminderDue;
                     const showSuggestionBadge = item.badgeKey === 'suggestions' && newSuggestionCount > 0;
+                    const Tag = item.external ? 'a' : Link;
+                    const linkProps = item.external
+                      ? { href: item.path, target: '_blank', rel: 'noopener noreferrer' }
+                      : { to: item.path, state: item.id === 'wellbeing' ? { dashboardNonce: Date.now() } : item.state };
                     return (
-                      <Link
+                      <Tag
                         key={item.id}
-                        to={item.path}
-                        state={item.id === 'wellbeing' ? { dashboardNonce: Date.now() } : item.state}
+                        {...linkProps}
                         onClick={() => setOpen(false)}
                         className="relative flex items-center gap-2 px-2 py-2 rounded-lg text-xs transition-opacity hover:opacity-70"
                         style={{
@@ -129,7 +132,7 @@ export default function AppsLauncher({
                             {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
                           </span>
                         )}
-                      </Link>
+                      </Tag>
                     );
                   })}
                 </div>

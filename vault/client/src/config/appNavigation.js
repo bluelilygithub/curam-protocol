@@ -9,6 +9,7 @@ export const APP_NAV_GROUPS = [
       { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: null },
       { id: 'prompts', label: 'Prompt Library', path: '/prompts', icon: 'book', featureKey: null },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },
+      { id: 'showcase', label: 'Client Showcase', path: 'https://claude.ai/artifact/STxyMcZUUHCVBZniFbxhtP', icon: 'external-link', featureKey: null, external: true },
     ],
   },
   {
