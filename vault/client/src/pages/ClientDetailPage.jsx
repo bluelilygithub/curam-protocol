@@ -28,13 +28,23 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Activity timestamps are real datetimes now (client_interactions.date is
+// TIMESTAMPTZ, not DATE — see docs/crm-activity-model.md). Day-only
+// granularity made two genuinely different same-day log entries render as
+// identical "Today" rows with no way to tell them apart — reported as a
+// "duplicate", but it was a display bug, not a double-write (verified
+// against the DB: different createdAt, ~30 min apart). Today/yesterday now
+// include the time; older entries stay date-only, where a same-day
+// collision is less likely and the time is less useful anyway.
 function fmtRelative(dateStr) {
   if (!dateStr) return '';
+  const full = new Date(dateStr);
   const d    = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
   const now  = new Date();
   const diff = Math.round((now - d) / 86400000);
-  if (diff === 0)  return 'Today';
-  if (diff === 1)  return 'Yesterday';
+  const time = full.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  if (diff === 0)  return `Today, ${time}`;
+  if (diff === 1)  return `Yesterday, ${time}`;
   if (diff < 7)   return `${diff} days ago`;
   if (diff < 30)  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -541,7 +551,7 @@ export default function ClientDetailPage() {
                GET /api/clients/:id/activity in server/routes/clients.js. */}
           <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
             <LogActivity clientId={id} contacts={contacts || []} tasks={tasks || []} onLogged={() => setActivityRefresh(n => n + 1)} />
-            <ActivityFeed clientId={id} refreshKey={activityRefresh} />
+            <ActivityFeed clientId={id} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
           </Section>
 
           {/* 0. Deals */}
@@ -641,21 +651,39 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
   }, [promptedTaskId]);
 
   const [taskId, setTaskId] = useState('');
+  const [file, setFile]     = useState(null);
+  const fileInputRef = useRef(null);
 
   const log = async () => {
     if (!note.trim()) return;
     setSaving(true);
     try {
-      await api.post(`/api/clients/${clientId}/touchpoints`, {
+      const tp = await api.post(`/api/clients/${clientId}/touchpoints`, {
         note: note.trim(),
         contactId: contactId || null,
         taskId: promptedTaskId || taskId || null,
         needsFollowUp,
       }).then(r => r.json());
+
+      // Attach the file after the note exists — reuses the same
+      // entity-attachment upload the old Touchpoints UI already had
+      // (server/utils/attachments.js), just called from the new single box.
+      if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await api.postForm(`/api/clients/${clientId}/touchpoints/${tp.id}/attachments`, formData);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Note logged, but attachment failed to upload');
+        }
+      }
+
       setNote('');
       setContactId('');
       setTaskId('');
       setNeedsFollowUp(false);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       if (promptedTaskId) {
         searchParams.delete('logTask');
         setSearchParams(searchParams, { replace: true });
@@ -702,6 +730,18 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
           <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
           Needs follow-up
         </label>
+        <input ref={fileInputRef} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
+          style={{ color: file ? 'var(--color-primary)' : 'var(--color-muted)' }}
+          title={file ? file.name : 'Attach a file'}
+        >
+          📎{file ? ` ${file.name.length > 16 ? file.name.slice(0, 14) + '…' : file.name}` : ''}
+        </button>
+        {file && (
+          <button onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>✕</button>
+        )}
         <button
           onClick={log}
           disabled={saving || !note.trim()}
@@ -775,9 +815,10 @@ function OutstandingSection({ clientId, refreshKey, onChanged }) {
 
 const ACTIVITY_ICON = { touchpoint: '💬', deal: '🤝', contact: '👤', task: '✓' };
 
-function ActivityFeed({ clientId, refreshKey }) {
+function ActivityFeed({ clientId, refreshKey, onChanged }) {
   const [items, setItems]     = useState(null); // null = loading
   const [error, setError]     = useState('');
+  const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
     let cancelled = false;
@@ -788,6 +829,15 @@ function ActivityFeed({ clientId, refreshKey }) {
       .catch(() => { if (!cancelled) setError('Failed to load activity'); });
     return () => { cancelled = true; };
   }, [clientId, refreshKey]);
+
+  const deleteAttachment = async (attachment) => {
+    try {
+      await api.delete(`/api/attachments/${attachment.id}`);
+      onChanged?.();
+    } catch (e) {
+      addToast(e.message || 'Failed to remove attachment', 'error');
+    }
+  };
 
   if (error) return <p className="text-sm pt-3" style={{ color: '#ef4444' }}>{error}</p>;
   if (items === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
@@ -804,8 +854,18 @@ function ActivityFeed({ clientId, refreshKey }) {
               {it.meta?.dealTitle && (
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>🤝 {it.meta.dealTitle}</span>
               )}
+              {it.meta?.taskTitle && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>✓ {it.meta.taskTitle}</span>
+              )}
             </div>
             {it.detail && <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{it.detail}</p>}
+            {it.attachments?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {it.attachments.map(a => (
+                  <AttachmentChip key={a.id} attachment={a} onDelete={deleteAttachment} />
+                ))}
+              </div>
+            )}
           </div>
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
         </div>

@@ -27,6 +27,29 @@
 > that client's page. Toast gained an optional `action: {label, href}`
 > (`toastStore.js` + `Toast.jsx`) to support the link.
 
+> **Locked spec (same day, supersedes chat history and prior addenda
+> individually):** see the "CRM Spec — Consolidated, Locked" document text
+> for the four requirements and locked decisions. Status of its open items:
+> - **"+step" question — answered:** `ClientTasksSection`'s subtask button
+>   (`tasks.parentTaskId`) predates Cases entirely and is unrelated to it —
+>   Cases' own step mechanism (`caseId`-tagged tasks) is separately dead
+>   code in `CaseDetail`. Both a subtask checklist and a task-linked
+>   activity log now coexist on a task, intentionally, not by accident.
+> - **Duplicate-note bug — root-caused, not a double-write:** checked the
+>   two BTMB rows directly in the DB — different `createdAt` (~30 min
+>   apart), slightly different text (user re-typed it). The real bug was
+>   `fmtRelative()` truncating to day-only granularity, so two different
+>   same-day entries rendered identically as "Today" with no way to tell
+>   them apart. Fixed: today/yesterday now show time-of-day.
+> - **Attachments — shipped:** reused the existing entity-attachment system
+>   as-is. Activity log entries: file input on `LogActivity`, uploaded via
+>   the already-existing `POST /api/clients/:id/touchpoints/:id/attachments`
+>   right after the note is created; shown via `AttachmentChip` in
+>   `ActivityFeed` (new: `GET /api/clients/:id/activity` now bulk-joins
+>   attachments). Tasks: confirmed already covered for free — `TasksPage`'s
+>   edit modal already has full attachment upload/view/delete for any task,
+>   CRM-linked or not; no new code needed there.
+
 # CRM Data Model — Activity/Case/Contact Unification
 
 Spec for the CRM's overlapping concepts (Touchpoints, Tasks, Communications, Cases), written to replace reactive per-feature additions with one design checked up front. Where old code conflicted with this spec, the spec won unless noted "fixed, unchanged." Decisions below are final for this phase — do not re-derive intent from old code or extend beyond what's written here without flagging the addition and reason first.

@@ -897,6 +897,12 @@ router.get('/:id/activity', async (req, res) => {
       `, [clientId]),
     ]);
 
+    // Attachments live on any client_interactions row (entityType
+    // 'touchpoint' — the name predates the Activity-log rename, unchanged
+    // to avoid a needless rename of a working system). Bulk-joined once,
+    // same pattern as withAttachments() above.
+    const attachmentsByInteraction = await attachmentsForEntities('touchpoint', interactions.map(r => r.id));
+
     const items = [];
 
     for (const row of interactions) {
@@ -913,6 +919,7 @@ router.get('/:id/activity', async (req, res) => {
         detail: row.note || null,
         needsFollowUp: row.needsFollowUp,
         interactionId: row.id,
+        attachments: attachmentsByInteraction.get(row.id) || [],
         meta: { dealTitle: row.dealTitle || null, touchpointType: row.type, taskTitle: row.taskTitle || null },
       });
     }
