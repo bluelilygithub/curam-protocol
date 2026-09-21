@@ -1548,63 +1548,68 @@ function ClientTasksSection({ clientId, tasks, onRefresh }) {
   const orphanSubtasks = tasks.filter(t => t.parentTaskId && !parentIds.has(t.parentTaskId));
 
   const TaskRow = ({ t, indent }) => (
-    <div className="flex items-center gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)', paddingLeft: indent ? 24 : 0 }}>
+    <div className="flex items-start gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)', paddingLeft: indent ? 24 : 0 }}>
       <input
         type="checkbox"
         checked={t.status === 'done'}
         disabled={togglingId === t.id}
         onChange={() => toggleDone(t)}
-        className="flex-shrink-0"
+        className="flex-shrink-0 mt-1"
       />
       <div className="flex-1 min-w-0">
         <button
           onClick={() => navigate('/tasks')}
-          className="text-sm text-left hover:opacity-70 transition-opacity truncate block"
+          className="text-sm text-left hover:opacity-70 transition-opacity truncate block w-full"
           style={{ color: 'var(--color-text)' }}
         >
           {t.title}
         </button>
-        <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+        {/* Metadata + badges + action buttons all live on their own line
+            below the title — a long title used to sit on the same flex row
+            as the "Waiting on client" badge and icon buttons with no
+            wrapping, so it visually collided with/ran under them instead
+            of truncating cleanly. */}
+        <div className="flex items-center gap-2 text-xs mt-1 flex-wrap" style={{ color: 'var(--color-muted)' }}>
           {t.projectName && <span>{t.projectName}</span>}
           {t.category && <><span>·</span><span className="capitalize">{t.category}</span></>}
           {t.dueDate && <><span>·</span><span>Due {fmtDate(t.dueDate)}</span></>}
+          {t.activityStatus === 'waiting' && (
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#fef3c7', color: '#92400e' }}>Waiting on client</span>
+          )}
+          {t.priority === 'high' && (
+            <span className="text-xs" style={{ color: '#ef4444' }}>High</span>
+          )}
+          <button
+            onClick={() => toggleWaiting(t)}
+            disabled={togglingId === t.id}
+            className="px-1.5 py-0.5 rounded hover:opacity-60"
+            style={{ color: 'var(--color-muted)' }}
+            title="Toggle waiting on client"
+          >
+            ⏳
+          </button>
+          {!indent && (
+            <button
+              onClick={() => setExpandedActivityId(expandedActivityId === t.id ? null : t.id)}
+              className="px-1.5 py-0.5 rounded hover:opacity-60"
+              style={{ color: 'var(--color-muted)' }}
+              title="View activity logged against this task"
+            >
+              💬
+            </button>
+          )}
+          {!indent && (
+            <button
+              onClick={() => setAddingStepFor(addingStepFor === t.id ? null : t.id)}
+              className="px-1.5 py-0.5 rounded hover:opacity-60"
+              style={{ color: 'var(--color-primary)' }}
+              title="Add a step"
+            >
+              + step
+            </button>
+          )}
         </div>
       </div>
-      {t.activityStatus === 'waiting' && (
-        <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fef3c7', color: '#92400e' }}>Waiting on client</span>
-      )}
-      {t.priority === 'high' && (
-        <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>High</span>
-      )}
-      <button
-        onClick={() => toggleWaiting(t)}
-        disabled={togglingId === t.id}
-        className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
-        style={{ color: 'var(--color-muted)' }}
-        title="Toggle waiting on client"
-      >
-        ⏳
-      </button>
-      {!indent && (
-        <button
-          onClick={() => setExpandedActivityId(expandedActivityId === t.id ? null : t.id)}
-          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
-          style={{ color: 'var(--color-muted)' }}
-          title="View activity logged against this task"
-        >
-          💬
-        </button>
-      )}
-      {!indent && (
-        <button
-          onClick={() => setAddingStepFor(addingStepFor === t.id ? null : t.id)}
-          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
-          style={{ color: 'var(--color-primary)' }}
-          title="Add a step"
-        >
-          + step
-        </button>
-      )}
     </div>
   );
 
