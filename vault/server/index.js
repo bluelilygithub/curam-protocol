@@ -224,6 +224,7 @@ const { startSharesCron } = require('./cron/sharesCron');
 const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
+const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -252,6 +253,7 @@ async function start() {
     startFinanceRemindersCron();
     startRecurringCron();
     startExpenseReviewCron();
+    startWeeklyDigestCron();
   }
 
   // API key presence checks — visible in Railway logs

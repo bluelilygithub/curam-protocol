@@ -1265,6 +1265,19 @@ router.post('/reminders/test', async (req, res) => {
   }
 });
 
+// Manual trigger for the weekly digest (Suggestions + Tasks + Finance + CRM
+// rollup) — lives here alongside the other admin-email test route rather than
+// a new route file, same fin_admin_email settings surface.
+router.post('/weekly-digest/test', async (req, res) => {
+  try {
+    const { runWeeklyDigest } = require('../cron/weeklyDigestCron');
+    const result = await runWeeklyDigest(req.user.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
 // Today's posted total per category — backs the "Today: $X across N entries" summary line on
