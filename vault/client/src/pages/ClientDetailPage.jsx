@@ -739,7 +739,11 @@ function CasesSection({ clientId, onRefresh }) {
             <CaseStatusBadge status={c.status} />
           </button>
           {openCaseId === c.id && (
-            <CaseDetail caseId={c.id} onChanged={() => { loadCases(); onRefresh?.(); }} />
+            <CaseDetail
+              caseId={c.id}
+              onChanged={() => { loadCases(); onRefresh?.(); }}
+              onDeleted={() => { setOpenCaseId(null); loadCases(); onRefresh?.(); }}
+            />
           )}
         </div>
       ))}
@@ -765,13 +769,24 @@ function CasesSection({ clientId, onRefresh }) {
 
 // Expanded case: steps checklist + quick "log an update" + merged log —
 // the one-stop view the whole rethink was for.
-function CaseDetail({ caseId, onChanged }) {
+function CaseDetail({ caseId, onChanged, onDeleted }) {
   const [data, setData]           = useState(null);
   const [stepTitle, setStepTitle] = useState('');
   const [updateNote, setUpdateNote] = useState('');
   const [saving, setSaving]       = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const addToast = useToastStore(s => s.addToast);
+
+  const doDelete = async () => {
+    try {
+      await api.delete(`/api/cases/${caseId}`);
+      addToast('Case deleted');
+      onDeleted?.();
+    } catch {
+      addToast('Failed to delete case', 'error');
+    }
+  };
 
   const load = useCallback(() => {
     api.get(`/api/cases/${caseId}`).then(r => r.json()).then(setData).catch(() => addToast('Failed to load case', 'error'));
@@ -848,20 +863,33 @@ function CaseDetail({ caseId, onChanged }) {
 
   return (
     <div className="pb-4 pl-1 flex flex-col gap-4">
-      {/* Status controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {Object.keys(CASE_STATUS_MAP).map(s => (
-          <button
-            key={s}
-            onClick={() => setStatus(s)}
-            className="text-xs px-2.5 py-1 rounded-full border capitalize"
-            style={data.status === s
-              ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
-              : { color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
-          >
-            {CASE_STATUS_MAP[s].label}
+      {/* Status controls + delete */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.keys(CASE_STATUS_MAP).map(s => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className="text-xs px-2.5 py-1 rounded-full border capitalize"
+              style={data.status === s
+                ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
+                : { color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+            >
+              {CASE_STATUS_MAP[s].label}
+            </button>
+          ))}
+        </div>
+        {confirmDelete ? (
+          <span className="text-xs flex items-center gap-2 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+            Delete this case?
+            <button onClick={doDelete} className="hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
+            <button onClick={() => setConfirmDelete(false)} className="hover:opacity-70">No</button>
+          </span>
+        ) : (
+          <button onClick={() => setConfirmDelete(true)} className="text-xs px-2 py-1 rounded hover:opacity-60 flex-shrink-0" style={{ color: '#ef4444' }}>
+            Delete case
           </button>
-        ))}
+        )}
       </div>
 
       {/* Steps */}
