@@ -1263,6 +1263,30 @@ async function initSchema() {
       END $$;
     `);
 
+    // ── CRM: Cases — the "manage a multi-step process with a client" unit
+    // (e.g. "lodge a software application") that touchpoints/tasks/activity
+    // alone couldn't express as one thing: a case has steps (tasks tagged
+    // "caseId") and its own update log (client_interactions tagged
+    // "caseId"), viewed together in one place instead of scattered across
+    // three sections. See server/routes/cases.js.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_cases (
+        id          SERIAL PRIMARY KEY,
+        "clientId"  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        "userId"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        title       TEXT NOT NULL,
+        status      VARCHAR(10) NOT NULL DEFAULT 'open' CHECK (status IN ('open','waiting','closed')),
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW(),
+        "closedAt"  TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_cases_client ON client_cases("clientId")`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "caseId" INTEGER REFERENCES client_cases(id) ON DELETE CASCADE`);
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "caseId" INTEGER REFERENCES client_cases(id) ON DELETE CASCADE`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_case ON tasks("caseId")`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_case ON client_interactions("caseId")`);
+
     // Optional many-to-many: which contacts are stakeholders on a deal. Empty
     // = implicitly all of the client's contacts (current default behavior).
     await client.query(`

@@ -154,6 +154,7 @@ app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 // which is generous enough (30/min) not to affect normal use.
 app.use('/api/clients', requireFeature('clients'), aiLimiter, require('./routes/clients'));
 app.use('/api/deals', requireFeature('clients'), require('./routes/deals'));
+app.use('/api/cases', requireFeature('clients'), require('./routes/cases'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
 // /api/shares/news and /api/shares/statements must be registered before
 // /api/shares to prevent prefix match interception

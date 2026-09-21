@@ -309,6 +309,7 @@ export default function ClientDetailPage() {
 
   const [sections, setSections] = useState({
     activity:       true,
+    cases:          true,
     deals:          true,
     contacts:       true,
     projects:       false,
@@ -532,6 +533,14 @@ export default function ClientDetailPage() {
             <ActivityFeed clientId={id} refreshKey={activityRefresh} />
           </Section>
 
+          {/* Cases — a multi-step process with this client (e.g. "Lodge
+               software application"): steps + its own update log, in one
+               place, instead of scattered across Tasks/Touchpoints. See
+               server/routes/cases.js. */}
+          <Section tourId="crm-cases" title="Cases" open={sections.cases} onToggle={() => toggleSection('cases')}>
+            <CasesSection clientId={id} onRefresh={() => setActivityRefresh(n => n + 1)} />
+          </Section>
+
           {/* 0. Deals */}
           <Section sectionRef={dealsRef} flash={flashSection === 'deals'} title={`Deals${deals?.length ? ` (${deals.length})` : ''}`} open={sections.deals} onToggle={() => toggleSection('deals')}>
             <DealsSection
@@ -655,6 +664,249 @@ function ActivityFeed({ clientId, refreshKey }) {
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Cases ──────────────────────────────────────────────────────────────────────
+// The single-thread view: a Case's steps and its update log, together,
+// instead of a Task checklist in one section and Touchpoints in another.
+
+const CASE_STATUS_MAP = {
+  open:    { label: 'Open',    bg: '#dbeafe', color: '#1e40af' },
+  waiting: { label: 'Waiting', bg: '#fef3c7', color: '#92400e' },
+  closed:  { label: 'Closed',  bg: 'var(--color-border)', color: 'var(--color-muted)' },
+};
+
+function CaseStatusBadge({ status }) {
+  const s = CASE_STATUS_MAP[status] || CASE_STATUS_MAP.open;
+  return <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: s.bg, color: s.color }}>{s.label}</span>;
+}
+
+function CasesSection({ clientId, onRefresh }) {
+  const [cases, setCases]       = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [openCaseId, setOpenCaseId] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const loadCases = useCallback(() => {
+    api.get(`/api/cases?clientId=${clientId}`).then(r => r.json()).then(json => setCases(Array.isArray(json) ? json : [])).catch(() => setCases([]));
+  }, [clientId]);
+
+  useEffect(() => { loadCases(); }, [loadCases]);
+
+  const create = async () => {
+    if (!newTitle.trim()) return;
+    setSaving(true);
+    try {
+      const c = await api.post('/api/cases', { clientId, title: newTitle.trim() }).then(r => r.json());
+      addToast('Case created');
+      setNewTitle('');
+      setShowForm(false);
+      loadCases();
+      onRefresh?.();
+      setOpenCaseId(c.id);
+    } catch (e) {
+      addToast(e.message || 'Failed to create case', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (cases === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+
+  return (
+    <div className="pt-3">
+      {!cases.length && !showForm && (
+        <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No cases yet — use a case to track a multi-step process with this client (e.g. "Lodge software application").</p>
+      )}
+
+      {cases.map(c => (
+        <div key={c.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            onClick={() => setOpenCaseId(openCaseId === c.id ? null : c.id)}
+            className="w-full flex items-center gap-3 py-2.5 text-left hover:opacity-80 transition-opacity"
+          >
+            <span className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--color-text)' }}>{c.title}</span>
+            {c.stepCount > 0 && (
+              <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{c.stepsDone}/{c.stepCount} steps</span>
+            )}
+            {c.stepsWaiting > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fef3c7', color: '#92400e' }}>⏳ {c.stepsWaiting}</span>
+            )}
+            <CaseStatusBadge status={c.status} />
+          </button>
+          {openCaseId === c.id && (
+            <CaseDetail caseId={c.id} onChanged={() => { loadCases(); onRefresh?.(); }} />
+          )}
+        </div>
+      ))}
+
+      {showForm ? (
+        <div className="mt-3 p-3 rounded-lg border flex flex-col gap-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+          <Input value={newTitle} onChange={setNewTitle} placeholder="Case title (e.g. Software application) *" />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setShowForm(false); setNewTitle(''); }} className="text-xs px-3 py-1.5 rounded-lg border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>Cancel</button>
+            <button onClick={create} disabled={saving || !newTitle.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              {saving ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowForm(true)} className="mt-3 text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+          + New case
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Expanded case: steps checklist + quick "log an update" + merged log —
+// the one-stop view the whole rethink was for.
+function CaseDetail({ caseId, onChanged }) {
+  const [data, setData]           = useState(null);
+  const [stepTitle, setStepTitle] = useState('');
+  const [updateNote, setUpdateNote] = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() => {
+    api.get(`/api/cases/${caseId}`).then(r => r.json()).then(setData).catch(() => addToast('Failed to load case', 'error'));
+  }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  const addStep = async () => {
+    if (!stepTitle.trim()) return;
+    setSaving(true);
+    try {
+      await api.post(`/api/cases/${caseId}/steps`, { title: stepTitle.trim() });
+      setStepTitle('');
+      load();
+      onChanged?.();
+    } catch (e) {
+      addToast(e.message || 'Failed to add step', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleStepDone = async (step) => {
+    setTogglingId(step.id);
+    try {
+      await api.put(`/api/tasks/${step.id}`, { status: step.status === 'done' ? 'todo' : 'done' });
+      load();
+      onChanged?.();
+    } catch {
+      addToast('Failed to update step', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const toggleStepWaiting = async (step) => {
+    setTogglingId(step.id);
+    try {
+      await api.put(`/api/tasks/${step.id}`, { activityStatus: step.activityStatus === 'waiting' ? 'none' : 'waiting' });
+      load();
+    } catch {
+      addToast('Failed to update step', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const logUpdate = async () => {
+    if (!updateNote.trim()) return;
+    setSaving(true);
+    try {
+      await api.post(`/api/cases/${caseId}/log`, { note: updateNote.trim() });
+      setUpdateNote('');
+      load();
+      onChanged?.();
+    } catch (e) {
+      addToast(e.message || 'Failed to log update', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setStatus = async (status) => {
+    try {
+      await api.put(`/api/cases/${caseId}`, { status });
+      load();
+      onChanged?.();
+    } catch {
+      addToast('Failed to update case', 'error');
+    }
+  };
+
+  if (!data) return <p className="text-sm pb-3" style={{ color: 'var(--color-muted)' }}>Loading case…</p>;
+
+  return (
+    <div className="pb-4 pl-1 flex flex-col gap-4">
+      {/* Status controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {Object.keys(CASE_STATUS_MAP).map(s => (
+          <button
+            key={s}
+            onClick={() => setStatus(s)}
+            className="text-xs px-2.5 py-1 rounded-full border capitalize"
+            style={data.status === s
+              ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' }
+              : { color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+          >
+            {CASE_STATUS_MAP[s].label}
+          </button>
+        ))}
+      </div>
+
+      {/* Steps */}
+      <div>
+        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Steps</p>
+        {!data.steps.length && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No steps yet.</p>}
+        {data.steps.map(s => (
+          <div key={s.id} className="flex items-center gap-2 py-1.5">
+            <input type="checkbox" checked={s.status === 'done'} disabled={togglingId === s.id} onChange={() => toggleStepDone(s)} />
+            <span className="text-sm flex-1" style={{ color: s.status === 'done' ? 'var(--color-muted)' : 'var(--color-text)', textDecoration: s.status === 'done' ? 'line-through' : 'none' }}>{s.title}</span>
+            {s.activityStatus === 'waiting' && (
+              <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fef3c7', color: '#92400e' }}>Waiting on client</span>
+            )}
+            <button onClick={() => toggleStepWaiting(s)} disabled={togglingId === s.id} className="text-xs px-1.5 py-1 rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }} title="Toggle waiting on client">⏳</button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 mt-1.5">
+          <Input value={stepTitle} onChange={setStepTitle} placeholder="Add a step…" />
+          <button onClick={addStep} disabled={saving || !stepTitle.trim()} className="text-xs px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-40 flex-shrink-0" style={{ background: 'var(--color-primary)', color: '#fff' }}>Add</button>
+        </div>
+      </div>
+
+      {/* Quick update */}
+      <div>
+        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Log an update</p>
+        <div className="flex items-center gap-2">
+          <Input value={updateNote} onChange={setUpdateNote} placeholder="e.g. Told Brett the application was lodged…" />
+          <button onClick={logUpdate} disabled={saving || !updateNote.trim()} className="text-xs px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-40 flex-shrink-0" style={{ background: 'var(--color-primary)', color: '#fff' }}>Log</button>
+        </div>
+      </div>
+
+      {/* Merged log */}
+      <div>
+        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>History</p>
+        {!data.log.length && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing logged yet.</p>}
+        {data.log.map(item => (
+          <div key={item.id} className="flex items-start justify-between gap-3 py-1.5 border-t first:border-t-0" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="min-w-0">
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{item.title}</p>
+              {item.detail && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{item.detail}</p>}
+            </div>
+            <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(item.ts)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
