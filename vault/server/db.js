@@ -1213,14 +1213,21 @@ async function initSchema() {
     // — the activity feed is now a single ORDER BY, not a 3-source merge.
     // Tasks stay in their own table (used well beyond the CRM — Kanban,
     // calendar, matrix) and are joined into the feed by clientId, not moved.
+    // type list per docs/crm-activity-model.md §3: the spec's five
+    // (call/email/meeting/note/case_update) plus the pre-existing
+    // decision/milestone/other (real Touchpoints dropdown options) and
+    // deal_stage/contact (system-generated bookkeeping rows) — extending
+    // the enum honestly rather than collapsing real distinctions into
+    // 'note' just to match the spec's illustrative word list.
     await client.query(`
       CREATE TABLE IF NOT EXISTS client_interactions (
         id          SERIAL PRIMARY KEY,
         "clientId"  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         "userId"    INTEGER REFERENCES users(id) ON DELETE SET NULL,
         type        VARCHAR(20) NOT NULL CHECK (type IN
-                      ('call','email','meeting','decision','milestone','other','deal_stage','contact')),
-        date        DATE NOT NULL DEFAULT CURRENT_DATE,
+                      ('call','email','meeting','decision','milestone','other','deal_stage','contact','note','case_update')),
+        source      VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','gmail_sync','system')),
+        date        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         title       TEXT,
         note        TEXT,
         "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL,
@@ -1229,6 +1236,25 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_client ON client_interactions("clientId", date DESC)`);
+
+    // ── Migration for a pre-existing client_interactions (this table
+    // shipped once already this session with a narrower shape) — additive/
+    // widening only, safe to run every boot. See docs/crm-activity-model.md.
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "source" VARCHAR(20) NOT NULL DEFAULT 'manual'`);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE client_interactions ADD CONSTRAINT client_interactions_source_check
+          CHECK (source IN ('manual','gmail_sync','system'));
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await client.query(`ALTER TABLE client_interactions ALTER COLUMN date TYPE TIMESTAMPTZ USING date::timestamptz`);
+    await client.query(`ALTER TABLE client_interactions ALTER COLUMN date SET DEFAULT NOW()`);
+    await client.query(`ALTER TABLE client_interactions DROP CONSTRAINT IF EXISTS client_interactions_type_check`);
+    await client.query(`
+      ALTER TABLE client_interactions ADD CONSTRAINT client_interactions_type_check
+        CHECK (type IN ('call','email','meeting','decision','milestone','other','deal_stage','contact','note','case_update'))
+    `);
     // "dealId" FK added further down, once client_deals exists (that table
     // is created after this one — see "CRM: Deals" below).
 
@@ -1282,7 +1308,13 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_cases_client ON client_cases("clientId")`);
+    await client.query(`ALTER TABLE client_cases ADD COLUMN IF NOT EXISTS "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "caseId" INTEGER REFERENCES client_cases(id) ON DELETE CASCADE`);
+    // Per docs/crm-activity-model.md §1/§4: enables "everything involving
+    // this contact" queries, which had no join path before (tasks/cases
+    // linked to a client, never to a specific person at that client).
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_contact ON tasks("contactId")`);
     await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "caseId" INTEGER REFERENCES client_cases(id) ON DELETE CASCADE`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_case ON tasks("caseId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_case ON client_interactions("caseId")`);

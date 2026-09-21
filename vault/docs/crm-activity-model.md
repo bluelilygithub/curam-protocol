@@ -1,0 +1,70 @@
+# CRM Data Model — Activity/Case/Contact Unification
+
+Spec for the CRM's overlapping concepts (Touchpoints, Tasks, Communications, Cases), written to replace reactive per-feature additions with one design checked up front. Where old code conflicted with this spec, the spec won unless noted "fixed, unchanged." Decisions below are final for this phase — do not re-derive intent from old code or extend beyond what's written here without flagging the addition and reason first.
+
+## 1. Fixed points — do not touch
+
+**`clients`** — core entity table, unchanged.
+
+**`tasks`** — verified genuinely mature (20 frontend surfaces: Kanban, Calendar, Goals, Projects, mobile tile, focus mode, weekly review, quick capture, imports, at-mentions). A forward-looking work-item engine (status, priority, recurrence, time tracking, OKR linkage via `keyResultId`, share tokens, Kanban ordering) — structurally distinct from a past-tense activity log. Does **not** absorb Touchpoints/Communications/Case updates as a "type" of task.
+
+One additive change: `tasks."contactId"` (nullable FK → `client_contacts`) — enables "everything involving this contact" queries that had no join path before.
+
+## 2. `client_interactions` — the "what happened" layer
+
+Kept this name (not renamed to `activities` — renaming for spec-word-match with zero functional gain repeats the exact pattern this spec exists to stop). Single past-tense log; every touchpoint, deal stage-change, contact add/remove, and case update is one row here.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | PK | |
+| `clientId` | FK → clients | required |
+| `contactId` | FK → client_contacts | nullable |
+| `dealId` | FK → client_deals | nullable |
+| `caseId` | FK → client_cases | nullable |
+| `type` | enum | `call, email, meeting, decision, milestone, other, deal_stage, contact, note, case_update` — the spec's original five plus the pre-existing real distinctions (`decision`/`milestone`/`other` are live Touchpoints dropdown options; `deal_stage`/`contact` are system-generated bookkeeping types). Collapsing these into a generic `note` would be a regression, not compliance. |
+| `source` | enum | `manual, gmail_sync, system` — `system` covers `deal_stage`/`contact` rows (nobody typed them); `manual` covers everything a user typed, including a Case's quick-log entry |
+| `date` | `TIMESTAMPTZ`, default `NOW()` | widened from `DATE` — a same-day chronological feed doesn't sort correctly on date-only precision, which undermines the one thing this whole model exists to deliver. Manual entry defaults to "now," editable. |
+| `title` | text | |
+| `note` | text | |
+| `userId` | FK → users | who logged it (`system`-source rows still record who triggered the action, e.g. who changed the deal stage) |
+
+## 3. `client_cases` — the "open thread" layer
+
+Stays a distinct table — a stateful container (`open`/`waiting`/`closed`), not a timeline. A case's detail view is `client_interactions` + `tasks` both filtered by `caseId` — no separate log structure of its own.
+
+Additive: `client_cases."contactId"` (nullable FK → `client_contacts`).
+
+**Status:** shipped, not yet validated against a real workflow. Don't add Case-specific features speculatively until one real case has been run end-to-end.
+
+## 4. Contacts — extend, don't rebuild
+
+`client_contacts` is real but thin (1 frontend consumer, only FK is to `clients`) — low-risk to extend precisely because nothing has calcified around it yet.
+
+Open question, deliberately not built ahead of a decision: should an interaction ever reference *multiple* contacts (e.g. a meeting with two stakeholders)? `deal_contacts` already solves this pattern for deals — reuse it (`activity_contacts` join table) if/when needed. A single nullable `contactId` is sufficient for now.
+
+## 5. Gmail / Communications
+
+Two very different builds were hiding behind "wire Gmail sync":
+- **Small (chosen):** a "Save as activity" button on a search result → one `client_interactions` row, `source: 'gmail_sync'`. Not yet built.
+- **Large (explicitly rejected for this phase):** background polling/cron, dedup, retry — a separate project, not scoped here.
+
+Once built, Communications stops being a separate section — a synced email is a `source` filter on the Activity feed, same as everything else.
+
+## 6. UI collapse (not yet done)
+
+Target end state on the client detail page:
+- **Tasks** — stays its own section, unchanged.
+- **Activity** — one feed, filterable by `type`/`source`. Must port Touchpoints' existing features (file attachments per entry, the "+ Follow up → creates a Task" bridge) into the feed UI — collapsing sections must not drop functionality.
+- **Cases** — stays its own section; its expanded view is `client_interactions`/`tasks` filtered by `caseId`, not a separate rendering path.
+
+Deals/Contacts/Projects sections are explicitly out of scope for this collapse — stay as-is.
+
+## 7. Build order
+
+1. ✅ Additive schema: `tasks.contactId`, `client_cases.contactId`, `client_interactions` widened (`source` column, `date`→`TIMESTAMPTZ`, `type` enum extended).
+2. Wire Gmail's "Save as activity" button (small version only).
+3. Validate one real case end-to-end before adding anything else to Cases.
+4. Collapse the client detail page UI (§6) — port attachments + follow-up bridge into the Activity feed, retire the standalone Touchpoints/Communications sections.
+5. Workspace-level views (last): "my open cases," "recent activity," "contacts untouched in 30 days" — all `clientId`-scope-dropping queries, cheap once the above is consistent.
+
+Do not add columns, tables, or UI sections beyond what's written here without flagging the addition and the reason first.

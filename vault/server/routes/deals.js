@@ -19,7 +19,7 @@ const TOUCHPOINT_TYPES_SQL = `ARRAY['call','email','meeting','decision','milesto
 // must never block the actual deal write.
 function logDealInteraction({ userId, clientId, dealId, title }) {
   pool.query(
-    `INSERT INTO client_interactions ("clientId", "userId", type, title, "dealId") VALUES ($1,$2,'deal_stage',$3,$4)`,
+    `INSERT INTO client_interactions ("clientId", "userId", type, source, title, "dealId") VALUES ($1,$2,'deal_stage','system',$3,$4)`,
     [clientId, userId, title, dealId]
   ).catch(err => getLogger().error({ err }, 'client_interactions write failed (deal)'));
 }

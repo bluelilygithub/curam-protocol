@@ -181,7 +181,7 @@ router.post('/:id/log', async (req, res) => {
 
     const { rows } = await pool.query(
       `INSERT INTO client_interactions ("clientId", "userId", type, title, note, "caseId")
-       VALUES ($1,$2,'other',$3,$4,$5) RETURNING *`,
+       VALUES ($1,$2,'case_update',$3,$4,$5) RETURNING *`,
       [kase.clientId, req.user.id, 'Case update', note.trim(), caseId]
     );
     await pool.query(`UPDATE client_cases SET "updatedAt"=NOW() WHERE id=$1`, [caseId]);

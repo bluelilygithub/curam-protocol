@@ -418,7 +418,7 @@ router.post('/:id/contacts', async (req, res) => {
 
     logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: rows[0].id, action: 'create', after: rows[0] });
     pool.query(
-      `INSERT INTO client_interactions ("clientId", "userId", type, title, "contactId") VALUES ($1,$2,'contact',$3,$4)`,
+      `INSERT INTO client_interactions ("clientId", "userId", type, source, title, "contactId") VALUES ($1,$2,'contact','system',$3,$4)`,
       [clientId, req.user.id, `Contact added: ${rows[0].name}`, rows[0].id]
     ).catch(err => getLogger().error({ err }, 'client_interactions write failed (contact create)'));
 
@@ -492,7 +492,7 @@ router.delete('/:id/contacts/:contactId', async (req, res) => {
     if (beforeRows.length) {
       logCrmAudit({ userId: req.user.id, clientId, entityType: 'contact', entityId: contactId, action: 'delete', before: beforeRows[0] });
       pool.query(
-        `INSERT INTO client_interactions ("clientId", "userId", type, title) VALUES ($1,$2,'contact',$3)`,
+        `INSERT INTO client_interactions ("clientId", "userId", type, source, title) VALUES ($1,$2,'contact','system',$3)`,
         [clientId, req.user.id, `Contact removed: ${beforeRows[0].name}`]
       ).catch(err => getLogger().error({ err }, 'client_interactions write failed (contact delete)'));
     }
