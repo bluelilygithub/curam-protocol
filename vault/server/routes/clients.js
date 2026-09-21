@@ -205,8 +205,9 @@ router.get('/:id', async (req, res) => {
     // linked task may have no project at all.
     const activeProjectIds = projects.filter(p => !p.archived_at).map(p => p.id);
     const { rows: tasks } = await pool.query(
-      `SELECT t.id, t.title, t.status, t.priority, t.category, t."dueDate", t."isUrgent",
-              t."projectId", p.name AS "projectName", t."clientId", t."dealId"
+      `SELECT t.id, t.title, t.notes, t.status, t.priority, t.category, t."dueDate", t."isUrgent",
+              t."projectId", p.name AS "projectName", t."clientId", t."dealId",
+              t."parentTaskId", t."activityStatus"
        FROM tasks t
        LEFT JOIN projects p ON t."projectId" = p.id
        WHERE t.status != 'done'

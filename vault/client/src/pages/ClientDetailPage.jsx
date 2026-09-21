@@ -568,7 +568,7 @@ export default function ClientDetailPage() {
                otherwise invisible on this page even though the server has
                always returned it in data.tasks. */}
           <Section tourId="crm-tasks" title={`Tasks${tasks?.length ? ` (${tasks.length})` : ''}`} open={sections.tasks} onToggle={() => toggleSection('tasks')}>
-            <ClientTasksSection tasks={tasks || []} onRefresh={load} />
+            <ClientTasksSection clientId={id} tasks={tasks || []} onRefresh={load} />
           </Section>
 
           {/* 3. Touchpoints */}
@@ -936,12 +936,23 @@ function ContactsSection({ clientId, contacts, onRefresh }) {
 // ── Projects section ──────────────────────────────────────────────────────────
 
 // All open tasks linked to this client — via a project or directly
-// (tasks.clientId). Read-only list + a done checkbox; full editing (due
-// date, notes, attachments, calendar export) stays in Tasks.
-function ClientTasksSection({ tasks, onRefresh }) {
+// (tasks.clientId). Supports creating a task, breaking it into subtasks
+// (tasks.parentTaskId — a checklist for a multi-step process like "lodge an
+// application"), toggling "waiting on client" (tasks.activityStatus), and
+// marking done. Full editing (priority, tags, attachments, calendar export)
+// stays in Tasks.
+const BLANK_TASK = { title: '', dueDate: '', notes: '' };
+
+function ClientTasksSection({ clientId, tasks, onRefresh }) {
   const navigate = useNavigate();
   const addToast = useToastStore(s => s.addToast);
   const [togglingId, setTogglingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(BLANK_TASK);
+  const [saving, setSaving] = useState(false);
+  const [addingStepFor, setAddingStepFor] = useState(null); // parent task id
+  const [stepTitle, setStepTitle] = useState('');
+  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
   const toggleDone = async (task) => {
     setTogglingId(task.id);
@@ -955,44 +966,146 @@ function ClientTasksSection({ tasks, onRefresh }) {
     }
   };
 
-  if (!tasks.length) {
-    return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>No open tasks.</p>;
-  }
+  const toggleWaiting = async (task) => {
+    setTogglingId(task.id);
+    try {
+      await api.put(`/api/tasks/${task.id}`, { activityStatus: task.activityStatus === 'waiting' ? 'none' : 'waiting' });
+      onRefresh();
+    } catch {
+      addToast('Failed to update task', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const createTask = async () => {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      await api.post('/api/tasks', { title: form.title.trim(), dueDate: form.dueDate || null, notes: form.notes || null, clientId }).then(r => r.json());
+      addToast('Task created');
+      setForm(BLANK_TASK);
+      setShowForm(false);
+      onRefresh();
+    } catch (e) {
+      addToast(e.message || 'Failed to create task', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addStep = async (parentTask) => {
+    if (!stepTitle.trim()) return;
+    setSaving(true);
+    try {
+      await api.post('/api/tasks', { title: stepTitle.trim(), clientId, parentTaskId: parentTask.id }).then(r => r.json());
+      setStepTitle('');
+      setAddingStepFor(null);
+      onRefresh();
+    } catch (e) {
+      addToast(e.message || 'Failed to add step', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Parents (or unrelated top-level tasks) first, each followed by its own
+  // subtasks — a lightweight checklist, not a full tree (one level is enough
+  // for "application steps" style tracking).
+  const parents  = tasks.filter(t => !t.parentTaskId);
+  const byParent = tasks.reduce((m, t) => {
+    if (t.parentTaskId) (m[t.parentTaskId] = m[t.parentTaskId] || []).push(t);
+    return m;
+  }, {});
+
+  const TaskRow = ({ t, indent }) => (
+    <div className="flex items-center gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)', paddingLeft: indent ? 24 : 0 }}>
+      <input
+        type="checkbox"
+        checked={t.status === 'done'}
+        disabled={togglingId === t.id}
+        onChange={() => toggleDone(t)}
+        className="flex-shrink-0"
+      />
+      <div className="flex-1 min-w-0">
+        <button
+          onClick={() => navigate('/tasks')}
+          className="text-sm text-left hover:opacity-70 transition-opacity truncate block"
+          style={{ color: 'var(--color-text)' }}
+        >
+          {t.title}
+        </button>
+        <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+          {t.projectName && <span>{t.projectName}</span>}
+          {t.category && <><span>·</span><span className="capitalize">{t.category}</span></>}
+          {t.dueDate && <><span>·</span><span>Due {fmtDate(t.dueDate)}</span></>}
+        </div>
+      </div>
+      {t.activityStatus === 'waiting' && (
+        <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fef3c7', color: '#92400e' }}>Waiting on client</span>
+      )}
+      {t.priority === 'high' && (
+        <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>High</span>
+      )}
+      <button
+        onClick={() => toggleWaiting(t)}
+        disabled={togglingId === t.id}
+        className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
+        style={{ color: 'var(--color-muted)' }}
+        title="Toggle waiting on client"
+      >
+        ⏳
+      </button>
+      {!indent && (
+        <button
+          onClick={() => setAddingStepFor(addingStepFor === t.id ? null : t.id)}
+          className="text-xs px-1.5 py-1 rounded hover:opacity-60 flex-shrink-0"
+          style={{ color: 'var(--color-primary)' }}
+          title="Add a step"
+        >
+          + step
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="pt-3">
-      {tasks.map(t => (
-        <div
-          key={t.id}
-          className="flex items-center gap-3 py-2.5 border-b last:border-b-0"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <input
-            type="checkbox"
-            checked={t.status === 'done'}
-            disabled={togglingId === t.id}
-            onChange={() => toggleDone(t)}
-            className="flex-shrink-0"
-          />
-          <div className="flex-1 min-w-0">
-            <button
-              onClick={() => navigate('/tasks')}
-              className="text-sm text-left hover:opacity-70 transition-opacity truncate block"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {t.title}
-            </button>
-            <div className="flex items-center gap-2 text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-              {t.projectName && <span>{t.projectName}</span>}
-              {t.category && <><span>·</span><span className="capitalize">{t.category}</span></>}
-              {t.dueDate && <><span>·</span><span>Due {fmtDate(t.dueDate)}</span></>}
+      {!tasks.length && !showForm && (
+        <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>No open tasks.</p>
+      )}
+
+      {parents.map(t => (
+        <React.Fragment key={t.id}>
+          <TaskRow t={t} indent={false} />
+          {(byParent[t.id] || []).map(sub => <TaskRow key={sub.id} t={sub} indent />)}
+          {addingStepFor === t.id && (
+            <div className="flex items-center gap-2 py-2" style={{ paddingLeft: 24 }}>
+              <Input value={stepTitle} onChange={setStepTitle} placeholder="Step title…" />
+              <button onClick={() => addStep(t)} disabled={saving || !stepTitle.trim()} className="text-xs px-2 py-1.5 rounded-lg font-medium disabled:opacity-40 flex-shrink-0" style={{ background: 'var(--color-primary)', color: '#fff' }}>Add</button>
+              <button onClick={() => { setAddingStepFor(null); setStepTitle(''); }} className="text-xs px-2 py-1 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>Cancel</button>
             </div>
-          </div>
-          {t.priority === 'high' && (
-            <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>High</span>
           )}
-        </div>
+        </React.Fragment>
       ))}
+
+      {showForm ? (
+        <div className="mt-3 p-3 rounded-lg border flex flex-col gap-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+          <Input value={form.title} onChange={set('title')} placeholder="Task title *" />
+          <Field label="Due date"><Input type="date" value={form.dueDate} onChange={set('dueDate')} /></Field>
+          <Input rows={2} value={form.notes} onChange={set('notes')} placeholder="Notes" />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setShowForm(false); setForm(BLANK_TASK); }} className="text-xs px-3 py-1.5 rounded-lg border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>Cancel</button>
+            <button onClick={createTask} disabled={saving || !form.title.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowForm(true)} className="mt-3 text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+          + Add task
+        </button>
+      )}
     </div>
   );
 }
