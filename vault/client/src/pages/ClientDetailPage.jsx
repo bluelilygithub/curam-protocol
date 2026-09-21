@@ -318,6 +318,7 @@ export default function ClientDetailPage() {
   };
 
   const [sections, setSections] = useState({
+    info:        false,
     outstanding: true,
     activity:    true,
     deals:       true,
@@ -370,7 +371,7 @@ export default function ClientDetailPage() {
   }
   if (!data) return null;
 
-  const { client, contacts, touchpoints, projects, tasks, deals, finance, mood } = data;
+  const { client, contacts, touchpoints, projects, tasks, deals, finance, mood, customFields, attachments: clientAttachments } = data;
   const openPipelineValue = (deals || [])
     .filter(d => d.stage !== 'won' && d.stage !== 'lost')
     .reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
@@ -513,26 +514,25 @@ export default function ClientDetailPage() {
           <StatCard label="Client since"  value={client.startDate ? fmtDate(client.startDate) : '—'} />
         </div>
 
-        {/* Notes / how they work */}
-        {(client.notes || client.howTheyWork) && (
-          <div className="rounded-xl border p-4 mb-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            {client.howTheyWork && (
-              <div>
-                <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>How they work</p>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{client.howTheyWork}</p>
-              </div>
-            )}
-            {client.notes && (
-              <div>
-                <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Notes</p>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{client.notes}</p>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Sections */}
         <div className="flex flex-col gap-3">
+
+          {/* Info — durable facts about the client (ABN, an AdWords login,
+               a reference number), distinct from Activity/Tasks which are
+               timestamped events. Edited in place, not logged. Folds in
+               the client's Notes/How-they-work (previously a standalone
+               always-visible block above the sections — moved here so
+               there's one place for "reference info about this client",
+               not two). See docs/crm-activity-model.md Addendum 3. */}
+          <Section tourId="crm-info" title="Info" open={sections.info} onToggle={() => toggleSection('info')}>
+            <InfoSection
+              client={client}
+              clientId={id}
+              customFields={customFields || []}
+              attachments={clientAttachments || []}
+              onRefresh={load}
+            />
+          </Section>
 
           {/* Outstanding — activities flagged needsFollowUp, one-click clear.
                Per docs/crm-activity-model.md scope-down addendum: replaces
@@ -872,6 +872,169 @@ function ActivityFeed({ clientId, refreshKey, onChanged }) {
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Info ───────────────────────────────────────────────────────────────────────
+// Durable facts about the client — Notes/How-they-work (existing client
+// fields, edited via Edit Client, just rendered here for page visibility)
+// + custom key/value fields (ad hoc, no fixed schema — an ABN, a login
+// username, a reference number) + client-level attachments (registration
+// docs etc, reusing the existing generic attachment system as-is).
+// Explicitly never for credentials — a username is fine, a password isn't
+// (see docs/crm-activity-model.md Addendum 3).
+
+function InfoSection({ client, clientId, customFields, attachments, onRefresh }) {
+  const [showFieldForm, setShowFieldForm] = useState(false);
+  const [fieldLabel, setFieldLabel] = useState('');
+  const [fieldValue, setFieldValue] = useState('');
+  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const openNewField = () => { setFieldLabel(''); setFieldValue(''); setEditingFieldId(null); setShowFieldForm(true); };
+  const openEditField = (f) => { setFieldLabel(f.label); setFieldValue(f.value); setEditingFieldId(f.id); setShowFieldForm(true); };
+
+  const saveField = async () => {
+    if (!fieldLabel.trim() || !fieldValue.trim()) return;
+    setSaving(true);
+    try {
+      if (editingFieldId) {
+        await api.put(`/api/clients/${clientId}/custom-fields/${editingFieldId}`, { label: fieldLabel.trim(), value: fieldValue.trim() });
+      } else {
+        await api.post(`/api/clients/${clientId}/custom-fields`, { label: fieldLabel.trim(), value: fieldValue.trim() });
+      }
+      setShowFieldForm(false);
+      onRefresh();
+    } catch (e) {
+      addToast(e.message || 'Failed to save field', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteField = async (f) => {
+    try {
+      await api.delete(`/api/clients/${clientId}/custom-fields/${f.id}`);
+      onRefresh();
+    } catch {
+      addToast('Failed to delete field', 'error');
+    }
+  };
+
+  const onFileChosen = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.postForm(`/api/clients/${clientId}/attachments`, formData);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Upload failed');
+      }
+      onRefresh();
+    } catch (err) {
+      addToast(err.message || 'Upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteAttachment = async (attachment) => {
+    try {
+      await api.delete(`/api/attachments/${attachment.id}`);
+      onRefresh();
+    } catch (e) {
+      addToast(e.message || 'Failed to remove attachment', 'error');
+    }
+  };
+
+  return (
+    <div className="pt-3 flex flex-col gap-4">
+      {(client.notes || client.howTheyWork) && (
+        <div className="flex flex-col gap-3">
+          {client.howTheyWork && (
+            <div>
+              <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>How they work</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{client.howTheyWork}</p>
+            </div>
+          )}
+          {client.notes && (
+            <div>
+              <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Notes</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{client.notes}</p>
+            </div>
+          )}
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Edit via the "Edit" button above.</p>
+        </div>
+      )}
+
+      {/* Custom fields */}
+      <div>
+        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Custom fields</p>
+        {customFields.length === 0 && !showFieldForm && (
+          <p className="text-sm mb-2" style={{ color: 'var(--color-muted)' }}>No custom fields yet — e.g. an ABN, an AdWords login, a reference number.</p>
+        )}
+        {customFields.map(f => (
+          <div key={f.id} className="group flex items-center justify-between gap-3 py-1.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="min-w-0">
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{f.label}: </span>
+              <span className="text-sm" style={{ color: 'var(--color-text)' }}>{f.value}</span>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <button onClick={() => openEditField(f)} className="text-xs px-2 py-1 rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Edit</button>
+              <button onClick={() => deleteField(f)} className="text-xs px-2 py-1 rounded hover:opacity-60" style={{ color: '#ef4444' }}>✕</button>
+            </div>
+          </div>
+        ))}
+
+        {showFieldForm ? (
+          <div className="mt-2 p-3 rounded-lg border flex flex-col gap-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={fieldLabel} onChange={setFieldLabel} placeholder="Label (e.g. AdWords login)" />
+              <Input value={fieldValue} onChange={setFieldValue} placeholder="Value" />
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Never store a password here — a username's fine; for a password, note where it's kept (e.g. "see 1Password").</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowFieldForm(false)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}>Cancel</button>
+              <button onClick={saveField} disabled={saving || !fieldLabel.trim() || !fieldValue.trim()} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={openNewField} className="mt-1 text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+            + Add field
+          </button>
+        )}
+      </div>
+
+      {/* Client-level attachments */}
+      <div>
+        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Files</p>
+        <input ref={fileInputRef} type="file" className="hidden" onChange={onFileChosen} />
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {attachments.map(a => (
+              <AttachmentChip key={a.id} attachment={a} onDelete={deleteAttachment} />
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-40"
+          style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
+        >
+          📎 {uploading ? 'Uploading…' : 'Add file'}
+        </button>
+      </div>
     </div>
   );
 }

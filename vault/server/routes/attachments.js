@@ -39,6 +39,16 @@ async function loadOwnedAttachment(attachmentId, userId) {
     return ok ? attachment : null;
   }
 
+  // Addendum 3 (docs/crm-activity-model.md): client-level attachments
+  // (e.g. registration documents), entityId = clients.id directly.
+  if (attachment.entityType === 'client') {
+    const { rows: [ok] } = await pool.query(
+      `SELECT 1 FROM clients WHERE id=$1 AND "userId"=$2`,
+      [attachment.entityId, userId]
+    );
+    return ok ? attachment : null;
+  }
+
   return null; // unknown entityType — fail closed
 }
 

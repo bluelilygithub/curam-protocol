@@ -50,6 +50,20 @@
 >   edit modal already has full attachment upload/view/delete for any task,
 >   CRM-linked or not; no new code needed there.
 
+> **Addendum 3 (same day):** new `client_custom_fields` table (id, clientId,
+> label, value, createdAt) — durable facts about a client (ABN, an AdWords
+> login, a reference number), distinct from the timestamped Activity/Tasks
+> log; edited in place, nothing written to `client_interactions`. New
+> "Info" section on the client page (peer of Outstanding/Activity/Tasks)
+> shows Notes/How-they-work (existing fields, moved here from a standalone
+> always-visible block above the sections — one place for client reference
+> info instead of two), the custom-field list, and client-level attachments
+> (entityType `'client'` on the existing generic attachment system — no new
+> upload code; `loadOwnedAttachment` in `server/routes/attachments.js`
+> gained a `'client'` case). **Never for credentials** — enforced via UI
+> copy + this doc, not a technical filter (no reliable way to detect "this
+> value is a password" from free text).
+
 # CRM Data Model — Activity/Case/Contact Unification
 
 Spec for the CRM's overlapping concepts (Touchpoints, Tasks, Communications, Cases), written to replace reactive per-feature additions with one design checked up front. Where old code conflicted with this spec, the spec won unless noted "fixed, unchanged." Decisions below are final for this phase — do not re-derive intent from old code or extend beyond what's written here without flagging the addition and reason first.

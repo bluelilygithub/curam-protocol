@@ -1298,6 +1298,22 @@ async function initSchema() {
       END $$;
     `);
 
+    // ── CRM: Client Info — durable facts about a client (ABN, an AdWords
+    // username, a reference number), distinct from Activity/Tasks which are
+    // timestamped events. Edited in place, not logged. See
+    // docs/crm-activity-model.md Addendum 3. Explicitly never for
+    // credentials/passwords — enforced at the UI/docs level, not the DB.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_custom_fields (
+        id          SERIAL PRIMARY KEY,
+        "clientId"  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        label       TEXT NOT NULL,
+        value       TEXT NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_custom_fields_client ON client_custom_fields("clientId")`);
+
     // ── CRM: Cases — the "manage a multi-step process with a client" unit
     // (e.g. "lodge a software application") that touchpoints/tasks/activity
     // alone couldn't express as one thing: a case has steps (tasks tagged

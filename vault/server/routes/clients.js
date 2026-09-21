@@ -9,7 +9,7 @@ const { getGmailClient, getHeader } = require('./gmail');
 const { callModel } = require('../services/callModel');
 const {
   createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota,
-  insertAttachment, attachmentsForEntities, deleteAttachmentsForEntityIds,
+  insertAttachment, attachmentsForEntities, attachmentsForEntity, deleteAttachmentsForEntityIds,
 } = require('../utils/attachments');
 const { logCrmAudit } = require('../utils/crmAudit');
 const { getLogger } = require('../middleware/requestContext');
@@ -250,6 +250,14 @@ router.get('/:id', async (req, res) => {
       [clientId]
     );
 
+    // Info section (Addendum 3): durable facts, not events — custom
+    // key/value fields + client-level attachments (e.g. registration docs).
+    const { rows: customFields } = await pool.query(
+      `SELECT * FROM client_custom_fields WHERE "clientId"=$1 ORDER BY "createdAt" ASC`,
+      [clientId]
+    );
+    const clientAttachments = await attachmentsForEntity('client', clientId);
+
     res.json({
       client,
       contacts,
@@ -259,6 +267,8 @@ router.get('/:id', async (req, res) => {
       deals,
       finance: finSummary,
       mood: moodSummary,
+      customFields,
+      attachments: clientAttachments,
     });
   } catch (err) {
     console.error('[clients] get error:', err);
@@ -364,6 +374,7 @@ router.delete('/:id', async (req, res) => {
       `SELECT id FROM client_interactions WHERE "clientId"=$1 AND type = ANY(${TOUCHPOINT_TYPES_SQL})`, [clientId]
     );
     await deleteAttachmentsForEntityIds('touchpoint', tps.map(t => t.id));
+    await deleteAttachmentsForEntityIds('client', [clientId]); // Addendum 3
 
     await pool.query('DELETE FROM clients WHERE id=$1', [clientId]);
     res.json({ deleted: true });
@@ -936,6 +947,94 @@ router.get('/:id/activity', async (req, res) => {
     res.json(items.slice(0, 150));
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Client Info: custom fields (Addendum 2 in docs/crm-activity-model.md's
+// numbering is Addendum 3) — durable facts, not events. Never a place for
+// credentials: a plain username is fine, a password is not (this is an
+// app database, not a secrets manager) — enforced by instruction/docs, not
+// a technical filter, since there's no reliable way to detect "this value
+// is a password" from free text.
+
+// POST /api/clients/:id/custom-fields
+router.post('/:id/custom-fields', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const { label, value } = req.body;
+  if (!label?.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!value?.trim()) return res.status(400).json({ error: 'value is required' });
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+
+    const { rows } = await pool.query(
+      `INSERT INTO client_custom_fields ("clientId", label, value) VALUES ($1,$2,$3) RETURNING *`,
+      [clientId, label.trim(), value.trim()]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/clients/:id/custom-fields/:fieldId
+router.put('/:id/custom-fields/:fieldId', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const fieldId  = parseInt(req.params.fieldId, 10);
+  const { label, value } = req.body;
+  if (!label?.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!value?.trim()) return res.status(400).json({ error: 'value is required' });
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+
+    const { rows } = await pool.query(
+      `UPDATE client_custom_fields SET label=$1, value=$2 WHERE id=$3 AND "clientId"=$4 RETURNING *`,
+      [label.trim(), value.trim(), fieldId, clientId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Field not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/clients/:id/custom-fields/:fieldId
+router.delete('/:id/custom-fields/:fieldId', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const fieldId  = parseInt(req.params.fieldId, 10);
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+
+    await pool.query(`DELETE FROM client_custom_fields WHERE id=$1 AND "clientId"=$2`, [fieldId, clientId]);
+    res.json({ deleted: true });
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Client Info: client-level attachments (e.g. registration documents) —
+// reuses the existing generic entity-attachment system as-is, entityType
+// 'client'. Download/delete already work via the generic
+// GET/DELETE /api/attachments/:id (server/routes/attachments.js) once its
+// ownership check recognizes entityType 'client' — see that file.
+router.post('/:id/attachments', uploadAttachment.single('file'), async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  try {
+    const ok = await assertClientOwner(clientId, req.user.id, res);
+    if (!ok) return;
+    if (!req.file) return res.status(400).json({ error: 'file is required' });
+
+    await rejectIfDisguisedExecutable(req.file.path);
+    await assertWithinQuota(req.user.id, req.file.size);
+
+    const attachment = await insertAttachment({
+      userId: req.user.id, entityType: 'client', entityId: clientId, file: req.file,
+    });
+    res.status(201).json(attachment);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
