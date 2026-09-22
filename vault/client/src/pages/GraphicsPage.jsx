@@ -807,6 +807,7 @@ export default function GraphicsPage() {
   const startProcessing = useProcessingStore((s) => s.startProcessing);
   const stopProcessing = useProcessingStore((s) => s.stopProcessing);
   const graphicsInfo = useToolInfoModal('vault_graphics_tools_info_seen');
+  const askCapabilityInfo = useToolInfoModal('vault_ask_graphics_capability_seen');
   const [mode, setMode] = useState('generate');
   const [compareOn, setCompareOn] = useState(false);
   const [openGroup, setOpenGroup] = useState('Create');
@@ -4066,7 +4067,31 @@ export default function GraphicsPage() {
             >
               {getIcon('info', { size: 14 })}
             </button>
+            <button
+              onClick={askCapabilityInfo.open}
+              title="What Ask Graphics can actually do"
+              style={{ color: '#b45309', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              className="hover:opacity-70"
+            >
+              {getIcon('alert-triangle', { size: 14 })}
+            </button>
           </h1>
+          {askCapabilityInfo.show && (
+            <ToolInfoModal title="What Ask Graphics Can Actually Do" onClose={askCapabilityInfo.close}>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                The text box takes literally anything you type — that's a feature of typing, not a promise about what happens next. Ask Graphics only ever plans against a fixed, narrow list of real operations. It doesn't get smarter or more capable just because a request sounds reasonable.
+              </p>
+              <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-text)' }}><strong>What it can actually run:</strong> Adjust (brightness/contrast/saturation/temperature/vignette), Color Grading (named preset), Background (remove or flat-colour replace), Recolor (swap one exact colour for another, everywhere it appears), Canvas Extend (padding), and Augment (whole-image prompt-driven regeneration — weather, mood, colourizing a black-and-white photo, style shifts).</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>What it can open for you, but not run automatically:</strong> Inpaint (paint a mask, describe the fill/replacement) and Extract Element (paint a mask, isolate it). These always need you to paint the region by hand.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>What it can't do at all:</strong> anything outside that list — no video, no multi-image composites, no text-in-image editing, none of the other ~30 modes elsewhere in Graphics (Perspective Correct, Smart Crop, Watermark, SVG, Icon Library, etc.) are plannable here, even though they exist in the sidebar.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Where it genuinely struggles even within scope:</strong> inserting a new, specific person or object so it photorealistically matches an existing photo's lighting, grain, and era — that's a hard compositing problem for any AI image model, commercial or otherwise, and usually takes several manual paint-and-regenerate passes in Inpaint, not one request.</p>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                If a request doesn't map to the list above, the planner is supposed to say so rather than force it onto the wrong tool — if it ever silently does something unrelated instead, that's a bug, tell me.
+              </p>
+            </ToolInfoModal>
+          )}
           {graphicsInfo.show && (
             <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>

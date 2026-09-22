@@ -73,6 +73,17 @@ export const GRAPHICS_PLAN_CATALOG = [
     },
   },
   {
+    id: 'augment',
+    label: 'Augment (image-to-image)',
+    description: 'Whole-image style/scene regeneration from a prompt — weather, mood, colourize a black-and-white photo, a stylistic reinterpretation. No mask. The whole image is regenerated, so identity/composition can shift more than the other auto-run modes; higher strength = closer to a new image, lower = closer to the original.',
+    endpoint: '/api/graphics/augment',
+    requiresMask: false,
+    paramSchema: {
+      prompt: { type: 'string', note: 'the scene/style change to apply, e.g. "rainy day, wet pavement, overcast sky" or "colourize this photo with natural, period-accurate colour"' },
+      denoise: { type: 'float', min: 0.15, max: 0.85, default: 0.45, note: 'how much the image is allowed to change — low keeps it close to the original, high lets more change' },
+    },
+  },
+  {
     id: 'inpaint',
     label: 'Inpaint / Remove',
     description: 'Paint over a specific area (a person\'s shirt, an object, a blemish) and describe what should replace it.',
