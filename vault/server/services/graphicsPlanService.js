@@ -12,6 +12,26 @@
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 
+// Naive "first { to last }" regex breaks the moment the model adds any stray brace outside the
+// real JSON block (a markdown fence, an aside sentence, anything). This instead strips code
+// fences defensively (same pattern as server/routes/gmail.js classifyEmailBatch), then walks the
+// text tracking brace depth to find the first complete, balanced {...} object — robust to
+// trailing/leading commentary the strict-JSON-only instruction doesn't always prevent.
+function extractJsonObject(raw) {
+  const stripped = String(raw || '').replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+  const start = stripped.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < stripped.length; i++) {
+    if (stripped[i] === '{') depth++;
+    else if (stripped[i] === '}') {
+      depth--;
+      if (depth === 0) return stripped.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function buildSystemPrompt(catalog) {
   const modeList = catalog.map((m) => {
     const params = Object.entries(m.paramSchema || {}).map(([name, schema]) => {
@@ -125,18 +145,18 @@ async function planGraphicsRequest(userId, transcript, catalog) {
   if (!modelId) throw new Error('No AI model is configured for this workspace yet — ask your admin to set one up in Settings.');
 
   const systemPrompt = buildSystemPrompt(catalog);
-  const raw = await callModel(modelId, text, { system: systemPrompt, maxTokens: 1024 });
+  const raw = await callModel(modelId, text, { system: systemPrompt, maxTokens: 2048 });
 
+  const jsonText = extractJsonObject(raw);
   let parsed;
   try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(match ? match[0] : raw);
-  } catch {
-    console.warn(`[graphics-plan] user=${userId} model=${modelId} unparseable response: ${raw.slice(0, 500)}`);
+    parsed = jsonText ? JSON.parse(jsonText) : null;
+  } catch (err) {
+    console.warn(`[graphics-plan] user=${userId} model=${modelId} transcript="${text}" JSON.parse failed (${err.message}). Full raw response:\n${raw}`);
     throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
   }
   if (!parsed || !Array.isArray(parsed.steps)) {
-    console.warn(`[graphics-plan] user=${userId} model=${modelId} no steps array in response: ${raw.slice(0, 500)}`);
+    console.warn(`[graphics-plan] user=${userId} model=${modelId} transcript="${text}" no steps array. Full raw response:\n${raw}`);
     throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
   }
 
