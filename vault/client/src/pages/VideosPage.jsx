@@ -1630,18 +1630,18 @@ export default function VideosPage() {
         {videoInfo.show && (
           <ToolInfoModal title="How Video Tools Works" onClose={videoInfo.close}>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              Six groups in the sidebar, each doing a different job with the same ffmpeg engine underneath:
+              A real production suite built on ffmpeg — six groups in the sidebar covering everything from a blank brief to a captioned, platform-ready export:
             </p>
             <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> generates a new clip from a text brief (and optional image seed) via Replicate or FAL — the only group that calls an AI video model.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> re-encodes what you already have: convert/compress, normalize audio, change speed.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> reshapes a video: clip/trim (upload a file, or paste a direct video URL you have rights to), reframe/crop, mute or replace audio.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> combines things: join multiple clips, overlay a watermark/logo, build a slideshow from images.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Library</strong> is where saved results live — anything you keep from another tool lands here with its full settings, so you can re-run or re-caption later.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> covers probe (technical info), thumbnail capture, and the caption studio (burn styled subtitles onto a video).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> generates a new clip from a text brief via Replicate's <code>minimax/hailuo-2.3</code> (FAL as fallback) — brief expansion runs first, so a rough idea becomes a properly-formed prompt before the model ever sees it. An optional seed image can animate directly or steer the generated style.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> re-encodes with real control, not one-click compression: adjustable CRF/width for convert, loudness-normalization presets, and precise speed changes with audio pitch handled correctly.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> reshapes a video — clip/trim (upload a file, or paste a direct licensed-video URL), reframe/crop, mute or replace audio.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> joins multiple clips with an optional crossfade (each clip auto-normalized to a shared resolution/frame rate/audio format first, so a join never breaks on mismatched sources), overlays a watermark or logo, or builds a slideshow from stills.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Caption studio</strong> burns real styled subtitles — font, weight, size, and color are all yours to set, not a fixed default. Upload an SRT, or transcribe locally via whisper-cli in dev.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Library</strong> saves full results with their settings intact, so anything you keep can be re-run or re-captioned later, not just re-downloaded.</p>
             </div>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              No YouTube/Vimeo/TikTok downloading anywhere in this tool — the Clip tool's URL option only accepts a direct file link, not a platform page.
+              No YouTube/Vimeo/TikTok downloading anywhere in this tool, by design — the Clip tool's URL option only accepts a direct video file link, not a platform page.
             </p>
           </ToolInfoModal>
         )}
