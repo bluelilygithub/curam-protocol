@@ -25,7 +25,7 @@ function loadImageEl(src) {
   });
 }
 
-export default function GraphicsAskPanel({ onOpenInModeWithPrompt }) {
+export default function GraphicsAskPanel({ onOpenInModeWithPrompt, getModeResultImage, currentMode }) {
   const getIcon = useIcon();
   const { isSTTAvailable, isLocalSTTAvailable, isListening, isTranscribing, transcript, interimText, voiceError, startListening, stopListening } = useVoice();
 
@@ -115,6 +115,9 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt }) {
     let working = currentImage || image.imageDataUrl;
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
+      // Already completed manually (a masked step whose result was pulled back in) — keep its
+      // output as the running image and move on, don't re-run or re-skip it.
+      if (stepStatus[i] === 'done') continue;
       if (step.requiresMask) {
         setStepStatus((prev) => ({ ...prev, [i]: 'skipped' }));
         continue;
@@ -162,8 +165,24 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt }) {
     setSnapshot(null);
   };
 
-  const openManualStep = (step) => {
+  const [awaitingStepIndex, setAwaitingStepIndex] = useState(null);
+
+  const openManualStep = (idx, step) => {
     onOpenInModeWithPrompt?.(step.mode, currentImage || image.imageDataUrl, step.params?.prompt || '');
+    setAwaitingStepIndex(idx);
+  };
+
+  // Pulls whatever the user just finished in the real mode (Inpaint/Extract) back into the
+  // plan as this step's output, so the next step chains from it instead of the plan stalling
+  // after a manual/masked step.
+  const pullManualResult = (idx) => {
+    const step = steps[idx];
+    const result = getModeResultImage?.(step.mode);
+    if (!result) return;
+    setCurrentImage(result);
+    setStepStatus((prev) => ({ ...prev, [idx]: 'done' }));
+    setStepError((prev) => { const n = { ...prev }; delete n[idx]; return n; });
+    setAwaitingStepIndex(null);
   };
 
   const anyRunning = runningIndex >= 0;
@@ -293,14 +312,34 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt }) {
                         {status === 'done' && <span style={{ color: '#22c55e' }}>{getIcon('check', { size: 14 })}</span>}
                         {status === 'running' && <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14, className: 'animate-spin' })}</span>}
                         {status === 'skipped' && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>skipped</span>}
-                        {step.requiresMask && (
-                          <button type="button" onClick={() => openManualStep(step)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                        {step.requiresMask && status !== 'done' && (
+                          <button type="button" onClick={() => openManualStep(i, step)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
                             Open {mode?.label}
                           </button>
                         )}
                       </div>
                     </div>
                     <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{step.note}</p>
+                    {step.requiresMask && status !== 'done' && (
+                      <div className="mt-2 px-2.5 py-2 rounded-lg flex items-center justify-between gap-2 flex-wrap" style={{ background: '#fffbeb' }}>
+                        <span className="text-xs" style={{ color: '#92400e' }}>
+                          {awaitingStepIndex === i && currentMode === step.mode
+                            ? `Finish it in ${mode?.label} above, then pull the result back in here.`
+                            : `Needs a mask — open ${mode?.label}, paint the area, run it there first.`}
+                        </span>
+                        <Tooltip text={`Bring the result you just made in ${mode?.label} back into this plan, so the next step continues from it.`}>
+                          <button
+                            type="button"
+                            onClick={() => pullManualResult(i)}
+                            disabled={!getModeResultImage?.(step.mode)}
+                            className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-40 flex-shrink-0"
+                            style={{ background: '#92400e' }}
+                          >
+                            Use this result
+                          </button>
+                        </Tooltip>
+                      </div>
+                    )}
                     {status === 'error' && (
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <span className="text-xs" style={{ color: '#991b1b' }}>{stepError[i]}</span>

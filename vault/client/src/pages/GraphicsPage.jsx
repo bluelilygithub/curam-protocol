@@ -2775,6 +2775,15 @@ export default function GraphicsPage() {
     if (targetMode === 'inpaint' && prefillPrompt) setInpaintPrompt(prefillPrompt);
   };
 
+  // Lets Ask Graphics pull a finished result back out of whichever manual/masked mode it sent
+  // the user to (inpaint, extract) — otherwise a plan step completed by hand has no way to feed
+  // its output into the next step, and the checklist stalls after step 1.
+  const getModeResultImage = (modeId) => {
+    if (modeId === 'inpaint') return inpaintResult?.imageDataUrl || null;
+    if (modeId === 'extract') return extractResult?.imageDataUrl || null;
+    return null;
+  };
+
   // Compact "Use result in…" dropdown shown in a result header.
   const renderSendTo = (dataUrl, name, excludeMode) => (
     <Tooltip text="Continue editing this result in another tool"><select
@@ -4130,7 +4139,7 @@ export default function GraphicsPage() {
         )}
       </div>
 
-      <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} />
+      <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} getModeResultImage={getModeResultImage} currentMode={mode} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         <aside className="w-full md:w-52 md:shrink-0 md:sticky md:top-6">
