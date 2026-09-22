@@ -2253,42 +2253,30 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
                 <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>{isOpen ? '▲' : '▼'}</span>
               </button>
 
-              {/* Accordion body */}
+              {/* Accordion body — same shape as End of month: lead paragraph, then compact stock rows */}
               {isOpen && (
-                <div className="px-4 pb-4 pt-1">
+                <div className="px-4 pb-4 pt-1" style={{ background: 'var(--color-surface)' }}>
                   {market && (
-                    <div className="mb-4 p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Market overview</span>
-                        <SignalBadge signal={market.signal} />
-                      </div>
-                      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{market.content}</p>
-                    </div>
+                    <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>{market.content}</p>
                   )}
 
                   {stocks.length > 0 && (
-                    <div className="space-y-3">
+                    <div className="space-y-2 mb-3">
                       {stocks.map((b) => {
                         const headlines = Array.isArray(b.headlines) ? b.headlines : parseJsonb(b.headlines);
                         return (
-                          <div key={b.id} className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-                            <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{b.symbol}</span>
-                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{b.exchange}</span>
-                              {b.priceChangePct != null && (
-                                <span className="text-xs font-medium" style={{ color: Number(b.priceChangePct) >= 0 ? '#22c55e' : '#ef4444' }}>
-                                  {Number(b.priceChangePct) >= 0 ? '+' : ''}{Number(b.priceChangePct).toFixed(2)}%
-                                </span>
-                              )}
-                              <SignalBadge signal={b.signal} />
-                            </div>
-                            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{b.content}</p>
+                          <div key={b.id} className="text-xs p-2 rounded" style={{ background: 'var(--color-bg)' }}>
+                            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{b.symbol}</span>
+                            <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{b.exchange}</span>
+                            {b.priceChangePct != null && (
+                              <span className="ml-2 font-medium" style={{ color: Number(b.priceChangePct) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                {Number(b.priceChangePct) >= 0 ? '+' : ''}{Number(b.priceChangePct).toFixed(2)}%
+                              </span>
+                            )}
+                            <span className="ml-2"><SignalBadge signal={b.signal} /></span>
+                            <p className="mt-0.5" style={{ color: 'var(--color-text)' }}>{b.content}</p>
                             {Array.isArray(headlines) && headlines.length > 0 && (
-                              <ul className="mt-2 space-y-0.5">
-                                {headlines.slice(0, 3).map((h, i) => (
-                                  <li key={i} className="text-xs" style={{ color: 'var(--color-muted)' }}>· {h}</li>
-                                ))}
-                              </ul>
+                              <p className="mt-0.5 italic" style={{ color: 'var(--color-muted)' }}>{headlines.slice(0, 3).join(' · ')}</p>
                             )}
                           </div>
                         );
