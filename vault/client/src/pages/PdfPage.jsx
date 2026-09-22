@@ -2873,15 +2873,14 @@ export default function PdfPage() {
         {pdfInfo.show && (
           <ToolInfoModal title="How PDF Tools Works" onClose={pdfInfo.close}>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              A full PDF production toolkit, not a merge-and-split utility — every tool is stateless (file in, file back, nothing kept server-side) so there's zero setup and zero risk of a stray copy sitting on a server somewhere.
+              24 tools in the sidebar, all stateless — file in, file back, nothing kept server-side.
             </p>
             <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <p style={{ color: 'var(--color-text)' }}><strong>Edit tools</strong> (merge, split, rotate, watermark, page numbers, organize, compress) work directly on an uploaded PDF's pages — split takes real page-range syntax (<code>1-3,5,7-9</code>), not just single pages.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Field designer</strong> is a canvas-based drag-to-place builder for fillable forms, with a grouped font picker: pdf-lib's 14 standard fonts everywhere, plus a Script group of 10 hand-verified Google Fonts (with live sample text) wherever the design guarantees it won't hit a viewer's live-field rendering limits. A value typed in at design time — or Fill Form with flatten on, the default — stamps it as permanent page content instead of a live field, the actual fix for custom fonts silently rendering as Helvetica in Chrome/Adobe Reader.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> handles image↔PDF and full Office↔PDF — DOCX, XLSX, PPTX, ODT, RTF, CSV, and more, through real LibreOffice headless conversion, not a lookalike renderer.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Google↔PDF</strong> exports a Doc/Sheet/Slide as PDF, or re-uploads a PDF as an editable Google file — reuses your existing Gmail connection, no separate OAuth to set up.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Sign</strong> draws, types, or uploads a signature onto any PDF.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Chat</strong> lets you ask questions grounded in an uploaded PDF's actual extracted text, not a guess from the filename.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Page operations</strong> — Merge, Split (real page-range syntax, <code>1-3,5,7-9</code>, not just single pages), Rotate Pages, Organize Pages (reorder/delete/insert/extract), Compress.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> — Images↔PDF, Text→PDF, Office→PDF and PDF→Word (real LibreOffice headless conversion — DOCX/XLSX/PPTX/ODT/RTF/CSV and more, not a lookalike renderer), Extract Text, Google Drive→PDF (reuses your existing Gmail OAuth, no separate login).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Forms</strong> — Inspect Fields, Fill Form, Fill &amp; Sign, and the <strong>field designer</strong> (canvas-based drag-to-place, pdf-lib's 14 standard fonts everywhere plus a Script group of 10 hand-verified Google Fonts wherever the design guarantees it's safe). Flatten — or Fill Form with flatten on, the default — stamps a value as permanent page content instead of a live field, the actual fix for custom fonts silently rendering as Helvetica in Chrome/Adobe Reader.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Mark up</strong> — Annotate (highlight, strikeout, draw, sticky notes, text boxes), Watermark, Page Numbers, Compare (two PDFs side by side).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Security &amp; info</strong> — Password Protect, Remove Password, Metadata (read/write), File Info.</p>
             </div>
           </ToolInfoModal>
         )}
