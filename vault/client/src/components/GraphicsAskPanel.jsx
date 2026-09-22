@@ -118,9 +118,16 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt, getModeResult
       // Already completed manually (a masked step whose result was pulled back in) — keep its
       // output as the running image and move on, don't re-run or re-skip it.
       if (stepStatus[i] === 'done') continue;
+      // Explicitly skipped by the user (the Skip button on an error) — respected, continue past it.
+      if (stepStatus[i] === 'skipped') continue;
       if (step.requiresMask) {
-        setStepStatus((prev) => ({ ...prev, [i]: 'skipped' }));
-        continue;
+        // STOP here, don't run later steps against the pre-edit image — a masked step the user
+        // hasn't finished yet means every step after it would silently operate on the wrong
+        // source image (this used to auto-skip and keep going, which is exactly the bug: Recolor/
+        // Adjust ran on the original upload, never on the inpainted one, with no visible sign why).
+        setStepStatus((prev) => ({ ...prev, [i]: 'blocked' }));
+        setRunningIndex(-1);
+        return;
       }
       setRunningIndex(i);
       setStepStatus((prev) => ({ ...prev, [i]: 'running' }));
@@ -312,6 +319,7 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt, getModeResult
                         {status === 'done' && <span style={{ color: '#22c55e' }}>{getIcon('check', { size: 14 })}</span>}
                         {status === 'running' && <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14, className: 'animate-spin' })}</span>}
                         {status === 'skipped' && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>skipped</span>}
+                        {status === 'blocked' && <span className="text-xs font-semibold" style={{ color: '#92400e' }}>stopped here</span>}
                         {step.requiresMask && status !== 'done' && (
                           <button type="button" onClick={() => openManualStep(i, step)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
                             Open {mode?.label}
@@ -323,21 +331,35 @@ export default function GraphicsAskPanel({ onOpenInModeWithPrompt, getModeResult
                     {step.requiresMask && status !== 'done' && (
                       <div className="mt-2 px-2.5 py-2 rounded-lg flex items-center justify-between gap-2 flex-wrap" style={{ background: '#fffbeb' }}>
                         <span className="text-xs" style={{ color: '#92400e' }}>
-                          {awaitingStepIndex === i && currentMode === step.mode
-                            ? `Finish it in ${mode?.label} above, then pull the result back in here.`
-                            : `Needs a mask — open ${mode?.label}, paint the area, run it there first.`}
+                          {status === 'blocked'
+                            ? `Run all stopped here — later steps would otherwise run against the wrong image. Finish this in ${mode?.label}, or skip it deliberately.`
+                            : awaitingStepIndex === i && currentMode === step.mode
+                              ? `Finish it in ${mode?.label} above, then pull the result back in here.`
+                              : `Needs a mask — open ${mode?.label}, paint the area, run it there first.`}
                         </span>
-                        <Tooltip text={`Bring the result you just made in ${mode?.label} back into this plan, so the next step continues from it.`}>
-                          <button
-                            type="button"
-                            onClick={() => pullManualResult(i)}
-                            disabled={!getModeResultImage?.(step.mode)}
-                            className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-40 flex-shrink-0"
-                            style={{ background: '#92400e' }}
-                          >
-                            Use this result
-                          </button>
-                        </Tooltip>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Tooltip text={`Bring the result you just made in ${mode?.label} back into this plan, so the next step continues from it.`}>
+                            <button
+                              type="button"
+                              onClick={() => pullManualResult(i)}
+                              disabled={!getModeResultImage?.(step.mode)}
+                              className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-40"
+                              style={{ background: '#92400e' }}
+                            >
+                              Use this result
+                            </button>
+                          </Tooltip>
+                          <Tooltip text="Deliberately leave this edit out and let Run all continue past it, using the image as-is.">
+                            <button
+                              type="button"
+                              onClick={() => skipStep(i)}
+                              className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                              style={{ borderColor: '#92400e', color: '#92400e', background: 'transparent' }}
+                            >
+                              Skip this step
+                            </button>
+                          </Tooltip>
+                        </div>
                       </div>
                     )}
                     {status === 'error' && (
