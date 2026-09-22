@@ -3,6 +3,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import IconLibraryGenerator from '../components/IconLibraryGenerator';
 import Tooltip from '../components/Tooltip';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import useProcessingStore from '../store/processingStore';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -804,6 +805,7 @@ export default function GraphicsPage() {
   const getIcon = useIcon();
   const startProcessing = useProcessingStore((s) => s.startProcessing);
   const stopProcessing = useProcessingStore((s) => s.stopProcessing);
+  const graphicsInfo = useToolInfoModal('vault_graphics_tools_info_seen');
   const [mode, setMode] = useState('generate');
   const [compareOn, setCompareOn] = useState(false);
   const [openGroup, setOpenGroup] = useState('Create');
@@ -4037,7 +4039,29 @@ export default function GraphicsPage() {
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('image', { size: 20 })}
             Graphics
+            <button
+              onClick={graphicsInfo.open}
+              title="How Graphics works"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('info', { size: 14 })}
+            </button>
           </h1>
+          {graphicsInfo.show && (
+            <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                Ten modes in the sidebar — split between generating new images and processing ones you already have:
+              </p>
+              <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-text)' }}><strong>Generate</strong> creates a new image from a text prompt via the admin-configured image model — the only mode that calls an AI image model directly (Icon Library also generates, as a themed set).</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Upscale</strong> and <strong>Background</strong> use AI (Replicate) to enlarge detail or remove/replace a background.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Convert, Compress, Batch, Favicon, Export Social</strong> are deterministic image processing — format conversion, file-size reduction, bulk operations, icon sets, and multi-platform crop bundles. No AI call, so they're fast and free to re-run.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>SVG</strong> traces a raster image into scalable vector paths — best on logos, icons, and flat clipart, not photos.</p>
+              </div>
+            </ToolInfoModal>
+          )}
           <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
             {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
             {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}

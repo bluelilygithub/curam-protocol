@@ -4,6 +4,7 @@ import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -739,6 +740,7 @@ function RunBtn({ onClick, busy, disabled, label, getIcon }) {
 export default function PdfPage() {
   const getIcon = useIcon();
   const { startProcessing, stopProcessing } = useProcessingStore();
+  const pdfInfo = useToolInfoModal('vault_pdf_tools_info_seen');
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Sidebar state
@@ -2855,10 +2857,34 @@ export default function PdfPage() {
         <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
           {getIcon('file-text', { size: 20 })}
           PDF Tools
+          <button
+            onClick={pdfInfo.open}
+            title="How PDF Tools works"
+            style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('info', { size: 14 })}
+          </button>
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
           {descMap[mode] || ''}
         </p>
+        {pdfInfo.show && (
+          <ToolInfoModal title="How PDF Tools Works" onClose={pdfInfo.close}>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              Everything here is stateless — every tool posts a file in, gets a file back, nothing is saved server-side unless you explicitly save a page (CSS tool) or upload to the library (Video Tools).
+            </p>
+            <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              <p style={{ color: 'var(--color-text)' }}><strong>Edit tools</strong> (merge, split, rotate, watermark, page numbers, organize, compress) work directly on an uploaded PDF's pages.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Forms</strong> (AcroForm inspect/fill/field designer) read or place fillable fields. A value typed in at design time, or Fill Form with flatten on (the default), stamps it as permanent page content instead of a live field — the fix for custom fonts rendering as Helvetica in some PDF viewers.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> handles image↔PDF and Office↔PDF (DOCX/XLSX/PPTX and more, via LibreOffice).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Google↔PDF</strong> exports a Doc/Sheet/Slide as PDF, or re-uploads a PDF as an editable Google file — reuses your Gmail connection, no separate login.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Sign</strong> draws, types, or uploads a signature onto any PDF.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Chat</strong> lets you ask questions about an uploaded PDF's extracted text.</p>
+            </div>
+          </ToolInfoModal>
+        )}
         {seedBanner && (
           <div className="mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#ecfdf5', color: '#065f46' }}>
             <span>{seedBanner}</span>

@@ -7,6 +7,7 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -814,6 +815,7 @@ export default function VideosPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
+  const videoInfo = useToolInfoModal('vault_video_tools_info_seen');
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
@@ -1615,7 +1617,34 @@ export default function VideosPage() {
             {getIcon('film', { size: 16 })}
           </div>
           <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Video Tools</h1>
+          <button
+            onClick={videoInfo.open}
+            title="How Video Tools works"
+            style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('info', { size: 13 })}
+          </button>
         </div>
+        {videoInfo.show && (
+          <ToolInfoModal title="How Video Tools Works" onClose={videoInfo.close}>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              Six groups in the sidebar, each doing a different job with the same ffmpeg engine underneath:
+            </p>
+            <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> generates a new clip from a text brief (and optional image seed) via Replicate or FAL — the only group that calls an AI video model.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> re-encodes what you already have: convert/compress, normalize audio, change speed.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> reshapes a video: clip/trim (upload a file, or paste a direct video URL you have rights to), reframe/crop, mute or replace audio.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> combines things: join multiple clips, overlay a watermark/logo, build a slideshow from images.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Library</strong> is where saved results live — anything you keep from another tool lands here with its full settings, so you can re-run or re-caption later.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> covers probe (technical info), thumbnail capture, and the caption studio (burn styled subtitles onto a video).</p>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              No YouTube/Vimeo/TikTok downloading anywhere in this tool — the Clip tool's URL option only accepts a direct file link, not a platform page.
+            </p>
+          </ToolInfoModal>
+        )}
 
         <Tooltip text="Filter the tool list below by name or description.">
           <input
