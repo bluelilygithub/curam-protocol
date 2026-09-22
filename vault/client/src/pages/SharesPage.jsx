@@ -436,13 +436,13 @@ export default function SharesPage() {
 
   const handleGenerateSummary = async () => {
     setGeneratingSummary(true);
-    startProcessing('Generating 30-day summary…', 'Reviewing daily signals and market movements over the past month.');
+    startProcessing('Generating end-of-month summary…', 'Reviewing daily signals and market movements over the past month.');
     try {
       const res = await api.post('/api/shares/news/generate-summary');
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Failed to generate summary (${res.status})`);
       if (Array.isArray(data.briefings)) setNewsBriefings(data.briefings);
-      addToast(data.message || '30-day summary generated', 'success');
+      addToast(data.message || 'End-of-month summary generated', 'success');
     } catch (err) {
       addToast(err.message || 'Failed to generate summary', 'error');
     } finally {
@@ -2078,15 +2078,12 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
   const hasToday = !!byDate[today];
 
-  // Accordion — default to most recent date open
-  const [openDate, setOpenDate] = React.useState(() => dates[0] || null);
-  // Keep openDate in sync when dates list first loads
-  React.useEffect(() => {
-    if (!openDate && dates.length) setOpenDate(dates[0]);
-  }, [dates.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Accordion — collapsed by default, same convention as End of month summaries below
+  // (was auto-opening the most recent date; now consistent, nothing expands until clicked).
+  const [openDate, setOpenDate] = React.useState(null);
 
-  // Monthly summaries — same accordion convention as daily briefings: collapsed by default,
-  // one open at a time, so a growing 30-day-summary history doesn't dump full text on load.
+  // End of month summaries — same accordion convention as daily briefings: collapsed by
+  // default, one open at a time, so a growing history doesn't dump full text on load.
   const [openSummaryId, setOpenSummaryId] = React.useState(null);
 
   const fmtDate = (dateStr) =>
@@ -2110,7 +2107,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Daily briefings</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Auto-generated at 4 AM · 45-day history · monthly summaries retained permanently
+            Auto-generated at 4 AM · 45-day history · end-of-month summaries retained permanently
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -2131,7 +2128,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
             className="text-sm px-3 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
-            {generatingSummary ? 'Generating…' : '30-day summary'}
+            {generatingSummary ? 'Generating…' : 'End of month'}
           </button>
           <button
             type="button"
@@ -2155,7 +2152,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
       {monthlySummaries.length > 0 && (
         <div className="mb-10">
           <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
-            30-day summaries <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 'normal' }}>({monthlySummaries.length})</span>
+            End of month <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 'normal' }}>({monthlySummaries.length})</span>
           </p>
           <div
             className="space-y-2 overflow-y-auto pr-1"
