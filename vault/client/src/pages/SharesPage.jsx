@@ -7,6 +7,8 @@ import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import SharesChartsTab from '../components/shares/SharesChartsTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
+import { useIcon } from '../providers/IconProvider';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 
 const TABS = [
   { id: 'portfolio', label: 'Portfolio' },
@@ -333,6 +335,8 @@ export default function SharesPage() {
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
+  const getIcon = useIcon();
+  const sharesInfo = useToolInfoModal('vault_shares_info_seen');
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUseShares = isAdmin || featureAccess.shares !== false;
 
@@ -750,7 +754,33 @@ export default function SharesPage() {
       <>
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Shares</h1>
+            <h1 className="text-xl font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+              Shares
+              <button
+                onClick={sharesInfo.open}
+                title="How Shares works"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+              >
+                {getIcon('info', { size: 14 })}
+              </button>
+            </h1>
+            {sharesInfo.show && (
+              <ToolInfoModal title="How Shares Works" onClose={sharesInfo.close}>
+                <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                  Eight tabs, covering holdings tracking through to AI-assisted portfolio Q&amp;A:
+                </p>
+                <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Portfolio</strong> shows current holdings, live quotes, and unrealized P&amp;L. <strong>Trades</strong> and <strong>Cash</strong> are the underlying ledgers — every buy/sell and every cash movement, avg-cost method for realized P&amp;L.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Statements</strong> uploads a broker PDF (CMC Markets primary, built broker-agnostic via LLM extraction) — every line lands in a review queue, nothing auto-applies to Trades/Cash until you approve it.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Charts</strong> — portfolio vs. benchmark moves, beat/lag movers, drawdown alerts, sector allocation, earnings timeline, move heatmap.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>News</strong> — daily AI-generated briefings per holding (bullish/bearish/watch/neutral signals) plus End of month trend summaries. Auto-generates at 4 AM; "Send Portfolio Note" triggers the same analyst-note email manually.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Questions</strong> is free-text Q&amp;A over your actual portfolio data — "What's my largest position?", "How would selling everything today perform?" — archived so you can revisit past answers.</p>
+                  <p style={{ color: 'var(--color-text)' }}><strong>Metals</strong> tracks physical precious-metals purchases separately from share holdings, with live spot price lookup.</p>
+                </div>
+              </ToolInfoModal>
+            )}
             <PortfolioStatusLine quotedAt={dashboard?.quotedAt} />
           </div>
           <button

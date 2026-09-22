@@ -82,6 +82,16 @@ const TOOL_HELP = {
       'ATO rates are editable right here (and in Settings) since they change yearly — never hardcoded',
     ],
   },
+  Assets: {
+    title: 'Assets',
+    description: 'A register for anything you buy that\'s a capital purchase, not a straight expense — one table, one form, whether there\'s 1 asset or 40.',
+    features: [
+      'Amount $300 or under auto-routes to an immediate deduction, no further fields needed',
+      'Over $300 needs a depreciation method; prime cost and diminishing value additionally need an effective life',
+      'Business-use % applies to shared-use assets, same idea as Vehicle/Home Office',
+      'Posts through the normal expense journal once saved, same as any other expense',
+    ],
+  },
   Recurring: {
     title: 'Recurring',
     description: 'Automate invoices or expenses that repeat on a schedule — a draft is generated automatically for you to review, not sent or posted without your action.',
