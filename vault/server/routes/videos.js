@@ -37,6 +37,7 @@ const {
   buildSlideshow,
 } = require('../services/videoFfmpeg');
 const { normalizeSrt } = require('../services/srtUtils');
+const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 
 const router = express.Router();
 
@@ -466,6 +467,42 @@ router.post('/clip', upload.single('video'), async (req, res) => {
   } catch (err) {
     console.error('[videos/clip]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// "Clip a licensed video" — downloads a direct video file URL the user has rights to (their
+// own hosting, a stock-footage link, a CC direct-download link) and runs it through the same
+// clip pipeline as the upload-based /clip route above. Explicitly refuses YouTube/Vimeo/TikTok/
+// etc. page URLs — see server/services/videoUrlIntake.js for why and how that's enforced.
+router.post('/clip-from-url', async (req, res) => {
+  try {
+    const ffmpeg = await checkFfmpeg();
+    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+
+    const url = String(req.body?.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    const startSec = Number(req.body?.startSec ?? 0);
+    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+    if (!Number.isFinite(startSec) || startSec < 0) {
+      return res.status(400).json({ error: 'startSec must be a non-negative number' });
+    }
+    if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
+      return res.status(400).json({ error: 'endSec must be greater than startSec' });
+    }
+
+    const buffer = await withTempDir(async (dir) => {
+      const inputPath = path.join(dir, 'source-download');
+      await fetchLicensedVideo(url, inputPath);
+      const outputPath = path.join(dir, 'clip.mp4');
+      await clipVideo(inputPath, outputPath, { startSec, endSec });
+      return readOutputFile(outputPath);
+    });
+
+    sendVideoBuffer(res, buffer, 'clip.mp4');
+  } catch (err) {
+    console.error('[videos/clip-from-url]', err.message);
+    res.status(400).json({ error: err.message });
   }
 });
 
