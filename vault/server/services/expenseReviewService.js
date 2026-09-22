@@ -26,6 +26,22 @@ function safeFilenamePart(s) {
   return String(s || 'invoice').replace(/[^a-z0-9-_]+/gi, '-').slice(0, 60) || 'invoice';
 }
 
+// Sender is typically "Name <billing@vendor.com>" or a bare address — pull the domain either way.
+function senderDomain(sender) {
+  const match = String(sender || '').match(/@([a-z0-9.-]+\.[a-z]{2,})/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+async function getPriorityDomains(userId) {
+  const { rows } = await pool.query(
+    `SELECT value FROM settings WHERE "userId"=$1 AND key='expense_review_priority_domains'`, [userId]
+  ).catch(() => ({ rows: [] }));
+  return String(rows[0]?.value || '')
+    .split(',')
+    .map(d => d.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 // Persists PDF bytes to UPLOAD_DIR/invoices/{year}/{month}/{vendor-or-id}.pdf and returns
 // the path stored in expense_review_queue."s3Url". NOTE: this app has no S3 integration —
 // the column is named s3Url only to match the original feature spec/FK naming; it always
@@ -71,6 +87,30 @@ async function findInvoiceCandidates(userId, { afterDate }) {
   const { classificationFailed, classificationError } = await classifyEmailBatch(userId, needsClassification, storedMap, logPrefix);
   if (classificationFailed) {
     console.warn(`${logPrefix} classification batch failed: ${classificationError || 'no JSON in response'}`);
+  }
+
+  // Priority vendor domains (Settings → Inbox Intel) bypass the classifier's judgment call —
+  // a borderline/ambiguous email from a known vendor is never silently skipped just because the
+  // LLM called it noise/fyi. Domain match forces isExpense true and persists it, same as a real
+  // classification, so subsequent runs don't need to re-check.
+  const priorityDomains = await getPriorityDomains(userId);
+  if (priorityDomains.length) {
+    const forced = emails.filter(e => {
+      const domain = senderDomain(e.sender);
+      const s = storedMap.get(e.threadId);
+      return domain && priorityDomains.includes(domain) && s && !s.isExpense;
+    });
+    if (forced.length) {
+      await pool.query(
+        `UPDATE gmail_classifications SET "isExpense"=TRUE WHERE "userId"=$1 AND "threadId"=ANY($2)`,
+        [userId, forced.map(e => e.threadId)]
+      ).catch(err => console.error(`${logPrefix} priority-domain override error:`, err.message));
+      for (const e of forced) {
+        const s = storedMap.get(e.threadId);
+        storedMap.set(e.threadId, { ...s, isExpense: true });
+      }
+      console.log(`${logPrefix} priority-domain override forced isExpense on ${forced.length} thread(s)`);
+    }
   }
 
   return emails.filter(e => storedMap.get(e.threadId)?.isExpense);

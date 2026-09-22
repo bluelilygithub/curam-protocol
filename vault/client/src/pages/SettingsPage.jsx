@@ -149,6 +149,7 @@ function SettingsPage() {
   const [gmailIntelRefreshInterval, setGmailIntelRefreshInterval] = useState('10');
   const [gmailIntelEmailCount, setGmailIntelEmailCount]           = useState('100');
   const [gmailPdfModel, setGmailPdfModel]                         = useState('');
+  const [expensePriorityDomains, setExpensePriorityDomains]       = useState('');
 
   // Shares alerts
   const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
@@ -361,6 +362,7 @@ function SettingsPage() {
       if (data.gmail_intel_refresh_interval) setGmailIntelRefreshInterval(data.gmail_intel_refresh_interval);
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
+      if (data.expense_review_priority_domains) setExpensePriorityDomains(data.expense_review_priority_domains);
       if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
       if (data.translate_language_order) {
         try {
@@ -2341,6 +2343,26 @@ function SettingsPage() {
                 <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
               ))}
             </select>
+          </div>
+
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Priority vendor domains</p>
+            <p className="text-xs mt-0.5 mb-3" style={{ color: 'var(--color-muted)' }}>
+              Comma-separated sender domains (e.g. <code>xero.com, telstra.com.au</code>) that Invoice Review should always flag as an expense — bypasses the AI classifier's judgment call for known vendors, so a borderline email from these domains is never silently skipped.
+            </p>
+            <input
+              type="text"
+              value={expensePriorityDomains}
+              onChange={e => setExpensePriorityDomains(e.target.value)}
+              onBlur={e => {
+                const cleaned = e.target.value.split(',').map(d => d.trim().toLowerCase()).filter(Boolean).join(', ');
+                setExpensePriorityDomains(cleaned);
+                api.post('/api/settings', { key: 'expense_review_priority_domains', value: cleaned }).catch(() => {});
+              }}
+              placeholder="xero.com, telstra.com.au"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+            />
           </div>
         </div>
       </section>
