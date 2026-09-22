@@ -857,11 +857,11 @@ export default function VideosPage() {
   const [endSec, setEndSec] = useState('');
   const [clipDuration, setClipDuration] = useState(0);
   const clipVideoRef = useRef(null);
-  const [clipSourceMode, setClipSourceMode] = useState('upload'); // 'upload' | 'url'
   const [clipUrl, setClipUrl] = useState('');
-  const [clipUrlStartSec, setClipUrlStartSec] = useState(0);
-  const [clipUrlEndSec, setClipUrlEndSec] = useState('');
   const [clipUrlLoading, setClipUrlLoading] = useState(false);
+  // Auto-detect: a URL in the field means "fetch and clip this"; empty means "clip the
+  // uploaded file below". No mode toggle — the input itself decides which path runs.
+  const isClipUrlMode = /^https?:\/\//i.test(clipUrl.trim());
 
   // Convert
   const [crf, setCrf] = useState(23);
@@ -1233,8 +1233,8 @@ export default function VideosPage() {
     try {
       const res = await api.post('/api/videos/clip-from-url', {
         url: clipUrl.trim(),
-        startSec: clipUrlStartSec,
-        endSec: clipUrlEndSec !== '' ? clipUrlEndSec : undefined,
+        startSec,
+        endSec: endSec !== '' ? endSec : undefined,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1250,7 +1250,7 @@ export default function VideosPage() {
       setClipUrlLoading(false);
       stopProcessing();
     }
-  }, [clipUrl, clipUrlStartSec, clipUrlEndSec, startProcessing, stopProcessing, setResultFromBlob, addToast]);
+  }, [clipUrl, startSec, endSec, startProcessing, stopProcessing, setResultFromBlob, addToast]);
 
   const requireFile = () => {
     if (!sourceFile) {
@@ -1877,63 +1877,28 @@ export default function VideosPage() {
         )}
 
         {tool === 'clip' && (
-          <div className="flex items-center gap-1 rounded-xl border p-1 w-fit" style={{ borderColor: 'var(--color-border)' }}>
-            {[['upload', 'Upload file'], ['url', 'Licensed video URL']].map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setClipSourceMode(mode)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
-                style={{
-                  background: clipSourceMode === mode ? 'var(--color-primary)' : 'transparent',
-                  color: clipSourceMode === mode ? '#fff' : 'var(--color-text)',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {tool === 'clip' && clipSourceMode === 'url' && (
-          <section className="space-y-3">
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              A direct link to a video file you have rights to — your own hosting, a stock-footage download link, or a CC direct-download link. Not a YouTube/Vimeo/TikTok page — those never serve the raw file at a plain URL, so this can't and won't fetch from them.
-            </p>
+          <div className="space-y-1.5">
             <input
-              type="url"
-              placeholder="https://example.com/my-video.mp4"
+              type="text"
+              placeholder="Paste a direct video file URL — or leave blank and choose a file below"
               value={clipUrl}
               onChange={(e) => setClipUrl(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border text-xs"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block space-y-1">
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
-                <input type="number" min={0} step={0.1} value={clipUrlStartSec} onChange={(e) => setClipUrlStartSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>End (seconds, optional)</span>
-                <input type="number" min={0} step={0.1} value={clipUrlEndSec} onChange={(e) => setClipUrlEndSec(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-              </label>
-            </div>
-            <Tooltip text="Download the file and cut it to the selected in/out range.">
-              <button type="button" onClick={runClipFromUrl} disabled={!ffmpegOk || clipUrlLoading} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-                {clipUrlLoading ? 'Clipping…' : 'Download & clip'}
-              </button>
-            </Tooltip>
-            {resultForTool === 'clip' && (
-              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            {isClipUrlMode && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Must be a direct link to the video file itself, not a YouTube/Vimeo/TikTok page — those never serve the raw file at a plain URL.
+              </p>
             )}
-          </section>
+          </div>
         )}
 
-        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && clipSourceMode === 'url') && (
+        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && clipSourceMode === 'url') && (
+        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -1954,10 +1919,12 @@ export default function VideosPage() {
           </>
         )}
 
-        {tool === 'clip' && clipSourceMode === 'upload' && (
+        {tool === 'clip' && (
           <section className="space-y-3">
             <ToolHeader id="clip" label="Clip / trim" onHelp={setHelpTool} getIcon={getIcon} />
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Drag the timeline markers above, or fine-tune with seconds below.</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              {isClipUrlMode ? 'Set the in/out range in seconds — the file will be fetched and cut on export.' : 'Drag the timeline markers above, or fine-tune with seconds below.'}
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start (seconds)</span>
@@ -1972,9 +1939,23 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
-            <Tooltip text="Cut the video down to just the selected in/out range.">
-              <button type="button" onClick={() => { if (!requireFile()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('startSec', String(startSec)); if (endSec !== '') fd.append('endSec', String(endSec)); runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
-                Export clip
+            <Tooltip text={isClipUrlMode ? 'Download the file and cut it to the selected in/out range.' : 'Cut the video down to just the selected in/out range.'}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isClipUrlMode) { runClipFromUrl(); return; }
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('startSec', String(startSec));
+                  if (endSec !== '') fd.append('endSec', String(endSec));
+                  runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' });
+                }}
+                disabled={!ffmpegOk || (isClipUrlMode && clipUrlLoading)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {isClipUrlMode ? (clipUrlLoading ? 'Clipping…' : 'Download & clip') : 'Export clip'}
               </button>
             </Tooltip>
             {resultForTool === 'clip' && (
