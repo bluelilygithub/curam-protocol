@@ -2085,6 +2085,10 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
     if (!openDate && dates.length) setOpenDate(dates[0]);
   }, [dates.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Monthly summaries — same accordion convention as daily briefings: collapsed by default,
+  // one open at a time, so a growing 30-day-summary history doesn't dump full text on load.
+  const [openSummaryId, setOpenSummaryId] = React.useState(null);
+
   const fmtDate = (dateStr) =>
     dateStr === today
       ? 'Today'
@@ -2147,47 +2151,63 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
         </p>
       )}
 
-      {/* Monthly summaries */}
+      {/* Monthly summaries — accordion, collapsed by default, one open at a time */}
       {monthlySummaries.length > 0 && (
         <div className="mb-10">
           <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
-            30-day summaries
+            30-day summaries <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 'normal' }}>({monthlySummaries.length})</span>
           </p>
-          <div className="space-y-4">
+          <div
+            className="space-y-2 overflow-y-auto pr-1"
+            style={{ maxHeight: monthlySummaries.length > 5 ? '400px' : 'none' }}
+          >
             {monthlySummaries.map((s) => {
               const meta = parseJsonb(s.headlines);
               const stocks = Array.isArray(meta.stocks) ? meta.stocks : [];
+              const isOpen = openSummaryId === s.id;
               return (
-                <div key={s.id} className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
-                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                    <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
-                      {fmtDate(s.date.slice(0, 10))}
-                    </span>
-                    {meta.period && (
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                        {meta.period}
+                <div key={s.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-primary)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenSummaryId(isOpen ? null : s.id)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:opacity-70 transition-opacity duration-200 text-left"
+                    style={{ background: 'var(--color-surface)' }}
+                  >
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                        {fmtDate(s.date.slice(0, 10))}
                       </span>
-                    )}
-                  </div>
-                  <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>{s.content}</p>
-                  {stocks.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {stocks.map((stock, i) => (
-                        <div key={i} className="text-xs p-2 rounded" style={{ background: 'var(--color-bg)' }}>
-                          <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{stock.symbol}</span>
-                          <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{stock.exchange}</span>
-                          {stock.trend && <span className="ml-2" style={{ color: 'var(--color-text)' }}>{stock.trend}</span>}
-                          {stock.signalAccuracy && (
-                            <p className="mt-0.5 italic" style={{ color: 'var(--color-muted)' }}>{stock.signalAccuracy}</p>
-                          )}
-                        </div>
-                      ))}
+                      {meta.period && (
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          {meta.period}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {meta.adviceQuality && (
-                    <p className="text-xs italic border-t pt-2 mt-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                      Advice quality: {meta.adviceQuality}
-                    </p>
+                    <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>{isOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-1" style={{ background: 'var(--color-surface)' }}>
+                      <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>{s.content}</p>
+                      {stocks.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {stocks.map((stock, i) => (
+                            <div key={i} className="text-xs p-2 rounded" style={{ background: 'var(--color-bg)' }}>
+                              <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{stock.symbol}</span>
+                              <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{stock.exchange}</span>
+                              {stock.trend && <span className="ml-2" style={{ color: 'var(--color-text)' }}>{stock.trend}</span>}
+                              {stock.signalAccuracy && (
+                                <p className="mt-0.5 italic" style={{ color: 'var(--color-muted)' }}>{stock.signalAccuracy}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {meta.adviceQuality && (
+                        <p className="text-xs italic border-t pt-2 mt-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          Advice quality: {meta.adviceQuality}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -2203,7 +2223,10 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, sendin
         </p>
       )}
 
-      <div className="space-y-2">
+      <div
+        className="space-y-2 overflow-y-auto pr-1"
+        style={{ maxHeight: dates.length > 5 ? '480px' : 'none' }}
+      >
         {dates.map((date) => {
           const { market, stocks } = byDate[date];
           const isOpen = openDate === date;
