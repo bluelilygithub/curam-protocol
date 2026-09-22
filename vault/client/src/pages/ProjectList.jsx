@@ -277,6 +277,7 @@ function ProjectList() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [recentSessions, setRecentSessions] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
+  const [folders, setFolders] = useState([]);
 
   const canUseFeature = useCallback((key) => {
     if (user?.isAdmin) return true;
@@ -303,6 +304,7 @@ function ProjectList() {
   useEffect(() => {
     fetchProjects();
     fetchArchived();
+    api.get('/api/folders').then(r => r.json()).then((data) => setFolders(Array.isArray(data) ? data : [])).catch(() => setFolders([]));
     setRecentLoading(true);
     api.get('/api/chat/recent?limit=20')
       .then((r) => r.json())
@@ -409,6 +411,132 @@ function ProjectList() {
   useEffect(() => {
     if (searchParams.get('archive') === '1') setShowArchive(true);
   }, [searchParams]);
+
+  // Group project tiles by folder — same folders as the sidebar's collections, so the two
+  // stay conceptually aligned. Unassigned projects render in their own group, last, only if
+  // any folders exist at all (otherwise the whole grid stays one flat "Projects" section, same
+  // as before folders existed).
+  const projectGroups = (() => {
+    if (folders.length === 0) return [{ id: null, name: null, projects }];
+    const byFolder = new Map(folders.map(f => [f.id, []]));
+    const unassigned = [];
+    for (const p of projects) {
+      if (p.folderId && byFolder.has(p.folderId)) byFolder.get(p.folderId).push(p);
+      else unassigned.push(p);
+    }
+    const groups = folders
+      .map(f => ({ id: f.id, name: f.name, projects: byFolder.get(f.id) }))
+      .filter(g => g.projects.length > 0);
+    if (unassigned.length > 0) groups.push({ id: 'unassigned', name: 'Unassigned', projects: unassigned });
+    return groups;
+  })();
+
+  const renderProjectCard = (project) => (
+    <div
+      key={project.id}
+      draggable
+      onDragStart={(e) => { setDraggedId(project.id); e.dataTransfer.effectAllowed = 'move'; }}
+      onDragOver={(e) => { e.preventDefault(); if (project.id !== draggedId) setDragOverId(project.id); }}
+      onDrop={(e) => { e.preventDefault(); handleDrop(project.id); }}
+      onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+      className="relative group rounded-xl border overflow-hidden transition-all hover:shadow-sm"
+      style={{
+        opacity: draggedId === project.id ? 0.4 : 1,
+        outline: dragOverId === project.id ? '2px solid var(--color-primary)' : 'none',
+        background: 'var(--color-surface)',
+        borderColor: 'var(--color-border)',
+        cursor: 'grab',
+      }}
+    >
+      <button
+        onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
+        className="w-full text-left p-4"
+        style={{ cursor: 'pointer' }}
+      >
+        <div className="flex items-start justify-between mb-3">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
+          >
+            {getIcon('folder', { size: 15 })}
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {new Date(project.updatedAt).toLocaleDateString()}
+          </span>
+        </div>
+        <h3 className="font-medium text-sm mb-0.5 truncate" style={{ color: 'var(--color-text)' }}>
+          {project.name}
+        </h3>
+        {project.clientName && (
+          <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-primary)', opacity: 0.8 }}>{project.clientName}</p>
+        )}
+        {project.goal ? (
+          <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
+        ) : (
+          <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
+        )}
+        <div className="flex items-center gap-2 mt-2">
+          {project.model && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
+              {getModelShortName(project.model)}
+            </span>
+          )}
+          {project.chatCount > 0 && (
+            <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+              {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Mood row — full width, own row at bottom of card */}
+      {moodMap !== null && (() => {
+        const dominant = moodMap[`project:${project.id}`];
+        const color = dominant ? (EMOTION_COLOURS[dominant.coreEmotion] || '#888') : null;
+        return (
+          <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setFeelingModalProjectId(project.id); }}
+              className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+            >
+              <span
+                className="w-6 h-6 rounded-full flex-shrink-0"
+                style={{
+                  background: color || 'transparent',
+                  border: dominant ? 'none' : '1.5px dashed var(--color-muted)',
+                }}
+              />
+              <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>
+                {dominant ? dominant.coreEmotion : 'Log feeling'}
+              </span>
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Hover action buttons */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setArchiveTarget(project); }}
+          className="w-6 h-6 flex items-center justify-center rounded-lg"
+          style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+          title="Archive project"
+        >
+          {getIcon('archive', { size: 12 })}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
+          className="w-6 h-6 flex items-center justify-center rounded-lg"
+          style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+          title="Delete project"
+        >
+          {getIcon('trash', { size: 12 })}
+        </button>
+      </div>
+    </div>
+  );
 
   const handleCreate = async (data) => {
     const project = await create(data);
@@ -719,114 +847,18 @@ function ProjectList() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {projects.map((project) => (
-                <div
-                  key={project.id}
-                  draggable
-                  onDragStart={(e) => { setDraggedId(project.id); e.dataTransfer.effectAllowed = 'move'; }}
-                  onDragOver={(e) => { e.preventDefault(); if (project.id !== draggedId) setDragOverId(project.id); }}
-                  onDrop={(e) => { e.preventDefault(); handleDrop(project.id); }}
-                  onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                  className="relative group rounded-xl border overflow-hidden transition-all hover:shadow-sm"
-                  style={{
-                    opacity: draggedId === project.id ? 0.4 : 1,
-                    outline: dragOverId === project.id ? '2px solid var(--color-primary)' : 'none',
-                    background: 'var(--color-surface)',
-                    borderColor: 'var(--color-border)',
-                    cursor: 'grab',
-                  }}
-                >
-                  <button
-                    onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
-                    className="w-full text-left p-4"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
-                      >
-                        {getIcon('folder', { size: 15 })}
-                      </div>
-                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {new Date(project.updatedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3 className="font-medium text-sm mb-0.5 truncate" style={{ color: 'var(--color-text)' }}>
-                      {project.name}
-                    </h3>
-                    {project.clientName && (
-                      <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-primary)', opacity: 0.8 }}>{project.clientName}</p>
-                    )}
-                    {project.goal ? (
-                      <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
-                    ) : (
-                      <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      {project.model && (
-                        <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
-                          {getModelShortName(project.model)}
-                        </span>
-                      )}
-                      {project.chatCount > 0 && (
-                        <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                          {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Mood row — full width, own row at bottom of card */}
-                  {moodMap !== null && (() => {
-                    const dominant = moodMap[`project:${project.id}`];
-                    const color = dominant ? (EMOTION_COLOURS[dominant.coreEmotion] || '#888') : null;
-                    return (
-                      <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setFeelingModalProjectId(project.id); }}
-                          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
-                        >
-                          <span
-                            className="w-6 h-6 rounded-full flex-shrink-0"
-                            style={{
-                              background: color || 'transparent',
-                              border: dominant ? 'none' : '1.5px dashed var(--color-muted)',
-                            }}
-                          />
-                          <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>
-                            {dominant ? dominant.coreEmotion : 'Log feeling'}
-                          </span>
-                        </button>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Hover action buttons */}
-                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setArchiveTarget(project); }}
-                      className="w-6 h-6 flex items-center justify-center rounded-lg"
-                      style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-                      title="Archive project"
-                    >
-                      {getIcon('archive', { size: 12 })}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                      className="w-6 h-6 flex items-center justify-center rounded-lg"
-                      style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-                      title="Delete project"
-                    >
-                      {getIcon('trash', { size: 12 })}
-                    </button>
-                  </div>
+            {projectGroups.map((group) => (
+              <div key={group.id ?? 'flat'} className="mb-8 last:mb-0">
+                {group.name && (
+                  <h3 className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: 'var(--color-muted)' }}>
+                    {group.name} <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 'normal' }}>({group.projects.length})</span>
+                  </h3>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {group.projects.map(renderProjectCard)}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
 
             {/* View archived link */}
             {archivedProjects.length > 0 && (
