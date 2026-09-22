@@ -126,9 +126,11 @@ async function planGraphicsRequest(userId, transcript, catalog) {
     const match = raw.match(/\{[\s\S]*\}/);
     parsed = JSON.parse(match ? match[0] : raw);
   } catch {
+    console.warn(`[graphics-plan] user=${userId} model=${modelId} unparseable response: ${raw.slice(0, 500)}`);
     throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
   }
   if (!parsed || !Array.isArray(parsed.steps)) {
+    console.warn(`[graphics-plan] user=${userId} model=${modelId} no steps array in response: ${raw.slice(0, 500)}`);
     throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
   }
 
@@ -143,6 +145,10 @@ async function planGraphicsRequest(userId, transcript, catalog) {
       continue;
     }
     steps.push(validated);
+  }
+
+  if (!steps.length) {
+    console.warn(`[graphics-plan] user=${userId} model=${modelId} transcript="${text}" produced zero usable steps. Raw model output: ${raw.slice(0, 800)}`);
   }
 
   return { steps, droppedNotes };
