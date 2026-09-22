@@ -114,8 +114,13 @@ async function planGraphicsRequest(userId, transcript, catalog) {
   if (!text) throw new Error('Describe what you want to change');
   if (!Array.isArray(catalog) || !catalog.length) throw new Error('No plannable modes were provided');
 
+  // standard, not light — this is compound instruction-following over a multi-sentence request
+  // (parse several distinct intents, map each to the right mode, judge ambiguity), the same
+  // shape of task server/services/restyle/aiEdit.js uses standard for. light is tuned for
+  // simple/short classification (session summaries, suggestion chips) and was collapsing
+  // multi-part requests to zero steps instead of actually reasoning through them.
   const tiers = await getModelsForUser(userId);
-  const modelId = tiers.light || tiers.standard;
+  const modelId = tiers.standard || tiers.light;
   if (!modelId) throw new Error('No AI model is configured for this workspace yet — ask your admin to set one up in Settings.');
 
   const systemPrompt = buildSystemPrompt(catalog);
