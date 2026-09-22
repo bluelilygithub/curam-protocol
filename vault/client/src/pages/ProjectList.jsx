@@ -664,6 +664,7 @@ function ProjectList() {
         </div>
       ) : (
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="overflow-y-auto" style={{ maxHeight: recentSessions.length > 5 ? '300px' : 'none' }}>
           {recentSessions.map((s, i) => (
             <button
               key={s.sessionId}
@@ -700,6 +701,7 @@ function ProjectList() {
               </div>
             </button>
           ))}
+        </div>
         </div>
       )}
     </div>
@@ -854,8 +856,13 @@ function ProjectList() {
                     {group.name} <span style={{ opacity: 0.6, textTransform: 'none', letterSpacing: 'normal' }}>({group.projects.length})</span>
                   </h3>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {group.projects.map(renderProjectCard)}
+                <div
+                  className="overflow-y-auto pr-1"
+                  style={{ maxHeight: group.projects.length > 5 ? '400px' : 'none' }}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {group.projects.map(renderProjectCard)}
+                  </div>
                 </div>
               </div>
             ))}
