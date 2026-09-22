@@ -21,6 +21,7 @@ const enhance = require('./graphics/enhance');
 const compose = require('./graphics/compose');
 const retouch = require('./graphics/retouch');
 const analyse = require('./graphics/analyse');
+const plan = require('./graphics/plan');
 
 router.use(shared.router);
 router.use(create);
@@ -30,5 +31,6 @@ router.use(enhance);
 router.use(compose);
 router.use(retouch);
 router.use(analyse);
+router.use(plan);
 
 module.exports = router;

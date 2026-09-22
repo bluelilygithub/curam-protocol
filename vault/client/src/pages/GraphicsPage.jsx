@@ -4,6 +4,7 @@ import { useIcon } from '../providers/IconProvider';
 import IconLibraryGenerator from '../components/IconLibraryGenerator';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import GraphicsAskPanel from '../components/GraphicsAskPanel';
 import useProcessingStore from '../store/processingStore';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -2766,6 +2767,14 @@ export default function GraphicsPage() {
     setMode(targetMode);
   };
 
+  // Ask Graphics (plan checklist) hands a manual/mask step off here — same sendImageTo
+  // mechanism every result panel uses, plus prefilling the target mode's own prompt field
+  // where one exists (currently just inpaint) so the drafted text carries over.
+  const openPlanStepInMode = (targetMode, dataUrl, prefillPrompt) => {
+    sendImageTo(targetMode, dataUrl, 'ask-graphics.png');
+    if (targetMode === 'inpaint' && prefillPrompt) setInpaintPrompt(prefillPrompt);
+  };
+
   // Compact "Use result in…" dropdown shown in a result header.
   const renderSendTo = (dataUrl, name, excludeMode) => (
     <Tooltip text="Continue editing this result in another tool"><select
@@ -4120,6 +4129,8 @@ export default function GraphicsPage() {
           </div>
         )}
       </div>
+
+      <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} />
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         <aside className="w-full md:w-52 md:shrink-0 md:sticky md:top-6">
