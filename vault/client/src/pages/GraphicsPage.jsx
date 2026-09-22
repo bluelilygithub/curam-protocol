@@ -4052,13 +4052,13 @@ export default function GraphicsPage() {
           {graphicsInfo.show && (
             <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                Ten modes in the sidebar — split between generating new images and processing ones you already have:
+                Ten modes in the sidebar, covering the full lifecycle from a blank prompt to a production-ready asset set:
               </p>
               <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                <p style={{ color: 'var(--color-text)' }}><strong>Generate</strong> creates a new image from a text prompt via the admin-configured image model — the only mode that calls an AI image model directly (Icon Library also generates, as a themed set).</p>
-                <p style={{ color: 'var(--color-text)' }}><strong>Upscale</strong> and <strong>Background</strong> use AI (Replicate) to enlarge detail or remove/replace a background.</p>
-                <p style={{ color: 'var(--color-text)' }}><strong>Convert, Compress, Batch, Favicon, Export Social</strong> are deterministic image processing — format conversion, file-size reduction, bulk operations, icon sets, and multi-platform crop bundles. No AI call, so they're fast and free to re-run.</p>
-                <p style={{ color: 'var(--color-text)' }}><strong>SVG</strong> traces a raster image into scalable vector paths — best on logos, icons, and flat clipart, not photos.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Generate</strong> creates a new image from a text prompt via your admin-configured model — swap models workspace-wide without touching this page. <strong>Icon Library</strong> uses the same engine to produce a cohesive themed set in one pass, not ten separate prompts you have to keep consistent by hand.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Upscale</strong> is fidelity-first, not a blunt resize — a dedicated Replicate model reconstructs real detail at higher resolution, with a creativity dial for how far it's allowed to invent texture. <strong>Background</strong> removes or replaces a background with the same AI-grade precision, no manual masking.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>SVG</strong> vectorises a raster into genuine scalable paths — three detail presets (smooth/medium/detailed) and a 2–64 color count give real control over the fidelity/complexity trade-off, not a one-size-fits-all trace. Best on logos, icons, and flat clipart; photos come out stylised by nature of vector tracing, not as a limitation of this implementation.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Convert, Compress, Batch, Favicon, Export Social</strong> round out production: any format, real file-size savings, bulk runs, a full favicon/app-icon manifest from one image, and every social platform's crop size bundled as one ZIP. All deterministic — instant, no AI cost, safe to re-run as many times as you want.</p>
               </div>
             </ToolInfoModal>
           )}
