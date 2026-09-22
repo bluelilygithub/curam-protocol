@@ -37,35 +37,42 @@ export default function CrmInfoModal({ onClose }) {
 
         <div className="px-5 py-4 space-y-4">
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            Touchpoints, follow-ups, and tasks are three separate things that connect one specific way —
-            worth knowing up front so nothing feels hidden:
+            Seven sections on this page, each with a distinct job:
           </p>
 
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <p style={{ color: 'var(--color-text)' }}>
-              <strong>Touchpoints are a past-tense log.</strong> "I called them," "they emailed," "we met" —
-              logged after it happens. Filter the list by channel (the chips above it) using the same
-              type you picked when logging.
+              <strong>Info</strong> holds durable facts — ABN, an AdWords login, a reference number, custom
+              fields, client-level attachments, and the notes/how-they-work block. Edited in place, not
+              logged — this is reference info about the client, not a timestamped event.
             </p>
             <p style={{ color: 'var(--color-text)' }}>
-              <strong>"+ Follow up" turns one into a Task.</strong> Hover a touchpoint row, click it, add a
-              due date and a note, save. That's the only way a touchpoint becomes something scheduled —
-              touchpoints themselves never carry a due date.
+              <strong>Outstanding</strong> is a one-click "needs follow-up" flag on any activity — tick it
+              when logging, clear it here when handled. A flag, not a status workflow.
             </p>
             <p style={{ color: 'var(--color-text)' }}>
-              <strong>Tasks (below) show every open task for this client</strong> — whether linked through a
-              project or directly (like a follow-up). Open one from here or from the main Tasks page to add
-              a due date, attach a file, or export it to your calendar (.ics).
+              <strong>Activity is a past-tense log.</strong> "I called them," "they emailed," "we met" —
+              logged after it happens. Filter by channel using the same type you picked when logging.
             </p>
             <p style={{ color: 'var(--color-text)' }}>
-              <strong>Attachments</strong> live on individual touchpoints (📎 on hover) or on a task itself —
-              not on the client as a whole.
+              <strong>"+ Follow up" turns one activity into a Task.</strong> Hover a row, click it, add a due
+              date and a note, save. That's the only way an activity becomes something scheduled —
+              activities themselves never carry a due date. One direction only: it never turns back.
+            </p>
+            <p style={{ color: 'var(--color-text)' }}>
+              <strong>Deals, Contacts, and Projects</strong> are their own sections — pipeline stage, people
+              linked to this client, and any Vault projects tied to the account.
+            </p>
+            <p style={{ color: 'var(--color-text)' }}>
+              <strong>Tasks shows every open task for this client</strong> — whether linked through a project
+              or directly (like a follow-up). Open one from here or the main Tasks page to add a due date,
+              attach a file, or export it to your calendar (.ics).
+            </p>
+            <p style={{ color: 'var(--color-text)' }}>
+              <strong>Attachments</strong> live on the client itself (Info), on individual activities (📎 on
+              hover), or on a task — three separate places, by design.
             </p>
           </div>
-
-          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            One direction only: touchpoint → task. A task never turns back into a touchpoint.
-          </p>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
