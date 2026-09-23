@@ -139,3 +139,16 @@ POST /api/videos/library/:id/captions  `srtText` or `srt` file + style fields + 
 ## Feature flag
 
 `videos` in workspace **Feature Access** (Settings → admin). Default **on** for admins; members follow `featureAccess.videos`.
+
+---
+
+## Hardening notes (2026-09-23)
+
+- **Annotate position was silently ignored** — the Annotate submit handler appended `position` to the upload twice (once explicitly, once via `appendTextStyleFields`), which multer/express turns into an array instead of a string, so the server-side lookup always fell through to the `bottom-center` default. Fixed by removing the duplicate append; `captionStyleFromBody` also now defensively takes `array[0]` if a duplicate field ever recurs.
+- **Caption Studio 500 in production** (`[Parsed_subtitles_0] Unable to open .../captions.srt` from ffmpeg, file demonstrably written and awaited beforehand) — root cause not conclusively pinned from code alone. Added a pre-flight `fs.stat` check in `burnSubtitles()` right before the ffmpeg call so a genuine missing/empty/permission problem now throws a clear, specific error instead of surfacing as ffmpeg's opaque filter-init message — if it recurs, the new error text will say exactly what's wrong.
+- Fixed a duplicate `Outline=` key in `buildSubtitleForceStyle()`'s transparent-background branch (harmless to libass — last value wins — but was dead/confusing).
+- **SSRF DNS-rebinding gap** in `videoGenerateService.js`'s seed-image fetcher (`checkSsrf`/`fetchBinaryUrl`): DNS was resolved once to validate the IP, then the actual request re-resolved the hostname at connect time, so an attacker could rebind DNS between the check and the connect. Fixed by pinning the connection to the already-validated IP (with `Host`/TLS `servername` kept as the original hostname). Also added IPv4-mapped-IPv6 detection (`::ffff:127.0.0.1`).
+- Fixed a real bug in the same fetcher: `res.headers.get('content-type')` — Node's plain `http.IncomingMessage.headers` has no `.get()` method — was throwing on every URL-based seed-image fetch. Changed to `res.headers['content-type']`.
+- `escapeDrawtext()` now also escapes `%` (drawtext's `%{...}` expansion syntax), closing a filter-string injection path via user-supplied Annotate text.
+- `/join` and `/slideshow` now enforce an aggregate upload size cap (3× the per-file `VIDEO_MAX_UPLOAD_MB` limit) — previously only each individual file was capped, so e.g. 12 near-cap files on `/join` could buffer far more in RAM than intended (multer `memoryStorage`).
+- `videos.js` now uses the structured `getLogger()` logger instead of `console.error`, and reports ffmpeg-unavailable via `SuggestionService.captureIf()` on `/status`, per the project's logging/suggestions conventions.

@@ -2510,7 +2510,7 @@ export default function VideosPage() {
               </label>
             </div>
             <Tooltip text="Burn the styled text label into the video permanently.">
-              <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); fd.append('position', textPosition); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 Apply label
               </button>
             </Tooltip>

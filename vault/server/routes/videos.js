@@ -7,6 +7,8 @@ const fs = require('fs/promises');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
+const { getLogger } = require('../lib/logger');
+const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { saveAsset, listAssets, getAsset, deleteAsset } = require('../services/videoLibraryService');
 const {
   startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
@@ -111,6 +113,10 @@ function captionStyleFromBody(body) {
   const transparent = body?.backgroundTransparent === 'true'
     || body?.backgroundTransparent === true
     || body?.backgroundColor === 'transparent';
+  // A duplicated form field (same name appended twice) turns into an array
+  // under multer/express, which then fails a plain object-key lookup and
+  // silently falls back to the default — take the first value defensively.
+  const position = Array.isArray(body?.position) ? body.position[0] : body?.position;
   return {
     fontFamily: body?.fontFamily || 'Roboto',
     fontSize: Number(body?.fontSize) || 24,
@@ -118,7 +124,7 @@ function captionStyleFromBody(body) {
     fontWeight: body?.fontWeight || 'normal',
     backgroundColor: body?.backgroundColor || '#000000',
     backgroundTransparent: transparent,
-    position: body?.position || 'bottom-center',
+    position: position || 'bottom-center',
     outlineColor: body?.outlineColor || '#000000',
     outline: Number(body?.outline) || 1,
   };
@@ -128,6 +134,20 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_VIDEO_BYTES },
 });
+
+// multer's `fileSize` limit only caps each individual file — multi-file
+// routes (/join, /slideshow) buffer everything in RAM via memoryStorage,
+// so without this a request could still stack many near-cap files into one
+// oversized payload (e.g. 12 × 80MB on /join). Cap the total per request.
+const MAX_MULTI_UPLOAD_BYTES = MAX_VIDEO_BYTES * 3;
+function enforceAggregateUploadSize(res, files) {
+  const total = (files || []).reduce((sum, f) => sum + (f?.buffer?.length || 0), 0);
+  if (total > MAX_MULTI_UPLOAD_BYTES) {
+    res.status(413).json({ error: `Combined upload too large — total is capped at ${Math.floor(MAX_MULTI_UPLOAD_BYTES / (1024 * 1024))}MB` });
+    return false;
+  }
+  return true;
+}
 
 function defaultModelPath() {
   const os = require('os');
@@ -184,6 +204,16 @@ router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();
   const generate = getVideoGenerateConfig();
 
+  await captureIf(!ffmpeg, {
+    userId: req.user.id,
+    source: 'videoTools',
+    category: 'alert',
+    fingerprint: makeFingerprint('videoTools', 'ffmpeg-unavailable'),
+    title: 'Video Tools: ffmpeg not available',
+    body: 'checkFfmpeg() returned false on /api/videos/status — every ffmpeg-based tool (clip, join, convert, etc.) will 503. Check the ffmpeg binary/PATH on this deployment.',
+    context: 'server/routes/videos.js /status',
+  });
+
   let transcribe;
   if (runtimeConfig.isLocal) {
     transcribe = {
@@ -224,7 +254,7 @@ router.post('/youtube-preview', async (req, res) => {
       hasTranscript: Boolean(ref.transcriptExcerpt),
     });
   } catch (err) {
-    console.error('[videos/youtube-preview]', err.message);
+    getLogger().error({ err }, '[videos/youtube-preview]');
     res.status(400).json({ error: err.message });
   }
 });
@@ -238,7 +268,7 @@ router.post('/playback', async (req, res) => {
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(buffer);
   } catch (err) {
-    console.error('[videos/playback]', err.message);
+    getLogger().error({ err }, '[videos/playback]');
     res.status(400).json({ error: err.message });
   }
 });
@@ -248,7 +278,7 @@ router.get('/library', async (req, res) => {
     const items = await listAssets(req.user.id);
     res.json(items);
   } catch (err) {
-    console.error('[videos/library]', err.message);
+    getLogger().error({ err }, '[videos/library]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -268,7 +298,7 @@ router.post('/library', upload.single('file'), async (req, res) => {
     });
     res.status(201).json(item);
   } catch (err) {
-    console.error('[videos/library POST]', err.message);
+    getLogger().error({ err }, '[videos/library POST]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -282,7 +312,7 @@ router.get('/library/:id/stream', async (req, res) => {
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(buf);
   } catch (err) {
-    console.error('[videos/library/stream]', err.message);
+    getLogger().error({ err }, '[videos/library/stream]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -328,7 +358,7 @@ router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }
 
     sendVideoBuffer(res, buffer, 'captioned.mp4');
   } catch (err) {
-    console.error('[videos/library/captions]', err.message);
+    getLogger().error({ err }, '[videos/library/captions]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -339,7 +369,7 @@ router.delete('/library/:id', async (req, res) => {
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('[videos/library DELETE]', err.message);
+    getLogger().error({ err }, '[videos/library DELETE]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -367,7 +397,7 @@ router.get('/generate/status', async (req, res) => {
     if (polled.status === 'COMPLETED') forgetVideoJob(requestId);
     res.json(polled);
   } catch (err) {
-    console.error('[videos/generate/status]', err.message);
+    getLogger().error({ err }, '[videos/generate/status]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -415,7 +445,7 @@ router.post('/generate', async (req, res) => {
 
     res.json(started);
   } catch (err) {
-    console.error('[videos/generate]', err.message);
+    getLogger().error({ err }, '[videos/generate]');
     res.status(err.message.includes('not configured') ? 503 : 500).json({ error: err.message });
   }
 });
@@ -437,7 +467,7 @@ router.post('/probe', upload.single('video'), async (req, res) => {
       ...info,
     });
   } catch (err) {
-    console.error('[videos/probe]', err.message);
+    getLogger().error({ err }, '[videos/probe]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -465,7 +495,7 @@ router.post('/clip', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'clip.mp4');
   } catch (err) {
-    console.error('[videos/clip]', err.message);
+    getLogger().error({ err }, '[videos/clip]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -501,7 +531,7 @@ router.post('/clip-from-url', async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'clip.mp4');
   } catch (err) {
-    console.error('[videos/clip-from-url]', err.message);
+    getLogger().error({ err }, '[videos/clip-from-url]');
     res.status(400).json({ error: err.message });
   }
 });
@@ -526,7 +556,7 @@ router.post('/convert', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'converted.mp4');
   } catch (err) {
-    console.error('[videos/convert]', err.message);
+    getLogger().error({ err }, '[videos/convert]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -540,6 +570,7 @@ router.post('/join', upload.array('videos', 12), async (req, res) => {
     if (files.length < 2) {
       return res.status(400).json({ error: 'Upload at least two video files (field name: videos)' });
     }
+    if (!enforceAggregateUploadSize(res, files)) return;
 
     const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
     const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
@@ -568,7 +599,7 @@ router.post('/join', upload.array('videos', 12), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'joined.mp4');
   } catch (err) {
-    console.error('[videos/join]', err.message);
+    getLogger().error({ err }, '[videos/join]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -592,7 +623,7 @@ router.post('/reframe', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'reframed.mp4');
   } catch (err) {
-    console.error('[videos/reframe]', err.message);
+    getLogger().error({ err }, '[videos/reframe]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -631,7 +662,7 @@ router.post('/audio', upload.fields([
 
     sendVideoBuffer(res, buffer, mode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4');
   } catch (err) {
-    console.error('[videos/audio]', err.message);
+    getLogger().error({ err }, '[videos/audio]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -655,7 +686,7 @@ router.post('/speed', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'speed.mp4');
   } catch (err) {
-    console.error('[videos/speed]', err.message);
+    getLogger().error({ err }, '[videos/speed]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -691,7 +722,7 @@ router.post('/overlay', upload.fields([
 
     sendVideoBuffer(res, buffer, 'overlay.mp4');
   } catch (err) {
-    console.error('[videos/overlay]', err.message);
+    getLogger().error({ err }, '[videos/overlay]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -715,7 +746,7 @@ router.post('/extract-audio', upload.single('video'), async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.send(buffer);
   } catch (err) {
-    console.error('[videos/extract-audio]', err.message);
+    getLogger().error({ err }, '[videos/extract-audio]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -736,7 +767,7 @@ router.post('/thumbnail', upload.single('video'), async (req, res) => {
 
     sendImageBuffer(res, buffer);
   } catch (err) {
-    console.error('[videos/thumbnail]', err.message);
+    getLogger().error({ err }, '[videos/thumbnail]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -772,7 +803,7 @@ router.post('/annotate', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'annotated.mp4');
   } catch (err) {
-    console.error('[videos/annotate]', err.message);
+    getLogger().error({ err }, '[videos/annotate]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -810,7 +841,7 @@ router.post('/transcribe', upload.single('video'), async (req, res) => {
 
     res.json({ srt, source: 'gemini' });
   } catch (err) {
-    console.error('[videos/transcribe]', err.message);
+    getLogger().error({ err }, '[videos/transcribe]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -843,7 +874,7 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
 
     sendVideoBuffer(res, buffer, 'captioned.mp4');
   } catch (err) {
-    console.error('[videos/burn-captions]', err.message);
+    getLogger().error({ err }, '[videos/burn-captions]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -864,7 +895,7 @@ router.post('/normalize', upload.single('video'), async (req, res) => {
 
     sendVideoBuffer(res, buffer, 'normalized.mp4');
   } catch (err) {
-    console.error('[videos/normalize]', err.message);
+    getLogger().error({ err }, '[videos/normalize]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -891,7 +922,7 @@ router.post('/togif', upload.single('video'), async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.send(buffer);
   } catch (err) {
-    console.error('[videos/togif]', err.message);
+    getLogger().error({ err }, '[videos/togif]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -907,6 +938,7 @@ router.post('/slideshow', upload.fields([
     const images = req.files?.images || [];
     if (images.length < 2) return res.status(400).json({ error: 'Upload at least two images (field name: images)' });
     if (images.length > 20) return res.status(400).json({ error: 'Maximum 20 images' });
+    if (!enforceAggregateUploadSize(res, [...images, ...(req.files?.audio || [])])) return;
 
     const secondsPerSlide = req.body?.secondsPerSlide ? Number(req.body.secondsPerSlide) : 3;
     const aspect = req.body?.aspect || '9:16';
@@ -943,7 +975,7 @@ router.post('/slideshow', upload.fields([
 
     sendVideoBuffer(res, buffer, 'slideshow.mp4');
   } catch (err) {
-    console.error('[videos/slideshow]', err.message);
+    getLogger().error({ err }, '[videos/slideshow]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -1030,7 +1062,7 @@ router.post('/export-social', upload.single('video'), async (req, res) => {
       items: items.map(({ buffer, ...rest }) => rest),
     });
   } catch (err) {
-    console.error('[videos/export-social]', err.message);
+    getLogger().error({ err }, '[videos/export-social]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -1043,7 +1075,7 @@ router.get('/export-social/:exportId/file/:presetId', async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Preset not found in this export' });
     sendVideoBuffer(res, item.buffer, item.fileName);
   } catch (err) {
-    console.error('[videos/export-social/file]', err.message);
+    getLogger().error({ err }, '[videos/export-social/file]');
     res.status(500).json({ error: err.message });
   }
 });
@@ -1059,7 +1091,7 @@ router.get('/export-social/:exportId/zip', async (req, res) => {
 
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.on('error', (err) => {
-      console.error('[videos/export-social/zip]', err.message);
+      getLogger().error({ err }, '[videos/export-social/zip]');
       if (!res.headersSent) res.status(500);
       res.end();
     });
@@ -1067,7 +1099,7 @@ router.get('/export-social/:exportId/zip', async (req, res) => {
     entry.items.forEach((item) => archive.append(item.buffer, { name: item.fileName }));
     await archive.finalize();
   } catch (err) {
-    console.error('[videos/export-social/zip]', err.message);
+    getLogger().error({ err }, '[videos/export-social/zip]');
     if (!res.headersSent) res.status(500).json({ error: err.message });
     else res.end();
   }

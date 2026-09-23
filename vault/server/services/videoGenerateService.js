@@ -88,10 +88,14 @@ const ASPECT_MAP = {
 
 function isPrivateIp(ip) {
   if (ip === '::1') return true;
-  const lower = String(ip).toLowerCase();
+  let lower = String(ip).toLowerCase();
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1) — unwrap to the v4 form before checking
+  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) lower = mapped[1];
   if (lower.startsWith('fe80')) return true;
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-  const parts = String(ip).split('.').map(Number);
+  if (lower === '::' || lower === '0:0:0:0:0:0:0:0') return true;
+  const parts = lower.split('.').map(Number);
   if (parts.length !== 4 || parts.some(Number.isNaN)) return false;
   const [a, b] = parts;
   if (a === 127 || a === 10 || a === 0) return true;
@@ -101,12 +105,16 @@ function isPrivateIp(ip) {
   return false;
 }
 
+// Resolves DNS once, validates the IP, then hands back that SAME address for
+// the actual connection (caller must pin to it) — resolving again at connect
+// time would reopen a DNS-rebinding gap (attacker flips the record between
+// the check and the request).
 function checkSsrf(hostname) {
   return new Promise((resolve, reject) => {
     dns.lookup(hostname, (err, address) => {
       if (err) return reject(new Error('DNS lookup failed'));
       if (isPrivateIp(address)) return reject(new Error('URL resolves to a private or internal address'));
-      resolve();
+      resolve(address);
     });
   });
 }
@@ -124,14 +132,18 @@ function fetchBinaryUrl(url, redirectsLeft = 5) {
       return reject(new Error('Only http(s) image URLs are supported'));
     }
 
-    checkSsrf(parsed.hostname).then(() => {
+    checkSsrf(parsed.hostname).then((resolvedAddress) => {
       const mod = parsed.protocol === 'https:' ? https : http;
       const req = mod.request({
-        hostname: parsed.hostname,
+        // Connect to the address we just validated, not the hostname again —
+        // re-resolving here is exactly the DNS-rebinding gap this guard exists
+        // to close. Host header + TLS servername keep it looking like the URL.
+        hostname: resolvedAddress,
+        servername: parsed.protocol === 'https:' ? parsed.hostname : undefined,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
         method: 'GET',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaultVideo/1.0)', Accept: 'image/*,*/*' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaultVideo/1.0)', Accept: 'image/*,*/*', Host: parsed.hostname },
         timeout: 15000,
       }, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
@@ -153,7 +165,7 @@ function fetchBinaryUrl(url, redirectsLeft = 5) {
         });
         res.on('end', () => resolve({
           buffer: Buffer.concat(chunks),
-          contentType: res.headers.get('content-type') || 'image/jpeg',
+          contentType: res.headers['content-type'] || 'image/jpeg',
         }));
         res.on('error', reject);
       });

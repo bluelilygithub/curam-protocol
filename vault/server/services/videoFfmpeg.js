@@ -776,26 +776,30 @@ function buildSubtitleForceStyle({
   const outlineAss = hexToAssColor(outlineColor);
   const outlinePx = Math.min(6, Math.max(0, Number(outline) || 1));
   const alignment = resolveAssAlignment(position);
+  // Outline is set once here; the transparent branch below needs a slightly
+  // larger minimum (for legibility with no background box) but must NOT
+  // append a second `Outline=` — a duplicate key in the force_style string
+  // is harmless to libass (last wins) but is dead confusion, not intent.
   const base = [
     `FontName=${name}`,
     `FontSize=${Math.min(96, Math.max(10, Number(fontSize) || 24))}`,
     `PrimaryColour=${primary}`,
     `Alignment=${alignment}`,
     `OutlineColour=${outlineAss}`,
-    `Outline=${outlinePx}`,
     `Bold=${bold}`,
   ];
   if (backgroundTransparent) {
     return [
       ...base,
+      `Outline=${Math.max(2, outlinePx)}`,
       `BackColour=&HFF000000`,
       `BorderStyle=1`,
-      `Outline=${Math.max(2, outlinePx)}`,
     ].join(',');
   }
   const back = hexToAssColor(backgroundColor);
   return [
     ...base,
+    `Outline=${outlinePx}`,
     `BackColour=${back}`,
     `BorderStyle=3`,
   ].join(',');
@@ -804,6 +808,7 @@ function buildSubtitleForceStyle({
 function escapeDrawtext(text) {
   return String(text || '')
     .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
     .replace(/'/g, "'\\''")
     .replace(/:/g, '\\:')
     .slice(0, 120);
@@ -863,6 +868,21 @@ async function annotateVideo(inputPath, outputPath, {
 
 async function burnSubtitles(inputPath, srtPath, outputPath, style = {}, workDir) {
   await writeFontToDir(style.fontFamily || 'Roboto', style.fontWeight, workDir);
+  // The `subtitles` ffmpeg filter has been observed failing with "Unable to
+  // open <path>" in production against a file this same process just wrote
+  // and awaited — with no reproducible cause found in the escaping/ordering
+  // logic. Stat it right before handing the path to ffmpeg so a real
+  // missing/empty/permission problem surfaces as a clear error here instead
+  // of ffmpeg's opaque filter-init message.
+  let srtStat;
+  try {
+    srtStat = await fs.stat(srtPath);
+  } catch (err) {
+    throw new Error(`Caption file not found at ${srtPath} right before ffmpeg ran (${err.code || err.message})`);
+  }
+  if (!srtStat.size) {
+    throw new Error(`Caption file at ${srtPath} is empty`);
+  }
   const fontsDir = escapeFilterPath(workDir);
   const sub = escapeFilterPath(srtPath);
   const forceStyle = buildSubtitleForceStyle(style).replace(/'/g, "'\\''");
