@@ -846,6 +846,7 @@ export default function VideosPage() {
   const [tool, setTool] = useState('generate');
   const [search, setSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
+  const [providerInfoOpen, setProviderInfoOpen] = useState(false);
 
   const [sourceFile, setSourceFile] = useState(null);
   const [resultBlob, setResultBlob] = useState(null);
@@ -1750,17 +1751,22 @@ export default function VideosPage() {
               </p>
             )}
             {generateOk && (
-              <Tooltip text={status?.generate?.provider === 'fal'
-                ? 'No REPLICATE_API_TOKEN configured, so generation is running on FAL — its default model tends toward a more stylized/CGI look for humans. Add REPLICATE_API_TOKEN in Railway to switch to Replicate’s more photoreal Hailuo model.'
-                : 'Generation is running via Replicate.'}
-              >
-                <p className="text-xs rounded-xl border px-3 py-2 inline-flex items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                  Provider: <strong style={{ color: 'var(--color-text)' }}>{status?.generate?.provider === 'replicate' ? 'Replicate' : 'FAL'}</strong>
-                  <span>·</span>
-                  <span className="font-mono">{status?.generate?.model}</span>
-                  {status?.generate?.provider === 'fal' && <span style={{ color: '#f59e0b' }}>— add REPLICATE_API_TOKEN for more photoreal humans</span>}
-                </p>
-              </Tooltip>
+              <p className="text-xs rounded-xl border px-3 py-2 inline-flex items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                Provider: <strong style={{ color: 'var(--color-text)' }}>{status?.generate?.provider === 'replicate' ? 'Replicate' : 'FAL'}</strong>
+                <span>·</span>
+                <span className="font-mono">{status?.generate?.model}</span>
+                {status?.generate?.provider === 'fal' && <span style={{ color: '#f59e0b' }}>— add REPLICATE_API_TOKEN for more photoreal humans</span>}
+                <Tooltip text="What's the difference between these providers?">
+                  <button
+                    type="button"
+                    onClick={() => setProviderInfoOpen(true)}
+                    className="hover:opacity-60 transition-opacity flex-shrink-0"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {getIcon('help-circle', { size: 13 })}
+                  </button>
+                </Tooltip>
+              </p>
             )}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
@@ -3111,6 +3117,48 @@ export default function VideosPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {providerInfoOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setProviderInfoOpen(false)}
+        >
+          <div
+            className="rounded-2xl p-6 max-w-md w-full shadow-xl"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>FAL vs Replicate</h3>
+              <button
+                type="button"
+                onClick={() => setProviderInfoOpen(false)}
+                className="hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {getIcon('x', { size: 18 })}
+              </button>
+            </div>
+            <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>
+              Both are third-party hosts that run the same family of text-to-video models — this app doesn't train or run its own model. Which one you get depends only on which API key is configured on the server, checked in this order:
+            </p>
+            <ul className="space-y-2 text-sm mb-3" style={{ color: 'var(--color-text)' }}>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon('check', { size: 14 })}</span>
+                <span><strong>Replicate</strong> (used first, when <code>REPLICATE_API_TOKEN</code> is set) — runs <code className="font-mono text-xs">minimax/hailuo-2.3</code>, the mainline Hailuo model. Noticeably more photoreal for humans.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{getIcon('check', { size: 14 })}</span>
+                <span><strong>FAL</strong> (fallback, when only <code>FAL_API_KEY</code> is set) — runs <code className="font-mono text-xs">fal-ai/minimax/video-01-live</code>, a "live"/animation-oriented variant. Faster/cheaper for stylized motion graphics, but humans often come out looking cartoon/CGI.</span>
+              </li>
+            </ul>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Both are billed pay-per-generation by their respective providers, independent of each other and of this app. Set or remove <code>REPLICATE_API_TOKEN</code> in Railway to switch which one runs — no code change needed. The badge above always shows which one is actually active right now.
+            </p>
           </div>
         </div>
       )}
