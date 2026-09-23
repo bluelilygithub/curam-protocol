@@ -555,7 +555,7 @@ function ImageReferenceUpload({ file, previewUrl, onFile, onClear }) {
   );
 }
 
-function VideoUpload({ file, onFile, label = 'Video file' }) {
+function VideoUpload({ file, onFile, label = 'Video file', libraryItems = [], onPickLibrary }) {
   const inputRef = useRef(null);
   return (
     <label className="block space-y-1">
@@ -571,6 +571,25 @@ function VideoUpload({ file, onFile, label = 'Video file' }) {
             {file ? 'Change file' : 'Choose video'}
           </button>
         </Tooltip>
+        {onPickLibrary && libraryItems.length > 0 && (
+          <Tooltip text="Use a video already saved in your library instead of uploading a new file.">
+            <select
+              value=""
+              onChange={(e) => {
+                const item = libraryItems.find((i) => String(i.id) === e.target.value);
+                if (item) onPickLibrary(item);
+                e.target.value = '';
+              }}
+              className="px-2 py-2 rounded-xl border text-xs"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Or choose from library…</option>
+              {libraryItems.map((item) => (
+                <option key={item.id} value={item.id}>{item.title || `Video #${item.id}`}</option>
+              ))}
+            </select>
+          </Tooltip>
+        )}
         {file && (
           <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
             {file.name} · {formatBytes(file.size)}
@@ -1066,10 +1085,12 @@ export default function VideosPage() {
     }
   }, [addToast]);
 
+  // Loaded once (not per-tool) — VideoUpload's "or choose from library" picker
+  // needs the list on every single-file tool, not just Saved media/Caption studio.
   useEffect(() => {
     if (!canUse) return;
-    if (tool === 'saved-library' || tool === 'caption-studio') loadLibrary();
-  }, [canUse, tool, loadLibrary]);
+    loadLibrary();
+  }, [canUse, loadLibrary]);
 
   const saveToLibrary = useCallback(async ({
     title,
@@ -1125,6 +1146,26 @@ export default function VideosPage() {
       addToast(err.message, 'error');
     }
   }, [addToast]);
+
+  // Pull a saved library video down as a real File so it drops straight into
+  // the same sourceFile path every tool already uploads against — no server
+  // changes needed, no per-tool "or use a library id" branch to maintain.
+  const useLibraryItemAsSource = useCallback(async (item) => {
+    if (!item) return;
+    startProcessing('Loading from library…', '');
+    try {
+      const res = await api.get(item.streamUrl);
+      if (!res.ok) throw new Error('Could not load saved video');
+      const blob = await res.blob();
+      const file = new File([blob], `${item.title || 'video'}.mp4`, { type: blob.type || 'video/mp4' });
+      setSourceFile(file);
+      addToast('Loaded from library', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, addToast]);
 
   const previewLibraryItem = useCallback(async (item) => {
     startProcessing('Loading preview…', '');
@@ -1923,7 +1964,12 @@ export default function VideosPage() {
         )}
 
         {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
-          <VideoUpload file={sourceFile} onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }} />
+          <VideoUpload
+            file={sourceFile}
+            onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
+            libraryItems={tool === 'caption-studio' ? [] : libraryVideoItems}
+            onPickLibrary={tool === 'caption-studio' ? undefined : useLibraryItemAsSource}
+          />
         )}
 
         {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
@@ -2526,7 +2572,7 @@ export default function VideosPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Place a logo or image on top of the video. PNG with transparency works best.
             </p>
-            <VideoUpload file={sourceFile} onFile={setSourceFile} label="Video" />
+            <VideoUpload file={sourceFile} onFile={setSourceFile} label="Video" libraryItems={libraryVideoItems} onPickLibrary={useLibraryItemAsSource} />
             {previewUrl && (
               <video src={previewUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
             )}
