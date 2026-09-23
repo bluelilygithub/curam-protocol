@@ -415,6 +415,7 @@ router.post('/generate', async (req, res) => {
       seedImageMode,
       youtubeUrl,
       useYoutubeThumbnailAsSeed,
+      provider,
     } = req.body || {};
 
     const started = await startVideoGeneration(req.user.id, {
@@ -426,6 +427,7 @@ router.post('/generate', async (req, res) => {
       seedImageMode: seedImageMode === 'suggest' ? 'suggest' : 'animate',
       youtubeUrl: youtubeUrl?.trim() || '',
       useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
+      provider: provider === 'fal' || provider === 'replicate' ? provider : undefined,
     });
 
     rememberVideoJob(started.requestId, req.user.id, {

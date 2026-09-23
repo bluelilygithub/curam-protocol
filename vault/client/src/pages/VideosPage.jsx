@@ -847,6 +847,7 @@ export default function VideosPage() {
   const [search, setSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
   const [providerInfoOpen, setProviderInfoOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('');
 
   const [sourceFile, setSourceFile] = useState(null);
   const [resultBlob, setResultBlob] = useState(null);
@@ -1550,6 +1551,7 @@ export default function VideosPage() {
         seedImageMode,
         youtubeUrl: youtubeUrl.trim() || undefined,
         useYoutubeThumbnailAsSeed,
+        provider: selectedProvider || undefined,
       });
       const started = await res.json();
       if (!res.ok) throw new Error(started.error || 'Generate failed');
@@ -1750,24 +1752,51 @@ export default function VideosPage() {
                 Add <strong>REPLICATE_API_TOKEN</strong> or <strong>FAL_API_KEY</strong> in Railway. Replicate is preferred when both are set ({status?.generate?.provider || 'replicate'} · {status?.generate?.model || 'minimax/hailuo-2.3'}).
               </p>
             )}
-            {generateOk && (
-              <p className="text-xs rounded-xl border px-3 py-2 inline-flex items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                Provider: <strong style={{ color: 'var(--color-text)' }}>{status?.generate?.provider === 'replicate' ? 'Replicate' : 'FAL'}</strong>
-                <span>·</span>
-                <span className="font-mono">{status?.generate?.model}</span>
-                {status?.generate?.provider === 'fal' && <span style={{ color: '#f59e0b' }}>— add REPLICATE_API_TOKEN for more photoreal humans</span>}
-                <Tooltip text="What's the difference between these providers?">
-                  <button
-                    type="button"
-                    onClick={() => setProviderInfoOpen(true)}
-                    className="hover:opacity-60 transition-opacity flex-shrink-0"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
-                    {getIcon('help-circle', { size: 13 })}
-                  </button>
-                </Tooltip>
-              </p>
-            )}
+            {generateOk && (() => {
+              const avail = status?.generate?.availableProviders || {};
+              const bothAvailable = avail.replicate && avail.fal;
+              const activeProvider = bothAvailable
+                ? (selectedProvider || status?.generate?.provider)
+                : status?.generate?.provider;
+              const activeModel = status?.generate?.models?.[activeProvider] || status?.generate?.model;
+              return (
+                <p className="text-xs rounded-xl border px-3 py-2 flex flex-wrap items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  Provider:
+                  {bothAvailable ? (
+                    <Tooltip text="Both REPLICATE_API_TOKEN and FAL_API_KEY are configured — choose which one runs this generation.">
+                      <select
+                        value={activeProvider}
+                        onChange={(e) => setSelectedProvider(e.target.value)}
+                        className="px-2 py-1 rounded-lg border text-xs font-medium"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        <option value="replicate">Replicate</option>
+                        <option value="fal">FAL</option>
+                      </select>
+                    </Tooltip>
+                  ) : (
+                    <strong style={{ color: 'var(--color-text)' }}>{activeProvider === 'replicate' ? 'Replicate' : 'FAL'}</strong>
+                  )}
+                  <span>·</span>
+                  <span className="font-mono">{activeModel}</span>
+                  {activeProvider === 'fal' && (
+                    <span style={{ color: '#f59e0b' }}>
+                      {bothAvailable ? '— tends toward a stylized/CGI look for humans' : '— add REPLICATE_API_TOKEN for more photoreal humans'}
+                    </span>
+                  )}
+                  <Tooltip text="What's the difference between these providers?">
+                    <button
+                      type="button"
+                      onClick={() => setProviderInfoOpen(true)}
+                      className="hover:opacity-60 transition-opacity flex-shrink-0"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {getIcon('help-circle', { size: 13 })}
+                    </button>
+                  </Tooltip>
+                </p>
+              );
+            })()}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
               <Tooltip text="Describe the shot in plain language — the workspace's light model expands this into a full video prompt.">

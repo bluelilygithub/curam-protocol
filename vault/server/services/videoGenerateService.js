@@ -15,7 +15,12 @@ const DEFAULT_REPLICATE_VIDEO_MODEL = process.env.VIDEO_REPLICATE_MODEL || 'mini
 const DEFAULT_REPLICATE_VIDEO_I2V_MODEL = process.env.VIDEO_REPLICATE_I2V_MODEL || 'minimax/hailuo-2.3';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-function resolveVideoProvider() {
+// `preferred` is an optional PER-REQUEST override (the Create tool's provider
+// picker) — honoured only when that provider's key is actually configured,
+// so a request can't silently succeed against a provider that isn't set up.
+// `VIDEO_GENERATE_PROVIDER` remains a deploy-wide forced default and still
+// wins over the request when set, since that's an operator's hard choice.
+function resolveVideoProvider(preferred) {
   const forced = String(process.env.VIDEO_GENERATE_PROVIDER || '').trim().toLowerCase();
   if (forced === 'replicate') {
     if (!process.env.REPLICATE_API_TOKEN?.trim()) {
@@ -29,12 +34,19 @@ function resolveVideoProvider() {
     }
     return 'fal';
   }
+  const wanted = String(preferred || '').trim().toLowerCase();
+  if (wanted === 'replicate' && process.env.REPLICATE_API_TOKEN?.trim()) return 'replicate';
+  if (wanted === 'fal' && process.env.FAL_API_KEY?.trim()) return 'fal';
   if (process.env.REPLICATE_API_TOKEN?.trim()) return 'replicate';
   if (process.env.FAL_API_KEY?.trim()) return 'fal';
   throw new Error('Configure REPLICATE_API_TOKEN or FAL_API_KEY for video generation');
 }
 
 function getVideoGenerateConfig() {
+  const availableProviders = {
+    replicate: Boolean(process.env.REPLICATE_API_TOKEN?.trim()),
+    fal: Boolean(process.env.FAL_API_KEY?.trim()),
+  };
   try {
     const provider = resolveVideoProvider();
     return {
@@ -42,6 +54,11 @@ function getVideoGenerateConfig() {
       provider,
       model: provider === 'replicate' ? DEFAULT_REPLICATE_VIDEO_MODEL : DEFAULT_VIDEO_MODEL,
       imageToVideoModel: provider === 'replicate' ? DEFAULT_REPLICATE_VIDEO_I2V_MODEL : DEFAULT_VIDEO_I2V_MODEL,
+      availableProviders,
+      models: {
+        replicate: DEFAULT_REPLICATE_VIDEO_MODEL,
+        fal: DEFAULT_VIDEO_MODEL,
+      },
     };
   } catch {
     return {
@@ -49,6 +66,11 @@ function getVideoGenerateConfig() {
       provider: null,
       model: null,
       imageToVideoModel: null,
+      availableProviders,
+      models: {
+        replicate: DEFAULT_REPLICATE_VIDEO_MODEL,
+        fal: DEFAULT_VIDEO_MODEL,
+      },
     };
   }
 }
@@ -542,7 +564,7 @@ async function buildGenerationPayload(userId, options) {
 }
 
 async function startVideoGeneration(userId, options) {
-  const provider = resolveVideoProvider();
+  const provider = resolveVideoProvider(options.provider);
   const prepared = await buildGenerationPayload(userId, options);
   const shared = {
     provider,
