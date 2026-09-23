@@ -43,4 +43,32 @@ function calculateCost(modelId, inputTokens, outputTokens) {
   return cost;
 }
 
-module.exports = { calculateCost };
+// Video generation is billed per-clip, not per-token — flat USD estimate per
+// generation, keyed by the model id actually submitted to the provider.
+// Update as Replicate/FAL rates change. Duration-insensitive approximation
+// (Replicate hailuo-2.3 charges ~$0.017-$0.028/sec at 768p depending on
+// duration; FAL minimax video-01-live is a flat per-clip rate).
+const VIDEO_PRICING = {
+  'minimax/hailuo-2.3': 0.20,   // Replicate, ~6-10s clip at 768p
+  'fal-ai/minimax/video-01-live': 0.50,
+  'fal-ai/minimax/video-01-live/image-to-video': 0.50,
+};
+
+function lookupVideoBySubstring(modelId) {
+  const id = String(modelId || '').toLowerCase();
+  if (id.includes('hailuo')) return 0.20;
+  if (id.includes('minimax')) return 0.50;
+  return 0.30; // safe generic fallback
+}
+
+/**
+ * Estimated flat USD cost for one video generation.
+ * @param {string} modelId
+ * @returns {number} cost in USD
+ */
+function calculateVideoCost(modelId) {
+  if (VIDEO_PRICING[modelId] != null) return VIDEO_PRICING[modelId];
+  return lookupVideoBySubstring(modelId);
+}
+
+module.exports = { calculateCost, calculateVideoCost };

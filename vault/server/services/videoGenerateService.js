@@ -6,6 +6,7 @@ const https = require('https');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const { calculateCost, calculateVideoCost } = require('./costCalculator');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { fetchYoutubeReference } = require('./youtubeTranscript');
 
@@ -360,6 +361,11 @@ Return JSON:
   return {
     video_prompt: parsed?.video_prompt || userBrief,
     negative_prompt: parsed?.negative_prompt || '',
+    promptUsage: {
+      model: result.model,
+      inputTokens: result.inputTokens || 0,
+      outputTokens: result.outputTokens || 0,
+    },
   };
 }
 
@@ -549,6 +555,7 @@ async function buildGenerationPayload(userId, options) {
     expanded,
     dims,
     durationSec: replicateDuration(durationSec || body.duration),
+    promptUsage: expanded.promptUsage,
     references: {
       seedImageMode: seedImageDataUrl ? effectiveSeedMode : null,
       youtube: youtubeRef ? {
@@ -576,6 +583,7 @@ async function startVideoGeneration(userId, options) {
     height: prepared.dims.height,
     durationSec: prepared.durationSec,
     references: prepared.references,
+    promptUsage: prepared.promptUsage,
     status: 'IN_QUEUE',
   };
 
@@ -610,6 +618,25 @@ async function startVideoGeneration(userId, options) {
   };
 }
 
+function buildGenerationUsage(preparedMeta) {
+  const promptUsage = preparedMeta.promptUsage || {};
+  const promptInputTokens = promptUsage.inputTokens || 0;
+  const promptOutputTokens = promptUsage.outputTokens || 0;
+  const promptCostUsd = promptUsage.model
+    ? calculateCost(promptUsage.model, promptInputTokens, promptOutputTokens)
+    : 0;
+  const videoCostUsd = calculateVideoCost(preparedMeta.model);
+  return {
+    promptModel: promptUsage.model || null,
+    promptInputTokens,
+    promptOutputTokens,
+    promptTokens: promptInputTokens + promptOutputTokens,
+    promptCostUsd,
+    videoCostUsd,
+    totalEstimatedCostUsd: promptCostUsd + videoCostUsd,
+  };
+}
+
 async function finalizeVideoResult(preparedMeta, falResult) {
   const videoUrl = resolveVideoUrl(falResult);
   if (!videoUrl) throw new Error('Video provider did not return a video URL');
@@ -630,6 +657,7 @@ async function finalizeVideoResult(preparedMeta, falResult) {
     ...preparedMeta,
     videoUrl,
     inline,
+    usage: buildGenerationUsage(preparedMeta),
     status: 'COMPLETED',
   };
 }
@@ -703,6 +731,7 @@ async function generateVideo(userId, options) {
       pollUrl: started.pollUrl,
       meta: {
         provider: started.provider,
+        model: started.model,
         endpoint: started.endpoint,
         mode: started.mode,
         video_prompt: started.video_prompt,
@@ -712,6 +741,7 @@ async function generateVideo(userId, options) {
         height: started.height,
         durationSec: started.durationSec,
         references: started.references,
+        promptUsage: started.promptUsage,
       },
     });
     if (polled.status === 'COMPLETED') return polled;

@@ -443,6 +443,7 @@ router.post('/generate', async (req, res) => {
       height: started.height,
       durationSec: started.durationSec,
       references: started.references,
+      promptUsage: started.promptUsage,
     });
 
     res.json(started);

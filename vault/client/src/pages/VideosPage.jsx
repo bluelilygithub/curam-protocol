@@ -1603,7 +1603,11 @@ export default function VideosPage() {
         mode: completed.mode,
         provider: completed.provider || started.provider,
       });
-      addToast(completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated', 'success');
+      const usage = completed.usage;
+      const usageSuffix = usage
+        ? ` — ${usage.promptTokens.toLocaleString()} tokens, ~$${usage.totalEstimatedCostUsd.toFixed(3)}`
+        : '';
+      addToast((completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated') + usageSuffix, 'success');
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -1979,6 +1983,12 @@ export default function VideosPage() {
                 )}
                 {generateResult.references?.youtube && (
                   <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>YouTube ref:</span> {generateResult.references.youtube.title}</p>
+                )}
+                {generateResult.usage && (
+                  <p style={{ color: 'var(--color-muted)' }}>
+                    <span className="font-medium" style={{ color: 'var(--color-text)' }}>Usage:</span>{' '}
+                    {generateResult.usage.promptTokens.toLocaleString()} tokens (prompt) · ~${generateResult.usage.totalEstimatedCostUsd.toFixed(3)} estimated total
+                  </p>
                 )}
               </div>
             )}
