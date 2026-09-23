@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
 import { useIcon } from '../providers/IconProvider';
+import useProcessingStore from '../store/processingStore';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -3036,6 +3037,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 
 function AssetsTab() {
   const addToast = useToastStore(s => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [assets, setAssets] = useState([]);
   const [form, setForm] = useState({ datePurchased: todayStr(), dateFirstUsed: todayStr(), description: '', amount: '', gstIncluded: true, businessUsePercent: '100', method: '', effectiveLifeYears: '', paidViaId: null });
   const [paymentAccounts, setPaymentAccounts] = useState([]);
@@ -3159,6 +3161,7 @@ function AssetsTab() {
 
   const runDepreciation = async () => {
     setRunning(true);
+    startProcessing(`Running FY${previewFy} depreciation…`, 'Posting journal entries for every asset due — please don\'t navigate away.');
     try {
       const res = await api.post('/api/finance/assets/depreciation/run', { fy: previewFy });
       const body = await res.json();
@@ -3166,7 +3169,7 @@ function AssetsTab() {
       addToast(`Depreciation posted for ${body.posted.length} asset${body.posted.length === 1 ? '' : 's'}, FY${previewFy}`);
       setPreview(null);
       load();
-    } catch (e) { addToast(e.message, 'error'); } finally { setRunning(false); }
+    } catch (e) { addToast(e.message, 'error'); } finally { setRunning(false); stopProcessing(); }
   };
 
   const activeAssets = assets.filter(a => !a.disposedDate);
@@ -5093,6 +5096,7 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
   const [accountMap, setAccountMap]         = useState(null); // null while loading
   const [totalAccounts, setTotalAccounts]   = useState(0);
   const addToast = useToastStore(s => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
 
   const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : type === 'sheets' ? 'Google Sheets' : 'Excel';
   const cutoffBlocked = minFrom && from < minFrom;
@@ -5120,6 +5124,7 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
 
   const handleExport = async () => {
     setLoading(true);
+    startProcessing(`Building your ${typeName} export…`, 'Please don\'t navigate away while this generates.');
     try {
       const params = new URLSearchParams({ from, to });
       const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : type === 'sheets' ? 'sheets' : 'excel';
@@ -5148,6 +5153,7 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
       setStage('setup');
     } finally {
       setLoading(false);
+      stopProcessing();
     }
   };
 

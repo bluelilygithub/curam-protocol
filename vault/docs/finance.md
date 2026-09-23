@@ -177,7 +177,20 @@ Also under the Reports tab ("Charts" sub-tab). Three plain inline-SVG charts, no
 
 The shared `Tooltip` component (`client/src/components/Tooltip.jsx`) is used on every new control introduced by this work (Drawings, Vehicle/Home Office calculators, capital-asset checkbox, all four Reports' date pickers and export buttons) plus a pass over the most safety-critical existing controls (Wages net-pay field, BAS cash-basis area, and the ABN/GST-registered/bank-detail/payment-terms Settings fields). Full exhaustive coverage of every existing control across Invoices/Clients/Suppliers/Codes/Accounts was not attempted in this pass — flagged as a follow-up.
 
+## Maintenance endpoint — `POST /assets/cleanup-orphaned-journal-entries`
+
+Deletes `fin_journal_entries`/`fin_journal_lines` rows left behind from before every asset create/delete path deleted its own journal entry directly (see `deleteJournalForSource`) — a mop-up for pre-existing data, not part of the normal asset lifecycle. Not exposed anywhere in `FinancePage.jsx` — call it directly if a user reports leftover asset-purchase/depreciation/disposal journal lines with no matching asset.
+
+**Source-id convention it depends on, and a bug this fixed**: `asset_purchase`/`asset_disposal` journal entries carry `sourceId = fin_assets.id`, but `depreciation` entries carry `sourceId = fin_expenses.id` (the depreciation expense row created alongside them) — the two source tables must never be checked against the same `fin_assets` existence test. An earlier version of this route did exactly that, which meant every `depreciation` entry read as "orphaned" the instant no asset happened to share that numeric id with the expense row — i.e. essentially always. Fixed to check `depreciation` rows against `fin_expenses` instead. Deleted rows are now logged (date/description/type/sourceId, via `getLogger().warn`) before removal, since this delete has no other audit trail.
+
+## Suggestions inbox coverage
+
+`finance.js` now calls `SuggestionService.captureIf()` directly (previously only the `financeRemindersCron.js` annual vehicle/home-office nudge did):
+
+- **`GET /bas`** — flags a quarter still `status='open'` more than 28 days (the standard lodgement-deadline window) past its `to_date`.
+- **`GET /assets/depreciation/preview`** — flags when the queried FY ended more than 90 days ago and assets still have no depreciation posted for it (the annual run was likely forgotten).
+- **`POST /invoices/:id/send`** (catch path) — flags an invoice/quote whose send has now failed twice within 24 hours (bad recipient address, provider outage), rather than only writing to `fin_invoice_send_log`.
+
 ## Deliberately out of scope
 
 - **Accrual-basis GST** — only cash-basis is implemented; a disclosure note is shown instead.
-- **Depreciation schedules** — the capital-asset flag only *flags and calls out* a purchase; it does not calculate depreciation or write an asset register.

@@ -41,6 +41,8 @@ const receiptUpload = multer({
   },
 });
 const { pool } = require('../db');
+const { getLogger } = require('../middleware/requestContext');
+const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 
 async function getWorkspaceTimezone() {
   try {
@@ -787,6 +789,9 @@ router.post('/invoices/:id/send', async (req, res) => {
     const invoiceId = req.params.id;
     const overrideTo = req.body.to || null;
     const message    = (req.body.message || '').trim();
+    if (overrideTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(overrideTo)) {
+      return res.status(400).json({ error: 'Invalid email address in "to"' });
+    }
 
     // Load invoice + items + client
     const { rows } = await pool.query(
@@ -855,9 +860,9 @@ router.post('/invoices/:id/send', async (req, res) => {
     const bankSection = (cfg.fin_bank_name || cfg.fin_bsb || cfg.fin_account_number) ? `
       <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
         <p style="margin:0 0 8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Payment Details</p>
-        ${cfg.fin_bank_name    ? `<p style="margin:0 0 4px;font-size:13px;color:#374151;">Bank: ${cfg.fin_bank_name}</p>` : ''}
-        ${cfg.fin_bsb          ? `<p style="margin:0 0 4px;font-size:13px;color:#374151;">BSB: ${cfg.fin_bsb}</p>` : ''}
-        ${cfg.fin_account_number ? `<p style="margin:0;font-size:13px;color:#374151;">Account: ${cfg.fin_account_number}</p>` : ''}
+        ${cfg.fin_bank_name    ? `<p style="margin:0 0 4px;font-size:13px;color:#374151;">Bank: ${escHtml(cfg.fin_bank_name)}</p>` : ''}
+        ${cfg.fin_bsb          ? `<p style="margin:0 0 4px;font-size:13px;color:#374151;">BSB: ${escHtml(cfg.fin_bsb)}</p>` : ''}
+        ${cfg.fin_account_number ? `<p style="margin:0;font-size:13px;color:#374151;">Account: ${escHtml(cfg.fin_account_number)}</p>` : ''}
       </div>` : '';
 
     const isQuote    = inv.docType === 'quote';
@@ -883,7 +888,7 @@ router.post('/invoices/:id/send', async (req, res) => {
         </td>` : ''}
         <td valign="middle" style="padding:20px 28px;">
           <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">${docLabel}: ${inv.number}</h1>
-          ${cfg.fin_biz_name ? `<p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">${cfg.fin_biz_name}</p>` : ''}
+          ${cfg.fin_biz_name ? `<p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">${escHtml(cfg.fin_biz_name)}</p>` : ''}
         </td>
       </tr>
     </table>
@@ -892,9 +897,9 @@ router.post('/invoices/:id/send', async (req, res) => {
       <!-- Row 1: who the document is for -->
       <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;">${addrLabel}</p>
-        <p style="margin:0;font-size:16px;font-weight:600;color:#1f2937;">${inv.clientName || ''}</p>
-        ${inv.clientAddress ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">${inv.clientAddress}</p>` : ''}
-        ${inv.clientAbn     ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">ABN ${inv.clientAbn}</p>` : ''}
+        <p style="margin:0;font-size:16px;font-weight:600;color:#1f2937;">${escHtml(inv.clientName || '')}</p>
+        ${inv.clientAddress ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">${escHtml(inv.clientAddress)}</p>` : ''}
+        ${inv.clientAbn     ? `<p style="margin:2px 0 0;font-size:13px;color:#6b7280;">ABN ${escHtml(inv.clientAbn)}</p>` : ''}
       </div>
       <!-- Row 2: dates as labelled blocks in a horizontal strip -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
@@ -941,11 +946,11 @@ router.post('/invoices/:id/send', async (req, res) => {
         </table>
       </div>
 
-      ${inv.notes ? `<p style="margin-top:20px;font-size:13px;color:#6b7280;">${inv.notes}</p>` : ''}
+      ${inv.notes ? `<p style="margin-top:20px;font-size:13px;color:#6b7280;">${escHtml(inv.notes)}</p>` : ''}
       ${bankSection}
     </div>
     <div style="padding:16px 32px;background:#f9fafb;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;">
-      ${cfg.fin_biz_name || ''}${cfg.fin_address ? ` &nbsp;·&nbsp; ${cfg.fin_address}` : ''}
+      ${escHtml(cfg.fin_biz_name || '')}${cfg.fin_address ? ` &nbsp;·&nbsp; ${escHtml(cfg.fin_address)}` : ''}
     </div>
   </div>
 </body>
@@ -994,6 +999,25 @@ router.post('/invoices/:id/send', async (req, res) => {
          VALUES ($1,$2,$3,$4,$5,FALSE,$6)`,
         [invoiceId, userId, to, adminEmail || null, !!pdfAttachment, sendErr.message]
       ).catch(() => {});
+
+      // Repeated send failures for the same invoice are a real anomaly (bad client email,
+      // provider outage) worth surfacing rather than only logging — check for a prior failure
+      // in the last 24h before this one.
+      const { rows: recentFails } = await pool.query(
+        `SELECT COUNT(*) AS n FROM fin_invoice_send_log
+         WHERE "invoiceId"=$1 AND "userId"=$2 AND ok=FALSE AND "sentAt" > NOW() - INTERVAL '24 hours'`,
+        [invoiceId, userId]
+      ).catch(() => ({ rows: [{ n: 0 }] }));
+      await captureIf(Number(recentFails[0]?.n || 0) >= 2, {
+        userId,
+        source: 'financeInvoiceSend',
+        category: 'alert',
+        fingerprint: makeFingerprint('financeInvoiceSend', `repeated-fail:${invoiceId}`),
+        title: `${docLabel} ${inv.number} has failed to send more than once`,
+        body: `Send to ${to} keeps failing (latest error: ${sendErr.message}). Check the recipient address and email provider config.`,
+        context: `Finance → ${isQuote ? 'Quotes' : 'Invoices'} → ${inv.number}`,
+      });
+
       throw sendErr;
     }
 
@@ -1563,7 +1587,7 @@ router.post('/expenses/:id/cc-pay', async (req, res) => {
       ],
     });
 
-    await dbClient.query(`UPDATE fin_expenses SET "ccSettled"=true WHERE id=$1`, [req.params.id]);
+    await dbClient.query(`UPDATE fin_expenses SET "ccSettled"=true WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
     await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
@@ -2700,7 +2724,7 @@ router.post('/assets/:id/cc-pay', async (req, res) => {
         { accountId: bankId, debit: 0, credit: totalCharged },
       ],
     });
-    await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "updatedAt"=NOW() WHERE id=$1`, [asset.id]);
+    await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`, [asset.id, userId]);
     await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
@@ -2985,18 +3009,38 @@ router.post('/assets/:id/dispose', async (req, res) => {
 // 'asset_purchase' journal entry. Safe by construction: only ever deletes an asset-sourced
 // journal entry whose sourceId has NO matching fin_assets row left — a still-valid asset's
 // entries are never touched, regardless of how many times this is called.
+// Maintenance-only: deletes journal entries left behind when an asset (or, for
+// depreciation, the expense row it posted) was removed without its journal entry
+// being cleaned up in the same transaction. 'asset_purchase'/'asset_disposal' entries
+// carry sourceId = fin_assets.id; 'depreciation' entries carry sourceId = fin_expenses.id
+// (the depreciation expense row created alongside it) — these two source tables must
+// never be conflated, or every depreciation entry reads as orphaned the moment no asset
+// happens to share that numeric id. Every asset/disposal create-or-delete path already
+// deletes its own journal entry directly (see deleteJournalForSource); this endpoint only
+// mops up rows from before that guarantee existed. Deleted rows are logged (date/description/
+// sourceId) before removal since there is no other audit trail for this delete.
 router.post('/assets/cleanup-orphaned-journal-entries', async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const { rows: orphaned } = await dbClient.query(
-      `SELECT id FROM fin_journal_entries
-       WHERE "userId"=$1 AND type IN ('asset_purchase','depreciation','asset_disposal')
-         AND "sourceId" IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM fin_assets fa WHERE fa.id = fin_journal_entries."sourceId")`,
+      `SELECT id, date, description, type, "sourceId" FROM fin_journal_entries
+       WHERE "userId"=$1 AND (
+         (type IN ('asset_purchase','asset_disposal') AND "sourceId" IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM fin_assets fa WHERE fa.id = fin_journal_entries."sourceId"))
+         OR
+         (type = 'depreciation' AND "sourceId" IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM fin_expenses fe WHERE fe.id = fin_journal_entries."sourceId"))
+       )`,
       [userId]
     );
+    if (orphaned.length) {
+      getLogger().warn(
+        { userId, deleted: orphaned.map(r => ({ id: r.id, date: r.date, description: r.description, type: r.type, sourceId: r.sourceId })) },
+        'finance: cleanup-orphaned-journal-entries deleting rows'
+      );
+    }
     for (const row of orphaned) {
       await dbClient.query(`DELETE FROM fin_journal_lines WHERE "entryId"=$1`, [row.id]);
       await dbClient.query(`DELETE FROM fin_journal_entries WHERE id=$1`, [row.id]);
@@ -3026,6 +3070,22 @@ router.get('/assets/depreciation/preview', async (req, res) => {
       .map(a => ({ asset: a, calc: computeAssetYearDepreciation(a, fy) }))
       .filter(r => r.calc)
       .map(r => ({ id: r.asset.id, description: r.asset.description, decline: r.calc.decline, deduction: r.calc.deduction }));
+
+    // If the queried FY ended more than 90 days ago and there's still unposted depreciation
+    // for it, the annual run was likely forgotten — flag it rather than only showing a preview
+    // nobody asked to see proactively.
+    const fyEnd = new Date(`${parseInt(fy.slice(0, 4), 10) + 1}-06-30T00:00:00Z`);
+    const daysPastFyEnd = Math.floor((Date.now() - fyEnd.getTime()) / 86400000);
+    await captureIf(preview.length > 0 && daysPastFyEnd > 90, {
+      userId: req.user.id,
+      source: 'financeDepreciation',
+      category: 'alert',
+      fingerprint: makeFingerprint('financeDepreciation', `unposted:${fy}`),
+      title: `${preview.length} asset${preview.length === 1 ? '' : 's'} missing FY${fy} depreciation`,
+      body: `FY${fy} ended over ${daysPastFyEnd} days ago and ${preview.length} asset${preview.length === 1 ? '' : 's'} still ${preview.length === 1 ? 'has' : 'have'} no depreciation posted for it. Go to Finance → Assets and run depreciation for FY${fy}.`,
+      context: 'Finance → Assets',
+    });
+
     res.json(preview);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3252,6 +3312,20 @@ router.get('/bas', async (req, res) => {
       [userId, from, to]
     );
     const quarter = qRows[0];
+
+    // A BAS-lodgement deadline is 28 days after quarter end. Flag a quarter still 'open'
+    // (never even reconciled) once that's passed — the one place this route can detect the
+    // anomaly itself, per the mandatory SuggestionService rule.
+    const daysPastDue = Math.floor((Date.now() - new Date(`${to}T00:00:00Z`).getTime()) / 86400000) - 28;
+    await captureIf(quarter.status === 'open' && daysPastDue > 0, {
+      userId,
+      source: 'financeBas',
+      category: 'alert',
+      fingerprint: makeFingerprint('financeBas', `unreconciled:${quarter.id}`),
+      title: `BAS quarter ${from} to ${to} is overdue and unreconciled`,
+      body: `Quarter ended ${to}, lodgement due 28 days later. It is ${daysPastDue} day${daysPastDue === 1 ? '' : 's'} past that deadline and still hasn't been reconciled. Go to Finance → BAS to review and reconcile.`,
+      context: 'Finance → BAS',
+    });
 
     res.json({
       from,
