@@ -1749,6 +1749,19 @@ export default function VideosPage() {
                 Add <strong>REPLICATE_API_TOKEN</strong> or <strong>FAL_API_KEY</strong> in Railway. Replicate is preferred when both are set ({status?.generate?.provider || 'replicate'} · {status?.generate?.model || 'minimax/hailuo-2.3'}).
               </p>
             )}
+            {generateOk && (
+              <Tooltip text={status?.generate?.provider === 'fal'
+                ? 'No REPLICATE_API_TOKEN configured, so generation is running on FAL — its default model tends toward a more stylized/CGI look for humans. Add REPLICATE_API_TOKEN in Railway to switch to Replicate’s more photoreal Hailuo model.'
+                : 'Generation is running via Replicate.'}
+              >
+                <p className="text-xs rounded-xl border px-3 py-2 inline-flex items-center gap-1.5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                  Provider: <strong style={{ color: 'var(--color-text)' }}>{status?.generate?.provider === 'replicate' ? 'Replicate' : 'FAL'}</strong>
+                  <span>·</span>
+                  <span className="font-mono">{status?.generate?.model}</span>
+                  {status?.generate?.provider === 'fal' && <span style={{ color: '#f59e0b' }}>— add REPLICATE_API_TOKEN for more photoreal humans</span>}
+                </p>
+              </Tooltip>
+            )}
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
               <Tooltip text="Describe the shot in plain language — the workspace's light model expands this into a full video prompt.">
