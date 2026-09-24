@@ -170,7 +170,11 @@ function RunLog({ runId }) {
     <ol className="mt-2 space-y-1 text-xs">
       {entries.map((e, i) => (
         <li key={i} style={{ color: e.kind === 'error' ? '#ef4444' : e.kind === 'guard' ? '#9a5a12' : 'var(--color-muted)' }}>
-          <ReactMarkdown components={MD_COMPONENTS}>{e.text}</ReactMarkdown>
+          {e.kind === 'error_screenshot' ? (
+            <img src={e.text} alt="Page at time of error" className="rounded-lg border w-full mt-1" style={{ borderColor: 'var(--color-border)' }} />
+          ) : (
+            <ReactMarkdown components={MD_COMPONENTS}>{e.text}</ReactMarkdown>
+          )}
         </li>
       ))}
     </ol>

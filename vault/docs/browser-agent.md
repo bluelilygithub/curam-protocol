@@ -21,6 +21,15 @@ The password is **never sent to the model or the Anthropic API**. The `fill_logi
 
 Login/sign-in submit buttons are blocked by the same `isSubmitLike()` guard as every other submit button — `fill_login` only fills the form, it never signs in on its own.
 
+## Robustness features
+
+- **Retry + faster recovery** — `click`/`type` retry once after a transient Playwright timeout (`withRetry`, common on React/Vue sites that redraw right after an action). A "No element with ref" failure now hands the model a fresh snapshot inline instead of costing it an extra turn.
+- **Screenshot on error** — any tool error captures the current page as a JPEG, archived as an `error_screenshot` log entry (rendered inline in both the live log and Archive).
+- **Multi-tab awareness** — new tabs (OAuth popups, payment redirects, "view" links) stay open and tracked (`this.pages`) instead of being force-merged into the main tab. `list_tabs` / `switch_tab` let the model see and move between them; the live screencast follows the active tab.
+- **Live cost/turn readout** — a `usage` WS message after every model turn (`{turn, maxTurns, inputTokens, outputTokens, costUsd}`) shown in the turn bar, using the same "hardcoded price table for cost display only" exception as `costCalculator.js`.
+- **Per-run domain allowlist** — an optional field on the instruction box restricts `navigate` to one domain (and its subdomains) for that run.
+- **Idle timeout** — a Chromium context with no WS activity for 10 minutes is closed to free resources; conversation memory (`this.messages`) survives, the next instruction just reopens the browser.
+
 ## Known limits (carried over from the reviewed original, not yet hardened further)
 
 - The POST guard only catches `document`/`xhr`/`fetch` resource types — a GET-based form submit or `navigator.sendBeacon` isn't blocked by it. Narrow edge case, not the common path.

@@ -36,6 +36,8 @@ export default function BrowserAgentPage() {
   const [answer, setAnswer] = useState('');
   const [connected, setConnected] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [allowedDomain, setAllowedDomain] = useState('');
+  const [usage, setUsage] = useState(null); // { turn, maxTurns, inputTokens, outputTokens, costUsd }
 
   const wsRef = useRef(null);
   const imgRef = useRef(null);
@@ -97,6 +99,9 @@ export default function BrowserAgentPage() {
           setLog((prev) => [...prev, { kind: 'error', text: m.text }]);
         } else if (m.type === 'session_cleared') {
           setLog([]);
+          setUsage(null);
+        } else if (m.type === 'usage') {
+          setUsage(m);
         }
       };
     }
@@ -119,7 +124,8 @@ export default function BrowserAgentPage() {
     // (kind: 'user') for the instruction, so it isn't added here too.
     setLog([]);
     setScrollFrac(0.5);
-    send({ type: 'start', instruction: instruction.trim() });
+    setUsage(null);
+    send({ type: 'start', instruction: instruction.trim(), allowedDomain: allowedDomain.trim() || undefined });
   }
 
   function submitAnswer() {
@@ -259,6 +265,11 @@ export default function BrowserAgentPage() {
           <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: control === 'agent' ? 'var(--color-primary)' : control === 'review' ? '#d9892b' : 'var(--color-muted)' }} />
           <span className="font-semibold text-sm">{who}</span>
           <span className="text-sm flex-1" style={{ color: 'var(--color-muted)' }}>{hint}</span>
+          {usage && (
+            <span className="text-xs flex-none" style={{ color: 'var(--color-muted)' }} title={`${usage.inputTokens} in / ${usage.outputTokens} out tokens`}>
+              Turn {usage.turn}/{usage.maxTurns} · ${usage.costUsd.toFixed(3)}
+            </span>
+          )}
           {control === 'agent' && (
             <button className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={takeover}>Take over</button>
           )}
@@ -327,6 +338,14 @@ export default function BrowserAgentPage() {
           {voice.isListening && micTargetRef.current === 'instruction' && voice.interimText && (
             <p className="text-xs mt-1.5 italic" style={{ color: 'var(--color-muted)' }}>{voice.interimText}</p>
           )}
+          <input
+            type="text"
+            value={allowedDomain}
+            onChange={(e) => setAllowedDomain(e.target.value)}
+            placeholder="Optional: restrict this run to a domain (e.g. example.com.au)"
+            className="w-full mt-2 px-2.5 py-1.5 rounded-lg border text-xs"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
           <div className="flex gap-2 mt-2.5">
             {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
               <button
@@ -408,7 +427,14 @@ export default function BrowserAgentPage() {
                     background: entry.kind === 'handoff' ? '#f9e8cf' : undefined,
                   }}
                 >
-                  <ReactMarkdown components={MD_COMPONENTS}>{entry.text}</ReactMarkdown>
+                  {entry.kind === 'error_screenshot' ? (
+                    <>
+                      <p className="text-[11px] mb-1" style={{ color: 'var(--color-muted)' }}>Page at the time of the error:</p>
+                      <img src={entry.text} alt="Page at time of error" className="rounded-lg border w-full" style={{ borderColor: 'var(--color-border)' }} />
+                    </>
+                  ) : (
+                    <ReactMarkdown components={MD_COMPONENTS}>{entry.text}</ReactMarkdown>
+                  )}
                 </li>
               ))}
             </ol>

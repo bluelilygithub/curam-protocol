@@ -135,13 +135,17 @@ function attachBrowserAgentWs(httpServer) {
       },
     });
 
+    session.bumpIdleTimer();
+
     ws.on('message', async (raw) => {
       let m;
       try { m = JSON.parse(raw); } catch { return; }
+      session.bumpIdleTimer();
       try {
         if (m.type === 'start') {
           const profile = await loadBrowserAgentProfile(user.id).catch(() => ({}));
-          session.run(String(m.instruction || '').slice(0, 2000), profile);
+          const allowedDomain = m.allowedDomain ? String(m.allowedDomain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] : null;
+          session.run(String(m.instruction || '').slice(0, 2000), profile, allowedDomain);
         }
         else if (m.type === 'answer' && session.pendingAnswer) session.pendingAnswer(String(m.text || ''));
         else if (m.type === 'takeover') session.takeover();
