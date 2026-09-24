@@ -31,4 +31,15 @@ router.delete('/runs/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Bulk delete — the Archive view's multi-select checkboxes.
+router.post('/runs/delete', async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isFinite) : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  const { rowCount } = await pool.query(
+    `DELETE FROM browser_agent_runs WHERE id = ANY($1) AND "userId"=$2`,
+    [ids, req.user.id]
+  );
+  res.json({ ok: true, deleted: rowCount });
+});
+
 module.exports = router;

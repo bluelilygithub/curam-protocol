@@ -5,12 +5,14 @@ import { useIcon } from '../providers/IconProvider';
 import { useVoice } from '../hooks/useVoice';
 import api from '../utils/apiClient';
 
-const OUTCOME_LABEL = {
-  handed_off: 'Handed off',
-  cancelled: 'Cancelled',
-  stopped: 'Stopped early',
-  error: 'Error',
-};
+const PROFILE_FIELDS = [
+  { key: 'user_name', label: 'Name' },
+  { key: 'user_city', label: 'City' },
+  { key: 'user_state', label: 'State' },
+  { key: 'browser_agent_phone', label: 'Phone' },
+  { key: 'browser_agent_email', label: 'Email' },
+  { key: 'browser_agent_address', label: 'Address' },
+];
 
 export default function BrowserAgentPage() {
   const getIcon = useIcon();
@@ -25,19 +27,18 @@ export default function BrowserAgentPage() {
   const [question, setQuestion] = useState(null);
   const [answer, setAnswer] = useState('');
   const [connected, setConnected] = useState(false);
-  const [runs, setRuns] = useState([]);
-  const [expandedRun, setExpandedRun] = useState(null);
+  const [profile, setProfile] = useState(null);
 
   const wsRef = useRef(null);
   const imgRef = useRef(null);
   const viewerRef = useRef(null);
   const micTargetRef = useRef(null); // 'instruction' | 'answer'
+  const scrollDragRef = useRef(null); // { startY, startFrac } while dragging the scrollbar thumb
+  const [scrollFrac, setScrollFrac] = useState(0.5); // no real scroll-position feed from the server, so this just tracks intent for the thumb's look
 
-  const loadRuns = useCallback(() => {
-    api.get('/api/browser-agent/runs').then((res) => (res.ok ? res.json() : [])).then(setRuns).catch(() => {});
+  useEffect(() => {
+    api.get('/api/settings').then((res) => (res.ok ? res.json() : {})).then(setProfile).catch(() => setProfile({}));
   }, []);
-
-  useEffect(() => { loadRuns(); }, [loadRuns]);
 
   // Voice input: mic feeds whichever box was last focused (instruction or the
   // ask_user answer box), reusing the shared STT hook (same one CSS/Restyle uses).
@@ -75,10 +76,10 @@ export default function BrowserAgentPage() {
           setLog((prev) => [...prev, { kind: m.kind, text: m.text }]);
         } else if (m.type === 'control') {
           if (m.who === 'agent') { setControl('agent'); setWho('Agent is driving'); setHint("Watch the browser. It won't press send."); }
-          else { setControl((c) => (c === 'review' ? c : 'user')); loadRuns(); }
+          else setControl((c) => (c === 'review' ? c : 'user'));
         } else if (m.type === 'handoff') {
           setLog((prev) => [...prev, { kind: 'handoff', text: m.summary }]);
-          setControl('review'); setWho('Your turn'); setHint("Scroll (or use the ↑↓ buttons) to check the form, then press the site's own send button.");
+          setControl('review'); setWho('Your turn'); setHint("Drag the scrollbar to check the whole form, then press the site's own send button.");
         } else if (m.type === 'question') {
           setQuestion(m.text);
           setLog((prev) => [...prev, { kind: 'thought', text: m.text }]);
@@ -104,8 +105,11 @@ export default function BrowserAgentPage() {
 
   function start() {
     if (!instruction.trim() || control === 'agent') return;
+    // Reset the log for this run — the server sends its own 'log' message
+    // (kind: 'user') for the instruction, so it isn't added here too.
+    setLog([]);
+    setScrollFrac(0.5);
     send({ type: 'start', instruction: instruction.trim() });
-    setLog([{ kind: 'user', text: instruction.trim() }]);
   }
 
   function submitAnswer() {
@@ -131,6 +135,29 @@ export default function BrowserAgentPage() {
     return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
   }
 
+  function scrollBy(dy) {
+    setScrollFrac((f) => Math.min(1, Math.max(0, f + dy / 3000)));
+    send({ type: 'wheel', dy, x: 0.5, y: 0.5 });
+  }
+
+  function onThumbPointerDown(e) {
+    e.stopPropagation();
+    scrollDragRef.current = { startY: e.clientY, startFrac: scrollFrac };
+    e.target.setPointerCapture(e.pointerId);
+  }
+  function onThumbPointerMove(e) {
+    if (!scrollDragRef.current) return;
+    const trackHeight = e.currentTarget.parentElement.clientHeight || 1;
+    const deltaFrac = (e.clientY - scrollDragRef.current.startY) / trackHeight;
+    const nextFrac = Math.min(1, Math.max(0, scrollDragRef.current.startFrac + deltaFrac));
+    setScrollFrac(nextFrac);
+    send({ type: 'wheel', dy: deltaFrac * 3000, x: 0.5, y: 0.5 });
+    scrollDragRef.current = { startY: e.clientY, startFrac: nextFrac };
+  }
+  function onThumbPointerUp() {
+    scrollDragRef.current = null;
+  }
+
   const interactive = control === 'review' || control === 'user';
 
   return (
@@ -145,7 +172,7 @@ export default function BrowserAgentPage() {
           className="relative"
           style={{ aspectRatio: '1280 / 800', background: '#f6f8fa', outline: interactive ? '3px solid var(--color-primary)' : 'none', cursor: interactive ? 'pointer' : 'default' }}
           onClick={(e) => { if (interactive) send({ type: 'mouse', ...posFromEvent(e) }); }}
-          onWheel={(e) => { if (interactive) send({ type: 'wheel', dy: e.deltaY, ...posFromEvent(e) }); }}
+          onWheel={(e) => { if (interactive) scrollBy(e.deltaY); }}
           onKeyDown={(e) => {
             if (!interactive) return;
             if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); send({ type: 'text', text: e.key }); }
@@ -161,26 +188,57 @@ export default function BrowserAgentPage() {
             </div>
           )}
           {interactive && (
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1.5">
-              <button
-                type="button"
-                title="Scroll up"
-                className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                onClick={(e) => { e.stopPropagation(); send({ type: 'wheel', dy: -400, x: 0.5, y: 0.5 }); }}
+            <>
+              {/* The stream is a video, not a real DOM page, so there's no native
+                  scrollbar — this is a stand-in: drag the thumb, or click the
+                  track, to scroll the actual page (server-side wheel events). */}
+              <div
+                className="absolute right-1.5 top-2 bottom-2 w-3 rounded-full"
+                style={{ background: 'rgba(0,0,0,0.08)' }}
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const clickFrac = (e.clientY - r.top) / r.height;
+                  scrollBy((clickFrac - scrollFrac) * 3000);
+                }}
               >
-                ↑
-              </button>
-              <button
-                type="button"
-                title="Scroll down"
-                className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                onClick={(e) => { e.stopPropagation(); send({ type: 'wheel', dy: 400, x: 0.5, y: 0.5 }); }}
-              >
-                ↓
-              </button>
-            </div>
+                <div
+                  role="scrollbar"
+                  aria-orientation="vertical"
+                  className="absolute left-0 w-3 rounded-full cursor-grab active:cursor-grabbing"
+                  style={{
+                    top: `calc(${scrollFrac * 85}% )`,
+                    height: '15%',
+                    background: 'var(--color-primary)',
+                    opacity: 0.85,
+                  }}
+                  onPointerDown={onThumbPointerDown}
+                  onPointerMove={onThumbPointerMove}
+                  onPointerUp={onThumbPointerUp}
+                  onPointerLeave={onThumbPointerUp}
+                />
+              </div>
+              <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  title="Scroll up"
+                  className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  onClick={(e) => { e.stopPropagation(); scrollBy(-400); }}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  title="Scroll down"
+                  className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  onClick={(e) => { e.stopPropagation(); scrollBy(400); }}
+                >
+                  ↓
+                </button>
+              </div>
+            </>
           )}
         </div>
         <div className="flex items-center gap-3.5 px-4 py-3.5 border-t" style={{ borderColor: 'var(--color-border)', background: control === 'agent' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : control === 'review' ? '#f9e8cf' : 'transparent' }}>
@@ -194,8 +252,18 @@ export default function BrowserAgentPage() {
       </section>
 
       <aside className="w-full lg:w-[380px] flex-none flex flex-col gap-4">
+        <div className="rounded-2xl border p-4 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <h1 className="text-lg font-semibold">Browser Agent</h1>
+          <Link
+            to="/browser-agent/archive"
+            className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
+            {getIcon('archive', { size: 14 })} Archive
+          </Link>
+        </div>
+
         <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <h1 className="text-lg font-semibold mb-1">Browser Agent</h1>
           <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>
             Fills a form on a real site, then hands the browser back to you before anything is sent. The agent never presses submit — you do, after reviewing.
           </p>
@@ -301,81 +369,28 @@ export default function BrowserAgentPage() {
           )}
         </div>
 
-        <div className="rounded-2xl border p-4 flex items-center gap-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          {getIcon('user', { size: 15 })}
-          <span className="text-sm flex-1" style={{ color: 'var(--color-muted)' }}>
-            Name/city/state/phone/email are pulled from your Settings profile.
-          </span>
-          <Link to="/settings" className="text-sm font-medium hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
-            Edit
-          </Link>
-        </div>
-
         <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            {getIcon('archive', { size: 15 })} Archive
-          </h2>
-          {runs.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Past attempts will show up here.</p>
+          <div className="flex items-center gap-2 mb-2.5">
+            {getIcon('user', { size: 15 })}
+            <span className="text-sm font-medium flex-1">Your details for forms</span>
+            <Link to="/settings" className="text-xs font-medium hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+              Edit
+            </Link>
+          </div>
+          {!profile ? (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
           ) : (
-            <ul className="space-y-1.5 max-h-[40vh] overflow-y-auto">
-              {runs.map((r) => (
-                <li key={r.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                  <button
-                    className="w-full text-left px-3 py-2 hover:opacity-70"
-                    onClick={() => setExpandedRun(expandedRun === r.id ? null : r.id)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex-none"
-                        style={{
-                          background: r.outcome === 'handed_off' ? '#f9e8cf' : r.outcome === 'error' ? '#fee2e2' : 'var(--color-bg)',
-                          color: r.outcome === 'handed_off' ? '#9a5a12' : r.outcome === 'error' ? '#b91c1c' : 'var(--color-muted)',
-                        }}
-                      >
-                        {OUTCOME_LABEL[r.outcome] || r.outcome}
-                      </span>
-                      <span className="text-xs truncate flex-1" style={{ color: 'var(--color-muted)' }}>
-                        {new Date(r.startedAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-sm mt-1 truncate">{r.instruction}</p>
-                  </button>
-                  {expandedRun === r.id && (
-                    <div className="px-3 pb-3 text-sm" style={{ borderTop: '1px solid var(--color-border)' }}>
-                      {r.summary && <p className="mt-2 italic" style={{ color: 'var(--color-muted)' }}>{r.summary}</p>}
-                      <RunLog runId={r.id} />
-                    </div>
-                  )}
-                </li>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+              {PROFILE_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <dt style={{ color: 'var(--color-muted)' }}>{f.label}</dt>
+                  <dd className="truncate">{profile[f.key] || <span style={{ color: 'var(--color-muted)' }}>—</span>}</dd>
+                </div>
               ))}
-            </ul>
+            </dl>
           )}
         </div>
       </aside>
     </div>
-  );
-}
-
-function RunLog({ runId }) {
-  const [entries, setEntries] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/api/browser-agent/runs/${runId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (!cancelled) setEntries(data?.log || []); })
-      .catch(() => { if (!cancelled) setEntries([]); });
-    return () => { cancelled = true; };
-  }, [runId]);
-
-  if (entries === null) return <p className="mt-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
-  return (
-    <ol className="mt-2 space-y-1 text-xs">
-      {entries.map((e, i) => (
-        <li key={i} style={{ color: e.kind === 'error' ? '#ef4444' : e.kind === 'guard' ? '#9a5a12' : 'var(--color-muted)' }}>
-          {e.text}
-        </li>
-      ))}
-    </ol>
   );
 }
