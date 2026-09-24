@@ -1,45 +1,51 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
+import { useVoice } from '../hooks/useVoice';
+import api from '../utils/apiClient';
 
-const PROFILE_FIELDS = [
-  { name: 'name', label: 'Name', autoComplete: 'name' },
-  { name: 'phone', label: 'Phone', autoComplete: 'tel' },
-  { name: 'email', label: 'Email', autoComplete: 'email', type: 'email', wide: true },
-  { name: 'address', label: 'Address', wide: true },
-];
-
-const PROFILE_STORAGE_KEY = 'vault:browserAgentProfile';
-
-function loadProfile() {
-  try {
-    return JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
+const OUTCOME_LABEL = {
+  handed_off: 'Handed off',
+  cancelled: 'Cancelled',
+  stopped: 'Stopped early',
+  error: 'Error',
+};
 
 export default function BrowserAgentPage() {
   const getIcon = useIcon();
   const token = useAuthStore((s) => s.token);
-  const [profile, setProfile] = useState(loadProfile);
+  const voice = useVoice();
   const [instruction, setInstruction] = useState('');
   const [log, setLog] = useState([]);
   const [control, setControl] = useState('idle'); // idle | agent | user | review
   const [who, setWho] = useState('Ready');
-  const [hint, setHint] = useState('Type what you want done.');
+  const [hint, setHint] = useState('Type or speak what you want done.');
   const [url, setUrl] = useState('No page open');
   const [question, setQuestion] = useState(null);
   const [answer, setAnswer] = useState('');
   const [connected, setConnected] = useState(false);
+  const [runs, setRuns] = useState([]);
+  const [expandedRun, setExpandedRun] = useState(null);
 
   const wsRef = useRef(null);
   const imgRef = useRef(null);
   const viewerRef = useRef(null);
+  const micTargetRef = useRef(null); // 'instruction' | 'answer'
 
+  const loadRuns = useCallback(() => {
+    api.get('/api/browser-agent/runs').then((res) => (res.ok ? res.json() : [])).then(setRuns).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadRuns(); }, [loadRuns]);
+
+  // Voice input: mic feeds whichever box was last focused (instruction or the
+  // ask_user answer box), reusing the shared STT hook (same one CSS/Restyle uses).
   useEffect(() => {
-    try { localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile)); } catch {}
-  }, [profile]);
+    if (!voice.transcript) return;
+    if (micTargetRef.current === 'answer') setAnswer(voice.transcript);
+    else setInstruction((prev) => (prev ? `${prev} ${voice.transcript}` : voice.transcript));
+  }, [voice.transcript]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -69,7 +75,7 @@ export default function BrowserAgentPage() {
           setLog((prev) => [...prev, { kind: m.kind, text: m.text }]);
         } else if (m.type === 'control') {
           if (m.who === 'agent') { setControl('agent'); setWho('Agent is driving'); setHint("Watch the browser. It won't press send."); }
-          else setControl((c) => (c === 'review' ? c : 'user'));
+          else { setControl((c) => (c === 'review' ? c : 'user')); loadRuns(); }
         } else if (m.type === 'handoff') {
           setLog((prev) => [...prev, { kind: 'handoff', text: m.summary }]);
           setControl('review'); setWho('Your turn'); setHint("Check the form, then press the site's own send button.");
@@ -98,7 +104,7 @@ export default function BrowserAgentPage() {
 
   function start() {
     if (!instruction.trim() || control === 'agent') return;
-    send({ type: 'start', instruction: instruction.trim(), profile });
+    send({ type: 'start', instruction: instruction.trim() });
     setLog([{ kind: 'user', text: instruction.trim() }]);
   }
 
@@ -107,6 +113,12 @@ export default function BrowserAgentPage() {
     send({ type: 'answer', text: answer.trim() });
     setLog((prev) => [...prev, { kind: 'user', text: answer.trim() }]);
     setAnswer('');
+  }
+
+  function toggleMic(target) {
+    if (voice.isListening) { voice.stopListening(); return; }
+    micTargetRef.current = target;
+    voice.startListening();
   }
 
   function takeover() {
@@ -171,29 +183,72 @@ export default function BrowserAgentPage() {
             placeholder="Go to example.com.au and fill out the enquiry form for a quote"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
+            onFocus={() => { micTargetRef.current = 'instruction'; }}
           />
-          <button
-            className="mt-2.5 w-full rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-70 disabled:opacity-40"
-            style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }}
-            disabled={control === 'agent' || !connected}
-            onClick={start}
-          >
-            Start
-          </button>
+          {voice.voiceError && (
+            <p className="text-xs mt-1.5" style={{ color: '#ef4444' }}>{voice.voiceError}</p>
+          )}
+          {voice.isListening && micTargetRef.current === 'instruction' && voice.interimText && (
+            <p className="text-xs mt-1.5 italic" style={{ color: 'var(--color-muted)' }}>{voice.interimText}</p>
+          )}
+          <div className="flex gap-2 mt-2.5">
+            {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
+              <button
+                type="button"
+                title="Speak your instruction"
+                aria-pressed={voice.isListening && micTargetRef.current === 'instruction'}
+                className="rounded-lg px-3.5 py-2.5 text-sm font-medium border hover:opacity-70 flex-none"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  background: voice.isListening && micTargetRef.current === 'instruction' ? '#ef4444' : 'var(--color-surface)',
+                  color: voice.isListening && micTargetRef.current === 'instruction' ? '#fff' : 'var(--color-text)',
+                }}
+                onClick={() => toggleMic('instruction')}
+              >
+                {getIcon('mic', { size: 16 })}
+              </button>
+            )}
+            <button
+              className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-70 disabled:opacity-40"
+              style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }}
+              disabled={control === 'agent' || !connected}
+              onClick={start}
+            >
+              Start
+            </button>
+          </div>
         </div>
 
         {question && (
           <div className="rounded-2xl border p-4" style={{ background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))', borderColor: 'var(--color-primary)' }}>
             <p className="text-sm font-medium mb-2">{question}</p>
-            <input
-              className="w-full rounded-lg border px-3 py-2 text-sm mb-2"
-              style={{ borderColor: 'var(--color-border)' }}
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submitAnswer()}
-              placeholder="Your answer"
-              autoFocus
-            />
+            <div className="flex gap-2 mb-2">
+              <input
+                className="flex-1 rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--color-border)' }}
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitAnswer()}
+                onFocus={() => { micTargetRef.current = 'answer'; }}
+                placeholder="Your answer"
+                autoFocus
+              />
+              {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
+                <button
+                  type="button"
+                  title="Speak your answer"
+                  className="rounded-lg px-3 py-2 text-sm border hover:opacity-70 flex-none"
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    background: voice.isListening && micTargetRef.current === 'answer' ? '#ef4444' : 'var(--color-surface)',
+                    color: voice.isListening && micTargetRef.current === 'answer' ? '#fff' : 'var(--color-text)',
+                  }}
+                  onClick={() => toggleMic('answer')}
+                >
+                  {getIcon('mic', { size: 16 })}
+                </button>
+              )}
+            </div>
             <button className="w-full rounded-lg px-3 py-2 text-sm font-medium hover:opacity-70" style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }} onClick={submitAnswer}>
               Answer
             </button>
@@ -224,27 +279,81 @@ export default function BrowserAgentPage() {
           )}
         </div>
 
-        <details className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <summary className="text-sm font-medium cursor-pointer flex items-center gap-2">
-            {getIcon('user', { size: 15 })} Your details for forms
-          </summary>
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            {PROFILE_FIELDS.map((f) => (
-              <label key={f.name} className={`flex flex-col gap-1 text-xs ${f.wide ? 'col-span-2' : ''}`} style={{ color: 'var(--color-muted)' }}>
-                {f.label}
-                <input
-                  type={f.type || 'text'}
-                  autoComplete={f.autoComplete}
-                  className="rounded-lg border px-2.5 py-1.5 text-sm"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  value={profile[f.name] || ''}
-                  onChange={(e) => setProfile((p) => ({ ...p, [f.name]: e.target.value }))}
-                />
-              </label>
-            ))}
-          </div>
-        </details>
+        <div className="rounded-2xl border p-4 flex items-center gap-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          {getIcon('user', { size: 15 })}
+          <span className="text-sm flex-1" style={{ color: 'var(--color-muted)' }}>
+            Name/city/state/phone/email are pulled from your Settings profile.
+          </span>
+          <Link to="/settings" className="text-sm font-medium hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+            Edit
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            {getIcon('archive', { size: 15 })} Archive
+          </h2>
+          {runs.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Past attempts will show up here.</p>
+          ) : (
+            <ul className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+              {runs.map((r) => (
+                <li key={r.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <button
+                    className="w-full text-left px-3 py-2 hover:opacity-70"
+                    onClick={() => setExpandedRun(expandedRun === r.id ? null : r.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex-none"
+                        style={{
+                          background: r.outcome === 'handed_off' ? '#f9e8cf' : r.outcome === 'error' ? '#fee2e2' : 'var(--color-bg)',
+                          color: r.outcome === 'handed_off' ? '#9a5a12' : r.outcome === 'error' ? '#b91c1c' : 'var(--color-muted)',
+                        }}
+                      >
+                        {OUTCOME_LABEL[r.outcome] || r.outcome}
+                      </span>
+                      <span className="text-xs truncate flex-1" style={{ color: 'var(--color-muted)' }}>
+                        {new Date(r.startedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm mt-1 truncate">{r.instruction}</p>
+                  </button>
+                  {expandedRun === r.id && (
+                    <div className="px-3 pb-3 text-sm" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      {r.summary && <p className="mt-2 italic" style={{ color: 'var(--color-muted)' }}>{r.summary}</p>}
+                      <RunLog runId={r.id} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </aside>
     </div>
+  );
+}
+
+function RunLog({ runId }) {
+  const [entries, setEntries] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/api/browser-agent/runs/${runId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (!cancelled) setEntries(data?.log || []); })
+      .catch(() => { if (!cancelled) setEntries([]); });
+    return () => { cancelled = true; };
+  }, [runId]);
+
+  if (entries === null) return <p className="mt-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+  return (
+    <ol className="mt-2 space-y-1 text-xs">
+      {entries.map((e, i) => (
+        <li key={i} style={{ color: e.kind === 'error' ? '#ef4444' : e.kind === 'guard' ? '#9a5a12' : 'var(--color-muted)' }}>
+          {e.text}
+        </li>
+      ))}
+    </ol>
   );
 }

@@ -170,19 +170,24 @@ async function describe(loc) {
 }
 
 class BrowserAgentSession {
-  constructor(ws, { model, tz }) {
+  constructor(ws, { model, tz, onFinish }) {
     this.ws = ws;
     this.model = model;
     this.tz = tz || 'Australia/Sydney';
+    this.onFinish = onFinish || null;
     this.agentInControl = false;
     this.running = false;
     this.cancelled = false;
     this.pendingAnswer = null;
     this.heavyResults = [];
+    this.runLog = []; // archived alongside the run — see onFinish
   }
 
   send(msg) { if (this.ws.readyState === 1) this.ws.send(JSON.stringify(msg)); }
-  log(kind, text) { this.send({ type: 'log', kind, text }); }
+  log(kind, text) {
+    this.runLog.push({ kind, text });
+    this.send({ type: 'log', kind, text });
+  }
 
   async ensureBrowser() {
     if (this.page && !this.page.isClosed()) return;
@@ -340,7 +345,11 @@ class BrowserAgentSession {
     this.running = true;
     this.cancelled = false;
     this.heavyResults = [];
+    this.runLog = [];
+    const startedAt = new Date();
     let handedOff = false;
+    let handoffSummary = null;
+    let erroredMessage = null;
 
     try {
       await this.ensureBrowser();
@@ -365,6 +374,7 @@ class BrowserAgentSession {
         for (const use of uses) {
           if (use.name === 'handoff_for_review') {
             handedOff = true;
+            handoffSummary = use.input.summary;
             this.send({ type: 'handoff', summary: use.input.summary });
             results.push({ type: 'tool_result', tool_use_id: use.id, content: 'Control handed to the user.' });
             continue;
@@ -385,11 +395,24 @@ class BrowserAgentSession {
       }
       if (!handedOff && !this.cancelled) this.log('thought', 'I stopped before finishing. You have control of the browser.');
     } catch (e) {
+      erroredMessage = e.message;
       this.log('error', e.message);
     } finally {
       this.running = false;
       this.agentInControl = false;
       this.send({ type: 'control', who: 'user' });
+
+      const outcome = erroredMessage ? 'error' : this.cancelled ? 'cancelled' : handedOff ? 'handed_off' : 'stopped';
+      if (this.onFinish) {
+        this.onFinish({
+          instruction,
+          outcome,
+          summary: handoffSummary,
+          log: this.runLog,
+          startedAt,
+          endedAt: new Date(),
+        });
+      }
     }
   }
 

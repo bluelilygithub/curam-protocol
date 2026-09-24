@@ -22,6 +22,29 @@ async function authenticate(token) {
   return users[0] || null;
 }
 
+// Profile lives in Settings (Profile tab → "Browser Agent form details"), same
+// key/value settings table every other Vault feature uses — not client localStorage,
+// so it's available from any device and survives the browser being cleared.
+const PROFILE_SETTING_KEYS = {
+  user_name: 'name',
+  browser_agent_phone: 'phone',
+  browser_agent_email: 'email',
+  browser_agent_address: 'address',
+};
+
+async function loadBrowserAgentProfile(userId) {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
+    [userId, Object.keys(PROFILE_SETTING_KEYS)]
+  );
+  const profile = {};
+  for (const row of rows) {
+    const field = PROFILE_SETTING_KEYS[row.key];
+    if (field && row.value) profile[field] = row.value;
+  }
+  return profile;
+}
+
 function attachBrowserAgentWs(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -79,13 +102,26 @@ function attachBrowserAgentWs(httpServer) {
     }
 
     activeSessions += 1;
-    const session = new BrowserAgentSession(ws, { model, tz });
+    const session = new BrowserAgentSession(ws, {
+      model,
+      tz,
+      onFinish: (run) => {
+        pool.query(
+          `INSERT INTO browser_agent_runs ("userId", instruction, outcome, summary, log, "startedAt", "endedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [user.id, run.instruction, run.outcome, run.summary, JSON.stringify(run.log), run.startedAt, run.endedAt]
+        ).catch((err) => console.error('[browser-agent] failed to archive run:', err.message));
+      },
+    });
 
     ws.on('message', async (raw) => {
       let m;
       try { m = JSON.parse(raw); } catch { return; }
       try {
-        if (m.type === 'start') session.run(String(m.instruction || '').slice(0, 2000), m.profile || {});
+        if (m.type === 'start') {
+          const profile = await loadBrowserAgentProfile(user.id).catch(() => ({}));
+          session.run(String(m.instruction || '').slice(0, 2000), profile);
+        }
         else if (m.type === 'answer' && session.pendingAnswer) session.pendingAnswer(String(m.text || ''));
         else if (m.type === 'takeover') session.takeover();
         else if (['mouse', 'wheel', 'key', 'text'].includes(m.type)) await session.userInput(m);

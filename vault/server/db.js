@@ -862,6 +862,24 @@ async function initSchema() {
       )
     `);
 
+    // ── Browser agent run archive ─────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS browser_agent_runs (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        instruction   TEXT NOT NULL,
+        outcome       TEXT NOT NULL DEFAULT 'error',
+        summary       TEXT,
+        log           JSONB NOT NULL DEFAULT '[]',
+        "startedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "endedAt"     TIMESTAMPTZ
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_browser_agent_runs_user
+      ON browser_agent_runs ("userId", "startedAt" DESC)
+    `);
+
     // ── Graphics gallery ──────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS graphics_gallery (

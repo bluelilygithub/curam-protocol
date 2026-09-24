@@ -72,6 +72,9 @@ function SettingsPage() {
   const [profileState,    setProfileState]    = useState('');
   const [profileCountry,  setProfileCountry]  = useState('');
   const [profileTimezone, setProfileTimezone] = useState('');
+  const [agentPhone,   setAgentPhone]   = useState('');
+  const [agentEmail,   setAgentEmail]   = useState('');
+  const [agentAddress, setAgentAddress] = useState('');
   const [audioVoices, setAudioVoices] = useState([]);
   const [audioVoiceURI, setAudioVoiceURI] = useState('');
   const [previewingVoiceURI, setPreviewingVoiceURI] = useState('');
@@ -352,6 +355,9 @@ function SettingsPage() {
       if (data.user_state)    setProfileState(data.user_state);
       if (data.user_country)  setProfileCountry(data.user_country);
       if (data.user_timezone) setProfileTimezone(data.user_timezone);
+      if (data.browser_agent_phone)   setAgentPhone(data.browser_agent_phone);
+      if (data.browser_agent_email)   setAgentEmail(data.browser_agent_email);
+      if (data.browser_agent_address) setAgentAddress(data.browser_agent_address);
       if (data[AUDIO_VOICE_SETTING_KEY]) setAudioVoiceURI(data[AUDIO_VOICE_SETTING_KEY]);
       if (data.inquiry_reminder_frequency) setInquiryFrequency(data.inquiry_reminder_frequency);
       if (data.inquiry_reminder_time)      setInquiryTime(data.inquiry_reminder_time);
@@ -901,6 +907,50 @@ function SettingsPage() {
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
               Used by automated schedules (news, shares). Admin's timezone is the system default.
             </p>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Browser Agent form details</label>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Used to fill out forms in Browser Agent — name/city/state above plus these. Never invented; a missing required field is asked for live during a run.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Phone</label>
+                <input
+                  type="tel"
+                  value={agentPhone}
+                  onChange={e => setAgentPhone(e.target.value)}
+                  onBlur={() => api.post('/api/settings', { key: 'browser_agent_phone', value: agentPhone }).catch(() => {})}
+                  placeholder="e.g. 0412 345 678"
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Email</label>
+                <input
+                  type="email"
+                  value={agentEmail}
+                  onChange={e => setAgentEmail(e.target.value)}
+                  onBlur={() => api.post('/api/settings', { key: 'browser_agent_email', value: agentEmail }).catch(() => {})}
+                  placeholder="e.g. you@example.com"
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Street address</label>
+              <input
+                type="text"
+                value={agentAddress}
+                onChange={e => setAgentAddress(e.target.value)}
+                onBlur={() => api.post('/api/settings', { key: 'browser_agent_address', value: agentAddress }).catch(() => {})}
+                placeholder="e.g. 12 Example St"
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
           </div>
           {localVoiceAvailable && (
             <div>
