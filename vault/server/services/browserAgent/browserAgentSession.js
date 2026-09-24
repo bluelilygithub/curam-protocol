@@ -507,6 +507,7 @@ class BrowserAgentSession {
     let handedOff = false;
     let handoffSummary = null;
     let erroredMessage = null;
+    let stuck = false;
 
     try {
       await this.ensureBrowser();
@@ -523,6 +524,8 @@ class BrowserAgentSession {
       const messages = this.messages;
       messages.push({ role: 'user', content: instruction });
       const price = priceFor(this.model);
+      let lastErrorSig = null;
+      let consecutiveErrors = 0;
 
       for (let turn = 0; turn < MAX_TURNS && !this.cancelled; turn++) {
         if (this.paused) {
@@ -563,10 +566,20 @@ class BrowserAgentSession {
             continue;
           }
           let content;
-          try { content = await this.runTool(use.name, use.input); }
-          catch (e) {
+          try {
+            content = await this.runTool(use.name, use.input);
+            lastErrorSig = null;
+            consecutiveErrors = 0;
+          } catch (e) {
             content = `Error: ${String(e.message).slice(0, 4000)}`;
             this.captureErrorScreenshot(use.name).catch(() => {});
+            // Same tool failing the same way repeatedly (a 403/blocked page, a
+            // selector that will never resolve) means retrying is just burning
+            // turns — stop and hand off instead of grinding to MAX_TURNS.
+            const sig = `${use.name}:${String(e.message).slice(0, 80)}`;
+            consecutiveErrors = sig === lastErrorSig ? consecutiveErrors + 1 : 1;
+            lastErrorSig = sig;
+            if (consecutiveErrors >= 4) stuck = true;
           }
           const block = { type: 'tool_result', tool_use_id: use.id, content };
           if (['navigate', 'snapshot', 'click', 'screenshot'].includes(use.name)) this.heavyResults.push(block);
@@ -574,8 +587,12 @@ class BrowserAgentSession {
         }
         messages.push({ role: 'user', content: results });
         if (handedOff) break;
+        if (stuck) {
+          this.log('error', `Stopped after the same action failed ${consecutiveErrors} times in a row — likely blocked by the site (e.g. a 403 or bot check), not something retrying will fix. Redirect it (pause and type a new instruction) or take over.`);
+          break;
+        }
       }
-      if (!handedOff && !this.cancelled) this.log('thought', 'I stopped before finishing. You have control of the browser.');
+      if (!handedOff && !stuck && !this.cancelled) this.log('thought', 'I stopped before finishing. You have control of the browser.');
     } catch (e) {
       erroredMessage = e.message;
       this.log('error', e.message);
@@ -585,7 +602,7 @@ class BrowserAgentSession {
       this.send({ type: 'control', who: 'user' });
       this.bumpIdleTimer();
 
-      const outcome = erroredMessage ? 'error' : this.cancelled ? 'cancelled' : handedOff ? 'handed_off' : 'stopped';
+      const outcome = erroredMessage ? 'error' : this.cancelled ? 'cancelled' : handedOff ? 'handed_off' : stuck ? 'stuck' : 'stopped';
       if (this.onFinish) {
         this.onFinish({
           instruction,
@@ -635,6 +652,16 @@ class BrowserAgentSession {
     if (!this.paused) return;
     this.paused = false;
     if (this.pauseResolve) this.pauseResolve();
+  }
+
+  /** While paused, injects a new instruction into the conversation and resumes —
+   * lets the user redirect a run ("stop trying that, do X instead") without
+   * taking over or losing what's already been filled in. */
+  redirect(text) {
+    if (!this.paused || !text) return;
+    this.messages.push({ role: 'user', content: `[User, mid-run]: ${text}` });
+    this.log('user', text);
+    this.resume();
   }
 
   async userInput(m) {

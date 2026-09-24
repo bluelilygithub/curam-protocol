@@ -16,6 +16,7 @@ const OUTCOME_LABEL = {
   handed_off: 'Handed off',
   cancelled: 'Cancelled',
   stopped: 'Stopped early',
+  stuck: 'Stuck (repeated failure)',
   error: 'Error',
 };
 
@@ -127,8 +128,8 @@ export default function BrowserAgentArchivePage() {
                     <span
                       className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex-none"
                       style={{
-                        background: r.outcome === 'handed_off' ? '#f9e8cf' : r.outcome === 'error' ? '#fee2e2' : 'var(--color-bg)',
-                        color: r.outcome === 'handed_off' ? '#9a5a12' : r.outcome === 'error' ? '#b91c1c' : 'var(--color-muted)',
+                        background: r.outcome === 'handed_off' ? '#f9e8cf' : (r.outcome === 'error' || r.outcome === 'stuck') ? '#fee2e2' : 'var(--color-bg)',
+                        color: r.outcome === 'handed_off' ? '#9a5a12' : (r.outcome === 'error' || r.outcome === 'stuck') ? '#b91c1c' : 'var(--color-muted)',
                       }}
                     >
                       {OUTCOME_LABEL[r.outcome] || r.outcome}

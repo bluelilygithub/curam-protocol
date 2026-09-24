@@ -38,7 +38,8 @@ Login/sign-in submit buttons are blocked by the same `isSubmitLike()` guard as e
 ## Productivity features
 
 - **Instruction presets** — save a typed/spoken instruction as a one-click chip (`browser_agent_presets` setting, per-user JSON array via the generic `/api/settings` upsert — no new table).
-- **Pause / Resume** — distinct from Take over: pause halts the loop before the next tool call (`this.paused` + a promise the loop awaits, resolved by `resume()`); the run, its turn count, and conversation memory are untouched. Take over still fully ends the run.
+- **Pause / Resume / Redirect** — distinct from Take over: pause halts the loop before the next tool call (`this.paused` + a promise the loop awaits, resolved by `resume()`); the run, its turn count, and conversation memory are untouched. While paused, typing a new instruction and pressing "Redirect" calls `session.redirect(text)`, which appends it to `this.messages` as a new user turn and resumes — steers the run without losing what's already been filled in. Take over still fully ends the run.
+- **Stuck-loop detection** — the same tool failing with the same error 4 times in a row (a 403, a selector that will never resolve) stops the run early (`outcome: 'stuck'`) instead of grinding through all `MAX_TURNS` retrying something that isn't going to work — a real gap found via a run that hit a 403 repeatedly and would have burned 50 turns on it.
 - **"Fields changed this run"** — derived client-side from `action`-kind log entries matching `Typing into`/`Choosing`/`Filling saved login`, shown alongside the handoff summary during review.
 - **Copy/Download step log** — plain-text export, on both the live page and Archive (`error_screenshot` entries excluded from the text export).
 - **Enter to start** — Enter in the instruction box starts the run; Shift+Enter for a newline, matching the answer box's existing behaviour.

@@ -50,7 +50,7 @@ export default function BrowserAgentInfoModal({ onClose }) {
               <strong>Saved logins</strong> fill a username/password for sites you control, without the password ever reaching the AI model — it's decrypted and typed in server-side only.
             </p>
             <p style={{ color: 'var(--color-text)' }}>
-              <strong>Pause / Take over / Clear session</strong> are three different levels: Pause halts before the next step (resume to continue); Take over stops the run and gives you the mouse/keyboard; Clear session wipes what it remembers and blanks the page, for a genuinely fresh start.
+              <strong>Pause / Take over / Clear session</strong> are three different levels: Pause halts before the next step — while paused, type a new instruction and press Redirect to steer it without losing what it's already filled in, or press Resume to continue as-is; Take over stops the run entirely and gives you the mouse/keyboard; Clear session wipes what it remembers and blanks the page, for a genuinely fresh start.
             </p>
             <p style={{ color: 'var(--color-text)' }}>
               <strong>Presets</strong> save a typed (or spoken) instruction as a one-click button for next time. <strong>Archive</strong> keeps every past run's steps, outcome and duration, searchable later.

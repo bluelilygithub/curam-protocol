@@ -138,8 +138,10 @@ export default function BrowserAgentPage() {
           setUsage(m);
         } else if (m.type === 'paused') {
           setPaused(true);
+          setHint('Paused. Type a new instruction and press Redirect to steer it, or press Resume to continue as-is.');
         } else if (m.type === 'resumed') {
           setPaused(false);
+          setHint("Watch the browser. It won't press send.");
         }
       };
     }
@@ -157,7 +159,15 @@ export default function BrowserAgentPage() {
   }, []);
 
   function start() {
-    if (!instruction.trim() || control === 'agent') return;
+    if (!instruction.trim()) return;
+    if (paused) {
+      // Redirect a paused run instead of starting a fresh one — keeps whatever
+      // the agent already filled in and just steers it from here.
+      send({ type: 'redirect', text: instruction.trim() });
+      setInstruction('');
+      return;
+    }
+    if (control === 'agent') return;
     // Reset the log for this run — the server sends its own 'log' message
     // (kind: 'user') for the instruction, so it isn't added here too.
     setLog([]);
@@ -517,10 +527,10 @@ export default function BrowserAgentPage() {
             <button
               className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-70 disabled:opacity-40"
               style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }}
-              disabled={control === 'agent' || !connected}
+              disabled={(control === 'agent' && !paused) || !connected || !instruction.trim()}
               onClick={start}
             >
-              Start
+              {paused ? 'Redirect' : 'Start'}
             </button>
           </div>
         </div>

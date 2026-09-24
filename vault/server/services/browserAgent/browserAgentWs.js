@@ -151,6 +151,7 @@ function attachBrowserAgentWs(httpServer) {
         else if (m.type === 'takeover') session.takeover();
         else if (m.type === 'pause') session.pause();
         else if (m.type === 'resume') session.resume();
+        else if (m.type === 'redirect') session.redirect(String(m.text || '').slice(0, 2000));
         else if (m.type === 'clear_session') await session.clearConversation();
         else if (['mouse', 'wheel', 'key', 'text'].includes(m.type)) await session.userInput(m);
       } catch (e) {
