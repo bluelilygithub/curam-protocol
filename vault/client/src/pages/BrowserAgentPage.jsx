@@ -243,6 +243,52 @@ export default function BrowserAgentPage() {
   return (
     <div className="flex flex-col lg:flex-row lg:items-start gap-5 p-5 max-w-[1400px] mx-auto">
       <section className="flex-1 min-w-0 flex flex-col rounded-2xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b flex-wrap" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-lg font-semibold">Browser Agent</h1>
+            <button
+              onClick={() => setShowInfo(true)}
+              title="How this works"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('info', { size: 15 })}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Tooltip text="Wipe what the agent remembers from earlier instructions this session and blank the page — for a genuinely fresh start">
+              <button
+                type="button"
+                disabled={control === 'agent'}
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5 disabled:opacity-40"
+                style={{ borderColor: 'var(--color-border)' }}
+                onClick={clearSession}
+              >
+                {getIcon('rotate-ccw', { size: 14 })} Clear session
+              </button>
+            </Tooltip>
+            <Tooltip text="Your details, saved site logins, and preferences for this tool">
+              <Link
+                to="/browser-agent/settings"
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                {getIcon('settings', { size: 14 })} Settings
+              </Link>
+            </Tooltip>
+            <Tooltip text="Every past run — steps, outcome, duration">
+              <Link
+                to="/browser-agent/archive"
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                {getIcon('archive', { size: 14 })} Archive
+              </Link>
+            </Tooltip>
+          </div>
+          {showInfo && <BrowserAgentInfoModal onClose={closeInfo} />}
+        </div>
         <div className="flex items-center gap-2 px-3.5 py-2.5 border-b text-xs truncate" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
           {url}
         </div>
@@ -352,53 +398,6 @@ export default function BrowserAgentPage() {
       </section>
 
       <aside className="w-full lg:w-[380px] flex-none flex flex-col gap-4">
-        <div className="rounded-2xl border p-4 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-lg font-semibold">Browser Agent</h1>
-            <button
-              onClick={() => setShowInfo(true)}
-              title="How this works"
-              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
-            >
-              {getIcon('info', { size: 15 })}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Tooltip text="Wipe what the agent remembers from earlier instructions this session and blank the page — for a genuinely fresh start">
-              <button
-                type="button"
-                disabled={control === 'agent'}
-                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5 disabled:opacity-40"
-                style={{ borderColor: 'var(--color-border)' }}
-                onClick={clearSession}
-              >
-                {getIcon('rotate-ccw', { size: 14 })} Clear session
-              </button>
-            </Tooltip>
-            <Tooltip text="Your details, saved site logins, and preferences for this tool">
-              <Link
-                to="/browser-agent/settings"
-                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                {getIcon('settings', { size: 14 })} Settings
-              </Link>
-            </Tooltip>
-            <Tooltip text="Every past run — steps, outcome, duration">
-              <Link
-                to="/browser-agent/archive"
-                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                {getIcon('archive', { size: 14 })} Archive
-              </Link>
-            </Tooltip>
-          </div>
-          {showInfo && <BrowserAgentInfoModal onClose={closeInfo} />}
-        </div>
-
         <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>
             Fills a form on a real site, then hands the browser back to you before anything is sent. The agent never presses submit — you do, after reviewing.
