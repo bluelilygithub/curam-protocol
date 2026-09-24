@@ -1,7 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+
+const MD_COMPONENTS = {
+  p: ({ children }) => <span>{children}</span>,
+  ul: ({ children }) => <ul className="list-disc pl-4">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4">{children}</ol>,
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline">{children}</a>,
+};
 
 const OUTCOME_LABEL = {
   handed_off: 'Handed off',
@@ -162,7 +170,7 @@ function RunLog({ runId }) {
     <ol className="mt-2 space-y-1 text-xs">
       {entries.map((e, i) => (
         <li key={i} style={{ color: e.kind === 'error' ? '#ef4444' : e.kind === 'guard' ? '#9a5a12' : 'var(--color-muted)' }}>
-          {e.text}
+          <ReactMarkdown components={MD_COMPONENTS}>{e.text}</ReactMarkdown>
         </li>
       ))}
     </ol>

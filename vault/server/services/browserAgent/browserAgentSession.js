@@ -466,6 +466,17 @@ class BrowserAgentSession {
     }
   }
 
+  clearConversation() {
+    if (this.running) {
+      this.log('guard', 'Cannot clear while the agent is running — take over or wait for it to finish first.');
+      return;
+    }
+    this.messages = [];
+    this.heavyResults = [];
+    this.send({ type: 'session_cleared' });
+    this.log('guard', 'Conversation cleared. The browser page itself is unchanged — only what the agent remembers was reset.');
+  }
+
   takeover() {
     this.cancelled = true;
     this.agentInControl = false;

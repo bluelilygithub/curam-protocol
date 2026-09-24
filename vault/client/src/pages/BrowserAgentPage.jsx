@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import { useVoice } from '../hooks/useVoice';
 import api from '../utils/apiClient';
+
+const MD_COMPONENTS = {
+  p: ({ children }) => <span>{children}</span>,
+  ul: ({ children }) => <ul className="list-disc pl-4">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4">{children}</ol>,
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline">{children}</a>,
+};
 
 const PROFILE_FIELDS = [
   { key: 'user_name', label: 'Name' },
@@ -87,6 +95,8 @@ export default function BrowserAgentPage() {
           setQuestion(null);
         } else if (m.type === 'error') {
           setLog((prev) => [...prev, { kind: 'error', text: m.text }]);
+        } else if (m.type === 'session_cleared') {
+          setLog([]);
         }
       };
     }
@@ -128,6 +138,10 @@ export default function BrowserAgentPage() {
   function takeover() {
     send({ type: 'takeover' });
     setControl('user'); setWho('You have control'); setHint('Click and type in the browser view.');
+  }
+
+  function clearSession() {
+    send({ type: 'clear_session' });
   }
 
   function posFromEvent(e) {
@@ -255,6 +269,16 @@ export default function BrowserAgentPage() {
         <div className="rounded-2xl border p-4 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h1 className="text-lg font-semibold">Browser Agent</h1>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              title="Clear what the agent remembers from earlier instructions this session (the open page is unaffected)"
+              disabled={control === 'agent'}
+              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5 disabled:opacity-40"
+              style={{ borderColor: 'var(--color-border)' }}
+              onClick={clearSession}
+            >
+              {getIcon('rotate-ccw', { size: 14 })} Clear session
+            </button>
             <Link
               to="/browser-agent/settings"
               className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
@@ -384,7 +408,7 @@ export default function BrowserAgentPage() {
                     background: entry.kind === 'handoff' ? '#f9e8cf' : undefined,
                   }}
                 >
-                  {entry.text}
+                  <ReactMarkdown components={MD_COMPONENTS}>{entry.text}</ReactMarkdown>
                 </li>
               ))}
             </ol>
