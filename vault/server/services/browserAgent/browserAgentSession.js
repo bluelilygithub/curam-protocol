@@ -354,8 +354,15 @@ class BrowserAgentSession {
           return `Blocked: ${e.message}`;
         }
         this.log('action', `Opening ${url}`);
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
         await settle(page);
+        // page.goto() does NOT throw on an HTTP error status (403, 404, 5xx) —
+        // it "succeeds" with the error page loaded, so without this check a
+        // blocked/forbidden page would never trip the stuck-loop detection in
+        // run() and the agent could retry it right up to MAX_TURNS.
+        if (response && response.status() >= 400) {
+          throw new Error(`Server returned ${response.status()} for this page — likely blocked (bot detection, access denied), not something retrying the same URL will fix.`);
+        }
         return takeSnapshot(page);
       }
       case 'snapshot':
