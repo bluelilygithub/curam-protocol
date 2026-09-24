@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+import Tooltip from '../components/Tooltip';
 
 const PROFILE_FIELDS = [
   { key: 'user_name', label: 'Name', autoComplete: 'name' },
@@ -184,18 +185,19 @@ export default function BrowserAgentSettingsPage() {
           <ul className="space-y-1.5">
             {credentials.map((c) => (
               <li key={c.id} className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  title={c.pinned ? 'Unpin' : 'Pin to top'}
-                  className="flex-none hover:opacity-60"
-                  style={{ color: c.pinned ? '#d9892b' : 'var(--color-muted)' }}
-                  onClick={async () => {
-                    await api.post(`/api/browser-agent/credentials/${c.id}/pin`, { pinned: !c.pinned });
-                    loadCredentials();
-                  }}
-                >
-                  {getIcon('star', { size: 14 })}
-                </button>
+                <Tooltip text={c.pinned ? 'Unpin' : 'Pin to top'}>
+                  <button
+                    type="button"
+                    className="flex-none hover:opacity-60"
+                    style={{ color: c.pinned ? '#d9892b' : 'var(--color-muted)' }}
+                    onClick={async () => {
+                      await api.post(`/api/browser-agent/credentials/${c.id}/pin`, { pinned: !c.pinned });
+                      loadCredentials();
+                    }}
+                  >
+                    {getIcon('star', { size: 14 })}
+                  </button>
+                </Tooltip>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{c.label}</p>
                   <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{c.domain} · {c.username}</p>
@@ -217,14 +219,15 @@ function CredentialDeleteButton({ id, onDeleted }) {
     onDeleted();
   }
   return (
-    <button
-      type="button"
-      title="Delete"
-      className="flex-none text-xs px-2 py-1 rounded-lg hover:opacity-60"
-      style={{ color: '#ef4444' }}
-      onClick={handleDelete}
-    >
-      {getIcon('trash', { size: 14 })}
-    </button>
+    <Tooltip text="Delete">
+      <button
+        type="button"
+        className="flex-none text-xs px-2 py-1 rounded-lg hover:opacity-60"
+        style={{ color: '#ef4444' }}
+        onClick={handleDelete}
+      >
+        {getIcon('trash', { size: 14 })}
+      </button>
+    </Tooltip>
   );
 }

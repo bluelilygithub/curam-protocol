@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+import Tooltip from '../components/Tooltip';
 
 const MD_COMPONENTS = {
   p: ({ children }) => <span>{children}</span>,
@@ -140,14 +141,15 @@ export default function BrowserAgentArchivePage() {
                   </div>
                   <p className="text-sm mt-1">{r.instruction}</p>
                 </button>
-                <button
-                  title="Delete this run"
-                  className="flex-none text-xs px-2 py-1 rounded-lg hover:opacity-60"
-                  style={{ color: '#ef4444' }}
-                  onClick={() => deleteOne(r.id)}
-                >
-                  {getIcon('trash', { size: 14 })}
-                </button>
+                <Tooltip text="Delete this run">
+                  <button
+                    className="flex-none text-xs px-2 py-1 rounded-lg hover:opacity-60"
+                    style={{ color: '#ef4444' }}
+                    onClick={() => deleteOne(r.id)}
+                  >
+                    {getIcon('trash', { size: 14 })}
+                  </button>
+                </Tooltip>
               </div>
               {expandedRun === r.id && (
                 <div className="px-3 pb-3 text-sm" style={{ borderTop: '1px solid var(--color-border)' }}>

@@ -5,6 +5,8 @@ import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import { useVoice } from '../hooks/useVoice';
 import api from '../utils/apiClient';
+import Tooltip from '../components/Tooltip';
+import BrowserAgentInfoModal, { INFO_SEEN_KEY } from '../components/BrowserAgentInfoModal';
 
 const MD_COMPONENTS = {
   p: ({ children }) => <span>{children}</span>,
@@ -42,6 +44,13 @@ export default function BrowserAgentPage() {
   const [presets, setPresets] = useState([]);
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [presetLabel, setPresetLabel] = useState('');
+  const [showInfo, setShowInfo] = useState(() => {
+    try { return !localStorage.getItem(INFO_SEEN_KEY); } catch { return false; }
+  });
+  const closeInfo = () => {
+    setShowInfo(false);
+    try { localStorage.setItem(INFO_SEEN_KEY, '1'); } catch { /* private window — just won't remember */ }
+  };
 
   const loadPresets = useCallback(() => {
     api.get('/api/settings').then((res) => (res.ok ? res.json() : {}))
@@ -290,24 +299,26 @@ export default function BrowserAgentPage() {
                 />
               </div>
               <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  title="Scroll up"
-                  className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
-                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  onClick={(e) => { e.stopPropagation(); scrollBy(-400); }}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  title="Scroll down"
-                  className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
-                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  onClick={(e) => { e.stopPropagation(); scrollBy(400); }}
-                >
-                  ↓
-                </button>
+                <Tooltip text="Scroll up" side="bottom">
+                  <button
+                    type="button"
+                    className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    onClick={(e) => { e.stopPropagation(); scrollBy(-400); }}
+                  >
+                    ↑
+                  </button>
+                </Tooltip>
+                <Tooltip text="Scroll down" side="bottom">
+                  <button
+                    type="button"
+                    className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    onClick={(e) => { e.stopPropagation(); scrollBy(400); }}
+                  >
+                    ↓
+                  </button>
+                </Tooltip>
               </div>
             </>
           )}
@@ -323,14 +334,18 @@ export default function BrowserAgentPage() {
           )}
           {control === 'agent' && (
             <>
-              <button
-                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60"
-                style={{ borderColor: 'var(--color-border)' }}
-                onClick={paused ? resumeAgent : pauseAgent}
-              >
-                {paused ? 'Resume' : 'Pause'}
-              </button>
-              <button className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={takeover}>Take over</button>
+              <Tooltip text={paused ? 'Continue where it left off' : 'Halt before the next step — resume to continue'} side="bottom">
+                <button
+                  className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60"
+                  style={{ borderColor: 'var(--color-border)' }}
+                  onClick={paused ? resumeAgent : pauseAgent}
+                >
+                  {paused ? 'Resume' : 'Pause'}
+                </button>
+              </Tooltip>
+              <Tooltip text="Stop the run entirely and take the mouse/keyboard yourself" side="bottom">
+                <button className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={takeover}>Take over</button>
+              </Tooltip>
             </>
           )}
         </div>
@@ -338,33 +353,50 @@ export default function BrowserAgentPage() {
 
       <aside className="w-full lg:w-[380px] flex-none flex flex-col gap-4">
         <div className="rounded-2xl border p-4 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <h1 className="text-lg font-semibold">Browser Agent</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-lg font-semibold">Browser Agent</h1>
             <button
-              type="button"
-              title="Clear what the agent remembers from earlier instructions this session (the open page is unaffected)"
-              disabled={control === 'agent'}
-              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5 disabled:opacity-40"
-              style={{ borderColor: 'var(--color-border)' }}
-              onClick={clearSession}
+              onClick={() => setShowInfo(true)}
+              title="How this works"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
             >
-              {getIcon('rotate-ccw', { size: 14 })} Clear session
+              {getIcon('info', { size: 15 })}
             </button>
-            <Link
-              to="/browser-agent/settings"
-              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              {getIcon('settings', { size: 14 })} Settings
-            </Link>
-            <Link
-              to="/browser-agent/archive"
-              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              {getIcon('archive', { size: 14 })} Archive
-            </Link>
           </div>
+          <div className="flex items-center gap-2">
+            <Tooltip text="Wipe what the agent remembers from earlier instructions this session and blank the page — for a genuinely fresh start">
+              <button
+                type="button"
+                disabled={control === 'agent'}
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5 disabled:opacity-40"
+                style={{ borderColor: 'var(--color-border)' }}
+                onClick={clearSession}
+              >
+                {getIcon('rotate-ccw', { size: 14 })} Clear session
+              </button>
+            </Tooltip>
+            <Tooltip text="Your details, saved site logins, and preferences for this tool">
+              <Link
+                to="/browser-agent/settings"
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                {getIcon('settings', { size: 14 })} Settings
+              </Link>
+            </Tooltip>
+            <Tooltip text="Every past run — steps, outcome, duration">
+              <Link
+                to="/browser-agent/archive"
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                {getIcon('archive', { size: 14 })} Archive
+              </Link>
+            </Tooltip>
+          </div>
+          {showInfo && <BrowserAgentInfoModal onClose={closeInfo} />}
         </div>
 
         <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -384,15 +416,16 @@ export default function BrowserAgentPage() {
               }}
             />
             {instruction && (
-              <button
-                type="button"
-                title="Clear"
-                className="absolute top-2 right-2 w-5 h-5 rounded-full grid place-items-center text-xs hover:opacity-70"
-                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-                onClick={() => setInstruction('')}
-              >
-                ✕
-              </button>
+              <Tooltip text="Clear">
+                <button
+                  type="button"
+                  className="absolute top-2 right-2 w-5 h-5 rounded-full grid place-items-center text-xs hover:opacity-70"
+                  style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                  onClick={() => setInstruction('')}
+                >
+                  ✕
+                </button>
+              </Tooltip>
             )}
           </div>
           {voice.voiceError && (
@@ -466,20 +499,21 @@ export default function BrowserAgentPage() {
 
           <div className="flex gap-2 mt-2.5">
             {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
-              <button
-                type="button"
-                title="Speak your instruction"
-                aria-pressed={voice.isListening && micTargetRef.current === 'instruction'}
-                className="rounded-lg px-3.5 py-2.5 text-sm font-medium border hover:opacity-70 flex-none"
-                style={{
-                  borderColor: 'var(--color-border)',
-                  background: voice.isListening && micTargetRef.current === 'instruction' ? '#ef4444' : 'var(--color-surface)',
-                  color: voice.isListening && micTargetRef.current === 'instruction' ? '#fff' : 'var(--color-text)',
-                }}
-                onClick={() => toggleMic('instruction')}
-              >
-                {getIcon('mic', { size: 16 })}
-              </button>
+              <Tooltip text="Speak your instruction">
+                <button
+                  type="button"
+                  aria-pressed={voice.isListening && micTargetRef.current === 'instruction'}
+                  className="rounded-lg px-3.5 py-2.5 text-sm font-medium border hover:opacity-70 flex-none"
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    background: voice.isListening && micTargetRef.current === 'instruction' ? '#ef4444' : 'var(--color-surface)',
+                    color: voice.isListening && micTargetRef.current === 'instruction' ? '#fff' : 'var(--color-text)',
+                  }}
+                  onClick={() => toggleMic('instruction')}
+                >
+                  {getIcon('mic', { size: 16 })}
+                </button>
+              </Tooltip>
             )}
             <button
               className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-70 disabled:opacity-40"
@@ -507,19 +541,20 @@ export default function BrowserAgentPage() {
                 autoFocus
               />
               {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
-                <button
-                  type="button"
-                  title="Speak your answer"
-                  className="rounded-lg px-3 py-2 text-sm border hover:opacity-70 flex-none"
-                  style={{
-                    borderColor: 'var(--color-border)',
-                    background: voice.isListening && micTargetRef.current === 'answer' ? '#ef4444' : 'var(--color-surface)',
-                    color: voice.isListening && micTargetRef.current === 'answer' ? '#fff' : 'var(--color-text)',
-                  }}
-                  onClick={() => toggleMic('answer')}
-                >
-                  {getIcon('mic', { size: 16 })}
-                </button>
+                <Tooltip text="Speak your answer">
+                  <button
+                    type="button"
+                    className="rounded-lg px-3 py-2 text-sm border hover:opacity-70 flex-none"
+                    style={{
+                      borderColor: 'var(--color-border)',
+                      background: voice.isListening && micTargetRef.current === 'answer' ? '#ef4444' : 'var(--color-surface)',
+                      color: voice.isListening && micTargetRef.current === 'answer' ? '#fff' : 'var(--color-text)',
+                    }}
+                    onClick={() => toggleMic('answer')}
+                  >
+                    {getIcon('mic', { size: 16 })}
+                  </button>
+                </Tooltip>
               )}
             </div>
             <button className="w-full rounded-lg px-3 py-2 text-sm font-medium hover:opacity-70" style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }} onClick={submitAnswer}>
