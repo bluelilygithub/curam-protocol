@@ -47,6 +47,7 @@ import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
 import WebExtractorPage from './pages/WebExtractorPage';
+import BrowserAgentPage from './pages/BrowserAgentPage';
 import RestylePage from './pages/RestylePage';
 import SearchConsolePage from './pages/SearchConsolePage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
@@ -184,6 +185,7 @@ function App() {
               <Route path="/html" element={<HtmlAuditPage />} />
               <Route path="/html/:id" element={<HtmlAuditPage />} />
               <Route path="/web-extractor" element={<WebExtractorPage />} />
+              <Route path="/browser-agent" element={<BrowserAgentPage />} />
               <Route path="/restyle" element={<RestylePage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />

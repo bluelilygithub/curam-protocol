@@ -1,0 +1,106 @@
+'use strict';
+
+const { WebSocketServer } = require('ws');
+const { URL } = require('url');
+const { pool } = require('../../db');
+const { loadFeatureAccess } = require('../../middleware/auth');
+const { getModelsForUser } = require('../modelResolver');
+const { BrowserAgentSession } = require('./browserAgentSession');
+
+const MAX_CONCURRENT_SESSIONS = 4;
+let activeSessions = 0;
+
+// Reuses the same 32-byte-hex token lookup as requireAuth (server/middleware/auth.js).
+// The WS upgrade handshake never runs Express middleware, so this check has to be
+// done by hand before a Session (and its Chromium context) is created.
+async function authenticate(token) {
+  if (!token) return null;
+  const { rows: sessions } = await pool.query('SELECT * FROM auth_sessions WHERE token=$1', [token]);
+  const session = sessions[0];
+  if (!session || new Date(session.expiresAt) < new Date()) return null;
+  const { rows: users } = await pool.query('SELECT id, email, "isAdmin" FROM users WHERE id=$1', [session.userId]);
+  return users[0] || null;
+}
+
+function attachBrowserAgentWs(httpServer) {
+  const wss = new WebSocketServer({ noServer: true });
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    const { pathname } = new URL(req.url, 'http://internal');
+    if (pathname !== '/api/browser-agent/ws') return; // leave other upgrades alone
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  });
+
+  wss.on('connection', async (ws, req) => {
+    const { searchParams } = new URL(req.url, 'http://internal');
+    const token = searchParams.get('token');
+
+    const user = await authenticate(token).catch(() => null);
+    if (!user) {
+      ws.send(JSON.stringify({ type: 'error', text: 'Not authenticated.' }));
+      return ws.close(4001, 'unauthenticated');
+    }
+
+    if (!user.isAdmin) {
+      const access = await loadFeatureAccess(user.id).catch(() => ({}));
+      if (access.browserAgent === false) {
+        ws.send(JSON.stringify({ type: 'error', text: 'Feature disabled for member accounts.' }));
+        return ws.close(4003, 'feature-disabled');
+      }
+    }
+
+    if (activeSessions >= MAX_CONCURRENT_SESSIONS) {
+      ws.send(JSON.stringify({ type: 'error', text: 'Too many browser agent sessions running right now — try again shortly.' }));
+      return ws.close(4008, 'capacity');
+    }
+
+    const { rows: tzRows } = await pool.query(
+      "SELECT value FROM settings WHERE \"userId\"=$1 AND key='user_timezone'", [user.id]
+    ).catch(() => ({ rows: [] }));
+    const tz = tzRows[0]?.value || 'Australia/Sydney';
+
+    // The tool-use loop below talks to the Anthropic SDK directly (no Gemini/DeepSeek
+    // routing, unlike chat.js) — so pick the first tier slot that's actually an
+    // Anthropic id, in case the workspace default_model points at gemini-*/deepseek-*.
+    const isAnthropicId = (id) => !!id && !id.startsWith('gemini-') && !id.startsWith('deepseek-') && !id.startsWith('ollama:');
+    let model;
+    try {
+      const models = await getModelsForUser(user.id);
+      model = [models.standard, models.light].find(isAnthropicId) || null;
+    } catch {
+      model = null;
+    }
+    if (!model) {
+      ws.send(JSON.stringify({ type: 'error', text: 'No Anthropic model configured for this workspace — add one to vault_models in Settings.' }));
+      return ws.close(4004, 'no-model');
+    }
+
+    activeSessions += 1;
+    const session = new BrowserAgentSession(ws, { model, tz });
+
+    ws.on('message', async (raw) => {
+      let m;
+      try { m = JSON.parse(raw); } catch { return; }
+      try {
+        if (m.type === 'start') session.run(String(m.instruction || '').slice(0, 2000), m.profile || {});
+        else if (m.type === 'answer' && session.pendingAnswer) session.pendingAnswer(String(m.text || ''));
+        else if (m.type === 'takeover') session.takeover();
+        else if (['mouse', 'wheel', 'key', 'text'].includes(m.type)) await session.userInput(m);
+      } catch (e) {
+        session.log('error', e.message);
+      }
+    });
+
+    ws.on('close', () => {
+      activeSessions -= 1;
+      session.close();
+    });
+  });
+
+  return wss;
+}
+
+module.exports = { attachBrowserAgentWs };

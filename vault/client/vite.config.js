@@ -20,6 +20,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        ws: true, // Browser Agent's /api/browser-agent/ws upgrade needs this forwarded too
       },
       '/tb': {
         target: 'http://localhost:3001',

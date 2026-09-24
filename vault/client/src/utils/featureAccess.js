@@ -34,6 +34,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   webExtractor: true,
   fonts: true,
   restyle: true,
+  browserAgent: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -75,6 +76,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'pdf', label: 'PDF Tools' },
       { key: 'fonts', label: 'Font Customizer' },
       { key: 'restyle', label: 'CSS' },
+      { key: 'browserAgent', label: 'Browser Agent' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

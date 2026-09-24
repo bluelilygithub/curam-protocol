@@ -263,7 +263,12 @@ async function start() {
     console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);
   });
 
-  app.listen(PORT, () => {
+  const http = require('http');
+  const server = http.createServer(app);
+  const { attachBrowserAgentWs } = require('./services/browserAgent/browserAgentWs');
+  attachBrowserAgentWs(server);
+
+  server.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);
   });
 }

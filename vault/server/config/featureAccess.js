@@ -34,6 +34,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   webExtractor: true,
   fonts: true,
   restyle: true,
+  browserAgent: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

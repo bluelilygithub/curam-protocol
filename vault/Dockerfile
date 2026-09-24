@@ -29,6 +29,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --include=dev
 
+# Playwright Chromium for the Browser Agent (server/services/browserAgent/) —
+# --with-deps pulls the OS libs Chromium needs on top of node:20-slim.
+RUN npx playwright install --with-deps chromium
+
 # Build frontend
 COPY . .
 RUN npm run build
