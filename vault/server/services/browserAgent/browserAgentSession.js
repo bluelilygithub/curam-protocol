@@ -185,6 +185,7 @@ class BrowserAgentSession {
     this.pendingAnswer = null;
     this.heavyResults = [];
     this.runLog = []; // archived alongside the run — see onFinish
+    this.messages = []; // persists across runs in this session — see run()
   }
 
   send(msg) { if (this.ws.readyState === 1) this.ws.send(JSON.stringify(msg)); }
@@ -389,7 +390,6 @@ class BrowserAgentSession {
     if (this.running) return;
     this.running = true;
     this.cancelled = false;
-    this.heavyResults = [];
     this.runLog = [];
     const startedAt = new Date();
     let handedOff = false;
@@ -402,8 +402,13 @@ class BrowserAgentSession {
       this.send({ type: 'control', who: 'agent' });
       this.log('user', instruction);
 
+      // this.messages persists across runs in this session (not reset here) so a
+      // follow-up instruction — "now change the phone number", "actually use a
+      // different date" — has the prior exchange as context, not just the raw
+      // page state. Only resets when the WS connection closes (new Session).
       const system = buildSystemPrompt(profile, this.tz);
-      const messages = [{ role: 'user', content: instruction }];
+      const messages = this.messages;
+      messages.push({ role: 'user', content: instruction });
 
       for (let turn = 0; turn < MAX_TURNS && !this.cancelled; turn++) {
         this.pruneOldResults();
