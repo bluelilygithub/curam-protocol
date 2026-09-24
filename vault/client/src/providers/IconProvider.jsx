@@ -137,6 +137,7 @@ const semanticMap = {
   'app-window': { lucide: 'AppWindow' },
   shapes: { lucide: 'Shapes' },
   'layout-grid': { lucide: 'LayoutGrid' },
+  'grid-3x3': { lucide: 'Grid3x3' },
   info: { lucide: 'Info' },
   'file-stack': { lucide: 'FileStack' },
   printer: { lucide: 'Printer' },

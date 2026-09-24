@@ -28,6 +28,7 @@ import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/r
 import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 import ConfirmModal from '../components/ConfirmModal';
 import UsersAdminPanel from '../components/UsersAdminPanel';
+import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
@@ -201,6 +202,7 @@ function SettingsPage() {
         'Shares',
         'Amazon Search',
         'Mobile',
+        'Navigation',
         'Members',
         'Feature Access',
         'Wellbeing Invites',
@@ -229,6 +231,7 @@ function SettingsPage() {
           'Shares',
           'Amazon Search',
           'Mobile',
+          'Navigation',
           'Members',
           'Feature Access',
           'Wellbeing Invites',
@@ -3009,6 +3012,16 @@ function SettingsPage() {
           {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
         </button>
       </>
+      )}
+
+      {/* Navigation (admin) — split the header Apps menu into two sets */}
+      {tab === 'Navigation' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Navigation
+        </h2>
+        <NavLayoutEditor />
+      </section>
       )}
 
       {/* Members (admin) */}

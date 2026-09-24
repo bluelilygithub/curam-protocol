@@ -174,3 +174,61 @@ export function getAppsNavGroups({ canUseFeature, isAdmin = false }) {
   if (habitsItems.length === 0) return groups;
   return [{ ...HABITS_NAV_GROUP, items: habitsItems }, ...groups];
 }
+
+/** Flat catalog of every nav item (id → item + its default group), for the
+ * admin nav-layout editor — the editor works from the full catalog, not from
+ * what's currently visible to the logged-in admin, so nothing is hidden while
+ * arranging it. Excludes the dynamic 7 Habits group (not part of the two-set
+ * layout — see applyNavLayout). */
+export function getNavItemCatalog() {
+  const byId = {};
+  for (const group of APP_NAV_GROUPS) {
+    for (const item of group.items) {
+      byId[item.id] = { ...item, defaultGroupId: group.id, defaultGroupLabel: group.label };
+    }
+  }
+  return byId;
+}
+
+const UNSORTED_GROUP_ID = '__unsorted';
+
+/**
+ * Splits the (already feature/admin-filtered) flat groups from getAppsNavGroups
+ * into the admin's two-set nav_layout, when one is configured. Any visible item
+ * the layout doesn't mention (new feature shipped since the layout was last
+ * saved, or never placed) lands in an auto "Unsorted" group in set 1 — it's
+ * never silently dropped from the nav.
+ *
+ * Returns null when no layout is configured, so callers fall back to rendering
+ * `groups` as a single dropdown exactly as before.
+ */
+export function applyNavLayout(navLayout, groups) {
+  if (!navLayout || !Array.isArray(navLayout.sets) || navLayout.sets.length !== 2) return null;
+
+  const itemsById = {};
+  for (const group of groups) for (const item of group.items) itemsById[item.id] = item;
+  const placedIds = new Set();
+
+  const sets = navLayout.sets.map((set) => ({
+    id: set.id,
+    label: set.label || 'Apps',
+    groups: (set.groups || [])
+      .map((g) => ({
+        id: g.id,
+        label: g.label || 'Group',
+        items: (g.itemIds || [])
+          .map((id) => itemsById[id])
+          .filter(Boolean),
+      }))
+      .filter((g) => g.items.length > 0),
+  }));
+
+  sets.forEach((set) => set.groups.forEach((g) => g.items.forEach((item) => placedIds.add(item.id))));
+
+  const unsorted = groups.flatMap((g) => g.items).filter((item) => !placedIds.has(item.id));
+  if (unsorted.length > 0) {
+    sets[0].groups.push({ id: UNSORTED_GROUP_ID, label: 'Unsorted', items: unsorted });
+  }
+
+  return sets;
+}

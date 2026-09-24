@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
-import { getAppsNavGroups, isNavItemActive } from '../config/appNavigation';
+import { getAppsNavGroups, isNavItemActive, applyNavLayout } from '../config/appNavigation';
+import api from '../utils/apiClient';
 
 export default function AppsLauncher({
   canUseFeature,
@@ -9,22 +10,70 @@ export default function AppsLauncher({
   missionReminderDue = false,
   newSuggestionCount = 0,
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
   const location = useLocation();
-  const getIcon = useIcon();
+  const [navLayout, setNavLayout] = useState(undefined); // undefined = not loaded yet, null = unconfigured
+
+  useEffect(() => {
+    api.get('/api/settings/nav-layout')
+      .then((res) => (res.ok ? res.json() : { navLayout: null }))
+      .then((data) => setNavLayout(data.navLayout))
+      .catch(() => setNavLayout(null));
+  }, []);
 
   const groups = getAppsNavGroups({ canUseFeature, isAdmin });
+  const sets = navLayout ? applyNavLayout(navLayout, groups) : null;
+
+  const openFromEvent = useRef(null);
+  useEffect(() => {
+    const openHandler = () => openFromEvent.current?.();
+    document.addEventListener('vault:open-apps-launcher', openHandler);
+    return () => document.removeEventListener('vault:open-apps-launcher', openHandler);
+  }, []);
+
+  if (!sets) {
+    return (
+      <NavDropdown
+        label="Apps"
+        icon="layout-grid"
+        groups={groups}
+        location={location}
+        missionReminderDue={missionReminderDue}
+        newSuggestionCount={newSuggestionCount}
+        registerOpen={(fn) => { openFromEvent.current = fn; }}
+        dataTour="apps-launcher"
+      />
+    );
+  }
+
+  return (
+    <div className="hidden sm:flex items-center gap-1">
+      {sets.map((set, i) => (
+        <NavDropdown
+          key={set.id}
+          label={set.label}
+          icon={i === 0 ? 'layout-grid' : 'grid-3x3'}
+          groups={set.groups}
+          location={location}
+          missionReminderDue={i === 0 && missionReminderDue}
+          newSuggestionCount={i === 0 ? newSuggestionCount : 0}
+          registerOpen={i === 0 ? (fn) => { openFromEvent.current = fn; } : undefined}
+          dataTour={i === 0 ? 'apps-launcher' : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+function NavDropdown({ label, icon, groups, location, missionReminderDue, newSuggestionCount, registerOpen, dataTour }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const getIcon = useIcon();
+
+  useEffect(() => { registerOpen?.(() => setOpen(true)); }, [registerOpen]);
 
   const anyActive = groups.some((g) =>
     g.items.some((item) => isNavItemActive(item, location.pathname, location.search))
   );
-
-  useEffect(() => {
-    const openHandler = () => setOpen(true);
-    document.addEventListener('vault:open-apps-launcher', openHandler);
-    return () => document.removeEventListener('vault:open-apps-launcher', openHandler);
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -49,12 +98,12 @@ export default function AppsLauncher({
         style={{
           color: open || anyActive ? 'var(--color-primary)' : 'var(--color-muted)',
         }}
-        data-tip="Apps"
-        data-tour="apps-launcher"
+        data-tip={label}
+        data-tour={dataTour}
         aria-expanded={open}
         aria-haspopup="true"
       >
-        {getIcon('layout-grid', { size: 16 })}
+        {getIcon(icon, { size: 16 })}
         {newSuggestionCount > 0 ? (
           <span
             className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
@@ -79,7 +128,7 @@ export default function AppsLauncher({
             className="px-3 py-2 border-b text-xs font-semibold uppercase tracking-wider"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
-            Apps
+            {label}
           </div>
           <div className="max-h-[min(70dvh,520px)] overflow-y-auto p-2 space-y-3">
             {groups.map((group) => (

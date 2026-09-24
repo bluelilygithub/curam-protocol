@@ -337,6 +337,47 @@ router.post('/mobile', async (req, res) => {
   }
 });
 
+// GET /api/settings/nav-layout — workspace-wide header nav split (two dropdown
+// "sets", each with its own groups) — see client/src/config/appNavigation.js.
+// null means unconfigured: the client falls back to the single "Apps" dropdown.
+router.get('/nav-layout', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM workspace_settings WHERE key='nav_layout' LIMIT 1"
+    );
+    if (!rows[0]) return res.json({ navLayout: null });
+    let parsed = null;
+    try { parsed = JSON.parse(rows[0].value); } catch { parsed = null; }
+    res.json({ navLayout: parsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/nav-layout — body: { navLayout: {...} | null }
+router.post('/nav-layout', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const { navLayout } = req.body || {};
+  try {
+    if (navLayout === null || navLayout === undefined) {
+      await pool.query("DELETE FROM workspace_settings WHERE key='nav_layout'");
+      return res.json({ ok: true });
+    }
+    if (!Array.isArray(navLayout.sets) || navLayout.sets.length !== 2) {
+      return res.status(400).json({ error: 'navLayout.sets must be an array of exactly 2 sets' });
+    }
+    await pool.query(
+      `INSERT INTO workspace_settings (key, value, "updatedAt")
+       VALUES ('nav_layout', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [JSON.stringify(navLayout)]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/settings/content-restrictions — workspace graphics safety rules
 router.get('/content-restrictions', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
