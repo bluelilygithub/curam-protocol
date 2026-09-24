@@ -134,7 +134,7 @@ export default function BrowserAgentPage() {
   const interactive = control === 'review' || control === 'user';
 
   return (
-    <div className="flex flex-col lg:flex-row gap-5 p-5 max-w-[1400px] mx-auto">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-5 p-5 max-w-[1400px] mx-auto">
       <section className="flex-1 min-w-0 flex flex-col rounded-2xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="flex items-center gap-2 px-3.5 py-2.5 border-b text-xs truncate" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
           {url}
