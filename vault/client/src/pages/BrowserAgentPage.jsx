@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import useAuthStore from '../store/authStore';
-import { getIcon } from '../providers/IconProvider';
+import { useIcon } from '../providers/IconProvider';
 
 const PROFILE_FIELDS = [
   { name: 'name', label: 'Name', autoComplete: 'name' },
@@ -20,6 +20,7 @@ function loadProfile() {
 }
 
 export default function BrowserAgentPage() {
+  const getIcon = useIcon();
   const token = useAuthStore((s) => s.token);
   const [profile, setProfile] = useState(loadProfile);
   const [instruction, setInstruction] = useState('');
