@@ -38,6 +38,31 @@ export default function BrowserAgentPage() {
   const [profile, setProfile] = useState(null);
   const [allowedDomain, setAllowedDomain] = useState('');
   const [usage, setUsage] = useState(null); // { turn, maxTurns, inputTokens, outputTokens, costUsd }
+  const [paused, setPaused] = useState(false);
+  const [presets, setPresets] = useState([]);
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [presetLabel, setPresetLabel] = useState('');
+
+  const loadPresets = useCallback(() => {
+    api.get('/api/settings').then((res) => (res.ok ? res.json() : {}))
+      .then((data) => { try { setPresets(JSON.parse(data.browser_agent_presets || '[]')); } catch { setPresets([]); } })
+      .catch(() => setPresets([]));
+  }, []);
+  useEffect(() => { loadPresets(); }, [loadPresets]);
+
+  function savePresets(next) {
+    setPresets(next);
+    api.post('/api/settings', { key: 'browser_agent_presets', value: JSON.stringify(next) }).catch(() => {});
+  }
+  function saveCurrentAsPreset() {
+    if (!presetLabel.trim() || !instruction.trim()) return;
+    savePresets([...presets, { id: Date.now(), label: presetLabel.trim(), instruction: instruction.trim() }]);
+    setPresetLabel('');
+    setShowSavePreset(false);
+  }
+  function deletePreset(id) {
+    savePresets(presets.filter((p) => p.id !== id));
+  }
 
   const wsRef = useRef(null);
   const imgRef = useRef(null);
@@ -86,7 +111,7 @@ export default function BrowserAgentPage() {
           setLog((prev) => [...prev, { kind: m.kind, text: m.text }]);
         } else if (m.type === 'control') {
           if (m.who === 'agent') { setControl('agent'); setWho('Agent is driving'); setHint("Watch the browser. It won't press send."); }
-          else setControl((c) => (c === 'review' ? c : 'user'));
+          else { setControl((c) => (c === 'review' ? c : 'user')); setPaused(false); }
         } else if (m.type === 'handoff') {
           setLog((prev) => [...prev, { kind: 'handoff', text: m.summary }]);
           setControl('review'); setWho('Your turn'); setHint("Drag the scrollbar to check the whole form, then press the site's own send button.");
@@ -102,6 +127,10 @@ export default function BrowserAgentPage() {
           setUsage(null);
         } else if (m.type === 'usage') {
           setUsage(m);
+        } else if (m.type === 'paused') {
+          setPaused(true);
+        } else if (m.type === 'resumed') {
+          setPaused(false);
         }
       };
     }
@@ -146,8 +175,29 @@ export default function BrowserAgentPage() {
     setControl('user'); setWho('You have control'); setHint('Click and type in the browser view.');
   }
 
+  function pauseAgent() {
+    send({ type: 'pause' });
+  }
+  function resumeAgent() {
+    send({ type: 'resume' });
+  }
+
   function clearSession() {
     send({ type: 'clear_session' });
+  }
+
+  function copyLog() {
+    const text = log.filter((e) => e.kind !== 'error_screenshot').map((e) => `[${e.kind}] ${e.text}`).join('\n');
+    navigator.clipboard?.writeText(text).catch(() => {});
+  }
+  function downloadLog() {
+    const text = log.filter((e) => e.kind !== 'error_screenshot').map((e) => `[${e.kind}] ${e.text}`).join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `browser-agent-log-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   function posFromEvent(e) {
@@ -179,6 +229,7 @@ export default function BrowserAgentPage() {
   }
 
   const interactive = control === 'review' || control === 'user';
+  const fieldChanges = log.filter((e) => e.kind === 'action' && /^(Typing into|Choosing|Filling saved login)/.test(e.text));
 
   return (
     <div className="flex flex-col lg:flex-row lg:items-start gap-5 p-5 max-w-[1400px] mx-auto">
@@ -271,7 +322,16 @@ export default function BrowserAgentPage() {
             </span>
           )}
           {control === 'agent' && (
-            <button className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={takeover}>Take over</button>
+            <>
+              <button
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60"
+                style={{ borderColor: 'var(--color-border)' }}
+                onClick={paused ? resumeAgent : pauseAgent}
+              >
+                {paused ? 'Resume' : 'Pause'}
+              </button>
+              <button className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={takeover}>Take over</button>
+            </>
           )}
         </div>
       </section>
@@ -319,6 +379,9 @@ export default function BrowserAgentPage() {
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               onFocus={() => { micTargetRef.current = 'instruction'; }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); start(); }
+              }}
             />
             {instruction && (
               <button
@@ -346,6 +409,61 @@ export default function BrowserAgentPage() {
             className="w-full mt-2 px-2.5 py-1.5 rounded-lg border text-xs"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
           />
+
+          {presets.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {presets.map((p) => (
+                <span key={p.id} className="inline-flex items-center rounded-full border text-xs overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 hover:opacity-70"
+                    title={p.instruction}
+                    onClick={() => setInstruction(p.instruction)}
+                  >
+                    {p.label}
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete preset"
+                    className="px-1.5 py-1 hover:opacity-70"
+                    style={{ color: '#ef4444' }}
+                    onClick={() => deletePreset(p.id)}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {showSavePreset ? (
+            <div className="flex gap-1.5 mt-2.5">
+              <input
+                type="text"
+                value={presetLabel}
+                onChange={(e) => setPresetLabel(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveCurrentAsPreset()}
+                placeholder="Preset name"
+                autoFocus
+                className="flex-1 px-2.5 py-1.5 rounded-lg border text-xs"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+              />
+              <button type="button" className="text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-60" style={{ borderColor: 'var(--color-border)' }} onClick={saveCurrentAsPreset}>Save</button>
+              <button type="button" className="text-xs px-2.5 py-1.5 rounded-lg hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={() => setShowSavePreset(false)}>Cancel</button>
+            </div>
+          ) : (
+            instruction.trim() && (
+              <button
+                type="button"
+                className="text-xs mt-1.5 hover:opacity-60"
+                style={{ color: 'var(--color-primary)' }}
+                onClick={() => setShowSavePreset(true)}
+              >
+                + Save as preset
+              </button>
+            )
+          )}
+
           <div className="flex gap-2 mt-2.5">
             {(voice.isSTTAvailable || voice.isLocalSTTAvailable) && (
               <button
@@ -410,7 +528,22 @@ export default function BrowserAgentPage() {
           </div>
         )}
 
+        {control === 'review' && fieldChanges.length > 0 && (
+          <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--color-muted)' }}>Fields changed this run</p>
+            <ul className="text-xs space-y-1 list-disc pl-4">
+              {fieldChanges.map((e, i) => <li key={i}>{e.text}</li>)}
+            </ul>
+          </div>
+        )}
+
         <div className="rounded-2xl border p-2 flex-1 min-h-[200px] max-h-[52vh] overflow-y-auto" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          {log.length > 0 && (
+            <div className="flex justify-end gap-2 px-1 pb-1">
+              <button type="button" title="Copy log" className="text-[11px] hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={copyLog}>Copy</button>
+              <button type="button" title="Download log" className="text-[11px] hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={downloadLog}>Download</button>
+            </div>
+          )}
           {log.length === 0 ? (
             <p className="text-sm px-2 py-2" style={{ color: 'var(--color-muted)' }}>Steps will show here as the agent works.</p>
           ) : (

@@ -12,7 +12,7 @@ function normaliseDomain(raw) {
 // List archived runs for the signed-in user — most recent first.
 router.get('/runs', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, instruction, outcome, summary, "startedAt", "endedAt"
+    `SELECT id, instruction, outcome, summary, "startedAt", "endedAt", jsonb_array_length(log) AS steps
      FROM browser_agent_runs WHERE "userId"=$1 ORDER BY "startedAt" DESC LIMIT 100`,
     [req.user.id]
   );
@@ -55,11 +55,22 @@ router.post('/runs/delete', async (req, res) => {
 
 router.get('/credentials', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, label, domain, username, "createdAt" FROM browser_agent_credentials
-     WHERE "userId"=$1 ORDER BY label ASC`,
+    `SELECT id, label, domain, username, pinned, "createdAt" FROM browser_agent_credentials
+     WHERE "userId"=$1 ORDER BY pinned DESC, label ASC`,
     [req.user.id]
   );
   res.json(rows);
+});
+
+router.post('/credentials/:id/pin', async (req, res) => {
+  const pinned = !!req.body?.pinned;
+  const { rows } = await pool.query(
+    `UPDATE browser_agent_credentials SET pinned=$1 WHERE id=$2 AND "userId"=$3
+     RETURNING id, label, domain, username, pinned, "createdAt"`,
+    [pinned, req.params.id, req.user.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
 });
 
 router.post('/credentials', async (req, res) => {

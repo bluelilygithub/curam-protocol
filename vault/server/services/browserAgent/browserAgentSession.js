@@ -225,6 +225,8 @@ class BrowserAgentSession {
     this.pages = []; // every open tab in this context; this.page is whichever is active
     this.usage = { inputTokens: 0, outputTokens: 0, turns: 0 };
     this.idleTimer = null;
+    this.paused = false;
+    this.pauseResolve = null;
   }
 
   bumpIdleTimer() {
@@ -498,6 +500,7 @@ class BrowserAgentSession {
     if (this.running) return;
     this.running = true;
     this.cancelled = false;
+    this.paused = false;
     this.runLog = [];
     this.allowedDomain = allowedDomain || null;
     const startedAt = new Date();
@@ -522,6 +525,13 @@ class BrowserAgentSession {
       const price = priceFor(this.model);
 
       for (let turn = 0; turn < MAX_TURNS && !this.cancelled; turn++) {
+        if (this.paused) {
+          this.send({ type: 'paused' });
+          await new Promise((resolve) => { this.pauseResolve = resolve; });
+          this.pauseResolve = null;
+          if (this.cancelled) break;
+          this.send({ type: 'resumed' });
+        }
         this.pruneOldResults();
         const resp = await anthropic.messages.create({ model: this.model, max_tokens: 2048, system, tools: TOOLS, messages });
         if (this.cancelled) break;
@@ -610,8 +620,21 @@ class BrowserAgentSession {
     this.cancelled = true;
     this.agentInControl = false;
     if (this.pendingAnswer) this.pendingAnswer('(The user took over the browser.)');
+    if (this.pauseResolve) this.pauseResolve();
     this.send({ type: 'control', who: 'user' });
     this.log('guard', 'You took over. The agent has stopped.');
+  }
+
+  pause() {
+    if (!this.running || this.paused) return;
+    this.paused = true;
+    this.log('guard', 'Paused before the next step. Resume when ready.');
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.pauseResolve) this.pauseResolve();
   }
 
   async userInput(m) {
@@ -627,6 +650,7 @@ class BrowserAgentSession {
     this.cancelled = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.pendingAnswer) this.pendingAnswer('');
+    if (this.pauseResolve) this.pauseResolve();
     await this.context?.close().catch(() => {});
   }
 }

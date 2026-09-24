@@ -891,8 +891,12 @@ async function initSchema() {
         domain        TEXT NOT NULL,
         username      TEXT NOT NULL,
         password      TEXT NOT NULL,
+        pinned        BOOLEAN NOT NULL DEFAULT FALSE,
         "createdAt"   TIMESTAMPTZ DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE browser_agent_credentials ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_browser_agent_credentials_user

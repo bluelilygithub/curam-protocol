@@ -184,6 +184,18 @@ export default function BrowserAgentSettingsPage() {
           <ul className="space-y-1.5">
             {credentials.map((c) => (
               <li key={c.id} className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
+                <button
+                  type="button"
+                  title={c.pinned ? 'Unpin' : 'Pin to top'}
+                  className="flex-none hover:opacity-60"
+                  style={{ color: c.pinned ? '#d9892b' : 'var(--color-muted)' }}
+                  onClick={async () => {
+                    await api.post(`/api/browser-agent/credentials/${c.id}/pin`, { pinned: !c.pinned });
+                    loadCredentials();
+                  }}
+                >
+                  {getIcon('star', { size: 14 })}
+                </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{c.label}</p>
                   <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{c.domain} · {c.username}</p>

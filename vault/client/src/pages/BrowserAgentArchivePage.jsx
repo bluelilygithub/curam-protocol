@@ -18,6 +18,13 @@ const OUTCOME_LABEL = {
   error: 'Error',
 };
 
+function formatDuration(startedAt, endedAt) {
+  if (!startedAt || !endedAt) return null;
+  const secs = Math.round((new Date(endedAt) - new Date(startedAt)) / 1000);
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
 export default function BrowserAgentArchivePage() {
   const getIcon = useIcon();
   const [runs, setRuns] = useState(null);
@@ -127,6 +134,8 @@ export default function BrowserAgentArchivePage() {
                     </span>
                     <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
                       {new Date(r.startedAt).toLocaleString()}
+                      {' · '}{r.steps ?? 0} step{r.steps === 1 ? '' : 's'}
+                      {formatDuration(r.startedAt, r.endedAt) && ` · ${formatDuration(r.startedAt, r.endedAt)}`}
                     </span>
                   </div>
                   <p className="text-sm mt-1">{r.instruction}</p>
@@ -166,7 +175,29 @@ function RunLog({ runId }) {
   }, [runId]);
 
   if (entries === null) return <p className="mt-2 text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+
+  function copyLog() {
+    const text = entries.filter((e) => e.kind !== 'error_screenshot').map((e) => `[${e.kind}] ${e.text}`).join('\n');
+    navigator.clipboard?.writeText(text).catch(() => {});
+  }
+  function downloadLog() {
+    const text = entries.filter((e) => e.kind !== 'error_screenshot').map((e) => `[${e.kind}] ${e.text}`).join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `browser-agent-log-${runId}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
+    <>
+    {entries.length > 0 && (
+      <div className="flex justify-end gap-2 mt-2">
+        <button type="button" className="text-[11px] hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={copyLog}>Copy</button>
+        <button type="button" className="text-[11px] hover:opacity-60" style={{ color: 'var(--color-muted)' }} onClick={downloadLog}>Download</button>
+      </div>
+    )}
     <ol className="mt-2 space-y-1 text-xs">
       {entries.map((e, i) => (
         <li key={i} style={{ color: e.kind === 'error' ? '#ef4444' : e.kind === 'guard' ? '#9a5a12' : 'var(--color-muted)' }}>
@@ -178,5 +209,6 @@ function RunLog({ runId }) {
         </li>
       ))}
     </ol>
+    </>
   );
 }
