@@ -178,11 +178,13 @@ export function getAppsNavGroups({ canUseFeature, isAdmin = false }) {
 /** Flat catalog of every nav item (id → item + its default group), for the
  * admin nav-layout editor — the editor works from the full catalog, not from
  * what's currently visible to the logged-in admin, so nothing is hidden while
- * arranging it. Excludes the dynamic 7 Habits group (not part of the two-set
- * layout — see applyNavLayout). */
+ * arranging it. Includes the 7 Habits shortcuts too (getAppsNavGroups prepends
+ * them at runtime, so applyNavLayout sees them and — if the editor didn't also
+ * expose them here — they'd only ever land in the auto "Unsorted" group with
+ * no way to place them). */
 export function getNavItemCatalog() {
   const byId = {};
-  for (const group of APP_NAV_GROUPS) {
+  for (const group of [...APP_NAV_GROUPS, HABITS_NAV_GROUP]) {
     for (const item of group.items) {
       byId[item.id] = { ...item, defaultGroupId: group.id, defaultGroupLabel: group.label };
     }
