@@ -75,17 +75,34 @@ export default function NavLayoutEditor() {
     setSaved(false);
   }
 
-  function moveItemToGroup(itemId, setId, groupId) {
+  function moveItemToGroup(itemId, setId, groupId, beforeItemId = null) {
     update((next) => {
       removeItemEverywhere(next, itemId);
-      const set = next.sets.find((s) => s.id === setId);
-      const group = set.groups.find((g) => g.id === groupId);
-      if (group && !group.itemIds.includes(itemId)) group.itemIds.push(itemId);
+      const group = next.sets.find((s) => s.id === setId).groups.find((g) => g.id === groupId);
+      if (!group) return;
+      const at = beforeItemId ? group.itemIds.indexOf(beforeItemId) : -1;
+      if (at === -1) group.itemIds.push(itemId);
+      else group.itemIds.splice(at, 0, itemId);
     });
   }
 
   function moveItemToPool(itemId) {
     update((next) => removeItemEverywhere(next, itemId));
+  }
+
+  function moveGroup(groupId, targetSetId, beforeGroupId = null) {
+    update((next) => {
+      let group = null;
+      next.sets.forEach((s) => {
+        const idx = s.groups.findIndex((g) => g.id === groupId);
+        if (idx !== -1) { [group] = s.groups.splice(idx, 1); }
+      });
+      if (!group) return;
+      const targetSet = next.sets.find((s) => s.id === targetSetId);
+      const at = beforeGroupId ? targetSet.groups.findIndex((g) => g.id === beforeGroupId) : -1;
+      if (at === -1) targetSet.groups.push(group);
+      else targetSet.groups.splice(at, 0, group);
+    });
   }
 
   function addGroup(setId) {
@@ -142,17 +159,48 @@ export default function NavLayoutEditor() {
 
   function onDragStartItem(e, itemId) {
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', itemId);
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'item', id: itemId }));
   }
-  function onDropOnGroup(e, setId, groupId) {
+  function onDragStartGroup(e, groupId) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'group', id: groupId }));
+  }
+  function readPayload(e) {
+    try { return JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return null; }
+  }
+  // Dropped directly on an item chip — insert the dragged item just before it
+  // (reordering within the group, or moving in from elsewhere at that exact spot).
+  function onDropOnItem(e, setId, groupId, targetItemId) {
     e.preventDefault();
-    const itemId = e.dataTransfer.getData('text/plain');
-    if (itemId) moveItemToGroup(itemId, setId, groupId);
+    e.stopPropagation();
+    const payload = readPayload(e);
+    if (payload?.type === 'item' && payload.id !== targetItemId) moveItemToGroup(payload.id, setId, groupId, targetItemId);
+  }
+  // Dropped on the group's item area but not on a specific chip — append to the end.
+  function onDropOnGroupBody(e, setId, groupId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const payload = readPayload(e);
+    if (payload?.type === 'item') moveItemToGroup(payload.id, setId, groupId);
+  }
+  // Dropped on another group's header — reorder groups (insert dragged group before this one).
+  function onDropOnGroupHeader(e, setId, groupId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const payload = readPayload(e);
+    if (payload?.type === 'group' && payload.id !== groupId) moveGroup(payload.id, setId, groupId);
+    else if (payload?.type === 'item') moveItemToGroup(payload.id, setId, groupId);
+  }
+  // Dropped on empty space below the last group in a set — append group to the end of that set.
+  function onDropOnSetTail(e, setId) {
+    e.preventDefault();
+    const payload = readPayload(e);
+    if (payload?.type === 'group') moveGroup(payload.id, setId);
   }
   function onDropOnPool(e) {
     e.preventDefault();
-    const itemId = e.dataTransfer.getData('text/plain');
-    if (itemId) moveItemToPool(itemId);
+    const payload = readPayload(e);
+    if (payload?.type === 'item') moveItemToPool(payload.id);
   }
 
   return (
@@ -170,16 +218,33 @@ export default function NavLayoutEditor() {
               className="w-full mb-3 px-2 py-1.5 rounded-lg border text-sm font-semibold"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
-            <div className="space-y-2.5">
+            <div
+              className="space-y-2.5"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => onDropOnSetTail(e, set.id)}
+            >
               {set.groups.map((group) => (
                 <div
                   key={group.id}
                   className="rounded-lg border p-2"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => onDropOnGroup(e, set.id, group.id)}
+                  onDrop={(e) => onDropOnGroupBody(e, set.id, group.id)}
                 >
-                  <div className="flex items-center gap-1.5 mb-1.5">
+                  <div
+                    className="flex items-center gap-1.5 mb-1.5"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDropOnGroupHeader(e, set.id, group.id)}
+                  >
+                    <span
+                      draggable
+                      onDragStart={(e) => onDragStartGroup(e, group.id)}
+                      title="Drag to reorder this group"
+                      className="flex-none cursor-grab active:cursor-grabbing"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {getIcon('grip-vertical', { size: 13 })}
+                    </span>
                     <input
                       value={group.label}
                       onChange={(e) => renameGroup(set.id, group.id, e.target.value)}
@@ -205,6 +270,9 @@ export default function NavLayoutEditor() {
                         key={id}
                         draggable
                         onDragStart={(e) => onDragStartItem(e, id)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => onDropOnItem(e, set.id, group.id, id)}
+                        title="Drag to reorder"
                         className="text-xs px-2 py-1 rounded-md border cursor-grab active:cursor-grabbing flex items-center gap-1"
                         style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
                       >
