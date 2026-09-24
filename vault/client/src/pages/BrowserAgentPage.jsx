@@ -78,7 +78,7 @@ export default function BrowserAgentPage() {
           else { setControl((c) => (c === 'review' ? c : 'user')); loadRuns(); }
         } else if (m.type === 'handoff') {
           setLog((prev) => [...prev, { kind: 'handoff', text: m.summary }]);
-          setControl('review'); setWho('Your turn'); setHint("Check the form, then press the site's own send button.");
+          setControl('review'); setWho('Your turn'); setHint("Scroll (or use the ↑↓ buttons) to check the form, then press the site's own send button.");
         } else if (m.type === 'question') {
           setQuestion(m.text);
           setLog((prev) => [...prev, { kind: 'thought', text: m.text }]);
@@ -158,6 +158,28 @@ export default function BrowserAgentPage() {
           {!connected && (
             <div className="absolute inset-0 grid place-items-center text-center px-6" style={{ color: 'var(--color-muted)' }}>
               <p>Connecting…</p>
+            </div>
+          )}
+          {interactive && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1.5">
+              <button
+                type="button"
+                title="Scroll up"
+                className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                onClick={(e) => { e.stopPropagation(); send({ type: 'wheel', dy: -400, x: 0.5, y: 0.5 }); }}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                title="Scroll down"
+                className="w-8 h-8 rounded-full grid place-items-center text-sm font-bold shadow hover:opacity-80"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                onClick={(e) => { e.stopPropagation(); send({ type: 'wheel', dy: 400, x: 0.5, y: 0.5 }); }}
+              >
+                ↓
+              </button>
             </div>
           )}
         </div>
