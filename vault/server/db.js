@@ -880,6 +880,25 @@ async function initSchema() {
       ON browser_agent_runs ("userId", "startedAt" DESC)
     `);
 
+    // ── Browser agent saved site logins ─────────────────────────────────────
+    // Passwords encrypted at rest (server/utils/encryption.js, same as Gmail
+    // OAuth tokens) — never returned to the client after creation.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS browser_agent_credentials (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label         TEXT NOT NULL,
+        domain        TEXT NOT NULL,
+        username      TEXT NOT NULL,
+        password      TEXT NOT NULL,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_browser_agent_credentials_user
+      ON browser_agent_credentials ("userId")
+    `);
+
     // ── Graphics gallery ──────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS graphics_gallery (

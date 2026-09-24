@@ -1,6 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { encrypt } = require('../utils/encryption');
+
+function normaliseDomain(raw) {
+  let v = String(raw || '').trim().toLowerCase();
+  v = v.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+  return v;
+}
 
 // List archived runs for the signed-in user — most recent first.
 router.get('/runs', async (req, res) => {
@@ -40,6 +47,44 @@ router.post('/runs/delete', async (req, res) => {
     [ids, req.user.id]
   );
   res.json({ ok: true, deleted: rowCount });
+});
+
+// ── Saved site logins ───────────────────────────────────────────────────────
+// Passwords are write-only from the client's point of view: list/get never
+// return them, only label/domain/username + whether one is set.
+
+router.get('/credentials', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, label, domain, username, "createdAt" FROM browser_agent_credentials
+     WHERE "userId"=$1 ORDER BY label ASC`,
+    [req.user.id]
+  );
+  res.json(rows);
+});
+
+router.post('/credentials', async (req, res) => {
+  const label = String(req.body?.label || '').trim();
+  const domain = normaliseDomain(req.body?.domain);
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  if (!label || !domain || !username || !password) {
+    return res.status(400).json({ error: 'label, domain, username and password are all required' });
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO browser_agent_credentials ("userId", label, domain, username, password)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id, label, domain, username, "createdAt"`,
+    [req.user.id, label, domain, username, encrypt(password)]
+  );
+  res.json(rows[0]);
+});
+
+router.delete('/credentials/:id', async (req, res) => {
+  const { rowCount } = await pool.query(
+    `DELETE FROM browser_agent_credentials WHERE id=$1 AND "userId"=$2`,
+    [req.params.id, req.user.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 module.exports = router;

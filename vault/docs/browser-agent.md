@@ -6,9 +6,20 @@ Streams a live view of a real headless Chromium session (Chrome DevTools Protoco
 
 ## Files
 
-- `server/services/browserAgent/browserAgentSession.js` — `BrowserAgentSession`: one Playwright `BrowserContext`/`Page` per connection, the 9-tool agent loop, the submit-click guard, the network-level POST guard.
-- `server/services/browserAgent/browserAgentWs.js` — WS upgrade handler mounted at `/api/browser-agent/ws`. Authenticates the same way `requireAuth` does (32-byte hex token, but read from `?token=` since the upgrade handshake never runs Express middleware), applies `browserAgent` feature-access, caps concurrent sessions, resolves an Anthropic model via `getModelsForUser()`.
-- `client/src/pages/BrowserAgentPage.jsx` — live view + instruction box + step log + saved "your details" profile (browser-local, not server-persisted).
+- `server/services/browserAgent/browserAgentSession.js` — `BrowserAgentSession`: one Playwright `BrowserContext`/`Page` per connection, the agent loop and its tools, the submit-click guard, the network-level POST guard.
+- `server/services/browserAgent/browserAgentWs.js` — WS upgrade handler mounted at `/api/browser-agent/ws`. Authenticates the same way `requireAuth` does (32-byte hex token, but read from `?token=` since the upgrade handshake never runs Express middleware), applies `browserAgent` feature-access, caps concurrent sessions, resolves an Anthropic model via `getModelsForUser()`, loads the profile (Settings) and a per-hostname credential lookup for `fill_login`.
+- `server/routes/browserAgent.js` — run archive (list/get/delete/bulk-delete) + saved-login CRUD (`/credentials`).
+- `client/src/pages/BrowserAgentPage.jsx` — live view (with a stand-in scrollbar widget — see below), instruction box with mic input (`useVoice()`) and a clear button, step log, read-only profile summary.
+- `client/src/pages/BrowserAgentSettingsPage.jsx` (`/browser-agent/settings`) — editable profile fields (writes the same `settings` keys as the main Settings page) + saved site logins.
+- `client/src/pages/BrowserAgentArchivePage.jsx` (`/browser-agent/archive`) — past runs, expandable to the full step log, multi-select delete.
+
+## Saved site logins (`fill_login`)
+
+`browser_agent_credentials` (userId, label, domain, username, password) — password encrypted at rest with `server/utils/encryption.js`, the same AES-256-GCM helper Gmail OAuth tokens use.
+
+The password is **never sent to the model or the Anthropic API**. The `fill_login` tool takes no input; server-side, `browserAgentWs.js` decrypts the matching credential for the current page's hostname and `browserAgentSession.js` fills it directly into the detected username/password fields via Playwright, returning only "Filled saved login" (or "No saved login for this site.") to the model. This was a deliberate redesign — an earlier draft that returned the credential value as a tool result was blocked by Claude Code's own permission classifier for credential leakage before it shipped.
+
+Login/sign-in submit buttons are blocked by the same `isSubmitLike()` guard as every other submit button — `fill_login` only fills the form, it never signs in on its own.
 
 ## Known limits (carried over from the reviewed original, not yet hardened further)
 

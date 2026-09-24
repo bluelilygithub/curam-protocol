@@ -49,6 +49,7 @@ import HtmlAuditPage from './pages/HtmlAuditPage';
 import WebExtractorPage from './pages/WebExtractorPage';
 import BrowserAgentPage from './pages/BrowserAgentPage';
 import BrowserAgentArchivePage from './pages/BrowserAgentArchivePage';
+import BrowserAgentSettingsPage from './pages/BrowserAgentSettingsPage';
 import RestylePage from './pages/RestylePage';
 import SearchConsolePage from './pages/SearchConsolePage';
 import ThemeBuilderPage from './pages/ThemeBuilderPage';
@@ -188,6 +189,7 @@ function App() {
               <Route path="/web-extractor" element={<WebExtractorPage />} />
               <Route path="/browser-agent" element={<BrowserAgentPage />} />
               <Route path="/browser-agent/archive" element={<BrowserAgentArchivePage />} />
+              <Route path="/browser-agent/settings" element={<BrowserAgentSettingsPage />} />
               <Route path="/restyle" element={<RestylePage />} />
               <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />

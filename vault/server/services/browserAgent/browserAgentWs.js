@@ -5,6 +5,7 @@ const { URL } = require('url');
 const { pool } = require('../../db');
 const { loadFeatureAccess } = require('../../middleware/auth');
 const { getModelsForUser } = require('../modelResolver');
+const { decrypt } = require('../../utils/encryption');
 const { BrowserAgentSession } = require('./browserAgentSession');
 
 const MAX_CONCURRENT_SESSIONS = 4;
@@ -43,6 +44,23 @@ async function loadBrowserAgentProfile(userId) {
     if (field && row.value) profile[field] = row.value;
   }
   return profile;
+}
+
+// Matches a page's hostname against the user's saved logins (browser_agent_credentials).
+// Decrypted here, inside the WS process, and handed straight into Playwright field
+// fills — never returned over the WS to the client, never logged, never included in
+// any string sent to the Anthropic API (see fill_login in browserAgentSession.js).
+async function makeCredentialLookup(userId) {
+  const { rows } = await pool.query(
+    `SELECT domain, username, password FROM browser_agent_credentials WHERE "userId"=$1`,
+    [userId]
+  );
+  return async (hostname) => {
+    const host = String(hostname || '').toLowerCase();
+    const match = rows.find((r) => host === r.domain || host.endsWith(`.${r.domain}`));
+    if (!match) return null;
+    return { username: match.username, password: decrypt(match.password) };
+  };
 }
 
 function attachBrowserAgentWs(httpServer) {
@@ -101,10 +119,13 @@ function attachBrowserAgentWs(httpServer) {
       return ws.close(4004, 'no-model');
     }
 
+    const lookupCredential = await makeCredentialLookup(user.id).catch(() => null);
+
     activeSessions += 1;
     const session = new BrowserAgentSession(ws, {
       model,
       tz,
+      lookupCredential,
       onFinish: (run) => {
         pool.query(
           `INSERT INTO browser_agent_runs ("userId", instruction, outcome, summary, log, "startedAt", "endedAt")

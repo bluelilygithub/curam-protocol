@@ -254,27 +254,49 @@ export default function BrowserAgentPage() {
       <aside className="w-full lg:w-[380px] flex-none flex flex-col gap-4">
         <div className="rounded-2xl border p-4 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h1 className="text-lg font-semibold">Browser Agent</h1>
-          <Link
-            to="/browser-agent/archive"
-            className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            {getIcon('archive', { size: 14 })} Archive
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/browser-agent/settings"
+              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              {getIcon('settings', { size: 14 })} Settings
+            </Link>
+            <Link
+              to="/browser-agent/archive"
+              className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-60 flex items-center gap-1.5"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              {getIcon('archive', { size: 14 })} Archive
+            </Link>
+          </div>
         </div>
 
         <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <p className="text-sm mb-3" style={{ color: 'var(--color-muted)' }}>
             Fills a form on a real site, then hands the browser back to you before anything is sent. The agent never presses submit — you do, after reviewing.
           </p>
-          <textarea
-            className="w-full min-h-[84px] rounded-lg border p-2.5 text-sm"
-            style={{ borderColor: 'var(--color-border)' }}
-            placeholder="Go to example.com.au and fill out the enquiry form for a quote"
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            onFocus={() => { micTargetRef.current = 'instruction'; }}
-          />
+          <div className="relative">
+            <textarea
+              className="w-full min-h-[84px] rounded-lg border p-2.5 pr-8 text-sm"
+              style={{ borderColor: 'var(--color-border)' }}
+              placeholder="Go to example.com.au and fill out the enquiry form for a quote"
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              onFocus={() => { micTargetRef.current = 'instruction'; }}
+            />
+            {instruction && (
+              <button
+                type="button"
+                title="Clear"
+                className="absolute top-2 right-2 w-5 h-5 rounded-full grid place-items-center text-xs hover:opacity-70"
+                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                onClick={() => setInstruction('')}
+              >
+                ✕
+              </button>
+            )}
+          </div>
           {voice.voiceError && (
             <p className="text-xs mt-1.5" style={{ color: '#ef4444' }}>{voice.voiceError}</p>
           )}
@@ -373,7 +395,7 @@ export default function BrowserAgentPage() {
           <div className="flex items-center gap-2 mb-2.5">
             {getIcon('user', { size: 15 })}
             <span className="text-sm font-medium flex-1">Your details for forms</span>
-            <Link to="/settings" className="text-xs font-medium hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
+            <Link to="/browser-agent/settings" className="text-xs font-medium hover:opacity-60" style={{ color: 'var(--color-primary)' }}>
               Edit
             </Link>
           </div>
