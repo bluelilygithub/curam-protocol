@@ -145,7 +145,7 @@ function attachBrowserAgentWs(httpServer) {
         }
         else if (m.type === 'answer' && session.pendingAnswer) session.pendingAnswer(String(m.text || ''));
         else if (m.type === 'takeover') session.takeover();
-        else if (m.type === 'clear_session') session.clearConversation();
+        else if (m.type === 'clear_session') await session.clearConversation();
         else if (['mouse', 'wheel', 'key', 'text'].includes(m.type)) await session.userInput(m);
       } catch (e) {
         session.log('error', e.message);

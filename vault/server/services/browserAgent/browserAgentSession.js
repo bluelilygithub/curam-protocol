@@ -466,15 +466,18 @@ class BrowserAgentSession {
     }
   }
 
-  clearConversation() {
+  async clearConversation() {
     if (this.running) {
       this.log('guard', 'Cannot clear while the agent is running — take over or wait for it to finish first.');
       return;
     }
     this.messages = [];
     this.heavyResults = [];
+    if (this.page && !this.page.isClosed()) {
+      await this.page.goto('about:blank').catch(() => {});
+    }
     this.send({ type: 'session_cleared' });
-    this.log('guard', 'Conversation cleared. The browser page itself is unchanged — only what the agent remembers was reset.');
+    this.log('guard', 'Conversation cleared and the browser page reset.');
   }
 
   takeover() {
