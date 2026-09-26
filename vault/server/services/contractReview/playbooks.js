@@ -77,6 +77,7 @@ const PLAYBOOKS = {
   loan: {
     default: {
       payment_terms: 'A clear repayment schedule and interest rate is standard; variable/undefined rates or acceleration clauses with no cure period are risky.',
+      indemnity: 'A guarantee capped to a defined amount, or conditioned on a cure period/formal default process before demand, is standard for the guarantor; an unconditional, uncapped personal guarantee triggered on any default with no conditions is risky for the guarantor. The same guarantee is standard (favourable, not risky) for the lender receiving it.',
     },
   },
   other: {

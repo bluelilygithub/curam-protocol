@@ -84,11 +84,11 @@ Clauses:
 ${list}`;
 }
 
-function riskScoringPrompt(clause, playbookPositions, relevantDefinitions, fullText) {
+function riskScoringPrompt(clause, playbookPositions, relevantDefinitions, fullText, role) {
   const positionsText = Object.entries(playbookPositions || {})
     .map(([type, position]) => `- ${type}: ${position}`).join('\n') || '(no specific playbook positions for this contract type/role)';
   const defsText = (relevantDefinitions || []).map((d) => `- ${d.term}: ${d.definition}`).join('\n') || '(none)';
-  return `You are reviewing one clause of a contract on behalf of a specific party. Assess whether THIS CLAUSE is risky FOR THAT PARTY, using the playbook positions below as your primary guide — do not flag something as risky that the playbook explicitly treats as standard, and do not ignore something the playbook explicitly flags. If the playbook has no relevant position and the clause is genuinely ambiguous, answer "unclear" rather than forcing a verdict.
+  return `You are reviewing one clause of a contract ON BEHALF OF THE PARTY WHOSE ROLE IS: "${role}". Assess whether THIS CLAUSE is risky FOR THAT PARTY SPECIFICALLY — the same clause can be risky for one party and perfectly fine for another (e.g. a personal guarantee is risky for the guarantor giving it, not for the lender receiving it), so if a playbook position below describes different outcomes for different roles, apply only the outcome that matches "${role}". Use the playbook positions as your primary guide — do not flag something as risky that the playbook explicitly treats as standard for this role, and do not ignore something the playbook explicitly flags for this role. If the playbook has no relevant position and the clause is genuinely ambiguous, answer "unclear" rather than forcing a verdict.
 
 Some playbook positions depend on something being present or absent ELSEWHERE in the document — e.g. "a clear repayment schedule and interest rate is standard; undefined rates are risky" requires checking whether an interest rate is stated anywhere in the contract, not just in this one clause. The full contract text is included below for exactly that kind of check. Your verdict is still about the one clause quoted at the end, not the document as a whole.
 

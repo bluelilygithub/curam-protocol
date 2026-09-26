@@ -44,7 +44,7 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
 
     if (standard) {
       try {
-        const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText);
+        const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
         const text = await callModel(standard, prompt, { maxTokens: 500 });
         const parsed = parseModelJson(text);
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, prompt: prompt.slice(0, 500), text, parsed } });
