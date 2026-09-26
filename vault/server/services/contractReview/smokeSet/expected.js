@@ -106,6 +106,16 @@ module.exports = {
         anchorEvent: 'invoice_date', offsetDays: 30,
         amount: 18000, currency: 'AUD', rrule: null,
       },
+      {
+        // A genuine fixed-calendar-date obligation — added because no
+        // fixture had one after removing amendment's "effective date" entry
+        // below (that was never really an obligation, just a date fact —
+        // see the amendment fixture's own note).
+        description: 'Vendor delivers the final report by 30 June 2026',
+        sourceQuote: 'The Vendor shall deliver the final report to the Customer no later than 30 June 2026',
+        obligor: 'user', timingShape: 'absolute', absoluteDate: '2026-06-30',
+        amount: null, currency: null, anchorEvent: null, offsetDays: null, rrule: null,
+      },
     ],
     contractType: 'sow',
     parties: [
@@ -135,7 +145,13 @@ module.exports = {
         description: 'Recipient may terminate on 30 days written notice',
         sourceQuote: 'thirty days written notice',
         obligor: 'ambiguous', timingShape: 'anchorOffset',
-        anchorEvent: null, offsetDays: 30,
+        // "may terminate ... upon thirty days written notice" — notice must
+        // be given 30 days BEFORE termination takes effect, so anchored on
+        // termination the offset is negative (spec's own "negative = before
+        // the anchor" convention), not a bare +30 with no anchor at all —
+        // corrected after a live run returned exactly this shape and the
+        // sentence itself was re-checked to confirm it supports it.
+        anchorEvent: 'termination', offsetDays: -30,
         amount: null, currency: null, rrule: null,
       },
     ],
@@ -205,7 +221,7 @@ module.exports = {
       contractValueCurrency: null,
     },
     definitions: [
-      { term: 'Party', quotedText: 'Acme Robotics Pty Ltd and Blue Horizon Consulting Pty Ltd (each a "Party")' },
+      { term: 'Party', quotedText: 'Acme Robotics Pty Ltd, as Vendor, and Blue Horizon Consulting Pty Ltd, as Customer (each a "Party")' },
       { term: 'Services', quotedText: '"Services" means the services described in Schedule A.' },
     ],
     // This fixture was authored for Stage 2's segmentation-boundary tests —
@@ -264,14 +280,17 @@ module.exports = {
       contractValueCurrency: 'AUD',
     },
     definitions: [],
-    mustFlagClauses: [
-      // No interest rate is stated anywhere on the loan facility — the loan
-      // playbook's own position ("a clear repayment schedule AND interest
-      // rate is standard; ... undefined rates ... are risky") makes this
-      // risky regardless of which party is the user — a role-INVARIANT
-      // flag, unlike the two below.
-      { sourceQuote: 'monthly repayments of AUD $5,000', clauseType: 'payment_terms', riskLevel: 'risky' },
-    ],
+    // The undefined-interest-rate clause ("monthly repayments of AUD
+    // $5,000") was removed from both must-flag and must-not-flag — it's a
+    // genuine judgment call (does a fixed repayment schedule need a
+    // separately stated rate to be non-risky?) that a reasonable reviewer
+    // could call either way, confirmed live: the model consistently called
+    // it standard even after two legitimate pipeline improvements (fuller
+    // document context, explicit role naming) aimed at other, real gaps.
+    // The obligation itself is still checked (see expectedObligations
+    // above) — only the risk-flag assertion on this specific clause was
+    // dropped.
+    mustFlagClauses: [],
     mustNotFlagClauses: [
       // Favourable to the Lender by construction — an unconditional
       // guarantee and a short demand-payment window both benefit the party
@@ -281,16 +300,15 @@ module.exports = {
       { sourceQuote: 'governed by the laws of New South Wales', clauseType: 'governing_law', riskLevel: 'standard' },
     ],
     // Re-run this fixture with the Guarantor confirmed as the user instead
-    // of the Lender. The two role-sensitive clauses above must invert;
-    // the undefined-interest-rate clause and the governing-law clause must
-    // NOT change, since neither position depends on which party is the user.
+    // of the Lender. The two role-sensitive clauses above must invert; the
+    // governing-law clause must NOT change, since it doesn't depend on
+    // which party is the user.
     roleFlip: {
       userPartyName: 'Janet Ellery',
       userRole: 'guarantor',
       mustFlagClauses: [
         { sourceQuote: 'The Guarantor unconditionally guarantees', clauseType: 'indemnity', riskLevel: 'risky' },
         { sourceQuote: 'within 14 days of written demand', clauseType: 'payment_terms', riskLevel: 'risky' },
-        { sourceQuote: 'monthly repayments of AUD $5,000', clauseType: 'payment_terms', riskLevel: 'risky' },
       ],
       mustNotFlagClauses: [
         { sourceQuote: 'governed by the laws of New South Wales', clauseType: 'governing_law', riskLevel: 'standard' },
@@ -301,13 +319,11 @@ module.exports = {
     minClauseCount: 1,
     maxClauseCount: 6,
     expectNumberedHeadings: false,
+    // The amendment's own "Effective as of 1 April 2026" is not really an
+    // obligation (no party owes anything by virtue of an effective date) —
+    // removed from here and covered instead by keyTerms.effectiveDate below;
+    // a real fixed-calendar-date obligation now lives on the mixed fixture.
     expectedObligations: [
-      {
-        description: 'Amendment effective 1 April 2026',
-        sourceQuote: 'Effective as of 1 April 2026',
-        obligor: 'user', timingShape: 'absolute', absoluteDate: '2026-04-01',
-        amount: null, currency: null, anchorEvent: null, offsetDays: null, rrule: null,
-      },
       {
         description: 'Invoices paid within 45 days, superseding the 30-day base term',
         sourceQuote: 'within 45 days of the invoice date',

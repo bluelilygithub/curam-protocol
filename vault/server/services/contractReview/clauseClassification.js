@@ -10,6 +10,7 @@ const { getModelsForUser } = require('../modelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
+const { trackCost, CostCeilingExceededError } = require('./costTracking');
 const { clauseClassificationPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const TAXONOMY_VERSION = 'v1';
@@ -40,7 +41,7 @@ async function getClauseTypeIdMap() {
   return new Map(rows.map((r) => [r.key, r.id]));
 }
 
-async function classifyClauses(reviewId, userId) {
+async function classifyClauses(reviewId, userId, costTracker) {
   const { rows: clauses } = await pool.query(
     `SELECT id, "numberLabel", text FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
   );
@@ -54,11 +55,14 @@ async function classifyClauses(reviewId, userId) {
   if (standard) {
     try {
       const prompt = clauseClassificationPrompt(clauses, [...typeIdByKey.keys()]);
-      const text = await callModel(standard, prompt, { maxTokens: 1500 });
+      const result = await callModel(standard, prompt, { maxTokens: 1500, returnUsage: true });
+      const text = result.text;
+      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.classifications)) classifications = parsed.classifications;
     } catch (err) {
+      if (err instanceof CostCeilingExceededError) throw err;
       console.warn(`[contract-review] clause classification failed for review ${reviewId}: ${err.message}`);
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
     }

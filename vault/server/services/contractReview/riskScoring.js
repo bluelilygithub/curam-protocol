@@ -11,12 +11,13 @@ const { getModelsForUser } = require('../modelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
+const { trackCost, CostCeilingExceededError } = require('./costTracking');
 const { getPlaybook, PLAYBOOK_VERSION, PLAYBOOK_HASH } = require('./playbooks');
 const { riskScoringPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const RISK_LEVELS = new Set(['standard', 'risky', 'unclear']);
 
-async function scoreClauses(reviewId, { contractType, role, userId, extractedText }) {
+async function scoreClauses(reviewId, { contractType, role, userId, extractedText, costTracker }) {
   const { rows: clauses } = await pool.query(
     `SELECT id, text FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
   );
@@ -45,7 +46,9 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
     if (standard) {
       try {
         const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
-        const text = await callModel(standard, prompt, { maxTokens: 500 });
+        const result = await callModel(standard, prompt, { maxTokens: 500, returnUsage: true });
+        const text = result.text;
+        if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
         const parsed = parseModelJson(text);
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, prompt: prompt.slice(0, 500), text, parsed } });
         if (parsed && typeof parsed === 'object') {
@@ -55,6 +58,7 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
           suggestedRedline = parsed.suggestedRedline ? String(parsed.suggestedRedline).slice(0, 4000) : null;
         }
       } catch (err) {
+        if (err instanceof CostCeilingExceededError) throw err;
         console.warn(`[contract-review] risk scoring failed for clause ${clause.id}: ${err.message}`);
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, error: err.message } });
       }

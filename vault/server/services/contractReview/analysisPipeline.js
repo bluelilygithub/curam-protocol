@@ -22,6 +22,7 @@ const { scoreClauses } = require('./riskScoring');
 const { extractObligations } = require('./obligationsExtraction');
 const { generateSummary } = require('./summaryGeneration');
 const { buildCoverageReport } = require('./coverageReport');
+const { createCostTracker } = require('./costTracking');
 const { PROMPT_VERSION } = require('./prompts/v1');
 
 async function setStatus(reviewId, status, extra = {}) {
@@ -55,15 +56,24 @@ async function loadReviewContext(reviewId) {
 async function runAnalysis(reviewId, { userId } = {}) {
   const ctx = await loadReviewContext(reviewId);
   await pool.query(`UPDATE contract_reviews SET "promptVersion"=$1 WHERE id=$2`, [PROMPT_VERSION, reviewId]);
+  const costTracker = createCostTracker(ctx.costUsd);
 
-  await setStatus(reviewId, 'detecting_type');
-  await detectContractType(reviewId, ctx.extractedText, userId);
+  try {
+    await setStatus(reviewId, 'detecting_type');
+    await detectContractType(reviewId, ctx.extractedText, userId, costTracker);
 
-  await setStatus(reviewId, 'awaiting_role_confirmation');
-  const { needsRoleConfirmation } = await extractPartiesAndKeyTerms(reviewId, ctx.contractId, ctx.extractedText, userId);
+    await setStatus(reviewId, 'awaiting_role_confirmation');
+    const { needsRoleConfirmation } = await extractPartiesAndKeyTerms(reviewId, ctx.contractId, ctx.extractedText, userId, costTracker);
 
-  if (needsRoleConfirmation) {
-    return { status: 'awaiting_role_confirmation', reviewId };
+    if (needsRoleConfirmation) {
+      return { status: 'awaiting_role_confirmation', reviewId };
+    }
+  } catch (err) {
+    await pool.query(
+      `UPDATE contract_reviews SET status='failed', "errorMessage"=$1, "completedAt"=NOW() WHERE id=$2`,
+      [err.message, reviewId]
+    );
+    throw err;
   }
   return resumeAfterRoleConfirmation(reviewId, { userId });
 }
@@ -93,22 +103,26 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
 
   const contractType = CONTRACT_TYPE_KEYS.includes(ctx.detectedContractType) ? ctx.detectedContractType : 'other';
   const role = userParty ? userParty.role : 'other';
+  // Re-derives the running cost total from the review's own already-
+  // persisted costUsd rather than assuming an in-memory tracker survived the
+  // awaiting_role_confirmation pause — see costTracking.js's own comment.
+  const costTracker = createCostTracker(ctx.costUsd);
 
   try {
     await setStatus(reviewId, 'extracting_definitions');
-    await extractDefinitions(reviewId, extractedText, userId);
+    await extractDefinitions(reviewId, extractedText, userId, costTracker);
 
     await setStatus(reviewId, 'classifying');
-    await classifyClauses(reviewId, userId);
+    await classifyClauses(reviewId, userId, costTracker);
 
     await setStatus(reviewId, 'scoring');
-    await scoreClauses(reviewId, { contractType, role, userId, extractedText });
+    await scoreClauses(reviewId, { contractType, role, userId, extractedText, costTracker });
 
     await setStatus(reviewId, 'extracting_obligations');
-    await extractObligations(reviewId, { contractId, documentId, extractedText, userId });
+    await extractObligations(reviewId, { contractId, documentId, extractedText, userId, costTracker });
 
     await setStatus(reviewId, 'summarizing');
-    await generateSummary(reviewId, extractedText, userId);
+    await generateSummary(reviewId, extractedText, userId, costTracker);
 
     await setStatus(reviewId, 'verifying');
     await buildCoverageReport(reviewId, contractType);

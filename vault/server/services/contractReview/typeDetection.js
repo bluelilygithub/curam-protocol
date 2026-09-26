@@ -7,6 +7,7 @@ const { getModelsForUser } = require('../modelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
+const { trackCost } = require('./costTracking');
 const { typeDetectionPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 /**
@@ -15,7 +16,7 @@ const { typeDetectionPrompt, PROMPT_VERSION } = require('./prompts/v1');
  * that's ContractService.promoteReviewToContract's job, only from an
  * executed document's current review). Low-confidence/no-match -> 'other'.
  */
-async function detectContractType(reviewId, extractedText, userId) {
+async function detectContractType(reviewId, extractedText, userId, costTracker) {
   const { standard } = await getModelsForUser(userId);
   const modelId = standard || 'none';
   let detectedContractType = 'other';
@@ -23,7 +24,9 @@ async function detectContractType(reviewId, extractedText, userId) {
 
   if (standard) {
     const prompt = typeDetectionPrompt(extractedText, CONTRACT_TYPE_KEYS);
-    const text = await callModel(standard, prompt, { maxTokens: 300 });
+    const result = await callModel(standard, prompt, { maxTokens: 300, returnUsage: true });
+    const text = result.text;
+    if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
     const parsed = parseModelJson(text);
     await recordRawOutput({ reviewId, stage: 'detecting_type', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
     if (parsed && typeof parsed === 'object') {

@@ -32,7 +32,7 @@ This agreement is governed by the laws of Queensland, Australia.`;
 // segmentation.js's continuesSequence() exists to catch.
 const DEEP_NESTING = `MASTER SERVICES AGREEMENT
 
-This Agreement is made between Acme Robotics Pty Ltd and Blue Horizon Consulting Pty Ltd (each a "Party").
+This Agreement is made between Acme Robotics Pty Ltd, as Vendor, and Blue Horizon Consulting Pty Ltd, as Customer (each a "Party").
 
 1.1 Definitions.
 
@@ -122,7 +122,9 @@ const MIXED_TYPED_BODY = `SERVICE ORDER FORM
 
 3. Payment of AUD $18,000 is due within 30 days of the Vendor's invoice.
 
-4. This Service Order incorporates the signed acceptance page attached as Exhibit A (scanned).`;
+4. This Service Order incorporates the signed acceptance page attached as Exhibit A (scanned).
+
+5. The Vendor shall deliver the final report to the Customer no later than 30 June 2026.`;
 
 const MIXED_SCANNED_EXHIBIT_TEXT = `EXHIBIT A - SIGNED ACCEPTANCE
 

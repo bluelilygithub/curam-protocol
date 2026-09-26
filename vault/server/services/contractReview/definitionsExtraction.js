@@ -10,9 +10,10 @@ const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
+const { trackCost, CostCeilingExceededError } = require('./costTracking');
 const { definitionsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
-async function extractDefinitions(reviewId, extractedText, userId) {
+async function extractDefinitions(reviewId, extractedText, userId, costTracker) {
   const { standard } = await getModelsForUser(userId);
   const modelId = standard || 'none';
   let rawDefinitions = [];
@@ -20,11 +21,14 @@ async function extractDefinitions(reviewId, extractedText, userId) {
   if (standard) {
     try {
       const prompt = definitionsPrompt(extractedText);
-      const text = await callModel(standard, prompt, { maxTokens: 1500 });
+      const result = await callModel(standard, prompt, { maxTokens: 1500, returnUsage: true });
+      const text = result.text;
+      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'extracting_definitions', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.definitions)) rawDefinitions = parsed.definitions;
     } catch (err) {
+      if (err instanceof CostCeilingExceededError) throw err; // must abort the whole review, never swallowed
       console.warn(`[contract-review] definitions extraction failed for review ${reviewId}: ${err.message}`);
       await recordRawOutput({ reviewId, stage: 'extracting_definitions', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
     }

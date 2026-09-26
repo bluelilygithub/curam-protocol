@@ -10,9 +10,10 @@ const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
+const { trackCost, CostCeilingExceededError } = require('./costTracking');
 const { summaryPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
-async function generateSummary(reviewId, extractedText, userId) {
+async function generateSummary(reviewId, extractedText, userId, costTracker) {
   const { rows: clauses } = await pool.query(`SELECT id, "numberLabel" FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]);
   const validClauseIds = new Set(clauses.map((c) => c.id));
 
@@ -23,11 +24,14 @@ async function generateSummary(reviewId, extractedText, userId) {
   if (standard) {
     try {
       const prompt = summaryPrompt(extractedText, clauses);
-      const text = await callModel(standard, prompt, { maxTokens: 1500 });
+      const result = await callModel(standard, prompt, { maxTokens: 1500, returnUsage: true });
+      const text = result.text;
+      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.summaryPoints)) rawPoints = parsed.summaryPoints;
     } catch (err) {
+      if (err instanceof CostCeilingExceededError) throw err;
       console.warn(`[contract-review] summary generation failed for review ${reviewId}: ${err.message}`);
       await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
     }

@@ -124,6 +124,7 @@ async function runFixtureThroughAnalysis(userId, fixtureKey, { userPartyName, us
   assert.strictEqual(finalResult.status, 'complete', `expected the review to complete (fixture: ${fixtureKey}), got status=${finalResult.status}`);
 
   const review = await ContractService.getReview(userId, ingestResult.reviewId);
+  console.log(`  [cost] ${fixtureKey}${userPartyName ? ` (as ${userPartyName})` : ''}: $${Number(review.costUsd || 0).toFixed(4)}`);
   return { contract, review, extractedText: ingestResult.extractedText, userPartyId: targetParty.id, userRole: userRole || targetParty.role };
 }
 

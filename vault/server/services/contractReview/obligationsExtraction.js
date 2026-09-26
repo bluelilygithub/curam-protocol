@@ -13,6 +13,7 @@ const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
 const { normalizeName } = require('./partiesKeyTerms');
+const { trackCost, CostCeilingExceededError } = require('./costTracking');
 const { obligationsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const ANCHOR_EVENTS = new Set(['effective_date', 'renewal_date', 'invoice_date', 'termination', 'custom']);
@@ -46,7 +47,7 @@ function matchLineage(description, priorObligations) {
   return match ? match.lineageId : crypto.randomUUID();
 }
 
-async function extractObligations(reviewId, { contractId, documentId, extractedText, userId }) {
+async function extractObligations(reviewId, { contractId, documentId, extractedText, userId, costTracker }) {
   const { rows: parties } = await pool.query(`SELECT * FROM contract_parties WHERE "contractId"=$1`, [contractId]);
   const partyByNorm = new Map(parties.map((p) => [normalizeName(p.name), p]));
 
@@ -57,11 +58,14 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
   if (standard) {
     try {
       const prompt = obligationsPrompt(extractedText, parties.map((p) => p.name));
-      const text = await callModel(standard, prompt, { maxTokens: 2000 });
+      const result = await callModel(standard, prompt, { maxTokens: 2000, returnUsage: true });
+      const text = result.text;
+      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.obligations)) rawObligations = parsed.obligations;
     } catch (err) {
+      if (err instanceof CostCeilingExceededError) throw err;
       console.warn(`[contract-review] obligation extraction failed for review ${reviewId}: ${err.message}`);
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
     }

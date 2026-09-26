@@ -390,6 +390,11 @@ export default function ContractReviewPage() {
 
                 {review && !['queued', 'extracting', 'segmenting', 'awaiting_role_confirmation'].includes(review.status) && (
                   <>
+                    {review.costUsd != null && (
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Analysis cost: ${Number(review.costUsd).toFixed(4)}
+                      </div>
+                    )}
                     {review.coverageReport?.length > 0 && (
                       <div className="rounded-lg border p-4" style={CARD}>
                         <h2 className="text-sm font-semibold mb-2">Coverage report</h2>

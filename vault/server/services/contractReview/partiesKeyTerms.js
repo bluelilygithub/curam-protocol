@@ -11,6 +11,7 @@ const { getModelsForUser } = require('../modelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
+const { trackCost } = require('./costTracking');
 const { partiesKeyTermsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 function normalizeName(name) {
@@ -42,7 +43,7 @@ function sanitizeKeyTerms(raw) {
  * needsRoleConfirmation is false only when a party on this contract is
  * already confirmedByUser=true (skip re-asking on every re-review).
  */
-async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, userId) {
+async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, userId, costTracker) {
   const { standard } = await getModelsForUser(userId);
   const modelId = standard || 'none';
   let extractedParties = [];
@@ -50,7 +51,9 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
 
   if (standard) {
     const prompt = partiesKeyTermsPrompt(extractedText, PARTY_ROLE_KEYS);
-    const text = await callModel(standard, prompt, { maxTokens: 900 });
+    const result = await callModel(standard, prompt, { maxTokens: 900, returnUsage: true });
+    const text = result.text;
+    if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
     const parsed = parseModelJson(text);
     await recordRawOutput({ reviewId, stage: 'parties_key_terms', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
     if (parsed && typeof parsed === 'object') {
