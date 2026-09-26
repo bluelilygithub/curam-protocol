@@ -10,14 +10,8 @@
 // Runs entirely inside the async pipeline job — never called from the upload
 // request path. ContractService.addDocument stays extraction-free.
 
-const os = require('os');
-const path = require('path');
-const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
-
 const { pool } = require('../../db');
+const { extractForTranslate } = require('../translateExtract');
 const { rasterizePages, isPdftoppmAvailable } = require('./pdfRasterize');
 const { recognize } = require('./ocrScheduler');
 
@@ -25,67 +19,71 @@ const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
 // pdf-parse's bundled pdfjs (v1.10.100, inside translateExtract.js's
-// extractForTranslate) has a confirmed non-deterministic corruption bug.
-// Root-caused via direct repro: the failure rate tracks specifically with a
-// DB query being awaited immediately, synchronously adjacent to the
-// extraction call in the SAME process (this function's own real shape) —
-// up to 80% (16/20) in that exact pattern — not pure randomness, and not
-// simply "many extraction calls" (20 truly concurrent extractions with no
-// DB: 0 failures; 20 serialized extractions with unrelated background DB
-// churn not synchronized to each call: 1/20). That points at an event-loop
-// tick-timing collision with pdf-parse's legacy setTimeout-based "fake
-// worker" scheduling. STRUCTURAL FIX: extraction now runs in its own child
-// process (extractInChildProcess.js) with nothing else sharing that
-// process's event loop — 0 failures observed across ~75 combined trials
-// whenever nothing else was running in the same process. The bounded retry
-// below is kept only as a backstop for whatever residual rate remains, not
-// the primary fix. Every failure observed, in every trial, was a loud
-// thrown exception — never a silent, successfully-returned-but-wrong
-// extractedText — so a corrupted extraction could never have silently
-// become "ground truth" for spans/lineage/corrections even before this fix.
-// Logged as a Suggestions-inbox alert against translateExtract.js itself
-// (shared with Translate's live production route — Translate calls
-// extractForTranslate directly, in-process, interleaved with its own DB
-// work on every upload, so it very likely has the identical concurrency
-// failure in production today; the same child-process isolation would fix
-// it there too). Not fixed in translate.js — out of scope for this feature.
-// See docs/contract-review-spec.md's Decisions Log for the full
-// investigation, including before/after failure-rate measurements.
+// extractForTranslate) has a confirmed COLD-START bug, re-characterized
+// after testing directly against the real deployed runtime (Node 20 in the
+// Railway container — this dev machine runs Node 24, which does NOT show
+// the same failure shape, an earlier false lead): the first 1-2 extraction
+// calls in a freshly-started process fail reliably; every call afterward,
+// in the SAME warm process, succeeds reliably (confirmed: 2/2 cold fails,
+// then 0/18 warm, repeated). An EARLIER fix here isolated each extraction
+// into its own fresh child process, reasoning from an event-loop-timing
+// theory that held on Node 24 but is actively WRONG for Node 20 in
+// production — a fresh child process is always cold, so that "fix"
+// guaranteed hitting this bug on every single real extraction (confirmed:
+// 10/10 fails via that path in the actual container). Reverted. The real
+// fix for a long-lived server process (which only cold-starts once, at
+// boot, not per-document) is to burn the cold-start failures against a
+// throwaway warm-up call at module load, not a real user's document — see
+// warmUpExtractor() below. The bounded retry stays as a backstop for
+// whatever residual rate remains post-warm-up. Every failure observed, in
+// every trial across both characterizations, was a loud thrown exception —
+// never a silent, successfully-returned-but-wrong extractedText — so a
+// corrupted extraction could never silently become "ground truth" for
+// spans/lineage/corrections either way. Logged as a Suggestions-inbox
+// alert against translateExtract.js itself (shared with Translate's live
+// production route, likely affected the same way at server boot — much
+// less severe there than the original per-document theory suggested,
+// since Translate's process also only cold-starts once). Not fixed in
+// translate.js — out of scope for this feature. See docs/contract-review-
+// spec.md's Decisions Log for the full investigation and both
+// characterizations, including why the first one was wrong.
 const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
 const MAX_EXTRACTION_RETRIES = 3;
-const EXTRACT_CHILD_SCRIPT = path.join(__dirname, 'extractInChildProcess.js');
 
-async function extractInChildProcess(buffer, filename, mimetype) {
-  const tmpDir = os.tmpdir();
-  const id = crypto.randomUUID();
-  const inputFilePath = path.join(tmpDir, `contract-review-extract-in-${id}`);
-  const outputFilePath = path.join(tmpDir, `contract-review-extract-out-${id}.json`);
-  const fs = require('fs');
-  fs.writeFileSync(inputFilePath, buffer);
+// A minimal, valid one-page PDF (built once, lazily, via pdf-lib) used
+// purely to absorb the cold-start failures at boot instead of a real
+// document. Fire-and-forget — never blocks server startup, and any error
+// here is expected/harmless (that's the whole point).
+let warmedUp = false;
+async function warmUpExtractor() {
+  if (warmedUp) return;
+  warmedUp = true;
   try {
-    try {
-      await execFileAsync(
-        process.execPath, [EXTRACT_CHILD_SCRIPT, inputFilePath, filename, mimetype, outputFilePath],
-        { timeout: 60_000, maxBuffer: 20 * 1024 * 1024 }
-      );
-      return JSON.parse(fs.readFileSync(outputFilePath, 'utf8'));
-    } catch (err) {
-      let message = err.message;
-      try { message = JSON.parse(fs.readFileSync(outputFilePath, 'utf8')).error || message; } catch (_) { /* keep raw */ }
-      const e = new Error(message);
-      throw e;
+    const { PDFDocument, StandardFonts } = require('pdf-lib');
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const page = doc.addPage([200, 200]);
+    page.drawText('warm-up', { x: 20, y: 100, size: 12, font });
+    const buffer = Buffer.from(await doc.save());
+    for (let i = 0; i < 3; i++) {
+      try {
+        await extractForTranslate({ buffer, filename: 'warmup.pdf', mimetype: 'application/pdf' });
+        console.log('[contract-review] pdf-parse warm-up succeeded');
+        return;
+      } catch (_) { /* expected on the first 1-2 cold-start calls */ }
     }
-  } finally {
-    try { fs.unlinkSync(inputFilePath); } catch (_) {}
-    try { fs.unlinkSync(outputFilePath); } catch (_) {}
+  } catch (err) {
+    console.warn('[contract-review] pdf-parse warm-up failed unexpectedly (non-fatal):', err.message);
   }
 }
+warmUpExtractor();
 
 async function extractPdfOrDocxWithRetry(buffer, doc, reviewId) {
+  await warmUpExtractor(); // no-op after the first call
   let lastErr;
   for (let attempt = 1; attempt <= MAX_EXTRACTION_RETRIES; attempt++) {
     try {
-      return await extractInChildProcess(buffer, doc.filename, doc.mimeType);
+      return await extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
     } catch (err) {
       if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
         await markReviewNotSupported(reviewId, err.message);
