@@ -51,27 +51,15 @@ const { pool, initSchema } = require('../../db');
 const ContractService = require('./contractService');
 
 async function waitForSchema() {
-  // Against a remote DB (e.g. a Railway proxy), initSchema() runs the ENTIRE
-  // app's ~150-statement migration first (every table, not just contract
-  // review's), each round-trip adding real network latency — this can take
-  // minutes, not seconds. Poll generously rather than time out on a slow but
-  // healthy connection.
-  const maxAttempts = 240; // up to 4 minutes at 1s each
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      // contract_clause_types is populated by the LAST statements in the
-      // migration's Contract Review section (the taxonomy seed loop) — unlike
-      // checking for "contracts" existing (an early table in that same
-      // section), a full row count here proves the whole section, including
-      // the seed data, actually finished, not just started.
-      const { rows: [{ count }] } = await pool.query(`SELECT COUNT(*) FROM contract_clause_types WHERE "taxonomyVersion"='v1'`);
-      if (Number(count) === 14) return;
-    } catch (e) {
-      if (i % 10 === 0) console.log(`[contract-review-tests] waiting for schema... (${i}s)`);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-  throw new Error('Schema not ready after waiting — is Postgres reachable and initSchema() running?');
+  // db.js fires its own initSchema() as an unawaited promise at module load —
+  // polling a row count only proves the DATABASE already has that data from
+  // some prior run, not that THIS process's own background chain has
+  // finished; an early test failure's run().catch() could still call
+  // pool.end() while it's mid-flight, throwing "Cannot use a pool after
+  // calling end on the pool" from inside it (confirmed via direct repro
+  // while debugging Stage 2's milestone2.test.js). Awaiting initSchema()
+  // explicitly first (idempotent) closes that gap with a real signal.
+  await initSchema();
 }
 
 // contracts.userId is ON DELETE CASCADE, so deleting a fixture user cascades

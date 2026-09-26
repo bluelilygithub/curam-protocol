@@ -1,6 +1,9 @@
 FROM node:20-slim
 
-# System deps — LibreOffice, ffmpeg, qpdf (PDF Tools password protect/remove), Python3 for guitar audio pipeline
+# System deps — LibreOffice, ffmpeg, qpdf (PDF Tools password protect/remove),
+# poppler-utils (Contract Review — server-side PDF page rasterization for the
+# OCR fallback, server/services/contractReview/pdfRasterize.js), Python3 for
+# guitar audio pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libreoffice \
@@ -8,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-calc \
     libreoffice-impress \
     qpdf \
+    poppler-utils \
     fonts-liberation \
     fonts-dejavu-core \
     fontconfig \
