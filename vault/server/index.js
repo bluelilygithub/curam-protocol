@@ -177,6 +177,7 @@ app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
 app.use('/api/product-scout', requireFeature('productScout'), aiLimiter, require('./routes/productScout'));
 app.use('/api/property-scenario', requireFeature('propertyScenario'), aiLimiter, require('./routes/propertyScenario'));
 app.use('/api/document-redaction', requireFeature('documentRedaction'), aiLimiter, require('./routes/documentRedaction'));
+app.use('/api/contract-review', requireFeature('contractReview'), aiLimiter, require('./routes/contractReview'));
 app.use('/api/google-ads', requireFeature('googleAds'), aiLimiter, require('./routes/seo'));
 app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit'));
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));

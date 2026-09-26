@@ -27,6 +27,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   productScout: true,
   propertyScenario: true,
   documentRedaction: true,
+  contractReview: true,
   googleAds: true,
   seo: true,
   html: true,

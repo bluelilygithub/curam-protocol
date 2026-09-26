@@ -49,6 +49,7 @@ export const APP_NAV_GROUPS = [
       { id: 'debate', label: 'Multi-Model Debate', path: '/debate', icon: 'debate', featureKey: 'debate' },
       { id: 'compare', label: 'Document Compare', path: '/compare', icon: 'compare', featureKey: 'compare' },
       { id: 'documentRedaction', label: 'Redaction', path: '/document-redaction', icon: 'file-pen', featureKey: 'documentRedaction', matchPrefix: true },
+      { id: 'contractReview', label: 'Contract Review', path: '/contract-review', icon: 'clipboard-list', featureKey: 'contractReview', matchPrefix: true },
     ],
   },
   {
