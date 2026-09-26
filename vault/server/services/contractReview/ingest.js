@@ -10,8 +10,11 @@
 // Runs entirely inside the async pipeline job — never called from the upload
 // request path. ContractService.addDocument stays extraction-free.
 
+const path = require('path');
+const crypto = require('crypto');
+const { fork } = require('child_process');
+
 const { pool } = require('../../db');
-const { extractForTranslate } = require('../translateExtract');
 const { rasterizePages, isPdftoppmAvailable } = require('./pdfRasterize');
 const { recognize } = require('./ocrScheduler');
 
@@ -19,71 +22,90 @@ const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
 // pdf-parse's bundled pdfjs (v1.10.100, inside translateExtract.js's
-// extractForTranslate) has a confirmed COLD-START bug, re-characterized
-// after testing directly against the real deployed runtime (Node 20 in the
-// Railway container — this dev machine runs Node 24, which does NOT show
-// the same failure shape, an earlier false lead): the first 1-2 extraction
-// calls in a freshly-started process fail reliably; every call afterward,
-// in the SAME warm process, succeeds reliably (confirmed: 2/2 cold fails,
-// then 0/18 warm, repeated). An EARLIER fix here isolated each extraction
-// into its own fresh child process, reasoning from an event-loop-timing
-// theory that held on Node 24 but is actively WRONG for Node 20 in
-// production — a fresh child process is always cold, so that "fix"
-// guaranteed hitting this bug on every single real extraction (confirmed:
-// 10/10 fails via that path in the actual container). Reverted. The real
-// fix for a long-lived server process (which only cold-starts once, at
-// boot, not per-document) is to burn the cold-start failures against a
-// throwaway warm-up call at module load, not a real user's document — see
-// warmUpExtractor() below. The bounded retry stays as a backstop for
-// whatever residual rate remains post-warm-up. Every failure observed, in
-// every trial across both characterizations, was a loud thrown exception —
-// never a silent, successfully-returned-but-wrong extractedText — so a
-// corrupted extraction could never silently become "ground truth" for
-// spans/lineage/corrections either way. Logged as a Suggestions-inbox
-// alert against translateExtract.js itself (shared with Translate's live
-// production route, likely affected the same way at server boot — much
-// less severe there than the original per-document theory suggested,
-// since Translate's process also only cold-starts once). Not fixed in
-// translate.js — out of scope for this feature. See docs/contract-review-
-// spec.md's Decisions Log for the full investigation and both
-// characterizations, including why the first one was wrong.
+// extractForTranslate) has TWO confirmed failure modes, both tested
+// directly against the real deployed runtime (Node 20 in the Railway
+// container — this dev machine runs Node 24, which behaves differently; an
+// earlier fix here was reasoned from Node 24 behavior alone and was wrong):
+//   1. Cold-start: the first 1-2 extraction calls in any freshly-started
+//      process fail reliably.
+//   2. DB-adjacency: even in an already-warm process, a DB query awaited
+//      immediately before the extraction call fails at a real, material
+//      rate (measured 9/20 = 45% on Node 20, warm, matching
+//      ingestDocument's own real shape).
+// A "run each call in a fresh child process" fix (tried first) only avoids
+// mode 2 while guaranteeing mode 1 on every single call (measured 10/10
+// fails). A "warm up once, then extract in the same process as
+// ingestDocument's own DB calls" fix (tried second) only avoids mode 1 and
+// leaves mode 2 fully exposed. The actual fix needs a process that is BOTH
+// warm AND never shares an event loop with DB I/O, for its entire
+// lifetime — a persistent, long-lived worker process (extractWorker.js,
+// forked once via child_process.fork, kept alive and reused for every
+// extraction) does both: it warms up once at fork time, then handles every
+// real request in a process whose only job, ever, is extraction — no DB
+// call is ever adjacent to one there. The bounded retry below is a backstop
+// for whatever residual rate remains (none observed once both modes are
+// addressed), not the primary defense. Every failure observed, across both
+// investigations and every trial, was a loud thrown exception — never a
+// silent, successfully-returned-but-wrong extractedText — so a corrupted
+// extraction could never silently become "ground truth" for spans/lineage/
+// corrections regardless of which fix was in place. Logged as a
+// Suggestions-inbox alert against translateExtract.js itself (shared with
+// Translate's live production route — translate.js calls extractForTranslate
+// directly, in-process, with its own DB work immediately around each
+// extraction on every real upload, the exact shape that reproduces mode 2
+// at a real rate; the same persistent-worker fix would apply there). Not
+// fixed in translate.js — out of scope for this feature. See docs/contract-
+// review-spec.md's Decisions Log for the full investigation, including
+// both earlier fixes that were tried, measured, and found wrong before
+// this one.
 const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
 const MAX_EXTRACTION_RETRIES = 3;
+const EXTRACT_WORKER_SCRIPT = path.join(__dirname, 'extractWorker.js');
+const EXTRACT_TIMEOUT_MS = 60_000;
 
-// A minimal, valid one-page PDF (built once, lazily, via pdf-lib) used
-// purely to absorb the cold-start failures at boot instead of a real
-// document. Fire-and-forget — never blocks server startup, and any error
-// here is expected/harmless (that's the whole point).
-let warmedUp = false;
-async function warmUpExtractor() {
-  if (warmedUp) return;
-  warmedUp = true;
-  try {
-    const { PDFDocument, StandardFonts } = require('pdf-lib');
-    const doc = await PDFDocument.create();
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const page = doc.addPage([200, 200]);
-    page.drawText('warm-up', { x: 20, y: 100, size: 12, font });
-    const buffer = Buffer.from(await doc.save());
-    for (let i = 0; i < 3; i++) {
-      try {
-        await extractForTranslate({ buffer, filename: 'warmup.pdf', mimetype: 'application/pdf' });
-        console.log('[contract-review] pdf-parse warm-up succeeded');
-        return;
-      } catch (_) { /* expected on the first 1-2 cold-start calls */ }
-    }
-  } catch (err) {
-    console.warn('[contract-review] pdf-parse warm-up failed unexpectedly (non-fatal):', err.message);
-  }
+let worker = null;
+const pending = new Map();
+
+function getExtractWorker() {
+  if (worker) return worker;
+  worker = fork(EXTRACT_WORKER_SCRIPT, { silent: false });
+  worker.on('message', (msg) => {
+    const entry = pending.get(msg.id);
+    if (!entry) return; // workerBooted message, or a response after its own timeout already rejected
+    pending.delete(msg.id);
+    if (msg.error) entry.reject(new Error(msg.error));
+    else entry.resolve(msg.result);
+  });
+  worker.on('exit', (code) => {
+    console.warn(`[contract-review] extraction worker exited (code ${code}) — will fork a new one on next use`);
+    worker = null;
+    for (const { reject } of pending.values()) reject(new Error('Extraction worker exited before responding'));
+    pending.clear();
+  });
+  return worker;
 }
-warmUpExtractor();
+
+async function extractViaWorker(buffer, filename, mimetype) {
+  const w = getExtractWorker();
+  const id = crypto.randomUUID();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`Extraction worker timed out after ${EXTRACT_TIMEOUT_MS / 1000}s`));
+    }, EXTRACT_TIMEOUT_MS);
+    pending.set(id, {
+      resolve: (v) => { clearTimeout(timer); resolve(v); },
+      reject: (e) => { clearTimeout(timer); reject(e); },
+    });
+    w.send({ id, bufferB64: buffer.toString('base64'), filename, mimetype });
+  });
+}
 
 async function extractPdfOrDocxWithRetry(buffer, doc, reviewId) {
-  await warmUpExtractor(); // no-op after the first call
   let lastErr;
   for (let attempt = 1; attempt <= MAX_EXTRACTION_RETRIES; attempt++) {
     try {
-      return await extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
+      return await extractViaWorker(buffer, doc.filename, doc.mimeType);
     } catch (err) {
       if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
         await markReviewNotSupported(reviewId, err.message);

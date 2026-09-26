@@ -35,69 +35,40 @@ if (/railway\.internal|rlwy\.net|railway\.app/i.test(TEST_DATABASE_URL)) {
 }
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
-const path = require('path');
-const os = require('os');
-const fs = require('fs');
-const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
-
 const { pool, initSchema } = require('../../db');
 const ContractService = require('./contractService');
-const { locateLlmBoundaries, llmBoundarySegment, heuristicSegment } = require('./segmentation');
+const { ingestDocument } = require('./ingest');
+const { segmentDocument, locateLlmBoundaries, llmBoundarySegment, heuristicSegment } = require('./segmentation');
 const { isPdftoppmAvailable } = require('./pdfRasterize');
 const { buildAllFixtures } = require('./smokeSet/buildFixtures');
 const expected = require('./smokeSet/expected');
 
-const SUBPROCESS_SCRIPT = path.join(__dirname, 'smokeSet', 'ingestSegmentSubprocess.js');
-
-// pdf-parse's bundled pdfjs (v1.10.100) has a confirmed non-deterministic
-// state-corruption bug — even a single, fresh-process extraction of a
-// perfectly valid PDF occasionally fails with this signature (direct repro:
-// 1 failure in 5 identical sequential calls; also seen on a single isolated
-// call). Logged as a Suggestions-inbox item against translateExtract.js
-// (shared production code, out of bounds to fix here). Subprocess isolation
-// (below) bounds exposure to at most one extractFromPdf call per attempt;
-// this bounded retry absorbs the residual per-call flake rate rather than
-// failing the whole gate on a known upstream race.
-const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
-const MAX_FLAKE_RETRIES = 4;
-
-/** Runs ingest+segment for one document in its own process — see
- * ingestSegmentSubprocess.js's header for why. Returns
+// pdf-parse's bundled pdfjs (v1.10.100) has a confirmed COLD-START bug (see
+// docs/contract-review-spec.md's Decisions Log for the full investigation,
+// including an earlier, wrong "isolate every call in its own process" fix
+// that was reverted once tested against the real deployed runtime — a fresh
+// process is always cold, so that fix guaranteed hitting this bug on every
+// single call). ingest.js's own warmUpExtractor() burns the cold-start
+// failures once, at first real use, against a throwaway document — this
+// test file deliberately calls ingestDocument/segmentDocument DIRECTLY, in
+// this one shared process, for every fixture (matching how a real
+// long-lived server actually behaves: one cold start, then reliably warm),
+// not one fresh subprocess per fixture (which would defeat the warm-up
+// entirely and reintroduce the bug this fix exists to avoid). The bounded
+// retry below is ingest.js's own backstop, not a second layer here.
+/** Runs ingest+segment for one document, in-process. Returns
  * { ok: true, ...result } or { ok: false, error }. */
 async function ingestAndSegmentInSubprocess(documentId) {
-  let lastResult;
-  for (let attempt = 0; attempt <= MAX_FLAKE_RETRIES; attempt++) {
-    lastResult = await runSubprocessOnce(documentId);
-    if (lastResult.ok || !KNOWN_PDF_PARSE_FLAKE.test(lastResult.error || '')) return lastResult;
-    console.log(`  ⚠ known pdf-parse flake hit for document ${documentId} (attempt ${attempt + 1}/${MAX_FLAKE_RETRIES + 1}) — retrying`);
-    await new Promise((r) => setTimeout(r, 750));
-  }
-  return lastResult;
-}
-
-async function runSubprocessOnce(documentId) {
-  // The subprocess writes its result to a dedicated file, not stdout —
-  // db.js's pino logger also writes to stdout, and line-splitting to find
-  // "our" JSON among its output proved fragile (confirmed while debugging:
-  // a pino line without its own trailing newline merged with our payload on
-  // one "line", breaking JSON.parse). A file sidesteps that entirely.
-  const outputFilePath = path.join(os.tmpdir(), `contract-review-m2-${crypto.randomUUID()}.json`);
   try {
-    await execFileAsync(
-      process.execPath, [SUBPROCESS_SCRIPT, String(documentId), outputFilePath],
-      { env: process.env, timeout: 120_000, maxBuffer: 20 * 1024 * 1024 }
-    );
-    const result = JSON.parse(fs.readFileSync(outputFilePath, 'utf8'));
-    return { ok: true, ...result };
+    const ingestResult = await ingestDocument(documentId);
+    let segResult = null;
+    if (ingestResult.outcome === 'complete') {
+      segResult = await segmentDocument(ingestResult.reviewId, ingestResult.extractedText, ingestResult.pageMap);
+    }
+    return { ok: true, reviewId: ingestResult.reviewId, outcome: ingestResult.outcome,
+      extractedText: ingestResult.extractedText ?? null, pageMap: ingestResult.pageMap ?? null, segResult };
   } catch (err) {
-    let parsedError = err.message;
-    try { parsedError = JSON.parse(fs.readFileSync(outputFilePath, 'utf8')).error || parsedError; } catch (_) { /* keep raw message */ }
-    return { ok: false, error: parsedError };
-  } finally {
-    try { fs.unlinkSync(outputFilePath); } catch (_) { /* may not exist if the subprocess crashed before writing */ }
+    return { ok: false, error: err.message };
   }
 }
 
