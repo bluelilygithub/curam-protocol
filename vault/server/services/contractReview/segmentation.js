@@ -9,15 +9,28 @@
 const crypto = require('crypto');
 const { pool } = require('../../db');
 
-// Ordered so a longer/more specific pattern (e.g. "Article IV") isn't
-// shadowed by a shorter one matching a prefix of the same line.
+// Sub-clause markers like "(a)" or "(ii)" are DELIBERATELY not headings —
+// they stay embedded in their parent numbered clause's body text (a real
+// contract's 4.1(a)(ii) is a sub-item of clause 4.1, not its own top-level
+// clause). Only true top-level section dividers start a new clause.
 const HEADING_PATTERNS = [
-  /^\d+\.\d+(?:\.\d+)?\s*\([a-z]\)(?:\s*\((?:i{1,3}|iv|v|vi{0,3})\))?/i, // 4.1(a)(ii)
-  /^Article\s+[IVXLC]+\b/i,
-  /^Section\s+\d+(?:\.\d+)?\b/i,
-  /^\d+\.\d+\b/,                                                        // 4.1
-  /^\d+\.\s/,                                                           // 1.
+  { re: /^Article\s+([IVXLC]+)\b/i, parse: (m) => ({ major: romanToInt(m[1]) }) },
+  { re: /^Section\s+(\d+)\b/i, parse: (m) => ({ major: Number(m[1]) }) },
+  { re: /^(\d+)\.(\d+)\b/, parse: (m) => ({ major: Number(m[1]), minor: Number(m[2]) }) }, // 4.1
+  { re: /^(\d+)\.\s/, parse: (m) => ({ major: Number(m[1]) }) },                           // 1.
 ];
+
+function romanToInt(roman) {
+  const map = { I: 1, V: 5, X: 10, L: 50, C: 100 };
+  let total = 0;
+  const s = roman.toUpperCase();
+  for (let i = 0; i < s.length; i++) {
+    const cur = map[s[i]];
+    const next = map[s[i + 1]];
+    total += next && cur < next ? -cur : cur;
+  }
+  return total;
+}
 
 /** Splits extractedText into paragraphs (blank-line delimited, matching
  * translateExtract.js's own convention) with their [start, end) offsets. */
@@ -33,13 +46,36 @@ function splitIntoParagraphOffsets(extractedText) {
   return paragraphs;
 }
 
+/** Returns { label, number: {major, minor?} } if the paragraph's first line
+ * looks like a top-level section heading, else null. Doesn't judge whether
+ * it CONTINUES the sequence — see acceptsSequence() for that. */
 function matchHeading(paragraphText) {
   const firstLine = paragraphText.split('\n')[0].trim();
-  for (const re of HEADING_PATTERNS) {
+  for (const { re, parse } of HEADING_PATTERNS) {
     const m = firstLine.match(re);
-    if (m) return m[0].trim();
+    if (m) return { label: m[0].trim(), number: parse(m) };
   }
   return null;
+}
+
+/** Decides whether a candidate heading CONTINUES the numbering sequence from
+ * the last accepted heading, rather than merely looking like one — rejects a
+ * cross-reference ("Section 5 shall survive termination.") or an embedded
+ * numbered list item, either of which can match HEADING_PATTERNS but neither
+ * of which is really a new top-level clause. Accepted only if it's the
+ * first heading in the document, continues the same section with the next
+ * minor number, or starts the next section in sequence. */
+function continuesSequence(candidate, last) {
+  if (!last) return true;
+  if (candidate.major === last.major) {
+    // Same top-level section: only a genuine minor increment continues it —
+    // a same-major candidate with no minor (e.g. a plain "1." numbered-list
+    // item appearing under an existing "1.1" heading) is NOT accepted just
+    // because the major matches; that's exactly the embedded-numbered-list
+    // case this check exists to reject.
+    return candidate.minor != null && last.minor != null && candidate.minor === last.minor + 1;
+  }
+  return candidate.major === last.major + 1;
 }
 
 /** Heuristic numbered-clause pass. Returns null if no headings found at all
@@ -47,13 +83,30 @@ function matchHeading(paragraphText) {
 function heuristicSegment(extractedText) {
   const paragraphs = splitIntoParagraphOffsets(extractedText);
   const headingIdxs = [];
+  let last = null;
   for (let i = 0; i < paragraphs.length; i++) {
-    const label = matchHeading(paragraphs[i].text);
-    if (label) headingIdxs.push({ i, label });
+    const match = matchHeading(paragraphs[i].text);
+    if (!match) continue;
+    if (!continuesSequence(match.number, last)) continue; // looks like a heading, isn't one
+    headingIdxs.push({ i, label: match.label });
+    last = match.number;
   }
   if (!headingIdxs.length) return null;
 
   const clauses = [];
+  // Any text before the first recognized heading (title, letterhead,
+  // preamble) is a real part of the document and must not silently vanish —
+  // captured as its own leading clause (no numberLabel) rather than dropped.
+  if (headingIdxs[0].i > 0) {
+    const leadStart = paragraphs[0];
+    const leadEnd = paragraphs[headingIdxs[0].i - 1];
+    clauses.push({
+      numberLabel: null,
+      text: extractedText.slice(leadStart.start, leadEnd.end),
+      spanStart: leadStart.start,
+      spanEnd: leadEnd.end,
+    });
+  }
   for (let h = 0; h < headingIdxs.length; h++) {
     const { i, label } = headingIdxs[h];
     const startPara = paragraphs[i];
@@ -252,4 +305,6 @@ module.exports = {
   locateLlmBoundaries,
   llmBoundarySegment,
   splitIntoParagraphOffsets,
+  matchHeading,
+  continuesSequence,
 };

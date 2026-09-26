@@ -14,6 +14,13 @@ const sharp = require('sharp');
 const { buildDocxFromParagraphs } = require('../../documentRedaction/ingestNormalize');
 const texts = require('./fixtureTexts');
 
+// pdf-lib stamps /CreationDate and /ModDate with the current time by default
+// — that alone made every "deterministic" fixture non-byte-identical across
+// separate runs (confirmed: two independent generations of the same fixture
+// hashed differently until this was pinned). Every PDFDocument.create() call
+// below sets both to this fixed date immediately.
+const FIXED_PDF_DATE = new Date('2026-01-01T00:00:00Z');
+
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
 const MARGIN = 50;
@@ -41,12 +48,14 @@ function wrapLine(text, font, size, maxWidth) {
  * separated by blank lines, paginating as needed. */
 async function buildTypedPdf(text) {
   const doc = await PDFDocument.create();
+  doc.setCreationDate(FIXED_PDF_DATE);
+  doc.setModificationDate(FIXED_PDF_DATE);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const paragraphs = text.split(/\n\n+/);
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let y = PAGE_HEIGHT - MARGIN;
 
-  for (const para of paragraphs) {
+  paragraphs.forEach((para, pIdx) => {
     const lines = wrapLine(para.replace(/\n/g, ' '), font, FONT_SIZE, PAGE_WIDTH - MARGIN * 2);
     for (const line of lines) {
       if (y < MARGIN) {
@@ -56,14 +65,30 @@ async function buildTypedPdf(text) {
       page.drawText(line, { x: MARGIN, y, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
       y -= LINE_HEIGHT;
     }
-    y -= LINE_HEIGHT; // paragraph gap
-  }
+    // The gap after the title (first paragraph) needs to be wide enough that
+    // extractFromPdf's own y-gap paragraph detection reliably keeps it
+    // separate from what follows — confirmed via direct repro that a single
+    // LINE_HEIGHT gap merges a short title with a short first heading into
+    // one paragraph (deterministically, on every extraction — a real
+    // rendering-layout quirk, not the pdf-parse corruption bug), which then
+    // silently drops the title from every clause since the merged line no
+    // longer starts with a recognizable heading pattern.
+    y -= pIdx === 0 ? LINE_HEIGHT * 2 : LINE_HEIGHT;
+  });
   return Buffer.from(await doc.save());
 }
 
 /** Renders text to a PNG image (via sharp's SVG rasterization), returning a
  * PNG buffer sized to a standard page — used to build a genuine image-only
- * PDF page (no text layer at all). */
+ * PDF page (no text layer at all). Degraded deterministically (fixed
+ * rotation angle, fixed blur radius, a fixed downscale-then-upscale) to
+ * resemble a real scan rather than a pristine rendered page — a smoke-set
+ * fixture that OCRs perfectly every time isn't testing anything a real
+ * scanned contract would actually stress. No randomness anywhere in this
+ * pipeline (no Math.random) — every parameter is a fixed constant, so the
+ * same input text always produces byte-identical output across separate
+ * runs/processes (verified directly: sha256 of two independent generations
+ * of the same fixture matches). */
 async function renderTextToPng(text) {
   const lines = text.split(/\n\n+/).flatMap((p) => wrapLine(p, { widthOfTextAtSize: (s) => s.length * 6.5 }, FONT_SIZE, PAGE_WIDTH - MARGIN * 2).concat(['']));
   const svgLines = lines.map((line, i) =>
@@ -73,7 +98,28 @@ async function renderTextToPng(text) {
     <rect width="100%" height="100%" fill="white"/>
     ${svgLines}
   </svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  const clean = await sharp(Buffer.from(svg)).png().toBuffer();
+  return degradeScanImage(clean);
+}
+
+const SCAN_ROTATE_DEGREES = 1.3;      // fixed slight skew, matching an imperfectly-fed scanner page
+const SCAN_BLUR_SIGMA = 0.6;          // fixed slight softness
+const SCAN_DOWNSCALE_FACTOR = 0.6;    // fixed resolution loss, then scaled back up
+
+/** Deterministically degrades a clean rendered page to resemble a real scan
+ * — fixed rotation + blur + a downscale/upscale round-trip for resolution
+ * loss. No Math.random or any other non-deterministic input. */
+async function degradeScanImage(pngBuffer) {
+  const meta = await sharp(pngBuffer).metadata();
+  const lowResWidth = Math.round(meta.width * SCAN_DOWNSCALE_FACTOR);
+  const lowResHeight = Math.round(meta.height * SCAN_DOWNSCALE_FACTOR);
+  return sharp(pngBuffer)
+    .resize(lowResWidth, lowResHeight)
+    .resize(meta.width, meta.height)
+    .blur(SCAN_BLUR_SIGMA)
+    .rotate(SCAN_ROTATE_DEGREES, { background: '#ffffff' })
+    .png()
+    .toBuffer();
 }
 
 function escapeXml(s) {
@@ -84,6 +130,8 @@ function escapeXml(s) {
  * it to a PNG and embedding that image as the entire page content. */
 async function buildScannedPdf(text) {
   const doc = await PDFDocument.create();
+  doc.setCreationDate(FIXED_PDF_DATE);
+  doc.setModificationDate(FIXED_PDF_DATE);
   const pngBuf = await renderTextToPng(text);
   const png = await doc.embedPng(pngBuf);
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -95,6 +143,8 @@ async function buildScannedPdf(text) {
  * image-only scanned page. */
 async function buildMixedPdf(typedText, scannedText) {
   const doc = await PDFDocument.create();
+  doc.setCreationDate(FIXED_PDF_DATE);
+  doc.setModificationDate(FIXED_PDF_DATE);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const paragraphs = typedText.split(/\n\n+/);
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);

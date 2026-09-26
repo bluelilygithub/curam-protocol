@@ -22,39 +22,53 @@ Either party may terminate this agreement upon thirty days written notice to the
 
 This agreement is governed by the laws of Queensland, Australia.`;
 
+// Realistic hierarchical numbering: top-level clauses are "N.M" headings on
+// their own line; (a)/(i)/(ii) sub-items are NOT separate headings — they
+// stay embedded in their parent clause's body, exactly as they would in a
+// real MSA. Clause 5.1 deliberately contains a cross-reference that LOOKS
+// like a heading ("Section 8 shall survive...") and an embedded numbered
+// list ("1. Eligibility...") — both must stay inside clause 5.1's body, not
+// split into their own clauses, which is exactly what the sequence check in
+// segmentation.js's continuesSequence() exists to catch.
 const DEEP_NESTING = `MASTER SERVICES AGREEMENT
 
-1. Definitions
+This Agreement is made between Acme Robotics Pty Ltd and Blue Horizon Consulting Pty Ltd (each a "Party").
 
-1.1 "Services" means the services described in Schedule A.
+1.1 Definitions.
 
-2. Term and Termination
+"Services" means the services described in Schedule A.
 
-2.1 This Agreement commences on the Effective Date and continues for twelve months.
+2.1 Term.
+
+This Agreement commences on the Effective Date and continues for twelve months.
 
 2.2 Termination for cause.
 
-2.2(a) Either party may terminate this Agreement immediately upon written notice if the other party:
+Either party may terminate this Agreement immediately upon written notice if the other party:
+(a) commits a material breach that is not remedied within 14 days of notice; or
+(b) becomes insolvent or enters administration.
 
-2.2(a)(i) commits a material breach that is not remedied within 14 days of notice; or
+Termination under this clause is without prejudice to any other rights or remedies.
 
-2.2(a)(ii) becomes insolvent or enters administration.
+3.1 Payment Terms.
 
-2.2(b) Termination under this clause is without prejudice to any other rights or remedies.
+The Customer shall pay all invoices within 30 days of the invoice date.
+(i) Late payments accrue interest at 1.5% per month.
+(ii) The Customer may dispute an invoice in writing within 10 days of receipt.
 
-3. Payment Terms
+4.1 Limitation of Liability.
 
-3.1 The Customer shall pay all invoices within 30 days of the invoice date.
+Neither party's liability under this Agreement shall exceed the fees paid in the preceding twelve months.
+(a) This limitation does not apply to breaches of confidentiality or infringement of intellectual property rights.
+(i) For clarity, wilful misconduct is also excluded from this limitation.
 
-3.2 Late payments accrue interest at 1.5% per month.
+5.1 Miscellaneous.
 
-4. Limitation of Liability
+Section 8 shall survive termination of this Agreement.
 
-4.1 Neither party's liability under this Agreement shall exceed the fees paid in the preceding twelve months.
-
-4.1(a) This limitation does not apply to breaches of confidentiality or infringement of intellectual property rights.
-
-4.1(a)(i) For clarity, wilful misconduct is also excluded from this limitation.`;
+1. Eligibility confirmation.
+2. Payment of the applicable fee.
+3. Written notice to the Lender.`;
 
 const MULTI_PARTY = `LOAN GUARANTEE AGREEMENT
 

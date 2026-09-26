@@ -18,6 +18,46 @@ const { recognize } = require('./ocrScheduler');
 const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
+// pdf-parse's bundled pdfjs (v1.10.100, inside extractForTranslate's PDF
+// path) has a confirmed non-deterministic corruption bug — direct repro
+// while building this stage: the SAME valid PDF, re-extracted repeatedly
+// with real async I/O interleaved (matching this function's own shape —
+// a DB read/write happens right before extraction), failed 16/20 times.
+// Every observed failure across ~60 combined trials this session was a
+// LOUD thrown exception with this exact signature — never a silent,
+// successfully-returned-but-wrong extractedText. That matters: it means a
+// corrupted extraction can never silently become "ground truth" for spans/
+// lineage/corrections, because it never returns successfully in the first
+// place. This retry exists purely to stop a real, valid document from
+// needing manual re-upload just because it landed on an unlucky attempt —
+// not to detect or repair corrupted output (none has ever been observed).
+// Logged as a Suggestions-inbox alert against translateExtract.js itself
+// (shared with Translate's live production route, equally exposed) —
+// not fixed there; out of scope for this feature. See docs/contract-
+// review-spec.md's Decisions Log for the full investigation.
+const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
+const MAX_EXTRACTION_RETRIES = 3;
+
+async function extractPdfOrDocxWithRetry(buffer, doc, reviewId) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_EXTRACTION_RETRIES; attempt++) {
+    try {
+      return await extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
+    } catch (err) {
+      if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
+        await markReviewNotSupported(reviewId, err.message);
+        return { outcome: 'not_supported' };
+      }
+      lastErr = err;
+      if (!KNOWN_PDF_PARSE_FLAKE.test(err.message || '') || attempt === MAX_EXTRACTION_RETRIES) break;
+      console.warn(`[contract-review] known pdf-parse flake on review ${reviewId} (attempt ${attempt}/${MAX_EXTRACTION_RETRIES}) — retrying: ${err.message}`);
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  await markReviewFailed(reviewId, `Extraction failed after ${MAX_EXTRACTION_RETRIES} attempt(s): ${lastErr.message}`);
+  throw lastErr;
+}
+
 /** Builds extractedText + pageMap from paragraphsByPage, in true page order
  * regardless of whether a given page's paragraphs came from the text layer
  * or OCR — paragraphsByPage is keyed by page number, so joining by sorted
@@ -78,17 +118,8 @@ async function ingestDocument(documentId) {
     throw err;
   }
 
-  let extracted;
-  try {
-    extracted = await extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
-  } catch (err) {
-    if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
-      await markReviewNotSupported(reviewId, err.message);
-      return { reviewId, outcome: 'not_supported' };
-    }
-    await markReviewFailed(reviewId, `Extraction failed: ${err.message}`);
-    throw err;
-  }
+  const extracted = await extractPdfOrDocxWithRetry(buffer, doc, reviewId);
+  if (extracted.outcome === 'not_supported') return { reviewId, outcome: 'not_supported' };
   if (extracted.sourceFormat !== 'pdf' && extracted.sourceFormat !== 'docx') {
     // Contract Review only supports PDF/DOCX uploads (per addDocument's
     // upload policy) — extractForTranslate also accepts .xlsx/.txt for

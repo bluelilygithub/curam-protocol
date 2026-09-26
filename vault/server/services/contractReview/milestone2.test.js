@@ -45,7 +45,7 @@ const execFileAsync = promisify(execFile);
 
 const { pool, initSchema } = require('../../db');
 const ContractService = require('./contractService');
-const { locateLlmBoundaries, llmBoundarySegment } = require('./segmentation');
+const { locateLlmBoundaries, llmBoundarySegment, heuristicSegment } = require('./segmentation');
 const { isPdftoppmAvailable } = require('./pdfRasterize');
 const { buildAllFixtures } = require('./smokeSet/buildFixtures');
 const expected = require('./smokeSet/expected');
@@ -277,12 +277,18 @@ async function testSegmentationNumberedHeuristic() {
   const userId = await makeUser('numbered');
   try {
     const { doc } = await uploadFixture(userId, 'deepNesting');
-    const { segResult } = await ingestAndSegment(doc);
+    const { ingestResult, segResult } = await ingestAndSegment(doc);
     assert.strictEqual(segResult.method, 'numbered');
     const exp = expected.deepNesting;
     assert.ok(segResult.clauseCount >= exp.minClauseCount && segResult.clauseCount <= exp.maxClauseCount,
       `clause count ${segResult.clauseCount} outside expected range [${exp.minClauseCount}, ${exp.maxClauseCount}]`);
-    console.log('  ✓ deep-nesting fixture segments via the numbered heuristic within the expected clause-count range');
+    const { rows: clauses } = await pool.query(
+      `SELECT "numberLabel" FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`,
+      [ingestResult.reviewId]
+    );
+    assert.deepStrictEqual(clauses.map((c) => c.numberLabel), exp.expectedNumberLabels,
+      'clause number labels must be exactly the top-level headings, in order — sub-items like (a)/(i) must stay embedded, not become their own clauses');
+    console.log('  ✓ deep-nesting fixture segments via the numbered heuristic with exactly the expected top-level clause labels');
   } finally {
     await cleanupUsers([userId]);
   }
@@ -347,6 +353,52 @@ async function testLlmFallbackBoundaryLocation() {
   console.log('  ✓ LLM boundary fallback locates valid boundaries and falls back to paragraph segmentation for unlocatable ones, never accepting unlocated model text');
 }
 
+function testSequenceCheckRejectsCrossReference() {
+  const text = `1.1 Introduction.
+
+This is the intro clause.
+
+2.1 Payment.
+
+Customer pays on time.
+
+Section 9 shall survive termination of this Agreement.
+
+3.1 Miscellaneous.
+
+Final clause.`;
+  const clauses = heuristicSegment(text);
+  const labels = clauses.map((c) => c.numberLabel);
+  assert.deepStrictEqual(labels, ['1.1', '2.1', '3.1'],
+    `a cross-reference that merely LOOKS like a heading ("Section 9...") must not start its own clause — got labels ${JSON.stringify(labels)}`);
+  const paymentClause = clauses.find((c) => c.numberLabel === '2.1');
+  assert.ok(paymentClause.text.includes('Section 9 shall survive termination'),
+    'the cross-reference sentence must stay embedded in the preceding clause\'s body');
+  console.log('  ✓ sequence check rejects a cross-reference that looks like a heading but does not continue the numbering');
+}
+
+function testSequenceCheckRejectsEmbeddedNumberedList() {
+  const text = `1.1 Eligibility.
+
+The following criteria apply:
+
+1. Must be over 18.
+2. Must reside in Australia.
+3. Must hold a valid license.
+
+2.1 Payment.
+
+Customer pays on time.`;
+  const clauses = heuristicSegment(text);
+  const labels = clauses.map((c) => c.numberLabel);
+  assert.deepStrictEqual(labels, ['1.1', '2.1'],
+    `a numbered list embedded inside a clause's body must not split into its own clauses — got labels ${JSON.stringify(labels)}`);
+  const eligibilityClause = clauses.find((c) => c.numberLabel === '1.1');
+  assert.ok(eligibilityClause.text.includes('Must be over 18'),
+    'the embedded numbered-list item must stay inside the enclosing clause\'s body');
+  console.log('  ✓ sequence check rejects a numbered list embedded inside a clause, not continuing the section numbering');
+}
+
 async function testObligationSentencesStayWithinOneClause() {
   const userId = await makeUser('obligations');
   const pdftoppmAvailable = await isPdftoppmAvailable();
@@ -364,12 +416,12 @@ async function testObligationSentencesStayWithinOneClause() {
         [ingestResult.reviewId]
       );
       for (const obligation of exp.expectedObligations) {
-        const idx = ingestResult.extractedText.indexOf(obligation.snippet);
-        assert.ok(idx !== -1, `expected obligation snippet not found in extracted text (fixture: ${key}): "${obligation.snippet}"`);
-        const snippetEnd = idx + obligation.snippet.length;
-        const containingClauses = clauses.filter((c) => idx >= c.spanStart && snippetEnd <= c.spanEnd);
+        const idx = ingestResult.extractedText.indexOf(obligation.sourceQuote);
+        assert.ok(idx !== -1, `expected obligation sourceQuote not found in extracted text (fixture: ${key}): "${obligation.sourceQuote}"`);
+        const quoteEnd = idx + obligation.sourceQuote.length;
+        const containingClauses = clauses.filter((c) => idx >= c.spanStart && quoteEnd <= c.spanEnd);
         assert.strictEqual(containingClauses.length, 1,
-          `obligation snippet must land inside exactly one clause, not split across a boundary (fixture: ${key}): "${obligation.snippet}"`);
+          `obligation sourceQuote must land inside exactly one clause, not split across a boundary (fixture: ${key}): "${obligation.sourceQuote}"`);
       }
     }
     console.log('  ✓ every expected obligation sentence lands inside a single segmented clause, never split across a boundary');
@@ -391,6 +443,8 @@ async function run() {
   await testSegmentationUnnumberedFallback();
   await testClauseTextAlwaysExactSlice();
   await testLlmFallbackBoundaryLocation();
+  testSequenceCheckRejectsCrossReference();
+  testSequenceCheckRejectsEmbeddedNumberedList();
   await testObligationSentencesStayWithinOneClause();
   console.log('\nAll Contract Review Stage 2 smoke tests passed.');
   await pool.end();
