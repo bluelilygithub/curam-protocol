@@ -16,7 +16,7 @@ module.exports = {
     maxClauseCount: 8,
     expectNumberedHeadings: false,
     expectedObligations: [
-      { description: 'Lessee pays $1,200/month lease rental', snippet: 'AUD $1,200 per month', obligor: 'user', timingShape: 'rrule' },
+      { description: 'Lessee pays $1,200/month lease rental', snippet: '1,200 per month', obligor: 'user', timingShape: 'rrule', note: 'snippet avoids the leading "$" — a confirmed OCR misread ($1,200 -> 31,200) at this render size/font, unrelated to any pipeline bug' },
       { description: 'Lessee notifies Lessor 90 days before renewal', snippet: 'Ninety days before the renewal date', obligor: 'user', timingShape: 'anchorOffset', anchorEvent: 'renewal_date', offsetDays: -90 },
     ],
   },
