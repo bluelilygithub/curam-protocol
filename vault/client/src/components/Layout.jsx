@@ -92,6 +92,7 @@ function Layout() {
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
   const [missionReminderDue,  setMissionReminderDue]  = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [envInfo, setEnvInfo] = useState(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -142,6 +143,18 @@ function Layout() {
       })
       .catch(() => {});
   }, []);
+
+  // Staging banner — a deploy with APP_ENV=staging must be unmistakable so
+  // testing never gets confused with production, no matter which physical
+  // Railway environment it's actually running in.
+  useEffect(() => {
+    api.get('/api/settings/environment')
+      .then(r => r.json())
+      .then(data => { if (data?.appEnv) setEnvInfo(data); })
+      .catch(() => {});
+  }, []);
+  const isStaging = envInfo?.isStaging;
+  const STAGING_BANNER_HEIGHT = 26;
 
   useEffect(() => {
     api.get('/api/mission/reminder-status').then(r => r.json()).then(d => {
@@ -317,10 +330,32 @@ function Layout() {
       };
 
   return (
-    <div
-      className="flex overflow-hidden"
-      style={{ height: '100dvh', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-    >
+    <>
+      {isStaging && (
+        <div
+          className="fixed top-0 left-0 right-0 flex items-center justify-center z-[9999]"
+          style={{
+            height: STAGING_BANNER_HEIGHT,
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            background: '#f59e0b',
+            color: '#1A1A1A',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.03em',
+          }}
+        >
+          ⚠ STAGING — test environment, not production
+        </div>
+      )}
+      <div
+        className="flex overflow-hidden"
+        style={{
+          height: isStaging ? `calc(100dvh - ${STAGING_BANNER_HEIGHT}px)` : '100dvh',
+          marginTop: isStaging ? STAGING_BANNER_HEIGHT : 0,
+          background: 'var(--color-bg)',
+          color: 'var(--color-text)',
+        }}
+      >
       {/* Mobile backdrop — tap to close sidebar */}
       {isMobile && sidebarOpen && (
         <div
@@ -618,7 +653,8 @@ function Layout() {
           onComplete={() => {}}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

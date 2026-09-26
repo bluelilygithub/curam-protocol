@@ -3,6 +3,7 @@
 function normalizeAppEnv(value) {
   const env = String(value || '').trim().toLowerCase();
   if (env === 'production' || env === 'prod') return 'production';
+  if (env === 'staging' || env === 'stage') return 'staging';
   if (env === 'local') return 'local';
   if (env === 'development' || env === 'dev' || env === 'test') return env;
   return process.env.NODE_ENV === 'production' ? 'production' : 'local';
@@ -38,6 +39,7 @@ const runtimeConfig = {
   appEnv,
   isLocal: appEnv === 'local',
   isProduction: appEnv === 'production',
+  isStaging: appEnv === 'staging',
   databaseUrl: database.url,
   databaseUrlSource: database.source,
   safeDatabaseUrl: maskDatabaseUrl(database.url),
@@ -58,6 +60,7 @@ function getPublicRuntimeConfig() {
     appEnv: runtimeConfig.appEnv,
     isLocal: runtimeConfig.isLocal,
     isProduction: runtimeConfig.isProduction,
+    isStaging: runtimeConfig.isStaging,
     databaseUrlSource: runtimeConfig.databaseUrlSource,
     safeDatabaseUrl: runtimeConfig.safeDatabaseUrl,
     appUrl: runtimeConfig.appUrl,

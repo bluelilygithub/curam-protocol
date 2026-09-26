@@ -143,6 +143,15 @@ router.get('/runtime', (req, res) => {
   res.json(getPublicRuntimeConfig());
 });
 
+// GET /api/settings/environment — just the environment identity, for the
+// staging banner (Layout.jsx). Not admin-gated like /runtime above (which
+// also exposes safeDatabaseUrl and provider config) — appEnv alone isn't
+// sensitive, and anyone testing against a staging deploy should see it.
+router.get('/environment', (req, res) => {
+  const { appEnv, isStaging, isProduction, isLocal } = getPublicRuntimeConfig();
+  res.json({ appEnv, isStaging, isProduction, isLocal });
+});
+
 // GET /api/settings/tool-maintenance/scan — admin-only preview of local tool updates.
 router.get('/tool-maintenance/scan', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
