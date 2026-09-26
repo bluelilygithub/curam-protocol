@@ -201,7 +201,8 @@ async function testExtractionScannedPdf() {
     assert.strictEqual(ingestResult.outcome, 'complete');
     const { rows: [updatedDoc] } = await pool.query(`SELECT "ocrUsed", "ocrConfidence" FROM contract_documents WHERE id=$1`, [doc.id]);
     assert.strictEqual(updatedDoc.ocrUsed, true, 'a genuine image-only PDF must report ocrUsed=true');
-    assert.ok(typeof updatedDoc.ocrConfidence === 'number' && updatedDoc.ocrConfidence > 0, 'expected a real OCR confidence value');
+    // NUMERIC(5,2) columns come back from pg as strings, not numbers.
+    assert.ok(!Number.isNaN(Number(updatedDoc.ocrConfidence)) && Number(updatedDoc.ocrConfidence) > 0, 'expected a real OCR confidence value');
     assert.ok(/Coastal|Lessee|forklift/i.test(ingestResult.extractedText), 'OCR output should roughly match the source content');
     console.log('  ✓ scanned-PDF OCR extraction works end-to-end');
   } finally {
