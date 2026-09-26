@@ -65,15 +65,17 @@ async function buildTypedPdf(text) {
       page.drawText(line, { x: MARGIN, y, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
       y -= LINE_HEIGHT;
     }
-    // The gap after the title (first paragraph) needs to be wide enough that
-    // extractFromPdf's own y-gap paragraph detection reliably keeps it
-    // separate from what follows — confirmed via direct repro that a single
-    // LINE_HEIGHT gap merges a short title with a short first heading into
-    // one paragraph (deterministically, on every extraction — a real
-    // rendering-layout quirk, not the pdf-parse corruption bug), which then
-    // silently drops the title from every clause since the merged line no
-    // longer starts with a recognizable heading pattern.
-    y -= pIdx === 0 ? LINE_HEIGHT * 2 : LINE_HEIGHT;
+    // A full blank-line gap (2x) between EVERY paragraph, not just after the
+    // title — confirmed via direct repro against pdftotext -layout (the real
+    // extraction path): a single LINE_HEIGHT gap between paragraphs doesn't
+    // read back as a blank line at all (poppler keeps them as consecutive
+    // single-newline-separated lines), so splitParagraphs() — which splits
+    // on blank lines, matching translateExtract.js's own convention — merged
+    // the entire fixture into one giant paragraph. A real Word/Adobe-
+    // exported document has genuine visible paragraph spacing; this
+    // synthetic renderer needs to match that, not the tighter spacing that
+    // happened to survive pdf-parse's different (and buggy) y-gap heuristic.
+    y -= LINE_HEIGHT * 2;
   });
   return Buffer.from(await doc.save());
 }

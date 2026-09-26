@@ -40,25 +40,21 @@ const ContractService = require('./contractService');
 const { ingestDocument } = require('./ingest');
 const { segmentDocument, locateLlmBoundaries, llmBoundarySegment, heuristicSegment } = require('./segmentation');
 const { isPdftoppmAvailable } = require('./pdfRasterize');
+const { isPdftotextAvailable } = require('./pdfTextExtract');
 const { buildAllFixtures } = require('./smokeSet/buildFixtures');
 const expected = require('./smokeSet/expected');
 
-// pdf-parse's bundled pdfjs (v1.10.100) has a confirmed COLD-START bug (see
-// docs/contract-review-spec.md's Decisions Log for the full investigation,
-// including an earlier, wrong "isolate every call in its own process" fix
-// that was reverted once tested against the real deployed runtime — a fresh
-// process is always cold, so that fix guaranteed hitting this bug on every
-// single call). ingest.js's own warmUpExtractor() burns the cold-start
-// failures once, at first real use, against a throwaway document — this
-// test file deliberately calls ingestDocument/segmentDocument DIRECTLY, in
-// this one shared process, for every fixture (matching how a real
-// long-lived server actually behaves: one cold start, then reliably warm),
-// not one fresh subprocess per fixture (which would defeat the warm-up
-// entirely and reintroduce the bug this fix exists to avoid). The bounded
-// retry below is ingest.js's own backstop, not a second layer here.
+// PDF extraction goes through pdftotext (poppler-utils) now, not pdf-parse —
+// see ingest.js's/pdfTextExtract.js's headers and docs/contract-review-
+// spec.md's Decisions Log for why (pdf-parse's bundled pdfjs had two real,
+// unfixed failure modes; several structural fixes were tried and measured
+// against the real deployed runtime before concluding the library itself
+// was the problem, not how it was called). This test file simply calls
+// ingestDocument/segmentDocument directly, in-process, for every fixture —
+// no special isolation or retry needed here anymore.
 /** Runs ingest+segment for one document, in-process. Returns
  * { ok: true, ...result } or { ok: false, error }. */
-async function ingestAndSegmentInSubprocess(documentId) {
+async function runIngestAndSegment(documentId) {
   try {
     const ingestResult = await ingestDocument(documentId);
     let segResult = null;
@@ -119,13 +115,13 @@ async function uploadFixture(userId, fixtureKey) {
   return { contract, doc };
 }
 
-/** Runs ingest+segment for a document (in its own subprocess) and returns the
- * same {ingestResult, segResult} shape the rest of this test file expects. */
+/** Runs ingest+segment for a document and returns the same
+ * {ingestResult, segResult} shape the rest of this test file expects. */
 async function ingestAndSegment(doc) {
-  const result = await ingestAndSegmentInSubprocess(doc.id);
+  const result = await runIngestAndSegment(doc.id);
   if (!result.ok) {
     const err = new Error(result.error);
-    err.subprocessFailed = true;
+    err.ingestFailed = true;
     throw err;
   }
   const { reviewId, outcome, extractedText, pageMap, segResult } = result;
@@ -133,6 +129,10 @@ async function ingestAndSegment(doc) {
 }
 
 async function testExtractionPdfTextLayer() {
+  if (!(await isPdftotextAvailable())) {
+    console.log('  ⚠ SKIPPED (pdftotext not on PATH in this environment) — PDF text-layer extraction. Run against the Railway staging deploy to verify.');
+    return;
+  }
   const userId = await makeUser('pdf-text');
   try {
     const { doc } = await uploadFixture(userId, 'deepNesting');
@@ -214,7 +214,7 @@ async function testExtractionNotSupported() {
     const doc = await ContractService.addDocument(userId, contract.id, {
       file: { buffer: Buffer.from('irrelevant'), filename: 'x.txt', mimeType: 'text/plain' },
     });
-    const result = await ingestAndSegmentInSubprocess(doc.id);
+    const result = await runIngestAndSegment(doc.id);
     assert.ok(result.ok, `ingest should not error for an unsupported-but-parseable file: ${result.error}`);
     assert.strictEqual(result.outcome, 'not_supported');
     const { rows: [review] } = await pool.query(`SELECT status FROM contract_reviews WHERE id=$1`, [result.reviewId]);
@@ -226,13 +226,17 @@ async function testExtractionNotSupported() {
 }
 
 async function testExtractionCorruptFile() {
+  if (!(await isPdftotextAvailable())) {
+    console.log('  ⚠ SKIPPED (pdftotext not on PATH in this environment) — corrupt-file handling. Run against the Railway staging deploy to verify.');
+    return;
+  }
   const userId = await makeUser('corrupt');
   try {
     const contract = await ContractService.createContract(userId, { title: 'Corrupt file test' });
     const doc = await ContractService.addDocument(userId, contract.id, {
       file: { buffer: Buffer.from('this is not a real pdf'), filename: 'corrupt.pdf', mimeType: 'application/pdf' },
     });
-    const result = await ingestAndSegmentInSubprocess(doc.id);
+    const result = await runIngestAndSegment(doc.id);
     assert.strictEqual(result.ok, false, 'a corrupt file must cause ingest to fail');
     const { rows } = await pool.query(`SELECT id, status FROM contract_reviews WHERE "documentId"=$1`, [doc.id]);
     const review = rows[0];
@@ -244,7 +248,13 @@ async function testExtractionCorruptFile() {
   }
 }
 
+const PDF_FIXTURE_KEYS = new Set(['scanned', 'mixed', 'deepNesting', 'amendment']);
+
 async function testSegmentationNumberedHeuristic() {
+  if (!(await isPdftotextAvailable())) {
+    console.log('  ⚠ SKIPPED (pdftotext not on PATH in this environment) — numbered-heuristic segmentation (PDF fixture). Run against the Railway staging deploy to verify.');
+    return;
+  }
   const userId = await makeUser('numbered');
   try {
     const { doc } = await uploadFixture(userId, 'deepNesting');
@@ -279,8 +289,13 @@ async function testSegmentationUnnumberedFallback() {
 
 async function testClauseTextAlwaysExactSlice() {
   const userId = await makeUser('exactslice');
+  const pdftotextAvailable = await isPdftotextAvailable();
   try {
     for (const key of Object.keys(expected)) {
+      if (PDF_FIXTURE_KEYS.has(key) && !pdftotextAvailable) {
+        console.log(`  ⚠ SKIPPED (pdftotext not on PATH in this environment) — exact-slice check for fixture "${key}"`);
+        continue;
+      }
       const { doc } = await uploadFixture(userId, key);
       const { ingestResult, segResult } = await ingestAndSegment(doc);
       if (ingestResult.outcome !== 'complete') continue; // OCR skipped locally — nothing to check here
@@ -373,10 +388,15 @@ Customer pays on time.`;
 async function testObligationSentencesStayWithinOneClause() {
   const userId = await makeUser('obligations');
   const pdftoppmAvailable = await isPdftoppmAvailable();
+  const pdftotextAvailable = await isPdftotextAvailable();
   try {
     for (const [key, exp] of Object.entries(expected)) {
       if ((key === 'scanned' || key === 'mixed') && !pdftoppmAvailable) {
         console.log(`  ⚠ SKIPPED (pdftoppm unavailable) — obligation-boundary check for fixture "${key}"`);
+        continue;
+      }
+      if (PDF_FIXTURE_KEYS.has(key) && !pdftotextAvailable) {
+        console.log(`  ⚠ SKIPPED (pdftotext not on PATH in this environment) — obligation-boundary check for fixture "${key}"`);
         continue;
       }
       const { doc } = await uploadFixture(userId, key);

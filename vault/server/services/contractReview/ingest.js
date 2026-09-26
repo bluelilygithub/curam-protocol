@@ -1,124 +1,44 @@
 'use strict';
 
-// Contract Review — Pipeline stage 1 (Ingest). Reuses translateExtract.js's
-// extractFromPdf/extractFromDocx (page-aware, already computes
-// scannedCandidatePages) rather than reinventing extraction. Scanned pages
-// are rasterized via pdfRasterize.js (new — no server-side rasterizer existed
-// anywhere in this repo, see docs/contract-review-spec.md's Decisions Log)
-// and OCR'd via this feature's own ocrScheduler.js.
+// Contract Review — Pipeline stage 1 (Ingest). PDFs go through pdftotext
+// (pdfTextExtract.js — poppler-utils, NOT translateExtract.js/pdf-parse; see
+// that file's header and docs/contract-review-spec.md's Decisions Log for
+// why this reverses an earlier "reuse translateExtract.js for everything"
+// decision). DOCX still reuses translateExtract.js's extractForTranslate
+// (mammoth) — unaffected, no reason to touch it. Scanned pages are
+// rasterized via pdfRasterize.js and OCR'd via this feature's own
+// ocrScheduler.js.
 //
 // Runs entirely inside the async pipeline job — never called from the upload
 // request path. ContractService.addDocument stays extraction-free.
 
-const path = require('path');
-const crypto = require('crypto');
-const { fork } = require('child_process');
-
+const fs = require('fs');
 const { pool } = require('../../db');
+const { detectSourceFormat, extractForTranslate } = require('../translateExtract');
+const { extractPdfViaPoppler, isPdftotextAvailable } = require('./pdfTextExtract');
 const { rasterizePages, isPdftoppmAvailable } = require('./pdfRasterize');
 const { recognize } = require('./ocrScheduler');
 
 const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
-// pdf-parse's bundled pdfjs (v1.10.100, inside translateExtract.js's
-// extractForTranslate) has TWO confirmed failure modes, both tested
-// directly against the real deployed runtime (Node 20 in the Railway
-// container — this dev machine runs Node 24, which behaves differently; an
-// earlier fix here was reasoned from Node 24 behavior alone and was wrong):
-//   1. Cold-start: the first 1-2 extraction calls in any freshly-started
-//      process fail reliably.
-//   2. DB-adjacency: even in an already-warm process, a DB query awaited
-//      immediately before the extraction call fails at a real, material
-//      rate (measured 9/20 = 45% on Node 20, warm, matching
-//      ingestDocument's own real shape).
-// A "run each call in a fresh child process" fix (tried first) only avoids
-// mode 2 while guaranteeing mode 1 on every single call (measured 10/10
-// fails). A "warm up once, then extract in the same process as
-// ingestDocument's own DB calls" fix (tried second) only avoids mode 1 and
-// leaves mode 2 fully exposed. The actual fix needs a process that is BOTH
-// warm AND never shares an event loop with DB I/O, for its entire
-// lifetime — a persistent, long-lived worker process (extractWorker.js,
-// forked once via child_process.fork, kept alive and reused for every
-// extraction) does both: it warms up once at fork time, then handles every
-// real request in a process whose only job, ever, is extraction — no DB
-// call is ever adjacent to one there. The bounded retry below is a backstop
-// for whatever residual rate remains (none observed once both modes are
-// addressed), not the primary defense. Every failure observed, across both
-// investigations and every trial, was a loud thrown exception — never a
-// silent, successfully-returned-but-wrong extractedText — so a corrupted
-// extraction could never silently become "ground truth" for spans/lineage/
-// corrections regardless of which fix was in place. Logged as a
-// Suggestions-inbox alert against translateExtract.js itself (shared with
-// Translate's live production route — translate.js calls extractForTranslate
-// directly, in-process, with its own DB work immediately around each
-// extraction on every real upload, the exact shape that reproduces mode 2
-// at a real rate; the same persistent-worker fix would apply there). Not
-// fixed in translate.js — out of scope for this feature. See docs/contract-
-// review-spec.md's Decisions Log for the full investigation, including
-// both earlier fixes that were tried, measured, and found wrong before
-// this one.
-const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
-const MAX_EXTRACTION_RETRIES = 3;
-const EXTRACT_WORKER_SCRIPT = path.join(__dirname, 'extractWorker.js');
-const EXTRACT_TIMEOUT_MS = 60_000;
+async function extractPdfOrDocx(buffer, doc, reviewId) {
+  const format = detectSourceFormat(doc.filename, doc.mimeType);
 
-let worker = null;
-const pending = new Map();
-
-function getExtractWorker() {
-  if (worker) return worker;
-  worker = fork(EXTRACT_WORKER_SCRIPT, { silent: false });
-  worker.on('message', (msg) => {
-    const entry = pending.get(msg.id);
-    if (!entry) return; // workerBooted message, or a response after its own timeout already rejected
-    pending.delete(msg.id);
-    if (msg.error) entry.reject(new Error(msg.error));
-    else entry.resolve(msg.result);
-  });
-  worker.on('exit', (code) => {
-    console.warn(`[contract-review] extraction worker exited (code ${code}) — will fork a new one on next use`);
-    worker = null;
-    for (const { reject } of pending.values()) reject(new Error('Extraction worker exited before responding'));
-    pending.clear();
-  });
-  return worker;
-}
-
-async function extractViaWorker(buffer, filename, mimetype) {
-  const w = getExtractWorker();
-  const id = crypto.randomUUID();
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Extraction worker timed out after ${EXTRACT_TIMEOUT_MS / 1000}s`));
-    }, EXTRACT_TIMEOUT_MS);
-    pending.set(id, {
-      resolve: (v) => { clearTimeout(timer); resolve(v); },
-      reject: (e) => { clearTimeout(timer); reject(e); },
-    });
-    w.send({ id, bufferB64: buffer.toString('base64'), filename, mimetype });
-  });
-}
-
-async function extractPdfOrDocxWithRetry(buffer, doc, reviewId) {
-  let lastErr;
-  for (let attempt = 1; attempt <= MAX_EXTRACTION_RETRIES; attempt++) {
-    try {
-      return await extractViaWorker(buffer, doc.filename, doc.mimeType);
-    } catch (err) {
-      if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
-        await markReviewNotSupported(reviewId, err.message);
-        return { outcome: 'not_supported' };
-      }
-      lastErr = err;
-      if (!KNOWN_PDF_PARSE_FLAKE.test(err.message || '') || attempt === MAX_EXTRACTION_RETRIES) break;
-      console.warn(`[contract-review] known pdf-parse flake on review ${reviewId} (attempt ${attempt}/${MAX_EXTRACTION_RETRIES}) — retrying: ${err.message}`);
-      await new Promise((r) => setTimeout(r, 500));
+  if (format === 'pdf') {
+    if (!(await isPdftotextAvailable())) {
+      const e = new Error('pdftotext is not available on this server (poppler-utils not installed)');
+      e.code = 'ENOENT';
+      throw e;
     }
+    return extractPdfViaPoppler(buffer);
   }
-  await markReviewFailed(reviewId, `Extraction failed after ${MAX_EXTRACTION_RETRIES} attempt(s): ${lastErr.message}`);
-  throw lastErr;
+  if (format === 'docx') {
+    return extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
+  }
+  const err = new Error(`Unsupported file type for Contract Review: ${format || 'unknown'}`);
+  err.notSupported = true;
+  throw err;
 }
 
 /** Builds extractedText + pageMap from paragraphsByPage, in true page order
@@ -172,7 +92,6 @@ async function ingestDocument(documentId) {
   );
   const reviewId = review.id;
 
-  const fs = require('fs');
   let buffer;
   try {
     buffer = fs.readFileSync(doc.storedPath);
@@ -181,14 +100,16 @@ async function ingestDocument(documentId) {
     throw err;
   }
 
-  const extracted = await extractPdfOrDocxWithRetry(buffer, doc, reviewId);
-  if (extracted.outcome === 'not_supported') return { reviewId, outcome: 'not_supported' };
-  if (extracted.sourceFormat !== 'pdf' && extracted.sourceFormat !== 'docx') {
-    // Contract Review only supports PDF/DOCX uploads (per addDocument's
-    // upload policy) — extractForTranslate also accepts .xlsx/.txt for
-    // Translate's own use case, which are not real contract documents here.
-    await markReviewNotSupported(reviewId, `Unsupported file type for Contract Review: ${extracted.sourceFormat}`);
-    return { reviewId, outcome: 'not_supported' };
+  let extracted;
+  try {
+    extracted = await extractPdfOrDocx(buffer, doc, reviewId);
+  } catch (err) {
+    if (err.notSupported) {
+      await markReviewNotSupported(reviewId, err.message);
+      return { reviewId, outcome: 'not_supported' };
+    }
+    await markReviewFailed(reviewId, `Extraction failed: ${err.message}`);
+    throw err;
   }
 
   if (extracted.pageCount > MAX_PAGES) {
