@@ -76,11 +76,23 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
     const type = OBLIGATION_TYPES.has(raw?.type) ? raw.type : 'other';
     const obligorPartyId = raw?.obligorName ? (partyByNorm.get(normalizeName(raw.obligorName))?.id || null) : null;
 
-    const absoluteDate = DATE_RE.test(raw?.absoluteDate) ? raw.absoluteDate : null;
-    const anchorEvent = !absoluteDate && ANCHOR_EVENTS.has(raw?.anchorEvent) ? raw.anchorEvent : null;
+    // Precedence when the model returns more than one shape at once (it's
+    // asked for exactly one, but real responses sometimes redundantly fill
+    // in more — confirmed live: a monthly rent obligation came back with
+    // BOTH a valid rrule AND anchorEvent:'custom'/offsetDays for the same
+    // "day of month" fact). rrule wins first — it's only ever present when
+    // the model recognized genuine recurrence language, the strongest
+    // signal of the three. absoluteDate is checked last, matching the
+    // spec's own "anchor+offset over a guessed absolute date" preference.
+    const rrule = raw?.rrule ? String(raw.rrule).slice(0, 200) : null;
+    const anchorEvent = !rrule && ANCHOR_EVENTS.has(raw?.anchorEvent) ? raw.anchorEvent : null;
+    const absoluteDate = !rrule && !anchorEvent && DATE_RE.test(raw?.absoluteDate) ? raw.absoluteDate : null;
     const anchorCustomLabel = anchorEvent === 'custom' && raw?.anchorCustomLabel ? String(raw.anchorCustomLabel).slice(0, 200) : null;
-    const offsetDays = anchorEvent && Number.isFinite(Number(raw?.offsetDays)) ? Math.round(Number(raw.offsetDays)) : null;
-    const rrule = !absoluteDate && !anchorEvent && raw?.rrule ? String(raw.rrule).slice(0, 200) : null;
+    // raw?.offsetDays != null guards against Number(null) === 0 being
+    // treated as a real, finite offset — a real bug found alongside the
+    // above (an obligation with no stated offset was getting offsetDays=0
+    // instead of null, inventing a value that was never in the source).
+    const offsetDays = anchorEvent && raw?.offsetDays != null && Number.isFinite(Number(raw.offsetDays)) ? Math.round(Number(raw.offsetDays)) : null;
 
     const amount = Number.isFinite(Number(raw?.amount)) && raw?.amount != null ? Number(raw.amount) : null;
     const currency = typeof raw?.currency === 'string' && raw.currency.trim() ? raw.currency.trim().slice(0, 3).toUpperCase() : null;
