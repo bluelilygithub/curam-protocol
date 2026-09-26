@@ -10,39 +10,82 @@
 // Runs entirely inside the async pipeline job — never called from the upload
 // request path. ContractService.addDocument stays extraction-free.
 
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+
 const { pool } = require('../../db');
-const { extractForTranslate } = require('../translateExtract');
 const { rasterizePages, isPdftoppmAvailable } = require('./pdfRasterize');
 const { recognize } = require('./ocrScheduler');
 
 const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
-// pdf-parse's bundled pdfjs (v1.10.100, inside extractForTranslate's PDF
-// path) has a confirmed non-deterministic corruption bug — direct repro
-// while building this stage: the SAME valid PDF, re-extracted repeatedly
-// with real async I/O interleaved (matching this function's own shape —
-// a DB read/write happens right before extraction), failed 16/20 times.
-// Every observed failure across ~60 combined trials this session was a
-// LOUD thrown exception with this exact signature — never a silent,
-// successfully-returned-but-wrong extractedText. That matters: it means a
-// corrupted extraction can never silently become "ground truth" for spans/
-// lineage/corrections, because it never returns successfully in the first
-// place. This retry exists purely to stop a real, valid document from
-// needing manual re-upload just because it landed on an unlucky attempt —
-// not to detect or repair corrupted output (none has ever been observed).
+// pdf-parse's bundled pdfjs (v1.10.100, inside translateExtract.js's
+// extractForTranslate) has a confirmed non-deterministic corruption bug.
+// Root-caused via direct repro: the failure rate tracks specifically with a
+// DB query being awaited immediately, synchronously adjacent to the
+// extraction call in the SAME process (this function's own real shape) —
+// up to 80% (16/20) in that exact pattern — not pure randomness, and not
+// simply "many extraction calls" (20 truly concurrent extractions with no
+// DB: 0 failures; 20 serialized extractions with unrelated background DB
+// churn not synchronized to each call: 1/20). That points at an event-loop
+// tick-timing collision with pdf-parse's legacy setTimeout-based "fake
+// worker" scheduling. STRUCTURAL FIX: extraction now runs in its own child
+// process (extractInChildProcess.js) with nothing else sharing that
+// process's event loop — 0 failures observed across ~75 combined trials
+// whenever nothing else was running in the same process. The bounded retry
+// below is kept only as a backstop for whatever residual rate remains, not
+// the primary fix. Every failure observed, in every trial, was a loud
+// thrown exception — never a silent, successfully-returned-but-wrong
+// extractedText — so a corrupted extraction could never have silently
+// become "ground truth" for spans/lineage/corrections even before this fix.
 // Logged as a Suggestions-inbox alert against translateExtract.js itself
-// (shared with Translate's live production route, equally exposed) —
-// not fixed there; out of scope for this feature. See docs/contract-
-// review-spec.md's Decisions Log for the full investigation.
+// (shared with Translate's live production route — Translate calls
+// extractForTranslate directly, in-process, interleaved with its own DB
+// work on every upload, so it very likely has the identical concurrency
+// failure in production today; the same child-process isolation would fix
+// it there too). Not fixed in translate.js — out of scope for this feature.
+// See docs/contract-review-spec.md's Decisions Log for the full
+// investigation, including before/after failure-rate measurements.
 const KNOWN_PDF_PARSE_FLAKE = /Invalid PDF structure|Unknown compression method/;
 const MAX_EXTRACTION_RETRIES = 3;
+const EXTRACT_CHILD_SCRIPT = path.join(__dirname, 'extractInChildProcess.js');
+
+async function extractInChildProcess(buffer, filename, mimetype) {
+  const tmpDir = os.tmpdir();
+  const id = crypto.randomUUID();
+  const inputFilePath = path.join(tmpDir, `contract-review-extract-in-${id}`);
+  const outputFilePath = path.join(tmpDir, `contract-review-extract-out-${id}.json`);
+  const fs = require('fs');
+  fs.writeFileSync(inputFilePath, buffer);
+  try {
+    try {
+      await execFileAsync(
+        process.execPath, [EXTRACT_CHILD_SCRIPT, inputFilePath, filename, mimetype, outputFilePath],
+        { timeout: 60_000, maxBuffer: 20 * 1024 * 1024 }
+      );
+      return JSON.parse(fs.readFileSync(outputFilePath, 'utf8'));
+    } catch (err) {
+      let message = err.message;
+      try { message = JSON.parse(fs.readFileSync(outputFilePath, 'utf8')).error || message; } catch (_) { /* keep raw */ }
+      const e = new Error(message);
+      throw e;
+    }
+  } finally {
+    try { fs.unlinkSync(inputFilePath); } catch (_) {}
+    try { fs.unlinkSync(outputFilePath); } catch (_) {}
+  }
+}
 
 async function extractPdfOrDocxWithRetry(buffer, doc, reviewId) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_EXTRACTION_RETRIES; attempt++) {
     try {
-      return await extractForTranslate({ buffer, filename: doc.filename, mimetype: doc.mimeType });
+      return await extractInChildProcess(buffer, doc.filename, doc.mimeType);
     } catch (err) {
       if (/Unsupported file type|Legacy \.doc/.test(err.message || '')) {
         await markReviewNotSupported(reviewId, err.message);

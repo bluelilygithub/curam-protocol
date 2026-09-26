@@ -596,3 +596,24 @@ All five items originally raised here were reviewed and resolved explicitly in r
 7. **`pageMap` shape confirmed and logged here** (no schema in `contract_documents.pageMap` mandates a specific shape beyond `JSONB` — this is what Stage 2 actually produces, for Stage 3+ to rely on): `{ [pageNum]: { startOffset, endOffset, label, ocrUsed, ocrConfidence } }`, one entry per physical page, `startOffset`/`endOffset` being character offsets into the document's `extractedText` (used directly by `segmentation.js`'s `pageForOffset()` to derive each clause's `startPage`/`endPage`).
 
 Re-ran the full suite after all of the above: locally (`npm run test:contract-review-m2` against the staging Postgres — all non-OCR checks pass, OCR checks skip with the same clear log line as before) and via `railway ssh` inside the redeployed staging container (all 11 checks pass for real, OCR included).
+
+**Stage 2 follow-up, round 2 — pdf-parse concurrency: root-caused and structurally fixed, not just retried.**
+
+Tested the hypothesis directly rather than assuming: is the trigger raw concurrency/call-count, or something about *how* async work is interleaved?
+
+| Scenario | N | Fails |
+|---|---|---|
+| In-process, no other work at all | 40 | 0 |
+| In-process, no other work (separate session) | 15 | 0 |
+| 20 extractions truly concurrent (`Promise.all`), no DB at all | 20 | 0 |
+| Serialized extractions, unrelated DB churn running continuously in the background (not synchronized to each call) | 20 | 1 |
+| 20 concurrent extractions with the same background DB churn | 20 | 0 |
+| **Serialized extractions, a DB query `await`ed immediately/synchronously right before EACH call — this function's own real shape** | 20 | **16** |
+
+Raw concurrency and call count don't reproduce it (0/20, 0/20). Background, unsynchronized DB activity barely does (1/20). The one pattern that reproduces it reliably is a promise resolving **immediately adjacent, in the same tick**, to the extraction call — exactly `ingestDocument`'s own shape (DB read/write right before extraction). This points at an event-loop tick-timing collision inside `pdf-parse`'s bundled `pdfjs`'s legacy `setTimeout`-based "fake worker" scheduling, not randomness, and not something a retry alone should be trusted to paper over at an 80% base rate (3 retries would still leave ~0.2³ ≈ 0.8% × ... — more precisely, ~51% chance of exhausting all 3 attempts if each is independently ~80%).
+
+**Structural fix**: extraction now runs in its own child process (`server/services/contractReview/extractInChildProcess.js`, spawned from `ingest.js`'s `extractInChildProcess()` via a temp-file-based IPC, same pattern as the test harness's own `ingestSegmentSubprocess.js`) — nothing else shares that process's event loop, removing the collision by construction rather than statistically. Re-measured with the exact same trigger shape that produced 16/20: **0/20 after the fix.** The bounded retry (`MAX_EXTRACTION_RETRIES = 3`) stays in `ingest.js` as a backstop for whatever residual rate remains (none observed in ~95 combined trials post-fix), not as the primary defense.
+
+**Translate is very likely affected identically in production, and now more specifically than the original alert said**: `translate.js` calls `extractForTranslate` directly, in-process, with its own DB reads/writes (job status updates, glossary lookups) happening immediately around each extraction call on every real upload — the exact shape that reproduces this at 80%. The Suggestions-inbox alert (`contractReviewStage2`, category `alert`) has been updated with this more precise characterization and the concrete fix (the same child-process isolation used here). Not fixed in `translate.js` — out of scope for this feature.
+
+Re-ran the full suite again after the structural fix (locally, all non-OCR checks pass; the corrupt-file test's own deliberately-invalid buffer still correctly exhausts retries and fails, unrelated to this fix).
