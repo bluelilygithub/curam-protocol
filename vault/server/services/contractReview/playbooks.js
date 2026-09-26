@@ -29,7 +29,7 @@ const PLAYBOOKS = {
   nda: {
     default: {
       confidentiality: 'Mutual confidentiality obligations preferred; one-sided obligations favouring the other party are risky.',
-      termination: 'A defined term (1-3 years) is standard; an indefinite or unusually long confidentiality term is risky.',
+      termination: 'Assess TOTAL confidentiality exposure — the stated term PLUS any post-termination survival period added on top, not the term alone. A total of 1-3 years is standard; an indefinite exposure, or a total exceeding roughly 3 years once the survival period is added, is risky.',
     },
   },
   msa: {
