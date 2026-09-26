@@ -229,13 +229,35 @@ async function testObligationTrackingAndIcs() {
   }
 }
 
+// Collects failures instead of aborting on the first one — see
+// milestone3.test.js's identical helper for the rationale.
+async function runAll(label, fn) {
+  try {
+    await fn();
+    return null;
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${label} — ${err.message}`);
+    return { label, message: err.message };
+  }
+}
+
 async function run() {
   await waitForSchema();
   await cleanupLeftoversFromPriorRuns();
 
-  for (const key of Object.keys(expected)) await testObligationsForFixture(key);
-  await testExecutionAndPromotion();
-  await testObligationTrackingAndIcs();
+  const failures = [];
+  for (const key of Object.keys(expected)) failures.push(await runAll(`obligations:${key}`, () => testObligationsForFixture(key)));
+  failures.push(await runAll('executionAndPromotion', testExecutionAndPromotion));
+  failures.push(await runAll('obligationTrackingAndIcs', testObligationTrackingAndIcs));
+
+  const real = failures.filter(Boolean);
+  if (real.length) {
+    console.error(`\n${real.length} Contract Review Stage 4 check(s) FAILED:`);
+    for (const f of real) console.error(`  - ${f.label}: ${f.message}`);
+    await pool.end();
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('\nAll Contract Review Stage 4 smoke tests passed.');
   await pool.end();

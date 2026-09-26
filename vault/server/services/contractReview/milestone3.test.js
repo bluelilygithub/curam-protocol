@@ -297,17 +297,42 @@ async function testPartiesReconciliation() {
   }
 }
 
+// Collects failures instead of aborting the whole run on the first one —
+// each check is independent (different fixture, different concern), so one
+// debatable LLM judgment call on fixture X shouldn't hide whether fixture Y
+// or the role-flip/reconciliation checks pass. Reports every failure at the
+// end, still exits 1 if any occurred.
+async function runAll(label, fn) {
+  try {
+    await fn();
+    return null;
+  } catch (err) {
+    console.error(`  ✗ FAILED: ${label} — ${err.message}`);
+    return { label, message: err.message };
+  }
+}
+
 async function run() {
   await waitForSchema();
   await cleanupLeftoversFromPriorRuns();
 
+  const failures = [];
   const keys = Object.keys(expected);
-  for (const key of keys) await testContractTypeAndKeyTerms(key);
-  for (const key of keys) await testDefinitionsGrounded(key);
-  for (const key of keys) await testSummaryGrounded(key);
-  for (const key of keys) await testRiskFlags(key);
-  await testRoleFlip();
-  await testPartiesReconciliation();
+  for (const key of keys) failures.push(await runAll(`contractType/keyTerms:${key}`, () => testContractTypeAndKeyTerms(key)));
+  for (const key of keys) failures.push(await runAll(`definitions:${key}`, () => testDefinitionsGrounded(key)));
+  for (const key of keys) failures.push(await runAll(`summary:${key}`, () => testSummaryGrounded(key)));
+  for (const key of keys) failures.push(await runAll(`riskFlags:${key}`, () => testRiskFlags(key)));
+  failures.push(await runAll('roleFlip', testRoleFlip));
+  failures.push(await runAll('partiesReconciliation', testPartiesReconciliation));
+
+  const real = failures.filter(Boolean);
+  if (real.length) {
+    console.error(`\n${real.length} Contract Review Stage 3 check(s) FAILED:`);
+    for (const f of real) console.error(`  - ${f.label}: ${f.message}`);
+    await pool.end();
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('\nAll Contract Review Stage 3 smoke tests passed.');
   await pool.end();
