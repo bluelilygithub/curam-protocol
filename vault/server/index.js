@@ -264,6 +264,26 @@ async function start() {
     console.log(`[env] ${k}: ${v ? `set (${v.slice(0,4)}…)` : 'NOT SET'}`);
   });
 
+  // Contract Review enum sync — contracts.contractType / contract_parties.role's
+  // CHECK constraint values (server/db.js) must exactly match
+  // server/services/contractReview/playbooks.js's keys. Fail boot loudly on
+  // drift (docs/contract-review-spec.md, Round 4 item 7) rather than let a
+  // missing/renamed playbook key silently ship.
+  {
+    const { CONTRACT_TYPE_KEYS } = require('./db');
+    const { getPlaybookKeys } = require('./services/contractReview/playbooks');
+    const { contractTypes } = getPlaybookKeys();
+    const missing = CONTRACT_TYPE_KEYS.filter((t) => !contractTypes.includes(t));
+    const extra = contractTypes.filter((t) => !CONTRACT_TYPE_KEYS.includes(t));
+    if (missing.length || extra.length) {
+      console.error('[contract-review] contractType enum/playbook mismatch:',
+        missing.length ? `DB has no playbook for: ${missing.join(', ')}` : '',
+        extra.length ? `playbooks.js has unknown type(s): ${extra.join(', ')}` : '');
+      process.exit(1);
+    }
+    console.log('[contract-review] contractType enum matches playbooks.js keys');
+  }
+
   const http = require('http');
   const server = http.createServer(app);
   const { attachBrowserAgentWs } = require('./services/browserAgent/browserAgentWs');

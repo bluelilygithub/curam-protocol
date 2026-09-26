@@ -109,6 +109,21 @@ pool.connect = function tracedConnect(cb) {
   return rawConnect().then(patchClient);
 };
 
+// ── Contract Review enum keys ──────────────────────────────────────────────────
+// Single source of truth for contracts.contractType / contract_parties.role's
+// CHECK constraint values, interpolated directly into the migration SQL below
+// AND exported for server/index.js's startup assertion that these match
+// server/services/contractReview/playbooks.js's keys exactly (docs/contract-review-spec.md,
+// Round 4 item 7) — one JS array, not two hand-kept-in-sync lists.
+const CONTRACT_TYPE_KEYS = [
+  'nda', 'msa', 'sow', 'lease', 'employment', 'consulting',
+  'license', 'purchase', 'partnership', 'loan', 'other',
+];
+const PARTY_ROLE_KEYS = [
+  'vendor', 'customer', 'employer', 'employee', 'licensor', 'licensee',
+  'landlord', 'tenant', 'lender', 'borrower', 'guarantor', 'other',
+];
+
 // ── Schema initialisation ──────────────────────────────────────────────────────
 
 async function initSchema() {
@@ -3027,6 +3042,301 @@ async function initSchema() {
     }
   }
 
+  // ── Contract Review ────────────────────────────────────────────────────────
+  // Schema per docs/contract-review-spec.md (locked after 4 review rounds +
+  // a Round 4 addendum). Stage 1 only: schema, taxonomy/playbook seed, and
+  // ContractService's entity CRUD — no extraction/LLM/routes/UI yet.
+  const contractTypeCheck = CONTRACT_TYPE_KEYS.map((k) => `'${k}'`).join(',');
+  const partyRoleCheck = PARTY_ROLE_KEYS.map((k) => `'${k}'`).join(',');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contracts (
+      id                      SERIAL PRIMARY KEY,
+      "userId"                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "workspaceId"           INTEGER NULL,
+      title                   TEXT NOT NULL,
+      "contractType"          VARCHAR(50) NOT NULL DEFAULT 'other'
+                                CHECK ("contractType" IN (${contractTypeCheck})),
+      "contractTypeRaw"       TEXT NULL,
+      status                  VARCHAR(20) NOT NULL DEFAULT 'draft'
+                                CHECK (status IN ('draft','executed','expired','terminated')),
+      "effectiveDate"         DATE NULL,
+      "termLengthMonths"      INTEGER NULL,
+      "governingLawCountry"   VARCHAR(2) NULL,
+      "governingLawRegion"    TEXT NULL,
+      "contractValue"         NUMERIC(14,2) NULL,
+      "contractValueCurrency" VARCHAR(3) NULL,
+      "legalHold"             BOOLEAN NOT NULL DEFAULT FALSE,
+      "createdAt"             TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"             TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contracts_user ON contracts ("userId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts (status)`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_parties (
+      id                 SERIAL PRIMARY KEY,
+      "contractId"       INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      name               TEXT NOT NULL,
+      role               VARCHAR(50) NOT NULL DEFAULT 'other'
+                            CHECK (role IN (${partyRoleCheck})),
+      "roleRaw"          TEXT NULL,
+      "isUser"           BOOLEAN NOT NULL DEFAULT FALSE,
+      "confirmedByUser"  BOOLEAN NOT NULL DEFAULT FALSE,
+      "crmClientId"      INTEGER NULL REFERENCES clients(id) ON DELETE SET NULL,
+      "createdAt"        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_parties_contract ON contract_parties ("contractId")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_documents (
+      id                 SERIAL PRIMARY KEY,
+      "contractId"       INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      kind               VARCHAR(20) NOT NULL DEFAULT 'base'
+                            CHECK (kind IN ('base','amendment','exhibit','schedule')),
+      "parentDocumentId" INTEGER NULL REFERENCES contract_documents(id) ON DELETE SET NULL,
+      version            INTEGER NOT NULL DEFAULT 1,
+      status             VARCHAR(20) NOT NULL DEFAULT 'draft'
+                            CHECK (status IN ('draft','executed','superseded')),
+      "executedAt"       TIMESTAMPTZ NULL,
+      filename           TEXT NOT NULL,
+      "mimeType"         TEXT NOT NULL,
+      "storedPath"       TEXT NOT NULL,
+      "contentHash"      VARCHAR(64) NOT NULL,
+      source             VARCHAR(20) NOT NULL DEFAULT 'upload'
+                            CHECK (source IN ('upload','email','esign')),
+      "externalId"       TEXT NULL,
+      "extractedText"    TEXT NULL,
+      "pageMap"          JSONB NULL,
+      "ocrUsed"          BOOLEAN NOT NULL DEFAULT FALSE,
+      "ocrConfidence"    NUMERIC(5,2) NULL,
+      language           VARCHAR(10) NULL,
+      "createdAt"        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_documents_contract ON contract_documents ("contractId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_documents_hash ON contract_documents ("contentHash")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_reviews (
+      id                        SERIAL PRIMARY KEY,
+      "documentId"              INTEGER NOT NULL REFERENCES contract_documents(id) ON DELETE CASCADE,
+      "userPartyId"             INTEGER NULL REFERENCES contract_parties(id) ON DELETE SET NULL,
+      "modelId"                 TEXT NOT NULL,
+      "promptVersion"           TEXT NOT NULL,
+      "playbookKey"             TEXT NULL,
+      "playbookVersion"         TEXT NULL,
+      "playbookHash"            VARCHAR(64) NULL,
+      "taxonomyVersion"         TEXT NOT NULL,
+      "contractTypeEnumVersion" TEXT NOT NULL,
+      "detectedContractType"    VARCHAR(50) NULL,
+      "detectedContractTypeRaw" TEXT NULL,
+      "extractedKeyTerms"       JSONB NULL,
+      "segmentationMethod"      VARCHAR(20) NULL CHECK ("segmentationMethod" IN ('numbered','paragraph','llm')),
+      status                    VARCHAR(30) NOT NULL DEFAULT 'queued'
+                                   CHECK (status IN (
+                                     'queued','extracting','segmenting','detecting_type',
+                                     'awaiting_role_confirmation','extracting_definitions',
+                                     'classifying','scoring','extracting_obligations',
+                                     'summarizing','verifying','complete','failed','not_supported'
+                                   )),
+      "stageProgress"           JSONB NOT NULL DEFAULT '{}',
+      "summaryPoints"           JSONB NOT NULL DEFAULT '[]',
+      "coverageReport"          JSONB NULL,
+      "costUsd"                 NUMERIC(8,4) NULL,
+      "errorMessage"            TEXT NULL,
+      "createdAt"               TIMESTAMPTZ DEFAULT NOW(),
+      "completedAt"             TIMESTAMPTZ NULL
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_reviews_document ON contract_reviews ("documentId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_reviews_status ON contract_reviews (status)`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_review_raw_outputs (
+      id              SERIAL PRIMARY KEY,
+      "reviewId"      INTEGER NOT NULL REFERENCES contract_reviews(id) ON DELETE CASCADE,
+      stage           VARCHAR(30) NOT NULL,
+      "modelId"       TEXT NOT NULL,
+      "promptVersion" TEXT NOT NULL,
+      "rawResponse"   JSONB NOT NULL,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_raw_outputs_review ON contract_review_raw_outputs ("reviewId")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_clause_types (
+      id                SERIAL PRIMARY KEY,
+      key               VARCHAR(50) NOT NULL,
+      label             TEXT NOT NULL,
+      description       TEXT NULL,
+      "taxonomyVersion" TEXT NOT NULL,
+      active            BOOLEAN NOT NULL DEFAULT TRUE,
+      UNIQUE (key, "taxonomyVersion")
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_clauses (
+      id                    SERIAL PRIMARY KEY,
+      "reviewId"            INTEGER NOT NULL REFERENCES contract_reviews(id) ON DELETE CASCADE,
+      "lineageId"           UUID NOT NULL,
+      ordinal               INTEGER NOT NULL,
+      "numberLabel"         TEXT NULL,
+      heading               TEXT NULL,
+      text                  TEXT NOT NULL,
+      "spanStart"           INTEGER NOT NULL,
+      "spanEnd"             INTEGER NOT NULL,
+      "startPage"           INTEGER NULL,
+      "endPage"             INTEGER NULL,
+      bbox                  JSONB NULL,
+      "clauseTypeId"        INTEGER NULL REFERENCES contract_clause_types(id),
+      "riskLevel"           VARCHAR(10) NULL CHECK ("riskLevel" IN ('standard','risky','unclear')),
+      "whyItMatters"        TEXT NULL,
+      "playbookPositionKey" TEXT NULL,
+      "suggestedRedline"    TEXT NULL,
+      "crossReferences"     JSONB NOT NULL DEFAULT '[]',
+      "verificationStatus"  VARCHAR(20) NULL CHECK ("verificationStatus" IN ('verified_exact','verified_normalized','failed')),
+      "priorClauseId"       INTEGER NULL REFERENCES contract_clauses(id) ON DELETE SET NULL,
+      "redlineOutcome"      VARCHAR(10) NULL CHECK ("redlineOutcome" IN ('accepted','partial','rejected','changed')),
+      "createdAt"           TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_review ON contract_clauses ("reviewId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_lineage ON contract_clauses ("lineageId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_text_fts ON contract_clauses USING GIN (to_tsvector('english', text))`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_definitions (
+      id                   SERIAL PRIMARY KEY,
+      "reviewId"           INTEGER NOT NULL REFERENCES contract_reviews(id) ON DELETE CASCADE,
+      term                 TEXT NOT NULL,
+      definition           TEXT NOT NULL,
+      "quotedText"         TEXT NOT NULL,
+      "spanStart"          INTEGER NULL,
+      "spanEnd"            INTEGER NULL,
+      "verificationStatus" VARCHAR(20) NULL CHECK ("verificationStatus" IN ('verified_exact','verified_normalized','failed'))
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_definitions_review ON contract_definitions ("reviewId")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_obligations (
+      id                       SERIAL PRIMARY KEY,
+      "reviewId"               INTEGER NOT NULL REFERENCES contract_reviews(id) ON DELETE CASCADE,
+      "contractId"             INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      "lineageId"              UUID NOT NULL,
+      "obligorPartyId"         INTEGER NULL REFERENCES contract_parties(id) ON DELETE SET NULL,
+      type                     VARCHAR(20) NOT NULL
+                                  CHECK (type IN ('payment','notice','renewal','delivery','reporting','other')),
+      description              TEXT NOT NULL,
+      "absoluteDate"           DATE NULL,
+      "anchorEvent"            VARCHAR(30) NULL
+                                  CHECK ("anchorEvent" IN ('effective_date','renewal_date','invoice_date','termination','custom')),
+      "anchorCustomLabel"      TEXT NULL,
+      "offsetDays"             INTEGER NULL,
+      rrule                    TEXT NULL,
+      amount                   NUMERIC(14,2) NULL,
+      currency                 VARCHAR(3) NULL,
+      "sourceClauseId"         INTEGER NULL REFERENCES contract_clauses(id) ON DELETE SET NULL,
+      "quotedText"             TEXT NULL,
+      "spanStart"              INTEGER NULL,
+      "spanEnd"                INTEGER NULL,
+      "verificationStatus"     VARCHAR(20) NULL CHECK ("verificationStatus" IN ('verified_exact','verified_normalized','failed')),
+      "supersededByDocumentId" INTEGER NULL REFERENCES contract_documents(id) ON DELETE SET NULL,
+      "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_obligations_contract ON contract_obligations ("contractId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_obligations_review ON contract_obligations ("reviewId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_obligations_lineage ON contract_obligations ("lineageId")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_obligation_tracking (
+      id             SERIAL PRIMARY KEY,
+      "contractId"   INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      "lineageId"    UUID NOT NULL,
+      "userState"    VARCHAR(20) NULL CHECK ("userState" IN ('handled','dismissed')),
+      "linkedTaskId" INTEGER NULL REFERENCES tasks(id) ON DELETE SET NULL,
+      "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt"    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE ("contractId", "lineageId")
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_corrections (
+      id                    SERIAL PRIMARY KEY,
+      "userId"              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "contractId"          INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      "clauseId"            INTEGER NULL REFERENCES contract_clauses(id) ON DELETE SET NULL,
+      "obligationId"        INTEGER NULL REFERENCES contract_obligations(id) ON DELETE SET NULL,
+      "partyId"             INTEGER NULL REFERENCES contract_parties(id) ON DELETE SET NULL,
+      "definitionId"        INTEGER NULL REFERENCES contract_definitions(id) ON DELETE SET NULL,
+      "lineageId"           UUID NULL,
+      "matchedTextSnapshot" TEXT NULL,
+      field                 TEXT NOT NULL,
+      "modelValue"          TEXT NULL,
+      "userValue"           TEXT NULL,
+      action                VARCHAR(20) NOT NULL CHECK (action IN ('edit','override','dismiss','accept')),
+      note                  TEXT NULL,
+      "createdAt"           TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT contract_corrections_target_check CHECK (
+        "contractId" IS NOT NULL AND
+        (("clauseId" IS NOT NULL)::int + ("obligationId" IS NOT NULL)::int +
+         ("partyId" IS NOT NULL)::int + ("definitionId" IS NOT NULL)::int) <= 1
+      )
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_clause ON contract_corrections ("clauseId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_obligation ON contract_corrections ("obligationId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_party ON contract_corrections ("partyId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_definition ON contract_corrections ("definitionId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_contract ON contract_corrections ("contractId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_corrections_lineage ON contract_corrections ("contractId", "lineageId")`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contract_events (
+      id             SERIAL PRIMARY KEY,
+      "contractId"   INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      type           VARCHAR(30) NOT NULL,
+      "occurredAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "actorUserId"  INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+      "documentId"   INTEGER NULL REFERENCES contract_documents(id) ON DELETE SET NULL,
+      "obligationId" INTEGER NULL REFERENCES contract_obligations(id) ON DELETE SET NULL,
+      payload        JSONB NOT NULL DEFAULT '{}'
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_events_contract ON contract_events ("contractId", "occurredAt" DESC)`);
+
+  // Clause taxonomy seed (v1) — idempotent, matches docs/contract-review-spec.md
+  const clauseTypeSeed = [
+    ['indemnity', 'Indemnity'],
+    ['limitation_of_liability', 'Limitation of Liability'],
+    ['termination', 'Termination'],
+    ['auto_renewal', 'Auto-Renewal'],
+    ['payment_terms', 'Payment Terms'],
+    ['ip_assignment', 'IP Assignment'],
+    ['non_compete', 'Non-Compete'],
+    ['confidentiality', 'Confidentiality'],
+    ['governing_law', 'Governing Law'],
+    ['dispute_resolution', 'Dispute Resolution'],
+    ['warranties', 'Warranties'],
+    ['assignment', 'Assignment'],
+    ['force_majeure', 'Force Majeure'],
+    ['data_protection', 'Data Protection'],
+  ];
+  for (const [key, label] of clauseTypeSeed) {
+    await pool.query(
+      `INSERT INTO contract_clause_types (key, label, "taxonomyVersion")
+       VALUES ($1, $2, 'v1') ON CONFLICT (key, "taxonomyVersion") DO NOTHING`,
+      [key, label]
+    );
+  }
+
   console.log('[db] Schema ready');
 }
 
@@ -3042,4 +3352,4 @@ pool.query('SELECT NOW()')
     process.exit(1);
   });
 
-module.exports = { pool };
+module.exports = { pool, initSchema, CONTRACT_TYPE_KEYS, PARTY_ROLE_KEYS };

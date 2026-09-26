@@ -11,6 +11,7 @@
     "start": "node server/index.js",
     "migrate:embeddings": "node server/scripts/migrateEmbeddings.js",
     "test:document-redaction-m1": "node server/services/documentRedaction/milestone1.test.js",
+    "test:contract-review-m1": "node server/services/contractReview/milestone1.test.js",
     "test:document-redaction-m3": "node server/services/documentRedaction/milestone3.test.js",
     "test:document-redaction-m4": "node server/services/documentRedaction/milestone4.test.js",
     "test:document-redaction-m5": "node server/services/documentRedaction/milestone5.test.js",
