@@ -16,7 +16,7 @@ const { riskScoringPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const RISK_LEVELS = new Set(['standard', 'risky', 'unclear']);
 
-async function scoreClauses(reviewId, { contractType, role, userId }) {
+async function scoreClauses(reviewId, { contractType, role, userId, extractedText }) {
   const { rows: clauses } = await pool.query(
     `SELECT id, text FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
   );
@@ -44,7 +44,7 @@ async function scoreClauses(reviewId, { contractType, role, userId }) {
 
     if (standard) {
       try {
-        const prompt = riskScoringPrompt(clause, positions, relevantDefinitions);
+        const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText);
         const text = await callModel(standard, prompt, { maxTokens: 500 });
         const parsed = parseModelJson(text);
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, prompt: prompt.slice(0, 500), text, parsed } });

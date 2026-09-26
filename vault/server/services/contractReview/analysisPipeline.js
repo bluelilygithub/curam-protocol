@@ -102,7 +102,7 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
     await classifyClauses(reviewId, userId);
 
     await setStatus(reviewId, 'scoring');
-    await scoreClauses(reviewId, { contractType, role, userId });
+    await scoreClauses(reviewId, { contractType, role, userId, extractedText });
 
     await setStatus(reviewId, 'extracting_obligations');
     await extractObligations(reviewId, { contractId, documentId, extractedText, userId });

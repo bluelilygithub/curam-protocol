@@ -84,11 +84,13 @@ Clauses:
 ${list}`;
 }
 
-function riskScoringPrompt(clause, playbookPositions, relevantDefinitions) {
+function riskScoringPrompt(clause, playbookPositions, relevantDefinitions, fullText) {
   const positionsText = Object.entries(playbookPositions || {})
     .map(([type, position]) => `- ${type}: ${position}`).join('\n') || '(no specific playbook positions for this contract type/role)';
   const defsText = (relevantDefinitions || []).map((d) => `- ${d.term}: ${d.definition}`).join('\n') || '(none)';
-  return `You are reviewing one clause of a contract on behalf of a specific party. Assess whether this clause is risky FOR THAT PARTY, using the playbook positions below as your primary guide — do not flag something as risky that the playbook explicitly treats as standard, and do not ignore something the playbook explicitly flags. If the playbook has no relevant position and the clause is genuinely ambiguous, answer "unclear" rather than forcing a verdict.
+  return `You are reviewing one clause of a contract on behalf of a specific party. Assess whether THIS CLAUSE is risky FOR THAT PARTY, using the playbook positions below as your primary guide — do not flag something as risky that the playbook explicitly treats as standard, and do not ignore something the playbook explicitly flags. If the playbook has no relevant position and the clause is genuinely ambiguous, answer "unclear" rather than forcing a verdict.
+
+Some playbook positions depend on something being present or absent ELSEWHERE in the document — e.g. "a clear repayment schedule and interest rate is standard; undefined rates are risky" requires checking whether an interest rate is stated anywhere in the contract, not just in this one clause. The full contract text is included below for exactly that kind of check. Your verdict is still about the one clause quoted at the end, not the document as a whole.
 
 Playbook positions for this contract type and party role:
 ${positionsText}
@@ -96,7 +98,10 @@ ${positionsText}
 Relevant defined terms:
 ${defsText}
 
-Clause text:
+Full contract text (for checking whether something is defined/stated elsewhere — assess only the clause below):
+${fullText}
+
+Clause being assessed:
 ${clause.text}
 
 Respond as JSON:
