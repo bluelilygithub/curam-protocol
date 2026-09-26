@@ -14,6 +14,18 @@
 require('dotenv').config();
 const assert = require('assert');
 
+// pg returns a DATE column as either a string ('YYYY-MM-DD') or a JS Date
+// object depending on context (confirmed live: a naive String(val).slice(0,10)
+// on a Date object produces "Tue Jun 30", not "2026-06-30" — node's default
+// Date.toString() is locale/timezone text, not ISO). node-pg's date parser
+// builds DATE-typed Date objects at UTC midnight, so .toISOString() round-
+// trips correctly with no timezone drift either way.
+function toIsoDateOnly(val) {
+  if (val == null) return null;
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
 // ── Disposable-database safety gate (identical to milestone1/2/3.test.js) ──
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 if (!TEST_DATABASE_URL) {
@@ -115,7 +127,7 @@ function findMatchingObligation(obligations, extractedText, expectedOb) {
   // Fallback for an obligation the model didn't ground with a quote — match
   // on timing-shape signature alone.
   return obligations.find((o) => {
-    if (expectedOb.timingShape === 'absolute') return o.absoluteDate && String(o.absoluteDate).slice(0, 10) === expectedOb.absoluteDate;
+    if (expectedOb.timingShape === 'absolute') return toIsoDateOnly(o.absoluteDate) === expectedOb.absoluteDate;
     if (expectedOb.timingShape === 'anchorOffset') return o.offsetDays === expectedOb.offsetDays && (!expectedOb.anchorEvent || o.anchorEvent === expectedOb.anchorEvent);
     if (expectedOb.timingShape === 'rrule') return !!o.rrule;
     return false;
@@ -135,7 +147,7 @@ async function testObligationsForFixture(key) {
       assert.ok(match, `no extracted obligation matched expected "${expOb.description}" (fixture ${key})`);
 
       if (expOb.timingShape === 'absolute') {
-        assert.strictEqual(match.absoluteDate ? String(match.absoluteDate).slice(0, 10) : null, expOb.absoluteDate,
+        assert.strictEqual(toIsoDateOnly(match.absoluteDate), expOb.absoluteDate,
           `wrong absoluteDate for "${expOb.description}" (fixture ${key})`);
       } else {
         // No invented date — an anchor/rrule-shaped obligation must never
