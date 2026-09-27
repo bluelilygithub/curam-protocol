@@ -191,11 +191,24 @@ export default function ContractReviewPage() {
   const [qaLoading, setQaLoading] = useState(false);
   const [reportEmail, setReportEmail] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
+  const [crmClients, setCrmClients] = useState([]); // Finance's own client picker endpoint — canonical clients table
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data?.flags) setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags }); })
+      .catch(() => {});
+  }, []);
+
+  // Optional link to an existing CRM contact/client — the canonical clients
+  // listing (server/routes/clients.js), gated by the 'clients' feature flag
+  // (not Finance's own picker-only wrapper, which sits behind the unrelated
+  // 'finance' flag — a Contract Review user with CRM access but no Finance
+  // access should still be able to link a contact).
+  useEffect(() => {
+    api.get('/api/clients')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setCrmClients(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -292,7 +305,15 @@ export default function ContractReviewPage() {
         const pollRes = await api.get(`/api/contract-review/reviews/${review.id}`);
         if (!pollRes.ok) continue;
         const polled = await pollRes.json();
-        processing.updateProcessingDetail(`Stage: ${String(polled.stageProgress?.stage || polled.status).replace(/_/g, ' ')}`);
+        const sp = polled.stageProgress || {};
+        let detail = `Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
+        if (sp.stage === 'scoring' && sp.total) {
+          detail = `Scoring clause ${sp.current || 0} of ${sp.total}`;
+          if (sp.etaSeconds != null) {
+            detail += sp.etaSeconds < 60 ? ` — about ${sp.etaSeconds}s remaining` : ` — about ${Math.round(sp.etaSeconds / 60)}m remaining`;
+          }
+        }
+        processing.updateProcessingDetail(detail);
         if (terminal.has(polled.status)) { finalReview = polled; break; }
       }
       if (!finalReview) throw new Error('Analysis is taking longer than expected — check back on this contract shortly.');
@@ -324,6 +345,18 @@ export default function ContractReviewPage() {
     setError('');
     setContract((prev) => (prev ? { ...prev, parties: prev.parties.map((p) => (p.id === partyId ? { ...p, [field]: value } : p)) } : prev));
   }, [contract, review]);
+
+  const linkContractClient = useCallback(async (clientId) => {
+    if (!contract) return;
+    await api.post(`/api/contract-review/contracts/${contract.id}/link-client`, { clientId: clientId || null });
+    setContract((prev) => (prev ? { ...prev, crmClientId: clientId ? Number(clientId) : null } : prev));
+  }, [contract]);
+
+  const linkPartyClient = useCallback(async (partyId, clientId) => {
+    if (!contract) return;
+    await api.post(`/api/contract-review/contracts/${contract.id}/parties/${partyId}/link-client`, { clientId: clientId || null });
+    setContract((prev) => (prev ? { ...prev, parties: prev.parties.map((p) => (p.id === partyId ? { ...p, crmClientId: clientId ? Number(clientId) : null } : p)) } : prev));
+  }, [contract]);
 
   // Covers the case where party extraction found nobody at all (a real,
   // observed failure mode — see docs/contract-review-spec.md) — the radio
@@ -557,14 +590,35 @@ export default function ContractReviewPage() {
                 <div className="rounded-lg border p-4" style={CARD}>
                   <h2 className="text-sm font-semibold mb-2">Parties</h2>
                   {(contract.parties || []).map((p) => (
-                    <div key={p.id} className="text-sm flex items-center gap-2 py-1">
-                      <span>{p.name}</span>
+                    <div key={p.id} className="flex items-center gap-2 py-1 flex-wrap">
+                      <span className="text-sm">{p.name}</span>
                       <Badge bg="var(--color-bg)" color="var(--color-muted)">{p.role}</Badge>
                       {p.isUser && <Badge bg="#e0e7ff" color="#3730a3">You</Badge>}
                       {p.confirmedByUser && getIcon('check-circle', { size: 14, color: '#166534' })}
+                      <select
+                        value={p.crmClientId || ''}
+                        onChange={(e) => linkPartyClient(p.id, e.target.value)}
+                        className="rounded border px-2 py-0.5 text-xs ml-auto" style={FIELD}
+                      >
+                        <option value="">No linked CRM contact</option>
+                        {crmClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
                     </div>
                   ))}
                   {!contract.parties?.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No parties extracted yet.</div>}
+                </div>
+
+                <div className="rounded-lg border p-4" style={CARD}>
+                  <h2 className="text-sm font-semibold mb-2">Linked CRM contact</h2>
+                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Optional — can be added or changed any time.</p>
+                  <select
+                    value={contract.crmClientId || ''}
+                    onChange={(e) => linkContractClient(e.target.value)}
+                    className="rounded border px-2 py-1.5 text-sm" style={FIELD}
+                  >
+                    <option value="">No linked contact</option>
+                    {crmClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
 
                 <div className="rounded-lg border p-4" style={CARD}>
@@ -897,6 +951,7 @@ export default function ContractReviewPage() {
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                          {o.documentStatus !== 'executed' && <Badge bg="#e0e7ff" color="#3730a3">Draft — not active</Badge>}
                           <Badge bg="var(--color-bg)" color="var(--color-muted)">{o.derivedStatus.replace(/_/g, ' ')}</Badge>
                           {unverified && <Badge bg="#fef3c7" color="#92400e">Unverified — not exported/linkable until confirmed</Badge>}
                           {o.userState && <Badge bg="#e0e7ff" color="#3730a3">{o.userState}</Badge>}

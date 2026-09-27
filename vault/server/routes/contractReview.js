@@ -79,6 +79,14 @@ router.post('/contracts/:id/status', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+router.post('/contracts/:id/link-client', async (req, res) => {
+  try {
+    const { clientId } = req.body || {};
+    await ContractService.linkContractToClient(req.user.id, Number(req.params.id), clientId ? Number(clientId) : null);
+    res.json({ ok: true });
+  } catch (err) { handleError(res, err); }
+});
+
 // ── Documents ────────────────────────────────────────────────────────────────
 
 router.post('/contracts/:id/documents', upload.single('file'), async (req, res) => {
@@ -120,6 +128,14 @@ router.post('/contracts/:id/parties', async (req, res) => {
     const { name, role, isUser } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'name is required' });
     const party = await ContractService.addParty(req.user.id, Number(req.params.id), { name: String(name).trim(), role, isUser });
+    res.json(party);
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/contracts/:id/parties/:partyId/link-client', async (req, res) => {
+  try {
+    const { clientId } = req.body || {};
+    const party = await ContractService.linkPartyToClient(req.user.id, Number(req.params.id), Number(req.params.partyId), clientId ? Number(clientId) : null);
     res.json(party);
   } catch (err) { handleError(res, err); }
 });

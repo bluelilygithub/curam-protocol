@@ -128,6 +128,26 @@ async function setLegalHold(userId, contractId, hold) {
   }
 }
 
+/** Optional link to an existing CRM client (server/routes/clients.js's
+ * `clients` table) — never required, can be set/changed/cleared any time.
+ * clientId=null unlinks. Not a new relationship type: same plain nullable-FK
+ * style clients/client_contacts already use, matching contract_parties'
+ * own (until now unwired) crmClientId column. */
+async function linkContractToClient(userId, contractId, clientId) {
+  await assertContractAccess(userId, contractId);
+  await pool.query(`UPDATE contracts SET "crmClientId"=$1, "updatedAt"=NOW() WHERE id=$2`, [clientId || null, contractId]);
+}
+
+async function linkPartyToClient(userId, contractId, partyId, clientId) {
+  await assertContractAccess(userId, contractId);
+  const { rows } = await pool.query(
+    `UPDATE contract_parties SET "crmClientId"=$1 WHERE id=$2 AND "contractId"=$3 RETURNING *`,
+    [clientId || null, partyId, contractId]
+  );
+  if (!rows[0]) throw new ContractAccessError(`Party ${partyId} not found on contract ${contractId}`);
+  return rows[0];
+}
+
 /** Unlinks any Tasks linked (via contract_obligation_tracking) to obligations
  * under this contract, appending a note to each task first, then deletes the
  * contract. Everything else cascades at the DB level (contract_obligation_tracking
@@ -696,19 +716,28 @@ async function recordCorrection(userId, { contractId, clauseId = null, obligatio
 
 // ── Obligations ──────────────────────────────────────────────────────────────
 
-/** Active obligations come from executed, non-superseded documents' current
- * reviews only (spec's lifecycle rule) — this join enforces that, not
- * contracts.status. verificationStatus='failed' obligations are still
- * returned (so the UI can show them visibly separated) but flagged
- * derivedStatus='unverified' instead of a time-based bucket. */
+/** Obligations are always shown, from every non-superseded document's
+ * current review — NOT restricted to executed documents. Originally
+ * gated on `d.status='executed'` (spec's original "active obligations"
+ * lifecycle rule), which meant a draft (unsigned) document's genuinely
+ * extracted obligations were entirely invisible with no indication why —
+ * a real report on a draft services agreement whose obligations were all
+ * silently hidden despite extraction having worked correctly. Each row now
+ * carries `documentStatus` so the UI can label a draft document's
+ * obligations "Draft — not active" instead of hiding them; `superseded`
+ * documents are still excluded (a real, separate exclusion — a stale prior
+ * draft's obligations shouldn't reappear once superseded by a newer one).
+ * verificationStatus='failed' obligations are still returned (so the UI can
+ * show them visibly separated) but flagged derivedStatus='unverified'
+ * instead of a time-based bucket. */
 async function listObligations(userId, { contractId = null, upcoming = false, obligorPartyId = null } = {}) {
-  const clauses = [`cnt."userId"=$1`, `d.status='executed'`];
+  const clauses = [`cnt."userId"=$1`, `d.status != 'superseded'`];
   const params = [userId];
   if (contractId) { params.push(contractId); clauses.push(`o."contractId"=$${params.length}`); }
   if (obligorPartyId) { params.push(obligorPartyId); clauses.push(`o."obligorPartyId"=$${params.length}`); }
 
   const { rows } = await pool.query(
-    `SELECT o.*, t."userState", t."linkedTaskId"
+    `SELECT o.*, t."userState", t."linkedTaskId", d.status AS "documentStatus"
      FROM contract_obligations o
      JOIN contract_reviews r ON r.id = o."reviewId"
      JOIN contract_documents d ON d.id = r."documentId"
@@ -801,6 +830,11 @@ async function exportIcs(userId, { contractId = null } = {}) {
 
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Curam Vault//Contract Review//EN'];
   for (const o of obligations) {
+    // listObligations now includes draft-document obligations too (so the
+    // UI can show them labelled "not active" instead of hiding them) — a
+    // calendar file of binding dates should still only ever come from an
+    // actually executed document.
+    if (o.documentStatus !== 'executed') continue;
     if (o.verificationStatus === 'failed') continue;
     let dtstart = null;
     if (o.absoluteDate) {
@@ -848,6 +882,8 @@ module.exports = {
   getContract,
   listContracts,
   setLegalHold,
+  linkContractToClient,
+  linkPartyToClient,
   deleteContract,
   addParty,
   confirmParty,
