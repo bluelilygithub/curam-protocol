@@ -107,7 +107,7 @@ ${clause.text}
 Respond as JSON:
 {
   "riskLevel": "standard" | "risky" | "unclear",
-  "whyItMatters": "<one or two sentences explaining the assessment to a non-lawyer>",
+  "whyItMatters": "<REQUIRED, one sentence. If risky: why it matters, in plain English. If unclear: what specifically you couldn't determine and why — e.g. 'depends on the Schedule, which isn't included' or 'the term uses an undefined word, X, that isn't defined anywhere in this document'. Never leave this blank for 'unclear' — a bare 'unclear' with no reason is not an acceptable answer.>",
   "playbookPositionKey": "<the playbook position key this was assessed against, or null>",
   "suggestedRedline": "<advisory copy-paste replacement/addition text if risky, else null — never legal advice, just a starting point>"
 }

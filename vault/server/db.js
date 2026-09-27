@@ -3323,6 +3323,7 @@ async function initSchema() {
     ['payment_terms', 'Payment Terms'],
     ['ip_assignment', 'IP Assignment'],
     ['non_compete', 'Non-Compete'],
+    ['non_solicitation', 'Non-Solicitation'],
     ['confidentiality', 'Confidentiality'],
     ['governing_law', 'Governing Law'],
     ['dispute_resolution', 'Dispute Resolution'],

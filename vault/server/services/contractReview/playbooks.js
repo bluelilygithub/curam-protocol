@@ -16,13 +16,53 @@ const crypto = require('crypto');
 
 const PLAYBOOK_VERSION = 'v1';
 
+// Every type/role combination below is a starting default, not legal
+// advice — the point is coverage of the clause types a real services
+// agreement actually contains (a "simple" contract still has most of
+// these), so risk scoring has real guidance to assess against instead of
+// falling back to "no playbook position, answer unclear" for anything that
+// isn't indemnity/liability/IP/payment/auto-renewal/non-compete.
 const GENERIC_DEFAULT = {
   indemnity: 'Mutual indemnity preferred; one-sided indemnity in favour of the other party is risky.',
   limitation_of_liability: 'A liability cap of at least 12 months\' fees is standard; uncapped liability is risky.',
   ip_assignment: 'IP assignment should be scoped to deliverables only; broad assignment beyond deliverables is risky.',
-  payment_terms: 'Net-30 payment terms are standard; materially shorter or unclear terms are risky.',
+  payment_terms: 'Net-30 payment terms, with any price increases capped or tied to a defined index (e.g. CPI) and requiring advance notice, are standard; materially shorter or unclear terms, or unrestricted/discretionary price increases with no notice, are risky.',
   auto_renewal: 'Auto-renewal with a reasonable opt-out notice window is standard; auto-renewal with no notice window, or a very long one, is risky.',
   non_compete: 'A non-compete narrowly scoped in time/geography/field is standard; broad or indefinite scope is risky.',
+  non_solicitation: 'A non-solicitation clause narrowly scoped in time (roughly 12-24 months) and to people/clients genuinely worked with during the engagement is standard; a broad, indefinite, or blanket non-solicitation covering any client or employee regardless of actual contact is risky.',
+  termination: 'A defined notice period (e.g. 30-60 days) available to both parties, plus a cure period before termination for breach, is standard; a termination right that\'s one-sided, immediate with no cure period, or entirely undefined, is risky.',
+  confidentiality: 'Mutual confidentiality obligations with a reasonable post-termination survival period (roughly 1-5 years, or indefinite specifically for trade secrets) are standard; one-sided obligations, or no survival period at all, are risky.',
+  governing_law: 'A clearly stated governing law and jurisdiction is standard; no governing law stated at all, or a jurisdiction with no real connection to either party, is risky.',
+};
+
+// Vendor/customer perspective differences for the clause types a services
+// agreement (SOW/consulting/MSA) actually contains — the SAME clause can be
+// risky for one side and perfectly fine for the other (riskScoringPrompt
+// already instructs the model to apply only the outcome matching the
+// confirmed role; these positions are what it has to work with).
+const SERVICES_BY_ROLE = {
+  vendor: {
+    indemnity: 'As the vendor, avoid open-ended indemnity for the customer\'s use of deliverables beyond your own negligence or IP infringement.',
+    limitation_of_liability: 'As the vendor, a liability cap at or above 12 months\' fees, with carve-outs limited to your own IP infringement, confidentiality breach, or gross negligence, is standard; uncapped liability, or carve-outs broad enough to swallow the cap entirely, is risky.',
+    ip_assignment: 'As the vendor, IP assignment scoped to the specific paid deliverables (with your own pre-existing tools/methodologies/background IP excluded) is standard; assignment of your background IP, or of anything beyond the paid deliverables, is risky.',
+    payment_terms: 'As the vendor, a right to suspend services or charge interest on materially overdue invoices is standard; payment terms giving you no recourse at all for late payment are risky.',
+    auto_renewal: 'As the vendor, auto-renewal is generally favourable to you (revenue continuity) — flag it as risky only if the customer alone holds an unusually easy or no-notice exit right that undermines that continuity.',
+    termination: 'As the vendor, a termination-for-convenience right held ONLY by the customer, with no matching right or minimum notice/fee for you, is risky; a mutual right, or one with a reasonable minimum term or notice period, is standard.',
+    confidentiality: 'As the vendor, obligations that also protect your own methodologies, pricing, and business information (not just the customer\'s data) are standard; a one-sided clause protecting only the customer\'s information is risky for you.',
+    non_solicitation: 'As the vendor, a mutual non-solicitation of each other\'s staff is standard; a one-sided clause restricting only your ability to hire the customer\'s people, with no reverse restriction, is risky for you.',
+    governing_law: 'As the vendor, your own home jurisdiction is standard; a jurisdiction that requires you to litigate on the customer\'s home turf with no reciprocal reason is risky.',
+  },
+  customer: {
+    indemnity: 'As the customer, an indemnity from the vendor covering IP infringement and data breach arising from the vendor\'s services is standard; no indemnity at all for the vendor\'s own IP infringement is risky.',
+    limitation_of_liability: 'As the customer, a liability cap with carve-outs for the vendor\'s IP infringement, confidentiality breach, and gross negligence or wilful misconduct is standard; a cap with no carve-outs at all, capping even the vendor\'s own misconduct, is risky.',
+    ip_assignment: 'As the customer, full assignment (or at minimum a broad, perpetual licence) of the deliverables you\'re paying for is standard; the vendor retaining ownership of what you\'ve paid for, or granting only a narrow or revocable licence, is risky.',
+    payment_terms: 'As the customer, price increases capped or tied to a defined index with advance notice are standard; unrestricted, discretionary, or no-notice price increases are risky.',
+    auto_renewal: 'As the customer, a reasonable opt-out notice window (e.g. 30-60 days) before auto-renewal is standard; auto-renewal with no notice window, a very long one, or one that\'s easy to miss, is risky.',
+    termination: 'As the customer, a termination-for-convenience right (even if it carries a fee) is standard; being locked in with no exit right short of the vendor\'s own material breach is risky.',
+    confidentiality: 'As the customer, the vendor\'s confidentiality obligations covering your data and business information, surviving termination, are standard; a short or absent survival period is risky given the vendor may have handled sensitive information throughout the engagement.',
+    non_solicitation: 'As the customer, a mutual non-solicitation of each other\'s staff is standard; a one-sided clause preventing you from hiring the vendor\'s people, with no reverse restriction, is risky for you.',
+    governing_law: 'As the customer, your own home jurisdiction is standard; being required to litigate in the vendor\'s jurisdiction with no reciprocal reason is risky.',
+  },
 };
 
 const PLAYBOOKS = {
@@ -35,12 +75,13 @@ const PLAYBOOKS = {
   msa: {
     default: { ...GENERIC_DEFAULT },
     byRole: {
-      vendor: { indemnity: 'As the vendor, avoid open-ended indemnity for the customer\'s use of deliverables beyond your own negligence.' },
-      customer: { indemnity: 'As the customer, an indemnity from the vendor covering IP infringement and data breach is standard.' },
+      vendor: { ...SERVICES_BY_ROLE.vendor, indemnity: 'As the vendor, avoid open-ended indemnity for the customer\'s use of deliverables beyond your own negligence.' },
+      customer: { ...SERVICES_BY_ROLE.customer, indemnity: 'As the customer, an indemnity from the vendor covering IP infringement and data breach is standard.' },
     },
   },
   sow: {
     default: { ...GENERIC_DEFAULT },
+    byRole: SERVICES_BY_ROLE,
   },
   lease: {
     default: {
@@ -60,6 +101,7 @@ const PLAYBOOKS = {
   },
   consulting: {
     default: { ...GENERIC_DEFAULT },
+    byRole: SERVICES_BY_ROLE,
   },
   license: {
     default: {

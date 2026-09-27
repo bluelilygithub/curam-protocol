@@ -519,6 +519,17 @@ export default function ContractReviewPage() {
 
                 {review && !['queued', 'extracting', 'segmenting', 'awaiting_role_confirmation', 'failed', 'not_supported'].includes(review.status) && (
                   <>
+                    {(() => {
+                      const reviewingAs = (contract.parties || []).find((p) => p.id === review.userPartyId);
+                      return reviewingAs ? (
+                        <div className="rounded-lg border p-3 text-sm flex items-center gap-2" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+                          {getIcon('user', { size: 14, style: { color: 'var(--color-primary)' } })}
+                          <span>Reviewing as <strong>{reviewingAs.name}</strong></span>
+                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{reviewingAs.role}</Badge>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>— risk flags below are assessed for this party</span>
+                        </div>
+                      ) : null;
+                    })()}
                     {review.costUsd != null && (
                       <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
                         Analysis cost: ${Number(review.costUsd).toFixed(4)}

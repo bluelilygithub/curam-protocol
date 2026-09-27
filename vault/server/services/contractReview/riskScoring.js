@@ -5,6 +5,12 @@
 // be scored using general judgment; playbookPositionKey is null in that
 // case). Model may answer "unclear" rather than being forced to a verdict —
 // stored as riskLevel='unclear', never silently defaulted to 'standard'.
+// Two guarantees enforced below, not just asked for in the prompt: (1) a
+// parse failure or malformed response is never stored as 'unclear' — it
+// throws, aborting the review with a real error, the same as any other
+// pipeline failure; (2) a genuine 'unclear' verdict always carries a
+// non-empty whyItMatters reason — a bare 'unclear' with nothing else is
+// treated as a malformed response too.
 
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
@@ -50,24 +56,45 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
     let suggestedRedline = null;
 
     if (resolved) {
+      let parsed;
       try {
         const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
         const result = await callModel(resolved, prompt, { maxTokens: 500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
         const text = result.text;
         if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
-        const parsed = parseModelJson(text);
+        parsed = parseModelJson(text);
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, prompt: prompt.slice(0, 500), text, parsed } });
-        if (parsed && typeof parsed === 'object') {
-          if (RISK_LEVELS.has(parsed.riskLevel)) riskLevel = parsed.riskLevel;
-          whyItMatters = parsed.whyItMatters ? String(parsed.whyItMatters).slice(0, 2000) : null;
-          playbookPositionKey = parsed.playbookPositionKey && positions[parsed.playbookPositionKey] ? parsed.playbookPositionKey : null;
-          suggestedRedline = parsed.suggestedRedline ? String(parsed.suggestedRedline).slice(0, 4000) : null;
-        }
       } catch (err) {
         // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, error: err.message } });
         throw err;
       }
+
+      // A parse failure or a malformed response must never silently become
+      // riskLevel='unclear' — that's indistinguishable from the model
+      // genuinely weighing the clause and being unable to decide, which is a
+      // real, useful signal to a reviewer. An unparseable response is a
+      // pipeline error and must surface as one (review status='failed'),
+      // same policy as the exception path just above.
+      if (!parsed || typeof parsed !== 'object' || !RISK_LEVELS.has(parsed.riskLevel)) {
+        const reason = !parsed || typeof parsed !== 'object'
+          ? 'model response was not valid JSON'
+          : `model returned an invalid riskLevel: ${JSON.stringify(parsed.riskLevel)}`;
+        throw new Error(`Risk scoring failed for clause ${clause.id}: ${reason}`);
+      }
+      // A genuine "unclear" verdict must always say what couldn't be
+      // determined (e.g. "depends on the Schedule, which isn't included") —
+      // enforced here, not left to the prompt alone, since only the prompt
+      // asking nicely doesn't guarantee the model complies every time.
+      const rawReason = parsed.whyItMatters ? String(parsed.whyItMatters).trim() : '';
+      if (parsed.riskLevel === 'unclear' && !rawReason) {
+        throw new Error(`Risk scoring failed for clause ${clause.id}: model rated 'unclear' with no reason given`);
+      }
+
+      riskLevel = parsed.riskLevel;
+      whyItMatters = rawReason ? rawReason.slice(0, 2000) : null;
+      playbookPositionKey = parsed.playbookPositionKey && positions[parsed.playbookPositionKey] ? parsed.playbookPositionKey : null;
+      suggestedRedline = parsed.suggestedRedline ? String(parsed.suggestedRedline).slice(0, 4000) : null;
     }
 
     await pool.query(

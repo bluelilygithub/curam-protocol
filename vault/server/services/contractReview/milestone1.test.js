@@ -364,12 +364,12 @@ async function testEnumSyncAssertionCatchesDrift() {
  * genuinely idempotent, not just written to look idempotent. */
 async function testMigrationIsIdempotent() {
   const { rows: [{ count: before }] } = await pool.query(`SELECT COUNT(*) FROM contract_clause_types WHERE "taxonomyVersion"='v1'`);
-  assert.strictEqual(Number(before), 14, 'expected the 14 seeded clause types before a second migration run');
+  assert.strictEqual(Number(before), 15, 'expected the 15 seeded clause types before a second migration run');
 
   await initSchema(); // second run, same connection/database
 
   const { rows: [{ count: after }] } = await pool.query(`SELECT COUNT(*) FROM contract_clause_types WHERE "taxonomyVersion"='v1'`);
-  assert.strictEqual(Number(after), 14, 'taxonomy seed must not duplicate rows on a second migration run');
+  assert.strictEqual(Number(after), 15, 'taxonomy seed must not duplicate rows on a second migration run');
 
   const { rows: tableCheck } = await pool.query(
     `SELECT table_name FROM information_schema.tables

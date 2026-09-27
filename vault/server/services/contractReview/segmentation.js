@@ -33,7 +33,9 @@ function romanToInt(roman) {
 }
 
 /** Splits extractedText into paragraphs (blank-line delimited, matching
- * translateExtract.js's own convention) with their [start, end) offsets. */
+ * translateExtract.js's own convention) with their [start, end) offsets.
+ * Used by the no-numbering fallback (paragraphSegment) — genuinely the
+ * right boundary unit when there's no numbering signal to key off at all. */
 function splitIntoParagraphOffsets(extractedText) {
   const paragraphs = [];
   const re = /[^\n]+(?:\n(?!\n)[^\n]*)*/g;
@@ -46,13 +48,32 @@ function splitIntoParagraphOffsets(extractedText) {
   return paragraphs;
 }
 
-/** Returns { label, number: {major, minor?} } if the paragraph's first line
- * looks like a top-level section heading, else null. Doesn't judge whether
- * it CONTINUES the sequence — see acceptsSequence() for that. */
-function matchHeading(paragraphText) {
-  const firstLine = paragraphText.split('\n')[0].trim();
+/** Splits extractedText into individual lines with their [start, end)
+ * offsets — the numbered heuristic pass scans at this granularity (not
+ * paragraph granularity) so a heading with no blank line before it (e.g.
+ * "1.1 Foo\n1.2 Bar" on consecutive lines, common in a real DOCX numbered
+ * list) is still found; matchHeading only ever looked at a paragraph
+ * block's FIRST line, so two dotted subclauses separated by a plain line
+ * break instead of a blank line silently merged into one clause. */
+function splitIntoLineOffsets(extractedText) {
+  const lines = [];
+  let idx = 0;
+  for (const lineText of extractedText.split('\n')) {
+    const start = idx;
+    const end = idx + lineText.length;
+    lines.push({ text: lineText, start, end });
+    idx = end + 1; // account for the '\n' consumed by split()
+  }
+  return lines;
+}
+
+/** Returns { label, number: {major, minor?} } if this single line looks
+ * like a top-level section heading, else null. Doesn't judge whether it
+ * CONTINUES the sequence — see continuesSequence() for that. */
+function matchHeading(lineText) {
+  const line = String(lineText || '').trim();
   for (const { re, parse } of HEADING_PATTERNS) {
-    const m = firstLine.match(re);
+    const m = line.match(re);
     if (m) return { label: m[0].trim(), number: parse(m) };
   }
   return null;
@@ -75,17 +96,32 @@ function continuesSequence(candidate, last) {
     // case this check exists to reject.
     return candidate.minor != null && last.minor != null && candidate.minor === last.minor + 1;
   }
+  // A bare "N."/"Article N" heading (no minor) is the ambiguous pattern —
+  // an embedded numbered list commonly restarts at "1." right after any
+  // dotted clause, and its later items ("2.", "3.") would otherwise satisfy
+  // this same "next major in sequence" rule purely by coincidence (caught
+  // via line-level scanning once dotted "1.1, 1.2" splitting needed every
+  // line checked individually, not just a paragraph block's first line).
+  // Only accept a bare-major continuation when the PRIOR heading was ALSO a
+  // bare-major pattern (a document genuinely using flat "1. / 2. / 3."
+  // numbering throughout) — never right after a dotted "N.M" heading, which
+  // is exactly what an embedded list under a real numbered clause looks like.
+  if (candidate.minor == null && last.minor != null) return false;
   return candidate.major === last.major + 1;
 }
 
 /** Heuristic numbered-clause pass. Returns null if no headings found at all
- * (caller falls through to paragraph segmentation). */
+ * (caller falls through to paragraph segmentation). Scans at LINE
+ * granularity (not paragraph) so two dotted subclauses on consecutive lines
+ * with no blank line between them ("1.1 Foo\n1.2 Bar") each still start
+ * their own clause. */
 function heuristicSegment(extractedText) {
-  const paragraphs = splitIntoParagraphOffsets(extractedText);
+  const lines = splitIntoLineOffsets(extractedText);
   const headingIdxs = [];
   let last = null;
-  for (let i = 0; i < paragraphs.length; i++) {
-    const match = matchHeading(paragraphs[i].text);
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].text.trim()) continue; // blank lines never start a heading
+    const match = matchHeading(lines[i].text);
     if (!match) continue;
     if (!continuesSequence(match.number, last)) continue; // looks like a heading, isn't one
     headingIdxs.push({ i, label: match.label });
@@ -93,30 +129,42 @@ function heuristicSegment(extractedText) {
   }
   if (!headingIdxs.length) return null;
 
+  // Trailing blank lines right before the next heading (or end of document)
+  // don't belong in a clause's own span.
+  const trimEnd = (fromIdx, minIdx) => {
+    let idx = fromIdx;
+    while (idx > minIdx && !lines[idx].text.trim()) idx -= 1;
+    return idx;
+  };
+
   const clauses = [];
   // Any text before the first recognized heading (title, letterhead,
   // preamble) is a real part of the document and must not silently vanish —
   // captured as its own leading clause (no numberLabel) rather than dropped.
   if (headingIdxs[0].i > 0) {
-    const leadStart = paragraphs[0];
-    const leadEnd = paragraphs[headingIdxs[0].i - 1];
-    clauses.push({
-      numberLabel: null,
-      text: extractedText.slice(leadStart.start, leadEnd.end),
-      spanStart: leadStart.start,
-      spanEnd: leadEnd.end,
-    });
+    const leadEndIdx = trimEnd(headingIdxs[0].i - 1, 0);
+    const leadStart = lines[0];
+    const leadEnd = lines[leadEndIdx];
+    if (leadEnd.end > leadStart.start) {
+      clauses.push({
+        numberLabel: null,
+        text: extractedText.slice(leadStart.start, leadEnd.end),
+        spanStart: leadStart.start,
+        spanEnd: leadEnd.end,
+      });
+    }
   }
   for (let h = 0; h < headingIdxs.length; h++) {
     const { i, label } = headingIdxs[h];
-    const startPara = paragraphs[i];
-    const nextHeadingParaIdx = h + 1 < headingIdxs.length ? headingIdxs[h + 1].i : paragraphs.length;
-    const endPara = paragraphs[nextHeadingParaIdx - 1] || startPara;
+    const startLine = lines[i];
+    const nextHeadingLineIdx = h + 1 < headingIdxs.length ? headingIdxs[h + 1].i : lines.length;
+    const endLineIdx = trimEnd(nextHeadingLineIdx - 1, i);
+    const endLine = lines[endLineIdx] || startLine;
     clauses.push({
       numberLabel: label,
-      text: extractedText.slice(startPara.start, endPara.end),
-      spanStart: startPara.start,
-      spanEnd: endPara.end,
+      text: extractedText.slice(startLine.start, endLine.end),
+      spanStart: startLine.start,
+      spanEnd: endLine.end,
     });
   }
   return clauses;
@@ -338,6 +386,7 @@ module.exports = {
   locateLlmBoundaries,
   llmBoundarySegment,
   splitIntoParagraphOffsets,
+  splitIntoLineOffsets,
   matchHeading,
   continuesSequence,
 };
