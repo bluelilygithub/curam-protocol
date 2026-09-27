@@ -24,7 +24,7 @@ const { generateSummary } = require('./summaryGeneration');
 const { buildCoverageReport } = require('./coverageReport');
 const { createCostTracker } = require('./costTracking');
 const { PROMPT_VERSION } = require('./prompts/v1');
-const { loadContractLevelCorrections } = require('./contractService');
+const { loadContractLevelCorrections, loadPartyCorrections, applyPartyCorrections } = require('./contractService');
 
 async function setStatus(reviewId, status, extra = {}) {
   const sets = [`status=$1`, `"stageProgress"=$2`];
@@ -105,10 +105,14 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
   }
   const { contractId, documentId, extractedText } = ctx;
 
-  const { rows: [userParty] } = await pool.query(
+  const { rows: [rawUserParty] } = await pool.query(
     `SELECT * FROM contract_parties WHERE "contractId"=$1 AND "isUser"=TRUE AND "confirmedByUser"=TRUE ORDER BY "createdAt" ASC LIMIT 1`,
     [contractId]
   );
+  // A name/role correction made on the role-confirmation screen must
+  // actually drive playbook selection below, not just display differently —
+  // "the review uses the edited values", not only the UI.
+  const userParty = rawUserParty ? applyPartyCorrections(rawUserParty, await loadPartyCorrections(contractId)) : null;
   await pool.query(`UPDATE contract_reviews SET "userPartyId"=$1 WHERE id=$2`, [userParty ? userParty.id : null, reviewId]);
 
   // Spec stage 7 precedence: a contract-level contractType correction always

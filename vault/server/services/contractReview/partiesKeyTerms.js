@@ -81,6 +81,41 @@ const KNOWN_ROLE_LABELS = [
 // character class a real name would).
 const ENTITY_SUFFIX_RE = /[A-Z][A-Za-z0-9&.,'-]*(?:\s+[A-Z0-9&][A-Za-z0-9&.,'-]*){0,6}?\s+(?:Pty\.?\s*Ltd\.?|Ltd\.?|L\.?L\.?C\.?|Inc\.?|Corp(?:oration)?\.?|Limited|LLP|LP)\b/g;
 
+const LEGAL_SUFFIX_RE = /\b(Pty\.?\s*Ltd\.?|Ltd\.?|L\.?L\.?C\.?|Inc\.?|Corp(?:oration)?\.?|Limited|LLP|LP)\b/i;
+
+// Words that can legitimately sit right next to a real entity name in a
+// preamble (a heading, a date, a document-title word) but are never
+// themselves part of one — kept deliberately short/conservative so a real
+// name containing an ordinary word (e.g. "XYZ Services Pty Ltd") is never
+// wrongly trimmed. Observed failure: "... October 2026. PARTIES Bluegum
+// Digital Pty Ltd" leaked the preceding date + heading word into the name.
+const NAME_NOISE_WORDS = new Set([
+  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december',
+  'parties', 'agreement', 'background', 'recitals', 'whereas', 'witnesseth',
+  'dated', 'effective', 'entered', 'made',
+]);
+
+// Trims anything before the entity name and anything after its company
+// suffix — a party name should be the legal entity name only, never leaking
+// surrounding heading/date/address/ACN text (applies to both the model's own
+// extraction and the regex fallback, since either can over-capture).
+function cleanEntityName(rawName) {
+  let name = String(rawName || '').trim();
+  if (!name) return '';
+  const suffixMatch = name.match(LEGAL_SUFFIX_RE);
+  if (suffixMatch) name = name.slice(0, suffixMatch.index + suffixMatch[0].length);
+  const words = name.split(/\s+/);
+  let lastNoiseIdx = -1;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i].replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+    if (!w) continue;
+    if (NAME_NOISE_WORDS.has(w.toLowerCase()) || /^\d+$/.test(w)) lastNoiseIdx = i;
+  }
+  if (lastNoiseIdx >= 0) words.splice(0, lastNoiseIdx + 1);
+  return words.join(' ').trim();
+}
+
 function detectPreambleParties(extractedText) {
   const preamble = String(extractedText || '').slice(0, 3000);
 
@@ -107,10 +142,12 @@ function detectPreambleParties(extractedText) {
       if (e.end <= labelStart && labelStart - e.end < 300 && (!best || e.end > best.end)) best = e;
     }
     if (!best) continue;
-    const key = normalizeName(best.name);
+    const cleanName = cleanEntityName(best.name);
+    if (!cleanName) continue;
+    const key = normalizeName(cleanName);
     if (seen.has(key)) continue;
     seen.add(key);
-    found.push({ name: best.name, role: mapRoleLabel(label), roleRaw: label });
+    found.push({ name: cleanName, role: mapRoleLabel(label), roleRaw: label });
   }
   return found;
 }
@@ -191,7 +228,10 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
 
   const reconciled = [];
   for (const raw of extractedParties) {
-    const name = String(raw?.name || '').trim();
+    // Applied to the model's own output too, not just the regex fallback —
+    // a model can just as easily copy surrounding heading/date/address text
+    // along with the real name.
+    const name = cleanEntityName(String(raw?.name || '').trim()) || String(raw?.name || '').trim();
     if (!name) continue;
     const roleRaw = raw?.roleRaw ? String(raw.roleRaw).slice(0, 200) : null;
     // Never just 'other' when the model's role AND its own roleRaw label
@@ -230,4 +270,4 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
   return { parties: allParties, keyTerms, needsRoleConfirmation: !alreadyConfirmed };
 }
 
-module.exports = { extractPartiesAndKeyTerms, normalizeName, sanitizeKeyTerms, mapRoleLabel, detectPreambleParties };
+module.exports = { extractPartiesAndKeyTerms, normalizeName, sanitizeKeyTerms, mapRoleLabel, detectPreambleParties, cleanEntityName };

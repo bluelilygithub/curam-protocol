@@ -89,12 +89,14 @@ async function createContract(userId, { title, contractType }) {
 
 async function getContract(userId, contractId) {
   await assertContractAccess(userId, contractId);
-  const [{ rows: [contract] }, { rows: parties }, { rows: documents }, { rows: events }] = await Promise.all([
+  const [{ rows: [contract] }, { rows: rawParties }, { rows: documents }, { rows: events }] = await Promise.all([
     pool.query(`SELECT * FROM contracts WHERE id=$1`, [contractId]),
     pool.query(`SELECT * FROM contract_parties WHERE "contractId"=$1 ORDER BY "createdAt" ASC`, [contractId]),
     pool.query(`SELECT * FROM contract_documents WHERE "contractId"=$1 ORDER BY "createdAt" ASC`, [contractId]),
     pool.query(`SELECT * FROM contract_events WHERE "contractId"=$1 ORDER BY "occurredAt" DESC LIMIT 50`, [contractId]),
   ]);
+  const byParty = await loadPartyCorrections(contractId);
+  const parties = rawParties.map((p) => applyPartyCorrections(p, byParty));
   return { ...contract, parties, documents, events };
 }
 
@@ -563,6 +565,42 @@ async function loadContractLevelCorrections(contractId) {
   return byField;
 }
 
+const PARTY_CORRECTABLE_FIELDS = new Set(['name', 'role']);
+
+/** Party corrections keyed by partyId then field — latest wins, same
+ * ASC+overwrite pattern as the other loaders. Parties (unlike clauses/
+ * obligations) aren't re-created per review — the same contract_parties row
+ * persists across re-reviews — so there's no lineage concept and no
+ * carry-forward check needed: a correction just applies by partyId, always,
+ * per the spec's "no lineage concept for those in v1" note. */
+async function loadPartyCorrections(contractId) {
+  const { rows } = await pool.query(
+    `SELECT "partyId", field, "userValue" FROM contract_corrections
+     WHERE "contractId"=$1 AND "partyId" IS NOT NULL ORDER BY "createdAt" ASC`,
+    [contractId]
+  );
+  const byParty = new Map();
+  for (const c of rows) {
+    if (!PARTY_CORRECTABLE_FIELDS.has(c.field)) continue;
+    if (!byParty.has(c.partyId)) byParty.set(c.partyId, new Map());
+    byParty.get(c.partyId).set(c.field, c.userValue); // ASC + overwrite => latest wins
+  }
+  return byParty;
+}
+
+/** The model's own extraction is never overwritten in place — this returns
+ * the EFFECTIVE (correction-applied) party the same way applyClauseCorrections
+ * does for clauses, keeping the original values as originalName/originalRole
+ * so a correction is always visibly an edit, not a silent replacement. */
+function applyPartyCorrections(party, byParty) {
+  const corrections = byParty.get(party.id);
+  if (!corrections) return party;
+  const out = { ...party, originalName: party.name, originalRole: party.role };
+  if (corrections.has('name')) out.name = corrections.get('name');
+  if (corrections.has('role')) out.role = corrections.get('role');
+  return out;
+}
+
 /** Clause/obligation corrections (lineageId IS NOT NULL) for a contract,
  * grouped by lineageId then field — latest per field wins, same ASC+overwrite
  * pattern as loadContractLevelCorrections. Read side of the Round 4
@@ -824,6 +862,8 @@ module.exports = {
   setContractStatus,
   recordCorrection,
   loadContractLevelCorrections,
+  loadPartyCorrections,
+  applyPartyCorrections,
   listObligations,
   setObligationState,
   linkObligationToTask,

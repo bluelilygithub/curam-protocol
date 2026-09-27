@@ -80,6 +80,7 @@ export default function ContractReviewPage() {
   const [pickedPartyId, setPickedPartyId] = useState(null);
   const [manualPartyName, setManualPartyName] = useState('');
   const [manualPartyRole, setManualPartyRole] = useState('other');
+  const [partyNameDrafts, setPartyNameDrafts] = useState({}); // partyId -> in-progress edit text
   const [correctionNote, setCorrectionNote] = useState({}); // clauseId -> note text
 
   useEffect(() => {
@@ -199,6 +200,20 @@ export default function ContractReviewPage() {
   const confirmRole = useCallback(async () => {
     await confirmPartyIdAndResume(pickedPartyId);
   }, [pickedPartyId, confirmPartyIdAndResume]);
+
+  // Corrections, not a direct edit — the model's own extraction stays in
+  // contract_parties untouched; recordCorrection stores the override and
+  // the server applies it as the effective name/role everywhere (getContract,
+  // and the role the pipeline actually uses once confirmed).
+  const savePartyField = useCallback(async (partyId, field, value) => {
+    if (!contract || !review) return;
+    const res = await api.post(`/api/contract-review/reviews/${review.id}/corrections`, {
+      contractId: contract.id, partyId, field, userValue: value, action: 'edit',
+    });
+    if (!res.ok) { setError((await res.json().catch(() => ({}))).error || `Could not save ${field}`); return; }
+    setError('');
+    setContract((prev) => (prev ? { ...prev, parties: prev.parties.map((p) => (p.id === partyId ? { ...p, [field]: value } : p)) } : prev));
+  }, [contract, review]);
 
   // Covers the case where party extraction found nobody at all (a real,
   // observed failure mode — see docs/contract-review-spec.md) — the radio
@@ -428,13 +443,33 @@ export default function ContractReviewPage() {
                 {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length > 0 && (
                   <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
                     <h2 className="text-sm font-semibold mb-2">Which party are you?</h2>
-                    <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Confirming unblocks risk scoring for your side of the agreement.</p>
-                    <div className="space-y-1 mb-3">
+                    <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+                      Confirming unblocks risk scoring for your side of the agreement. Fix a name or role below if the extraction got it wrong — your edit is what the review uses.
+                    </p>
+                    <div className="space-y-2 mb-3">
                       {contract.parties.map((p) => (
-                        <label key={p.id} className="flex items-center gap-2 text-sm">
+                        <div key={p.id} className="flex items-center gap-2 text-sm">
                           <input type="radio" name="userParty" checked={pickedPartyId === p.id} onChange={() => setPickedPartyId(p.id)} />
-                          {p.name} <Badge bg="var(--color-bg)" color="var(--color-muted)">{p.role}</Badge>
-                        </label>
+                          <input
+                            type="text"
+                            value={partyNameDrafts[p.id] ?? p.name}
+                            onChange={(e) => setPartyNameDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (v && v !== p.name) savePartyField(p.id, 'name', v);
+                            }}
+                            className="rounded border px-2 py-1 text-sm flex-1"
+                            style={FIELD}
+                          />
+                          <select
+                            value={p.role}
+                            onChange={(e) => savePartyField(p.id, 'role', e.target.value)}
+                            className="rounded border px-2 py-1 text-sm"
+                            style={FIELD}
+                          >
+                            {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                        </div>
                       ))}
                     </div>
                     <button onClick={confirmRole} disabled={!pickedPartyId} className="rounded px-3 py-1.5 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: pickedPartyId ? 1 : 0.5 }}>
