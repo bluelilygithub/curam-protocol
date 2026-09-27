@@ -6,11 +6,11 @@
 // distinction between the two.
 
 const { pool } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
-const { trackCost, CostCeilingExceededError } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { clauseClassificationPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const TAXONOMY_VERSION = 'v1';
@@ -48,23 +48,23 @@ async function classifyClauses(reviewId, userId, costTracker) {
   if (!clauses.length) return { classified: 0 };
 
   const typeIdByKey = await getClauseTypeIdMap();
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let classifications = [];
 
-  if (standard) {
+  if (resolved) {
     try {
       const prompt = clauseClassificationPrompt(clauses, [...typeIdByKey.keys()]);
-      const result = await callModel(standard, prompt, { maxTokens: 1500, returnUsage: true });
+      const result = await callModel(resolved, prompt, { maxTokens: 1500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.classifications)) classifications = parsed.classifications;
     } catch (err) {
-      if (err instanceof CostCeilingExceededError) throw err;
-      console.warn(`[contract-review] clause classification failed for review ${reviewId}: ${err.message}`);
+      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
+      throw err;
     }
   }
 

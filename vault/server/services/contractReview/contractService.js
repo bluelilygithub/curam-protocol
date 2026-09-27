@@ -349,7 +349,21 @@ async function startReview(userId, documentId) {
   if (ingestResult.outcome !== 'complete') {
     return { reviewId: ingestResult.reviewId, status: ingestResult.outcome };
   }
-  await segmentDocument(ingestResult.reviewId, ingestResult.extractedText, ingestResult.pageMap, { userId });
+  try {
+    // segmentDocument has no status-management responsibility of its own
+    // (unlike ingestDocument and the analysisPipeline stages, which each
+    // mark their own review failed on error) — nothing previously caught a
+    // failure here, which could leave a review stuck at status='segmenting'
+    // forever. This is the one place that knows both the reviewId and that
+    // segmentation is what's running.
+    await segmentDocument(ingestResult.reviewId, ingestResult.extractedText, ingestResult.pageMap, { userId });
+  } catch (err) {
+    await pool.query(
+      `UPDATE contract_reviews SET status='failed', "errorMessage"=$1, "completedAt"=NOW() WHERE id=$2`,
+      [`Segmentation failed: ${err.message}`, ingestResult.reviewId]
+    );
+    throw err;
+  }
   const analysisResult = await runAnalysis(ingestResult.reviewId, { userId });
 
   const client = await pool.connect();
@@ -369,15 +383,30 @@ async function startReview(userId, documentId) {
 /** Resumes a review paused at awaiting_role_confirmation — called after
  * ContractService.confirmParty (or the pipeline's own reconciliation, which
  * already skips the pause when a party is pre-confirmed). */
+/** Fire-and-forget — stages 5-11 (definitions through coverage report) run
+ * several sequential LLM calls and can legitimately take minutes, far
+ * longer than a single HTTP request should ever block for. A real incident
+ * confirmed this: the request hung long enough to hit an infrastructure-
+ * level timeout before Express's own JSON error response could ever arrive,
+ * which is what produced a generic, unhelpful "Failed to resume review" on
+ * the client (it was falling back to that text specifically because the
+ * response body wasn't valid JSON by the time — if ever — it arrived).
+ * resumeAfterRoleConfirmation already marks the review status='failed' with
+ * a real errorMessage on any failure — this returns immediately and the
+ * client polls GET /reviews/:id for the actual outcome instead of awaiting
+ * one long-lived request. */
 async function resumeReview(userId, reviewId) {
   const { rows: [row] } = await pool.query(
-    `SELECT r.id, d."contractId" FROM contract_reviews r JOIN contract_documents d ON d.id = r."documentId" WHERE r.id=$1`,
+    `SELECT r.id, r.status, d."contractId" FROM contract_reviews r JOIN contract_documents d ON d.id = r."documentId" WHERE r.id=$1`,
     [reviewId]
   );
   if (!row) throw new ContractAccessError(`Review ${reviewId} not found`);
   await assertContractAccess(userId, row.contractId);
   const { resumeAfterRoleConfirmation } = require('./analysisPipeline');
-  return resumeAfterRoleConfirmation(reviewId, { userId });
+  resumeAfterRoleConfirmation(reviewId, { userId }).catch((err) => {
+    console.error(`[contract-review] resume failed for review ${reviewId}:`, err.message);
+  });
+  return { reviewId, status: row.status === 'complete' ? 'complete' : 'processing' };
 }
 
 async function getReview(userId, reviewId) {

@@ -7,11 +7,11 @@
 // stored as riskLevel='unclear', never silently defaulted to 'standard'.
 
 const { pool } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
-const { trackCost, CostCeilingExceededError } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { getPlaybook, PLAYBOOK_VERSION, PLAYBOOK_HASH } = require('./playbooks');
 const { riskScoringPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
@@ -32,8 +32,8 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
   );
 
   if (!clauses.length) return { scored: 0 };
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let scored = 0;
 
   for (const clause of clauses) {
@@ -43,10 +43,10 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
     let playbookPositionKey = null;
     let suggestedRedline = null;
 
-    if (standard) {
+    if (resolved) {
       try {
         const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
-        const result = await callModel(standard, prompt, { maxTokens: 500, returnUsage: true });
+        const result = await callModel(resolved, prompt, { maxTokens: 500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
         const text = result.text;
         if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
         const parsed = parseModelJson(text);
@@ -58,9 +58,9 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
           suggestedRedline = parsed.suggestedRedline ? String(parsed.suggestedRedline).slice(0, 4000) : null;
         }
       } catch (err) {
-        if (err instanceof CostCeilingExceededError) throw err;
-        console.warn(`[contract-review] risk scoring failed for clause ${clause.id}: ${err.message}`);
+        // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
         await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, error: err.message } });
+        throw err;
       }
     }
 

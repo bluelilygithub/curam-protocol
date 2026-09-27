@@ -117,56 +117,67 @@ async function ingestDocument(documentId) {
     return { reviewId, outcome: 'not_supported' };
   }
 
-  const ocrPages = {};
-  let ocrAttempted = false;
-  if (extracted.sourceFormat === 'pdf' && (extracted.scannedCandidatePages || []).length) {
-    ocrAttempted = true;
-    const available = await isPdftoppmAvailable();
-    if (!available) {
-      // No rasterizer on this host (e.g. local dev without poppler-utils) —
-      // proceed with whatever text-layer content exists rather than failing
-      // the whole ingest; scanned pages simply stay empty. Real OCR coverage
-      // is verified against the Railway staging deploy, which has
-      // poppler-utils via the Dockerfile.
-      console.warn(`[contract-review] pdftoppm unavailable — skipping OCR for review ${reviewId}, scanned pages will have no text`);
-    } else {
-      const images = await rasterizePages(buffer, extracted.scannedCandidatePages);
-      for (const [pageStr, imageBuf] of Object.entries(images)) {
-        const pageNum = Number(pageStr);
-        const { text, confidence } = await recognize(imageBuf);
-        const paras = String(text || '')
-          .split(/\n{2,}/)
-          .map((p) => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
-          .filter((p) => p.length > 1);
-        extracted.paragraphsByPage[pageNum] = paras.length ? paras : (text.trim() ? [text.trim()] : []);
-        ocrPages[pageNum] = { confidence };
+  // Everything from here on (OCR, page-map assembly, the two DB writes) had
+  // no failure handling at all before this — an OCR/rasterize exception
+  // propagated straight out of ingestDocument uncaught, leaving the review
+  // stuck at status='extracting' forever (found while investigating a
+  // review that looked "stuck" for 6+ minutes; this specific gap wasn't the
+  // actual cause that time, but it's the same class of bug and a real one).
+  try {
+    const ocrPages = {};
+    let ocrAttempted = false;
+    if (extracted.sourceFormat === 'pdf' && (extracted.scannedCandidatePages || []).length) {
+      ocrAttempted = true;
+      const available = await isPdftoppmAvailable();
+      if (!available) {
+        // No rasterizer on this host (e.g. local dev without poppler-utils) —
+        // proceed with whatever text-layer content exists rather than failing
+        // the whole ingest; scanned pages simply stay empty. Real OCR coverage
+        // is verified against the Railway staging deploy, which has
+        // poppler-utils via the Dockerfile.
+        console.warn(`[contract-review] pdftoppm unavailable — skipping OCR for review ${reviewId}, scanned pages will have no text`);
+      } else {
+        const images = await rasterizePages(buffer, extracted.scannedCandidatePages);
+        for (const [pageStr, imageBuf] of Object.entries(images)) {
+          const pageNum = Number(pageStr);
+          const { text, confidence } = await recognize(imageBuf);
+          const paras = String(text || '')
+            .split(/\n{2,}/)
+            .map((p) => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
+            .filter((p) => p.length > 1);
+          extracted.paragraphsByPage[pageNum] = paras.length ? paras : (text.trim() ? [text.trim()] : []);
+          ocrPages[pageNum] = { confidence };
+        }
       }
     }
+
+    const { extractedText, pageMap } = buildExtractedTextAndPageMap(
+      extracted.paragraphsByPage, extracted.pageLabels, ocrPages
+    );
+
+    if (extractedText.length > MAX_CHARS) {
+      await markReviewNotSupported(reviewId, `Document text exceeds ${MAX_CHARS} characters`);
+      return { reviewId, outcome: 'not_supported' };
+    }
+
+    const ocrConfidences = Object.values(ocrPages).map((p) => p.confidence).filter((c) => typeof c === 'number');
+    const ocrUsed = ocrConfidences.length > 0;
+    const ocrConfidence = ocrUsed ? ocrConfidences.reduce((a, b) => a + b, 0) / ocrConfidences.length : null;
+
+    await pool.query(
+      `UPDATE contract_documents SET "extractedText"=$1, "pageMap"=$2, "ocrUsed"=$3, "ocrConfidence"=$4 WHERE id=$5`,
+      [extractedText, JSON.stringify(pageMap), ocrUsed, ocrConfidence, documentId]
+    );
+    await pool.query(
+      `UPDATE contract_reviews SET status='segmenting', "stageProgress"='{"stage":"segmentation"}' WHERE id=$1`,
+      [reviewId]
+    );
+
+    return { reviewId, outcome: 'complete', extractedText, pageMap, ocrAttempted };
+  } catch (err) {
+    await markReviewFailed(reviewId, `Ingest failed after extraction: ${err.message}`);
+    throw err;
   }
-
-  const { extractedText, pageMap } = buildExtractedTextAndPageMap(
-    extracted.paragraphsByPage, extracted.pageLabels, ocrPages
-  );
-
-  if (extractedText.length > MAX_CHARS) {
-    await markReviewNotSupported(reviewId, `Document text exceeds ${MAX_CHARS} characters`);
-    return { reviewId, outcome: 'not_supported' };
-  }
-
-  const ocrConfidences = Object.values(ocrPages).map((p) => p.confidence).filter((c) => typeof c === 'number');
-  const ocrUsed = ocrConfidences.length > 0;
-  const ocrConfidence = ocrUsed ? ocrConfidences.reduce((a, b) => a + b, 0) / ocrConfidences.length : null;
-
-  await pool.query(
-    `UPDATE contract_documents SET "extractedText"=$1, "pageMap"=$2, "ocrUsed"=$3, "ocrConfidence"=$4 WHERE id=$5`,
-    [extractedText, JSON.stringify(pageMap), ocrUsed, ocrConfidence, documentId]
-  );
-  await pool.query(
-    `UPDATE contract_reviews SET status='segmenting', "stageProgress"='{"stage":"segmentation"}' WHERE id=$1`,
-    [reviewId]
-  );
-
-  return { reviewId, outcome: 'complete', extractedText, pageMap, ocrAttempted };
 }
 
 async function markReviewFailed(reviewId, errorMessage) {

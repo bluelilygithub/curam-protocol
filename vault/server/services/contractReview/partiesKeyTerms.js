@@ -7,11 +7,11 @@
 // contract_parties reconciliation note.
 
 const { pool, PARTY_ROLE_KEYS } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
-const { trackCost } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { partiesKeyTermsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 function normalizeName(name) {
@@ -44,14 +44,14 @@ function sanitizeKeyTerms(raw) {
  * already confirmedByUser=true (skip re-asking on every re-review).
  */
 async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, userId, costTracker) {
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let extractedParties = [];
   let keyTerms = sanitizeKeyTerms(null);
 
-  if (standard) {
+  if (resolved) {
     const prompt = partiesKeyTermsPrompt(extractedText, PARTY_ROLE_KEYS);
-    const result = await callModel(standard, prompt, { maxTokens: 900, returnUsage: true });
+    const result = await callModel(resolved, prompt, { maxTokens: 900, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
     const text = result.text;
     if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
     const parsed = parseModelJson(text);

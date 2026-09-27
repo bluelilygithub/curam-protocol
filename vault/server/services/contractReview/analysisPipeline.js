@@ -75,7 +75,16 @@ async function runAnalysis(reviewId, { userId } = {}) {
     );
     throw err;
   }
-  return resumeAfterRoleConfirmation(reviewId, { userId });
+  // Already confirmed on a prior review (re-review of an already-answered
+  // contract) — stages 5-11 can take several minutes; fire-and-forget rather
+  // than block the caller, same reasoning as ContractService.resumeReview's
+  // own doc comment. Safe for existing callers: milestone3.test.js's own use
+  // of runAnalysis only ever asserts on the FAST part (parties reconciliation),
+  // which has already completed synchronously by this point either way.
+  resumeAfterRoleConfirmation(reviewId, { userId }).catch((err) => {
+    console.error(`[contract-review] auto-resume failed for review ${reviewId}:`, err.message);
+  });
+  return { status: 'processing', reviewId };
 }
 
 /** Runs stages 5-11 (definitions through coverage report). Called once a

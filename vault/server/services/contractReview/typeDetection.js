@@ -3,11 +3,11 @@
 // Contract Review — Pipeline stage 3 (Contract type detection).
 
 const { pool, CONTRACT_TYPE_KEYS } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
-const { trackCost } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { typeDetectionPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 /**
@@ -17,14 +17,14 @@ const { typeDetectionPrompt, PROMPT_VERSION } = require('./prompts/v1');
  * executed document's current review). Low-confidence/no-match -> 'other'.
  */
 async function detectContractType(reviewId, extractedText, userId, costTracker) {
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let detectedContractType = 'other';
   let detectedContractTypeRaw = null;
 
-  if (standard) {
+  if (resolved) {
     const prompt = typeDetectionPrompt(extractedText, CONTRACT_TYPE_KEYS);
-    const result = await callModel(standard, prompt, { maxTokens: 300, returnUsage: true });
+    const result = await callModel(resolved, prompt, { maxTokens: 300, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
     const text = result.text;
     if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
     const parsed = parseModelJson(text);

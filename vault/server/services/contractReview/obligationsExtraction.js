@@ -7,13 +7,13 @@
 
 const crypto = require('crypto');
 const { pool } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
 const { normalizeName } = require('./partiesKeyTerms');
-const { trackCost, CostCeilingExceededError } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { obligationsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const ANCHOR_EVENTS = new Set(['effective_date', 'renewal_date', 'invoice_date', 'termination', 'custom']);
@@ -51,23 +51,23 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
   const { rows: parties } = await pool.query(`SELECT * FROM contract_parties WHERE "contractId"=$1`, [contractId]);
   const partyByNorm = new Map(parties.map((p) => [normalizeName(p.name), p]));
 
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let rawObligations = [];
 
-  if (standard) {
+  if (resolved) {
     try {
       const prompt = obligationsPrompt(extractedText, parties.map((p) => p.name));
-      const result = await callModel(standard, prompt, { maxTokens: 2000, returnUsage: true });
+      const result = await callModel(resolved, prompt, { maxTokens: 2000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.obligations)) rawObligations = parsed.obligations;
     } catch (err) {
-      if (err instanceof CostCeilingExceededError) throw err;
-      console.warn(`[contract-review] obligation extraction failed for review ${reviewId}: ${err.message}`);
+      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
+      throw err;
     }
   }
 

@@ -14,6 +14,16 @@ const { calculateCost } = require('../costCalculator');
 
 const MAX_REVIEW_COST_USD = Number(process.env.CONTRACT_REVIEW_MAX_COST_USD) || 2.0;
 
+// Every callModel() call in the pipeline passes this — found live: a review
+// on a slow/reasoning-heavy configured model (deepseek-v4-flash) took 6+
+// minutes end to end with zero per-call timeout, looking indistinguishable
+// from "stuck" to the person testing it. A genuinely hanging provider call
+// had no bound at all before this — could have left a review in progress
+// forever. 90s is generous enough for a real (if slow) response while still
+// guaranteeing every stage eventually surfaces a clear failure instead of
+// hanging indefinitely.
+const LLM_CALL_TIMEOUT_MS = Number(process.env.CONTRACT_REVIEW_LLM_TIMEOUT_MS) || 90_000;
+
 class CostCeilingExceededError extends Error {
   constructor(totalCost) {
     super(`Review exceeded the per-review cost ceiling ($${totalCost.toFixed(4)} > $${MAX_REVIEW_COST_USD.toFixed(2)})`);
@@ -46,4 +56,4 @@ async function trackCost(tracker, reviewId, modelId, usage) {
   }
 }
 
-module.exports = { createCostTracker, trackCost, CostCeilingExceededError, MAX_REVIEW_COST_USD };
+module.exports = { createCostTracker, trackCost, CostCeilingExceededError, MAX_REVIEW_COST_USD, LLM_CALL_TIMEOUT_MS };

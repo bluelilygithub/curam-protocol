@@ -218,14 +218,15 @@ function llmBoundarySegment(extractedText, boundaries) {
  * never clause text. Separate from llmBoundarySegment so tests can exercise
  * boundary-location logic without a live API call. */
 async function requestLlmBoundaries(extractedText, userId) {
-  const { getModelsForUser } = require('../modelResolver');
+  const { resolveContractReviewModel } = require('../contractReviewModelResolver');
   const { callModel } = require('../callModel');
-  const { standard } = await getModelsForUser(userId);
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
   const prompt = `This is the full text of a contract with no clear paragraph or numbering structure. ` +
     `Identify clause boundaries. For each clause, return ONLY the opening few words and closing few words ` +
     `of that clause EXACTLY as they appear in the text — never the clause text itself. ` +
     `Respond as a JSON array: [{"opening": "...", "closing": "..."}]. Text:\n\n${extractedText}`;
-  const text = await callModel(standard, prompt, { maxTokens: 2000 });
+  const { LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+  const text = await callModel(resolved, prompt, { maxTokens: 2000, timeoutMs: LLM_CALL_TIMEOUT_MS });
   try {
     const parsed = JSON.parse(text.replace(/^```json\s*|```$/g, '').trim());
     if (Array.isArray(parsed)) return parsed;

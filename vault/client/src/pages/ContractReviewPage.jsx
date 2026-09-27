@@ -143,26 +143,38 @@ export default function ContractReviewPage() {
     if (!pickedPartyId || !contract) return;
     const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties/${pickedPartyId}/confirm`, {});
     if (!res.ok) { setError('Could not confirm role'); return; }
+    setError('');
+    processing.startProcessing('Continuing analysis…', 'Definitions, clause classification, risk scoring, obligations, and summary. This can take a few minutes.');
     try {
-      const result = await runWithStepLog(
-        processing,
-        'Continuing analysis…',
-        'Definitions, clause classification, risk scoring, obligations, and summary.',
-        ['Extracting definitions', 'Classifying clauses', 'Scoring risk', 'Extracting obligations', 'Summarizing'],
-        async () => {
-          const resumeRes = await api.post(`/api/contract-review/reviews/${review.id}/resume`, {});
-          if (!resumeRes.ok) throw new Error((await resumeRes.json().catch(() => ({}))).error || 'Failed to resume review');
-          return resumeRes.json();
-        },
-        { stepIntervalMs: 1200 }
-      );
-      await openReview(result.reviewId || review.id);
+      const resumeRes = await api.post(`/api/contract-review/reviews/${review.id}/resume`, {});
+      if (!resumeRes.ok) throw new Error((await resumeRes.json().catch(() => ({}))).error || 'Failed to resume review');
+      // The resume call returns immediately — the actual analysis runs in the
+      // background and can take several minutes (several sequential LLM
+      // calls). Poll for the real status instead of awaiting one long-lived
+      // request, which previously hit an infrastructure-level timeout before
+      // the server's own error response could ever arrive — that's what
+      // surfaced as a generic "Failed to resume review" with no real cause.
+      const terminal = new Set(['complete', 'failed', 'not_supported']);
+      let finalReview = null;
+      for (let attempt = 0; attempt < 200; attempt += 1) { // ~200 * 3s = 10 min ceiling
+        await new Promise((r) => setTimeout(r, 3000));
+        const pollRes = await api.get(`/api/contract-review/reviews/${review.id}`);
+        if (!pollRes.ok) continue;
+        const polled = await pollRes.json();
+        processing.updateProcessingDetail(`Stage: ${String(polled.stageProgress?.stage || polled.status).replace(/_/g, ' ')}`);
+        if (terminal.has(polled.status)) { finalReview = polled; break; }
+      }
+      if (!finalReview) throw new Error('Analysis is taking longer than expected — check back on this contract shortly.');
+      if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
+      setReview(finalReview);
       const obRes = await api.get(`/api/contract-review/obligations?contractId=${contract.id}`);
       if (obRes.ok) setObligations((await obRes.json()).obligations || []);
     } catch (e) {
       setError(e.message || 'Failed to continue analysis');
+    } finally {
+      processing.stopProcessing();
     }
-  }, [pickedPartyId, contract, review, processing, openReview]);
+  }, [pickedPartyId, contract, review, processing]);
 
   const recordCorrection = useCallback(async (target, action) => {
     if (!contract) return;
@@ -388,7 +400,21 @@ export default function ContractReviewPage() {
                   </div>
                 )}
 
-                {review && !['queued', 'extracting', 'segmenting', 'awaiting_role_confirmation'].includes(review.status) && (
+                {review?.status === 'failed' && (
+                  <div className="rounded-lg border p-4" style={{ background: '#fee2e2', borderColor: '#991b1b' }}>
+                    <h2 className="text-sm font-semibold mb-1" style={{ color: '#991b1b' }}>Analysis failed</h2>
+                    <p className="text-xs" style={{ color: '#991b1b' }}>{review.errorMessage || 'An unexpected error occurred during analysis.'}</p>
+                  </div>
+                )}
+
+                {review?.status === 'not_supported' && (
+                  <div className="rounded-lg border p-4" style={{ background: '#fef3c7', borderColor: '#92400e' }}>
+                    <h2 className="text-sm font-semibold mb-1" style={{ color: '#92400e' }}>Document not supported</h2>
+                    <p className="text-xs" style={{ color: '#92400e' }}>{review.errorMessage || 'This document could not be analyzed.'}</p>
+                  </div>
+                )}
+
+                {review && !['queued', 'extracting', 'segmenting', 'awaiting_role_confirmation', 'failed', 'not_supported'].includes(review.status) && (
                   <>
                     {review.costUsd != null && (
                       <div className="text-xs" style={{ color: 'var(--color-muted)' }}>

@@ -5,35 +5,35 @@
 // verification status, per docs/contract-review-spec.md round 3 item 7.
 
 const { pool } = require('../../db');
-const { getModelsForUser } = require('../modelResolver');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
 const { callModel } = require('../callModel');
 const { parseModelJson } = require('../../utils/parseModelJson');
 const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
-const { trackCost, CostCeilingExceededError } = require('./costTracking');
+const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
 const { summaryPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 async function generateSummary(reviewId, extractedText, userId, costTracker) {
   const { rows: clauses } = await pool.query(`SELECT id, "numberLabel" FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]);
   const validClauseIds = new Set(clauses.map((c) => c.id));
 
-  const { standard } = await getModelsForUser(userId);
-  const modelId = standard || 'none';
+  const { modelId: resolved } = await resolveContractReviewModel(userId);
+  const modelId = resolved || 'none';
   let rawPoints = [];
 
-  if (standard) {
+  if (resolved) {
     try {
       const prompt = summaryPrompt(extractedText, clauses);
-      const result = await callModel(standard, prompt, { maxTokens: 1500, returnUsage: true });
+      const result = await callModel(resolved, prompt, { maxTokens: 1500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
       if (parsed && Array.isArray(parsed.summaryPoints)) rawPoints = parsed.summaryPoints;
     } catch (err) {
-      if (err instanceof CostCeilingExceededError) throw err;
-      console.warn(`[contract-review] summary generation failed for review ${reviewId}: ${err.message}`);
+      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
       await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
+      throw err;
     }
   }
 

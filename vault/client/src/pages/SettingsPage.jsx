@@ -119,8 +119,11 @@ function SettingsPage() {
     productScoutModel,
     productScoutModelConfig,
     saveProductScoutModel,
+    contractReviewModel,
+    saveContractReviewModel,
     reload: reloadModels,
   } = useModels();
+  const [contractReviewModelError, setContractReviewModelError] = useState('');
   const [productScoutModelSaved, setProductScoutModelSaved] = useState(false);
   const [productScoutModelError, setProductScoutModelError] = useState('');
   // Admin-only display order for the Translate agent's target-language dropdown. Defaults to
@@ -2029,6 +2032,36 @@ function SettingsPage() {
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Contract Review model — same own-setting -> admin-fallback -> vault default
+            pattern as Translate/Document Redaction above, collapsed to one slot since
+            the whole pipeline (type detection through summary) uses one model. */}
+        <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+            Contract Review model
+          </label>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Used for every stage of the Contract Review pipeline (type detection, parties, definitions, clause classification, risk scoring, obligations, summary). Leave blank to use Vault's standard-tier default.
+          </p>
+          <select
+            value={contractReviewModel}
+            onChange={async (e) => {
+              setContractReviewModelError('');
+              try { await saveContractReviewModel(e.target.value); }
+              catch (err) { setContractReviewModelError(err.message || 'Could not save Contract Review model'); }
+            }}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <option value="">Use vault default / standard tier</option>
+            {textModelChoices.map((m) => (
+              <option key={m.id} value={m.id}>{formatModelSelectLabel(m)}</option>
+            ))}
+          </select>
+          {contractReviewModelError && (
+            <p className="text-xs mt-2" style={{ color: '#b45309' }}>{contractReviewModelError}</p>
+          )}
         </div>
 
         <div className="mb-4 p-4 rounded-xl border space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

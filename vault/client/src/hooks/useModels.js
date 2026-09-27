@@ -19,6 +19,8 @@ export function useModels() {
   const [translateCustomInstructions, setTranslateCustomInstructions] = useState('');
   const [productScoutModel, setProductScoutModel] = useState('');
   const [productScoutModelConfig, setProductScoutModelConfig] = useState(null);
+  const [contractReviewModel, setContractReviewModel] = useState('');
+  const [contractReviewAgentCard, setContractReviewAgentCard] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +51,10 @@ export function useModels() {
           setTranslateModel(data.translateAgent.translate?.modelId || '');
           setTranslateReviewModel(data.translateAgent.review?.modelId || '');
         }
+        if (data.contractReviewAgent) {
+          setContractReviewAgentCard(data.contractReviewAgent);
+          setContractReviewModel(data.contractReviewAgent.analysis?.modelId || '');
+        }
         if (data.defaultModel) {
           setDefaultModel(data.defaultModel);
         } else if (data.models?.[0]?.id) {
@@ -71,6 +77,7 @@ export function useModels() {
         if (settings.translate_review_model) setTranslateReviewModel(settings.translate_review_model);
         if (settings.translate_target_language) setTranslateTargetLanguage(settings.translate_target_language);
         if (settings.translate_custom_instructions) setTranslateCustomInstructions(settings.translate_custom_instructions);
+        if (settings.contract_review_model) setContractReviewModel(settings.contract_review_model);
       }
       if (embeddingRes.ok) {
         const emb = await embeddingRes.json();
@@ -200,6 +207,14 @@ export function useModels() {
     return { ok: true };
   }, []);
 
+  const saveContractReviewModel = useCallback(async (modelId) => {
+    const res = await api.post('/api/settings', { key: 'contract_review_model', value: modelId });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save Contract Review model');
+    setContractReviewModel(modelId);
+    return { ok: true };
+  }, []);
+
   const saveProductScoutModel = useCallback(async (modelId) => {
     const res = await api.post('/api/product-scout/model-config', { modelId });
     const data = await res.json().catch(() => ({}));
@@ -241,5 +256,8 @@ export function useModels() {
     productScoutModel,
     productScoutModelConfig,
     saveProductScoutModel,
+    contractReviewModel,
+    contractReviewAgentCard,
+    saveContractReviewModel,
   };
 }

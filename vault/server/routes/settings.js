@@ -12,6 +12,7 @@ const {
   getDocumentRedactionAgentCardConfig,
 } = require('../services/documentRedactionModelResolver');
 const { getTranslateAgentCardConfig } = require('../services/translateModelResolver');
+const { getContractReviewAgentCardConfig } = require('../services/contractReviewModelResolver');
 const { resolveEmbeddingConfig, getGeminiEmbeddingOptions } = require('../services/embeddingResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
@@ -68,10 +69,12 @@ router.get('/effective-models', async (req, res) => {
     const config = await getVaultModelsConfigForUser(req.user.id);
     const documentRedactionAgent = await getDocumentRedactionAgentCardConfig(req.user.id);
     const translateAgent = await getTranslateAgentCardConfig(req.user.id);
+    const contractReviewAgent = await getContractReviewAgentCardConfig(req.user.id);
     res.json({
       ...config,
       documentRedactionAgent,
       translateAgent,
+      contractReviewAgent,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
