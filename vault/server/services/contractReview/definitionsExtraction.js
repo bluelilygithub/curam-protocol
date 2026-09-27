@@ -1,8 +1,10 @@
 'use strict';
 
-// Contract Review — Pipeline stage 5 (Definitions extraction). Failures
-// leave definitions empty rather than block the run — clause scoring still
-// proceeds without term injection (spec's stated failure behavior).
+// Contract Review — Pipeline stage 5 (Definitions extraction). Stale doc
+// note removed here: this file's ACTUAL behavior (see the comment right
+// above extractDefinitions) has aborted the whole review on any failure
+// for some time now — this top comment describing a soft-fail design was
+// never updated when that changed.
 
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
@@ -32,7 +34,14 @@ async function extractDefinitions(reviewId, extractedText, userId, costTracker) 
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'extracting_definitions', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      if (parsed && Array.isArray(parsed.definitions)) rawDefinitions = parsed.definitions;
+      // A parse failure must never be silently treated the same as a
+      // genuine "this contract has no defined terms" (the prompt's own
+      // valid empty answer is {"definitions": []}, still an array) — only
+      // a missing/malformed "definitions" array is a real pipeline error.
+      if (!parsed || !Array.isArray(parsed.definitions)) {
+        throw new Error('Definitions extraction failed: model response was not valid JSON with a "definitions" array');
+      }
+      rawDefinitions = parsed.definitions;
     } catch (err) {
       await recordRawOutput({ reviewId, stage: 'extracting_definitions', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
       throw err;

@@ -76,7 +76,13 @@ async function classifyClauses(reviewId, userId, costTracker) {
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      if (parsed && Array.isArray(parsed.classifications)) classifications = parsed.classifications;
+      // A parse failure must never be silently treated as "no clause
+      // matched any type" — only a missing/malformed "classifications"
+      // array is a real pipeline error.
+      if (!parsed || !Array.isArray(parsed.classifications)) {
+        throw new Error('Clause classification failed: model response was not valid JSON with a "classifications" array');
+      }
+      classifications = parsed.classifications;
     } catch (err) {
       // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
       await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });

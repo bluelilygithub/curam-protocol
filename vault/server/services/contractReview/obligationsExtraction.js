@@ -63,7 +63,16 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      if (parsed && Array.isArray(parsed.obligations)) rawObligations = parsed.obligations;
+      // A parse failure (or a response with no "obligations" array at all)
+      // must never be silently treated the same as a genuine "this contract
+      // has no obligations" — that was indistinguishable before, and the
+      // real-world result was a document with several plain, unambiguous
+      // obligations (a payment-within-14-days clause, a 60-day non-renewal
+      // notice, etc.) showing an empty Obligations tab with no error at all.
+      if (!parsed || !Array.isArray(parsed.obligations)) {
+        throw new Error('Obligations extraction failed: model response was not valid JSON with an "obligations" array');
+      }
+      rawObligations = parsed.obligations;
     } catch (err) {
       // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
       await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
