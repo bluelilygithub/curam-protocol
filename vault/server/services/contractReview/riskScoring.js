@@ -59,7 +59,12 @@ async function scoreClauses(reviewId, { contractType, role, userId, extractedTex
       let parsed;
       try {
         const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
-        const result = await callModel(resolved, prompt, { maxTokens: 500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
+        // 500 was tight enough to truncate a real response mid-JSON on a
+        // risky clause needing a genuine suggestedRedline (the column allows
+        // up to 4000 chars for that field alone) — especially on a smaller/
+        // faster model, surfacing as "model response was not valid JSON"
+        // once that stopped being silently swallowed as a bare 'unclear'.
+        const result = await callModel(resolved, prompt, { maxTokens: 1200, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
         const text = result.text;
         if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
         parsed = parseModelJson(text);
