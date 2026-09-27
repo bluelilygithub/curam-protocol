@@ -26,6 +26,24 @@ const COVERAGE_BADGE = {
   could_not_assess: { text: 'Could not assess', bg: '#fef3c7', color: '#92400e' },
 };
 
+// Mirrors server's contract_parties.role CHECK constraint (server/db.js's
+// PARTY_ROLE_KEYS) — a small, rarely-changing v1 taxonomy, not worth a shared
+// module for the one dropdown that needs it.
+const ROLE_OPTIONS = [
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'employer', label: 'Employer' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'licensor', label: 'Licensor' },
+  { value: 'licensee', label: 'Licensee' },
+  { value: 'landlord', label: 'Landlord' },
+  { value: 'tenant', label: 'Tenant' },
+  { value: 'lender', label: 'Lender' },
+  { value: 'borrower', label: 'Borrower' },
+  { value: 'guarantor', label: 'Guarantor' },
+  { value: 'other', label: 'Other' },
+];
+
 function Badge({ bg, color, children }) {
   return (
     <span style={{ background: bg, color, fontSize: 11, padding: '2px 8px', borderRadius: 999, fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -60,6 +78,8 @@ export default function ContractReviewPage() {
   const [obligations, setObligations] = useState([]);
   const [tab, setTab] = useState('overview'); // overview | review | obligations
   const [pickedPartyId, setPickedPartyId] = useState(null);
+  const [manualPartyName, setManualPartyName] = useState('');
+  const [manualPartyRole, setManualPartyRole] = useState('other');
   const [correctionNote, setCorrectionNote] = useState({}); // clauseId -> note text
 
   useEffect(() => {
@@ -139,9 +159,9 @@ export default function ContractReviewPage() {
     }
   }, [newTitle, newFile, processing, loadContracts, openContract]);
 
-  const confirmRole = useCallback(async () => {
-    if (!pickedPartyId || !contract) return;
-    const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties/${pickedPartyId}/confirm`, {});
+  const confirmPartyIdAndResume = useCallback(async (partyId) => {
+    if (!partyId || !contract) return;
+    const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties/${partyId}/confirm`, {});
     if (!res.ok) { setError('Could not confirm role'); return; }
     setError('');
     processing.startProcessing('Continuing analysis…', 'Definitions, clause classification, risk scoring, obligations, and summary. This can take a few minutes.');
@@ -174,7 +194,30 @@ export default function ContractReviewPage() {
     } finally {
       processing.stopProcessing();
     }
-  }, [pickedPartyId, contract, review, processing]);
+  }, [contract, review, processing]);
+
+  const confirmRole = useCallback(async () => {
+    await confirmPartyIdAndResume(pickedPartyId);
+  }, [pickedPartyId, confirmPartyIdAndResume]);
+
+  // Covers the case where party extraction found nobody at all (a real,
+  // observed failure mode — see docs/contract-review-spec.md) — the radio
+  // list above has nothing to show and must not leave the user stuck behind
+  // a permanently disabled button. Creates a party row for the user's own
+  // side of the agreement, confirms it, then continues exactly like picking
+  // an existing party would.
+  const addManualPartyAndConfirm = useCallback(async () => {
+    if (!manualPartyName.trim() || !contract) return;
+    setError('');
+    const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties`, {
+      name: manualPartyName.trim(), role: manualPartyRole, isUser: true,
+    });
+    if (!res.ok) { setError((await res.json().catch(() => ({}))).error || 'Could not add party'); return; }
+    const party = await res.json();
+    setContract((prev) => (prev ? { ...prev, parties: [...(prev.parties || []), party] } : prev));
+    setManualPartyName('');
+    await confirmPartyIdAndResume(party.id);
+  }, [manualPartyName, manualPartyRole, contract, confirmPartyIdAndResume]);
 
   const recordCorrection = useCallback(async (target, action) => {
     if (!contract) return;
@@ -382,12 +425,12 @@ export default function ContractReviewPage() {
               <div className="space-y-4">
                 {!review && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No review yet.</div>}
 
-                {review?.status === 'awaiting_role_confirmation' && (
+                {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length > 0 && (
                   <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
                     <h2 className="text-sm font-semibold mb-2">Which party are you?</h2>
                     <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Confirming unblocks risk scoring for your side of the agreement.</p>
                     <div className="space-y-1 mb-3">
-                      {(contract.parties || []).map((p) => (
+                      {contract.parties.map((p) => (
                         <label key={p.id} className="flex items-center gap-2 text-sm">
                           <input type="radio" name="userParty" checked={pickedPartyId === p.id} onChange={() => setPickedPartyId(p.id)} />
                           {p.name} <Badge bg="var(--color-bg)" color="var(--color-muted)">{p.role}</Badge>
@@ -396,6 +439,31 @@ export default function ContractReviewPage() {
                     </div>
                     <button onClick={confirmRole} disabled={!pickedPartyId} className="rounded px-3 py-1.5 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: pickedPartyId ? 1 : 0.5 }}>
                       Confirm and continue analysis
+                    </button>
+                  </div>
+                )}
+
+                {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length === 0 && (
+                  <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+                    <h2 className="text-sm font-semibold mb-2">Which party are you?</h2>
+                    <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+                      No parties could be automatically detected in this document. Enter your own name and role to continue — the rest of the parties can still be identified later from the clauses themselves.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                      <input
+                        type="text" value={manualPartyName} onChange={(e) => setManualPartyName(e.target.value)}
+                        placeholder="Your name or organization" className="rounded border px-2 py-1.5 text-sm flex-1" style={FIELD}
+                      />
+                      <select value={manualPartyRole} onChange={(e) => setManualPartyRole(e.target.value)} className="rounded border px-2 py-1.5 text-sm" style={FIELD}>
+                        {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                    </div>
+                    <button
+                      onClick={addManualPartyAndConfirm} disabled={!manualPartyName.trim()}
+                      className="rounded px-3 py-1.5 text-xs font-medium hover:opacity-70"
+                      style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: manualPartyName.trim() ? 1 : 0.5 }}
+                    >
+                      Add and continue analysis
                     </button>
                   </div>
                 )}
