@@ -621,7 +621,7 @@ async function loadLineageCorrections(contractId) {
 }
 
 const CLAUSE_CORRECTABLE_FIELDS = new Set(['riskLevel', 'whyItMatters', 'suggestedRedline']);
-const OBLIGATION_CORRECTABLE_FIELDS = new Set(['verificationStatus', 'description']);
+const OBLIGATION_CORRECTABLE_FIELDS = new Set(['verificationStatus', 'description', 'absoluteDate', 'obligorPartyId']);
 
 /** The exact text recordCorrection snapshots for an obligation
  * (matchedTextSnapshot) — kept as one function so the carry-forward

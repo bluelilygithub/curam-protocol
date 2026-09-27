@@ -20,6 +20,17 @@ const HEADING_PATTERNS = [
   { re: /^(\d+)\.\s/, parse: (m) => ({ major: Number(m[1]) }) },                           // 1.
 ];
 
+// Schedules/annexures/appendices and the signature block are structural
+// boundaries, not part of the numbered clause scheme at all — matched
+// independently of HEADING_PATTERNS/continuesSequence (always accepted,
+// never judged against the major/minor sequence) since they're
+// unambiguous section markers, not something that could be a false-
+// positive cross-reference or embedded list the way a numbered heading can.
+// Real observed failure: a numbered clause's span ran all the way through
+// a following Schedule AND the signature block, since neither matched any
+// recognized heading pattern and nothing ended the clause before them.
+const SPECIAL_SECTION_RE = /^(Schedule|Annexure|Appendix)\s+[A-Z0-9]+\b|^(IN WITNESS WHEREOF|SIGNED (?:BY|FOR AND ON BEHALF OF)|EXECUTED AS (?:A DEED|AN AGREEMENT)|AUTHORI[SZ]ED SIGNATORY|SIGNATURE PAGE)\b/i;
+
 function romanToInt(roman) {
   const map = { I: 1, V: 5, X: 10, L: 50, C: 100 };
   let total = 0;
@@ -134,12 +145,21 @@ function heuristicSegment(extractedText) {
   let last = null;
   let docUsesBareMajors = null; // locked in from the first accepted heading
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].text.trim()) continue; // blank lines never start a heading
+    const trimmedLine = lines[i].text.trim();
+    if (!trimmedLine) continue; // blank lines never start a heading
+    const specialMatch = trimmedLine.match(SPECIAL_SECTION_RE);
+    if (specialMatch) {
+      // A structural boundary (schedule/annexure/appendix/signature block) —
+      // always accepted, independent of the numbered major/minor scheme, so
+      // it neither consults nor updates `last`/`docUsesBareMajors`.
+      headingIdxs.push({ i, label: specialMatch[0].trim(), isSpecial: true });
+      continue;
+    }
     const match = matchHeading(lines[i].text);
     if (!match) continue;
     if (!continuesSequence(match.number, last, docUsesBareMajors)) continue; // looks like a heading, isn't one
     if (last === null) docUsesBareMajors = match.number.minor == null;
-    headingIdxs.push({ i, label: match.label });
+    headingIdxs.push({ i, label: match.label, isBareMajor: match.number.minor == null });
     last = match.number;
   }
   if (!headingIdxs.length) return null;
@@ -166,21 +186,36 @@ function heuristicSegment(extractedText) {
         text: extractedText.slice(leadStart.start, leadEnd.end),
         spanStart: leadStart.start,
         spanEnd: leadEnd.end,
+        isContextOnly: true,
       });
     }
   }
   for (let h = 0; h < headingIdxs.length; h++) {
-    const { i, label } = headingIdxs[h];
+    const { i, label, isSpecial, isBareMajor } = headingIdxs[h];
     const startLine = lines[i];
     const nextHeadingLineIdx = h + 1 < headingIdxs.length ? headingIdxs[h + 1].i : lines.length;
     const endLineIdx = trimEnd(nextHeadingLineIdx - 1, i);
     const endLine = lines[endLineIdx] || startLine;
-    clauses.push({
-      numberLabel: label,
-      text: extractedText.slice(startLine.start, endLine.end),
-      spanStart: startLine.start,
-      spanEnd: endLine.end,
-    });
+    const text = extractedText.slice(startLine.start, endLine.end);
+    const clause = { numberLabel: label, text, spanStart: startLine.start, spanEnd: endLine.end };
+    if (isSpecial) {
+      // Schedules/annexures/appendices/signature blocks are informational,
+      // never risk-scored.
+      clause.isContextOnly = true;
+    } else if (isBareMajor) {
+      // A bare section title ("1. Term") whose entire span is just that one
+      // heading line — because its own dotted subclauses ("1.1", "1.2")
+      // immediately took over as their own clauses — is a group label for
+      // those subclauses, not a clause with its own content to assess. A
+      // bare heading that DOES have real prose of its own (no subclauses
+      // following it at all) still gets scored normally.
+      const bodyLineCount = text.split('\n').map((l) => l.trim()).filter(Boolean).length;
+      if (bodyLineCount <= 1) {
+        clause.isContextOnly = true;
+        clause.isGroupHeading = true;
+      }
+    }
+    clauses.push(clause);
   }
   return clauses;
 }
@@ -351,10 +386,10 @@ async function segmentDocument(reviewId, extractedText, pageMap, opts = {}) {
       if (!c.text || !c.text.trim()) continue;
       await client.query(
         `INSERT INTO contract_clauses
-           ("reviewId", "lineageId", ordinal, "numberLabel", text, "spanStart", "spanEnd", "startPage", "endPage", "isContextOnly")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           ("reviewId", "lineageId", ordinal, "numberLabel", text, "spanStart", "spanEnd", "startPage", "endPage", "isContextOnly", "isGroupHeading")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [reviewId, crypto.randomUUID(), ordinal, c.numberLabel || null, c.text, c.spanStart, c.spanEnd,
-          pageForOffset(c.spanStart), pageForOffset(Math.max(c.spanStart, c.spanEnd - 1)), isContextOnlyClause(c, i, method)]
+          pageForOffset(c.spanStart), pageForOffset(Math.max(c.spanStart, c.spanEnd - 1)), isContextOnlyClause(c, i, method), c.isGroupHeading === true]
       );
       ordinal += 1;
     }
@@ -381,7 +416,13 @@ async function segmentDocument(reviewId, extractedText, pageMap, opts = {}) {
 const SIGNATURE_BLOCK_RE = /\b(IN WITNESS WHEREOF|SIGNED (?:BY|FOR AND ON BEHALF OF)|EXECUTED AS (?:A DEED|AN AGREEMENT)|AUTHORI[SZ]ED SIGNATORY)\b/i;
 
 function isContextOnlyClause(clause, index, method) {
-  // The one clause heuristicSegment captures for text before the first
+  // heuristicSegment ('numbered' method) already determines this directly
+  // at build time — leading preamble, schedules/annexures/signature blocks,
+  // and bare-heading group labels (see heuristicSegment) all set this flag
+  // themselves, more precisely than anything inferable after the fact.
+  if (clause.isContextOnly) return true;
+  // Fallbacks for 'paragraph'/'llm' methods, which never set the flag above:
+  // the one clause heuristicSegment captures for text before the first
   // recognized heading (title/preamble/recitals) — only meaningful for the
   // 'numbered' method, where a null numberLabel at index 0 specifically
   // means "this is that captured lead-in text". Under 'paragraph'/'llm',

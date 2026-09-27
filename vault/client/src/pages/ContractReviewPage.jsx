@@ -52,12 +52,114 @@ function Badge({ bg, color, children }) {
   );
 }
 
+function ClauseCard({ c, getIcon, onDismiss, onOverride, indent = false }) {
+  const risk = RISK_BADGE[c.riskLevel] || null;
+  const verify = VERIFY_BADGE[c.verificationStatus] || null;
+  const style = indent ? { ...FIELD, marginLeft: 20 } : FIELD;
+  if (c.isContextOnly) {
+    return (
+      <div className="rounded border p-3" style={{ ...style, opacity: 0.75 }}>
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
+          <Badge bg="var(--color-bg)" color="var(--color-muted)">Context only — not risk-scored</Badge>
+        </div>
+        <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded border p-3" style={style}>
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
+        {risk && <Badge bg={risk.bg} color={risk.color}>{risk.text}</Badge>}
+        {verify && <Badge bg={verify.bg} color={verify.color}>{verify.text}</Badge>}
+      </div>
+      <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
+      {c.whyItMatters && <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>{c.whyItMatters}</p>}
+      {c.suggestedRedline && (
+        <div className="text-xs mt-1 rounded p-2" style={{ background: 'var(--color-bg)' }}>
+          <strong>Suggested redline (advisory, copy-paste only):</strong> {c.suggestedRedline}
+        </div>
+      )}
+      {(c.crossReferences || []).length > 0 && (
+        <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+          References: {c.crossReferences.map((r) => r.label).join(', ')}
+        </div>
+      )}
+      {c.riskLevel === 'risky' && (
+        <div className="flex gap-2 mt-2">
+          <button onClick={onDismiss} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Dismiss</button>
+          <button onClick={onOverride} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Not risky for me</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NotLegalAdviceBanner() {
   return (
     <div style={{ background: '#fef3c7', color: '#92400e', padding: '8px 16px', fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
       Informational only — not legal advice. Always confirm important decisions with a qualified lawyer.
     </div>
   );
+}
+
+const SEVERITY_RANK = { risky: 0, unclear: 1, standard: 2 };
+
+// Filters/sorts the flat clause list. Severity sort or any non-"all" filter
+// switches to a flat list — grouping (see groupClauses) only makes sense for
+// the default, unsorted, unfiltered order view.
+function getVisibleClauses(clauses, filter, sort) {
+  let list = clauses || [];
+  if (filter === 'context') list = list.filter((c) => c.isContextOnly);
+  else if (filter !== 'all') list = list.filter((c) => c.riskLevel === filter);
+  if (sort === 'severity') {
+    list = [...list].sort((a, b) => (SEVERITY_RANK[a.riskLevel] ?? 3) - (SEVERITY_RANK[b.riskLevel] ?? 3));
+  }
+  return list;
+}
+
+// A bare-heading clause ("11." — see segmentation.js's isGroupHeading) is a
+// group label for its own dotted subclauses ("11.1", "11.2", ...), not a
+// clause with its own content — grouped here so the client can render it as
+// a section header with its subclauses nested underneath, instead of one
+// more flat card in the list.
+function groupClauses(clauses) {
+  const groups = [];
+  let current = null;
+  for (const c of clauses) {
+    if (c.isGroupHeading) {
+      current = { heading: c, children: [] };
+      groups.push(current);
+      continue;
+    }
+    const majorPrefix = current?.heading?.numberLabel ? `${current.heading.numberLabel.replace(/\.$/, '')}.` : null;
+    if (current && majorPrefix && c.numberLabel?.startsWith(majorPrefix)) {
+      current.children.push(c);
+    } else {
+      groups.push({ heading: null, children: [c] });
+      current = null;
+    }
+  }
+  return groups;
+}
+
+function formatObligationTiming(o) {
+  if (o.absoluteDate) return new Date(o.absoluteDate).toLocaleDateString();
+  if (o.rrule) return `Recurring`;
+  if (o.anchorEvent) {
+    const anchorLabel = {
+      effective_date: 'the effective date', renewal_date: 'renewal', invoice_date: 'invoice date',
+      termination: 'termination', custom: o.anchorCustomLabel || 'a custom event',
+    }[o.anchorEvent] || o.anchorEvent;
+    if (o.offsetDays != null) {
+      const days = Math.abs(o.offsetDays);
+      const direction = o.offsetDays < 0 ? 'before' : 'after';
+      return `${days} day${days === 1 ? '' : 's'} ${direction} ${anchorLabel}`;
+    }
+    return anchorLabel;
+  }
+  return 'No fixed date';
 }
 
 export default function ContractReviewPage() {
@@ -82,6 +184,13 @@ export default function ContractReviewPage() {
   const [manualPartyRole, setManualPartyRole] = useState('other');
   const [partyNameDrafts, setPartyNameDrafts] = useState({}); // partyId -> in-progress edit text
   const [correctionNote, setCorrectionNote] = useState({}); // clauseId -> note text
+  const [clauseFilter, setClauseFilter] = useState('all'); // all | risky | unclear | standard | context
+  const [clauseSort, setClauseSort] = useState('order'); // order | severity
+  const [question, setQuestion] = useState('');
+  const [qaHistory, setQaHistory] = useState([]); // [{question, answer, quote, answeredByContract}]
+  const [qaLoading, setQaLoading] = useState(false);
+  const [reportEmail, setReportEmail] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -109,6 +218,7 @@ export default function ContractReviewPage() {
     setContract(data);
     setView('detail');
     setTab('overview');
+    setQaHistory([]);
     const latestDoc = (data.documents || [])[data.documents.length - 1];
     if (latestDoc) {
       const reviewsRes = await api.get(`/api/contract-review/documents/${latestDoc.id}/reviews`);
@@ -295,6 +405,65 @@ export default function ContractReviewPage() {
     await api.download(`/api/contract-review/export.ics?contractId=${contract.id}`, `contract-${contract.id}.ics`);
   }, [contract]);
 
+  const askQuestion = useCallback(async () => {
+    const q = question.trim();
+    if (!q || !review) return;
+    setQaLoading(true);
+    setError('');
+    try {
+      const res = await api.post(`/api/contract-review/reviews/${review.id}/ask`, { question: q });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not get an answer');
+      setQaHistory((prev) => [{ question: q, ...data }, ...prev]);
+      setQuestion('');
+    } catch (e) {
+      setError(e.message || 'Could not get an answer');
+    } finally {
+      setQaLoading(false);
+    }
+  }, [question, review]);
+
+  const downloadReport = useCallback(async () => {
+    if (!contract) return;
+    setReportBusy(true);
+    setError('');
+    try {
+      const qs = review?.id ? `?reviewId=${review.id}` : '';
+      await api.download(`/api/contract-review/contracts/${contract.id}/report/pdf${qs}`, `${contract.title || 'contract'}-review.pdf`);
+    } catch (e) {
+      setError(e.message || 'Could not generate report');
+    } finally {
+      setReportBusy(false);
+    }
+  }, [contract, review]);
+
+  const emailReport = useCallback(async () => {
+    if (!contract || !reportEmail.trim()) return;
+    setReportBusy(true);
+    setError('');
+    try {
+      const res = await api.post(`/api/contract-review/contracts/${contract.id}/report/email`, { reviewId: review?.id || null, to: reportEmail.trim() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not send report');
+      setReportEmail('');
+    } catch (e) {
+      setError(e.message || 'Could not send report');
+    } finally {
+      setReportBusy(false);
+    }
+  }, [contract, review, reportEmail]);
+
+  const setObligationField = useCallback(async (obligation, field, value) => {
+    if (!contract || !review) return;
+    const res = await api.post(`/api/contract-review/reviews/${review.id}/corrections`, {
+      contractId: contract.id, obligationId: obligation.id, field, userValue: value, action: 'edit',
+    });
+    if (!res.ok) { setError((await res.json().catch(() => ({}))).error || `Could not save ${field}`); return; }
+    setError('');
+    const obRes = await api.get(`/api/contract-review/obligations?contractId=${contract.id}`);
+    if (obRes.ok) setObligations((await obRes.json()).obligations || []);
+  }, [contract, review]);
+
   if (!enabled) {
     return (
       <div className="p-6">
@@ -424,6 +593,27 @@ export default function ContractReviewPage() {
                     Deletion removes everything under this contract. A contract on legal hold cannot be deleted.
                   </p>
                 </div>
+
+                {review && (
+                  <div className="rounded-lg border p-4" style={CARD}>
+                    <h2 className="text-sm font-semibold mb-2">Report</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
+                        {getIcon('download', { size: 14 })} Download PDF
+                      </button>
+                      <input
+                        type="email" value={reportEmail} onChange={(e) => setReportEmail(e.target.value)}
+                        placeholder="Email address" className="rounded border px-2 py-1.5 text-sm" style={FIELD}
+                      />
+                      <button onClick={emailReport} disabled={reportBusy || !reportEmail.trim()} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy || !reportEmail.trim() ? 0.5 : 1 }}>
+                        Send report
+                      </button>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                      Banner, parties and role, flags with reasons and redlines, and obligations.
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-lg border p-4" style={CARD}>
                   <h2 className="text-sm font-semibold mb-2">History</h2>
@@ -568,50 +758,88 @@ export default function ContractReviewPage() {
                     )}
 
                     <div className="rounded-lg border p-4" style={CARD}>
-                      <h2 className="text-sm font-semibold mb-2">Clauses</h2>
+                      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <h2 className="text-sm font-semibold">Clauses</h2>
+                        <div className="flex items-center gap-2">
+                          <select value={clauseFilter} onChange={(e) => setClauseFilter(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                            <option value="all">All</option>
+                            <option value="risky">Risky</option>
+                            <option value="unclear">Unclear</option>
+                            <option value="standard">Standard</option>
+                            <option value="context">Context only</option>
+                          </select>
+                          <select value={clauseSort} onChange={(e) => setClauseSort(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                            <option value="order">Clause order</option>
+                            <option value="severity">Severity</option>
+                          </select>
+                        </div>
+                      </div>
                       <div className="space-y-3">
-                        {(review.clauses || []).map((c) => {
-                          const risk = RISK_BADGE[c.riskLevel] || null;
-                          const verify = VERIFY_BADGE[c.verificationStatus] || null;
-                          if (c.isContextOnly) {
-                            return (
-                              <div key={c.id} className="rounded border p-3" style={{ ...FIELD, opacity: 0.75 }}>
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
-                                  <Badge bg="var(--color-bg)" color="var(--color-muted)">Context only — not risk-scored</Badge>
+                        {clauseFilter === 'all' && clauseSort === 'order' ? (
+                          groupClauses(review.clauses || []).map((g, gi) => (
+                            <div key={g.heading?.id || `flat-${gi}`}>
+                              {g.heading && (
+                                <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>
+                                  {g.heading.numberLabel} {g.heading.text.replace(/^[\d.]+\s*/, '').trim()}
                                 </div>
-                                <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
+                              )}
+                              <div className="space-y-3">
+                                {g.children.map((c) => (
+                                  <ClauseCard
+                                    key={c.id} c={c} getIcon={getIcon} indent={!!g.heading}
+                                    onDismiss={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'dismiss')}
+                                    onOverride={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'override')}
+                                  />
+                                ))}
                               </div>
-                            );
-                          }
-                          return (
-                            <div key={c.id} className="rounded border p-3" style={FIELD}>
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
-                                {risk && <Badge bg={risk.bg} color={risk.color}>{risk.text}</Badge>}
-                                {verify && <Badge bg={verify.bg} color={verify.color}>{verify.text}</Badge>}
-                              </div>
-                              <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
-                              {c.whyItMatters && <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>{c.whyItMatters}</p>}
-                              {c.suggestedRedline && (
-                                <div className="text-xs mt-1 rounded p-2" style={{ background: 'var(--color-bg)' }}>
-                                  <strong>Suggested redline (advisory, copy-paste only):</strong> {c.suggestedRedline}
-                                </div>
-                              )}
-                              {(c.crossReferences || []).length > 0 && (
-                                <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                                  References: {c.crossReferences.map((r) => r.label).join(', ')}
-                                </div>
-                              )}
-                              {c.riskLevel === 'risky' && (
-                                <div className="flex gap-2 mt-2">
-                                  <button onClick={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'dismiss')} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Dismiss</button>
-                                  <button onClick={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'override')} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Not risky for me</button>
-                                </div>
-                              )}
                             </div>
-                          );
-                        })}
+                          ))
+                        ) : (
+                          getVisibleClauses(review.clauses || [], clauseFilter, clauseSort).map((c) => (
+                            <ClauseCard
+                              key={c.id} c={c} getIcon={getIcon}
+                              onDismiss={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'dismiss')}
+                              onOverride={() => recordCorrection({ clauseId: c.id, field: 'riskLevel', userValue: 'standard' }, 'override')}
+                            />
+                          ))
+                        )}
+                        {!(review.clauses || []).length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No clauses.</div>}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border p-4" style={CARD}>
+                      <h2 className="text-sm font-semibold mb-2">Ask about this contract</h2>
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !qaLoading) askQuestion(); }}
+                          placeholder="e.g. How much notice do I need to give to terminate?"
+                          className="flex-1 rounded border px-3 py-2 text-sm" style={FIELD}
+                        />
+                        <button onClick={askQuestion} disabled={qaLoading || !question.trim()} className="rounded px-3 py-2 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: qaLoading || !question.trim() ? 0.5 : 1 }}>
+                          {qaLoading ? 'Asking…' : 'Ask'}
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {qaHistory.map((h, i) => (
+                          <div key={i} className="rounded border p-3" style={FIELD}>
+                            <div className="text-xs font-semibold mb-1">{h.question}</div>
+                            {h.answeredByContract ? (
+                              <>
+                                <p className="text-sm mb-1">{h.answer}</p>
+                                {h.quote && (
+                                  <div className="text-xs mt-1 rounded p-2 flex items-start gap-2" style={{ background: 'var(--color-bg)' }}>
+                                    {getIcon((VERIFY_BADGE[h.quote.verificationStatus] || VERIFY_BADGE.failed).icon, { size: 12, style: { marginTop: 2, color: (VERIFY_BADGE[h.quote.verificationStatus] || VERIFY_BADGE.failed).color } })}
+                                    <span>"{h.quote.text}"</span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-sm italic" style={{ color: 'var(--color-muted)' }}>{h.answer}</p>
+                            )}
+                          </div>
+                        ))}
+                        {!qaHistory.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Ask a question about this contract — answers quote the clause they're based on.</div>}
                       </div>
                     </div>
 
@@ -637,7 +865,7 @@ export default function ContractReviewPage() {
             {tab === 'obligations' && (
               <div className="rounded-lg border p-4" style={CARD}>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold">Obligations</h2>
+                  <h2 className="text-sm font-semibold">What you need to do</h2>
                   <button onClick={exportIcs} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms' }}>
                     {getIcon('calendar-check', { size: 14 })} Export .ics
                   </button>
@@ -645,24 +873,41 @@ export default function ContractReviewPage() {
                 <div className="space-y-2">
                   {obligations.map((o) => {
                     const unverified = o.derivedStatus === 'unverified';
+                    const done = o.userState === 'handled';
                     return (
-                      <div key={o.id} className="rounded border p-3 flex items-start justify-between gap-3" style={FIELD}>
-                        <div>
-                          <div className="text-sm">{o.description}</div>
-                          <div className="text-xs mt-1 flex items-center gap-2" style={{ color: 'var(--color-muted)' }}>
-                            <Badge bg="var(--color-bg)" color="var(--color-muted)">{o.derivedStatus.replace(/_/g, ' ')}</Badge>
-                            {!o.obligorPartyId && <Badge bg="#fef3c7" color="#92400e">Obligor unresolved</Badge>}
-                            {unverified && <Badge bg="#fef3c7" color="#92400e">Unverified — not exported/linkable until confirmed</Badge>}
-                            {o.userState && <Badge bg="#e0e7ff" color="#3730a3">{o.userState}</Badge>}
-                          </div>
+                      <div key={o.id} className="rounded border p-3" style={{ ...FIELD, opacity: done ? 0.6 : 1 }}>
+                        <div className="text-sm mb-2" style={{ textDecoration: done ? 'line-through' : 'none' }}>{o.description}</div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <select
+                            value={o.obligorPartyId != null ? String(o.obligorPartyId) : ''}
+                            onChange={(e) => setObligationField(o, 'obligorPartyId', e.target.value)}
+                            className="rounded border px-2 py-1 text-xs" style={FIELD}
+                          >
+                            <option value="">Obligor unresolved</option>
+                            {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <input
+                            type="date"
+                            value={o.absoluteDate ? String(o.absoluteDate).slice(0, 10) : ''}
+                            onChange={(e) => { if (e.target.value) setObligationField(o, 'absoluteDate', e.target.value); }}
+                            className="rounded border px-2 py-1 text-xs" style={FIELD}
+                          />
+                          {!o.absoluteDate && (
+                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>({formatObligationTiming(o)})</span>
+                          )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          {!o.linkedTaskId && (
-                            <button onClick={() => addToTask(o)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>+ Add to Task</button>
-                          )}
-                          {!o.userState && (
-                            <button onClick={() => setObligationState(o.id, 'handled')} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Mark handled</button>
-                          )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{o.derivedStatus.replace(/_/g, ' ')}</Badge>
+                          {unverified && <Badge bg="#fef3c7" color="#92400e">Unverified — not exported/linkable until confirmed</Badge>}
+                          {o.userState && <Badge bg="#e0e7ff" color="#3730a3">{o.userState}</Badge>}
+                          <div className="flex gap-2 ml-auto">
+                            {!o.linkedTaskId && (
+                              <button onClick={() => addToTask(o)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>Send to Tasks</button>
+                            )}
+                            {!done && (
+                              <button onClick={() => setObligationState(o.id, 'handled')} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Mark done</button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

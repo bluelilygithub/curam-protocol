@@ -210,6 +210,61 @@ router.get('/export.ics', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+// ── Q&A ──────────────────────────────────────────────────────────────────────
+
+router.post('/reviews/:id/ask', async (req, res) => {
+  try {
+    const { question } = req.body || {};
+    // Confirms the caller owns the contract this review belongs to before
+    // running any model call — same access-check convention as every other
+    // review-scoped route (getReview/recordCorrection).
+    await ContractService.getReview(req.user.id, Number(req.params.id));
+    const { askAboutContract } = require('../services/contractReview/qa');
+    const result = await askAboutContract(Number(req.params.id), question, req.user.id);
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+// ── Report ───────────────────────────────────────────────────────────────────
+
+async function buildReportInputs(userId, contractId, reviewId) {
+  const contract = await ContractService.getContract(userId, contractId);
+  const review = reviewId ? await ContractService.getReview(userId, reviewId) : null;
+  const obligations = await ContractService.listObligations(userId, { contractId });
+  const { buildContractReviewPdfBuffer } = require('../services/contractReview/reportPdf');
+  const pdfBytes = await buildContractReviewPdfBuffer(contract, review, obligations, review?.userPartyId || null);
+  return { contract, pdfBytes };
+}
+
+router.get('/contracts/:id/report/pdf', async (req, res) => {
+  try {
+    const { reviewId } = req.query || {};
+    const { contract, pdfBytes } = await buildReportInputs(req.user.id, Number(req.params.id), reviewId ? Number(reviewId) : null);
+    const safeTitle = String(contract.title || 'contract').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}-review.pdf"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+    res.end(Buffer.from(pdfBytes));
+  } catch (err) { handleError(res, err); }
+});
+
+router.post('/contracts/:id/report/email', async (req, res) => {
+  try {
+    const { reviewId, to } = req.body || {};
+    if (!to || !String(to).trim()) return res.status(400).json({ error: 'to is required' });
+    const { contract, pdfBytes } = await buildReportInputs(req.user.id, Number(req.params.id), reviewId ? Number(reviewId) : null);
+    const sendEmail = require('../utils/sendEmail');
+    const safeTitle = String(contract.title || 'contract').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+    const sendResult = await sendEmail({
+      to: String(to).trim(),
+      subject: `Contract Review report — ${contract.title || 'Untitled contract'}`,
+      html: `<p>Attached is the Contract Review report for <strong>${contract.title || 'Untitled contract'}</strong>.</p><p style="color:#92400e">Informational only — not legal advice. Always confirm important decisions with a qualified lawyer.</p>`,
+      attachments: [{ filename: `${safeTitle}-review.pdf`, content: Buffer.from(pdfBytes), contentType: 'application/pdf' }],
+    });
+    res.json({ ok: true, provider: sendResult?.provider || null });
+  } catch (err) { handleError(res, err); }
+});
+
 // ── Search ───────────────────────────────────────────────────────────────────
 
 router.get('/search', async (req, res) => {
