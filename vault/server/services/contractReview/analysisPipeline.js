@@ -25,6 +25,27 @@ const { buildCoverageReport } = require('./coverageReport');
 const { createCostTracker } = require('./costTracking');
 const { PROMPT_VERSION } = require('./prompts/v1');
 const { loadContractLevelCorrections, loadPartyCorrections, applyPartyCorrections } = require('./contractService');
+const { resolveContractReviewModel } = require('../contractReviewModelResolver');
+
+// Every stage from here on (type detection through summary) silently
+// degrades to a plausible-looking-but-wrong default when no model is
+// configured — 'other' for contract type, riskLevel='unclear' with no
+// reason for every clause, empty definitions/obligations/summary — because
+// each stage's own `if (resolved) {...} else { record a skip }` pattern was
+// designed to let ONE transient stage degrade gracefully, not to mask a
+// workspace with no Contract Review model at all. The parties stage's own
+// regex fallback (partiesKeyTerms.js's detectPreambleParties) made this
+// especially easy to miss: it can find real parties from the preamble with
+// NO model at all, so "parties look fine" gave no signal that every other
+// stage was quietly producing nothing. Checked once, here, at the start of
+// each stage group, so a missing model is a loud, immediate, real error
+// instead of five or six different silent degradations.
+async function assertModelConfigured(userId) {
+  const { modelId } = await resolveContractReviewModel(userId);
+  if (!modelId) {
+    throw new Error('No Contract Review model is configured for this workspace — set one in Settings → AI & Chat → Contract Review model, or configure a workspace default (Vault) model.');
+  }
+}
 
 async function setStatus(reviewId, status, extra = {}) {
   const sets = [`status=$1`, `"stageProgress"=$2`];
@@ -60,6 +81,7 @@ async function runAnalysis(reviewId, { userId } = {}) {
   const costTracker = createCostTracker(ctx.costUsd);
 
   try {
+    await assertModelConfigured(userId);
     await setStatus(reviewId, 'detecting_type');
     await detectContractType(reviewId, ctx.extractedText, userId, costTracker);
 
@@ -129,6 +151,7 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
   const costTracker = createCostTracker(ctx.costUsd);
 
   try {
+    await assertModelConfigured(userId);
     await setStatus(reviewId, 'extracting_definitions');
     await extractDefinitions(reviewId, extractedText, userId, costTracker);
 
