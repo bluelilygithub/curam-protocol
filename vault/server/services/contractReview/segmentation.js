@@ -83,30 +83,43 @@ function matchHeading(lineText) {
  * the last accepted heading, rather than merely looking like one — rejects a
  * cross-reference ("Section 5 shall survive termination.") or an embedded
  * numbered list item, either of which can match HEADING_PATTERNS but neither
- * of which is really a new top-level clause. Accepted only if it's the
- * first heading in the document, continues the same section with the next
- * minor number, or starts the next section in sequence. */
-function continuesSequence(candidate, last) {
+ * of which is really a new top-level clause.
+ *
+ * `docUsesBareMajors` is null until the document's first heading is
+ * accepted, then locked to whether THAT heading was a bare "N."/"Article N"
+ * (no minor) or a dotted "N.M" — the two real document structures this has
+ * to tell apart: (a) "1. Term" as a bare section title with "1.1"/"1.2" as
+ * its own dotted subclauses (a bare-major-then-dotted-subclause hierarchy,
+ * very common in real contracts), vs (b) a document whose ONLY top-level
+ * unit is dotted "N.M" throughout, where any bare "1./2./3." sighting is
+ * presumptively an embedded list, never a real section. Determining this
+ * from the FIRST heading alone (rather than per-candidate heuristics) is
+ * what makes both directions distinguishable — see the two branches below. */
+function continuesSequence(candidate, last, docUsesBareMajors) {
   if (!last) return true;
   if (candidate.major === last.major) {
-    // Same top-level section: only a genuine minor increment continues it —
-    // a same-major candidate with no minor (e.g. a plain "1." numbered-list
-    // item appearing under an existing "1.1" heading) is NOT accepted just
-    // because the major matches; that's exactly the embedded-numbered-list
-    // case this check exists to reject.
-    return candidate.minor != null && last.minor != null && candidate.minor === last.minor + 1;
+    // Same top-level section number restated with no minor at all — always
+    // either a literal duplicate or an embedded list item ("1." again
+    // under an existing "1.1"), never a genuine continuation.
+    if (candidate.minor == null) return false;
+    // The prior heading was a bare major ("1. Term") with no minor of its
+    // own yet — a dotted candidate under the SAME major is that section's
+    // first subclause ("1.1"), not a continuation to judge by increment.
+    if (last.minor == null) return true;
+    return candidate.minor === last.minor + 1;
   }
-  // A bare "N."/"Article N" heading (no minor) is the ambiguous pattern —
-  // an embedded numbered list commonly restarts at "1." right after any
-  // dotted clause, and its later items ("2.", "3.") would otherwise satisfy
-  // this same "next major in sequence" rule purely by coincidence (caught
-  // via line-level scanning once dotted "1.1, 1.2" splitting needed every
-  // line checked individually, not just a paragraph block's first line).
-  // Only accept a bare-major continuation when the PRIOR heading was ALSO a
-  // bare-major pattern (a document genuinely using flat "1. / 2. / 3."
-  // numbering throughout) — never right after a dotted "N.M" heading, which
-  // is exactly what an embedded list under a real numbered clause looks like.
-  if (candidate.minor == null && last.minor != null) return false;
+  if (candidate.minor == null) {
+    // A bare-major candidate for a NEW section (e.g. "2." after "1.2") is
+    // only ever valid in a document that genuinely uses bare majors as its
+    // section dividers — in a pure-dotted-scheme document (established by
+    // the FIRST heading being dotted), any bare-major sighting is an
+    // embedded list restarting at a later number, not a real next section.
+    if (!docUsesBareMajors) return false;
+    return candidate.major === last.major + 1;
+  }
+  // Dotted candidate opening a new major directly (e.g. "2.1" continuing
+  // after "1.2", with no bare "2." title in between) — valid in either
+  // scheme.
   return candidate.major === last.major + 1;
 }
 
@@ -119,11 +132,13 @@ function heuristicSegment(extractedText) {
   const lines = splitIntoLineOffsets(extractedText);
   const headingIdxs = [];
   let last = null;
+  let docUsesBareMajors = null; // locked in from the first accepted heading
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].text.trim()) continue; // blank lines never start a heading
     const match = matchHeading(lines[i].text);
     if (!match) continue;
-    if (!continuesSequence(match.number, last)) continue; // looks like a heading, isn't one
+    if (!continuesSequence(match.number, last, docUsesBareMajors)) continue; // looks like a heading, isn't one
+    if (last === null) docUsesBareMajors = match.number.minor == null;
     headingIdxs.push({ i, label: match.label });
     last = match.number;
   }
