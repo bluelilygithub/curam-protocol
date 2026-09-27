@@ -58,7 +58,14 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
   if (resolved) {
     try {
       const prompt = obligationsPrompt(extractedText, parties.map((p) => p.name));
-      const result = await callModel(resolved, prompt, { maxTokens: 2000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
+      // 2000 was tight enough to truncate a real response mid-JSON on a
+      // document with several genuine obligations — each one is 11 JSON
+      // fields plus a verbatim quotedText sentence, and a real services
+      // agreement can easily have 6-8+ of them (payment terms, notice
+      // periods, reporting, termination, non-solicitation...). Same class
+      // of truncation bug already found and fixed in riskScoring.js, now
+      // visible instead of silently swallowed as an empty result.
+      const result = await callModel(resolved, prompt, { maxTokens: 4000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
