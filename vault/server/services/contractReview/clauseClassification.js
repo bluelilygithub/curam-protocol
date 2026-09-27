@@ -55,9 +55,12 @@ async function getClauseTypeIdMap() {
 }
 
 async function classifyClauses(reviewId, userId, costTracker) {
-  const { rows: clauses } = await pool.query(
-    `SELECT id, "numberLabel", text FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
+  const { rows: allClauses } = await pool.query(
+    `SELECT id, "numberLabel", text, "isContextOnly" FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
   );
+  // Preamble/recitals/signature-block clauses are context only — no clause
+  // type to classify, no cross-references worth resolving as findings.
+  const clauses = allClauses.filter((c) => !c.isContextOnly);
   if (!clauses.length) return { classified: 0 };
 
   const typeIdByKey = await getClauseTypeIdMap();

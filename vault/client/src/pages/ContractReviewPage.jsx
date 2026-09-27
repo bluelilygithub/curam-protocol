@@ -527,6 +527,17 @@ export default function ContractReviewPage() {
                         {(review.clauses || []).map((c) => {
                           const risk = RISK_BADGE[c.riskLevel] || null;
                           const verify = VERIFY_BADGE[c.verificationStatus] || null;
+                          if (c.isContextOnly) {
+                            return (
+                              <div key={c.id} className="rounded border p-3" style={{ ...FIELD, opacity: 0.75 }}>
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
+                                  <Badge bg="var(--color-bg)" color="var(--color-muted)">Context only — not risk-scored</Badge>
+                                </div>
+                                <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
+                              </div>
+                            );
+                          }
                           return (
                             <div key={c.id} className="rounded border p-3" style={FIELD}>
                               <div className="flex items-center gap-2 mb-1 flex-wrap">

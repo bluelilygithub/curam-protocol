@@ -283,14 +283,15 @@ async function segmentDocument(reviewId, extractedText, pageMap, opts = {}) {
   try {
     await client.query('BEGIN');
     let ordinal = 1;
-    for (const c of clauses) {
+    for (let i = 0; i < clauses.length; i++) {
+      const c = clauses[i];
       if (!c.text || !c.text.trim()) continue;
       await client.query(
         `INSERT INTO contract_clauses
-           ("reviewId", "lineageId", ordinal, "numberLabel", text, "spanStart", "spanEnd", "startPage", "endPage")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+           ("reviewId", "lineageId", ordinal, "numberLabel", text, "spanStart", "spanEnd", "startPage", "endPage", "isContextOnly")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [reviewId, crypto.randomUUID(), ordinal, c.numberLabel || null, c.text, c.spanStart, c.spanEnd,
-          pageForOffset(c.spanStart), pageForOffset(Math.max(c.spanStart, c.spanEnd - 1))]
+          pageForOffset(c.spanStart), pageForOffset(Math.max(c.spanStart, c.spanEnd - 1)), isContextOnlyClause(c, i, method)]
       );
       ordinal += 1;
     }
@@ -309,8 +310,28 @@ async function segmentDocument(reviewId, extractedText, pageMap, opts = {}) {
   return { method, clauseCount: clauses.filter((c) => c.text && c.text.trim()).length };
 }
 
+// Preamble/recitals/signature-block clauses must not be risk-scored (a
+// clause with no substantive obligation always scores 'unclear', which
+// looked like a genuine flag to a reviewer even though there's nothing to
+// assess) — flagged here, deterministically, rather than left to the risk-
+// scoring model to somehow recognize on every single clause.
+const SIGNATURE_BLOCK_RE = /\b(IN WITNESS WHEREOF|SIGNED (?:BY|FOR AND ON BEHALF OF)|EXECUTED AS (?:A DEED|AN AGREEMENT)|AUTHORI[SZ]ED SIGNATORY)\b/i;
+
+function isContextOnlyClause(clause, index, method) {
+  // The one clause heuristicSegment captures for text before the first
+  // recognized heading (title/preamble/recitals) — only meaningful for the
+  // 'numbered' method, where a null numberLabel at index 0 specifically
+  // means "this is that captured lead-in text". Under 'paragraph'/'llm',
+  // EVERY clause has numberLabel null, so this check would otherwise wrongly
+  // flag every clause in those documents as context-only.
+  if (index === 0 && method === 'numbered' && !clause.numberLabel) return true;
+  if (SIGNATURE_BLOCK_RE.test(clause.text)) return true;
+  return false;
+}
+
 module.exports = {
   segmentDocument,
+  isContextOnlyClause,
   heuristicSegment,
   heuristicPassesSanityCheck,
   paragraphSegment,

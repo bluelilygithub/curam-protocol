@@ -18,9 +18,15 @@ const { riskScoringPrompt, PROMPT_VERSION } = require('./prompts/v1');
 const RISK_LEVELS = new Set(['standard', 'risky', 'unclear']);
 
 async function scoreClauses(reviewId, { contractType, role, userId, extractedText, costTracker }) {
-  const { rows: clauses } = await pool.query(
-    `SELECT id, text FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
+  const { rows: allClauses } = await pool.query(
+    `SELECT id, text, "isContextOnly" FROM contract_clauses WHERE "reviewId"=$1 ORDER BY ordinal`, [reviewId]
   );
+  // Preamble/recitals/signature-block clauses have nothing to assess —
+  // scoring them always landed on riskLevel='unclear' (no playbook position
+  // ever matches a title block), which read as a real flag to a reviewer.
+  // Left at their column defaults (riskLevel NULL) so the UI can render them
+  // as "context only" rather than an assessed-but-inconclusive clause.
+  const clauses = allClauses.filter((c) => !c.isContextOnly);
   const { rows: definitions } = await pool.query(
     `SELECT term, definition FROM contract_definitions WHERE "reviewId"=$1`, [reviewId]
   );

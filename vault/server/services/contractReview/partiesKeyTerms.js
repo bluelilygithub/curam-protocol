@@ -22,6 +22,99 @@ function normalizeName(name) {
     .trim();
 }
 
+// Common commercial-role labels that don't literally appear in
+// PARTY_ROLE_KEYS but map cleanly onto one — a services agreement's
+// "Provider"/"Client" is the everyday case, not an edge case, and defaulting
+// straight to 'other' for these loses real signal the document already
+// states plainly. roleRaw always keeps the document's own label regardless.
+const ROLE_LABEL_MAP = {
+  vendor: ['vendor', 'provider', 'service provider', 'supplier', 'contractor', 'consultant', 'seller'],
+  customer: ['customer', 'client', 'purchaser', 'buyer'],
+  employer: ['employer'],
+  employee: ['employee'],
+  licensor: ['licensor'],
+  licensee: ['licensee'],
+  landlord: ['landlord', 'lessor'],
+  tenant: ['tenant', 'lessee'],
+  lender: ['lender'],
+  borrower: ['borrower'],
+  guarantor: ['guarantor'],
+};
+
+function mapRoleLabel(label) {
+  const norm = String(label || '').toLowerCase().trim();
+  if (!norm) return 'other';
+  for (const [role, keywords] of Object.entries(ROLE_LABEL_MAP)) {
+    if (keywords.includes(norm)) return role;
+  }
+  return 'other';
+}
+
+// Deterministic fallback for when the model's own extraction comes back
+// empty despite the parties being plainly stated — a real observed failure
+// mode on a document whose preamble read "Bluegum Digital Pty Ltd ... (the
+// Provider)" / "Harbourline Physiotherapy Pty Ltd ... (the Client)" and got
+// zero parties from the model. This never silently drops a party the way an
+// LLM occasionally does; it only ever ADDS candidates when the model found
+// none at all, so it can't override a real model result. Longest labels
+// first so "service provider" matches before "provider" inside it.
+const KNOWN_ROLE_LABELS = [
+  'service provider', 'provider', 'client', 'vendor', 'customer', 'supplier',
+  'contractor', 'consultant', 'buyer', 'seller', 'purchaser', 'employer',
+  'employee', 'licensor', 'licensee', 'landlord', 'tenant', 'lessor', 'lessee',
+  'lender', 'borrower', 'guarantor', 'discloser', 'recipient',
+].sort((a, b) => b.length - a.length);
+
+// Legal-entity name suffixes — used to anchor a company name independently
+// of the defined-term parenthetical, since a real preamble almost always has
+// an ABN/registration-number parenthetical sitting BETWEEN the name and the
+// "(the X)" label ("Bluegum Digital Pty Ltd (ABN 12 345 678 901) ... (the
+// Provider)") — matching the name immediately before the label paren (the
+// first version of this function) grabbed whatever capitalized words sat
+// right before THAT paren instead, which is the ABN clause's own trailing
+// text, not the company name. Anchoring on the legal suffix instead finds
+// the name in one contiguous run with nothing in between.
+// Each word of the name itself must start with a capital/digit — without
+// that, the flexible middle group happily swallows an ordinary lowercase
+// run ("Agreement is entered into between Bluegum Digital Pty Ltd" all
+// matches as "the name" otherwise, since plain prose satisfies the same
+// character class a real name would).
+const ENTITY_SUFFIX_RE = /[A-Z][A-Za-z0-9&.,'-]*(?:\s+[A-Z0-9&][A-Za-z0-9&.,'-]*){0,6}?\s+(?:Pty\.?\s*Ltd\.?|Ltd\.?|L\.?L\.?C\.?|Inc\.?|Corp(?:oration)?\.?|Limited|LLP|LP)\b/g;
+
+function detectPreambleParties(extractedText) {
+  const preamble = String(extractedText || '').slice(0, 3000);
+
+  const entities = [];
+  let em;
+  const entityRe = new RegExp(ENTITY_SUFFIX_RE);
+  while ((em = entityRe.exec(preamble))) {
+    entities.push({ name: em[0].trim().replace(/\s+/g, ' '), end: em.index + em[0].length });
+  }
+  if (!entities.length) return [];
+
+  const labelAlt = KNOWN_ROLE_LABELS.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const labelRe = new RegExp(`\\(\\s*(?:the\\s+)?["“']?(${labelAlt})["”']?\\s*\\)`, 'gi');
+  const seen = new Set();
+  const found = [];
+  let lm;
+  while ((lm = labelRe.exec(preamble))) {
+    const label = lm[1].trim();
+    const labelStart = lm.index;
+    // The nearest entity name ending before this label, within a reasonable
+    // window — skips past an intervening ABN/registration parenthetical.
+    let best = null;
+    for (const e of entities) {
+      if (e.end <= labelStart && labelStart - e.end < 300 && (!best || e.end > best.end)) best = e;
+    }
+    if (!best) continue;
+    const key = normalizeName(best.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push({ name: best.name, role: mapRoleLabel(label), roleRaw: label });
+  }
+  return found;
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function sanitizeKeyTerms(raw) {
@@ -64,6 +157,33 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
     await recordRawOutput({ reviewId, stage: 'parties_key_terms', modelId, promptVersion: PROMPT_VERSION, rawResponse: { skipped: 'no model configured' } });
   }
 
+  // The model came back with zero parties despite a real contract always
+  // naming at least one — never silently accept that as "there are no
+  // parties" when the document's own preamble states them plainly (the
+  // observed failure: a clear "X Pty Ltd ... (the Provider)" preamble still
+  // produced an empty parties array). Only runs when the model found
+  // nothing at all, so it can never override or drop a real model result.
+  if (!extractedParties.length) {
+    const fallback = detectPreambleParties(extractedText);
+    if (fallback.length) {
+      extractedParties = fallback;
+      await recordRawOutput({
+        reviewId, stage: 'parties_key_terms', modelId: 'regex-preamble-fallback', promptVersion: PROMPT_VERSION,
+        rawResponse: { fallbackTriggeredBecause: 'model returned zero parties', found: fallback },
+      });
+      const { captureIf, makeFingerprint } = require('../SuggestionService');
+      await captureIf(true, {
+        userId,
+        source: 'contractReviewParties',
+        category: 'alert',
+        fingerprint: makeFingerprint('contractReviewParties', `review:${reviewId}:model-empty-parties`),
+        title: 'Contract Review: model returned no parties, regex fallback found some',
+        body: `Review ${reviewId}: the parties extraction model returned an empty parties array even though a preamble party pattern was found by the deterministic fallback. Check the model's own raw output for this review to see why it missed them.`,
+        context: `reviewId=${reviewId}`,
+      });
+    }
+  }
+
   const { rows: existingParties } = await pool.query(
     `SELECT * FROM contract_parties WHERE "contractId"=$1`, [contractId]
   );
@@ -74,7 +194,11 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
     const name = String(raw?.name || '').trim();
     if (!name) continue;
     const roleRaw = raw?.roleRaw ? String(raw.roleRaw).slice(0, 200) : null;
-    const role = PARTY_ROLE_KEYS.includes(raw?.role) ? raw.role : 'other';
+    // Never just 'other' when the model's role AND its own roleRaw label
+    // both miss the enum — a generic label like "Provider"/"Client" maps
+    // cleanly onto vendor/customer and shouldn't be flattened to 'other'
+    // just because the model didn't pick the exact enum word itself.
+    const role = PARTY_ROLE_KEYS.includes(raw?.role) ? raw.role : mapRoleLabel(roleRaw || raw?.role);
     const norm = normalizeName(name);
     const existing = existingByNorm.get(norm);
     if (existing) {
@@ -106,4 +230,4 @@ async function extractPartiesAndKeyTerms(reviewId, contractId, extractedText, us
   return { parties: allParties, keyTerms, needsRoleConfirmation: !alreadyConfirmed };
 }
 
-module.exports = { extractPartiesAndKeyTerms, normalizeName, sanitizeKeyTerms };
+module.exports = { extractPartiesAndKeyTerms, normalizeName, sanitizeKeyTerms, mapRoleLabel, detectPreambleParties };

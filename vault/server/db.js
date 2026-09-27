@@ -3202,9 +3202,11 @@ async function initSchema() {
       "verificationStatus"  VARCHAR(20) NULL CHECK ("verificationStatus" IN ('verified_exact','verified_normalized','failed')),
       "priorClauseId"       INTEGER NULL REFERENCES contract_clauses(id) ON DELETE SET NULL,
       "redlineOutcome"      VARCHAR(10) NULL CHECK ("redlineOutcome" IN ('accepted','partial','rejected','changed')),
+      "isContextOnly"       BOOLEAN NOT NULL DEFAULT FALSE,
       "createdAt"           TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE contract_clauses ADD COLUMN IF NOT EXISTS "isContextOnly" BOOLEAN NOT NULL DEFAULT FALSE`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_review ON contract_clauses ("reviewId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_lineage ON contract_clauses ("lineageId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contract_clauses_text_fts ON contract_clauses USING GIN (to_tsvector('english', text))`);
