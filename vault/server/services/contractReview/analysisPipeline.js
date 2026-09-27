@@ -24,6 +24,7 @@ const { generateSummary } = require('./summaryGeneration');
 const { buildCoverageReport } = require('./coverageReport');
 const { createCostTracker } = require('./costTracking');
 const { PROMPT_VERSION } = require('./prompts/v1');
+const { loadContractLevelCorrections } = require('./contractService');
 
 async function setStatus(reviewId, status, extra = {}) {
   const sets = [`status=$1`, `"stageProgress"=$2`];
@@ -110,7 +111,13 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
   );
   await pool.query(`UPDATE contract_reviews SET "userPartyId"=$1 WHERE id=$2`, [userParty ? userParty.id : null, reviewId]);
 
-  const contractType = CONTRACT_TYPE_KEYS.includes(ctx.detectedContractType) ? ctx.detectedContractType : 'other';
+  // Spec stage 7 precedence: a contract-level contractType correction always
+  // wins over the review's own detection — otherwise a user's correction on
+  // one draft is silently ignored by every later draft's playbook selection.
+  const contractTypeCorrection = (await loadContractLevelCorrections(contractId)).get('contractType');
+  const contractType = contractTypeCorrection && CONTRACT_TYPE_KEYS.includes(contractTypeCorrection)
+    ? contractTypeCorrection
+    : (CONTRACT_TYPE_KEYS.includes(ctx.detectedContractType) ? ctx.detectedContractType : 'other');
   const role = userParty ? userParty.role : 'other';
   // Re-derives the running cost total from the review's own already-
   // persisted costUsd rather than assuming an in-memory tracker survived the

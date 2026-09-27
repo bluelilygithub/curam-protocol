@@ -25,6 +25,9 @@ function handleError(res, err) {
   if (err instanceof ContractService.ContractAccessError) {
     return res.status(err.statusCode || 404).json({ error: err.message });
   }
+  if (err.statusCode) {
+    return res.status(err.statusCode).json({ error: err.message });
+  }
   console.error('[contract-review]', err);
   res.status(500).json({ error: err.message || 'Contract Review request failed' });
 }

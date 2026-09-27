@@ -160,31 +160,42 @@ function locateLlmBoundaries(extractedText, boundaries) {
     const closing = String(b.closing || '').trim();
     if (!opening || !closing) { located.push(null); continue; }
 
-    let openIdx = extractedText.indexOf(opening, searchFrom);
-    if (openIdx === -1) openIdx = normalizedIndexOf(extractedText, opening, searchFrom);
-    if (openIdx === -1) { located.push(null); continue; }
+    const openMatch = findMatch(extractedText, opening, searchFrom);
+    if (!openMatch) { located.push(null); continue; }
 
-    const closeSearchFrom = openIdx + opening.length;
-    let closeIdx = extractedText.indexOf(closing, closeSearchFrom);
-    if (closeIdx === -1) closeIdx = normalizedIndexOf(extractedText, closing, closeSearchFrom);
-    if (closeIdx === -1) { located.push(null); continue; }
+    const closeMatch = findMatch(extractedText, closing, openMatch.index + openMatch.length);
+    if (!closeMatch) { located.push(null); continue; }
 
-    const spanEnd = closeIdx + closing.length;
-    located.push({ spanStart: openIdx, spanEnd });
+    const spanEnd = closeMatch.index + closeMatch.length;
+    located.push({ spanStart: openMatch.index, spanEnd });
     searchFrom = spanEnd;
   }
   return located;
 }
 
-/** Light whitespace/case-normalized retry — for OCR'd text where an exact
- * match can fail on stray whitespace differences. */
-function normalizedIndexOf(haystack, needle, fromIndex) {
-  const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ');
-  const normHaystack = normalize(haystack);
-  const normNeedle = normalize(needle);
-  const idx = normHaystack.indexOf(normNeedle, fromIndex);
-  return idx; // approximate offset into the normalized string; acceptable since
-              // normalization only collapses whitespace, never removes chars.
+/** Locates `needle` in `haystack` at/after fromIndex — exact substring match
+ * first (returned length === needle.length), else grounding.js's own
+ * whitespace/case/quote-glyph-tolerant regex retry, matched directly against
+ * the ORIGINAL (un-normalized) text so the returned index is always exact.
+ * The returned `length` is the ACTUAL matched text's length, which can differ
+ * from needle.length whenever the source's whitespace run differs from the
+ * LLM's quoted one (e.g. a "\n\n" paragraph break vs a single space) —
+ * using needle.length for spanEnd in that case would silently shift the
+ * clause boundary, the same bug class grounding.js's buildTolerantRegex was
+ * built to avoid for quote verification; this reuses that exact fix rather
+ * than a second, separately-normalized-copy implementation. */
+function findMatch(haystack, needle, fromIndex) {
+  const text = String(needle || '').trim();
+  if (!text) return null;
+  const exactIdx = haystack.indexOf(text, fromIndex);
+  if (exactIdx !== -1) return { index: exactIdx, length: text.length };
+  const { buildTolerantRegex } = require('./grounding');
+  let regex;
+  try { regex = buildTolerantRegex(text); } catch (_) { return null; }
+  const searchSpace = haystack.slice(fromIndex);
+  const m = regex.exec(searchSpace);
+  if (!m || !m[0]) return null;
+  return { index: fromIndex + m.index, length: m[0].length };
 }
 
 /** Builds clauses from located boundaries, falling back to paragraph

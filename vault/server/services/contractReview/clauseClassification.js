@@ -19,14 +19,27 @@ const TAXONOMY_VERSION = 'v1';
 // cross-reference TO another clause — recorded, never resolved/assessed.
 const CROSS_REF_RE = /\b(Section|Clause|Article)\s+([0-9]+(?:\.[0-9]+)?(?:\([a-z0-9ivx]+\))*|[IVXLC]+)\b/gi;
 
+// Own labels come in two shapes depending on which HEADING_PATTERNS entry
+// produced them (segmentation.js): "Section 4"/"Article IV" (keyword +
+// number) or bare "4.1"/"1." (no keyword). Detected cross-references always
+// have the keyword prefix. Comparing the NUMBER portion only, exact (not
+// substring), avoids both a false negative on the keyword mismatch and the
+// false positive a substring check produces — "Section 14.1".includes("4.1")
+// is true, which wrongly dropped a genuine reference to a different clause.
+function stripKeywordPrefix(label) {
+  return String(label || '').trim().replace(/^(Section|Clause|Article)\s+/i, '').replace(/\.$/, '');
+}
+
 function detectCrossReferences(clauseText, ownNumberLabel) {
   const refs = [];
   const seen = new Set();
   let m;
   const re = new RegExp(CROSS_REF_RE);
+  const ownNumber = ownNumberLabel ? stripKeywordPrefix(ownNumberLabel) : null;
   while ((m = re.exec(clauseText))) {
     const label = m[0].trim();
-    if (ownNumberLabel && label.includes(ownNumberLabel)) continue; // don't flag a clause referencing its own label
+    const number = (m[2] || '').trim();
+    if (ownNumber && number.toUpperCase() === ownNumber.toUpperCase()) continue; // don't flag a clause referencing its own label
     if (seen.has(label)) continue;
     seen.add(label);
     refs.push({ label, note: 'referenced, not assessed' });

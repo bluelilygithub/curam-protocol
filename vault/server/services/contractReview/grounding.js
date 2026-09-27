@@ -84,4 +84,4 @@ function verifyQuote(haystack, quotedText, { withinSpan = null } = {}) {
   return { spanStart: null, spanEnd: null, verificationStatus: 'failed' };
 }
 
-module.exports = { verifyQuote, normalize };
+module.exports = { verifyQuote, normalize, buildTolerantRegex };

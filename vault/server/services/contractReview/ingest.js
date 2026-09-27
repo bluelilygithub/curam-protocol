@@ -22,6 +22,28 @@ const { recognize } = require('./ocrScheduler');
 const MAX_PAGES = 300;
 const MAX_CHARS = 2_000_000;
 
+// Common English function words — cheap, dependency-free signal for "is this
+// even English", not a real language identifier. Every downstream stage
+// (type detection, playbook risk scoring, obligations, summary) is an
+// English-oriented prompt, so a non-English contract must stop cleanly here
+// (spec stage 1: "non-English... documents stop cleanly with
+// status=not_supported") rather than silently produce misleading output.
+const ENGLISH_STOPWORDS = new Set([
+  'the', 'and', 'of', 'to', 'in', 'is', 'that', 'for', 'on', 'with', 'as',
+  'by', 'this', 'shall', 'be', 'or', 'are', 'not', 'it', 'from', 'at',
+  'which', 'has', 'have', 'will', 'any', 'all', 'such', 'other', 'under',
+  'their', 'been', 'was', 'were', 'if', 'than', 'party', 'parties', 'may',
+]);
+const ENGLISH_STOPWORD_RATIO_MIN = 0.12;
+
+function looksEnglish(text) {
+  const sample = text.slice(0, 5000);
+  const words = sample.toLowerCase().match(/[a-z']+/g) || [];
+  if (words.length < 20) return true; // too little sampled text to judge — MAX_CHARS/OCR-empty handles that failure mode elsewhere
+  const hits = words.filter((w) => ENGLISH_STOPWORDS.has(w)).length;
+  return hits / words.length > ENGLISH_STOPWORD_RATIO_MIN;
+}
+
 async function extractPdfOrDocx(buffer, doc, reviewId) {
   const format = detectSourceFormat(doc.filename, doc.mimeType);
 
@@ -160,13 +182,18 @@ async function ingestDocument(documentId) {
       return { reviewId, outcome: 'not_supported' };
     }
 
+    if (!looksEnglish(extractedText)) {
+      await markReviewNotSupported(reviewId, 'Document does not appear to be in English, which this feature does not yet support');
+      return { reviewId, outcome: 'not_supported' };
+    }
+
     const ocrConfidences = Object.values(ocrPages).map((p) => p.confidence).filter((c) => typeof c === 'number');
     const ocrUsed = ocrConfidences.length > 0;
     const ocrConfidence = ocrUsed ? ocrConfidences.reduce((a, b) => a + b, 0) / ocrConfidences.length : null;
 
     await pool.query(
-      `UPDATE contract_documents SET "extractedText"=$1, "pageMap"=$2, "ocrUsed"=$3, "ocrConfidence"=$4 WHERE id=$5`,
-      [extractedText, JSON.stringify(pageMap), ocrUsed, ocrConfidence, documentId]
+      `UPDATE contract_documents SET "extractedText"=$1, "pageMap"=$2, "ocrUsed"=$3, "ocrConfidence"=$4, language=$5 WHERE id=$6`,
+      [extractedText, JSON.stringify(pageMap), ocrUsed, ocrConfidence, 'en', documentId]
     );
     await pool.query(
       `UPDATE contract_reviews SET status='segmenting', "stageProgress"='{"stage":"segmentation"}' WHERE id=$1`,
@@ -197,4 +224,5 @@ async function markReviewNotSupported(reviewId, errorMessage) {
 module.exports = {
   ingestDocument,
   buildExtractedTextAndPageMap,
+  looksEnglish,
 };

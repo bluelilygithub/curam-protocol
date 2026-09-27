@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../../db');
+const { rejectIfDisguisedExecutable } = require('../../utils/attachments');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../../uploads');
 
@@ -216,6 +217,12 @@ async function addDocument(userId, contractId, { file, kind = 'base', parentDocu
   const safeName = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
   const storedPath = path.join(dir, `${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`);
   fs.writeFileSync(storedPath, file.buffer);
+  // Same magic-byte disguised-executable check server/utils/attachments.js
+  // runs for touchpoint/task uploads — this route's own multer only filters
+  // on extension/mimetype (both spoofable), so this was never actually
+  // applied to contract uploads despite the spec's "reuses this rather than
+  // a third copy of the same logic" intent. Unlinks and throws on a hit.
+  await rejectIfDisguisedExecutable(storedPath);
 
   let version = 1;
   if (parentDocumentId) {
@@ -421,7 +428,13 @@ async function getReview(userId, reviewId) {
     pool.query(`SELECT * FROM contract_definitions WHERE "reviewId"=$1`, [reviewId]),
     pool.query(`SELECT * FROM contract_obligations WHERE "reviewId"=$1`, [reviewId]),
   ]);
-  return { ...row, clauses, definitions, obligations };
+  const byLineage = await loadLineageCorrections(row.contractId);
+  return {
+    ...row,
+    clauses: clauses.map((c) => applyClauseCorrections(c, byLineage)),
+    definitions,
+    obligations: obligations.map((o) => applyObligationCorrections(o, byLineage)),
+  };
 }
 
 async function listReviews(userId, documentId) {
@@ -449,12 +462,7 @@ async function promoteReviewToContract(userId, reviewId) {
   if (!row) throw new ContractAccessError(`Review ${reviewId} not found`);
   await assertContractAccess(userId, row.contractId);
 
-  const { rows: corrections } = await pool.query(
-    `SELECT field, "userValue" FROM contract_corrections
-     WHERE "contractId"=$1 AND "clauseId" IS NULL AND "obligationId" IS NULL AND "partyId" IS NULL AND "definitionId" IS NULL`,
-    [row.contractId]
-  );
-  const correctionByField = new Map(corrections.map((c) => [c.field, c.userValue]));
+  const correctionByField = await loadContractLevelCorrections(row.contractId);
   const isBase = row.kind === 'base';
   const keyTerms = row.extractedKeyTerms || {};
 
@@ -537,6 +545,89 @@ async function setContractStatus(userId, contractId, status) {
 
 // ── Corrections ──────────────────────────────────────────────────────────────
 
+/** Contract-level corrections only (no clause/obligation/party/definition
+ * target) keyed by field — latest correction per field wins (ASC order +
+ * Map overwrite). Used both by promoteReviewToContract (contract-level
+ * fields like effectiveDate) and by the pipeline's playbook contractType
+ * selection (spec stage 7: "a contract_corrections row... if one exists —
+ * the user's own correction always wins"). */
+async function loadContractLevelCorrections(contractId) {
+  const { rows } = await pool.query(
+    `SELECT field, "userValue" FROM contract_corrections
+     WHERE "contractId"=$1 AND "clauseId" IS NULL AND "obligationId" IS NULL AND "partyId" IS NULL AND "definitionId" IS NULL
+     ORDER BY "createdAt" ASC`,
+    [contractId]
+  );
+  const byField = new Map();
+  for (const c of rows) byField.set(c.field, c.userValue); // ASC + overwrite => latest correction per field wins
+  return byField;
+}
+
+/** Clause/obligation corrections (lineageId IS NOT NULL) for a contract,
+ * grouped by lineageId then field — latest per field wins, same ASC+overwrite
+ * pattern as loadContractLevelCorrections. Read side of the Round 4
+ * corrections redesign: recordCorrection was write-only until this was added
+ * (getReview/listObligations never applied a recorded correction to
+ * anything). */
+async function loadLineageCorrections(contractId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM contract_corrections WHERE "contractId"=$1 AND "lineageId" IS NOT NULL ORDER BY "createdAt" ASC`,
+    [contractId]
+  );
+  const byLineage = new Map();
+  for (const c of rows) {
+    if (!byLineage.has(c.lineageId)) byLineage.set(c.lineageId, new Map());
+    byLineage.get(c.lineageId).set(c.field, c); // ASC + overwrite => latest correction per field wins
+  }
+  return byLineage;
+}
+
+const CLAUSE_CORRECTABLE_FIELDS = new Set(['riskLevel', 'whyItMatters', 'suggestedRedline']);
+const OBLIGATION_CORRECTABLE_FIELDS = new Set(['verificationStatus', 'description']);
+
+/** The exact text recordCorrection snapshots for an obligation
+ * (matchedTextSnapshot) — kept as one function so the carry-forward
+ * comparison here can never drift from what gets stored at correction time. */
+function obligationMatchText(o) {
+  return o.quotedText ? `${o.description} | ${o.quotedText}` : o.description;
+}
+
+/** Applies any corrections targeting this clause's lineage, per the spec's
+ * carry-forward rule: only applied if the clause's CURRENT text still equals
+ * the correction's matchedTextSnapshot; otherwise the clause is flagged
+ * correctedOnEarlierVersion so the UI can show "corrected on an earlier
+ * version" instead of silently applying or silently dropping the correction. */
+function applyClauseCorrections(clause, byLineage) {
+  const corrections = byLineage.get(clause.lineageId);
+  if (!corrections) return clause;
+  const out = { ...clause };
+  for (const [field, c] of corrections) {
+    if (!CLAUSE_CORRECTABLE_FIELDS.has(field)) continue;
+    if (c.matchedTextSnapshot !== clause.text) { out.correctedOnEarlierVersion = true; continue; }
+    out[field] = c.userValue;
+    out.corrected = true;
+  }
+  return out;
+}
+
+/** Same carry-forward rule as applyClauseCorrections, matched against
+ * obligationMatchText instead of clause.text. A confirming correction
+ * (field='verificationStatus') is what lets an obligation the pipeline
+ * couldn't verify still be actioned — see linkObligationToTask/exportIcs. */
+function applyObligationCorrections(ob, byLineage) {
+  const corrections = byLineage.get(ob.lineageId);
+  if (!corrections) return ob;
+  const out = { ...ob };
+  const currentMatchText = obligationMatchText(ob);
+  for (const [field, c] of corrections) {
+    if (!OBLIGATION_CORRECTABLE_FIELDS.has(field)) continue;
+    if (c.matchedTextSnapshot !== currentMatchText) { out.correctedOnEarlierVersion = true; continue; }
+    out[field] = c.userValue;
+    out.corrected = true;
+  }
+  return out;
+}
+
 /** contractId always required — the (contractId, lineageId) lookup key a
  * later review's carry-forward check uses, per the spec's Round 4 redesign.
  * At most one of clauseId/obligationId/partyId/definitionId (provenance only). */
@@ -591,8 +682,17 @@ async function listObligations(userId, { contractId = null, upcoming = false, ob
     params
   );
 
+  // Corrections applied per-contract (a lineageId is only unique within its
+  // own contract) — batched so a cross-contract listing (no contractId
+  // filter) doesn't re-query the same contract's corrections per row.
+  const correctionsByContract = new Map();
+  for (const cid of new Set(rows.map((o) => o.contractId))) {
+    correctionsByContract.set(cid, await loadLineageCorrections(cid));
+  }
+  const corrected = rows.map((o) => applyObligationCorrections(o, correctionsByContract.get(o.contractId)));
+
   const now = new Date();
-  const withStatus = rows.map((o) => {
+  const withStatus = corrected.map((o) => {
     let derivedStatus;
     if (o.verificationStatus === 'failed') derivedStatus = 'unverified';
     else if (o.absoluteDate) derivedStatus = new Date(o.absoluteDate) < now ? 'overdue' : 'upcoming';
@@ -617,13 +717,25 @@ async function setObligationState(userId, obligationId, state) {
 }
 
 /** Same one-directional bridge as the CRM touchpoint -> Task pattern —
- * tasks never point back. */
+ * tasks never point back. Blocks on an unverified obligation the same way
+ * exportIcs does (spec: "Both Add to Tasks and ICS export exclude any
+ * obligation with verificationStatus='failed' until the user confirms it via
+ * a correction") — checked against the EFFECTIVE (post-correction) status so
+ * a confirming correction still unblocks it. */
 async function linkObligationToTask(userId, obligationId, taskId) {
   const { rows: [ob] } = await pool.query(
-    `SELECT o."contractId", o."lineageId" FROM contract_obligations o JOIN contracts c ON c.id = o."contractId" WHERE o.id=$1 AND c."userId"=$2`,
+    `SELECT o."contractId", o."lineageId", o.description, o."quotedText", o."verificationStatus"
+     FROM contract_obligations o JOIN contracts c ON c.id = o."contractId" WHERE o.id=$1 AND c."userId"=$2`,
     [obligationId, userId]
   );
   if (!ob) throw new ContractAccessError(`Obligation ${obligationId} not found for this user`);
+  const byLineage = await loadLineageCorrections(ob.contractId);
+  const effective = applyObligationCorrections(ob, byLineage);
+  if (effective.verificationStatus === 'failed') {
+    const err = new Error('This obligation could not be verified against the source text — confirm it via a correction before linking it to a Task');
+    err.statusCode = 400;
+    throw err;
+  }
   await pool.query(
     `INSERT INTO contract_obligation_tracking ("contractId", "lineageId", "linkedTaskId") VALUES ($1,$2,$3)
      ON CONFLICT ("contractId", "lineageId") DO UPDATE SET "linkedTaskId"=EXCLUDED."linkedTaskId", "updatedAt"=NOW()`,
@@ -711,6 +823,7 @@ module.exports = {
   markDocumentExecuted,
   setContractStatus,
   recordCorrection,
+  loadContractLevelCorrections,
   listObligations,
   setObligationState,
   linkObligationToTask,
