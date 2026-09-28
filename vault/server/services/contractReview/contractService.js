@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../../db');
-const { rejectIfDisguisedExecutable } = require('../../utils/attachments');
+const { rejectIfDisguisedExecutable, PER_USER_QUOTA_BYTES } = require('../../utils/attachments');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../../uploads');
 
@@ -34,7 +34,7 @@ class ContractAccessError extends Error {
  * function in this service calls this first. */
 async function assertContractAccess(userId, contractId) {
   const { rows } = await pool.query(
-    `SELECT id, "legalHold" FROM contracts WHERE id=$1 AND "userId"=$2`,
+    `SELECT id, "legalHold" FROM contracts WHERE id=$1 AND "userId"=$2 AND "deletedAt" IS NULL`,
     [contractId, userId]
   );
   if (!rows[0]) throw new ContractAccessError(`Contract ${contractId} not found for this user`);
@@ -48,7 +48,7 @@ async function assertDocumentAccess(userId, documentId) {
     `SELECT d.id AS "documentId", d."contractId", c."legalHold"
      FROM contract_documents d
      JOIN contracts c ON c.id = d."contractId"
-     WHERE d.id=$1 AND c."userId"=$2`,
+     WHERE d.id=$1 AND c."userId"=$2 AND c."deletedAt" IS NULL`,
     [documentId, userId]
   );
   if (!rows[0]) throw new ContractAccessError(`Document ${documentId} not found for this user`);
@@ -101,7 +101,7 @@ async function getContract(userId, contractId) {
 }
 
 async function listContracts(userId, { status, search, crmClientId } = {}) {
-  const clauses = [`"userId"=$1`];
+  const clauses = [`"userId"=$1`, `"deletedAt" IS NULL`];
   const params = [userId];
   if (status) { params.push(status); clauses.push(`status=$${params.length}`); }
   if (search) { params.push(`%${search}%`); clauses.push(`title ILIKE $${params.length}`); }
@@ -184,9 +184,13 @@ async function linkPartyToClient(userId, contractId, partyId, clientId) {
 }
 
 /** Unlinks any Tasks linked (via contract_obligation_tracking) to obligations
- * under this contract, appending a note to each task first, then deletes the
- * contract. Everything else cascades at the DB level (contract_obligation_tracking
- * and contract_corrections both have contractId ON DELETE CASCADE). */
+ * under this contract, appending a note to each task first, then soft-deletes
+ * the contract (sets deletedAt). A hard DELETE here would cascade away
+ * contract_events too (its contractId FK is ON DELETE CASCADE) — destroying
+ * the contract's own audit trail along with the data it audits, with no
+ * restore path. deletedAt hides it from listContracts/assertContractAccess,
+ * same pattern as sessions."deletedAt" elsewhere in this codebase, while
+ * preserving history. */
 async function deleteContract(userId, contractId) {
   const { legalHold } = await assertContractAccess(userId, contractId);
   if (legalHold) throw new Error('Contract is on legal hold and cannot be deleted');
@@ -195,7 +199,8 @@ async function deleteContract(userId, contractId) {
   try {
     await client.query('BEGIN');
     await unlinkTasksForContract(client, contractId, 'the contract it was linked to was deleted');
-    await client.query(`DELETE FROM contracts WHERE id=$1`, [contractId]);
+    await client.query(`UPDATE contracts SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1`, [contractId]);
+    await writeEvent(client, { contractId, type: 'contract_deleted', actorUserId: userId });
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -265,8 +270,32 @@ async function confirmParty(userId, contractId, partyId) {
 
 /** file: { buffer, filename, mimeType }. No text extraction in Stage 1 —
  * extractedText stays null; that's Stage 2. */
+/** Contract documents live in their own storedPath-on-disk pool, never in
+ * the shared `attachments` table, so they never picked up the per-user
+ * ATTACHMENT_QUOTA_MB cap touchpoint/task uploads already enforce — a user
+ * could upload unlimited 50MB contract PDFs/DOCXs (multer's fileSize limit
+ * is per-file only). Sums this pool's own on-disk sizes against the same
+ * quota env var/policy rather than the shared table, since this is a
+ * separate storage pool from it. */
+async function assertContractDocsWithinQuota(userId, incomingBytes) {
+  const { rows } = await pool.query(
+    `SELECT d."storedPath" FROM contract_documents d JOIN contracts c ON c.id = d."contractId" WHERE c."userId"=$1`,
+    [userId]
+  );
+  let total = 0;
+  for (const { storedPath } of rows) {
+    try { total += fs.statSync(storedPath).size; } catch (_) { /* file missing on disk — ignore */ }
+  }
+  if (total + incomingBytes > PER_USER_QUOTA_BYTES) {
+    const err = new Error(`Contract document storage limit reached (${PER_USER_QUOTA_BYTES / (1024 * 1024)}MB per user)`);
+    err.statusCode = 413;
+    throw err;
+  }
+}
+
 async function addDocument(userId, contractId, { file, kind = 'base', parentDocumentId = null }) {
   await assertContractAccess(userId, contractId);
+  await assertContractDocsWithinQuota(userId, file.buffer.length);
   const contentHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
 
   const dir = path.join(UPLOAD_DIR, 'contracts', String(contractId));
@@ -410,49 +439,71 @@ async function deleteDocument(userId, documentId) {
  * When omitted, behaves exactly as before: pauses at
  * awaiting_role_confirmation unless a party is already confirmed on the
  * contract, then uses that confirmed party. */
+/** Fire-and-forget from createQueuedReview onward — ingest (OCR-heavy for
+ * scanned PDFs) through analysis can legitimately take minutes, the same
+ * class of infra-level request timeout resumeReview was already fixed for
+ * (see that function's own comment) but this upload/first-review path never
+ * was. Returns as soon as the review row exists; the client polls
+ * GET /reviews/:id for real progress/outcome, same as resumeReview. */
 async function startReview(userId, documentId, { asPartyId = null } = {}) {
   const { contractId } = await assertDocumentAccess(userId, documentId);
   if (asPartyId) {
     const { rows: [party] } = await pool.query(`SELECT id FROM contract_parties WHERE id=$1 AND "contractId"=$2`, [asPartyId, contractId]);
     if (!party) throw new ContractAccessError(`Party ${asPartyId} not found on this contract`);
   }
-  const { ingestDocument } = require('./ingest');
+  const { createQueuedReview, runIngestBody } = require('./ingest');
   const { segmentDocument } = require('./segmentation');
   const { runAnalysis } = require('./analysisPipeline');
 
-  const ingestResult = await ingestDocument(documentId);
-  if (ingestResult.outcome !== 'complete') {
-    return { reviewId: ingestResult.reviewId, status: ingestResult.outcome };
-  }
-  try {
-    // segmentDocument has no status-management responsibility of its own
-    // (unlike ingestDocument and the analysisPipeline stages, which each
-    // mark their own review failed on error) — nothing previously caught a
-    // failure here, which could leave a review stuck at status='segmenting'
-    // forever. This is the one place that knows both the reviewId and that
-    // segmentation is what's running.
-    await segmentDocument(ingestResult.reviewId, ingestResult.extractedText, ingestResult.pageMap, { userId });
-  } catch (err) {
-    await pool.query(
-      `UPDATE contract_reviews SET status='failed', "errorMessage"=$1, "completedAt"=NOW() WHERE id=$2`,
-      [`Segmentation failed: ${err.message}`, ingestResult.reviewId]
-    );
-    throw err;
-  }
-  const analysisResult = await runAnalysis(ingestResult.reviewId, { userId, asPartyId });
+  const reviewId = await createQueuedReview(documentId);
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await writeEvent(client, { contractId, type: 'reviewed', actorUserId: userId, documentId, payload: { reviewId: ingestResult.reviewId, status: analysisResult.status } });
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-  } finally {
-    client.release();
-  }
+  (async () => {
+    let ingestResult;
+    try {
+      ingestResult = await runIngestBody(documentId, reviewId);
+    } catch (err) {
+      console.error(`[contract-review] ingest failed for review ${reviewId}:`, err.message);
+      return;
+    }
+    if (ingestResult.outcome !== 'complete') return;
 
-  return { reviewId: ingestResult.reviewId, status: analysisResult.status };
+    try {
+      // segmentDocument has no status-management responsibility of its own
+      // (unlike ingestDocument and the analysisPipeline stages, which each
+      // mark their own review failed on error) — this is the one place that
+      // knows both the reviewId and that segmentation is what's running.
+      await segmentDocument(reviewId, ingestResult.extractedText, ingestResult.pageMap, { userId });
+    } catch (err) {
+      await pool.query(
+        `UPDATE contract_reviews SET status='failed', "errorMessage"=$1, "completedAt"=NOW() WHERE id=$2`,
+        [`Segmentation failed: ${err.message}`, reviewId]
+      );
+      return;
+    }
+
+    let analysisResult;
+    try {
+      analysisResult = await runAnalysis(reviewId, { userId, asPartyId });
+    } catch (err) {
+      console.error(`[contract-review] analysis failed for review ${reviewId}:`, err.message);
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await writeEvent(client, { contractId, type: 'reviewed', actorUserId: userId, documentId, payload: { reviewId, status: analysisResult.status } });
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+  })().catch((err) => {
+    console.error(`[contract-review] background review pipeline crashed for review ${reviewId}:`, err.message);
+  });
+
+  return { reviewId, status: 'extracting' };
 }
 
 /** Resumes a review paused at awaiting_role_confirmation — called after
@@ -497,10 +548,11 @@ async function getReview(userId, reviewId) {
     pool.query(`SELECT * FROM contract_obligations WHERE "reviewId"=$1`, [reviewId]),
   ]);
   const byLineage = await loadLineageCorrections(row.contractId);
+  const byDefinition = await loadDefinitionCorrections(row.contractId);
   return {
     ...row,
     clauses: clauses.map((c) => applyClauseCorrections(c, byLineage)),
-    definitions,
+    definitions: definitions.map((d) => applyDefinitionCorrections(d, byDefinition)),
     obligations: obligations.map((o) => applyObligationCorrections(o, byLineage)),
   };
 }
@@ -522,15 +574,15 @@ const PROMOTABLE_FIELDS = ['effectiveDate', 'termLengthMonths', 'governingLawCou
  * overwriting a real base-contract value with an amendment's mostly-empty
  * key terms. Contract-level corrections win over whatever the review
  * detected. */
-async function promoteReviewToContract(userId, reviewId) {
-  const { rows: [row] } = await pool.query(
+async function promoteReviewToContract(userId, reviewId, execClient = pool) {
+  const { rows: [row] } = await execClient.query(
     `SELECT r.*, d.kind, d."contractId" FROM contract_reviews r JOIN contract_documents d ON d.id = r."documentId" WHERE r.id=$1`,
     [reviewId]
   );
   if (!row) throw new ContractAccessError(`Review ${reviewId} not found`);
   await assertContractAccess(userId, row.contractId);
 
-  const correctionByField = await loadContractLevelCorrections(row.contractId);
+  const correctionByField = await loadContractLevelCorrections(row.contractId, execClient);
   const isBase = row.kind === 'base';
   const keyTerms = row.extractedKeyTerms || {};
 
@@ -540,14 +592,19 @@ async function promoteReviewToContract(userId, reviewId) {
 
   for (const field of PROMOTABLE_FIELDS) {
     const value = correctionByField.has(field) ? correctionByField.get(field) : keyTerms[field];
-    if (value == null && !isBase && !correctionByField.has(field)) continue; // amendment: never overwrite with null
+    // Never overwrite an existing contract value with null unless a user
+    // correction explicitly set it to null — previously this only guarded
+    // amendments, so a later BASE document (e.g. a reissued/restated
+    // contract) whose own extraction missed a field could silently wipe out
+    // a previously-known-good value on execute.
+    if (value == null && !correctionByField.has(field)) continue;
     if (value !== undefined) updates[field] = value;
   }
 
   if (!Object.keys(updates).length) return;
   const cols = Object.keys(updates);
   const setSql = cols.map((c, i) => `"${c}"=$${i + 2}`).join(', ');
-  await pool.query(`UPDATE contracts SET ${setSql}, "updatedAt"=NOW() WHERE id=$1`, [row.contractId, ...cols.map((c) => updates[c])]);
+  await execClient.query(`UPDATE contracts SET ${setSql}, "updatedAt"=NOW() WHERE id=$1`, [row.contractId, ...cols.map((c) => updates[c])]);
 }
 
 /** Sets a document's status='executed', supersedes any other document
@@ -576,6 +633,19 @@ async function markDocumentExecuted(userId, documentId, executedAt) {
       await client.query(`UPDATE contract_documents SET status='superseded' WHERE id = ANY($1) AND status='executed'`, [chainIds]);
     }
     await writeEvent(client, { contractId, type: 'executed', actorUserId: userId, documentId });
+
+    // Promotion + the contracts.status flip run in the SAME transaction as
+    // the document-status/supersession writes above — previously these two
+    // ran as separate un-transacted pool.query() calls after COMMIT, so a
+    // crash between them could leave a document marked executed with its
+    // review already promoted but contracts.status stuck at 'draft' forever.
+    const { rows: [currentReview] } = await client.query(
+      `SELECT id FROM contract_reviews WHERE "documentId"=$1 AND status='complete' ORDER BY "createdAt" DESC LIMIT 1`,
+      [documentId]
+    );
+    if (currentReview) await promoteReviewToContract(userId, currentReview.id, client);
+    await client.query(`UPDATE contracts SET status='executed', "updatedAt"=NOW() WHERE id=$1 AND status='draft'`, [contractId]);
+
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -583,13 +653,6 @@ async function markDocumentExecuted(userId, documentId, executedAt) {
   } finally {
     client.release();
   }
-
-  const { rows: [currentReview] } = await pool.query(
-    `SELECT id FROM contract_reviews WHERE "documentId"=$1 AND status='complete' ORDER BY "createdAt" DESC LIMIT 1`,
-    [documentId]
-  );
-  if (currentReview) await promoteReviewToContract(userId, currentReview.id);
-  await pool.query(`UPDATE contracts SET status='executed', "updatedAt"=NOW() WHERE id=$1 AND status='draft'`, [contractId]);
 }
 
 /** 'expired' | 'terminated' only — 'draft'/'executed' are only ever set by
@@ -619,8 +682,8 @@ async function setContractStatus(userId, contractId, status) {
  * fields like effectiveDate) and by the pipeline's playbook contractType
  * selection (spec stage 7: "a contract_corrections row... if one exists —
  * the user's own correction always wins"). */
-async function loadContractLevelCorrections(contractId) {
-  const { rows } = await pool.query(
+async function loadContractLevelCorrections(contractId, execClient = pool) {
+  const { rows } = await execClient.query(
     `SELECT field, "userValue" FROM contract_corrections
      WHERE "contractId"=$1 AND "clauseId" IS NULL AND "obligationId" IS NULL AND "partyId" IS NULL AND "definitionId" IS NULL
      ORDER BY "createdAt" ASC`,
@@ -664,6 +727,40 @@ function applyPartyCorrections(party, byParty) {
   const out = { ...party, originalName: party.name, originalRole: party.role };
   if (corrections.has('name')) out.name = corrections.get('name');
   if (corrections.has('role')) out.role = corrections.get('role');
+  return out;
+}
+
+const DEFINITION_CORRECTABLE_FIELDS = new Set(['term', 'definition']);
+
+/** Definition corrections keyed by definitionId then field — contract_definitions
+ * has no lineageId (each re-review's definitions are entirely new rows), so
+ * unlike clauses/obligations a definition correction applies only to the
+ * exact definition row it targeted, no carry-forward across re-reviews.
+ * Was write-only before this: recordCorrection stored these rows but nothing
+ * ever read them back — getReview returned definitions raw, so a definition
+ * correction silently never appeared anywhere. */
+async function loadDefinitionCorrections(contractId) {
+  const { rows } = await pool.query(
+    `SELECT "definitionId", field, "userValue" FROM contract_corrections
+     WHERE "contractId"=$1 AND "definitionId" IS NOT NULL ORDER BY "createdAt" ASC`,
+    [contractId]
+  );
+  const byDefinition = new Map();
+  for (const c of rows) {
+    if (!DEFINITION_CORRECTABLE_FIELDS.has(c.field)) continue;
+    if (!byDefinition.has(c.definitionId)) byDefinition.set(c.definitionId, new Map());
+    byDefinition.get(c.definitionId).set(c.field, c.userValue); // ASC + overwrite => latest wins
+  }
+  return byDefinition;
+}
+
+function applyDefinitionCorrections(definition, byDefinition) {
+  const corrections = byDefinition.get(definition.id);
+  if (!corrections) return definition;
+  const out = { ...definition, originalTerm: definition.term, originalDefinition: definition.definition };
+  if (corrections.has('term')) out.term = corrections.get('term');
+  if (corrections.has('definition')) out.definition = corrections.get('definition');
+  out.corrected = true;
   return out;
 }
 
@@ -740,14 +837,45 @@ async function recordCorrection(userId, { contractId, clauseId = null, obligatio
   const targetCount = [clauseId, obligationId, partyId, definitionId].filter((v) => v != null).length;
   if (targetCount > 1) throw new Error('At most one of clauseId/obligationId/partyId/definitionId may be set');
 
+  // Every target below is looked up scoped to the caller's OWN contractId —
+  // previously clauseId/obligationId were fetched by bare id with no
+  // cross-check against contractId, so a caller who owns contract A could
+  // supply a clauseId/obligationId from contract B and get contract B's
+  // lineageId/text written into a correction row filed under contract A
+  // (cross-contract data leak + corruption).
   let lineageId = null;
   let matchedTextSnapshot = null;
   if (clauseId) {
-    const { rows: [clause] } = await pool.query(`SELECT "lineageId", text FROM contract_clauses WHERE id=$1`, [clauseId]);
-    if (clause) { lineageId = clause.lineageId; matchedTextSnapshot = clause.text; }
+    const { rows: [clause] } = await pool.query(
+      `SELECT cl."lineageId", cl.text
+       FROM contract_clauses cl
+       JOIN contract_reviews r ON r.id = cl."reviewId"
+       JOIN contract_documents d ON d.id = r."documentId"
+       WHERE cl.id=$1 AND d."contractId"=$2`,
+      [clauseId, contractId]
+    );
+    if (!clause) throw new ContractAccessError(`Clause ${clauseId} not found on contract ${contractId}`);
+    lineageId = clause.lineageId; matchedTextSnapshot = clause.text;
   } else if (obligationId) {
-    const { rows: [ob] } = await pool.query(`SELECT "lineageId", description, "quotedText" FROM contract_obligations WHERE id=$1`, [obligationId]);
-    if (ob) { lineageId = ob.lineageId; matchedTextSnapshot = ob.quotedText ? `${ob.description} | ${ob.quotedText}` : ob.description; }
+    const { rows: [ob] } = await pool.query(
+      `SELECT "lineageId", description, "quotedText" FROM contract_obligations WHERE id=$1 AND "contractId"=$2`,
+      [obligationId, contractId]
+    );
+    if (!ob) throw new ContractAccessError(`Obligation ${obligationId} not found on contract ${contractId}`);
+    lineageId = ob.lineageId; matchedTextSnapshot = ob.quotedText ? `${ob.description} | ${ob.quotedText}` : ob.description;
+  } else if (partyId) {
+    const { rows: [p] } = await pool.query(`SELECT id FROM contract_parties WHERE id=$1 AND "contractId"=$2`, [partyId, contractId]);
+    if (!p) throw new ContractAccessError(`Party ${partyId} not found on contract ${contractId}`);
+  } else if (definitionId) {
+    const { rows: [def] } = await pool.query(
+      `SELECT def.id
+       FROM contract_definitions def
+       JOIN contract_reviews r ON r.id = def."reviewId"
+       JOIN contract_documents d ON d.id = r."documentId"
+       WHERE def.id=$1 AND d."contractId"=$2`,
+      [definitionId, contractId]
+    );
+    if (!def) throw new ContractAccessError(`Definition ${definitionId} not found on contract ${contractId}`);
   }
 
   const { rows } = await pool.query(
@@ -777,7 +905,7 @@ async function recordCorrection(userId, { contractId, clauseId = null, obligatio
  * show them visibly separated) but flagged derivedStatus='unverified'
  * instead of a time-based bucket. */
 async function listObligations(userId, { contractId = null, upcoming = false, obligorPartyId = null } = {}) {
-  const clauses = [`cnt."userId"=$1`, `d.status != 'superseded'`];
+  const clauses = [`cnt."userId"=$1`, `cnt."deletedAt" IS NULL`, `d.status != 'superseded'`];
   const params = [userId];
   if (contractId) { params.push(contractId); clauses.push(`o."contractId"=$${params.length}`); }
   if (obligorPartyId) { params.push(obligorPartyId); clauses.push(`o."obligorPartyId"=$${params.length}`); }
@@ -911,7 +1039,7 @@ async function searchClauses(userId, { query, includeAllDrafts = false } = {}) {
     JOIN contract_reviews r ON r.id = cl."reviewId"
     JOIN contract_documents d ON d.id = r."documentId"
     JOIN contracts cnt ON cnt.id = d."contractId"
-    WHERE cnt."userId"=$1 AND to_tsvector('english', cl.text) @@ plainto_tsquery('english', $2)`;
+    WHERE cnt."userId"=$1 AND cnt."deletedAt" IS NULL AND to_tsvector('english', cl.text) @@ plainto_tsquery('english', $2)`;
   if (!includeAllDrafts) {
     sql += ` AND r.id = (SELECT id FROM contract_reviews r2 WHERE r2."documentId" = d.id AND r2.status = 'complete' ORDER BY r2."createdAt" DESC LIMIT 1)`;
   }

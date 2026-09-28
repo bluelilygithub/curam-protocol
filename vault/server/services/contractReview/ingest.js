@@ -92,19 +92,12 @@ function buildExtractedTextAndPageMap(paragraphsByPage, pageLabels, ocrPages) {
   return { extractedText: chunks.join('\n\n'), pageMap };
 }
 
-/**
- * Runs pipeline stage 1 (ingest) for a document: extraction + OCR fallback.
- * Creates/updates the contract_reviews row itself (status/stageProgress are
- * real, not stubbed) so Stage 3+ can build on a genuine review lifecycle.
- * @returns {Promise<{reviewId: number, outcome: 'complete'|'not_supported', extractedText?: string, pageMap?: object}>}
- */
-async function ingestDocument(documentId) {
-  const { rows: [doc] } = await pool.query(
-    `SELECT id, "contractId", "mimeType", "storedPath", filename FROM contract_documents WHERE id=$1`,
-    [documentId]
-  );
-  if (!doc) throw new Error(`Document ${documentId} not found`);
-
+/** Just the row creation — fast, single INSERT — split out from the rest of
+ * ingest so a caller (ContractService.startReview) can hand a reviewId back
+ * to the HTTP response immediately and run the slow extraction/OCR work
+ * (runIngestBody below) in the background, the same way stages 5-11 and
+ * resumeReview already do. */
+async function createQueuedReview(documentId) {
   const { rows: [review] } = await pool.query(
     `INSERT INTO contract_reviews
        ("documentId", "modelId", "promptVersion", "taxonomyVersion", "contractTypeEnumVersion", status, "stageProgress")
@@ -112,7 +105,23 @@ async function ingestDocument(documentId) {
      RETURNING id`,
     [documentId]
   );
-  const reviewId = review.id;
+  return review.id;
+}
+
+/**
+ * Runs pipeline stage 1 (ingest) for a document: extraction + OCR fallback,
+ * against an already-created review row (see createQueuedReview above).
+ * @returns {Promise<{reviewId: number, outcome: 'complete'|'not_supported', extractedText?: string, pageMap?: object}>}
+ */
+async function runIngestBody(documentId, reviewId) {
+  const { rows: [doc] } = await pool.query(
+    `SELECT id, "contractId", "mimeType", "storedPath", filename FROM contract_documents WHERE id=$1`,
+    [documentId]
+  );
+  if (!doc) {
+    await markReviewFailed(reviewId, `Document ${documentId} not found`);
+    throw new Error(`Document ${documentId} not found`);
+  }
 
   let buffer;
   try {
@@ -207,6 +216,15 @@ async function ingestDocument(documentId) {
   }
 }
 
+/** Original single-call API — creates the review row and runs ingest against
+ * it synchronously. Kept as-is for every existing caller (milestone tests)
+ * that expects one call to do both; startReview uses createQueuedReview +
+ * runIngestBody directly instead so it can return before this finishes. */
+async function ingestDocument(documentId) {
+  const reviewId = await createQueuedReview(documentId);
+  return runIngestBody(documentId, reviewId);
+}
+
 async function markReviewFailed(reviewId, errorMessage) {
   await pool.query(
     `UPDATE contract_reviews SET status='failed', "errorMessage"=$1, "completedAt"=NOW() WHERE id=$2`,
@@ -223,6 +241,8 @@ async function markReviewNotSupported(reviewId, errorMessage) {
 
 module.exports = {
   ingestDocument,
+  createQueuedReview,
+  runIngestBody,
   buildExtractedTextAndPageMap,
   looksEnglish,
 };

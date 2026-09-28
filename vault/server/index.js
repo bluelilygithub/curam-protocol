@@ -267,7 +267,7 @@ async function start() {
 
   // Contract Review enum sync — contracts.contractType / contract_parties.role's
   // CHECK constraint values (server/db.js) must exactly match
-  // server/services/contractReview/playbooks.js's keys. Fail boot loudly on
+  // server/services/contractReview/playbooks.js's keys. Surfaced loudly on
   // drift (docs/contract-review-spec.md, Round 4 item 7) rather than let a
   // missing/renamed playbook key silently ship.
   {
@@ -277,12 +277,33 @@ async function start() {
     const missing = CONTRACT_TYPE_KEYS.filter((t) => !contractTypes.includes(t));
     const extra = contractTypes.filter((t) => !CONTRACT_TYPE_KEYS.includes(t));
     if (missing.length || extra.length) {
-      console.error('[contract-review] contractType enum/playbook mismatch:',
+      const detail = [
         missing.length ? `DB has no playbook for: ${missing.join(', ')}` : '',
-        extra.length ? `playbooks.js has unknown type(s): ${extra.join(', ')}` : '');
-      process.exit(1);
+        extra.length ? `playbooks.js has unknown type(s): ${extra.join(', ')}` : '',
+      ].filter(Boolean).join(' | ');
+      console.error('[contract-review] contractType enum/playbook mismatch:', detail);
+      // This used to process.exit(1) — a Contract-Review-only drift between
+      // two JS-level lists (not a real DB/migration failure) taking down the
+      // ENTIRE Vault app on every feature, not just this one. Scoped to a
+      // Suggestions-inbox alert instead so it's visible to the admin without
+      // an app-wide outage; the affected contract type(s) will just fail
+      // risk scoring until fixed.
+      const { capture, makeFingerprint, getPrimaryAdminUserId } = require('./services/SuggestionService');
+      getPrimaryAdminUserId().then((adminId) => {
+        if (!adminId) return;
+        return capture({
+          userId: adminId,
+          source: 'contract-review-boot-check',
+          category: 'alert',
+          fingerprint: makeFingerprint('contract-review-boot-check', detail),
+          title: 'Contract Review contractType enum drift',
+          body: `contracts.contractType (server/db.js) and playbooks.js keys no longer match: ${detail}`,
+          context: 'server boot / contract-review enum sync check',
+        });
+      }).catch((err) => console.warn('[contract-review] boot-check suggestion capture failed:', err.message));
+    } else {
+      console.log('[contract-review] contractType enum matches playbooks.js keys');
     }
-    console.log('[contract-review] contractType enum matches playbooks.js keys');
   }
 
   const http = require('http');

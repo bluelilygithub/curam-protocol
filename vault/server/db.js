@@ -3068,11 +3068,13 @@ async function initSchema() {
       "contractValueCurrency" VARCHAR(3) NULL,
       "legalHold"             BOOLEAN NOT NULL DEFAULT FALSE,
       "crmClientId"           INTEGER NULL REFERENCES clients(id) ON DELETE SET NULL,
+      "deletedAt"             TIMESTAMPTZ NULL,
       "createdAt"             TIMESTAMPTZ DEFAULT NOW(),
       "updatedAt"             TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await pool.query(`ALTER TABLE contracts ADD COLUMN IF NOT EXISTS "crmClientId" INTEGER NULL REFERENCES clients(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE contracts ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ NULL`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contracts_user ON contracts ("userId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts (status)`);
 

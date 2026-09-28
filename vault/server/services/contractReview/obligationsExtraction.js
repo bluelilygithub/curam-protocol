@@ -105,7 +105,12 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
     const currency = typeof raw?.currency === 'string' && raw.currency.trim() ? raw.currency.trim().slice(0, 3).toUpperCase() : null;
 
     const quotedTextRaw = raw?.quotedText ? String(raw.quotedText).trim() : null;
-    let spanStart = null, spanEnd = null, verificationStatus = null;
+    // No quote at all is exactly as unverifiable as a quote that failed to
+    // match — every gate that excludes an unverified obligation (Add to
+    // Tasks, ICS export, listObligations' derivedStatus) checks
+    // verificationStatus === 'failed' literally, so leaving this null let a
+    // quote-less, never-verified obligation slip through every one of them.
+    let spanStart = null, spanEnd = null, verificationStatus = 'failed';
     if (quotedTextRaw) {
       ({ spanStart, spanEnd, verificationStatus } = verifyQuote(extractedText, quotedTextRaw));
     }

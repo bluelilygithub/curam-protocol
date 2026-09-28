@@ -15,8 +15,8 @@ function normalize(s) {
   return String(s || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
-    .replace(/[''`]/g, "'")
-    .replace(/[""]/g, '"')
+    .replace(/['‘’`]/g, "'")
+    .replace(/["“”]/g, '"')
     .trim();
 }
 
@@ -38,9 +38,14 @@ function escapeRegExp(s) {
  * real source via regex means match indices are always exact by
  * construction — nothing to approximate. */
 function buildTolerantRegex(text) {
+  // Both classes previously contained the same ASCII quote character on
+  // both sides (e.g. `['']` — no actual curly U+2018/2019/201C/201D ever
+  // appeared), so a straight-vs-curly quote mismatch between the source and
+  // the model's quotedText never actually got tolerated — confirmed via a
+  // direct codepoint dump of the source. Fixed to include the real glyphs.
   const escaped = escapeRegExp(text.trim())
-    .replace(/['']/g, "['']")
-    .replace(/[""]/g, '[""]')
+    .replace(/'/g, "['‘’]")
+    .replace(/"/g, '["“”]')
     .replace(/\s+/g, '\\s+');
   return new RegExp(escaped, 'i');
 }
