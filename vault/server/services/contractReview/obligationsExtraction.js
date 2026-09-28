@@ -8,12 +8,10 @@
 const crypto = require('crypto');
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
-const { callModel } = require('../callModel');
-const { parseModelJson } = require('../../utils/parseModelJson');
-const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
 const { normalizeName } = require('./partiesKeyTerms');
-const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { callModelForJson } = require('./callModelForJson');
 const { obligationsPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const ANCHOR_EVENTS = new Set(['effective_date', 'renewal_date', 'invoice_date', 'termination', 'custom']);
@@ -56,35 +54,24 @@ async function extractObligations(reviewId, { contractId, documentId, extractedT
   let rawObligations = [];
 
   if (resolved) {
-    try {
-      const prompt = obligationsPrompt(extractedText, parties.map((p) => p.name));
-      // 2000 was tight enough to truncate a real response mid-JSON on a
-      // document with several genuine obligations — each one is 11 JSON
-      // fields plus a verbatim quotedText sentence, and a real services
-      // agreement can easily have 6-8+ of them (payment terms, notice
-      // periods, reporting, termination, non-solicitation...). Same class
-      // of truncation bug already found and fixed in riskScoring.js, now
-      // visible instead of silently swallowed as an empty result.
-      const result = await callModel(resolved, prompt, { maxTokens: 4000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
-      const text = result.text;
-      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
-      const parsed = parseModelJson(text);
-      await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      // A parse failure (or a response with no "obligations" array at all)
-      // must never be silently treated the same as a genuine "this contract
-      // has no obligations" — that was indistinguishable before, and the
-      // real-world result was a document with several plain, unambiguous
-      // obligations (a payment-within-14-days clause, a 60-day non-renewal
-      // notice, etc.) showing an empty Obligations tab with no error at all.
-      if (!parsed || !Array.isArray(parsed.obligations)) {
-        throw new Error('Obligations extraction failed: model response was not valid JSON with an "obligations" array');
-      }
-      rawObligations = parsed.obligations;
-    } catch (err) {
-      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
-      await recordRawOutput({ reviewId, stage: 'extracting_obligations', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
-      throw err;
-    }
+    const prompt = obligationsPrompt(extractedText, parties.map((p) => p.name));
+    // Truncation (each obligation is 11 JSON fields plus a verbatim
+    // quotedText sentence, and a real services agreement can easily have
+    // 6-8+ of them) was independently hit at 2000, then 4000, as bigger
+    // documents kept needing more — callModelForJson now retries with
+    // doubled tokens on a shape failure instead of a fixed guess. A parse
+    // failure (or a response with no "obligations" array at all) must never
+    // be silently treated the same as "this contract has no obligations" —
+    // that was indistinguishable before, and the real-world result was a
+    // document with several plain, unambiguous obligations showing an empty
+    // Obligations tab with no error at all.
+    const parsed = await callModelForJson({
+      reviewId, modelId: resolved, prompt, maxTokens: 2000, timeoutMs: LLM_CALL_TIMEOUT_MS,
+      stage: 'extracting_obligations', promptVersion: PROMPT_VERSION, costTracker,
+      isValid: (p) => Array.isArray(p.obligations),
+      describeFailure: 'Obligations extraction',
+    });
+    rawObligations = parsed.obligations;
   }
 
   const priorObligations = await findPriorObligations(documentId);

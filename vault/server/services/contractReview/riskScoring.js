@@ -27,10 +27,8 @@
 
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
-const { callModel } = require('../callModel');
-const { parseModelJson } = require('../../utils/parseModelJson');
-const { recordRawOutput } = require('./rawOutputs');
-const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { callModelForJson } = require('./callModelForJson');
 const { getPlaybook, PLAYBOOK_VERSION, PLAYBOOK_HASH } = require('./playbooks');
 const { riskScoringPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
@@ -44,42 +42,28 @@ async function scoreOneClause(clause, { reviewId, positions, relevantDefinitions
   let suggestedRedline = null;
 
   if (resolved) {
-    let parsed;
-    try {
-      const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
-      // 500, then 1200, both still truncated a real response mid-JSON on a
-      // risky clause needing a genuine suggestedRedline (the column allows
-      // up to 4000 chars for that field alone) — especially on a smaller/
-      // faster model, surfacing as "model response was not valid JSON" once
-      // that stopped being silently swallowed as a bare 'unclear'. Matching
-      // clauseClassification.js's headroom now.
-      const result = await callModel(resolved, prompt, { maxTokens: 2500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
-      const text = result.text;
-      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
-      parsed = parseModelJson(text);
-      await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, prompt: prompt.slice(0, 500), text, parsed } });
-    } catch (err) {
-      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
-      await recordRawOutput({ reviewId, stage: 'scoring', modelId, promptVersion: PROMPT_VERSION, rawResponse: { clauseId: clause.id, error: err.message } });
-      throw err;
-    }
+    const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
+    // Truncation (maxTokens too small for a risky clause's genuine
+    // suggestedRedline — the column allows up to 4000 chars for that field
+    // alone) was independently hit at 500, then 1200, then 2500 as bigger
+    // documents kept needing more — callModelForJson now retries with
+    // doubled tokens on a shape failure instead of a fixed guess that's
+    // only ever right until the next bigger document.
+    const parsed = await callModelForJson({
+      reviewId, modelId: resolved, prompt, maxTokens: 1200, timeoutMs: LLM_CALL_TIMEOUT_MS,
+      stage: 'scoring', promptVersion: PROMPT_VERSION, costTracker,
+      isValid: (p) => p && typeof p === 'object' && RISK_LEVELS.has(p.riskLevel),
+      describeFailure: `Risk scoring for clause ${clause.id}`,
+    });
 
-    // A parse failure or a malformed response must never silently become
-    // riskLevel='unclear' — that's indistinguishable from the model
-    // genuinely weighing the clause and being unable to decide, which is a
-    // real, useful signal to a reviewer. An unparseable response is a
-    // pipeline error and must surface as one (review status='failed'),
-    // same policy as the exception path just above.
-    if (!parsed || typeof parsed !== 'object' || !RISK_LEVELS.has(parsed.riskLevel)) {
-      const reason = !parsed || typeof parsed !== 'object'
-        ? 'model response was not valid JSON'
-        : `model returned an invalid riskLevel: ${JSON.stringify(parsed.riskLevel)}`;
-      throw new Error(`Risk scoring failed for clause ${clause.id}: ${reason}`);
-    }
     // A genuine "unclear" verdict must always say what couldn't be
     // determined (e.g. "depends on the Schedule, which isn't included") —
     // enforced here, not left to the prompt alone, since only the prompt
-    // asking nicely doesn't guarantee the model complies every time.
+    // asking nicely doesn't guarantee the model complies every time. This
+    // is a SEMANTIC completeness check, not a shape/truncation one — more
+    // tokens can't fix a model that structurally succeeded but omitted the
+    // reason, so it's checked here (immediate throw), not inside
+    // callModelForJson's retry loop (which would just waste calls).
     const rawReason = parsed.whyItMatters ? String(parsed.whyItMatters).trim() : '';
     if (parsed.riskLevel === 'unclear' && !rawReason) {
       throw new Error(`Risk scoring failed for clause ${clause.id}: model rated 'unclear' with no reason given`);

@@ -7,10 +7,8 @@
 
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
-const { callModel } = require('../callModel');
-const { parseModelJson } = require('../../utils/parseModelJson');
-const { recordRawOutput } = require('./rawOutputs');
-const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { callModelForJson } = require('./callModelForJson');
 const { clauseClassificationPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 const TAXONOMY_VERSION = 'v1';
@@ -69,30 +67,21 @@ async function classifyClauses(reviewId, userId, costTracker) {
   let classifications = [];
 
   if (resolved) {
-    try {
-      const prompt = clauseClassificationPrompt(clauses, [...typeIdByKey.keys()]);
-      // 1500 was tight enough to truncate a real response on a document
-      // with 20+ real clauses (a services agreement with dotted subclauses
-      // under every bare section heading easily has this many) — same class
-      // of truncation bug already found and fixed in riskScoring.js and
-      // obligationsExtraction.js.
-      const result = await callModel(resolved, prompt, { maxTokens: 3000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
-      const text = result.text;
-      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
-      const parsed = parseModelJson(text);
-      await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      // A parse failure must never be silently treated as "no clause
-      // matched any type" — only a missing/malformed "classifications"
-      // array is a real pipeline error.
-      if (!parsed || !Array.isArray(parsed.classifications)) {
-        throw new Error('Clause classification failed: model response was not valid JSON with a "classifications" array');
-      }
-      classifications = parsed.classifications;
-    } catch (err) {
-      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
-      await recordRawOutput({ reviewId, stage: 'classifying', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
-      throw err;
-    }
+    const prompt = clauseClassificationPrompt(clauses, [...typeIdByKey.keys()]);
+    // Truncation (a document with 20+ real clauses — a services agreement
+    // with dotted subclauses under every bare section heading easily has
+    // this many) was independently hit at 1500, then 3000 — callModelForJson
+    // now retries with doubled tokens on a shape failure instead of a fixed
+    // guess. A parse failure must never be silently treated as "no clause
+    // matched any type" — only a missing/malformed "classifications" array
+    // is a real pipeline error.
+    const parsed = await callModelForJson({
+      reviewId, modelId: resolved, prompt, maxTokens: 1500, timeoutMs: LLM_CALL_TIMEOUT_MS,
+      stage: 'classifying', promptVersion: PROMPT_VERSION, costTracker,
+      isValid: (p) => Array.isArray(p.classifications),
+      describeFailure: 'Clause classification',
+    });
+    classifications = parsed.classifications;
   }
 
   const typeByClauseId = new Map(

@@ -6,11 +6,9 @@
 
 const { pool } = require('../../db');
 const { resolveContractReviewModel } = require('../contractReviewModelResolver');
-const { callModel } = require('../callModel');
-const { parseModelJson } = require('../../utils/parseModelJson');
-const { recordRawOutput } = require('./rawOutputs');
 const { verifyQuote } = require('./grounding');
-const { trackCost, LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { LLM_CALL_TIMEOUT_MS } = require('./costTracking');
+const { callModelForJson } = require('./callModelForJson');
 const { summaryPrompt, PROMPT_VERSION } = require('./prompts/v1');
 
 async function generateSummary(reviewId, extractedText, userId, costTracker) {
@@ -18,33 +16,24 @@ async function generateSummary(reviewId, extractedText, userId, costTracker) {
   const validClauseIds = new Set(clauses.map((c) => c.id));
 
   const { modelId: resolved } = await resolveContractReviewModel(userId);
-  const modelId = resolved || 'none';
   let rawPoints = [];
 
   if (resolved) {
-    try {
-      const prompt = summaryPrompt(extractedText, clauses);
-      // Raised proactively alongside clauseClassification.js's identical
-      // fix — each summary point needs a real verbatim quotedText sentence
-      // (for grounding) on top of the plain-English text and clauseIds, and
-      // 4-8 points of that shape can add up on a genuinely dense contract.
-      const result = await callModel(resolved, prompt, { maxTokens: 2500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
-      const text = result.text;
-      if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
-      const parsed = parseModelJson(text);
-      await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { prompt: prompt.slice(0, 500), text, parsed } });
-      // A parse failure must never be silently treated as "no summary
-      // points" — only a missing/malformed "summaryPoints" array is a real
-      // pipeline error.
-      if (!parsed || !Array.isArray(parsed.summaryPoints)) {
-        throw new Error('Summary generation failed: model response was not valid JSON with a "summaryPoints" array');
-      }
-      rawPoints = parsed.summaryPoints;
-    } catch (err) {
-      // Any failure aborts the whole review now — see definitionsExtraction.js's header comment for why.
-      await recordRawOutput({ reviewId, stage: 'summarizing', modelId, promptVersion: PROMPT_VERSION, rawResponse: { error: err.message } });
-      throw err;
-    }
+    const prompt = summaryPrompt(extractedText, clauses);
+    // Each summary point needs a real verbatim quotedText sentence (for
+    // grounding) on top of the plain-English text and clauseIds, and 4-8
+    // points of that shape can add up on a genuinely dense contract —
+    // callModelForJson retries with doubled tokens on a shape failure
+    // instead of a fixed guess. A parse failure must never be silently
+    // treated as "no summary points" — only a missing/malformed
+    // "summaryPoints" array is a real pipeline error.
+    const parsed = await callModelForJson({
+      reviewId, modelId: resolved, prompt, maxTokens: 1500, timeoutMs: LLM_CALL_TIMEOUT_MS,
+      stage: 'summarizing', promptVersion: PROMPT_VERSION, costTracker,
+      isValid: (p) => Array.isArray(p.summaryPoints),
+      describeFailure: 'Summary generation',
+    });
+    rawPoints = parsed.summaryPoints;
   }
 
   const summaryPoints = [];
