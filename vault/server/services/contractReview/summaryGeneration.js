@@ -24,7 +24,11 @@ async function generateSummary(reviewId, extractedText, userId, costTracker) {
   if (resolved) {
     try {
       const prompt = summaryPrompt(extractedText, clauses);
-      const result = await callModel(resolved, prompt, { maxTokens: 1500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
+      // Raised proactively alongside clauseClassification.js's identical
+      // fix — each summary point needs a real verbatim quotedText sentence
+      // (for grounding) on top of the plain-English text and clauseIds, and
+      // 4-8 points of that shape can add up on a genuinely dense contract.
+      const result = await callModel(resolved, prompt, { maxTokens: 2500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);

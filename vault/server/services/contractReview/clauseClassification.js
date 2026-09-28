@@ -71,7 +71,12 @@ async function classifyClauses(reviewId, userId, costTracker) {
   if (resolved) {
     try {
       const prompt = clauseClassificationPrompt(clauses, [...typeIdByKey.keys()]);
-      const result = await callModel(resolved, prompt, { maxTokens: 1500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
+      // 1500 was tight enough to truncate a real response on a document
+      // with 20+ real clauses (a services agreement with dotted subclauses
+      // under every bare section heading easily has this many) — same class
+      // of truncation bug already found and fixed in riskScoring.js and
+      // obligationsExtraction.js.
+      const result = await callModel(resolved, prompt, { maxTokens: 3000, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       const parsed = parseModelJson(text);
