@@ -6,10 +6,58 @@ import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
+import ConfirmModal from '../components/ConfirmModal';
 import { startContractReviewTour, TOUR_KEY as CR_TOUR_KEY } from '../utils/tours/contractReviewTour';
 
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+
+// Action styling tiers — "Run review", "Mark as executed", "Send to Tasks"
+// etc previously rendered as plain text links indistinguishable from quiet
+// metadata; a real UX review flagged that primary actions must read as
+// unmistakably clickable. Focus ring uses the theme's own primary colour
+// instead of the browser default (also flagged — the default outline read
+// as an accidental heavy black box around the active tab).
+const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--color-primary)]';
+const BTN_PRIMARY_SM = { background: 'var(--color-primary)', color: '#fff', border: '1px solid var(--color-primary)' };
+const BTN_SECONDARY_SM = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+const BTN_DESTRUCTIVE_SM = { background: 'transparent', borderColor: '#ef4444', color: '#ef4444' };
+
+function PrimaryButton({ children, className = '', style, large = false, ...props }) {
+  return (
+    <button
+      {...props}
+      className={`rounded-md font-semibold hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${large ? 'px-4 py-2 text-sm' : 'px-3 py-1.5 text-xs'} ${FOCUS_RING} ${className}`}
+      style={{ transition: 'opacity 200ms', ...BTN_PRIMARY_SM, ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, className = '', style, ...props }) {
+  return (
+    <button
+      {...props}
+      className={`rounded-md border px-3 py-1.5 text-xs font-medium hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${className}`}
+      style={{ transition: 'opacity 200ms', ...BTN_SECONDARY_SM, ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DestructiveButton({ children, className = '', style, ...props }) {
+  return (
+    <button
+      {...props}
+      className={`rounded-md border px-3 py-1.5 text-xs font-semibold hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${className}`}
+      style={{ transition: 'opacity 200ms', ...BTN_DESTRUCTIVE_SM, ...style }}
+    >
+      {children}
+    </button>
+  );
+}
 
 const RISK_BADGE = {
   risky: { text: 'Risky', bg: '#fee2e2', color: '#991b1b' },
@@ -28,6 +76,29 @@ const COVERAGE_BADGE = {
   not_found: { text: 'Not found', bg: '#fee2e2', color: '#991b1b' },
   could_not_assess: { text: 'Could not assess', bg: '#fef3c7', color: '#92400e' },
 };
+
+// Contract/document lifecycle status — previously a flat grey badge for
+// every value ("draft", "complete", "base · v1", ...) with no colour or
+// grouping to signal what each one actually means.
+const CONTRACT_STATUS_BADGE = {
+  draft: { text: 'Draft', bg: 'var(--color-bg)', color: 'var(--color-muted)' },
+  executed: { text: 'Executed', bg: '#dcfce7', color: '#166534' },
+  expired: { text: 'Expired', bg: '#fef3c7', color: '#92400e' },
+  terminated: { text: 'Terminated', bg: '#fee2e2', color: '#991b1b' },
+};
+const DOCUMENT_STATUS_BADGE = {
+  draft: { text: 'Draft', bg: 'var(--color-bg)', color: 'var(--color-muted)' },
+  executed: { text: 'Executed', bg: '#dcfce7', color: '#166534' },
+  superseded: { text: 'Superseded', bg: 'var(--color-bg)', color: 'var(--color-muted)' },
+};
+
+// "other" is a real enum value but reads as a non-answer in the UI —
+// contractTypeRaw (the model's own free-text guess before it was mapped
+// onto the fixed enum) is a clearer thing to show when available.
+function contractTypeLabel(c) {
+  if (c?.contractType && c.contractType !== 'other') return c.contractType.replace(/_/g, ' ');
+  return c?.contractTypeRaw ? c.contractTypeRaw : 'Uncategorized contract';
+}
 
 // Mirrors server's contract_parties.role CHECK constraint (server/db.js's
 // PARTY_ROLE_KEYS) — a small, rarely-changing v1 taxonomy, not worth a shared
@@ -49,19 +120,27 @@ const ROLE_OPTIONS = [
 
 function Badge({ bg, color, children }) {
   return (
-    <span style={{ background: bg, color, fontSize: 11, padding: '2px 8px', borderRadius: 999, fontWeight: 600, whiteSpace: 'nowrap' }}>
+    <span style={{ background: bg, color, fontSize: 12, padding: '3px 9px', borderRadius: 999, fontWeight: 600, whiteSpace: 'nowrap' }}>
       {children}
     </span>
   );
 }
 
+// A clause's source text, risk status and explanation previously sat in one
+// dense paragraph with no separation — a UX review specifically asked for
+// faster access to "what's wrong / why it matters / what to do". Only risky
+// and unclear clauses get the full Finding/Impact/Action treatment; standard
+// clauses and context-only headings stay compact since there's nothing to
+// act on.
 function ClauseCard({ c, getIcon, onDismiss, onOverride, indent = false }) {
   const risk = RISK_BADGE[c.riskLevel] || null;
   const verify = VERIFY_BADGE[c.verificationStatus] || null;
   const style = indent ? { ...FIELD, marginLeft: 20 } : FIELD;
+  const flagged = c.riskLevel === 'risky' || c.riskLevel === 'unclear';
+
   if (c.isContextOnly) {
     return (
-      <div className="rounded border p-3" style={{ ...style, opacity: 0.75 }}>
+      <div className="rounded-lg border p-3" style={{ ...style, opacity: 0.75 }}>
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
           <Badge bg="var(--color-bg)" color="var(--color-muted)">Context only — not risk-scored</Badge>
@@ -70,32 +149,148 @@ function ClauseCard({ c, getIcon, onDismiss, onOverride, indent = false }) {
       </div>
     );
   }
+
   return (
-    <div className="rounded border p-3" style={style}>
-      <div className="flex items-center gap-2 mb-1 flex-wrap">
-        {c.numberLabel && <span className="text-xs font-semibold">{c.numberLabel}</span>}
+    <div className="rounded-lg border p-3" style={{ ...style, borderLeft: flagged ? `3px solid ${risk?.color || 'var(--color-border)'}` : style.borderColor ? `1px solid ${style.borderColor}` : undefined }}>
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {c.numberLabel && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{c.numberLabel}</span>}
         {risk && <Badge bg={risk.bg} color={risk.color}>{risk.text}</Badge>}
         {verify && <Badge bg={verify.bg} color={verify.color}>{verify.text}</Badge>}
       </div>
-      <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
-      {c.whyItMatters && <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>{c.whyItMatters}</p>}
-      {c.suggestedRedline && (
-        <div className="text-xs mt-1 rounded p-2" style={{ background: 'var(--color-bg)' }}>
-          <strong>Suggested redline (advisory, copy-paste only):</strong> {c.suggestedRedline}
+
+      {flagged ? (
+        <div className="space-y-2">
+          {c.whyItMatters && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: risk?.color || 'var(--color-muted)' }}>Why it matters</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{c.whyItMatters}</p>
+            </div>
+          )}
+          {c.suggestedRedline && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: 'var(--color-muted)' }}>Suggested action (advisory, copy-paste only)</p>
+              <p className="text-sm rounded p-2" style={{ background: 'var(--color-bg)' }}>{c.suggestedRedline}</p>
+            </div>
+          )}
+          <details>
+            <summary className="text-xs cursor-pointer select-none" style={{ color: 'var(--color-muted)' }}>Show source clause text</summary>
+            <p className="text-sm mt-1.5" style={{ color: 'var(--color-muted)' }}>{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
+          </details>
         </div>
+      ) : (
+        <p className="text-sm mb-1">{c.text.slice(0, 500)}{c.text.length > 500 ? '…' : ''}</p>
       )}
+
       {(c.crossReferences || []).length > 0 && (
-        <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+        <div className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>
           References: {c.crossReferences.map((r) => r.label).join(', ')}
         </div>
       )}
       {c.riskLevel === 'risky' && (
-        <div className="flex gap-2 mt-2">
-          <button onClick={onDismiss} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Dismiss</button>
-          <button onClick={onOverride} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Not risky for me</button>
+        <div className="flex gap-3 mt-2.5">
+          <button onClick={onDismiss} className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Dismiss</button>
+          <button onClick={onOverride} className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Not risky for me</button>
         </div>
       )}
     </div>
+  );
+}
+
+// At-a-glance summary shown above the clause list — risk counts, obligation
+// counts, and major dates, so the user isn't forced to scroll the whole
+// clause list just to know whether anything needs attention.
+function ReviewSummaryBar({ contract, review, obligations, getIcon, onJumpToRisky }) {
+  const clauses = review?.clauses || [];
+  const counts = { risky: 0, unclear: 0, standard: 0 };
+  for (const c of clauses) {
+    if (c.isContextOnly) continue;
+    if (counts[c.riskLevel] != null) counts[c.riskLevel] += 1;
+  }
+  const overdue = obligations.filter((o) => o.derivedStatus === 'overdue' && o.userState !== 'handled').length;
+  const upcoming = obligations.filter((o) => o.derivedStatus === 'upcoming' && o.userState !== 'handled').length;
+
+  const dateBits = [];
+  if (contract?.effectiveDate) dateBits.push(`Effective ${new Date(contract.effectiveDate).toLocaleDateString()}`);
+  if (contract?.termLengthMonths) dateBits.push(`${contract.termLengthMonths}-month term`);
+
+  const recommendation = counts.risky > 0
+    ? `Start with the ${counts.risky} risky clause${counts.risky === 1 ? '' : 's'} below.`
+    : counts.unclear > 0
+      ? `${counts.unclear} clause${counts.unclear === 1 ? ' needs' : 's need'} a closer look.`
+      : overdue > 0
+        ? `${overdue} obligation${overdue === 1 ? ' is' : 's are'} overdue — see the Obligations tab.`
+        : 'No risky clauses flagged for your confirmed party.';
+
+  const Stat = ({ label, value, color }) => (
+    <div className="rounded-lg border px-3 py-2 text-center" style={FIELD}>
+      <div className="text-xl font-semibold" style={{ color: color || 'var(--color-text)' }}>{value}</div>
+      <div className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div className="rounded-lg border p-4" style={CARD}>
+      <h2 className="text-base font-semibold mb-3">At a glance</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <Stat label="Risky" value={counts.risky} color={counts.risky ? '#991b1b' : undefined} />
+        <Stat label="Unclear" value={counts.unclear} color={counts.unclear ? '#92400e' : undefined} />
+        <Stat label="Standard" value={counts.standard} />
+        <Stat label="Overdue / upcoming" value={`${overdue} / ${upcoming}`} color={overdue ? '#991b1b' : undefined} />
+      </div>
+      {dateBits.length > 0 && (
+        <div className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>{dateBits.join(' · ')}</div>
+      )}
+      <div className="flex items-center gap-2 text-sm rounded-lg p-2" style={{ background: 'var(--color-bg)' }}>
+        {getIcon('arrow-right', { size: 14, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
+        <span>{recommendation}</span>
+        {counts.risky > 0 && (
+          <button onClick={onJumpToRisky} className={`ml-auto text-xs font-medium hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>
+            Jump to risky clauses
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Drag-and-drop upload zone — a bare browser file input was visually
+// disconnected from the rest of the interface and gave no indication of
+// accepted types or size limit up front.
+function UploadDropZone({ file, onFile, accept = '.pdf,.docx', maxLabel = '50MB max', hint = 'PDF or DOCX' }) {
+  const getIcon = useIcon();
+  const [dragOver, setDragOver] = useState(false);
+  const inputId = React.useId();
+  return (
+    <label
+      htmlFor={inputId}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) onFile(f);
+      }}
+      className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors"
+      style={{
+        borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
+        background: dragOver ? 'var(--color-bg)' : 'transparent',
+      }}
+    >
+      <span style={{ color: dragOver ? 'var(--color-primary)' : 'var(--color-muted)' }}>{getIcon('upload', { size: 22 })}</span>
+      {file ? (
+        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</span>
+      ) : (
+        <>
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Drop a file here, or click to browse</span>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{hint} · {maxLabel}</span>
+        </>
+      )}
+      <input
+        id={inputId} type="file" accept={accept} className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+      />
+    </label>
   );
 }
 
@@ -313,6 +508,9 @@ export default function ContractReviewPage() {
   const [compareFor, setCompareFor] = useState(null); // documentId currently showing a "What changed" view
   const [compareResult, setCompareResult] = useState(null);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // { kind: 'delete'|'expired'|'terminated', ... }
+  const [obligationOwnerFilter, setObligationOwnerFilter] = useState('');
+  const [obligationStatusFilter, setObligationStatusFilter] = useState('all'); // all | overdue | upcoming | recurring_or_relative | unverified | done
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -687,16 +885,22 @@ export default function ContractReviewPage() {
   }, [contract, processing, pollReviewUntilTerminal, openContract, runCompare]);
 
 
+  // These three previously fired immediately (setStatus via a bare
+  // window.confirm, deleteContract with no confirmation at all) — a UX
+  // review flagged all three as needing a real confirmation screen that
+  // explains the consequence, matching the ConfirmModal convention used
+  // elsewhere for high-stakes operations.
   const setStatus = useCallback(async (status) => {
     if (!contract) return;
-    if (!window.confirm(`Mark this contract as ${status}?`)) return;
     await api.post(`/api/contract-review/contracts/${contract.id}/status`, { status });
+    setConfirmAction(null);
     await openContract(contract.id);
   }, [contract, openContract]);
 
   const deleteContract = useCallback(async () => {
     if (!contract) return;
     await api.delete(`/api/contract-review/contracts/${contract.id}`);
+    setConfirmAction(null);
     setView('list');
     setContract(null);
     await loadContracts();
@@ -783,7 +987,7 @@ export default function ContractReviewPage() {
         {view === 'list' && (
           <>
             <div className="flex items-center gap-2 mb-4">
-              <h1 className="text-lg font-semibold">Contract Review</h1>
+              <h1 className="text-xl font-semibold">Contract Review</h1>
               <button
                 onClick={() => { localStorage.removeItem(CR_TOUR_KEY); startContractReviewTour(navigate); }}
                 title="Take the Contract Review tour"
@@ -811,32 +1015,26 @@ export default function ContractReviewPage() {
             {error && <div style={{ color: '#991b1b' }} className="mb-3 text-sm">{error}</div>}
 
             <div className="rounded-lg border p-4 mb-6" style={CARD} data-tour="contract-review-upload">
-              <h2 className="text-sm font-semibold mb-3">New contract review</h2>
+              <h2 className="text-base font-semibold mb-3">New contract review</h2>
               <Tooltip text="A short label to find this contract again later — doesn't affect the analysis.">
                 <input
                   type="text" placeholder="Contract title" value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full rounded border px-3 py-2 text-sm mb-2" style={FIELD}
+                  className={`w-full rounded border px-3 py-2 text-sm mb-3 ${FOCUS_RING}`} style={FIELD}
                 />
               </Tooltip>
               <Tooltip text="PDF or DOCX only. This kicks off extraction, segmentation, type detection, and party extraction.">
-                <input
-                  type="file" accept=".pdf,.docx"
-                  onChange={(e) => setNewFile(e.target.files?.[0] || null)}
-                  className="w-full text-sm mb-3"
-                />
+                <div className="mb-3">
+                  <UploadDropZone file={newFile} onFile={setNewFile} />
+                </div>
               </Tooltip>
-              <button
-                onClick={createContract}
-                className="rounded px-4 py-2 text-sm font-medium hover:opacity-70"
-                style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff' }}
-              >
+              <PrimaryButton onClick={createContract} disabled={!newTitle.trim() || !newFile} large>
                 Upload &amp; review
-              </button>
+              </PrimaryButton>
             </div>
 
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <h2 className="text-sm font-semibold">Your contracts</h2>
+              <h2 className="text-base font-semibold">Your contracts</h2>
               {contracts.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <label className="flex items-center gap-1 text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
@@ -871,10 +1069,16 @@ export default function ContractReviewPage() {
                     onChange={() => toggleContractSelected(c.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <button onClick={() => openContract(c.id)} className="flex-1 text-left flex items-center justify-between gap-2">
+                  <button onClick={() => openContract(c.id)} className={`flex-1 text-left flex items-center justify-between gap-2 rounded ${FOCUS_RING}`}>
                     <div>
                       <div className="text-sm font-medium">{c.title}</div>
-                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.contractType} · {c.status}</div>
+                      <div className="text-xs flex items-center gap-1.5 mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                        <span className="capitalize">{contractTypeLabel(c)}</span>
+                        <span>·</span>
+                        <Badge bg={(CONTRACT_STATUS_BADGE[c.status] || {}).bg} color={(CONTRACT_STATUS_BADGE[c.status] || {}).color}>
+                          {(CONTRACT_STATUS_BADGE[c.status] || {}).text || c.status}
+                        </Badge>
+                      </div>
                     </div>
                     {getIcon('chevron-right', { size: 16 })}
                   </button>
@@ -910,8 +1114,10 @@ export default function ContractReviewPage() {
                 />
               </Tooltip>
               <div className="flex items-center gap-2">
-                <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.contractType}</Badge>
-                <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.status}</Badge>
+                <Badge bg="var(--color-bg)" color="var(--color-muted)"><span className="capitalize">{contractTypeLabel(contract)}</span></Badge>
+                <Badge bg={(CONTRACT_STATUS_BADGE[contract.status] || {}).bg} color={(CONTRACT_STATUS_BADGE[contract.status] || {}).color}>
+                  {(CONTRACT_STATUS_BADGE[contract.status] || {}).text || contract.status}
+                </Badge>
                 {contract.legalHold && getIcon('lock', { size: 14, color: '#92400e' })}
               </div>
             </div>
@@ -927,8 +1133,8 @@ export default function ContractReviewPage() {
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className="pb-2 text-sm hover:opacity-70"
-                  style={{ transition: 'opacity 200ms', borderBottom: tab === key ? '2px solid var(--color-primary)' : '2px solid transparent', fontWeight: tab === key ? 600 : 400 }}
+                  className={`pb-2 text-sm hover:opacity-70 rounded-t ${FOCUS_RING}`}
+                  style={{ transition: 'opacity 200ms', borderBottom: tab === key ? '2px solid var(--color-primary)' : '2px solid transparent', fontWeight: tab === key ? 600 : 400, color: tab === key ? 'var(--color-text)' : 'var(--color-muted)' }}
                 >
                   {label}
                 </button>
@@ -938,7 +1144,7 @@ export default function ContractReviewPage() {
             {tab === 'overview' && (
               <div className="space-y-4">
                 <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Parties</h2>
+                  <h2 className="text-base font-semibold mb-2">Parties</h2>
                   {(contract.parties || []).map((p) => (
                     <div key={p.id} className="flex items-center gap-2 py-1 flex-wrap">
                       <span className="text-sm">{p.name}</span>
@@ -961,23 +1167,53 @@ export default function ContractReviewPage() {
                 </div>
 
                 <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Actions</h2>
+                  <h2 className="text-base font-semibold mb-2">Actions</h2>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={toggleHold} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>
+                    <SecondaryButton onClick={toggleHold}>
                       {contract.legalHold ? 'Release legal hold' : 'Set legal hold'}
-                    </button>
-                    <button onClick={() => setStatus('expired')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark expired</button>
-                    <button onClick={() => setStatus('terminated')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark terminated</button>
-                    <button onClick={deleteContract} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', borderColor: '#991b1b', color: '#991b1b' }}>Delete contract</button>
+                    </SecondaryButton>
+                    <SecondaryButton onClick={() => setConfirmAction({ kind: 'expired' })}>Mark expired</SecondaryButton>
+                    <SecondaryButton onClick={() => setConfirmAction({ kind: 'terminated' })}>Mark terminated</SecondaryButton>
+                    <DestructiveButton onClick={() => setConfirmAction({ kind: 'delete' })}>Delete contract</DestructiveButton>
                   </div>
                   <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
                     Deletion removes everything under this contract. A contract on legal hold cannot be deleted.
                   </p>
                 </div>
 
+                {confirmAction?.kind === 'delete' && (
+                  <ConfirmModal
+                    title="Delete this contract?"
+                    message="This removes every document, review, clause, obligation, and correction under this contract from view, and unlinks any Tasks created from its obligations. This cannot be undone from the app."
+                    confirmLabel="Delete contract"
+                    confirmText={contract.title}
+                    danger
+                    onConfirm={deleteContract}
+                    onCancel={() => setConfirmAction(null)}
+                  />
+                )}
+                {confirmAction?.kind === 'expired' && (
+                  <ConfirmModal
+                    title="Mark this contract as expired?"
+                    message="Its term has ended. This is a status change, not a deletion — the contract, its documents, and its history all stay exactly as they are."
+                    confirmLabel="Mark expired"
+                    onConfirm={() => setStatus('expired')}
+                    onCancel={() => setConfirmAction(null)}
+                  />
+                )}
+                {confirmAction?.kind === 'terminated' && (
+                  <ConfirmModal
+                    title="Mark this contract as terminated?"
+                    message="The agreement has been ended before its natural term. This is a status change, not a deletion — the contract, its documents, and its history all stay exactly as they are."
+                    confirmLabel="Mark terminated"
+                    onConfirm={() => setStatus('terminated')}
+                    onCancel={() => setConfirmAction(null)}
+                  />
+                )}
+
                 {review && (
                   <div className="rounded-lg border p-4" style={CARD}>
-                    <h2 className="text-sm font-semibold mb-2">Report</h2>
+                    <h2 className="text-base font-semibold mb-2">Report</h2>
                     <div className="flex flex-wrap items-center gap-2">
                       <Tooltip text="Banner, parties and role, every flag with its reason and redline, and obligations.">
                         <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
@@ -1001,7 +1237,7 @@ export default function ContractReviewPage() {
                 )}
 
                 <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">History</h2>
+                  <h2 className="text-base font-semibold mb-2">History</h2>
                   {(contract.events || []).map((ev) => (
                     <div key={ev.id} className="text-xs py-1" style={{ color: 'var(--color-muted)' }}>
                       {new Date(ev.occurredAt).toLocaleString()} — {ev.type.replace(/_/g, ' ')}
@@ -1014,28 +1250,34 @@ export default function ContractReviewPage() {
             {tab === 'documents' && (
               <div className="space-y-6">
                 <section>
-                  <h2 className="text-sm font-semibold mb-1">Documents &amp; revisions</h2>
+                  <h2 className="text-base font-semibold mb-1">Documents &amp; revisions</h2>
                   <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
                     Every document uploaded under this contract, and every revision of each. Upload a new revision, mark a draft as executed, or run a review as a specific party from here.
                   </p>
                   <div className="rounded-lg border p-4" style={CARD}>
                   <div className="space-y-2">
                     {[...(contract.documents || [])].sort((a, b) => a.version - b.version).map((d) => (
-                      <div key={d.id} className="rounded border p-2" style={FIELD}>
-                        <div className="flex items-center justify-between flex-wrap gap-1">
-                          <span className="text-sm">{d.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.kind} · v{d.version}</Badge> <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.status}</Badge></span>
+                      <div key={d.id} className="rounded-lg border p-3" style={FIELD}>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                            {d.filename}
+                            <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.kind} · v{d.version}</Badge>
+                            <Badge bg={(DOCUMENT_STATUS_BADGE[d.status] || {}).bg} color={(DOCUMENT_STATUS_BADGE[d.status] || {}).color}>
+                              {(DOCUMENT_STATUS_BADGE[d.status] || {}).text || d.status}
+                            </Badge>
+                          </span>
                           <div className="flex items-center gap-2">
                             {d.status === 'draft' && (
-                              <button onClick={() => markExecuted(d.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>Mark as executed</button>
+                              <PrimaryButton onClick={() => markExecuted(d.id)}>Mark as executed</PrimaryButton>
                             )}
                             {d.parentDocumentId && (
-                              <button onClick={() => runCompare(d.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>What changed</button>
+                              <SecondaryButton onClick={() => runCompare(d.id)}>What changed</SecondaryButton>
                             )}
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <div className="flex flex-wrap items-center gap-2 mt-2.5">
                           <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
-                            <label className="text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                            <label className={`text-xs rounded border px-2.5 py-1 hover:opacity-80 cursor-pointer ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', ...BTN_SECONDARY_SM }}>
                               {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
                               <input
                                 type="file" accept=".pdf,.docx" className="hidden" disabled={revisionBusy === d.id}
@@ -1043,23 +1285,19 @@ export default function ContractReviewPage() {
                               />
                             </label>
                           </Tooltip>
-                          <span style={{ color: 'var(--color-border)' }}>·</span>
                           <Tooltip text="Runs a new, independent review of this same document from another party's perspective.">
                             <select
                               value={reviewAsPartyId[d.id] || ''}
                               onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [d.id]: e.target.value ? Number(e.target.value) : null }))}
-                              className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                              className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
                             >
                               <option value="">Review as…</option>
                               {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
                             </select>
                           </Tooltip>
-                          <button
-                            onClick={() => reviewAsParty(d.id)} disabled={!reviewAsPartyId[d.id]}
-                            className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[d.id] ? 1 : 0.5 }}
-                          >
+                          <PrimaryButton onClick={() => reviewAsParty(d.id)} disabled={!reviewAsPartyId[d.id]}>
                             Run review
-                          </button>
+                          </PrimaryButton>
                         </div>
                       </div>
                     ))}
@@ -1069,7 +1307,7 @@ export default function ContractReviewPage() {
                   {compareFor && (
                     <div className="rounded-lg border p-4 mt-3" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold">What changed</h3>
+                        <h3 className="text-base font-semibold">What changed</h3>
                         <button onClick={() => { setCompareFor(null); setCompareResult(null); }} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Close</button>
                       </div>
                       {compareLoading && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Comparing…</div>}
@@ -1121,7 +1359,7 @@ export default function ContractReviewPage() {
                 <hr style={{ borderColor: 'var(--color-border)' }} />
 
                 <section>
-                  <h2 className="text-sm font-semibold mb-1">Reviews</h2>
+                  <h2 className="text-base font-semibold mb-1">Reviews</h2>
                   <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
                     Every review run against any document in this contract, each its own party perspective. Select one to open it on the Review tab.
                   </p>
@@ -1178,7 +1416,7 @@ export default function ContractReviewPage() {
 
                 {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length > 0 && (
                   <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
-                    <h2 className="text-sm font-semibold mb-2">Which party are you?</h2>
+                    <h2 className="text-base font-semibold mb-2">Which party are you?</h2>
                     <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
                       Confirming unblocks risk scoring for your side of the agreement. Fix a name or role below if the extraction got it wrong — your edit is what the review uses.
                     </p>
@@ -1214,15 +1452,15 @@ export default function ContractReviewPage() {
                         </div>
                       ))}
                     </div>
-                    <button onClick={confirmRole} disabled={!pickedPartyId} className="rounded px-3 py-1.5 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: pickedPartyId ? 1 : 0.5 }}>
+                    <PrimaryButton onClick={confirmRole} disabled={!pickedPartyId} large>
                       Confirm and continue analysis
-                    </button>
+                    </PrimaryButton>
                   </div>
                 )}
 
                 {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length === 0 && (
                   <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
-                    <h2 className="text-sm font-semibold mb-2">Which party are you?</h2>
+                    <h2 className="text-base font-semibold mb-2">Which party are you?</h2>
                     <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
                       No parties could be automatically detected in this document. Enter your own name and role to continue — the rest of the parties can still be identified later from the clauses themselves.
                     </p>
@@ -1239,26 +1477,22 @@ export default function ContractReviewPage() {
                         </select>
                       </Tooltip>
                     </div>
-                    <button
-                      onClick={addManualPartyAndConfirm} disabled={!manualPartyName.trim()}
-                      className="rounded px-3 py-1.5 text-xs font-medium hover:opacity-70"
-                      style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: manualPartyName.trim() ? 1 : 0.5 }}
-                    >
+                    <PrimaryButton onClick={addManualPartyAndConfirm} disabled={!manualPartyName.trim()} large>
                       Add and continue analysis
-                    </button>
+                    </PrimaryButton>
                   </div>
                 )}
 
                 {review?.status === 'failed' && (
                   <div className="rounded-lg border p-4" style={{ background: '#fee2e2', borderColor: '#991b1b' }}>
-                    <h2 className="text-sm font-semibold mb-1" style={{ color: '#991b1b' }}>Analysis failed</h2>
+                    <h2 className="text-base font-semibold mb-1" style={{ color: '#991b1b' }}>Analysis failed</h2>
                     <p className="text-xs" style={{ color: '#991b1b' }}>{review.errorMessage || 'An unexpected error occurred during analysis.'}</p>
                   </div>
                 )}
 
                 {review?.status === 'not_supported' && (
                   <div className="rounded-lg border p-4" style={{ background: '#fef3c7', borderColor: '#92400e' }}>
-                    <h2 className="text-sm font-semibold mb-1" style={{ color: '#92400e' }}>Document not supported</h2>
+                    <h2 className="text-base font-semibold mb-1" style={{ color: '#92400e' }}>Document not supported</h2>
                     <p className="text-xs" style={{ color: '#92400e' }}>{review.errorMessage || 'This document could not be analyzed.'}</p>
                   </div>
                 )}
@@ -1285,18 +1519,15 @@ export default function ContractReviewPage() {
                               <select
                                 value={reviewAsPartyId[review.documentId] || ''}
                                 onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
-                                className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                                className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
                               >
                                 <option value="">Choose a party…</option>
                                 {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
                               </select>
                             </Tooltip>
-                            <button
-                              onClick={() => reviewAsParty(review.documentId)} disabled={!reviewAsPartyId[review.documentId]}
-                              className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[review.documentId] ? 1 : 0.5 }}
-                            >
+                            <PrimaryButton onClick={() => reviewAsParty(review.documentId)} disabled={!reviewAsPartyId[review.documentId]}>
                               Run new review
-                            </button>
+                            </PrimaryButton>
                           </div>
                         </div>
                       );
@@ -1306,9 +1537,17 @@ export default function ContractReviewPage() {
                         Analysis cost: ${Number(review.costUsd).toFixed(4)}
                       </div>
                     )}
+
+                    {(review.clauses || []).length > 0 && (
+                      <ReviewSummaryBar
+                        contract={contract} review={review} obligations={obligations} getIcon={getIcon}
+                        onJumpToRisky={() => { setClauseFilter('risky'); setClauseSort('order'); document.getElementById('cr-clauses-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                      />
+                    )}
+
                     {review.coverageReport?.length > 0 && (
                       <div className="rounded-lg border p-4" style={CARD}>
-                        <h2 className="text-sm font-semibold mb-2">Coverage report</h2>
+                        <h2 className="text-base font-semibold mb-2">Coverage report</h2>
                         {review.coverageReport.map((c) => {
                           const b = COVERAGE_BADGE[c.status] || COVERAGE_BADGE.could_not_assess;
                           return (
@@ -1323,7 +1562,7 @@ export default function ContractReviewPage() {
 
                     {review.summaryPoints?.length > 0 && (
                       <div className="rounded-lg border p-4" style={CARD}>
-                        <h2 className="text-sm font-semibold mb-2">Summary</h2>
+                        <h2 className="text-base font-semibold mb-2">Summary</h2>
                         <ul className="space-y-2">
                           {review.summaryPoints.map((p, i) => {
                             const b = VERIFY_BADGE[p.verificationStatus] || VERIFY_BADGE.failed;
@@ -1338,12 +1577,12 @@ export default function ContractReviewPage() {
                       </div>
                     )}
 
-                    <div className="rounded-lg border p-4" style={CARD}>
-                      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                        <h2 className="text-sm font-semibold">Clauses</h2>
+                    <div id="cr-clauses-card" className="rounded-lg border p-4 scroll-mt-4" style={CARD}>
+                      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                        <h2 className="text-base font-semibold">Clauses</h2>
                         <div className="flex items-center gap-2">
                           <Tooltip text="Show only clauses of one risk level, or context-only clauses that weren't risk-scored at all.">
-                            <select value={clauseFilter} onChange={(e) => setClauseFilter(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                            <select value={clauseFilter} onChange={(e) => setClauseFilter(e.target.value)} className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}>
                               <option value="all">All</option>
                               <option value="risky">Risky</option>
                               <option value="unclear">Unclear</option>
@@ -1352,7 +1591,7 @@ export default function ContractReviewPage() {
                             </select>
                           </Tooltip>
                           <Tooltip text="Clause order follows the document; Severity groups the riskiest clauses first.">
-                            <select value={clauseSort} onChange={(e) => setClauseSort(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                            <select value={clauseSort} onChange={(e) => setClauseSort(e.target.value)} className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}>
                               <option value="order">Clause order</option>
                               <option value="severity">Severity</option>
                             </select>
@@ -1393,7 +1632,7 @@ export default function ContractReviewPage() {
                     </div>
 
                     <div className="rounded-lg border p-4" style={CARD}>
-                      <h2 className="text-sm font-semibold mb-2">Ask about this contract</h2>
+                      <h2 className="text-base font-semibold mb-2">Ask about this contract</h2>
                       <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Searches every document and revision under this contract, not just the one currently open.</p>
                       <div className="flex gap-2 mb-3">
                         <Tooltip text="Answers are grounded in the actual clause text and quote the clause they're based on — searches every document and revision under this contract.">
@@ -1401,12 +1640,12 @@ export default function ContractReviewPage() {
                             type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !qaLoading) askQuestion(); }}
                             placeholder="e.g. How much notice do I need to give to terminate?"
-                            className="flex-1 rounded border px-3 py-2 text-sm" style={FIELD}
+                            className={`flex-1 rounded border px-3 py-2 text-sm ${FOCUS_RING}`} style={FIELD}
                           />
                         </Tooltip>
-                        <button onClick={askQuestion} disabled={qaLoading || !question.trim()} className="rounded px-3 py-2 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: qaLoading || !question.trim() ? 0.5 : 1 }}>
+                        <PrimaryButton onClick={askQuestion} disabled={qaLoading || !question.trim()}>
                           {qaLoading ? 'Asking…' : 'Ask'}
-                        </button>
+                        </PrimaryButton>
                       </div>
                       <div className="space-y-3">
                         {qaHistory.map((h, i) => (
@@ -1436,7 +1675,7 @@ export default function ContractReviewPage() {
 
                     {review.definitions?.length > 0 && (
                       <div className="rounded-lg border p-4" style={CARD}>
-                        <h2 className="text-sm font-semibold mb-2">Definitions</h2>
+                        <h2 className="text-base font-semibold mb-2">Definitions</h2>
                         {review.definitions.map((d) => {
                           const b = VERIFY_BADGE[d.verificationStatus] || VERIFY_BADGE.failed;
                           return (
@@ -1455,25 +1694,75 @@ export default function ContractReviewPage() {
 
             {tab === 'obligations' && (
               <div className="rounded-lg border p-4" style={CARD}>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold">What you need to do</h2>
-                  <button onClick={exportIcs} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms' }}>
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <h2 className="text-base font-semibold">What you need to do</h2>
+                  <SecondaryButton onClick={exportIcs} className="flex items-center gap-1">
                     {getIcon('calendar-check', { size: 14 })} Export .ics
-                  </button>
+                  </SecondaryButton>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                  <Tooltip text="Show only obligations owed by one party.">
+                    <select
+                      value={obligationOwnerFilter}
+                      onChange={(e) => setObligationOwnerFilter(e.target.value)}
+                      className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
+                    >
+                      <option value="">All owners</option>
+                      <option value="unresolved">Obligor unresolved</option>
+                      {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </Tooltip>
+                  <Tooltip text="Filter by timing status — overdue, upcoming, unverified, or already marked done.">
+                    <select
+                      value={obligationStatusFilter}
+                      onChange={(e) => setObligationStatusFilter(e.target.value)}
+                      className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="overdue">Overdue</option>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="recurring_or_relative">Recurring / relative</option>
+                      <option value="unverified">Unverified</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </Tooltip>
+                  {(obligationOwnerFilter || obligationStatusFilter !== 'all') && (
+                    <button
+                      onClick={() => { setObligationOwnerFilter(''); setObligationStatusFilter('all'); }}
+                      className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+
                 <div className="space-y-2">
-                  {obligations.map((o) => {
+                  {obligations
+                    .filter((o) => {
+                      if (obligationOwnerFilter === 'unresolved' && o.obligorPartyId != null) return false;
+                      if (obligationOwnerFilter && obligationOwnerFilter !== 'unresolved' && String(o.obligorPartyId) !== obligationOwnerFilter) return false;
+                      if (obligationStatusFilter === 'done') return o.userState === 'handled';
+                      if (obligationStatusFilter !== 'all' && obligationStatusFilter !== 'done') {
+                        if (o.userState === 'handled') return false;
+                        if (obligationStatusFilter === 'unverified') return o.derivedStatus === 'unverified';
+                        return o.derivedStatus === obligationStatusFilter;
+                      }
+                      return true;
+                    })
+                    .map((o) => {
                     const unverified = o.derivedStatus === 'unverified';
+                    const overdue = o.derivedStatus === 'overdue';
                     const done = o.userState === 'handled';
                     return (
-                      <div key={o.id} className="rounded border p-3" style={{ ...FIELD, opacity: done ? 0.6 : 1 }}>
-                        <div className="text-sm mb-2" style={{ textDecoration: done ? 'line-through' : 'none' }}>{o.description}</div>
+                      <div key={o.id} className="rounded-lg border p-3" style={{ ...FIELD, opacity: done ? 0.6 : 1, borderLeft: overdue && !done ? '3px solid #991b1b' : undefined }}>
+                        <div className="text-sm mb-2 font-medium" style={{ textDecoration: done ? 'line-through' : 'none' }}>{o.description}</div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <Tooltip text="Who owes this obligation. Correct it here if the extraction couldn't resolve it automatically.">
                             <select
                               value={o.obligorPartyId != null ? String(o.obligorPartyId) : ''}
                               onChange={(e) => setObligationField(o, 'obligorPartyId', e.target.value)}
-                              className="rounded border px-2 py-1 text-xs" style={FIELD}
+                              className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
                             >
                               <option value="">Obligor unresolved</option>
                               {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1484,7 +1773,7 @@ export default function ContractReviewPage() {
                               type="date"
                               value={o.absoluteDate ? String(o.absoluteDate).slice(0, 10) : ''}
                               onChange={(e) => { if (e.target.value) setObligationField(o, 'absoluteDate', e.target.value); }}
-                              className="rounded border px-2 py-1 text-xs" style={FIELD}
+                              className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
                             />
                           </Tooltip>
                           {!o.absoluteDate && (
@@ -1493,15 +1782,15 @@ export default function ContractReviewPage() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           {o.documentStatus !== 'executed' && <Badge bg="#e0e7ff" color="#3730a3">Draft — not active</Badge>}
-                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{o.derivedStatus.replace(/_/g, ' ')}</Badge>
+                          <Badge bg={overdue ? '#fee2e2' : 'var(--color-bg)'} color={overdue ? '#991b1b' : 'var(--color-muted)'}>{o.derivedStatus.replace(/_/g, ' ')}</Badge>
                           {unverified && <Badge bg="#fef3c7" color="#92400e">Unverified — not exported/linkable until confirmed</Badge>}
                           {o.userState && <Badge bg="#e0e7ff" color="#3730a3">{o.userState}</Badge>}
                           <div className="flex gap-2 ml-auto">
                             {!o.linkedTaskId && (
-                              <button onClick={() => addToTask(o)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>Send to Tasks</button>
+                              <PrimaryButton onClick={() => addToTask(o)}>Send to Tasks</PrimaryButton>
                             )}
                             {!done && (
-                              <button onClick={() => setObligationState(o.id, 'handled')} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Mark done</button>
+                              <SecondaryButton onClick={() => setObligationState(o.id, 'handled')}>Mark done</SecondaryButton>
                             )}
                           </div>
                         </div>
