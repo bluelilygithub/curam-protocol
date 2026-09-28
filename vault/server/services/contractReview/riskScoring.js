@@ -47,12 +47,13 @@ async function scoreOneClause(clause, { reviewId, positions, relevantDefinitions
     let parsed;
     try {
       const prompt = riskScoringPrompt(clause, positions, relevantDefinitions, extractedText, role);
-      // 500 was tight enough to truncate a real response mid-JSON on a
+      // 500, then 1200, both still truncated a real response mid-JSON on a
       // risky clause needing a genuine suggestedRedline (the column allows
       // up to 4000 chars for that field alone) — especially on a smaller/
-      // faster model, surfacing as "model response was not valid JSON"
-      // once that stopped being silently swallowed as a bare 'unclear'.
-      const result = await callModel(resolved, prompt, { maxTokens: 1200, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
+      // faster model, surfacing as "model response was not valid JSON" once
+      // that stopped being silently swallowed as a bare 'unclear'. Matching
+      // clauseClassification.js's headroom now.
+      const result = await callModel(resolved, prompt, { maxTokens: 2500, returnUsage: true, timeoutMs: LLM_CALL_TIMEOUT_MS });
       const text = result.text;
       if (costTracker) await trackCost(costTracker, reviewId, modelId, result);
       parsed = parseModelJson(text);
