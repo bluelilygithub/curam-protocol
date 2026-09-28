@@ -309,6 +309,39 @@ export default function ContractReviewPage() {
     }
   }, [newTitle, newFile, processing, loadContracts, openContract]);
 
+  // Every review-starting/resuming call returns almost immediately — the
+  // actual analysis runs in the background and can take several minutes
+  // (several sequential LLM calls). This polls for the real terminal status
+  // instead of awaiting one long-lived request, which previously hit an
+  // infrastructure-level timeout before the server's own error response
+  // could ever arrive — that's what surfaced as a generic "Failed to resume
+  // review" with no real cause. Shared by confirmPartyIdAndResume,
+  // reviewAsParty, and uploadRevision — all three start/resume a review and
+  // must wait for it to actually finish before refreshing anything, not just
+  // fire the request and read back whatever mid-flight stage happens to be
+  // there (a real bug: "Review as another party" and "Upload new revision"
+  // both originally skipped this and showed a stuck-looking stage name).
+  const pollReviewUntilTerminal = useCallback(async (reviewId) => {
+    const terminal = new Set(['complete', 'failed', 'not_supported']);
+    for (let attempt = 0; attempt < 200; attempt += 1) { // ~200 * 3s = 10 min ceiling
+      await new Promise((r) => setTimeout(r, 3000));
+      const pollRes = await api.get(`/api/contract-review/reviews/${reviewId}`);
+      if (!pollRes.ok) continue;
+      const polled = await pollRes.json();
+      const sp = polled.stageProgress || {};
+      let detail = `Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
+      if (sp.stage === 'scoring' && sp.total) {
+        detail = `Scoring clause ${sp.current || 0} of ${sp.total}`;
+        if (sp.etaSeconds != null) {
+          detail += sp.etaSeconds < 60 ? ` — about ${sp.etaSeconds}s remaining` : ` — about ${Math.round(sp.etaSeconds / 60)}m remaining`;
+        }
+      }
+      processing.updateProcessingDetail(detail);
+      if (terminal.has(polled.status)) return polled;
+    }
+    throw new Error('Analysis is taking longer than expected — check back on this contract shortly.');
+  }, [processing]);
+
   const confirmPartyIdAndResume = useCallback(async (partyId) => {
     if (!partyId || !contract) return;
     const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties/${partyId}/confirm`, {});
@@ -318,31 +351,7 @@ export default function ContractReviewPage() {
     try {
       const resumeRes = await api.post(`/api/contract-review/reviews/${review.id}/resume`, {});
       if (!resumeRes.ok) throw new Error((await resumeRes.json().catch(() => ({}))).error || 'Failed to resume review');
-      // The resume call returns immediately — the actual analysis runs in the
-      // background and can take several minutes (several sequential LLM
-      // calls). Poll for the real status instead of awaiting one long-lived
-      // request, which previously hit an infrastructure-level timeout before
-      // the server's own error response could ever arrive — that's what
-      // surfaced as a generic "Failed to resume review" with no real cause.
-      const terminal = new Set(['complete', 'failed', 'not_supported']);
-      let finalReview = null;
-      for (let attempt = 0; attempt < 200; attempt += 1) { // ~200 * 3s = 10 min ceiling
-        await new Promise((r) => setTimeout(r, 3000));
-        const pollRes = await api.get(`/api/contract-review/reviews/${review.id}`);
-        if (!pollRes.ok) continue;
-        const polled = await pollRes.json();
-        const sp = polled.stageProgress || {};
-        let detail = `Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
-        if (sp.stage === 'scoring' && sp.total) {
-          detail = `Scoring clause ${sp.current || 0} of ${sp.total}`;
-          if (sp.etaSeconds != null) {
-            detail += sp.etaSeconds < 60 ? ` — about ${sp.etaSeconds}s remaining` : ` — about ${Math.round(sp.etaSeconds / 60)}m remaining`;
-          }
-        }
-        processing.updateProcessingDetail(detail);
-        if (terminal.has(polled.status)) { finalReview = polled; break; }
-      }
-      if (!finalReview) throw new Error('Analysis is taking longer than expected — check back on this contract shortly.');
+      const finalReview = await pollReviewUntilTerminal(review.id);
       if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
       setReview(finalReview);
       const obRes = await api.get(`/api/contract-review/obligations?contractId=${contract.id}`);
@@ -352,7 +361,7 @@ export default function ContractReviewPage() {
     } finally {
       processing.stopProcessing();
     }
-  }, [contract, review, processing]);
+  }, [contract, review, processing, pollReviewUntilTerminal]);
 
   const confirmRole = useCallback(async () => {
     await confirmPartyIdAndResume(pickedPartyId);
@@ -452,29 +461,28 @@ export default function ContractReviewPage() {
     const partyId = reviewAsPartyId[documentId];
     if (!partyId || !contract) return;
     setError('');
+    processing.startProcessing('Reviewing from that party\'s perspective…', 'This runs a full, independent analysis of this document for the chosen party — it does not affect any other review. This can take a few minutes.');
     try {
-      await runWithStepLog(
-        processing,
-        'Reviewing from that party\'s perspective…',
-        'This runs a full, independent analysis of this document for the chosen party — it does not affect any other review.',
-        ['Segmenting document', 'Classifying clauses', 'Scoring risk', 'Extracting obligations'],
-        async () => {
-          const res = await api.post(`/api/contract-review/documents/${documentId}/review`, { asPartyId: partyId });
-          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to start review');
-          return res.json();
-        },
-        { stepIntervalMs: 900 }
-      );
+      const res = await api.post(`/api/contract-review/documents/${documentId}/review`, { asPartyId: partyId });
+      const started = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(started.error || 'Failed to start review');
+      if (started.status !== 'awaiting_role_confirmation' && started.status !== 'not_supported' && started.status !== 'failed') {
+        const finalReview = await pollReviewUntilTerminal(started.reviewId);
+        if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
+      }
       await openContract(contract.id);
     } catch (e) {
       setError(e.message || 'Failed to start review');
+    } finally {
+      processing.stopProcessing();
     }
-  }, [contract, reviewAsPartyId, processing, openContract]);
+  }, [contract, reviewAsPartyId, processing, pollReviewUntilTerminal, openContract]);
 
   const uploadRevision = useCallback(async (documentId, file) => {
     if (!file || !contract) return;
     setRevisionBusy(documentId);
     setError('');
+    processing.startProcessing('Uploading and reviewing the new revision…', 'Extraction, segmentation, and the full analysis pipeline run for this revision. This can take a few minutes.');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -483,14 +491,25 @@ export default function ContractReviewPage() {
       if (!docRes.ok) throw new Error((await docRes.json().catch(() => ({}))).error || 'Failed to upload revision');
       const doc = await docRes.json();
       const reviewRes = await api.post(`/api/contract-review/documents/${doc.id}/review`, {});
-      if (!reviewRes.ok) throw new Error((await reviewRes.json().catch(() => ({}))).error || 'Failed to start review');
+      const started = await reviewRes.json().catch(() => ({}));
+      if (!reviewRes.ok) throw new Error(started.error || 'Failed to start review');
+      // A revision reuses the contract's already-confirmed party (see
+      // extractPartiesAndKeyTerms's reconciliation), so this normally skips
+      // awaiting_role_confirmation entirely — but a genuinely new party
+      // situation could still pause it, in which case there's nothing to
+      // poll for yet.
+      if (started.status !== 'awaiting_role_confirmation' && started.status !== 'not_supported' && started.status !== 'failed') {
+        const finalReview = await pollReviewUntilTerminal(started.reviewId);
+        if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
+      }
       await openContract(contract.id);
     } catch (e) {
       setError(e.message || 'Failed to upload revision');
     } finally {
       setRevisionBusy(null);
+      processing.stopProcessing();
     }
-  }, [contract, openContract]);
+  }, [contract, processing, pollReviewUntilTerminal, openContract]);
 
   const runCompare = useCallback(async (documentId) => {
     setCompareFor(documentId);
@@ -968,14 +987,37 @@ export default function ContractReviewPage() {
                   <>
                     {(() => {
                       const reviewingAs = (contract.parties || []).find((p) => p.id === review.userPartyId);
-                      return reviewingAs ? (
-                        <div className="rounded-lg border p-3 text-sm flex items-center gap-2" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
-                          {getIcon('user', { size: 14, style: { color: 'var(--color-primary)' } })}
-                          <span>Reviewing as <strong>{reviewingAs.name}</strong></span>
-                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{reviewingAs.role}</Badge>
-                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>— risk flags below are assessed for this party</span>
+                      return (
+                        <div className="rounded-lg border p-3 text-sm flex items-center gap-2 flex-wrap" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+                          {reviewingAs ? (
+                            <>
+                              {getIcon('user', { size: 14, style: { color: 'var(--color-primary)' } })}
+                              <span>Reviewing as <strong>{reviewingAs.name}</strong></span>
+                              <Badge bg="var(--color-bg)" color="var(--color-muted)">{reviewingAs.role}</Badge>
+                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>— risk flags below are assessed for this party</span>
+                            </>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No perspective set for this review.</span>
+                          )}
+                          <div className="flex items-center gap-2 ml-auto">
+                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Review this same document as:</span>
+                            <select
+                              value={reviewAsPartyId[review.documentId] || ''}
+                              onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
+                              className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                            >
+                              <option value="">Choose a party…</option>
+                              {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                            </select>
+                            <button
+                              onClick={() => reviewAsParty(review.documentId)} disabled={!reviewAsPartyId[review.documentId]}
+                              className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[review.documentId] ? 1 : 0.5 }}
+                            >
+                              Run new review
+                            </button>
+                          </div>
                         </div>
-                      ) : null;
+                      );
                     })()}
                     {review.costUsd != null && (
                       <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
