@@ -192,6 +192,13 @@ export default function ContractReviewPage() {
   const [reportEmail, setReportEmail] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
   const [crmClients, setCrmClients] = useState([]); // Finance's own client picker endpoint — canonical clients table
+  const [titleDraft, setTitleDraft] = useState('');
+  const [contractReviews, setContractReviews] = useState([]); // every review across every document under this contract
+  const [reviewAsPartyId, setReviewAsPartyId] = useState({}); // documentId -> selected partyId for "Review as another party"
+  const [revisionBusy, setRevisionBusy] = useState(null); // documentId currently uploading a revision
+  const [compareFor, setCompareFor] = useState(null); // documentId currently showing a "What changed" view
+  const [compareResult, setCompareResult] = useState(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -223,15 +230,24 @@ export default function ContractReviewPage() {
 
   useEffect(() => { loadContracts(); }, [loadContracts]);
 
+  const loadContractReviews = useCallback(async (id) => {
+    const res = await api.get(`/api/contract-review/contracts/${id}/reviews`);
+    if (res.ok) setContractReviews((await res.json()).reviews || []);
+  }, []);
+
   const openContract = useCallback(async (id) => {
     setError('');
     const res = await api.get(`/api/contract-review/contracts/${id}`);
     if (!res.ok) { setError('Could not load contract'); return; }
     const data = await res.json();
     setContract(data);
+    setTitleDraft(data.title || '');
     setView('detail');
     setTab('overview');
     setQaHistory([]);
+    setCompareFor(null);
+    setCompareResult(null);
+    await loadContractReviews(id);
     const latestDoc = (data.documents || [])[data.documents.length - 1];
     if (latestDoc) {
       const reviewsRes = await api.get(`/api/contract-review/documents/${latestDoc.id}/reviews`);
@@ -242,12 +258,22 @@ export default function ContractReviewPage() {
     }
     const obRes = await api.get(`/api/contract-review/obligations?contractId=${id}`);
     if (obRes.ok) setObligations((await obRes.json()).obligations || []);
-  }, []);
+  }, [loadContractReviews]);
 
   const openReview = useCallback(async (reviewId) => {
     const res = await api.get(`/api/contract-review/reviews/${reviewId}`);
     if (res.ok) setReview(await res.json());
   }, []);
+
+  const saveTitle = useCallback(async () => {
+    const t = titleDraft.trim();
+    if (!contract || !t || t === contract.title) return;
+    const res = await api.post(`/api/contract-review/contracts/${contract.id}/title`, { title: t });
+    if (!res.ok) { setError((await res.json().catch(() => ({}))).error || 'Could not save title'); return; }
+    setError('');
+    setContract((prev) => (prev ? { ...prev, title: t } : prev));
+    await loadContracts();
+  }, [contract, titleDraft, loadContracts]);
 
   const createContract = useCallback(async () => {
     if (!newTitle.trim() || !newFile) { setError('Title and a file are required'); return; }
@@ -418,6 +444,72 @@ export default function ContractReviewPage() {
     await openContract(contract.id);
   }, [contract, openContract]);
 
+  // Runs a NEW, independent review of this document from an explicitly
+  // chosen party's perspective — never reuses or disturbs the contract's
+  // own confirmedByUser/isUser party. A document can end up with several
+  // reviews this way, each its own userPartyId (see the reviews list).
+  const reviewAsParty = useCallback(async (documentId) => {
+    const partyId = reviewAsPartyId[documentId];
+    if (!partyId || !contract) return;
+    setError('');
+    try {
+      await runWithStepLog(
+        processing,
+        'Reviewing from that party\'s perspective…',
+        'This runs a full, independent analysis of this document for the chosen party — it does not affect any other review.',
+        ['Segmenting document', 'Classifying clauses', 'Scoring risk', 'Extracting obligations'],
+        async () => {
+          const res = await api.post(`/api/contract-review/documents/${documentId}/review`, { asPartyId: partyId });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to start review');
+          return res.json();
+        },
+        { stepIntervalMs: 900 }
+      );
+      await openContract(contract.id);
+    } catch (e) {
+      setError(e.message || 'Failed to start review');
+    }
+  }, [contract, reviewAsPartyId, processing, openContract]);
+
+  const uploadRevision = useCallback(async (documentId, file) => {
+    if (!file || !contract) return;
+    setRevisionBusy(documentId);
+    setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('parentDocumentId', String(documentId));
+      const docRes = await api.postForm(`/api/contract-review/contracts/${contract.id}/documents`, fd);
+      if (!docRes.ok) throw new Error((await docRes.json().catch(() => ({}))).error || 'Failed to upload revision');
+      const doc = await docRes.json();
+      const reviewRes = await api.post(`/api/contract-review/documents/${doc.id}/review`, {});
+      if (!reviewRes.ok) throw new Error((await reviewRes.json().catch(() => ({}))).error || 'Failed to start review');
+      await openContract(contract.id);
+    } catch (e) {
+      setError(e.message || 'Failed to upload revision');
+    } finally {
+      setRevisionBusy(null);
+    }
+  }, [contract, openContract]);
+
+  const runCompare = useCallback(async (documentId) => {
+    setCompareFor(documentId);
+    setCompareResult(null);
+    setCompareLoading(true);
+    setError('');
+    try {
+      const res = await api.get(`/api/contract-review/documents/${documentId}/compare`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not compare versions');
+      setCompareResult(data);
+    } catch (e) {
+      setError(e.message || 'Could not compare versions');
+      setCompareFor(null);
+    } finally {
+      setCompareLoading(false);
+    }
+  }, []);
+
   const setStatus = useCallback(async (status) => {
     if (!contract) return;
     if (!window.confirm(`Mark this contract as ${status}?`)) return;
@@ -440,11 +532,11 @@ export default function ContractReviewPage() {
 
   const askQuestion = useCallback(async () => {
     const q = question.trim();
-    if (!q || !review) return;
+    if (!q || !contract) return;
     setQaLoading(true);
     setError('');
     try {
-      const res = await api.post(`/api/contract-review/reviews/${review.id}/ask`, { question: q });
+      const res = await api.post(`/api/contract-review/contracts/${contract.id}/ask`, { question: q });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not get an answer');
       setQaHistory((prev) => [{ question: q, ...data }, ...prev]);
@@ -454,7 +546,7 @@ export default function ContractReviewPage() {
     } finally {
       setQaLoading(false);
     }
-  }, [question, review]);
+  }, [question, contract]);
 
   const downloadReport = useCallback(async () => {
     if (!contract) return;
@@ -562,8 +654,14 @@ export default function ContractReviewPage() {
             <button onClick={() => { setView('list'); setContract(null); setReview(null); }} className="text-sm mb-3 hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
               ← All contracts
             </button>
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-lg font-semibold">{contract.title}</h1>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <input
+                type="text" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={saveTitle} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                className="text-lg font-semibold rounded border px-2 py-1 bg-transparent"
+                style={{ borderColor: 'transparent', minWidth: 200 }}
+                onFocus={(e) => { e.target.style.borderColor = 'var(--color-border)'; }}
+              />
               <div className="flex items-center gap-2">
                 <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.contractType}</Badge>
                 <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.status}</Badge>
@@ -622,16 +720,121 @@ export default function ContractReviewPage() {
                 </div>
 
                 <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Documents</h2>
-                  {(contract.documents || []).map((d) => (
-                    <div key={d.id} className="text-sm flex items-center justify-between py-1">
-                      <span>{d.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.kind} · v{d.version}</Badge> <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.status}</Badge></span>
-                      {d.status === 'draft' && (
-                        <button onClick={() => markExecuted(d.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>Mark as executed</button>
-                      )}
-                    </div>
-                  ))}
+                  <h2 className="text-sm font-semibold mb-2">Documents &amp; revisions</h2>
+                  <div className="space-y-2">
+                    {[...(contract.documents || [])].sort((a, b) => a.version - b.version).map((d) => (
+                      <div key={d.id} className="rounded border p-2" style={FIELD}>
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <span className="text-sm">{d.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.kind} · v{d.version}</Badge> <Badge bg="var(--color-bg)" color="var(--color-muted)">{d.status}</Badge></span>
+                          <div className="flex items-center gap-2">
+                            {d.status === 'draft' && (
+                              <button onClick={() => markExecuted(d.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>Mark as executed</button>
+                            )}
+                            {d.parentDocumentId && (
+                              <button onClick={() => runCompare(d.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)' }}>What changed</button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <label className="text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                            {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
+                            <input
+                              type="file" accept=".pdf,.docx" className="hidden" disabled={revisionBusy === d.id}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRevision(d.id, f); e.target.value = ''; }}
+                            />
+                          </label>
+                          <span style={{ color: 'var(--color-border)' }}>·</span>
+                          <select
+                            value={reviewAsPartyId[d.id] || ''}
+                            onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [d.id]: e.target.value ? Number(e.target.value) : null }))}
+                            className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                          >
+                            <option value="">Review as…</option>
+                            {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                          </select>
+                          <button
+                            onClick={() => reviewAsParty(d.id)} disabled={!reviewAsPartyId[d.id]}
+                            className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[d.id] ? 1 : 0.5 }}
+                          >
+                            Run review
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                <div className="rounded-lg border p-4" style={CARD}>
+                  <h2 className="text-sm font-semibold mb-2">Reviews</h2>
+                  <div className="space-y-1">
+                    {contractReviews.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => { openReview(r.id); setTab('review'); }}
+                        className="w-full text-left rounded border p-2 flex items-center justify-between gap-2 hover:opacity-70 flex-wrap"
+                        style={{ ...FIELD, transition: 'opacity 200ms', borderColor: review?.id === r.id ? 'var(--color-primary)' : 'var(--color-border)' }}
+                      >
+                        <span className="text-sm">{r.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">v{r.version}</Badge></span>
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {r.partyName ? `${r.partyName} (${r.partyRole})` : 'No perspective set'} · {new Date(r.createdAt).toLocaleDateString()}
+                        </span>
+                        <Badge bg="var(--color-bg)" color="var(--color-muted)">{r.status}</Badge>
+                      </button>
+                    ))}
+                    {!contractReviews.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No reviews yet.</div>}
+                  </div>
+                </div>
+
+                {compareFor && (
+                  <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h2 className="text-sm font-semibold">What changed</h2>
+                      <button onClick={() => { setCompareFor(null); setCompareResult(null); }} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Close</button>
+                    </div>
+                    {compareLoading && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Comparing…</div>}
+                    {compareResult && (
+                      <>
+                        {compareResult.summary && (
+                          <p className="text-sm mb-3 rounded p-2" style={{ background: 'var(--color-bg)' }}>{compareResult.summary}</p>
+                        )}
+                        <div className="space-y-2">
+                          {compareResult.diffItems.filter((d) => d.status !== 'unchanged').map((d, i) => (
+                            <div key={i} className="rounded border p-2" style={FIELD}>
+                              <div className="flex items-center gap-2 mb-1">
+                                {d.numberLabel && <span className="text-xs font-semibold">{d.numberLabel}</span>}
+                                <Badge
+                                  bg={d.status === 'added' ? '#dcfce7' : d.status === 'removed' ? '#fee2e2' : '#e0f2fe'}
+                                  color={d.status === 'added' ? '#166534' : d.status === 'removed' ? '#991b1b' : '#075985'}
+                                >
+                                  {d.status}
+                                </Badge>
+                                {d.oldRiskLevel && d.oldRiskLevel !== d.newRiskLevel && (
+                                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{d.oldRiskLevel} → {d.newRiskLevel || 'unscored'}</span>
+                                )}
+                              </div>
+                              {d.status === 'changed' && d.diff ? (
+                                <p className="text-sm">
+                                  {d.diff.map((op, j) => op.type === 'equal' ? (
+                                    <span key={j}>{op.text}</span>
+                                  ) : op.type === 'remove' ? (
+                                    <span key={j} style={{ background: '#fee2e2', textDecoration: 'line-through', color: '#991b1b' }}>{op.text}</span>
+                                  ) : (
+                                    <span key={j} style={{ background: '#dcfce7', color: '#166534' }}>{op.text}</span>
+                                  ))}
+                                </p>
+                              ) : (
+                                <p className="text-sm">{d.newText || d.oldText}</p>
+                              )}
+                            </div>
+                          ))}
+                          {!compareResult.diffItems.some((d) => d.status !== 'unchanged') && (
+                            <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No clauses changed between these two versions.</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-lg border p-4" style={CARD}>
                   <h2 className="text-sm font-semibold mb-2">Actions</h2>
@@ -863,6 +1066,7 @@ export default function ContractReviewPage() {
 
                     <div className="rounded-lg border p-4" style={CARD}>
                       <h2 className="text-sm font-semibold mb-2">Ask about this contract</h2>
+                      <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Searches every document and revision under this contract, not just the one currently open.</p>
                       <div className="flex gap-2 mb-3">
                         <input
                           type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
@@ -884,8 +1088,11 @@ export default function ContractReviewPage() {
                                 {h.quote && (
                                   <div className="text-xs mt-1 rounded p-2 flex items-start gap-2" style={{ background: 'var(--color-bg)' }}>
                                     {getIcon((VERIFY_BADGE[h.quote.verificationStatus] || VERIFY_BADGE.failed).icon, { size: 12, style: { marginTop: 2, color: (VERIFY_BADGE[h.quote.verificationStatus] || VERIFY_BADGE.failed).color } })}
-                                    <span>"{h.quote.text}"</span>
+                                    <span>"{h.quote.text}"{h.documentVersion != null && ` — version ${h.documentVersion}`}</span>
                                   </div>
+                                )}
+                                {h.perspectiveNote && (
+                                  <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Perspective: {h.perspectiveNote}</div>
                                 )}
                               </>
                             ) : (

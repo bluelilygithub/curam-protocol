@@ -128,6 +128,34 @@ async function setLegalHold(userId, contractId, hold) {
   }
 }
 
+async function updateContractTitle(userId, contractId, title) {
+  const t = String(title || '').trim();
+  if (!t) throw new Error('title is required');
+  await assertContractAccess(userId, contractId);
+  await pool.query(`UPDATE contracts SET title=$1, "updatedAt"=NOW() WHERE id=$2`, [t, contractId]);
+}
+
+/** Every review across every document under this contract — "the contract
+ * is the project": one title grouping all its documents, revisions and
+ * reviews. Each row identifies which document/version it reviewed and
+ * which party's perspective it was run from (a document can have more than
+ * one review, each its own perspective — see startReview's asPartyId). */
+async function listContractReviews(userId, contractId) {
+  await assertContractAccess(userId, contractId);
+  const { rows } = await pool.query(
+    `SELECT r.id, r.status, r."createdAt", r."completedAt", r."documentId", r."userPartyId",
+            d.filename, d.version, d.kind, d.status AS "documentStatus",
+            p.name AS "partyName", p.role AS "partyRole"
+     FROM contract_reviews r
+     JOIN contract_documents d ON d.id = r."documentId"
+     LEFT JOIN contract_parties p ON p.id = r."userPartyId"
+     WHERE d."contractId"=$1
+     ORDER BY d.version ASC, r."createdAt" DESC`,
+    [contractId]
+  );
+  return rows;
+}
+
 /** Optional link to an existing CRM client (server/routes/clients.js's
  * `clients` table) — never required, can be set/changed/cleared any time.
  * clientId=null unlinks. Not a new relationship type: same plain nullable-FK
@@ -368,8 +396,19 @@ async function deleteDocument(userId, documentId) {
  * call that runs multiple LLM stages, e.g. sharesNewsService/Document
  * Redaction's own "propose" endpoint). Returns once the review reaches a
  * stable state: 'complete' | 'failed' | 'not_supported' | 'awaiting_role_confirmation'. */
-async function startReview(userId, documentId) {
+/** asPartyId: an explicit party perspective for this specific review — used
+ * by "Review as another party" (a document can be reviewed from more than
+ * one party's perspective; each review stores its OWN userPartyId, never
+ * sharing or reusing the contract's single confirmedByUser/isUser party).
+ * When omitted, behaves exactly as before: pauses at
+ * awaiting_role_confirmation unless a party is already confirmed on the
+ * contract, then uses that confirmed party. */
+async function startReview(userId, documentId, { asPartyId = null } = {}) {
   const { contractId } = await assertDocumentAccess(userId, documentId);
+  if (asPartyId) {
+    const { rows: [party] } = await pool.query(`SELECT id FROM contract_parties WHERE id=$1 AND "contractId"=$2`, [asPartyId, contractId]);
+    if (!party) throw new ContractAccessError(`Party ${asPartyId} not found on this contract`);
+  }
   const { ingestDocument } = require('./ingest');
   const { segmentDocument } = require('./segmentation');
   const { runAnalysis } = require('./analysisPipeline');
@@ -393,7 +432,7 @@ async function startReview(userId, documentId) {
     );
     throw err;
   }
-  const analysisResult = await runAnalysis(ingestResult.reviewId, { userId });
+  const analysisResult = await runAnalysis(ingestResult.reviewId, { userId, asPartyId });
 
   const client = await pool.connect();
   try {
@@ -882,6 +921,8 @@ module.exports = {
   getContract,
   listContracts,
   setLegalHold,
+  updateContractTitle,
+  listContractReviews,
   linkContractToClient,
   linkPartyToClient,
   deleteContract,

@@ -87,6 +87,22 @@ router.post('/contracts/:id/link-client', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+router.post('/contracts/:id/title', async (req, res) => {
+  try {
+    await ContractService.updateContractTitle(req.user.id, Number(req.params.id), req.body?.title);
+    res.json({ ok: true });
+  } catch (err) { handleError(res, err); }
+});
+
+// Every review across every document under this contract — "the contract
+// is the project" — not just the latest document's latest review.
+router.get('/contracts/:id/reviews', async (req, res) => {
+  try {
+    const reviews = await ContractService.listContractReviews(req.user.id, Number(req.params.id));
+    res.json({ reviews });
+  } catch (err) { handleError(res, err); }
+});
+
 // ── Documents ────────────────────────────────────────────────────────────────
 
 router.post('/contracts/:id/documents', upload.single('file'), async (req, res) => {
@@ -144,7 +160,21 @@ router.post('/contracts/:id/parties/:partyId/link-client', async (req, res) => {
 
 router.post('/documents/:id/review', async (req, res) => {
   try {
-    const result = await ContractService.startReview(req.user.id, Number(req.params.id));
+    const { asPartyId } = req.body || {};
+    const result = await ContractService.startReview(req.user.id, Number(req.params.id), {
+      asPartyId: asPartyId ? Number(asPartyId) : null,
+    });
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
+// "What changed" against the previous version — computed fresh per
+// request, not a stored lineage (see compareReviews.js's own header note).
+router.get('/documents/:id/compare', async (req, res) => {
+  try {
+    await ContractService.assertDocumentAccess(req.user.id, Number(req.params.id));
+    const { compareToPreviousVersion } = require('../services/contractReview/compareReviews');
+    const result = await compareToPreviousVersion(Number(req.params.id), req.user.id);
     res.json(result);
   } catch (err) { handleError(res, err); }
 });
@@ -228,13 +258,12 @@ router.get('/export.ics', async (req, res) => {
 
 // ── Q&A ──────────────────────────────────────────────────────────────────────
 
-router.post('/reviews/:id/ask', async (req, res) => {
+// Contract-scoped (not review-scoped): searches every document/revision
+// under the contract, not just one review — "the contract is the project".
+router.post('/contracts/:id/ask', async (req, res) => {
   try {
     const { question } = req.body || {};
-    // Confirms the caller owns the contract this review belongs to before
-    // running any model call — same access-check convention as every other
-    // review-scoped route (getReview/recordCorrection).
-    await ContractService.getReview(req.user.id, Number(req.params.id));
+    await ContractService.assertContractAccess(req.user.id, Number(req.params.id));
     const { askAboutContract } = require('../services/contractReview/qa');
     const result = await askAboutContract(Number(req.params.id), question, req.user.id);
     res.json(result);

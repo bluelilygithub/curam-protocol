@@ -74,8 +74,13 @@ async function loadReviewContext(reviewId) {
 
 /** Runs stages 3-4 (type detection, parties+key terms). Pauses at
  * awaiting_role_confirmation unless a party is already confirmed. Caller
- * (ContractService.startReview) invokes this right after segmentation. */
-async function runAnalysis(reviewId, { userId } = {}) {
+ * (ContractService.startReview) invokes this right after segmentation.
+ *
+ * asPartyId ("Review as another party"): an explicit perspective for THIS
+ * review, bypassing the pause and the contract-wide confirmed-party reuse
+ * entirely — parties/key terms are still extracted (for key-term recording
+ * and party reconciliation), just never used to decide whether to pause. */
+async function runAnalysis(reviewId, { userId, asPartyId = null } = {}) {
   const ctx = await loadReviewContext(reviewId);
   await pool.query(`UPDATE contract_reviews SET "promptVersion"=$1 WHERE id=$2`, [PROMPT_VERSION, reviewId]);
   const costTracker = createCostTracker(ctx.costUsd);
@@ -85,10 +90,10 @@ async function runAnalysis(reviewId, { userId } = {}) {
     await setStatus(reviewId, 'detecting_type');
     await detectContractType(reviewId, ctx.extractedText, userId, costTracker);
 
-    await setStatus(reviewId, 'awaiting_role_confirmation');
+    await setStatus(reviewId, asPartyId ? 'extracting_definitions' : 'awaiting_role_confirmation');
     const { needsRoleConfirmation } = await extractPartiesAndKeyTerms(reviewId, ctx.contractId, ctx.extractedText, userId, costTracker);
 
-    if (needsRoleConfirmation) {
+    if (needsRoleConfirmation && !asPartyId) {
       return { status: 'awaiting_role_confirmation', reviewId };
     }
   } catch (err) {
@@ -104,7 +109,7 @@ async function runAnalysis(reviewId, { userId } = {}) {
   // own doc comment. Safe for existing callers: milestone3.test.js's own use
   // of runAnalysis only ever asserts on the FAST part (parties reconciliation),
   // which has already completed synchronously by this point either way.
-  resumeAfterRoleConfirmation(reviewId, { userId }).catch((err) => {
+  resumeAfterRoleConfirmation(reviewId, { userId, asPartyId }).catch((err) => {
     console.error(`[contract-review] auto-resume failed for review ${reviewId}:`, err.message);
   });
   return { status: 'processing', reviewId };
@@ -116,7 +121,7 @@ async function runAnalysis(reviewId, { userId } = {}) {
  * sense that it re-runs each stage's own INSERTs, matching every other
  * stage's design (a review's rows are immutable only once status='complete'
  * — see the guardrail — this function is the one place that completes it). */
-async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
+async function resumeAfterRoleConfirmation(reviewId, { userId, asPartyId = null } = {}) {
   const ctx = await loadReviewContext(reviewId);
   if (ctx.status === 'complete') {
     // Guardrail: contract_clauses/contract_definitions/contract_obligations
@@ -127,10 +132,21 @@ async function resumeAfterRoleConfirmation(reviewId, { userId } = {}) {
   }
   const { contractId, documentId, extractedText } = ctx;
 
-  const { rows: [rawUserParty] } = await pool.query(
-    `SELECT * FROM contract_parties WHERE "contractId"=$1 AND "isUser"=TRUE AND "confirmedByUser"=TRUE ORDER BY "createdAt" ASC LIMIT 1`,
-    [contractId]
-  );
+  // "Review as another party": this review's own explicit perspective,
+  // never the contract-wide confirmedByUser/isUser party — each review
+  // stores its own userPartyId, and a document can be reviewed from more
+  // than one party's perspective at once (see ContractService.startReview).
+  let rawUserParty = null;
+  if (asPartyId) {
+    const { rows: [p] } = await pool.query(`SELECT * FROM contract_parties WHERE id=$1 AND "contractId"=$2`, [asPartyId, contractId]);
+    rawUserParty = p || null;
+  } else {
+    const { rows: [p] } = await pool.query(
+      `SELECT * FROM contract_parties WHERE "contractId"=$1 AND "isUser"=TRUE AND "confirmedByUser"=TRUE ORDER BY "createdAt" ASC LIMIT 1`,
+      [contractId]
+    );
+    rawUserParty = p || null;
+  }
   // A name/role correction made on the role-confirmation screen must
   // actually drive playbook selection below, not just display differently —
   // "the review uses the edited values", not only the UI.
