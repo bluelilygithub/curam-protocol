@@ -179,6 +179,23 @@ router.get('/documents/:id/compare', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+// Compare-revisions tab: any two reviews under this contract (any versions,
+// any perspectives) — not limited to adjacent parent/child versions like the
+// quick "What changed" action in Documents & Reviews above.
+router.post('/contracts/:id/compare-reviews', async (req, res) => {
+  try {
+    const contractId = Number(req.params.id);
+    await ContractService.assertContractAccess(req.user.id, contractId);
+    const { oldReviewId, newReviewId } = req.body || {};
+    if (!oldReviewId || !newReviewId) return res.status(400).json({ error: 'oldReviewId and newReviewId are required' });
+    const { compareReviewsFull } = require('../services/contractReview/compareReviews');
+    const result = await compareReviewsFull({
+      contractId, oldReviewId: Number(oldReviewId), newReviewId: Number(newReviewId), userId: req.user.id,
+    });
+    res.json(result);
+  } catch (err) { handleError(res, err); }
+});
+
 router.post('/reviews/:id/resume', async (req, res) => {
   try {
     const result = await ContractService.resumeReview(req.user.id, Number(req.params.id));
