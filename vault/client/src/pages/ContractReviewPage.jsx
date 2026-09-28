@@ -904,6 +904,30 @@ export default function ContractReviewPage() {
 
             {tab === 'review' && (
               <div className="space-y-4">
+                {contractReviews.length > 1 && (
+                  <div className="rounded-lg border p-3" style={CARD}>
+                    <div className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                      This contract has {contractReviews.length} reviews — showing one at a time:
+                    </div>
+                    <div className="space-y-1">
+                      {contractReviews.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => openReview(r.id)}
+                          className="w-full text-left rounded border p-2 flex items-center justify-between gap-2 hover:opacity-70 flex-wrap"
+                          style={{ ...FIELD, transition: 'opacity 200ms', borderColor: review?.id === r.id ? 'var(--color-primary)' : 'var(--color-border)' }}
+                        >
+                          <span className="text-sm">{r.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">v{r.version}</Badge></span>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {r.partyName ? `${r.partyName} (${r.partyRole})` : 'No perspective set'} · {new Date(r.createdAt).toLocaleDateString()}
+                          </span>
+                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{r.status}</Badge>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {!review && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No review yet.</div>}
 
                 {review?.status === 'awaiting_role_confirmation' && (contract.parties || []).length > 0 && (
