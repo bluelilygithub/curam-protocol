@@ -356,17 +356,18 @@ export default function ContractReviewPage() {
   // fire the request and read back whatever mid-flight stage happens to be
   // there (a real bug: "Review as another party" and "Upload new revision"
   // both originally skipped this and showed a stuck-looking stage name).
-  const pollReviewUntilTerminal = useCallback(async (reviewId) => {
+  const pollReviewUntilTerminal = useCallback(async (reviewId, label) => {
     const terminal = new Set(['complete', 'failed', 'not_supported']);
+    const prefix = label ? `${label} — ` : '';
     for (let attempt = 0; attempt < 200; attempt += 1) { // ~200 * 3s = 10 min ceiling
       await new Promise((r) => setTimeout(r, 3000));
       const pollRes = await api.get(`/api/contract-review/reviews/${reviewId}`);
       if (!pollRes.ok) continue;
       const polled = await pollRes.json();
       const sp = polled.stageProgress || {};
-      let detail = `Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
+      let detail = `${prefix}Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
       if (sp.stage === 'scoring' && sp.total) {
-        detail = `Scoring clause ${sp.current || 0} of ${sp.total}`;
+        detail = `${prefix}Scoring clause ${sp.current || 0} of ${sp.total}`;
         if (sp.etaSeconds != null) {
           detail += sp.etaSeconds < 60 ? ` — about ${sp.etaSeconds}s remaining` : ` — about ${Math.round(sp.etaSeconds / 60)}m remaining`;
         }
@@ -374,7 +375,7 @@ export default function ContractReviewPage() {
       processing.updateProcessingDetail(detail);
       if (terminal.has(polled.status)) return polled;
     }
-    throw new Error('Analysis is taking longer than expected — check back on this contract shortly.');
+    throw new Error(`${prefix}Analysis is taking longer than expected — check back on this contract shortly.`);
   }, [processing]);
 
   const confirmPartyIdAndResume = useCallback(async (partyId) => {
@@ -382,11 +383,15 @@ export default function ContractReviewPage() {
     const res = await api.post(`/api/contract-review/contracts/${contract.id}/parties/${partyId}/confirm`, {});
     if (!res.ok) { setError('Could not confirm role'); return; }
     setError('');
-    processing.startProcessing('Continuing analysis…', 'Definitions, clause classification, risk scoring, obligations, and summary. This can take a few minutes.');
+    const docLabel = (contract.documents || []).find((d) => d.id === review?.documentId)?.filename || null;
+    processing.startProcessing(
+      docLabel ? `Continuing analysis of ${docLabel}…` : 'Continuing analysis…',
+      'Definitions, clause classification, risk scoring, obligations, and summary. This can take a few minutes.'
+    );
     try {
       const resumeRes = await api.post(`/api/contract-review/reviews/${review.id}/resume`, {});
       if (!resumeRes.ok) throw new Error((await resumeRes.json().catch(() => ({}))).error || 'Failed to resume review');
-      const finalReview = await pollReviewUntilTerminal(review.id);
+      const finalReview = await pollReviewUntilTerminal(review.id, docLabel);
       if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
       setReview(finalReview);
       const obRes = await api.get(`/api/contract-review/obligations?contractId=${contract.id}`);
@@ -490,13 +495,19 @@ export default function ContractReviewPage() {
     const partyId = reviewAsPartyId[documentId];
     if (!partyId || !contract) return;
     setError('');
-    processing.startProcessing('Reviewing from that party\'s perspective…', 'This runs a full, independent analysis of this document for the chosen party — it does not affect any other review. This can take a few minutes.');
+    const docLabel = (contract.documents || []).find((d) => d.id === documentId)?.filename || null;
+    const partyLabel = (contract.parties || []).find((p) => p.id === partyId)?.name || null;
+    const label = [docLabel, partyLabel ? `as ${partyLabel}` : null].filter(Boolean).join(' — ') || null;
+    processing.startProcessing(
+      label ? `Reviewing ${label}…` : 'Reviewing from that party\'s perspective…',
+      'This runs a full, independent analysis of this document for the chosen party — it does not affect any other review. This can take a few minutes.'
+    );
     try {
       const res = await api.post(`/api/contract-review/documents/${documentId}/review`, { asPartyId: partyId });
       const started = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(started.error || 'Failed to start review');
       if (started.status !== 'awaiting_role_confirmation' && started.status !== 'not_supported' && started.status !== 'failed') {
-        const finalReview = await pollReviewUntilTerminal(started.reviewId);
+        const finalReview = await pollReviewUntilTerminal(started.reviewId, label);
         if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
       }
       await openContract(contract.id);
@@ -511,7 +522,7 @@ export default function ContractReviewPage() {
     if (!file || !contract) return;
     setRevisionBusy(documentId);
     setError('');
-    processing.startProcessing('Uploading and reviewing the new revision…', 'Extraction, segmentation, and the full analysis pipeline run for this revision. This can take a few minutes.');
+    processing.startProcessing(`Uploading and reviewing ${file.name}…`, 'Extraction, segmentation, and the full analysis pipeline run for this revision. This can take a few minutes.');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -528,7 +539,7 @@ export default function ContractReviewPage() {
       // situation could still pause it, in which case there's nothing to
       // poll for yet.
       if (started.status !== 'awaiting_role_confirmation' && started.status !== 'not_supported' && started.status !== 'failed') {
-        const finalReview = await pollReviewUntilTerminal(started.reviewId);
+        const finalReview = await pollReviewUntilTerminal(started.reviewId, file.name);
         if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
       }
       await openContract(contract.id);
