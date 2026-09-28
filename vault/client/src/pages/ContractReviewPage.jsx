@@ -518,6 +518,24 @@ export default function ContractReviewPage() {
     }
   }, [contract, reviewAsPartyId, processing, pollReviewUntilTerminal, openContract]);
 
+  const runCompare = useCallback(async (documentId) => {
+    setCompareFor(documentId);
+    setCompareResult(null);
+    setCompareLoading(true);
+    setError('');
+    try {
+      const res = await api.get(`/api/contract-review/documents/${documentId}/compare`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not compare versions');
+      setCompareResult(data);
+    } catch (e) {
+      setError(e.message || 'Could not compare versions');
+      setCompareFor(null);
+    } finally {
+      setCompareLoading(false);
+    }
+  }, []);
+
   const uploadRevision = useCallback(async (documentId, file) => {
     if (!file || !contract) return;
     setRevisionBusy(documentId);
@@ -538,36 +556,28 @@ export default function ContractReviewPage() {
       // awaiting_role_confirmation entirely — but a genuinely new party
       // situation could still pause it, in which case there's nothing to
       // poll for yet.
+      let reviewSucceeded = false;
       if (started.status !== 'awaiting_role_confirmation' && started.status !== 'not_supported' && started.status !== 'failed') {
         const finalReview = await pollReviewUntilTerminal(started.reviewId, file.name);
         if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
+        reviewSucceeded = finalReview.status === 'complete';
       }
       await openContract(contract.id);
+      // The whole point of uploading a revision is "what's different from
+      // last time" — surface that automatically instead of making the user
+      // find and click "What changed" themselves afterward.
+      if (reviewSucceeded) {
+        setTab('documents');
+        await runCompare(doc.id);
+      }
     } catch (e) {
       setError(e.message || 'Failed to upload revision');
     } finally {
       setRevisionBusy(null);
       processing.stopProcessing();
     }
-  }, [contract, processing, pollReviewUntilTerminal, openContract]);
+  }, [contract, processing, pollReviewUntilTerminal, openContract, runCompare]);
 
-  const runCompare = useCallback(async (documentId) => {
-    setCompareFor(documentId);
-    setCompareResult(null);
-    setCompareLoading(true);
-    setError('');
-    try {
-      const res = await api.get(`/api/contract-review/documents/${documentId}/compare`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not compare versions');
-      setCompareResult(data);
-    } catch (e) {
-      setError(e.message || 'Could not compare versions');
-      setCompareFor(null);
-    } finally {
-      setCompareLoading(false);
-    }
-  }, []);
 
   const setStatus = useCallback(async (status) => {
     if (!contract) return;
