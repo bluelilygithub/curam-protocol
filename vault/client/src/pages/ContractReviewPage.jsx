@@ -708,21 +708,6 @@ export default function ContractReviewPage() {
   // back to Documents & Reviews.
   useEffect(() => { setRevisionUploadOpenFor(null); }, [contract?.id, tab]);
 
-  // Live progress — a review can now finish its ingest/analysis entirely in
-  // the background (server/services/contractReview/contractService.js's
-  // startReview/resumeReview are fire-and-forget), so a page reload or a
-  // fresh navigation to this contract while a review is still running has no
-  // active poll loop of its own. Without this, the Review tab would just
-  // show nothing meaningful until the user manually refreshed.
-  useEffect(() => {
-    if (!review) return;
-    const inProgress = !['awaiting_role_confirmation', 'failed', 'not_supported', 'complete'].includes(review.status);
-    if (!inProgress) return;
-    const reviewId = review.id;
-    const interval = setInterval(() => { openReview(reviewId); }, 4000);
-    return () => clearInterval(interval);
-  }, [review?.id, review?.status, openReview]);
-
   useEffect(() => {
     api.get('/api/settings/feature-access')
       .then((r) => (r.ok ? r.json() : null))
@@ -828,6 +813,25 @@ export default function ContractReviewPage() {
     const res = await api.get(`/api/contract-review/reviews/${reviewId}`);
     if (res.ok && currentReviewIdRef.current === reviewId) setReview(await res.json());
   }, []);
+
+  // Live progress — a review can now finish its ingest/analysis entirely in
+  // the background (server/services/contractReview/contractService.js's
+  // startReview/resumeReview are fire-and-forget), so a page reload or a
+  // fresh navigation to this contract while a review is still running has no
+  // active poll loop of its own. Without this, the Review tab would just
+  // show nothing meaningful until the user manually refreshed. Must come
+  // AFTER openReview's own declaration above — referencing it in this
+  // effect's dependency array before its `const` initializes is a temporal-
+  // dead-zone ReferenceError under strict production evaluation (a real bug
+  // this exact ordering caused once already).
+  useEffect(() => {
+    if (!review) return;
+    const inProgress = !['awaiting_role_confirmation', 'failed', 'not_supported', 'complete'].includes(review.status);
+    if (!inProgress) return;
+    const reviewId = review.id;
+    const interval = setInterval(() => { openReview(reviewId); }, 4000);
+    return () => clearInterval(interval);
+  }, [review?.id, review?.status, openReview]);
 
   const saveTitle = useCallback(async () => {
     const t = titleDraft.trim();
