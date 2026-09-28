@@ -10,6 +10,7 @@ import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '.
 import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
+import { startContractReviewTour, TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
 
 export default function TourButton() {
   const location = useLocation();
@@ -25,8 +26,9 @@ export default function TourButton() {
   const isProductScout = location.pathname.startsWith('/product-scout');
   const isRecipes = location.pathname.startsWith('/recipes');
   const isPropertyScenario = location.pathname.startsWith('/property-scenario');
+  const isContractReview = location.pathname.startsWith('/contract-review');
 
-  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings && !isProductScout && !isRecipes && !isPropertyScenario) return null;
+  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings && !isProductScout && !isRecipes && !isPropertyScenario && !isContractReview) return null;
 
   // On /goals: Getting Started tour takes priority while pending, then Goals tour
   const isGettingStartedPending = isGoals && !localStorage.getItem(GETTING_STARTED_TOUR_KEY);
@@ -41,6 +43,7 @@ export default function TourButton() {
   else if (isProductScout) tourKey = PRODUCT_SCOUT_TOUR_KEY;
   else if (isRecipes) tourKey = RECIPES_TOUR_KEY;
   else if (isPropertyScenario) tourKey = PROPERTY_SCENARIO_TOUR_KEY;
+  else if (isContractReview) tourKey = CONTRACT_REVIEW_TOUR_KEY;
 
   if (localStorage.getItem(tourKey)) return null;
 
@@ -54,6 +57,7 @@ export default function TourButton() {
     else if (isProductScout) startProductScoutTour(navigate);
     else if (isRecipes) startRecipesTour(navigate);
     else if (isPropertyScenario) startPropertyScenarioTour(navigate);
+    else if (isContractReview) startContractReviewTour(navigate);
   };
 
   let label;
@@ -66,6 +70,7 @@ export default function TourButton() {
   else if (isProductScout) label = 'Amazon Search Tour';
   else if (isRecipes) label = 'Recipes Tour';
   else if (isPropertyScenario) label = 'Property Scenario Tour';
+  else if (isContractReview) label = 'Contract Review Tour';
 
   return (
     <button

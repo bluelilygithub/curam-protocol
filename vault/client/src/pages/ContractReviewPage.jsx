@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import Tooltip from '../components/Tooltip';
+import { startContractReviewTour, TOUR_KEY as CR_TOUR_KEY } from '../utils/tours/contractReviewTour';
 
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -163,7 +165,113 @@ function formatObligationTiming(o) {
   return 'No fixed date';
 }
 
+function ContractReviewHelp({ onClose, getIcon }) {
+  const STAGES = [
+    { stage: 'Extraction & segmentation', what: 'PDF/DOCX text pulled out and split into individually addressable clauses (numbered where possible).' },
+    { stage: 'Type detection', what: "The contract's type (lease, employment, services, NDA, etc.) is identified to steer which checks apply." },
+    { stage: 'Party extraction', what: 'Every named party is detected. Analysis pauses here until you confirm which one is you — see Part 2 below.' },
+    { stage: 'Definitions', what: "Defined terms (\"Confidential Information\" etc.) are extracted and verified against the source text." },
+    { stage: 'Clause classification & risk scoring', what: 'Each clause is scored Risky / Unclear / Standard specifically for your confirmed party — the same clause can score differently for the other side.' },
+    { stage: 'Obligations', what: 'Dates, deadlines, and recurring duties are extracted with their trigger (absolute date, recurring rule, or an anchor event like "30 days after termination").' },
+    { stage: 'Summary', what: 'A short plain-English summary of the whole document, each point tagged with how well it could be verified against the source text.' },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 720, maxHeight: '90dvh' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-2">
+            {getIcon('book', { size: 16 })}
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Contract Review — How it works</span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+          >
+            {getIcon('close', { size: 18 })}
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto px-6 py-5 space-y-6 text-sm" style={{ color: 'var(--color-text)' }}>
+          <p style={{ color: 'var(--color-muted)' }}>
+            Upload a contract and it runs through a fixed pipeline, then two things stay in your hands throughout: whose side the risk flags are scored for, and whether any given flag actually applies to your situation.
+          </p>
+
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 1 — The analysis pipeline</h2>
+            <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)', width: '32%' }}>Stage</th>
+                    <th className="text-left px-4 py-2.5 font-semibold border-b" style={{ borderColor: 'var(--color-border)' }}>What happens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {STAGES.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: i < STAGES.length - 1 ? `1px solid var(--color-border)` : 'none' }}>
+                      <td className="px-4 py-3 align-top font-medium" style={{ color: 'var(--color-text)' }}>{row.stage}</td>
+                      <td className="px-4 py-3 align-top" style={{ color: 'var(--color-muted)' }}>{row.what}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 2 — Why it asks "which party are you?"</h2>
+            <p style={{ color: 'var(--color-muted)' }}>
+              A termination clause that's risky for a tenant can be entirely standard for a landlord. Risk scoring can't be neutral, so analysis pauses after party extraction until you confirm your side — correcting a detected name or role right there if it's wrong, or adding yourself manually if nobody was detected at all. You can later run an independent review of the same document as a different party without disturbing this one.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Part 3 — Verification badges</h2>
+            <ul className="space-y-1 text-xs list-disc list-inside" style={{ color: 'var(--color-muted)' }}>
+              <li><strong style={{ color: 'var(--color-text)' }}>Verified</strong> — the clause/quote text was matched back to the source document exactly.</li>
+              <li><strong style={{ color: 'var(--color-text)' }}>Verified (approx.)</strong> — matched after normalizing whitespace/punctuation, not a byte-for-byte match.</li>
+              <li><strong style={{ color: 'var(--color-text)' }}>Unverified</strong> — could not be confirmed against the source text. Treat with more caution than a verified flag.</li>
+            </ul>
+          </section>
+
+          <section className="rounded-xl p-4 border-l-4" style={{ background: 'var(--color-bg)', borderLeftColor: 'var(--color-primary)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }}>
+            <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Suggested redlines are advisory only</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Any suggested redline text is copy-paste-only wording for you to bring to a negotiation or a lawyer — it is never applied to the document automatically, and nothing here is legal advice.
+            </p>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t shrink-0 flex justify-end" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ContractReviewPage() {
+  const navigate = useNavigate();
+  const [helpOpen, setHelpOpen] = useState(false);
   const getIcon = useIcon();
   const isAdmin = useAuthStore((s) => s.user?.isAdmin);
   const processing = useProcessingStore();
@@ -670,10 +778,31 @@ export default function ContractReviewPage() {
   return (
     <div style={{ background: 'var(--color-bg)', color: 'var(--color-text)', minHeight: '100dvh' }}>
       <NotLegalAdviceBanner />
+      {helpOpen && <ContractReviewHelp onClose={() => setHelpOpen(false)} getIcon={getIcon} />}
       <div className="p-4 sm:p-6 max-w-5xl mx-auto">
         {view === 'list' && (
           <>
-            <h1 className="text-lg font-semibold mb-4">Contract Review</h1>
+            <div className="flex items-center gap-2 mb-4">
+              <h1 className="text-lg font-semibold">Contract Review</h1>
+              <button
+                onClick={() => { localStorage.removeItem(CR_TOUR_KEY); startContractReviewTour(navigate); }}
+                title="Take the Contract Review tour"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'color 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+              >
+                {getIcon('compass', { size: 15 })}
+              </button>
+              <button
+                onClick={() => setHelpOpen(true)}
+                title="How this tool works"
+                style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, transition: 'color 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+              >
+                {getIcon('info', { size: 15 })}
+              </button>
+            </div>
             {crmClientIdFilter && (
               <div className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
                 Showing contracts linked to this CRM contact only. <Link to="/contract-review" style={{ color: 'var(--color-primary)' }}>Show all contracts</Link>
@@ -681,18 +810,22 @@ export default function ContractReviewPage() {
             )}
             {error && <div style={{ color: '#991b1b' }} className="mb-3 text-sm">{error}</div>}
 
-            <div className="rounded-lg border p-4 mb-6" style={CARD}>
+            <div className="rounded-lg border p-4 mb-6" style={CARD} data-tour="contract-review-upload">
               <h2 className="text-sm font-semibold mb-3">New contract review</h2>
-              <input
-                type="text" placeholder="Contract title" value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                className="w-full rounded border px-3 py-2 text-sm mb-2" style={FIELD}
-              />
-              <input
-                type="file" accept=".pdf,.docx"
-                onChange={(e) => setNewFile(e.target.files?.[0] || null)}
-                className="w-full text-sm mb-3"
-              />
+              <Tooltip text="A short label to find this contract again later — doesn't affect the analysis.">
+                <input
+                  type="text" placeholder="Contract title" value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full rounded border px-3 py-2 text-sm mb-2" style={FIELD}
+                />
+              </Tooltip>
+              <Tooltip text="PDF or DOCX only. This kicks off extraction, segmentation, type detection, and party extraction.">
+                <input
+                  type="file" accept=".pdf,.docx"
+                  onChange={(e) => setNewFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm mb-3"
+                />
+              </Tooltip>
               <button
                 onClick={createContract}
                 className="rounded px-4 py-2 text-sm font-medium hover:opacity-70"
@@ -767,13 +900,15 @@ export default function ContractReviewPage() {
               ← All contracts
             </button>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <input
-                type="text" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={saveTitle} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                className="text-lg font-semibold rounded border px-2 py-1 bg-transparent"
-                style={{ borderColor: 'transparent', minWidth: 200 }}
-                onFocus={(e) => { e.target.style.borderColor = 'var(--color-border)'; }}
-              />
+              <Tooltip text="Click to rename this contract. Saves automatically when you click away.">
+                <input
+                  type="text" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={saveTitle} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                  className="text-lg font-semibold rounded border px-2 py-1 bg-transparent"
+                  style={{ borderColor: 'transparent', minWidth: 200 }}
+                  onFocus={(e) => { e.target.style.borderColor = 'var(--color-border)'; }}
+                />
+              </Tooltip>
               <div className="flex items-center gap-2">
                 <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.contractType}</Badge>
                 <Badge bg="var(--color-bg)" color="var(--color-muted)">{contract.status}</Badge>
@@ -810,14 +945,16 @@ export default function ContractReviewPage() {
                       <Badge bg="var(--color-bg)" color="var(--color-muted)">{p.role}</Badge>
                       {p.isUser && <Badge bg="#e0e7ff" color="#3730a3">You</Badge>}
                       {p.confirmedByUser && getIcon('check-circle', { size: 14, color: '#166534' })}
-                      <select
-                        value={p.crmClientId || ''}
-                        onChange={(e) => linkPartyClient(p.id, e.target.value)}
-                        className="rounded border px-2 py-0.5 text-xs ml-auto" style={FIELD}
-                      >
-                        <option value="">No linked CRM contact</option>
-                        {crmClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                      <Tooltip text="Link this party to an existing CRM contact — no effect on the analysis, just cross-references the two.">
+                        <select
+                          value={p.crmClientId || ''}
+                          onChange={(e) => linkPartyClient(p.id, e.target.value)}
+                          className="rounded border px-2 py-0.5 text-xs ml-auto" style={FIELD}
+                        >
+                          <option value="">No linked CRM contact</option>
+                          {crmClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </Tooltip>
                     </div>
                   ))}
                   {!contract.parties?.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No parties extracted yet.</div>}
@@ -842,13 +979,17 @@ export default function ContractReviewPage() {
                   <div className="rounded-lg border p-4" style={CARD}>
                     <h2 className="text-sm font-semibold mb-2">Report</h2>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
-                        {getIcon('download', { size: 14 })} Download PDF
-                      </button>
-                      <input
-                        type="email" value={reportEmail} onChange={(e) => setReportEmail(e.target.value)}
-                        placeholder="Email address" className="rounded border px-2 py-1.5 text-sm" style={FIELD}
-                      />
+                      <Tooltip text="Banner, parties and role, every flag with its reason and redline, and obligations.">
+                        <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
+                          {getIcon('download', { size: 14 })} Download PDF
+                        </button>
+                      </Tooltip>
+                      <Tooltip text="Sends the same PDF report to this address instead of downloading it.">
+                        <input
+                          type="email" value={reportEmail} onChange={(e) => setReportEmail(e.target.value)}
+                          placeholder="Email address" className="rounded border px-2 py-1.5 text-sm" style={FIELD}
+                        />
+                      </Tooltip>
                       <button onClick={emailReport} disabled={reportBusy || !reportEmail.trim()} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy || !reportEmail.trim() ? 0.5 : 1 }}>
                         Send report
                       </button>
@@ -893,22 +1034,26 @@ export default function ContractReviewPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mt-2">
-                          <label className="text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
-                            {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
-                            <input
-                              type="file" accept=".pdf,.docx" className="hidden" disabled={revisionBusy === d.id}
-                              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRevision(d.id, f); e.target.value = ''; }}
-                            />
-                          </label>
+                          <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
+                            <label className="text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                              {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
+                              <input
+                                type="file" accept=".pdf,.docx" className="hidden" disabled={revisionBusy === d.id}
+                                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRevision(d.id, f); e.target.value = ''; }}
+                              />
+                            </label>
+                          </Tooltip>
                           <span style={{ color: 'var(--color-border)' }}>·</span>
-                          <select
-                            value={reviewAsPartyId[d.id] || ''}
-                            onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [d.id]: e.target.value ? Number(e.target.value) : null }))}
-                            className="rounded border px-2 py-0.5 text-xs" style={FIELD}
-                          >
-                            <option value="">Review as…</option>
-                            {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
-                          </select>
+                          <Tooltip text="Runs a new, independent review of this same document from another party's perspective.">
+                            <select
+                              value={reviewAsPartyId[d.id] || ''}
+                              onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [d.id]: e.target.value ? Number(e.target.value) : null }))}
+                              className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                            >
+                              <option value="">Review as…</option>
+                              {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                            </select>
+                          </Tooltip>
                           <button
                             onClick={() => reviewAsParty(d.id)} disabled={!reviewAsPartyId[d.id]}
                             className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[d.id] ? 1 : 0.5 }}
@@ -1040,26 +1185,32 @@ export default function ContractReviewPage() {
                     <div className="space-y-2 mb-3">
                       {contract.parties.map((p) => (
                         <div key={p.id} className="flex items-center gap-2 text-sm">
-                          <input type="radio" name="userParty" checked={pickedPartyId === p.id} onChange={() => setPickedPartyId(p.id)} />
-                          <input
-                            type="text"
-                            value={partyNameDrafts[p.id] ?? p.name}
-                            onChange={(e) => setPartyNameDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v && v !== p.name) savePartyField(p.id, 'name', v);
-                            }}
-                            className="rounded border px-2 py-1 text-sm flex-1"
-                            style={FIELD}
-                          />
-                          <select
-                            value={p.role}
-                            onChange={(e) => savePartyField(p.id, 'role', e.target.value)}
-                            className="rounded border px-2 py-1 text-sm"
-                            style={FIELD}
-                          >
-                            {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                          </select>
+                          <Tooltip text="Select this party as you — risk flags for the rest of the review are scored for your confirmed side.">
+                            <input type="radio" name="userParty" checked={pickedPartyId === p.id} onChange={() => setPickedPartyId(p.id)} />
+                          </Tooltip>
+                          <Tooltip text="Fix the detected name if it's wrong — your edit is what the review uses from here on.">
+                            <input
+                              type="text"
+                              value={partyNameDrafts[p.id] ?? p.name}
+                              onChange={(e) => setPartyNameDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v && v !== p.name) savePartyField(p.id, 'name', v);
+                              }}
+                              className="rounded border px-2 py-1 text-sm flex-1"
+                              style={FIELD}
+                            />
+                          </Tooltip>
+                          <Tooltip text="Fix the detected role if it's wrong — this affects how risk is scored once confirmed.">
+                            <select
+                              value={p.role}
+                              onChange={(e) => savePartyField(p.id, 'role', e.target.value)}
+                              className="rounded border px-2 py-1 text-sm"
+                              style={FIELD}
+                            >
+                              {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                            </select>
+                          </Tooltip>
                         </div>
                       ))}
                     </div>
@@ -1076,13 +1227,17 @@ export default function ContractReviewPage() {
                       No parties could be automatically detected in this document. Enter your own name and role to continue — the rest of the parties can still be identified later from the clauses themselves.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                      <input
-                        type="text" value={manualPartyName} onChange={(e) => setManualPartyName(e.target.value)}
-                        placeholder="Your name or organization" className="rounded border px-2 py-1.5 text-sm flex-1" style={FIELD}
-                      />
-                      <select value={manualPartyRole} onChange={(e) => setManualPartyRole(e.target.value)} className="rounded border px-2 py-1.5 text-sm" style={FIELD}>
-                        {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
+                      <Tooltip text="Your own name or organization — becomes a party on this contract, confirmed as you.">
+                        <input
+                          type="text" value={manualPartyName} onChange={(e) => setManualPartyName(e.target.value)}
+                          placeholder="Your name or organization" className="rounded border px-2 py-1.5 text-sm flex-1" style={FIELD}
+                        />
+                      </Tooltip>
+                      <Tooltip text="Your role in this agreement — used to score risk flags for your side.">
+                        <select value={manualPartyRole} onChange={(e) => setManualPartyRole(e.target.value)} className="rounded border px-2 py-1.5 text-sm" style={FIELD}>
+                          {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </Tooltip>
                     </div>
                     <button
                       onClick={addManualPartyAndConfirm} disabled={!manualPartyName.trim()}
@@ -1126,14 +1281,16 @@ export default function ContractReviewPage() {
                           )}
                           <div className="flex items-center gap-2 ml-auto">
                             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Review this same document as:</span>
-                            <select
-                              value={reviewAsPartyId[review.documentId] || ''}
-                              onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
-                              className="rounded border px-2 py-0.5 text-xs" style={FIELD}
-                            >
-                              <option value="">Choose a party…</option>
-                              {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
-                            </select>
+                            <Tooltip text="Starts a brand new, independent review of this document for the chosen party — never affects the review you're currently viewing.">
+                              <select
+                                value={reviewAsPartyId[review.documentId] || ''}
+                                onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
+                                className="rounded border px-2 py-0.5 text-xs" style={FIELD}
+                              >
+                                <option value="">Choose a party…</option>
+                                {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                              </select>
+                            </Tooltip>
                             <button
                               onClick={() => reviewAsParty(review.documentId)} disabled={!reviewAsPartyId[review.documentId]}
                               className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-primary)', opacity: reviewAsPartyId[review.documentId] ? 1 : 0.5 }}
@@ -1185,17 +1342,21 @@ export default function ContractReviewPage() {
                       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                         <h2 className="text-sm font-semibold">Clauses</h2>
                         <div className="flex items-center gap-2">
-                          <select value={clauseFilter} onChange={(e) => setClauseFilter(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
-                            <option value="all">All</option>
-                            <option value="risky">Risky</option>
-                            <option value="unclear">Unclear</option>
-                            <option value="standard">Standard</option>
-                            <option value="context">Context only</option>
-                          </select>
-                          <select value={clauseSort} onChange={(e) => setClauseSort(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
-                            <option value="order">Clause order</option>
-                            <option value="severity">Severity</option>
-                          </select>
+                          <Tooltip text="Show only clauses of one risk level, or context-only clauses that weren't risk-scored at all.">
+                            <select value={clauseFilter} onChange={(e) => setClauseFilter(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                              <option value="all">All</option>
+                              <option value="risky">Risky</option>
+                              <option value="unclear">Unclear</option>
+                              <option value="standard">Standard</option>
+                              <option value="context">Context only</option>
+                            </select>
+                          </Tooltip>
+                          <Tooltip text="Clause order follows the document; Severity groups the riskiest clauses first.">
+                            <select value={clauseSort} onChange={(e) => setClauseSort(e.target.value)} className="rounded border px-2 py-1 text-xs" style={FIELD}>
+                              <option value="order">Clause order</option>
+                              <option value="severity">Severity</option>
+                            </select>
+                          </Tooltip>
                         </div>
                       </div>
                       <div className="space-y-3">
@@ -1235,12 +1396,14 @@ export default function ContractReviewPage() {
                       <h2 className="text-sm font-semibold mb-2">Ask about this contract</h2>
                       <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Searches every document and revision under this contract, not just the one currently open.</p>
                       <div className="flex gap-2 mb-3">
-                        <input
-                          type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && !qaLoading) askQuestion(); }}
-                          placeholder="e.g. How much notice do I need to give to terminate?"
-                          className="flex-1 rounded border px-3 py-2 text-sm" style={FIELD}
-                        />
+                        <Tooltip text="Answers are grounded in the actual clause text and quote the clause they're based on — searches every document and revision under this contract.">
+                          <input
+                            type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !qaLoading) askQuestion(); }}
+                            placeholder="e.g. How much notice do I need to give to terminate?"
+                            className="flex-1 rounded border px-3 py-2 text-sm" style={FIELD}
+                          />
+                        </Tooltip>
                         <button onClick={askQuestion} disabled={qaLoading || !question.trim()} className="rounded px-3 py-2 text-xs font-medium hover:opacity-70" style={{ transition: 'opacity 200ms', background: 'var(--color-primary)', color: '#fff', opacity: qaLoading || !question.trim() ? 0.5 : 1 }}>
                           {qaLoading ? 'Asking…' : 'Ask'}
                         </button>
@@ -1306,20 +1469,24 @@ export default function ContractReviewPage() {
                       <div key={o.id} className="rounded border p-3" style={{ ...FIELD, opacity: done ? 0.6 : 1 }}>
                         <div className="text-sm mb-2" style={{ textDecoration: done ? 'line-through' : 'none' }}>{o.description}</div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <select
-                            value={o.obligorPartyId != null ? String(o.obligorPartyId) : ''}
-                            onChange={(e) => setObligationField(o, 'obligorPartyId', e.target.value)}
-                            className="rounded border px-2 py-1 text-xs" style={FIELD}
-                          >
-                            <option value="">Obligor unresolved</option>
-                            {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <input
-                            type="date"
-                            value={o.absoluteDate ? String(o.absoluteDate).slice(0, 10) : ''}
-                            onChange={(e) => { if (e.target.value) setObligationField(o, 'absoluteDate', e.target.value); }}
-                            className="rounded border px-2 py-1 text-xs" style={FIELD}
-                          />
+                          <Tooltip text="Who owes this obligation. Correct it here if the extraction couldn't resolve it automatically.">
+                            <select
+                              value={o.obligorPartyId != null ? String(o.obligorPartyId) : ''}
+                              onChange={(e) => setObligationField(o, 'obligorPartyId', e.target.value)}
+                              className="rounded border px-2 py-1 text-xs" style={FIELD}
+                            >
+                              <option value="">Obligor unresolved</option>
+                              {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                          </Tooltip>
+                          <Tooltip text="Set or correct an exact due date — needed before this obligation can export to .ics or link to a Task with a due date.">
+                            <input
+                              type="date"
+                              value={o.absoluteDate ? String(o.absoluteDate).slice(0, 10) : ''}
+                              onChange={(e) => { if (e.target.value) setObligationField(o, 'absoluteDate', e.target.value); }}
+                              className="rounded border px-2 py-1 text-xs" style={FIELD}
+                            />
+                          </Tooltip>
                           {!o.absoluteDate && (
                             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>({formatObligationTiming(o)})</span>
                           )}
