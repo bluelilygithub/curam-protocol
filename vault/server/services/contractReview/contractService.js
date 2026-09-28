@@ -957,8 +957,11 @@ async function setObligationState(userId, obligationId, state) {
   );
 }
 
-/** Same one-directional bridge as the CRM touchpoint -> Task pattern —
- * tasks never point back. Blocks on an unverified obligation the same way
+/** Same bridge shape as the CRM touchpoint -> Task pattern, with one
+ * deliberate difference: unlike touchpoints, completing/reopening the linked
+ * Task DOES point back here (see tasks.js's PUT /:id -> syncObligationStateFromTask)
+ * — an obligation's tracked state should follow its Task rather than drift
+ * out of sync with it. Blocks on an unverified obligation the same way
  * exportIcs does (spec: "Both Add to Tasks and ICS export exclude any
  * obligation with verificationStatus='failed' until the user confirms it via
  * a correction") — checked against the EFFECTIVE (post-correction) status so
@@ -981,6 +984,23 @@ async function linkObligationToTask(userId, obligationId, taskId) {
     `INSERT INTO contract_obligation_tracking ("contractId", "lineageId", "linkedTaskId") VALUES ($1,$2,$3)
      ON CONFLICT ("contractId", "lineageId") DO UPDATE SET "linkedTaskId"=EXCLUDED."linkedTaskId", "updatedAt"=NOW()`,
     [ob.contractId, ob.lineageId, taskId]
+  );
+}
+
+/** Called by tasks.js whenever a linked Task's done/not-done state changes —
+ * the one deliberate exception to the CRM touchpoint->Task "one direction
+ * only, tasks never point back" pattern documented elsewhere in this
+ * codebase. Requested explicitly: completing (or reopening) a Task created
+ * via linkObligationToTask should flip the obligation's tracked state to
+ * match, in both directions, rather than leaving it to drift out of sync.
+ * No userId/ownership check here — tasks.js already owns that check for the
+ * task itself, and this only ever touches a tracking row a real task row
+ * already points at (a bare UPDATE with no matching linkedTaskId is a no-op,
+ * not an error, for every task that isn't obligation-linked). */
+async function syncObligationStateFromTask(taskId, done) {
+  await pool.query(
+    `UPDATE contract_obligation_tracking SET "userState"=$1, "updatedAt"=NOW() WHERE "linkedTaskId"=$2`,
+    [done ? 'handled' : null, taskId]
   );
 }
 
@@ -1079,6 +1099,7 @@ module.exports = {
   listObligations,
   setObligationState,
   linkObligationToTask,
+  syncObligationStateFromTask,
   exportIcs,
   searchClauses,
 };

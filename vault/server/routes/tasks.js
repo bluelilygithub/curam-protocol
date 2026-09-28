@@ -807,6 +807,17 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // Contract Review: a Task created from "Send to Tasks" on an obligation
+    // (ContractService.linkObligationToTask) should reflect back onto that
+    // obligation when completed/reopened here — the one exception to the
+    // otherwise one-directional touchpoint/obligation -> Task bridge.
+    if (isNowDone !== wasAlreadyDone) {
+      const { syncObligationStateFromTask } = require('../services/contractReview/contractService');
+      await syncObligationStateFromTask(Number(id), isNowDone).catch((err) => {
+        console.error('[tasks] obligation state sync failed:', err.message);
+      });
+    }
+
     res.json(built);
   } catch (err) {
     console.error('[tasks PUT]', err);
