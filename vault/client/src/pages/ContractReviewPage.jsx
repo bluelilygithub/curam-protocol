@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore, { runWithStepLog } from '../store/processingStore';
@@ -167,10 +168,15 @@ export default function ContractReviewPage() {
   const isAdmin = useAuthStore((s) => s.user?.isAdmin);
   const processing = useProcessingStore();
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [searchParams] = useSearchParams();
+  const crmClientIdFilter = searchParams.get('crmClientId') || null;
 
   const [view, setView] = useState('list'); // list | detail
   const [contracts, setContracts] = useState([]);
   const [error, setError] = useState('');
+  const [selectedContractIds, setSelectedContractIds] = useState(new Set());
+  const [pendingDeleteId, setPendingDeleteId] = useState(null); // single-row inline confirm
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
   const [newFile, setNewFile] = useState(null);
@@ -222,13 +228,42 @@ export default function ContractReviewPage() {
   const enabled = isAdmin || featureAccess.contractReview !== false;
 
   const loadContracts = useCallback(async () => {
-    const res = await api.get('/api/contract-review/contracts');
+    const qs = crmClientIdFilter ? `?crmClientId=${crmClientIdFilter}` : '';
+    const res = await api.get(`/api/contract-review/contracts${qs}`);
     if (!res.ok) return;
     const data = await res.json();
     setContracts(data.contracts || []);
-  }, []);
+  }, [crmClientIdFilter]);
 
   useEffect(() => { loadContracts(); }, [loadContracts]);
+
+  const toggleContractSelected = useCallback((id) => {
+    setSelectedContractIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllContracts = useCallback(() => {
+    setSelectedContractIds((prev) => (
+      prev.size === contracts.length ? new Set() : new Set(contracts.map((c) => c.id))
+    ));
+  }, [contracts]);
+
+  const deleteContractFromList = useCallback(async (id) => {
+    await api.delete(`/api/contract-review/contracts/${id}`);
+    setPendingDeleteId(null);
+    setSelectedContractIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    await loadContracts();
+  }, [loadContracts]);
+
+  const deleteSelectedContracts = useCallback(async () => {
+    await Promise.all([...selectedContractIds].map((id) => api.delete(`/api/contract-review/contracts/${id}`)));
+    setPendingBulkDelete(false);
+    setSelectedContractIds(new Set());
+    await loadContracts();
+  }, [selectedContractIds, loadContracts]);
 
   const loadContractReviews = useCallback(async (id) => {
     const res = await api.get(`/api/contract-review/contracts/${id}/reviews`);
@@ -624,6 +659,11 @@ export default function ContractReviewPage() {
         {view === 'list' && (
           <>
             <h1 className="text-lg font-semibold mb-4">Contract Review</h1>
+            {crmClientIdFilter && (
+              <div className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+                Showing contracts linked to this CRM contact only. <Link to="/contract-review" style={{ color: 'var(--color-primary)' }}>Show all contracts</Link>
+              </div>
+            )}
             {error && <div style={{ color: '#991b1b' }} className="mb-3 text-sm">{error}</div>}
 
             <div className="rounded-lg border p-4 mb-6" style={CARD}>
@@ -647,21 +687,59 @@ export default function ContractReviewPage() {
               </button>
             </div>
 
-            <h2 className="text-sm font-semibold mb-2">Your contracts</h2>
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <h2 className="text-sm font-semibold">Your contracts</h2>
+              {contracts.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-1 text-xs hover:opacity-70 cursor-pointer" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                    <input type="checkbox" checked={selectedContractIds.size === contracts.length} onChange={toggleSelectAllContracts} />
+                    Select all
+                  </label>
+                  {selectedContractIds.size > 0 && (
+                    pendingBulkDelete ? (
+                      <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Delete {selectedContractIds.size} contract{selectedContractIds.size === 1 ? '' : 's'}?
+                        <button onClick={deleteSelectedContracts} className="hover:opacity-70" style={{ transition: 'opacity 200ms', color: '#991b1b' }}>Yes</button>
+                        <button onClick={() => setPendingBulkDelete(false)} className="hover:opacity-70" style={{ transition: 'opacity 200ms' }}>No</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setPendingBulkDelete(true)} className="rounded border px-2 py-1 text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', borderColor: '#991b1b', color: '#991b1b' }}>
+                        Delete selected ({selectedContractIds.size})
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
             <div className="space-y-2">
               {contracts.map((c) => (
-                <button
+                <div
                   key={c.id}
-                  onClick={() => openContract(c.id)}
-                  className="w-full text-left rounded-lg border p-3 flex items-center justify-between hover:opacity-70"
+                  className="w-full rounded-lg border p-3 flex items-center gap-2 hover:opacity-70"
                   style={{ ...CARD, transition: 'opacity 200ms' }}
                 >
-                  <div>
-                    <div className="text-sm font-medium">{c.title}</div>
-                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.contractType} · {c.status}</div>
-                  </div>
-                  {getIcon('chevron-right', { size: 16 })}
-                </button>
+                  <input
+                    type="checkbox" checked={selectedContractIds.has(c.id)}
+                    onChange={() => toggleContractSelected(c.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button onClick={() => openContract(c.id)} className="flex-1 text-left flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium">{c.title}</div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.contractType} · {c.status}</div>
+                    </div>
+                    {getIcon('chevron-right', { size: 16 })}
+                  </button>
+                  {pendingDeleteId === c.id ? (
+                    <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Delete?
+                      <button onClick={() => deleteContractFromList(c.id)} className="hover:opacity-70" style={{ transition: 'opacity 200ms', color: '#991b1b' }}>Yes</button>
+                      <button onClick={() => setPendingDeleteId(null)} className="hover:opacity-70" style={{ transition: 'opacity 200ms' }}>No</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setPendingDeleteId(c.id)} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: '#991b1b' }}>Del</button>
+                  )}
+                </div>
               ))}
               {!contracts.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No contracts yet.</div>}
             </div>
@@ -690,14 +768,19 @@ export default function ContractReviewPage() {
             {error && <div style={{ color: '#991b1b' }} className="mb-3 text-sm">{error}</div>}
 
             <div className="flex gap-4 mb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              {['overview', 'review', 'obligations'].map((t) => (
+              {[
+                { key: 'overview', label: 'Overview' },
+                { key: 'documents', label: 'Documents & Reviews' },
+                { key: 'review', label: 'Review' },
+                { key: 'obligations', label: 'Obligations' },
+              ].map(({ key, label }) => (
                 <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className="pb-2 text-sm capitalize hover:opacity-70"
-                  style={{ transition: 'opacity 200ms', borderBottom: tab === t ? '2px solid var(--color-primary)' : '2px solid transparent', fontWeight: tab === t ? 600 : 400 }}
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className="pb-2 text-sm hover:opacity-70"
+                  style={{ transition: 'opacity 200ms', borderBottom: tab === key ? '2px solid var(--color-primary)' : '2px solid transparent', fontWeight: tab === key ? 600 : 400 }}
                 >
-                  {t}
+                  {label}
                 </button>
               ))}
             </div>
@@ -738,6 +821,55 @@ export default function ContractReviewPage() {
                   </select>
                 </div>
 
+                <div className="rounded-lg border p-4" style={CARD}>
+                  <h2 className="text-sm font-semibold mb-2">Actions</h2>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={toggleHold} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>
+                      {contract.legalHold ? 'Release legal hold' : 'Set legal hold'}
+                    </button>
+                    <button onClick={() => setStatus('expired')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark expired</button>
+                    <button onClick={() => setStatus('terminated')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark terminated</button>
+                    <button onClick={deleteContract} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', borderColor: '#991b1b', color: '#991b1b' }}>Delete contract</button>
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                    Deletion removes everything under this contract. A contract on legal hold cannot be deleted.
+                  </p>
+                </div>
+
+                {review && (
+                  <div className="rounded-lg border p-4" style={CARD}>
+                    <h2 className="text-sm font-semibold mb-2">Report</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
+                        {getIcon('download', { size: 14 })} Download PDF
+                      </button>
+                      <input
+                        type="email" value={reportEmail} onChange={(e) => setReportEmail(e.target.value)}
+                        placeholder="Email address" className="rounded border px-2 py-1.5 text-sm" style={FIELD}
+                      />
+                      <button onClick={emailReport} disabled={reportBusy || !reportEmail.trim()} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy || !reportEmail.trim() ? 0.5 : 1 }}>
+                        Send report
+                      </button>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                      Banner, parties and role, flags with reasons and redlines, and obligations.
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-lg border p-4" style={CARD}>
+                  <h2 className="text-sm font-semibold mb-2">History</h2>
+                  {(contract.events || []).map((ev) => (
+                    <div key={ev.id} className="text-xs py-1" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(ev.occurredAt).toLocaleString()} — {ev.type.replace(/_/g, ' ')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tab === 'documents' && (
+              <div className="space-y-4">
                 <div className="rounded-lg border p-4" style={CARD}>
                   <h2 className="text-sm font-semibold mb-2">Documents &amp; revisions</h2>
                   <div className="space-y-2">
@@ -854,51 +986,6 @@ export default function ContractReviewPage() {
                     )}
                   </div>
                 )}
-
-                <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Actions</h2>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={toggleHold} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>
-                      {contract.legalHold ? 'Release legal hold' : 'Set legal hold'}
-                    </button>
-                    <button onClick={() => setStatus('expired')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark expired</button>
-                    <button onClick={() => setStatus('terminated')} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>Mark terminated</button>
-                    <button onClick={deleteContract} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', borderColor: '#991b1b', color: '#991b1b' }}>Delete contract</button>
-                  </div>
-                  <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                    Deletion removes everything under this contract. A contract on legal hold cannot be deleted.
-                  </p>
-                </div>
-
-                {review && (
-                  <div className="rounded-lg border p-4" style={CARD}>
-                    <h2 className="text-sm font-semibold mb-2">Report</h2>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={downloadReport} disabled={reportBusy} className="rounded border px-3 py-1.5 text-xs hover:opacity-70 flex items-center gap-1" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy ? 0.5 : 1 }}>
-                        {getIcon('download', { size: 14 })} Download PDF
-                      </button>
-                      <input
-                        type="email" value={reportEmail} onChange={(e) => setReportEmail(e.target.value)}
-                        placeholder="Email address" className="rounded border px-2 py-1.5 text-sm" style={FIELD}
-                      />
-                      <button onClick={emailReport} disabled={reportBusy || !reportEmail.trim()} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms', opacity: reportBusy || !reportEmail.trim() ? 0.5 : 1 }}>
-                        Send report
-                      </button>
-                    </div>
-                    <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                      Banner, parties and role, flags with reasons and redlines, and obligations.
-                    </p>
-                  </div>
-                )}
-
-                <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">History</h2>
-                  {(contract.events || []).map((ev) => (
-                    <div key={ev.id} className="text-xs py-1" style={{ color: 'var(--color-muted)' }}>
-                      {new Date(ev.occurredAt).toLocaleString()} — {ev.type.replace(/_/g, ' ')}
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 

@@ -100,11 +100,18 @@ async function getContract(userId, contractId) {
   return { ...contract, parties, documents, events };
 }
 
-async function listContracts(userId, { status, search } = {}) {
+async function listContracts(userId, { status, search, crmClientId } = {}) {
   const clauses = [`"userId"=$1`];
   const params = [userId];
   if (status) { params.push(status); clauses.push(`status=$${params.length}`); }
   if (search) { params.push(`%${search}%`); clauses.push(`title ILIKE $${params.length}`); }
+  if (crmClientId) {
+    // A contract can be linked to a CRM client directly (contracts.crmClientId)
+    // or only through one of its parties (contract_parties.crmClientId) —
+    // match either so a client's "Contracts" tile doesn't miss one.
+    params.push(crmClientId);
+    clauses.push(`("crmClientId"=$${params.length} OR EXISTS (SELECT 1 FROM contract_parties cp WHERE cp."contractId"=contracts.id AND cp."crmClientId"=$${params.length}))`);
+  }
   const { rows } = await pool.query(
     `SELECT * FROM contracts WHERE ${clauses.join(' AND ')} ORDER BY "createdAt" DESC`,
     params

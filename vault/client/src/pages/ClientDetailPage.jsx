@@ -371,7 +371,7 @@ export default function ClientDetailPage() {
   }
   if (!data) return null;
 
-  const { client, contacts, touchpoints, projects, tasks, deals, finance, mood, customFields, attachments: clientAttachments } = data;
+  const { client, contacts, touchpoints, projects, tasks, deals, finance, mood, customFields, attachments: clientAttachments, contractsCount } = data;
   const openPipelineValue = (deals || [])
     .filter(d => d.stage !== 'won' && d.stage !== 'lost')
     .reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
@@ -511,7 +511,8 @@ export default function ClientDetailPage() {
           <StatCard label="Outstanding"   value={fmt(finance?.outstanding)}
                     warn={parseFloat(finance?.outstanding) > 0}
                     onClick={() => navigate(`/finance?tab=Invoices&clientId=${id}`)} />
-          <StatCard label="Client since"  value={client.startDate ? fmtDate(client.startDate) : '—'} />
+          <StatCard label="Contracts"     value={contractsCount ?? 0}
+                    onClick={() => navigate(`/contract-review?crmClientId=${id}`)} />
         </div>
 
         {/* Sections */}

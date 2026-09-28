@@ -45,8 +45,8 @@ router.post('/contracts', async (req, res) => {
 
 router.get('/contracts', async (req, res) => {
   try {
-    const { status, search } = req.query || {};
-    const contracts = await ContractService.listContracts(req.user.id, { status, search });
+    const { status, search, crmClientId } = req.query || {};
+    const contracts = await ContractService.listContracts(req.user.id, { status, search, crmClientId: crmClientId ? Number(crmClientId) : null });
     res.json({ contracts });
   } catch (err) { handleError(res, err); }
 });

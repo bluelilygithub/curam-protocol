@@ -258,6 +258,18 @@ router.get('/:id', async (req, res) => {
     );
     const clientAttachments = await attachmentsForEntity('client', clientId);
 
+    // Contract Review count — linked either directly (contracts.crmClientId)
+    // or through one of its parties (contract_parties.crmClientId), same
+    // either-match rule as ContractService.listContracts's own crmClientId
+    // filter, so the "Contracts" tile and the drill-in list agree.
+    const { rows: [contractCount] } = await pool.query(
+      `SELECT COUNT(DISTINCT c.id)::int AS count
+       FROM contracts c
+       LEFT JOIN contract_parties cp ON cp."contractId" = c.id
+       WHERE c."userId"=$2 AND (c."crmClientId"=$1 OR cp."crmClientId"=$1)`,
+      [clientId, userId]
+    );
+
     res.json({
       client,
       contacts,
@@ -269,6 +281,7 @@ router.get('/:id', async (req, res) => {
       mood: moodSummary,
       customFields,
       attachments: clientAttachments,
+      contractsCount: contractCount?.count || 0,
     });
   } catch (err) {
     console.error('[clients] get error:', err);
