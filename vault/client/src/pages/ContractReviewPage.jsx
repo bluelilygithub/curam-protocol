@@ -416,12 +416,6 @@ export default function ContractReviewPage() {
     setContract((prev) => (prev ? { ...prev, parties: prev.parties.map((p) => (p.id === partyId ? { ...p, [field]: value } : p)) } : prev));
   }, [contract, review]);
 
-  const linkContractClient = useCallback(async (clientId) => {
-    if (!contract) return;
-    await api.post(`/api/contract-review/contracts/${contract.id}/link-client`, { clientId: clientId || null });
-    setContract((prev) => (prev ? { ...prev, crmClientId: clientId ? Number(clientId) : null } : prev));
-  }, [contract]);
-
   const linkPartyClient = useCallback(async (partyId, clientId) => {
     if (!contract) return;
     await api.post(`/api/contract-review/contracts/${contract.id}/parties/${partyId}/link-client`, { clientId: clientId || null });
@@ -809,19 +803,6 @@ export default function ContractReviewPage() {
                 </div>
 
                 <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Linked CRM contact</h2>
-                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Optional — can be added or changed any time.</p>
-                  <select
-                    value={contract.crmClientId || ''}
-                    onChange={(e) => linkContractClient(e.target.value)}
-                    className="rounded border px-2 py-1.5 text-sm" style={FIELD}
-                  >
-                    <option value="">No linked contact</option>
-                    {crmClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="rounded-lg border p-4" style={CARD}>
                   <h2 className="text-sm font-semibold mb-2">Actions</h2>
                   <div className="flex flex-wrap gap-2">
                     <button onClick={toggleHold} className="rounded border px-3 py-1.5 text-xs hover:opacity-70" style={{ ...FIELD, transition: 'opacity 200ms' }}>
@@ -869,9 +850,13 @@ export default function ContractReviewPage() {
             )}
 
             {tab === 'documents' && (
-              <div className="space-y-4">
-                <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Documents &amp; revisions</h2>
+              <div className="space-y-6">
+                <section>
+                  <h2 className="text-sm font-semibold mb-1">Documents &amp; revisions</h2>
+                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                    Every document uploaded under this contract, and every revision of each. Upload a new revision, mark a draft as executed, or run a review as a specific party from here.
+                  </p>
+                  <div className="rounded-lg border p-4" style={CARD}>
                   <div className="space-y-2">
                     {[...(contract.documents || [])].sort((a, b) => a.version - b.version).map((d) => (
                       <div key={d.id} className="rounded border p-2" style={FIELD}>
@@ -913,79 +898,87 @@ export default function ContractReviewPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-
-                <div className="rounded-lg border p-4" style={CARD}>
-                  <h2 className="text-sm font-semibold mb-2">Reviews</h2>
-                  <div className="space-y-1">
-                    {contractReviews.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => { openReview(r.id); setTab('review'); }}
-                        className="w-full text-left rounded border p-2 flex items-center justify-between gap-2 hover:opacity-70 flex-wrap"
-                        style={{ ...FIELD, transition: 'opacity 200ms', borderColor: review?.id === r.id ? 'var(--color-primary)' : 'var(--color-border)' }}
-                      >
-                        <span className="text-sm">{r.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">v{r.version}</Badge></span>
-                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {r.partyName ? `${r.partyName} (${r.partyRole})` : 'No perspective set'} · {new Date(r.createdAt).toLocaleDateString()}
-                        </span>
-                        <Badge bg="var(--color-bg)" color="var(--color-muted)">{r.status}</Badge>
-                      </button>
-                    ))}
-                    {!contractReviews.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No reviews yet.</div>}
                   </div>
-                </div>
 
-                {compareFor && (
-                  <div className="rounded-lg border p-4" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-sm font-semibold">What changed</h2>
-                      <button onClick={() => { setCompareFor(null); setCompareResult(null); }} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Close</button>
-                    </div>
-                    {compareLoading && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Comparing…</div>}
-                    {compareResult && (
-                      <>
-                        {compareResult.summary && (
-                          <p className="text-sm mb-3 rounded p-2" style={{ background: 'var(--color-bg)' }}>{compareResult.summary}</p>
-                        )}
-                        <div className="space-y-2">
-                          {compareResult.diffItems.filter((d) => d.status !== 'unchanged').map((d, i) => (
-                            <div key={i} className="rounded border p-2" style={FIELD}>
-                              <div className="flex items-center gap-2 mb-1">
-                                {d.numberLabel && <span className="text-xs font-semibold">{d.numberLabel}</span>}
-                                <Badge
-                                  bg={d.status === 'added' ? '#dcfce7' : d.status === 'removed' ? '#fee2e2' : '#e0f2fe'}
-                                  color={d.status === 'added' ? '#166534' : d.status === 'removed' ? '#991b1b' : '#075985'}
-                                >
-                                  {d.status}
-                                </Badge>
-                                {d.oldRiskLevel && d.oldRiskLevel !== d.newRiskLevel && (
-                                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{d.oldRiskLevel} → {d.newRiskLevel || 'unscored'}</span>
+                  {compareFor && (
+                    <div className="rounded-lg border p-4 mt-3" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold">What changed</h3>
+                        <button onClick={() => { setCompareFor(null); setCompareResult(null); }} className="text-xs hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>Close</button>
+                      </div>
+                      {compareLoading && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Comparing…</div>}
+                      {compareResult && (
+                        <>
+                          {compareResult.summary && (
+                            <p className="text-sm mb-3 rounded p-2" style={{ background: 'var(--color-bg)' }}>{compareResult.summary}</p>
+                          )}
+                          <div className="space-y-2">
+                            {compareResult.diffItems.filter((d) => d.status !== 'unchanged').map((d, i) => (
+                              <div key={i} className="rounded border p-2" style={FIELD}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  {d.numberLabel && <span className="text-xs font-semibold">{d.numberLabel}</span>}
+                                  <Badge
+                                    bg={d.status === 'added' ? '#dcfce7' : d.status === 'removed' ? '#fee2e2' : '#e0f2fe'}
+                                    color={d.status === 'added' ? '#166534' : d.status === 'removed' ? '#991b1b' : '#075985'}
+                                  >
+                                    {d.status}
+                                  </Badge>
+                                  {d.oldRiskLevel && d.oldRiskLevel !== d.newRiskLevel && (
+                                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{d.oldRiskLevel} → {d.newRiskLevel || 'unscored'}</span>
+                                  )}
+                                </div>
+                                {d.status === 'changed' && d.diff ? (
+                                  <p className="text-sm">
+                                    {d.diff.map((op, j) => op.type === 'equal' ? (
+                                      <span key={j}>{op.text}</span>
+                                    ) : op.type === 'remove' ? (
+                                      <span key={j} style={{ background: '#fee2e2', textDecoration: 'line-through', color: '#991b1b' }}>{op.text}</span>
+                                    ) : (
+                                      <span key={j} style={{ background: '#dcfce7', color: '#166534' }}>{op.text}</span>
+                                    ))}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm">{d.newText || d.oldText}</p>
                                 )}
                               </div>
-                              {d.status === 'changed' && d.diff ? (
-                                <p className="text-sm">
-                                  {d.diff.map((op, j) => op.type === 'equal' ? (
-                                    <span key={j}>{op.text}</span>
-                                  ) : op.type === 'remove' ? (
-                                    <span key={j} style={{ background: '#fee2e2', textDecoration: 'line-through', color: '#991b1b' }}>{op.text}</span>
-                                  ) : (
-                                    <span key={j} style={{ background: '#dcfce7', color: '#166534' }}>{op.text}</span>
-                                  ))}
-                                </p>
-                              ) : (
-                                <p className="text-sm">{d.newText || d.oldText}</p>
-                              )}
-                            </div>
-                          ))}
-                          {!compareResult.diffItems.some((d) => d.status !== 'unchanged') && (
-                            <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No clauses changed between these two versions.</div>
-                          )}
-                        </div>
-                      </>
-                    )}
+                            ))}
+                            {!compareResult.diffItems.some((d) => d.status !== 'unchanged') && (
+                              <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No clauses changed between these two versions.</div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <hr style={{ borderColor: 'var(--color-border)' }} />
+
+                <section>
+                  <h2 className="text-sm font-semibold mb-1">Reviews</h2>
+                  <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+                    Every review run against any document in this contract, each its own party perspective. Select one to open it on the Review tab.
+                  </p>
+                  <div className="rounded-lg border p-4" style={CARD}>
+                    <div className="space-y-1">
+                      {contractReviews.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => { openReview(r.id); setTab('review'); }}
+                          className="w-full text-left rounded border p-2 flex items-center justify-between gap-2 hover:opacity-70 flex-wrap"
+                          style={{ ...FIELD, transition: 'opacity 200ms', borderColor: review?.id === r.id ? 'var(--color-primary)' : 'var(--color-border)' }}
+                        >
+                          <span className="text-sm">{r.filename} <Badge bg="var(--color-bg)" color="var(--color-muted)">v{r.version}</Badge></span>
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {r.partyName ? `${r.partyName} (${r.partyRole})` : 'No perspective set'} · {new Date(r.createdAt).toLocaleDateString()}
+                          </span>
+                          <Badge bg="var(--color-bg)" color="var(--color-muted)">{r.status}</Badge>
+                        </button>
+                      ))}
+                      {!contractReviews.length && <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No reviews yet.</div>}
+                    </div>
                   </div>
-                )}
+                </section>
               </div>
             )}
 
