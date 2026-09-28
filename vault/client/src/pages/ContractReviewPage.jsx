@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -317,27 +317,52 @@ function CompareChangeCard({ d }) {
 
 // Drag-and-drop upload zone — a bare browser file input was visually
 // disconnected from the rest of the interface and gave no indication of
-// accepted types or size limit up front.
-function UploadDropZone({ file, onFile, accept = '.pdf,.docx', maxLabel = '50MB max', hint = 'PDF or DOCX' }) {
+// accepted types or size limit up front. `compact` is a single-line inline
+// variant for per-row use (e.g. uploading a document revision) where the
+// full-size card would be too bulky to show per document.
+function UploadDropZone({ file, onFile, accept = '.pdf,.docx', maxLabel = '50MB max', hint = 'PDF or DOCX', compact = false }) {
   const getIcon = useIcon();
   const [dragOver, setDragOver] = useState(false);
   const inputId = React.useId();
+  const dragHandlers = {
+    onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: () => setDragOver(false),
+    onDrop: (e) => {
+      e.preventDefault();
+      setDragOver(false);
+      const f = e.dataTransfer.files?.[0];
+      if (f) onFile(f);
+    },
+  };
+  const borderStyle = {
+    borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
+    background: dragOver ? 'var(--color-bg)' : 'transparent',
+  };
+
+  if (compact) {
+    return (
+      <label
+        htmlFor={inputId} {...dragHandlers}
+        className={`flex items-center gap-2 rounded-lg border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${FOCUS_RING}`}
+        style={borderStyle}
+      >
+        <span style={{ color: dragOver ? 'var(--color-primary)' : 'var(--color-muted)', flexShrink: 0 }}>{getIcon('upload', { size: 16 })}</span>
+        <span className="text-xs" style={{ color: file ? 'var(--color-text)' : 'var(--color-muted)' }}>
+          {file ? file.name : `Drop a file, or click to browse — ${hint} · ${maxLabel}`}
+        </span>
+        <input
+          id={inputId} type="file" accept={accept} className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        />
+      </label>
+    );
+  }
+
   return (
     <label
-      htmlFor={inputId}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
-      }}
+      htmlFor={inputId} {...dragHandlers}
       className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors"
-      style={{
-        borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)',
-        background: dragOver ? 'var(--color-bg)' : 'transparent',
-      }}
+      style={borderStyle}
     >
       <span style={{ color: dragOver ? 'var(--color-primary)' : 'var(--color-muted)' }}>{getIcon('upload', { size: 22 })}</span>
       {file ? (
@@ -353,6 +378,53 @@ function UploadDropZone({ file, onFile, accept = '.pdf,.docx', maxLabel = '50MB 
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
       />
     </label>
+  );
+}
+
+// Mirrors contract_reviews.status (server/db.js) in pipeline order — used to
+// compute a rough percent-complete for the persistent progress bar below.
+// 'awaiting_role_confirmation'/'failed'/'not_supported'/'complete' are
+// terminal-ish states handled by their own dedicated blocks, not this one.
+const REVIEW_STAGE_ORDER = [
+  'queued', 'extracting', 'segmenting', 'detecting_type', 'awaiting_role_confirmation',
+  'extracting_definitions', 'classifying', 'scoring', 'extracting_obligations',
+  'summarizing', 'verifying', 'complete',
+];
+const REVIEW_STAGE_LABELS = {
+  queued: 'Queued', extracting: 'Extracting text', segmenting: 'Splitting into clauses',
+  detecting_type: 'Detecting contract type', awaiting_role_confirmation: 'Waiting for your role',
+  extracting_definitions: 'Extracting definitions', classifying: 'Classifying clauses',
+  scoring: 'Scoring risk', extracting_obligations: 'Extracting obligations',
+  summarizing: 'Writing summary', verifying: 'Verifying against source', complete: 'Complete',
+};
+
+// A review whose ingest/analysis now runs entirely in the background (see
+// startReview/resumeReview) has no guaranteed active ProcessingModal watching
+// it — reloading the page or navigating here fresh needs its own persistent,
+// self-updating indicator rather than a one-off toast. Backed by the polling
+// effect in the main component (keyed on review.id/status).
+function ReviewProgressCard({ review, party }) {
+  const idx = REVIEW_STAGE_ORDER.indexOf(review.status);
+  const pct = idx >= 0 ? Math.round((idx / (REVIEW_STAGE_ORDER.length - 1)) * 100) : 5;
+  const sp = review.stageProgress || {};
+  const stageLabel = REVIEW_STAGE_LABELS[review.status] || String(review.status).replace(/_/g, ' ');
+  let subDetail = null;
+  if (review.status === 'scoring' && sp.total) {
+    subDetail = `Clause ${sp.current || 0} of ${sp.total}` + formatEtaRemaining(sp.etaSeconds);
+  }
+  return (
+    <div className="rounded-lg border p-4" style={CARD}>
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <h2 className="text-base font-semibold">Analysis in progress</h2>
+        {party && <Badge bg="var(--color-bg)" color="var(--color-muted)">Reviewing as {party.name}</Badge>}
+      </div>
+      <div className="w-full h-2 rounded-full overflow-hidden mb-2" style={{ background: 'var(--color-bg)' }}>
+        <div className="h-full rounded-full" style={{ width: `${Math.max(pct, 5)}%`, background: 'var(--color-primary)', transition: 'width 200ms' }} />
+      </div>
+      <div className="text-sm font-medium">{stageLabel}</div>
+      {subDetail && <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{subDetail}</div>}
+      <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>This updates automatically — no need to refresh.</p>
+    </div>
   );
 }
 
@@ -402,6 +474,14 @@ function groupClauses(clauses) {
     }
   }
   return groups;
+}
+
+// Shared by ReviewProgressCard and pollReviewUntilTerminal's own detail
+// text — one place for the "how much longer" phrasing so the two progress
+// surfaces can't drift apart.
+function formatEtaRemaining(etaSeconds) {
+  if (etaSeconds == null) return '';
+  return etaSeconds < 60 ? ` — about ${etaSeconds}s remaining` : ` — about ${Math.round(etaSeconds / 60)}m remaining`;
 }
 
 function formatObligationTiming(o) {
@@ -573,6 +653,10 @@ export default function ContractReviewPage() {
   const [confirmAction, setConfirmAction] = useState(null); // { kind: 'delete'|'expired'|'terminated', ... }
   const [obligationOwnerFilter, setObligationOwnerFilter] = useState('');
   const [obligationStatusFilter, setObligationStatusFilter] = useState('all'); // all | overdue | upcoming | recurring_or_relative | unverified | done
+  const [obligationDueFrom, setObligationDueFrom] = useState('');
+  const [obligationDueTo, setObligationDueTo] = useState('');
+  const [switchPerspectiveOpen, setSwitchPerspectiveOpen] = useState(false); // Review tab — deliberate extra step before switching perspective
+  const [revisionUploadOpenFor, setRevisionUploadOpenFor] = useState(null); // documentId currently showing its revision dropzone
 
   // Compare-revisions tab — perspective-first: pick a party, then pick which
   // two of that party's completed reviews to compare (any two versions, not
@@ -613,6 +697,31 @@ export default function ContractReviewPage() {
     setCompareFullError('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparePartyId, contractReviews]);
+
+  // Reset the perspective-switch panel whenever a different review is opened
+  // — it shouldn't stay expanded (or collapsed-but-stale) across reviews.
+  useEffect(() => { setSwitchPerspectiveOpen(false); }, [review?.id]);
+
+  // Same idea for the revision-upload dropzone — without this, opening it
+  // for a document then navigating to a different tab or contract (without
+  // Cancel or picking a file) leaves it stuck expanded when the user comes
+  // back to Documents & Reviews.
+  useEffect(() => { setRevisionUploadOpenFor(null); }, [contract?.id, tab]);
+
+  // Live progress — a review can now finish its ingest/analysis entirely in
+  // the background (server/services/contractReview/contractService.js's
+  // startReview/resumeReview are fire-and-forget), so a page reload or a
+  // fresh navigation to this contract while a review is still running has no
+  // active poll loop of its own. Without this, the Review tab would just
+  // show nothing meaningful until the user manually refreshed.
+  useEffect(() => {
+    if (!review) return;
+    const inProgress = !['awaiting_role_confirmation', 'failed', 'not_supported', 'complete'].includes(review.status);
+    if (!inProgress) return;
+    const reviewId = review.id;
+    const interval = setInterval(() => { openReview(reviewId); }, 4000);
+    return () => clearInterval(interval);
+  }, [review?.id, review?.status, openReview]);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -708,9 +817,16 @@ export default function ContractReviewPage() {
     if (obRes.ok) setObligations((await obRes.json()).obligations || []);
   }, [loadContractReviews]);
 
+  // currentReviewIdRef guards against a stale response — e.g. the 4s
+  // progress-polling effect below has an in-flight request for review A when
+  // the user clicks a different review B in the list; A's response must not
+  // overwrite B once it lands late. Updated synchronously so any newer call
+  // always wins regardless of which one's fetch resolves last.
+  const currentReviewIdRef = useRef(null);
   const openReview = useCallback(async (reviewId) => {
+    currentReviewIdRef.current = reviewId;
     const res = await api.get(`/api/contract-review/reviews/${reviewId}`);
-    if (res.ok) setReview(await res.json());
+    if (res.ok && currentReviewIdRef.current === reviewId) setReview(await res.json());
   }, []);
 
   const saveTitle = useCallback(async () => {
@@ -780,10 +896,7 @@ export default function ContractReviewPage() {
       const sp = polled.stageProgress || {};
       let detail = `${prefix}Stage: ${String(sp.stage || polled.status).replace(/_/g, ' ')}`;
       if (sp.stage === 'scoring' && sp.total) {
-        detail = `${prefix}Scoring clause ${sp.current || 0} of ${sp.total}`;
-        if (sp.etaSeconds != null) {
-          detail += sp.etaSeconds < 60 ? ` — about ${sp.etaSeconds}s remaining` : ` — about ${Math.round(sp.etaSeconds / 60)}m remaining`;
-        }
+        detail = `${prefix}Scoring clause ${sp.current || 0} of ${sp.total}` + formatEtaRemaining(sp.etaSeconds);
       }
       processing.updateProcessingDetail(detail);
       if (terminal.has(polled.status)) return polled;
@@ -806,6 +919,7 @@ export default function ContractReviewPage() {
       if (!resumeRes.ok) throw new Error((await resumeRes.json().catch(() => ({}))).error || 'Failed to resume review');
       const finalReview = await pollReviewUntilTerminal(review.id, docLabel);
       if (finalReview.status === 'failed') throw new Error(finalReview.errorMessage || 'Analysis failed');
+      currentReviewIdRef.current = finalReview.id;
       setReview(finalReview);
       const obRes = await api.get(`/api/contract-review/obligations?contractId=${contract.id}`);
       if (obRes.ok) setObligations((await obRes.json()).obligations || []);
@@ -1235,7 +1349,7 @@ export default function ContractReviewPage() {
 
         {view === 'detail' && contract && (
           <>
-            <button onClick={() => { setView('list'); setContract(null); setReview(null); }} className="text-sm mb-3 hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+            <button onClick={() => { setView('list'); setContract(null); setReview(null); currentReviewIdRef.current = null; }} className="text-sm mb-3 hover:opacity-70" style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
               ← All contracts
             </button>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1412,15 +1526,26 @@ export default function ContractReviewPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                          <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
-                            <label className={`text-xs rounded border px-2.5 py-1 hover:opacity-70 cursor-pointer ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', ...BTN_SECONDARY_SM }}>
-                              {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
-                              <input
-                                type="file" accept=".pdf,.docx" className="hidden" disabled={revisionBusy === d.id}
-                                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRevision(d.id, f); e.target.value = ''; }}
-                              />
-                            </label>
-                          </Tooltip>
+                          {revisionUploadOpenFor === d.id ? (
+                            <div className="flex items-center gap-2">
+                              <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
+                                <UploadDropZone
+                                  compact
+                                  file={null}
+                                  onFile={(f) => { setRevisionUploadOpenFor(null); uploadRevision(d.id, f); }}
+                                />
+                              </Tooltip>
+                              <button onClick={() => setRevisionUploadOpenFor(null)} className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <Tooltip text="Uploads a new version of this document and runs the full analysis pipeline on it again.">
+                              <SecondaryButton onClick={() => setRevisionUploadOpenFor(d.id)} disabled={revisionBusy === d.id}>
+                                {revisionBusy === d.id ? 'Uploading…' : 'Upload new revision'}
+                              </SecondaryButton>
+                            </Tooltip>
+                          )}
                           <Tooltip text="Runs a new, independent review of this same document from another party's perspective.">
                             <select
                               value={reviewAsPartyId[d.id] || ''}
@@ -1633,38 +1758,60 @@ export default function ContractReviewPage() {
                   </div>
                 )}
 
-                {review && !['queued', 'extracting', 'segmenting', 'awaiting_role_confirmation', 'failed', 'not_supported'].includes(review.status) && (
+                {review && !['awaiting_role_confirmation', 'failed', 'not_supported', 'complete'].includes(review.status) && (
+                  <ReviewProgressCard review={review} party={(contract.parties || []).find((p) => p.id === review.userPartyId)} />
+                )}
+
+                {review?.status === 'complete' && (
                   <>
                     {(() => {
                       const reviewingAs = (contract.parties || []).find((p) => p.id === review.userPartyId);
                       return (
-                        <div className="rounded-lg border p-3 text-sm flex items-center gap-2 flex-wrap" style={{ ...CARD, borderColor: 'var(--color-primary)' }}>
-                          {reviewingAs ? (
-                            <>
-                              {getIcon('user', { size: 14, style: { color: 'var(--color-primary)' } })}
-                              <span>Reviewing as <strong>{reviewingAs.name}</strong></span>
-                              <Badge bg="var(--color-bg)" color="var(--color-muted)">{reviewingAs.role}</Badge>
-                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>— risk flags below are assessed for this party</span>
-                            </>
-                          ) : (
-                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No perspective set for this review.</span>
-                          )}
-                          <div className="flex items-center gap-2 ml-auto">
-                            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Review this same document as:</span>
-                            <Tooltip text="Starts a brand new, independent review of this document for the chosen party — never affects the review you're currently viewing.">
-                              <select
-                                value={reviewAsPartyId[review.documentId] || ''}
-                                onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
-                                className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
-                              >
-                                <option value="">Choose a party…</option>
-                                {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
-                              </select>
-                            </Tooltip>
-                            <PrimaryButton onClick={() => reviewAsParty(review.documentId)} disabled={!reviewAsPartyId[review.documentId]}>
-                              Run new review
-                            </PrimaryButton>
+                        <div className="rounded-lg p-4" style={{ background: 'var(--color-surface)', border: '2px solid var(--color-primary)' }}>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {getIcon('user', { size: 20, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
+                            <div className="flex-1 min-w-0">
+                              {reviewingAs ? (
+                                <>
+                                  <div className="text-base font-semibold">
+                                    Reviewing as {reviewingAs.name} <span className="font-normal text-sm" style={{ color: 'var(--color-muted)' }}>({reviewingAs.role})</span>
+                                  </div>
+                                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                                    Every risk flag and recommendation below is scored specifically for this party.
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-sm" style={{ color: 'var(--color-muted)' }}>No perspective set for this review.</div>
+                              )}
+                            </div>
+                            {!switchPerspectiveOpen && (
+                              <SecondaryButton onClick={() => setSwitchPerspectiveOpen(true)}>Review as a different party</SecondaryButton>
+                            )}
                           </div>
+                          {switchPerspectiveOpen && (
+                            <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap" style={{ borderColor: 'var(--color-border)' }}>
+                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Start a NEW, independent review as:</span>
+                              <Tooltip text="Starts a brand new, independent review of this document for the chosen party — never affects the review you're currently viewing.">
+                                <select
+                                  value={reviewAsPartyId[review.documentId] || ''}
+                                  onChange={(e) => setReviewAsPartyId((prev) => ({ ...prev, [review.documentId]: e.target.value ? Number(e.target.value) : null }))}
+                                  className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
+                                >
+                                  <option value="">Choose a party…</option>
+                                  {(contract.parties || []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
+                                </select>
+                              </Tooltip>
+                              <PrimaryButton
+                                onClick={() => { reviewAsParty(review.documentId); setSwitchPerspectiveOpen(false); }}
+                                disabled={!reviewAsPartyId[review.documentId]}
+                              >
+                                Run new review
+                              </PrimaryButton>
+                              <button onClick={() => setSwitchPerspectiveOpen(false)} className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}>
+                                Cancel
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -2014,9 +2161,23 @@ export default function ContractReviewPage() {
                       <option value="done">Done</option>
                     </select>
                   </Tooltip>
-                  {(obligationOwnerFilter || obligationStatusFilter !== 'all') && (
+                  <Tooltip text="Only obligations with an exact due date falling in this range. Recurring or relatively-dated obligations (no exact date) are hidden while a range is set.">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Due</span>
+                      <input
+                        type="date" value={obligationDueFrom} onChange={(e) => setObligationDueFrom(e.target.value)}
+                        className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
+                      />
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>to</span>
+                      <input
+                        type="date" value={obligationDueTo} onChange={(e) => setObligationDueTo(e.target.value)}
+                        className={`rounded border px-2 py-1 text-xs ${FOCUS_RING}`} style={FIELD}
+                      />
+                    </div>
+                  </Tooltip>
+                  {(obligationOwnerFilter || obligationStatusFilter !== 'all' || obligationDueFrom || obligationDueTo) && (
                     <button
-                      onClick={() => { setObligationOwnerFilter(''); setObligationStatusFilter('all'); }}
+                      onClick={() => { setObligationOwnerFilter(''); setObligationStatusFilter('all'); setObligationDueFrom(''); setObligationDueTo(''); }}
                       className={`text-xs hover:opacity-70 rounded ${FOCUS_RING}`} style={{ transition: 'opacity 200ms', color: 'var(--color-muted)' }}
                     >
                       Clear filters
@@ -2029,11 +2190,17 @@ export default function ContractReviewPage() {
                     .filter((o) => {
                       if (obligationOwnerFilter === 'unresolved' && o.obligorPartyId != null) return false;
                       if (obligationOwnerFilter && obligationOwnerFilter !== 'unresolved' && String(o.obligorPartyId) !== obligationOwnerFilter) return false;
-                      if (obligationStatusFilter === 'done') return o.userState === 'handled';
-                      if (obligationStatusFilter !== 'all' && obligationStatusFilter !== 'done') {
+                      if (obligationStatusFilter === 'done') { if (o.userState !== 'handled') return false; }
+                      else if (obligationStatusFilter !== 'all') {
                         if (o.userState === 'handled') return false;
-                        if (obligationStatusFilter === 'unverified') return o.derivedStatus === 'unverified';
-                        return o.derivedStatus === obligationStatusFilter;
+                        if (obligationStatusFilter === 'unverified') { if (o.derivedStatus !== 'unverified') return false; }
+                        else if (o.derivedStatus !== obligationStatusFilter) return false;
+                      }
+                      if (obligationDueFrom || obligationDueTo) {
+                        if (!o.absoluteDate) return false;
+                        const due = String(o.absoluteDate).slice(0, 10);
+                        if (obligationDueFrom && due < obligationDueFrom) return false;
+                        if (obligationDueTo && due > obligationDueTo) return false;
                       }
                       return true;
                     })
