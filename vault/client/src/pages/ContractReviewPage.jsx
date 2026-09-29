@@ -109,6 +109,16 @@ const DOCUMENT_STATUS_BADGE = {
   superseded: { text: 'Superseded', bg: 'var(--color-bg)', color: 'var(--color-muted)' },
 };
 
+// Detail-view section nav — a Recipes-style grouped left sidebar instead of
+// the horizontal tab bar it replaced, only shown once a contract is open.
+const CONTRACT_NAV_ITEMS = [
+  { key: 'overview', label: 'Overview', icon: 'info' },
+  { key: 'documents', label: 'Documents & Reviews', icon: 'file-text' },
+  { key: 'review', label: 'Review', icon: 'shield-check' },
+  { key: 'compare', label: 'Compare revisions', icon: 'columns' },
+  { key: 'obligations', label: 'Obligations', icon: 'list-checks' },
+];
+
 // "other" is a real enum value but reads as a non-answer in the UI —
 // contractTypeRaw (the model's own free-text guess before it was mapped
 // onto the fixed enum) is a clearer thing to show when available.
@@ -1376,25 +1386,32 @@ export default function ContractReviewPage() {
             </div>
             {error && <div style={{ color: '#991b1b' }} className="mb-3 text-sm">{error}</div>}
 
-            <div className="flex gap-4 mb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              {[
-                { key: 'overview', label: 'Overview' },
-                { key: 'documents', label: 'Documents & Reviews' },
-                { key: 'review', label: 'Review' },
-                { key: 'compare', label: 'Compare revisions' },
-                { key: 'obligations', label: 'Obligations' },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`pb-2 text-sm hover:opacity-70 rounded-t ${FOCUS_RING}`}
-                  style={{ transition: 'opacity 200ms', borderBottom: tab === key ? '2px solid var(--color-primary)' : '2px solid transparent', fontWeight: tab === key ? 600 : 400, color: tab === key ? 'var(--color-text)' : 'var(--color-muted)' }}
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+              <aside className="w-full sm:w-52 shrink-0">
+                <nav
+                  className="flex sm:flex-col gap-1 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 mb-4 sm:mb-0 border-b sm:border-b-0 sm:border-r sm:pr-3"
+                  style={{ borderColor: 'var(--color-border)' }}
                 >
-                  {label}
-                </button>
-              ))}
-            </div>
+                  {CONTRACT_NAV_ITEMS.map(({ key, label, icon }) => (
+                    <button
+                      key={key}
+                      onClick={() => setTab(key)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap hover:opacity-70 ${FOCUS_RING}`}
+                      style={{
+                        transition: 'opacity 200ms',
+                        background: tab === key ? 'var(--color-bg)' : 'transparent',
+                        color: tab === key ? 'var(--color-text)' : 'var(--color-muted)',
+                        fontWeight: tab === key ? 600 : 400,
+                      }}
+                    >
+                      {getIcon(icon, { size: 15, style: { flexShrink: 0, color: tab === key ? 'var(--color-primary)' : 'var(--color-muted)' } })}
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              </aside>
 
+              <div className="flex-1 min-w-0 space-y-4">
             {tab === 'overview' && (
               <div className="space-y-4">
                 <div className="rounded-lg border p-4" style={CARD}>
@@ -2259,6 +2276,8 @@ export default function ContractReviewPage() {
                 </div>
               </div>
             )}
+              </div>
+            </div>
           </>
         )}
       </div>
