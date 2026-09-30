@@ -567,8 +567,10 @@ async function loadDividendIncomeSummary(userId, tz) {
   return {
     count: summary.totalCount,
     last30DaysAud: summary.last30DaysAud,
+    // Gross (before withholding) — matches the Portfolio tab tile. withholding is the same
+    // calendar-year window as yearToDateAud (was the FY figure against a calendar-year label).
     yearToDateAud: summary.calendarYtdAud,
-    withholdingTaxYtdAud: summary.fyWithholdingTaxAud,
+    withholdingTaxYtdAud: summary.calendarYtdWithholdingAud,
     recent: summary.recent,
   };
 }
@@ -875,7 +877,7 @@ Cover every holding in moversToCover (included if |day %| ≥ 1 OR |vs sector| �
 One line per holding in positionsNotInMovers (every other position — complete audit trail):
 - **TICKER** [±X.XX%] vs sector → **beat/lagged/matched** — [no notable move / no news / one-line status]
 
-If SHARES pre-computed summary's portfolio.dividendIncome.count > 0, add one final bullet here (state the numbers as given, don't recompute): "Dividend income: $X last 30 days, $Y this calendar year so far" — include withholding tax figure only if withholdingTaxYtdAud is nonzero. This is a factual running total, not a mover — do not repeat it in any other section of the note.
+If SHARES pre-computed summary's portfolio.dividendIncome.count > 0, add one final bullet here (state the numbers as given, don't recompute): "Dividend income: $X last 30 days, $Y this calendar year so far" — these are GROSS amounts (before US withholding tax); include the withholding tax figure only if withholdingTaxYtdAud is nonzero. This is a factual running total, not a mover — do not repeat it in any other section of the note.
 
 ## SECTOR & MACRO CONTEXT
 Sector-wide drivers today (not stock-specific). Cite macro/sector items. Estimate how much of portfolio day move is sector beta vs stock-specific.

@@ -13,6 +13,7 @@ const { extractPdfText } = require('./studyUploadExtract');
 const { getModelsForUser } = require('./modelResolver');
 const { callModel } = require('./callModel');
 const { logUsage } = require('../utils/logUsage');
+const { resolveImportedDividend } = require('./sharesDividends');
 
 // Narrowed to dividends only (chat history: trade date/price matching proved
 // unreliable against real statements — some genuine trades kept classifying
@@ -172,7 +173,7 @@ async function classifyLine(userId, line) {
   if (['dividend', 'interest', 'fee'].includes(line.lineType) && line.date) {
     const { rows } = await pool.query(
       `SELECT id, "amountAud" FROM share_cash_ledger
-       WHERE "userId"=$1 AND type=$2 AND "createdAt"::date=$3::date LIMIT 5`,
+       WHERE "userId"=$1 AND type=$2 AND COALESCE("paidOn", "createdAt"::date)=$3::date LIMIT 5`,
       [userId, line.lineType, line.date]
     );
     const exact = rows.find((r) => withinTolerance(Number(r.amountAud), line.amount));
@@ -323,16 +324,20 @@ async function approveLine(userId, lineId) {
        f.description || 'Imported from statement', line.importId, line.id]
     );
   } else if (['dividend', 'interest', 'fee'].includes(line.lineType)) {
-    const amountAud = f.grossAmountAud != null ? f.grossAmountAud : f.amount;
-    if (!amountAud) {
+    // amountAud is always NET (cash received) — see sharesDividends.js. A dividend's gross /
+    // withholding come from the statement when it shows both, else gross is derived from net.
+    const d = line.lineType === 'dividend'
+      ? await resolveImportedDividend(userId, f)
+      : { netAud: Number(f.amount) || null, grossAud: null, withholdingTaxAud: null, withholdingRatePct: null, grossDerived: false, paidOn: /^\d{4}-\d{2}-\d{2}$/.test(f.date || '') ? f.date : null };
+    if (!d.netAud) {
       const err = new Error('Line missing an amount — edit before approving');
       err.statusCode = 400;
       throw err;
     }
     await pool.query(
-      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",symbol,note,"sourceImportId","sourceStatementLineId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [userId, line.lineType, amountAud, f.withholdingTaxAud || null, f.symbol || null,
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","grossAud","withholdingTaxAud","withholdingRatePct","grossDerived","paidOn",symbol,note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [userId, line.lineType, d.netAud, d.grossAud, d.withholdingTaxAud, d.withholdingRatePct, d.grossDerived, d.paidOn, f.symbol || null,
        f.description || `Imported from statement (${f.symbol || ''})`.trim(), line.importId, line.id]
     );
   } else if (line.lineType === 'drp') {
@@ -341,11 +346,11 @@ async function approveLine(userId, lineId) {
       err.statusCode = 400;
       throw err;
     }
-    const amountAud = f.grossAmountAud != null ? f.grossAmountAud : f.amount;
+    const d = await resolveImportedDividend(userId, { ...f, amount: f.amount || (f.quantity * f.pricePerUnit) });
     await pool.query(
-      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","withholdingTaxAud",symbol,note,"sourceImportId","sourceStatementLineId")
-       VALUES ($1,'dividend',$2,$3,$4,$5,$6,$7)`,
-      [userId, amountAud || (f.quantity * f.pricePerUnit), f.withholdingTaxAud || null, f.symbol,
+      `INSERT INTO share_cash_ledger ("userId",type,"amountAud","grossAud","withholdingTaxAud","withholdingRatePct","grossDerived","paidOn",symbol,note,"sourceImportId","sourceStatementLineId")
+       VALUES ($1,'dividend',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [userId, d.netAud, d.grossAud, d.withholdingTaxAud, d.withholdingRatePct, d.grossDerived, d.paidOn, f.symbol,
        `DRP reinvestment (${f.symbol})`, line.importId, line.id]
     );
     const drpExchange = await resolveExchange(userId, f.symbol, f.exchange, f.currency || 'AUD');

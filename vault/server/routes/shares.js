@@ -7,7 +7,7 @@ const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
 const { checkDailyDropAlerts } = require('../cron/sharesCron');
 const { generateObservation, getWorkspaceTimezone, getDateInTz } = require('../services/sharesNewsService');
-const { getDividendSummary } = require('../services/sharesDividends');
+const { getDividendSummary, resolveDividendEdit } = require('../services/sharesDividends');
 const { answerSharesQuestion, listQa, deleteQa } = require('../services/sharesAskService');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
@@ -289,24 +289,75 @@ router.post('/cash', async (req, res) => {
 const VALID_CASH_LEDGER_TYPES = ['deposit', 'withdraw', 'dividend', 'interest', 'fee'];
 router.put('/cash/:id', async (req, res) => {
   try {
-    const { type, amountAud, note } = req.body || {};
+    const { type, amountAud, note, grossAud, withholdingRatePct } = req.body || {};
+    const hasPaidOn = Object.prototype.hasOwnProperty.call(req.body || {}, 'paidOn');
     const amt = Number(amountAud);
     if (!amt || amt <= 0) return res.status(400).json({ error: 'amountAud must be positive' });
 
     const { rows: existingRows } = await pool.query(
-      `SELECT type FROM share_cash_ledger WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]
+      // paidOnText: keep the date as a plain string — a DATE read back as a JS Date and re-sent
+      // as a query parameter can shift by a day in a non-UTC server timezone.
+      `SELECT *, "paidOn"::text AS "paidOnText" FROM share_cash_ledger WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]
     );
     if (!existingRows.length) return res.status(404).json({ error: 'Not found' });
-    const t = VALID_CASH_LEDGER_TYPES.includes(type) ? type : existingRows[0].type;
+    const existing = existingRows[0];
+    const t = VALID_CASH_LEDGER_TYPES.includes(type) ? type : existing.type;
+
+    // Dividend tax figures. amountAud is always the NET cash received; gross / withholding /
+    // rate ride alongside it (server/services/sharesDividends.js). Only dividends carry them.
+    let tax = { grossAud: null, withholdingTaxAud: null, withholdingRatePct: null, grossDerived: false };
+    if (t === 'dividend') {
+      const keep = {
+        grossAud: existing.grossAud != null ? Number(existing.grossAud) : null,
+        withholdingTaxAud: existing.withholdingTaxAud != null ? Number(existing.withholdingTaxAud) : null,
+        withholdingRatePct: existing.withholdingRatePct != null ? Number(existing.withholdingRatePct) : null,
+        grossDerived: !!existing.grossDerived,
+      };
+      const edited = resolveDividendEdit(amt, { grossAud, withholdingRatePct });
+      if (edited) {
+        tax = edited;
+      } else if (keep.grossAud == null) {
+        tax = keep; // nothing known, nothing invented
+      } else if (Math.abs(Number(existing.amountAud) - amt) < 0.005) {
+        tax = keep; // net unchanged — leave the tax figures exactly as they were
+      } else if (keep.grossDerived && keep.withholdingRatePct != null) {
+        // Net changed on a derived row: re-derive at the same rate.
+        tax = resolveDividendEdit(amt, { withholdingRatePct: keep.withholdingRatePct });
+      } else {
+        // Net changed on a user-entered gross: keep the gross, recompute the tax withheld.
+        tax = resolveDividendEdit(amt, { grossAud: keep.grossAud });
+      }
+    }
+
+    // Payment date. Only imported-style cash rows (dividend/interest/fee) carry one; omit the key
+    // to keep the current value, send ''/null to clear it (summaries then fall back to the date
+    // the row was added). Must be a real calendar date — 2026-02-30 is rejected, not rolled over.
+    let paidOn = existing.paidOnText;
+    if (!['dividend', 'interest', 'fee'].includes(t)) {
+      paidOn = null;
+    } else if (hasPaidOn) {
+      const raw = req.body.paidOn;
+      if (raw == null || raw === '') {
+        paidOn = null;
+      } else {
+        const s = String(raw);
+        const d = new Date(`${s}T00:00:00Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+          return res.status(400).json({ error: 'paidOn must be a real date (YYYY-MM-DD)' });
+        }
+        paidOn = s;
+      }
+    }
 
     const { rows } = await pool.query(
-      `UPDATE share_cash_ledger SET type=$1, "amountAud"=$2, note=$3
-       WHERE id=$4 AND "userId"=$5 RETURNING *`,
-      [t, amt, note || null, req.params.id, req.user.id]
+      `UPDATE share_cash_ledger SET type=$1, "amountAud"=$2, note=$3,
+              "grossAud"=$4, "withholdingTaxAud"=$5, "withholdingRatePct"=$6, "grossDerived"=$7, "paidOn"=$8
+       WHERE id=$9 AND "userId"=$10 RETURNING *, "paidOn"::text AS "paidOnText"`,
+      [t, amt, note || null, tax.grossAud, tax.withholdingTaxAud, tax.withholdingRatePct, tax.grossDerived, paidOn, req.params.id, req.user.id]
     );
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

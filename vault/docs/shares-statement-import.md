@@ -13,6 +13,19 @@ Real-usage testing surfaced repeated trade-matching problems even after several 
 
 **Re-enabling trades later**: needs the user's own trade data cleaned up first (accurate per-trade price and date, not averaged/estimated values) — that's a data-quality problem in their existing `share_trades` rows, not something this feature can fix by extracting harder. Once that's sorted, flip `LINE_TYPES` back to the full set and restore the fuller extraction prompt (kept in git history, not deleted).
 
+## Gross / withholding / net + payment date + franking columns (2026-09-30)
+
+Backlog item 1 (US withholding) and item 5 (franking fields). **Schema change, additive + nullable** — take a Railway backup before deploying.
+
+**Column semantics (`share_cash_ledger`, `type='dividend'`):** `amountAud` stays **NET** (cash actually received — `computeCashFromActivity()` adds it to cash, so storing gross there would overstate cash; an older comment here claimed the opposite and `approveLine` used to store gross when a statement showed one — both fixed). New: `grossAud`, `withholdingTaxAud` (existed, previously always null for CMC), `withholdingRatePct`, `grossDerived` (TRUE = calculated from net, FALSE = read from a statement or typed in), `paidOn` (DATE), and franking columns `frankedAmountAud` / `frankingCreditAud` / `frankingPercent` (**columns only — nothing reads or writes them yet**).
+
+- **Derivation:** CMC statements show net only, so gross = net ÷ (1 − rate). US-listed (NYSE/NASDAQ, per the user's own trade history for that symbol) uses the default **15%** (US–AU treaty rate, assumes a current W-8BEN); ASX = 0%; a symbol with no trade history is **left un-derived** (never guess a rate). Override the default per user with settings key `shares_us_withholding_pct` (e.g. `30` if there is no W-8BEN) via `POST /api/settings` — no UI yet; it applies to new imports and the boot backfill, not to rows already derived.
+- **Statement shows gross + withholding:** used as-is, `grossDerived=false`, net = gross − withholding.
+- **Boot backfill** (`db.js`, idempotent, per-row fault tolerant): derives gross for existing net-only dividends and sets `paidOn` from the source statement line's `parsedFields.date`.
+- **`paidOn` matters:** dividends previously had no date of their own — every summary bucketed them by `createdAt` (approval time), so a dividend imported late landed in the wrong month/financial year. Summaries, dedup and the Cash list now use `COALESCE(paidOn, createdAt::date)`. **`paidOn` is editable**: the dividend/interest/fee edit form on the Cash tab has a Payment date field, and `PUT /api/shares/cash/:id` accepts `paidOn` (omit = keep, `''`/null = clear back to the added-on date, invalid or impossible dates like 2026-02-30 = 400). Deposit/withdraw rows never carry one.
+- **Editing (`PUT /api/shares/cash/:id`):** supply `grossAud` (wins, not derived) or `withholdingRatePct` (re-derives gross); gross must be ≥ net, rate 0–<100. Editing only the net re-derives at the same rate for derived rows, or keeps a user-entered gross and recomputes the tax. Changing type away from dividend clears the tax fields.
+- **Summary (`getDividendSummary`):** `*Aud` totals are **gross**, `*NetAud` is cash received, plus withholding, `derivedCount` and `missingGrossCount` (dividends with no gross are counted at net — no tax is ever invented). The Portfolio tile, yield and Charts dividend bars use gross; the Portfolio Note prompt is told its dividend figures are gross.
+
 ## Dividend income "board view" (2026-09-20)
 
 Once dividends started actually landing in `share_cash_ledger`, two real bugs surfaced immediately (neither had been exercised before — 0 dividends approved when found):

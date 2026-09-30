@@ -210,7 +210,9 @@ async function getTradesAndLedger(userId) {
       [userId]
     ),
     pool.query(
-      `SELECT * FROM share_cash_ledger WHERE "userId"=$1 ORDER BY "createdAt" DESC, id DESC`,
+      // paidOnText: the payment date as a plain YYYY-MM-DD string (a DATE column comes back as a
+      // JS Date, which serialises with a timezone shift).
+      `SELECT *, "paidOn"::text AS "paidOnText" FROM share_cash_ledger WHERE "userId"=$1 ORDER BY "createdAt" DESC, id DESC`,
       [userId]
     ),
   ]);

@@ -337,7 +337,7 @@ export default function SharesChartsTab({
           <p className="text-xs font-semibold uppercase tracking-wide mb-2 mt-6" style={{ color: 'var(--color-primary)' }}>Dividend income</p>
           <ChartSection
             title="By holding"
-            subtitle={`All-time total across ${dividendSummary.totalCount} payment(s). FY to date (from ${dividendSummary.fyStart}) shown as the Portfolio tab stat tile.`}
+            subtitle={`Gross (before withholding tax) — all-time total across ${dividendSummary.totalCount} payment(s). FY to date (from ${dividendSummary.fyStart}) shown as the Portfolio tab stat tile.`}
           >
             <HorizontalBars items={dividendSummary.bySymbol} valueKey="totalAud" labelKey="symbol" format="aud" />
           </ChartSection>

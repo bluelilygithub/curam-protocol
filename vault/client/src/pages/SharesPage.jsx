@@ -328,7 +328,7 @@ const EMPTY_TRADE_FORM = {
   notes: '',
 };
 
-const EMPTY_CASH_FORM = { type: 'deposit', amountAud: '', note: '' };
+const EMPTY_CASH_FORM = { type: 'deposit', amountAud: '', note: '', grossAud: '', withholdingRatePct: '', paidOn: '' };
 
 export default function SharesPage() {
   const { user } = useAuthStore();
@@ -563,6 +563,9 @@ export default function SharesPage() {
       type: c.type,
       amountAud: String(c.amountAud),
       note: c.note || '',
+      grossAud: c.grossAud != null ? String(c.grossAud) : '',
+      withholdingRatePct: c.withholdingRatePct != null ? String(c.withholdingRatePct) : '',
+      paidOn: c.paidOnText || '',
     });
     setTab('cash');
   };
@@ -574,6 +577,20 @@ export default function SharesPage() {
       amountAud: Number(cashForm.amountAud),
       note: cashForm.note || null,
     };
+    // Dividend tax figures are only sent when the user actually changed them — the form is
+    // pre-filled from the saved row, and re-sending an unchanged gross would stop the server
+    // from re-deriving it when the net amount is edited.
+    if (editingCashId && ['dividend', 'interest', 'fee'].includes(cashForm.type)) {
+      const origRow = cashRows.find((r) => r.id === editingCashId);
+      if (cashForm.paidOn !== (origRow?.paidOnText || '')) payload.paidOn = cashForm.paidOn || null;
+    }
+    if (editingCashId && cashForm.type === 'dividend') {
+      const orig = cashRows.find((r) => r.id === editingCashId);
+      const origGross = orig?.grossAud != null ? String(orig.grossAud) : '';
+      const origRate = orig?.withholdingRatePct != null ? String(orig.withholdingRatePct) : '';
+      if (cashForm.grossAud !== origGross) payload.grossAud = cashForm.grossAud === '' ? null : Number(cashForm.grossAud);
+      else if (cashForm.withholdingRatePct !== origRate) payload.withholdingRatePct = cashForm.withholdingRatePct === '' ? null : Number(cashForm.withholdingRatePct);
+    }
     try {
       const res = editingCashId
         ? await api.put(`/api/shares/cash/${editingCashId}`, payload)
@@ -839,13 +856,18 @@ export default function SharesPage() {
                         : null,
                     },
                     ...(dividendSummary?.totalCount > 0 ? [{
-                      label: 'Dividend income (FY)',
+                      label: 'Dividend income (FY, gross)',
                       value: fmtAud(dividendSummary.fyToDateAud),
-                      // Rough yield: FY dividend income / current holdings value. Not
+                      // Rough yield: FY GROSS dividend income / current holdings value. Not
                       // annualised, not per-holding — a quick "is this doing anything" signal.
-                      sub: dashboard?.holdingsValueAud
-                        ? `≈${fmtPct((dividendSummary.fyToDateAud / dashboard.holdingsValueAud) * 100)} of holdings value, FY to date`
-                        : `Since ${dividendSummary.fyStart}`,
+                      sub: [
+                        `${fmtAud(dividendSummary.fyNetAud)} net after ${fmtAud(dividendSummary.fyWithholdingTaxAud)} tax withheld`,
+                        dashboard?.holdingsValueAud
+                          ? `≈${fmtPct((dividendSummary.fyToDateAud / dashboard.holdingsValueAud) * 100)} of holdings value, FY to date`
+                          : `Since ${dividendSummary.fyStart}`,
+                        dividendSummary.derivedCount > 0 ? `${dividendSummary.derivedCount} gross figure(s) derived from net` : null,
+                        dividendSummary.missingGrossCount > 0 ? `${dividendSummary.missingGrossCount} without gross (counted at net)` : null,
+                      ].filter(Boolean).join(' · '),
                     }] : []),
                   ].map((card) => (
                     <div
@@ -1140,18 +1162,65 @@ export default function SharesPage() {
                   >
                     <option value="deposit">Deposit</option>
                     <option value="withdraw">Withdraw</option>
+                    {/* Imported types can't be created here, but must stay selectable while editing one */}
+                    {editingCashId && ['dividend', 'interest', 'fee'].includes(cashForm.type) && (
+                      <option value={cashForm.type} className="capitalize">{cashForm.type}</option>
+                    )}
                   </select>
                   <input
                     required
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="Amount AUD"
+                    placeholder={cashForm.type === 'dividend' ? 'Net received AUD' : 'Amount AUD'}
                     value={cashForm.amountAud}
                     onChange={(e) => setCashForm((f) => ({ ...f, amountAud: e.target.value }))}
                     className="w-full px-2 py-1.5 rounded border text-sm"
                     style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
                   />
+                  {editingCashId && ['dividend', 'interest', 'fee'].includes(cashForm.type) && (
+                    <div className="space-y-1">
+                      <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Payment date</label>
+                      <input
+                        type="date"
+                        value={cashForm.paidOn}
+                        onChange={(e) => setCashForm((f) => ({ ...f, paidOn: e.target.value }))}
+                        className="w-full px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                      />
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        The day it was paid — this decides which month and financial year it counts in. Leave blank to use the date it was added here.
+                      </p>
+                    </div>
+                  )}
+                  {editingCashId && cashForm.type === 'dividend' && (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Gross AUD (before withholding)"
+                        value={cashForm.grossAud}
+                        onChange={(e) => setCashForm((f) => ({ ...f, grossAud: e.target.value, withholdingRatePct: '' }))}
+                        className="w-full px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="99.99"
+                        step="0.01"
+                        placeholder="Withholding rate % (e.g. 15, or 0 for ASX)"
+                        value={cashForm.withholdingRatePct}
+                        onChange={(e) => setCashForm((f) => ({ ...f, withholdingRatePct: e.target.value }))}
+                        className="w-full px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                      />
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Net is what reached your account. Enter the gross to override, or change the rate and the gross is recalculated.
+                      </p>
+                    </div>
+                  )}
                   <input
                     placeholder="Note (optional)"
                     value={cashForm.note}
@@ -1190,7 +1259,33 @@ export default function SharesPage() {
                       style={{ borderColor: 'var(--color-border)' }}
                     >
                       <span style={{ color: 'var(--color-text)' }}>
-                        {c.type} {fmtAud(c.amountAud)}
+                        {c.type === 'dividend' ? (
+                          <>
+                            dividend{c.symbol ? ` ${c.symbol}` : ''}{' '}
+                            {c.grossAud != null ? (
+                              <>
+                                gross {fmtAud(c.grossAud)}
+                                <span className="ml-1" style={{ color: 'var(--color-muted)' }}>
+                                  − tax {fmtAud(c.withholdingTaxAud)}{c.withholdingRatePct != null ? ` (${Number(c.withholdingRatePct)}%)` : ''} =
+                                </span>{' '}
+                                net {fmtAud(c.amountAud)}
+                                {c.grossDerived && (
+                                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} title="Your broker statement shows net only — gross and tax withheld were calculated from the net at the withholding rate.">derived</span>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                net {fmtAud(c.amountAud)}
+                                <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>gross unknown — Edit to add</span>
+                              </>
+                            )}
+                            {(c.paidOnText || c.createdAt) && (
+                              <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>{c.paidOnText || String(c.createdAt).slice(0, 10)}</span>
+                            )}
+                          </>
+                        ) : (
+                          <>{c.type} {fmtAud(c.amountAud)}</>
+                        )}
                         {c.note && <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>{c.note}</span>}
                       </span>
                       {deleteCashId === c.id ? (

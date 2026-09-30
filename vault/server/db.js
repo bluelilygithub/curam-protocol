@@ -1983,9 +1983,10 @@ async function initSchema() {
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$
   `);
-  // Dividend rows store the GROSS amount in amountAud + withholdingTaxAud
-  // separately — net received is always derived (amountAud - withholdingTaxAud),
-  // never stored, so the two numbers can't drift apart. Null for
+  // Dividend rows: amountAud is the NET cash received (computeCashFromActivity adds it to cash,
+  // so it must stay net). Tax figures live alongside it — withholdingTaxAud here, plus
+  // grossAud / withholdingRatePct / grossDerived / paidOn and the franking columns added
+  // below (see server/services/sharesDividends.js for the full column semantics). Null for
   // interest/fee/deposit/withdraw rows.
   await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "withholdingTaxAud" NUMERIC(18, 2)`);
   // Nullable, not required — a manual deposit/withdraw has no symbol. Set by
@@ -2001,6 +2002,23 @@ async function initSchema() {
   // created; they just lose their provenance tag).
   await pool.query(`ALTER TABLE share_trades ADD COLUMN IF NOT EXISTS "sourceImportId" INTEGER`);
   await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "sourceImportId" INTEGER`);
+
+  // ── Dividend tax fields: gross / withholding / payment date / franking ──────────────────
+  // All additive + nullable. amountAud stays NET (cash received).
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "grossAud" NUMERIC(18, 2)`);
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "withholdingRatePct" NUMERIC(5, 2)`);
+  // TRUE = gross was calculated from net (CMC statements show net only); FALSE = read from a
+  // statement or typed in by the user.
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "grossDerived" BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Payment date. Dividends previously had no date of their own — every summary used createdAt
+  // (the moment the line was approved), which puts a late-imported dividend in the wrong
+  // financial year. NULL falls back to createdAt.
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "paidOn" DATE`);
+  // Franking (ASX dividends). Columns only — no screen or calculation uses them yet, so an ASX
+  // holding later doesn't need a schema change.
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "frankedAmountAud" NUMERIC(18, 2)`);
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "frankingCreditAud" NUMERIC(18, 2)`);
+  await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "frankingPercent" NUMERIC(5, 2)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_statement_imports (
@@ -2063,6 +2081,60 @@ async function initSchema() {
   // back, not a second share_statement_lines row.
   await pool.query(`ALTER TABLE share_trades ADD COLUMN IF NOT EXISTS "sourceStatementLineId" INTEGER`);
   await pool.query(`ALTER TABLE share_cash_ledger ADD COLUMN IF NOT EXISTS "sourceStatementLineId" INTEGER`);
+
+  // Backfills for the dividend tax columns above. Both are idempotent (they only touch rows
+  // still NULL) and per-row fault tolerant (one bad row can never abort boot).
+  // 1) paidOn from the statement line the dividend was approved from (its parsedFields.date).
+  await pool.query(`
+    DO $$
+    DECLARE r RECORD;
+    BEGIN
+      FOR r IN
+        SELECT l.id, s."parsedFields"->>'date' AS d
+        FROM share_cash_ledger l
+        JOIN share_statement_lines s ON s.id = l."sourceStatementLineId"
+        WHERE l."paidOn" IS NULL AND s."parsedFields"->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$'
+      LOOP
+        BEGIN
+          UPDATE share_cash_ledger SET "paidOn" = r.d::date WHERE id = r.id;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+      END LOOP;
+    END $$
+  `);
+  // 2) Gross-up existing net-only dividends: US-listed (per the user's own trade history) at the
+  //    user's shares_us_withholding_pct setting (default 15), ASX at 0%. Flagged grossDerived.
+  //    Symbols we can't place on an exchange are left alone rather than guessed.
+  await pool.query(`
+    DO $$
+    DECLARE r RECORD; ex TEXT; rate NUMERIC; gross NUMERIC;
+    BEGIN
+      FOR r IN
+        SELECT id, "userId", symbol, "amountAud" FROM share_cash_ledger
+        WHERE type = 'dividend' AND "grossAud" IS NULL AND "withholdingTaxAud" IS NULL AND symbol IS NOT NULL
+      LOOP
+        BEGIN
+          SELECT exchange INTO ex FROM share_trades
+            WHERE "userId" = r."userId" AND symbol = r.symbol ORDER BY "tradedAt" DESC LIMIT 1;
+          IF ex IS NULL THEN CONTINUE; END IF;
+          IF ex IN ('NYSE', 'NASDAQ') THEN
+            SELECT NULLIF(regexp_replace(value, '[^0-9.]', '', 'g'), '')::numeric INTO rate
+              FROM settings WHERE "userId" = r."userId" AND key = 'shares_us_withholding_pct';
+            rate := COALESCE(rate, 15);
+          ELSE
+            rate := 0;
+          END IF;
+          IF rate < 0 OR rate >= 100 THEN CONTINUE; END IF;
+          gross := ROUND(r."amountAud" / (1 - rate / 100), 2);
+          UPDATE share_cash_ledger
+            SET "grossAud" = gross, "withholdingTaxAud" = gross - r."amountAud",
+                "withholdingRatePct" = rate, "grossDerived" = TRUE
+            WHERE id = r.id;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+      END LOOP;
+    END $$
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_news_briefings (
