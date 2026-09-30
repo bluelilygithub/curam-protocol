@@ -11,9 +11,11 @@ Capital gains per purchase parcel, in AUD, with the 12-month CGT-discount test. 
 - **Brokerage:** cost = qty × price + buy fees; proceeds = qty × price − sell fees, allocated across parcels in whole cents (the rows for one sale add up to exactly its net proceeds; a parcel's cost is never lost or duplicated).
 - **Discount = 50%** (an individual). Not modelled: company (0%) / SMSF (33⅓%), prior-year capital losses, non-resident rules.
 
-## Summary figures
+## Sold parcels table and FY totals
 
-Per selected FY (by sale date, AU financial year Jul–Jun) or all years: gains eligible for discount, other gains, losses, discount amount, **indicative net capital gain**, loss carried forward. Current-year losses are applied to gains that *don't* qualify for the discount first, then to discount-eligible gains, and the 50% discount applies to what remains. Indicative only, not tax advice.
+- **Sold parcels:** one row per parcel a sale consumed — bought, sold, days held, quantity, cost, proceeds, gain/loss, and *"Held over 12 months?"* shown as the result — `✓ Yes — held 420 days` / `No — held 113 days`. There is deliberately no per-row "after discount" figure: the discount only makes sense after the year's losses are netted off, so it lives in the totals. ("Eligible from" appears only on parcels still held.)
+- **FY totals** (one block per financial year, by sale date, AU FY Jul–Jun; "All years" shows one block per year because the loss/discount netting is a per-year calculation): gains eligible for discount, other gains, total gains → capital losses, applied to **gains that don't qualify for the discount first**, then to discount-eligible gains → other gains remaining, discount-eligible gains remaining → 50% discount on that remainder → **net capital gain**, or **net capital loss carried forward** when losses exceed the year's gains. Server: `summariseDisposals()` returns every step (`lossesAppliedToOtherAud`, `lossesAppliedToDiscountableAud`, `gainsOtherRemainingAud`, `gainsDiscountableRemainingAud`, `discountAmountAud`, `netCapitalGainAud`, `lossCarriedForwardAud`); the client only displays them. Tests pin a net-loss year ($13,501.33 of losses against $6,000 of gains → $7,501.33 carried forward) and that every dollar of loss is either applied or carried forward.
+- Indicative only: losses carried forward from earlier years are not included.
 
 ## Data problems are flagged, not hidden
 

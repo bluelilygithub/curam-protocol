@@ -130,7 +130,6 @@ function buildCgt(trades, tz, { today } = {}) {
         daysHeld: diffDays(parcel.acquiredOn, date),
         discountEligible: eligible,
         eligibleFrom: discountEligibleFrom(parcel.acquiredOn),
-        discountedGainAud: eligible && gainCents > 0 ? fromCents(gainCents - Math.round(gainCents * DISCOUNT_RATE)) : fromCents(gainCents),
         fy: fyLabel(date),
       });
 
@@ -188,10 +187,12 @@ function summariseDisposals(disposals) {
     else if (d.discountEligible) discountable += g;
     else other += g;
   }
-  const lossAfterOther = Math.max(0, losses - other);
-  const otherRemaining = Math.max(0, other - losses);
-  const discountableRemaining = Math.max(0, discountable - lossAfterOther);
-  const unappliedLoss = Math.max(0, lossAfterOther - discountable);
+  const lossAppliedToOther = Math.min(losses, other);
+  const lossAfterOther = losses - lossAppliedToOther;
+  const otherRemaining = other - lossAppliedToOther;
+  const lossAppliedToDiscountable = Math.min(lossAfterOther, discountable);
+  const discountableRemaining = discountable - lossAppliedToDiscountable;
+  const unappliedLoss = lossAfterOther - lossAppliedToDiscountable;
   const discountAmount = Math.round(discountableRemaining * DISCOUNT_RATE);
   const netCapitalGain = otherRemaining + discountableRemaining - discountAmount;
   return {
@@ -200,7 +201,13 @@ function summariseDisposals(disposals) {
     costAud: fromCents(cost),
     gainsDiscountableAud: fromCents(discountable),
     gainsOtherAud: fromCents(other),
+    totalGainsAud: fromCents(discountable + other),
     lossesAud: fromCents(losses),
+    // the working, step by step: losses come off non-discount gains first, then discount gains
+    lossesAppliedToOtherAud: fromCents(lossAppliedToOther),
+    lossesAppliedToDiscountableAud: fromCents(lossAppliedToDiscountable),
+    gainsOtherRemainingAud: fromCents(otherRemaining),
+    gainsDiscountableRemainingAud: fromCents(discountableRemaining),
     discountAmountAud: fromCents(discountAmount),
     netCapitalGainAud: fromCents(netCapitalGain),
     lossCarriedForwardAud: fromCents(unappliedLoss),

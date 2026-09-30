@@ -23,18 +23,50 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
-function StatCard({ label, value, sub, color }) {
+function Th({ children, right }) {
+  return <th className={`px-3 py-2 text-xs font-medium whitespace-nowrap ${right ? 'text-right' : 'text-left'}`} style={{ color: 'var(--color-muted)' }}>{children}</th>;
+}
+
+function TotalsRow({ label, value, indent, bold, color, top }) {
   return (
-    <div className="rounded-lg p-3 border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</p>
-      <p className="text-lg font-semibold mt-1" style={{ color: color || 'var(--color-text)' }}>{value}</p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sub}</p>}
-    </div>
+    <tr className={top ? 'border-t' : ''} style={{ borderColor: 'var(--color-border)' }}>
+      <td className={`py-1.5 pr-3 ${indent ? 'pl-6' : 'pl-3'} ${bold ? 'font-semibold' : ''}`} style={{ color: indent ? 'var(--color-muted)' : 'var(--color-text)' }}>{label}</td>
+      <td className={`py-1.5 px-3 text-right tabular-nums ${bold ? 'font-semibold' : ''}`} style={{ color: color || 'var(--color-text)' }}>{fmtAud(value)}</td>
+    </tr>
   );
 }
 
-function Th({ children, right }) {
-  return <th className={`px-3 py-2 text-xs font-medium whitespace-nowrap ${right ? 'text-right' : 'text-left'}`} style={{ color: 'var(--color-muted)' }}>{children}</th>;
+// The year's capital gains working, step by step: total gains, losses applied (to gains that
+// don't qualify for the discount first), discount on what remains, then the net result.
+function FyTotals({ t, ratePct }) {
+  const isLoss = t.lossCarriedForwardAud > 0;
+  return (
+    <div>
+      <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>FY {t.fy} TOTALS</p>
+      <div className="border rounded-lg overflow-hidden max-w-xl" style={{ borderColor: 'var(--color-border)' }}>
+        <table className="w-full text-sm">
+          <tbody>
+            <TotalsRow label="Gains eligible for discount (held over 12 months)" value={t.gainsDiscountableAud} />
+            <TotalsRow label="Other gains (held 12 months or less)" value={t.gainsOtherAud} />
+            <TotalsRow label="Total capital gains" value={t.totalGainsAud} bold top />
+            <TotalsRow label="Less: capital losses" value={-t.lossesAud} color={t.lossesAud > 0 ? '#ef4444' : undefined} top />
+            <TotalsRow label="applied to other gains first" value={-t.lossesAppliedToOtherAud} indent />
+            <TotalsRow label="applied to discount-eligible gains" value={-t.lossesAppliedToDiscountableAud} indent />
+            <TotalsRow label="Other gains remaining" value={t.gainsOtherRemainingAud} top />
+            <TotalsRow label="Discount-eligible gains remaining" value={t.gainsDiscountableRemainingAud} />
+            <TotalsRow label={`Less: ${ratePct}% discount on the discount-eligible remainder`} value={-t.discountAmountAud} />
+            <TotalsRow label="Net capital gain" value={t.netCapitalGainAud} bold top />
+            {isLoss && <TotalsRow label="Net capital loss carried forward" value={t.lossCarriedForwardAud} bold color="#ef4444" />}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+        {isLoss
+          ? "Losses exceed this year's gains, so there is no net capital gain to report. The unused loss carries forward to offset future capital gains."
+          : 'Indicative — losses carried forward from earlier years are not included.'}
+      </p>
+    </div>
+  );
 }
 
 export default function SharesCgtTab({ positions = [] }) {
@@ -64,23 +96,34 @@ export default function SharesCgtTab({ positions = [] }) {
     return m;
   }, [positions]);
 
+  // 'All years' shows one totals block per financial year: the loss/discount working is a
+  // per-year calculation, so adding years together into one figure would be wrong.
+  const totalsBlocks = useMemo(() => {
+    if (!data) return [];
+    if (data.fy === 'all') return data.fySummaries.filter((t) => t.disposalCount > 0);
+    return data.summary.disposalCount > 0 ? [{ fy: data.fy, ...data.summary }] : [];
+  }, [data]);
+
   const exportCsv = () => {
     if (!data) return;
     const rows = [
       [`Capital gains by parcel — FY ${data.fy}`], [`FIFO, AUD, trade dates (${data.timezone})`], [],
-      ['Symbol', 'Exchange', 'Bought', 'Sold', 'Days held', 'Quantity', 'Cost AUD', 'Proceeds AUD', 'Gain/loss AUD', 'Discount eligible', 'Eligible from', 'Gain after discount AUD'],
-      ...data.disposals.map((d) => [d.symbol, d.exchange, d.acquiredOn, d.soldOn, d.daysHeld, d.quantity, d.costAud.toFixed(2), d.proceedsAud.toFixed(2), d.gainAud.toFixed(2), d.discountEligible ? 'Yes' : 'No', d.eligibleFrom, d.discountedGainAud.toFixed(2)]),
-      [], ['Gains eligible for discount', data.summary.gainsDiscountableAud.toFixed(2)], ['Other gains', data.summary.gainsOtherAud.toFixed(2)],
-      ['Losses', data.summary.lossesAud.toFixed(2)], ['Discount (50%)', data.summary.discountAmountAud.toFixed(2)],
-      ['Indicative net capital gain', data.summary.netCapitalGainAud.toFixed(2)], ['Loss carried forward', data.summary.lossCarriedForwardAud.toFixed(2)],
+      ['Symbol', 'Exchange', 'Bought', 'Sold', 'Days held', 'Quantity', 'Cost AUD', 'Proceeds AUD', 'Gain/loss AUD', 'Held over 12 months'],
+      ...data.disposals.map((d) => [d.symbol, d.exchange, d.acquiredOn, d.soldOn, d.daysHeld, d.quantity, d.costAud.toFixed(2), d.proceedsAud.toFixed(2), d.gainAud.toFixed(2), d.discountEligible ? 'Yes' : 'No']),
+      ...totalsBlocks.flatMap((t) => [
+        [], [`Totals - FY ${t.fy}`],
+        ['Gains eligible for discount', t.gainsDiscountableAud.toFixed(2)], ['Other gains', t.gainsOtherAud.toFixed(2)], ['Total capital gains', t.totalGainsAud.toFixed(2)],
+        ['Capital losses', t.lossesAud.toFixed(2)], ['  applied to other gains first', t.lossesAppliedToOtherAud.toFixed(2)], ['  applied to discount-eligible gains', t.lossesAppliedToDiscountableAud.toFixed(2)],
+        ['Other gains remaining', t.gainsOtherRemainingAud.toFixed(2)], ['Discount-eligible gains remaining', t.gainsDiscountableRemainingAud.toFixed(2)],
+        [`Discount (${data.discountRatePct}%)`, t.discountAmountAud.toFixed(2)],
+        ['Net capital gain', t.netCapitalGainAud.toFixed(2)], ['Net capital loss carried forward', t.lossCarriedForwardAud.toFixed(2)],
+      ]),
     ];
     downloadCsv(`cgt-parcels-${data.fy}.csv`, rows);
   };
 
   if (loading && !data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   if (!data) return null;
-  const s = data.summary;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3 justify-between">
@@ -116,17 +159,6 @@ export default function SharesCgtTab({ positions = [] }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Gains eligible for discount" value={fmtAud(s.gainsDiscountableAud)} sub="held more than 12 months" />
-        <StatCard label="Other gains" value={fmtAud(s.gainsOtherAud)} sub="held 12 months or less" />
-        <StatCard label="Losses" value={fmtAud(s.lossesAud)} color={s.lossesAud > 0 ? '#ef4444' : undefined} />
-        <StatCard
-          label="Indicative net capital gain"
-          value={fmtAud(s.netCapitalGainAud)}
-          sub={`after ${fmtAud(s.discountAmountAud)} discount (${data.discountRatePct}%)${s.lossCarriedForwardAud > 0 ? ` · ${fmtAud(s.lossCarriedForwardAud)} loss carried forward` : ''}`}
-        />
-      </div>
-
       <div>
         <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>SOLD PARCELS — {data.fy === 'all' ? 'ALL YEARS' : `FY ${data.fy}`}</p>
         {data.disposals.length === 0 ? (
@@ -137,7 +169,7 @@ export default function SharesCgtTab({ positions = [] }) {
               <thead>
                 <tr style={{ background: 'var(--color-surface)' }}>
                   <Th>Symbol</Th><Th>Bought</Th><Th>Sold</Th><Th right>Days held</Th><Th right>Qty</Th>
-                  <Th right>Cost</Th><Th right>Proceeds</Th><Th right>Gain / loss</Th><Th>12-month test</Th><Th right>After discount</Th>
+                  <Th right>Cost</Th><Th right>Proceeds</Th><Th right>Gain / loss</Th><Th>Held over 12 months?</Th>
                 </tr>
               </thead>
               <tbody>
@@ -153,10 +185,9 @@ export default function SharesCgtTab({ positions = [] }) {
                     <td className="px-3 py-2 text-right font-medium" style={{ color: gainColor(d.gainAud) }}>{fmtAud(d.gainAud)}</td>
                     <td className="px-3 py-2 text-xs">
                       {d.discountEligible
-                        ? <span style={{ color: '#22c55e' }}>✓ Eligible</span>
-                        : <span style={{ color: 'var(--color-muted)' }}>No — eligible from {fmtDate(d.eligibleFrom)}</span>}
+                        ? <span style={{ color: '#22c55e' }}>✓ Yes — held {d.daysHeld} days</span>
+                        : <span style={{ color: 'var(--color-muted)' }}>No — held {d.daysHeld} days</span>}
                     </td>
-                    <td className="px-3 py-2 text-right" style={{ color: gainColor(d.discountedGainAud) }}>{fmtAud(d.discountedGainAud)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -164,6 +195,8 @@ export default function SharesCgtTab({ positions = [] }) {
           </div>
         )}
       </div>
+
+      {totalsBlocks.map((t) => <FyTotals key={t.fy} t={t} ratePct={data.discountRatePct} />)}
 
       <div>
         <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>PARCELS STILL HELD</p>

@@ -91,9 +91,9 @@ test('FIFO: a sale uses the oldest parcel first, then the next', () => {
   const a = disposals.find((d) => d.acquiredOn === '2024-01-02');
   const b = disposals.find((d) => d.acquiredOn === '2025-06-02');
   assert.strictEqual(a.quantity, 100); assert.strictEqual(a.costAud, 1000); assert.strictEqual(a.proceedsAud, 3000); assert.strictEqual(a.gainAud, 2000);
-  assert.strictEqual(a.discountEligible, true); assert.strictEqual(a.discountedGainAud, 1000);
+  assert.strictEqual(a.discountEligible, true);
   assert.strictEqual(b.quantity, 50); assert.strictEqual(b.costAud, 1000); assert.strictEqual(b.proceedsAud, 1500); assert.strictEqual(b.gainAud, 500);
-  assert.strictEqual(b.discountEligible, false); assert.strictEqual(b.discountedGainAud, 500);
+  assert.strictEqual(b.discountEligible, false);
   assert.strictEqual(openParcels.length, 1);
   assert.strictEqual(openParcels[0].quantity, 50); assert.strictEqual(openParcels[0].costAud, 1000);
 });
@@ -188,6 +188,12 @@ test('summary: losses offset non-discount gains first, then the discount applies
   assert.strictEqual(s.discountAmountAud, 850);
   assert.strictEqual(s.netCapitalGainAud, 850);
   assert.strictEqual(s.lossCarriedForwardAud, 0);
+  // the working, step by step
+  assert.strictEqual(s.totalGainsAud, 2500);
+  assert.strictEqual(s.lossesAppliedToOtherAud, 500);
+  assert.strictEqual(s.lossesAppliedToDiscountableAud, 300);
+  assert.strictEqual(s.gainsOtherRemainingAud, 0);
+  assert.strictEqual(s.gainsDiscountableRemainingAud, 1700);
 });
 
 test('summary: losses larger than all gains are carried forward, net gain is zero', () => {
@@ -197,6 +203,42 @@ test('summary: losses larger than all gains are carried forward, net gain is zer
   ]);
   assert.strictEqual(s.netCapitalGainAud, 0);
   assert.strictEqual(s.lossCarriedForwardAud, 300);
+});
+
+test('net capital LOSS year: losses exceed all gains -> nothing taxable, remainder carried forward, steps add up', () => {
+  // gains 6000 (eligible 4000 + other 2000), losses 13501.33 -> net loss 7501.33 carried forward
+  const s = summariseDisposals([
+    { gainAud: 4000, proceedsAud: 5000, costAud: 1000, discountEligible: true },
+    { gainAud: 2000, proceedsAud: 3000, costAud: 1000, discountEligible: false },
+    { gainAud: -9000.5, proceedsAud: 1000, costAud: 10000.5, discountEligible: false },
+    { gainAud: -4500.83, proceedsAud: 500, costAud: 5000.83, discountEligible: true },
+  ]);
+  assert.strictEqual(s.totalGainsAud, 6000);
+  assert.strictEqual(s.lossesAud, 13501.33);
+  assert.strictEqual(s.lossesAppliedToOtherAud, 2000);          // non-discount gains first
+  assert.strictEqual(s.lossesAppliedToDiscountableAud, 4000);   // then the discount-eligible gains
+  assert.strictEqual(s.gainsOtherRemainingAud, 0);
+  assert.strictEqual(s.gainsDiscountableRemainingAud, 0);
+  assert.strictEqual(s.discountAmountAud, 0);                   // nothing left to discount
+  assert.strictEqual(s.netCapitalGainAud, 0);
+  assert.strictEqual(s.lossCarriedForwardAud, 7501.33);
+  // every dollar of loss is either applied or carried forward
+  assert.strictEqual(Math.round((s.lossesAppliedToOtherAud + s.lossesAppliedToDiscountableAud + s.lossCarriedForwardAud) * 100), Math.round(s.lossesAud * 100));
+});
+
+test('gain year: steps reconcile — total gains = losses applied + remaining, net = remaining less discount', () => {
+  const s = summariseDisposals([
+    { gainAud: 3000, proceedsAud: 4000, costAud: 1000, discountEligible: true },
+    { gainAud: 1000, proceedsAud: 2000, costAud: 1000, discountEligible: false },
+    { gainAud: -1500, proceedsAud: 500, costAud: 2000, discountEligible: false },
+  ]);
+  assert.strictEqual(s.lossesAppliedToOtherAud, 1000);
+  assert.strictEqual(s.lossesAppliedToDiscountableAud, 500);
+  assert.strictEqual(s.gainsDiscountableRemainingAud, 2500);
+  assert.strictEqual(s.discountAmountAud, 1250);
+  assert.strictEqual(s.netCapitalGainAud, 1250);
+  assert.strictEqual(s.lossCarriedForwardAud, 0);
+  assert.strictEqual(Math.round((s.totalGainsAud - s.lossesAppliedToOtherAud - s.lossesAppliedToDiscountableAud) * 100), Math.round((s.gainsOtherRemainingAud + s.gainsDiscountableRemainingAud) * 100));
 });
 
 test('summary totals equal the sum of the displayed rows', () => {
