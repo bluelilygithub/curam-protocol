@@ -163,7 +163,29 @@ All four reports read `fin_journal_entries`/`fin_journal_lines` directly (the jo
 - `GET /reports/gst-summary?from=&to=` — extends the existing `/bas` cash-basis calculation with a breakdown by tx code, instead of reimplementing GST logic.
 - `GET /reports/trial-balance?asOf=` — every account's debit/credit balance as of a date; `isBalanced` is a direct consequence of the A1 guarantee.
 
-Client: "Reports" tab, four sub-tabs, each with a date picker and a CSV export button (`downloadCsv()` helper, same blob-download pattern as the existing MYOB/Xero/Sheets exports).
+Client: "Reports" tab, each report with a date picker and a CSV export button (`downloadCsv()` helper, same blob-download pattern as the existing MYOB/Xero/Sheets exports).
+
+**Date-range bug fixed (2026-09-30):** these four queries used to `LEFT JOIN fin_journal_entries ... AND e.date BETWEEN ...` but summed `l.debit`/`l.credit` from the lines table regardless, so lines from entries outside the range were still counted — P&L, Balance Sheet (as-of) and Trial Balance (as-of) effectively ignored their date pickers and showed all-time totals. Sums are now `CASE WHEN e.id IS NOT NULL THEN … END`. Any new report that filters by entry date must inner-join entries (as `financeReports.js` does) or use the same guard.
+
+### Extra reports (`server/routes/financeReports.js`, `client/src/pages/finance/ExtraReports.jsx`)
+
+Mounted from `finance.js` via `router.use('/reports', require('./financeReports')({ gstPaidForRange }))` — `gstPaidForRange` is injected so BAS figures can never drift from the BAS tab. The Reports tab is now grouped: **Statements** (P&L, P&L Comparison, Balance Sheet, Cash Flow Statement, Trial Balance, General Ledger) · **Receivables & Payables** (Aged Receivables, Aged Payables, Customer Statements, Invoice Status) · **Sales & Purchases** (Sales by Client, Purchases by Supplier, Expenses by Category) · **Tax & Compliance** (GST Summary, BAS Worksheet, Depreciation Schedule, Drawings & Wages, Tax Time Summary) · **Planning & Control** (Budget vs Actual, Audit Trail, Charts).
+
+Every new endpoint returns one normalized shape (`{ title, subtitle, notes, summary, sections: [{ title, columns, rows, totals }] }`), so `ExtraReport` renders any of them and gives CSV export plus Print/PDF (a printable window → "Save as PDF") for free. Adding a report = one route + one entry in `EXTRA_REPORTS`. Endpoints (all under `/api/finance/reports/`): `aged-receivables?asOf` · `aged-payables?asOf` · `general-ledger?from&to[&account=code]` · `cash-flow-statement?from&to` · `profit-loss-comparison?from&to&compare=previous|year|monthly` · `sales-by-client` · `purchases-by-supplier` · `expenses-by-category` · `bas-worksheet` · `depreciation-schedule?fy` · `drawings-wages` · `invoice-status` · `budget-vs-actual?fy` (+ `GET/PUT budget-lines`) · `tax-time-summary?fy` · `customer-statement?from&to&clientId` (+ `/pdf`) · `audit-trail`. Dates/FY are validated strictly (400 on malformed input).
+
+Behaviour worth knowing:
+
+- **Aged Receivables** counts days past due (issue date if no due date), and is date-accurate: an invoice paid after the as-of date still shows as outstanding on it. Quotes/drafts/void excluded.
+- **Aged Payables** can't be a true AP ledger — expenses are recorded when paid. It ages *unsettled credit-card purchases* (expenses/assets whose `paidViaId` is a liability account and `ccSettled=false`) by days since purchase, and shows date-accurate liability balances from the journal. Settlement dates aren't stored, so the unsettled list always reflects today's state.
+- **Cash Flow Statement** is direct-method: every entry touching Bank (1000), grouped by journal `type` (manual entries by the accounts they touch). Closing balance ties to the bank account balance.
+- **BAS Worksheet** maps G1/1A/G10/G11/1B/W1/W2 on the same cash basis as the BAS tab. G2/G3/G13/G14 (GST-free/input-taxed) and T7 (PAYG instalments) are not tracked. A worksheet, not a lodgement.
+- **Depreciation Schedule** reads *posted* depreciation (expenses named `Depreciation FY<fy>: <asset description>`); assets sharing a description can't be told apart there (the report warns).
+- **Budget vs Actual** — new table `fin_budgets` (`userId, fy, kind, code, amount`), annual budget per transaction code; actuals are ex-GST (income by invoice issue date, expenses by date). Uncoded activity shows as "Uncoded" so spend never vanishes.
+- **Tax Time Summary** — deductions are built from source tables and reconcile to the journal P&L via an explicit "Other / manual journal entries" line.
+- **Customer Statements** — invoices issued (debit) and payments (credit, by the date marked paid), plus ageing; PDF from `server/services/statementPdf.js` (same react-pdf look as `invoicePdf.js`).
+- **Audit Trail** is an *activity log*, not a true audit trail: journal entries by creation time + invoice/quote send attempts. Finance keeps no field-level edit history, and edits rebuild the journal entry, so previous versions are not retained. A real audit trail would need change-capture (triggers or an append-only log) — not built.
+
+Not built: a cash/accrual toggle (accrual GST stays out of scope, see below).
 
 ## Charts (Part D)
 

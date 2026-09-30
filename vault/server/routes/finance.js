@@ -4313,8 +4313,8 @@ router.get('/reports/profit-loss', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT a.id, a.code, a.name, a.type,
-              COALESCE(SUM(l.debit),0)  AS "totalDebit",
-              COALESCE(SUM(l.credit),0) AS "totalCredit"
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.debit ELSE 0 END),0)  AS "totalDebit",
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.credit ELSE 0 END),0) AS "totalCredit"
        FROM fin_accounts a
        LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
        LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
@@ -4378,8 +4378,8 @@ router.get('/reports/balance-sheet', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT a.id, a.code, a.name, a.type,
-              COALESCE(SUM(l.debit),0)  AS "totalDebit",
-              COALESCE(SUM(l.credit),0) AS "totalCredit"
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.debit ELSE 0 END),0)  AS "totalDebit",
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.credit ELSE 0 END),0) AS "totalCredit"
        FROM fin_accounts a
        LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
        LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
@@ -4396,8 +4396,8 @@ router.get('/reports/balance-sheet', async (req, res) => {
     // balance sheet themselves; their net effect closes to equity.
     const { rows: peRows } = await pool.query(
       `SELECT a.type,
-              COALESCE(SUM(l.debit),0)  AS "totalDebit",
-              COALESCE(SUM(l.credit),0) AS "totalCredit"
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.debit ELSE 0 END),0)  AS "totalDebit",
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.credit ELSE 0 END),0) AS "totalCredit"
        FROM fin_accounts a
        LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
        LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
@@ -4517,8 +4517,8 @@ router.get('/reports/trial-balance', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT a.id, a.code, a.name, a.type,
-              COALESCE(SUM(l.debit),0)  AS "totalDebit",
-              COALESCE(SUM(l.credit),0) AS "totalCredit"
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.debit ELSE 0 END),0)  AS "totalDebit",
+              COALESCE(SUM(CASE WHEN e.id IS NOT NULL THEN l.credit ELSE 0 END),0) AS "totalCredit"
        FROM fin_accounts a
        LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
        LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = a."userId"
@@ -4659,6 +4659,11 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Extra reports (aged receivables/payables, general ledger, cash flow statement, comparisons,
+// BAS worksheet, budgets, statements, ...) live in their own file to keep this one manageable.
+// Mounted after the four original /reports/* routes above, which never overlap with its paths.
+router.use('/reports', require('./financeReports')({ gstPaidForRange }));
 
 // Exposed for server/routes/expenseReview.js so bulk expense creation from the invoice
 // review queue reuses the exact same insert+journal path as manual expense entry, and

@@ -6,6 +6,7 @@ import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
+import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -6207,7 +6208,13 @@ const CashBasisNote = () => (
   </p>
 );
 
-const REPORT_SUBTABS = ['Profit & Loss', 'Balance Sheet', 'GST Summary', 'Trial Balance', 'Charts'];
+const REPORT_GROUP_TIPS = {
+  'Statements': 'Profit & loss, balance sheet, cash flow, trial balance and the general ledger.',
+  'Receivables & Payables': 'Who owes you, what you owe, customer statements and invoice/quote status.',
+  'Sales & Purchases': 'Revenue by client, spend by supplier and expenses by category.',
+  'Tax & Compliance': 'GST, BAS worksheet, depreciation, drawings & wages and the tax-time summary.',
+  'Planning & Control': 'Budget vs actual, the activity log and charts.',
+};
 const REPORT_SUBTAB_TIPS = {
   'Profit & Loss': 'Income minus expenses for a period — the report your accountant needs most at tax time.',
   'Balance Sheet': 'Assets, liabilities, and equity as of a date — hand this to your accountant alongside the P&L.',
@@ -6294,9 +6301,26 @@ function ReportsTab() {
 
   return (
     <div className="p-6">
+      <div className="flex gap-4 mb-2 overflow-x-auto scroll-x-obvious border-b" style={{ borderColor: 'var(--color-border)' }}>
+        {REPORT_GROUPS.map(g => {
+          const active = g.items.includes(sub);
+          return (
+            <Tooltip key={g.label} text={REPORT_GROUP_TIPS[g.label]}>
+              <button onClick={() => { if (!active) setSub(g.items[0]); }}
+                className="flex-shrink-0 text-sm pb-2 border-b-2 transition-colors"
+                style={{
+                  color: active ? 'var(--color-primary)' : 'var(--color-muted)',
+                  borderBottomColor: active ? 'var(--color-primary)' : 'transparent',
+                  fontWeight: active ? 600 : 400,
+                }}
+              >{g.label}</button>
+            </Tooltip>
+          );
+        })}
+      </div>
       <div className="flex gap-1 mb-4 overflow-x-auto scroll-x-obvious">
-        {REPORT_SUBTABS.map(s => (
-          <Tooltip key={s} text={REPORT_SUBTAB_TIPS[s] || `Switch to the ${s} report.`}>
+        {(REPORT_GROUPS.find(g => g.items.includes(sub)) || REPORT_GROUPS[0]).items.map(s => (
+          <Tooltip key={s} text={REPORT_SUBTAB_TIPS[s] || EXTRA_REPORTS[s]?.tip || `Switch to the ${s} report.`}>
             <button onClick={() => setSub(s)}
               className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border"
               style={{
@@ -6308,6 +6332,8 @@ function ReportsTab() {
           </Tooltip>
         ))}
       </div>
+
+      {EXTRA_REPORTS[sub] && <ExtraReport key={sub} name={sub} config={EXTRA_REPORTS[sub]} />}
 
       {(sub === 'Profit & Loss' || sub === 'GST Summary') && (
         <div className="flex items-center gap-3 mb-4">

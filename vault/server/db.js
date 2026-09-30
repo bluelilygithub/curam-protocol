@@ -2552,6 +2552,21 @@ async function initSchema() {
     )
   `);
 
+  // ── Finance: annual budgets (Budget vs Actual report) ────────────────────
+  // One row per FY ("2025-26") per kind per transaction code; a missing row means "no budget".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_budgets (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      fy          TEXT NOT NULL,
+      kind        TEXT NOT NULL CHECK(kind IN ('income','expense')),
+      code        TEXT NOT NULL,
+      amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+      "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("userId", fy, kind, code)
+    )
+  `);
+
   // ── Finance: capital asset flag on expenses ──────────────────────────────
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "isCapitalAsset" BOOLEAN NOT NULL DEFAULT FALSE`);
 
