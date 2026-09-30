@@ -8,6 +8,7 @@ const portfolio = require('../services/sharesPortfolio');
 const { checkDailyDropAlerts } = require('../cron/sharesCron');
 const { generateObservation, getWorkspaceTimezone, getDateInTz } = require('../services/sharesNewsService');
 const { getDividendSummary, resolveDividendEdit } = require('../services/sharesDividends');
+const { buildCgt, summariseDisposals, fyLabel, DISCOUNT_RATE } = require('../services/sharesCgt');
 const { answerSharesQuestion, listQa, deleteQa } = require('../services/sharesAskService');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
@@ -135,6 +136,41 @@ router.post('/refresh', async (req, res) => {
     generateObservation(req.user.id).catch((err) =>
       console.error('[shares] manual observation generation failed:', err.message)
     );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/shares/cgt?fy=2025-26|all — capital gains by parcel (FIFO), docs/shares-cgt.md.
+// Named route, before any /:id-shaped route in this file. Read-only: nothing is stored.
+router.get('/cgt', async (req, res) => {
+  try {
+    const requested = req.query.fy == null || req.query.fy === '' ? null : String(req.query.fy);
+    if (requested && requested !== 'all' && !/^\d{4}-\d{2}$/.test(requested)) {
+      return res.status(400).json({ error: "fy must look like 2025-26, or 'all'" });
+    }
+    const tz = await getWorkspaceTimezone();
+    const today = getDateInTz(tz);
+    const { trades } = await portfolio.getTradesAndLedger(req.user.id);
+    const { disposals, openParcels, warnings } = buildCgt(trades, tz, { today });
+
+    const currentFy = fyLabel(today);
+    const fys = [...new Set([currentFy, ...disposals.map((d) => d.fy)])].sort().reverse();
+    const fy = requested || currentFy;
+    const selected = fy === 'all' ? disposals : disposals.filter((d) => d.fy === fy);
+
+    res.json({
+      timezone: tz,
+      today,
+      fy,
+      fys,
+      discountRatePct: DISCOUNT_RATE * 100,
+      summary: summariseDisposals(selected),
+      fySummaries: fys.map((f) => ({ fy: f, ...summariseDisposals(disposals.filter((d) => d.fy === f)) })),
+      disposals: selected,
+      openParcels,
+      warnings,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

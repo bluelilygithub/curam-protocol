@@ -6,6 +6,7 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import SharesChartsTab from '../components/shares/SharesChartsTab';
+import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import { useIcon } from '../providers/IconProvider';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'trades', label: 'Trades' },
   { id: 'cash', label: 'Cash' },
+  { id: 'cgt', label: 'CGT' },
   { id: 'statements', label: 'Statements' },
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
@@ -1339,6 +1341,8 @@ export default function SharesPage() {
                 dividendSummary={dividendSummary}
               />
             )}
+
+            {tab === 'cgt' && <SharesCgtTab positions={dashboard?.positions || []} />}
 
             {tab === 'statements' && (
               <SharesStatementsTab onImported={loadAll} />
