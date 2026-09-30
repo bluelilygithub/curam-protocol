@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
@@ -375,17 +375,21 @@ export default function SharesPage() {
       .catch(() => {});
   }, []);
 
+  // Only the newest request may update the charts: a slow response for an earlier range (click
+  // 90d then 7d quickly) must never overwrite the newer one.
+  const chartReqRef = useRef(0);
   const loadCharts = useCallback(async (days) => {
+    const reqId = ++chartReqRef.current;
     setChartsLoading(true);
     try {
       const chartRes = await api.get(`/api/shares/charts?days=${days}`);
       const chartData = await chartRes.json();
       if (!chartRes.ok) throw new Error(chartData.error || 'Failed to load charts');
-      setCharts(chartData);
+      if (reqId === chartReqRef.current) setCharts(chartData);
     } catch (err) {
-      addToast(err.message || 'Failed to load charts', 'error');
+      if (reqId === chartReqRef.current) addToast(err.message || 'Failed to load charts', 'error');
     } finally {
-      setChartsLoading(false);
+      if (reqId === chartReqRef.current) setChartsLoading(false);
     }
   }, [addToast]);
 

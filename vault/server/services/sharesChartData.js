@@ -169,11 +169,13 @@ function buildAllocationByBenchmark(enriched, holdingsValueAud) {
     .sort((a, b) => b.valueAud - a.valueAud);
 }
 
-async function loadTrailingMetrics(userId, holdings, windowDays = 5) {
+// bufferDays: the original 5-day metric reaches back 3 extra days so a weekend still has a
+// snapshot to start from. The range-driven version passes 0 so "30d" means 30 days.
+async function loadTrailingMetrics(userId, holdings, windowDays = 5, bufferDays = 3) {
   const symbols = [...new Set(holdings.map((h) => h.symbol).filter(Boolean))];
   if (!symbols.length) return [];
 
-  const cutoff = new Date(Date.now() - (windowDays + 3) * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - (windowDays + bufferDays) * 24 * 60 * 60 * 1000);
   const { rows } = await pool.query(
     `SELECT DISTINCT ON (symbol) symbol, "priceAud", "recordedAt"
      FROM share_symbol_snapshots
@@ -294,6 +296,60 @@ function buildNormalizedPerformance(observationHistory) {
   return out;
 }
 
+// Return over the selected range for the portfolio and each index proxy, from the same daily
+// Portfolio Note observations the relative-performance chart uses (compounded daily moves).
+// Holdings are AUD; the index proxies (QQQ, SOXX) are USD-priced ETFs and STW is AUD — the
+// chart labels that. An index with no recorded moves in the window is left out, never shown as 0%.
+function buildBenchmarksPeriod(normalized, observationHistory) {
+  if (!normalized.length || !observationHistory.length) {
+    return { available: false, items: [], observationCount: 0, from: null, to: null };
+  }
+  const last = normalized[normalized.length - 1];
+  const has = (field) => observationHistory.some((r) => r[field] != null);
+  const pct = (key) => round2(last[key] - 100);
+  const items = [{ label: 'Your holdings', pct: pct('portfolio'), kind: 'portfolio' }];
+  if (has('nasdaqPct')) items.push({ label: 'Nasdaq', pct: pct('nasdaq'), kind: 'nasdaq' });
+  if (has('soxPct')) items.push({ label: 'SOX', pct: pct('sox'), kind: 'sox' });
+  if (has('asxPct')) items.push({ label: 'ASX 200', pct: pct('asx'), kind: 'asx' });
+  return {
+    available: true,
+    items,
+    observationCount: observationHistory.length,
+    from: observationHistory[0].date,
+    to: observationHistory[observationHistory.length - 1].date,
+  };
+}
+
+// Per-holding move over the range (first stored snapshot in the window -> current price) and how
+// it compared with the holding's sector index over the same range. Holdings with no snapshot in
+// the window are left out.
+function buildPeriodMovers(enriched, trailing, benchmarksPeriod) {
+  const bench = Object.fromEntries((benchmarksPeriod?.items || []).map((i) => [i.kind, i.pct]));
+  const trailByKey = Object.fromEntries((trailing || []).filter((t) => t.dataAvailable).map((t) => [t.key, t]));
+  return enriched
+    .map((h) => {
+      const t = trailByKey[h.key];
+      if (!t) return null;
+      const sectorPct = bench[h.sectorBenchmarkKey] ?? null;
+      const vsSector = sectorPct != null ? round2(t.trailingPct - sectorPct) : null;
+      let relativeToSector = 'unknown';
+      if (vsSector != null) {
+        if (Math.abs(vsSector) < 0.25) relativeToSector = 'matched';
+        else relativeToSector = vsSector > 0 ? 'beat' : 'lagged';
+      }
+      return {
+        key: h.key, symbol: h.symbol, exchange: h.exchange,
+        sectorBenchmark: h.sectorBenchmark,
+        periodChangePct: t.trailingPct,
+        sectorBenchmarkPct: sectorPct,
+        vsSectorPct: vsSector,
+        relativeToSector,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Math.abs(b.periodChangePct) - Math.abs(a.periodChangePct));
+}
+
 async function buildMoveHeatmap(userId, days, unexplainedHistory = {}) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const { rows } = await pool.query(
@@ -389,40 +445,41 @@ async function getChartData(userId, rawDays = 30) {
   const days = parseDays(rawDays);
   const tz = await getWorkspaceTimezone();
   const today = getDateInTz(tz);
-  const since = days <= 1
-    ? 'CURRENT_DATE'
-    : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const sinceParam = days <= 1 ? null : since;
+  // "Today" = since local midnight in the workspace timezone. It used to be CURRENT_DATE, which is
+  // the database server's (UTC) date, so for Sydney the window only began around 10-11am.
+  const TODAY_START_SQL = `(($2::date)::timestamp AT TIME ZONE $3)`;
 
-  const [dash, metalsDash, portfolioRows, symbolRows, observationHistory] = await Promise.all([
+  const [dash, metalsDash, portfolioRows, symbolRows, observationHistory, firstSnapRes] = await Promise.all([
     sharesPortfolio.buildDashboard(userId),
     metalsPortfolio.buildMetalsDashboard(userId, tz),
     pool.query(
       days <= 1
         ? `SELECT "totalValueAud", "holdingsValueAud", "cashAud", "costBasisAud", "recordedAt"
            FROM share_portfolio_snapshots
-           WHERE "userId"=$1 AND "recordedAt" >= CURRENT_DATE
+           WHERE "userId"=$1 AND "recordedAt" >= ${TODAY_START_SQL}
            ORDER BY "recordedAt" ASC`
         : `SELECT "totalValueAud", "holdingsValueAud", "cashAud", "costBasisAud", "recordedAt"
            FROM share_portfolio_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= $2
            ORDER BY "recordedAt" ASC`,
-      days <= 1 ? [userId] : [userId, sinceParam]
+      days <= 1 ? [userId, today, tz] : [userId, sinceParam]
     ),
     pool.query(
       days <= 1
         ? `SELECT symbol, "priceAud", "valueAud", quantity, "recordedAt"
            FROM share_symbol_snapshots
-           WHERE "userId"=$1 AND "recordedAt" >= CURRENT_DATE
+           WHERE "userId"=$1 AND "recordedAt" >= ${TODAY_START_SQL}
            ORDER BY "recordedAt" ASC`
         : `SELECT symbol, "priceAud", "valueAud", quantity, "recordedAt"
            FROM share_symbol_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= $2
            ORDER BY "recordedAt" ASC`,
-      days <= 1 ? [userId] : [userId, sinceParam]
+      days <= 1 ? [userId, today, tz] : [userId, sinceParam]
     ),
     loadObservationHistory(userId, days),
+    pool.query(`SELECT MIN("recordedAt") AS first FROM share_portfolio_snapshots WHERE "userId"=$1`, [userId]),
   ]);
 
   const [nasdaqPct, soxPct, asxPct] = await Promise.all([
@@ -451,10 +508,23 @@ async function getChartData(userId, rawDays = 30) {
     ...buildMetalsAlertRows(metalsDash.positions, highWaterMarks, metalsDash.spot?.audPerOz ?? null),
   ].sort((a, b) => (a.pctOffPeak ?? 0) - (b.pctOffPeak ?? 0));
 
+  // Today keeps the original 5-day trailing metric; any longer range uses exactly that range.
+  const trailingWindowDays = days <= 1 ? 5 : days;
   const [trailingReturns, earningsTimeline] = await Promise.all([
-    loadTrailingMetrics(userId, enriched, 5),
+    loadTrailingMetrics(userId, enriched, trailingWindowDays, days <= 1 ? 3 : 0),
     loadUpcomingEarnings(enriched, today, tz, 90),
   ]);
+
+  const normalizedPerformance = buildNormalizedPerformance(observationHistory);
+  const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory);
+  const periodMovers = days <= 1 ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
+  const firstSnapshotAt = firstSnapRes.rows[0]?.first || null;
+  const history = {
+    firstSnapshotAt,
+    availableDays: firstSnapshotAt
+      ? Math.max(1, Math.ceil((Date.now() - new Date(firstSnapshotAt).getTime()) / (24 * 60 * 60 * 1000)))
+      : 0,
+  };
 
   const latestObs = observationHistory[observationHistory.length - 1];
   const unexplainedHistory = latestObs?.unexplainedMoveHistory || {};
@@ -526,6 +596,10 @@ async function getChartData(userId, rawDays = 30) {
     days,
     asOf: dash.quotedAt,
     benchmarksToday,
+    benchmarksPeriod,
+    periodMovers,
+    trailingWindowDays,
+    history,
     portfolioMove,
     indexPcts,
     dayMovers,
@@ -545,7 +619,7 @@ async function getChartData(userId, rawDays = 30) {
     moveHeatmap,
     earningsTimeline,
     observationHistory,
-    normalizedPerformance: buildNormalizedPerformance(observationHistory),
+    normalizedPerformance,
     portfolioSnapshots,
     bySymbol,
     portfolioLine: portfolioSnapshots,
@@ -566,4 +640,8 @@ module.exports = {
   getChartData,
   parseDays,
   VALID_DAYS,
+  // pure helpers, exported for tests
+  buildBenchmarksPeriod,
+  buildPeriodMovers,
+  buildNormalizedPerformance,
 };

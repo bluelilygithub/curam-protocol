@@ -1,24 +1,25 @@
 import React from 'react';
 
-export default function DayMoversChart({ movers = [] }) {
-  const items = movers.filter((m) => m.dayChangePct != null).slice(0, 12);
+// valueKey/periodLabel let the same chart show a move over a longer range (e.g. 30d) instead of the day.
+export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct', periodLabel = 'Day' }) {
+  const items = movers.filter((m) => m[valueKey] != null).slice(0, 12);
   if (!items.length) {
     return (
       <p className="text-xs py-6 text-center" style={{ color: 'var(--color-muted)' }}>
-        No priced holdings for today&apos;s move chart.
+        {valueKey === 'dayChangePct' ? 'No priced holdings for today’s move chart.' : 'No holdings have stored prices in this range yet.'}
       </p>
     );
   }
 
   const maxAbs = Math.max(
-    ...items.flatMap((m) => [Math.abs(m.dayChangePct || 0), Math.abs(m.vsSectorPct || 0)]),
+    ...items.flatMap((m) => [Math.abs(m[valueKey] || 0), Math.abs(m.vsSectorPct || 0)]),
     1
   );
 
   return (
     <ul className="space-y-4">
       {items.map((m) => {
-        const day = Number(m.dayChangePct) || 0;
+        const day = Number(m[valueKey]) || 0;
         const vs = Number(m.vsSectorPct) || 0;
         const rel = m.relativeToSector || 'unknown';
         const relColor = rel === 'beat' ? '#16a34a' : rel === 'lagged' ? '#dc2626' : 'var(--color-muted)';
@@ -36,7 +37,7 @@ export default function DayMoversChart({ movers = [] }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="flex justify-between text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
-                  <span>Day</span>
+                  <span>{periodLabel}</span>
                   <span style={{ color: day >= 0 ? '#16a34a' : '#dc2626' }}>{day >= 0 ? '+' : ''}{day.toFixed(2)}%</span>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>

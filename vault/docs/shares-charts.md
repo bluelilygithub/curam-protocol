@@ -64,10 +64,31 @@ Legacy fields `portfolioLine`, `allocation`, `holdingPnl`, `bySymbol` remain for
 
 | `days` | Portfolio/symbol snapshots | Observation history |
 |---|---|---|
-| `1` | Intraday (`CURRENT_DATE`) | N/A for heatmap length |
+| `1` | Intraday, since **local midnight in the workspace timezone** (was the database's UTC `CURRENT_DATE`, which made "Today" start around 10-11am in Sydney) | N/A for heatmap length |
 | `7` / `30` / `90` | Daily last snapshot per calendar day | Up to window from `share_news_briefings` |
 
 Charts load when the **Charts** tab is opened (not on every Shares page load). **Refresh quotes** re-records snapshots and reloads chart data.
+
+### Which charts follow the range (2026-09-30)
+
+The range buttons used to change only a handful of charts (portfolio value, price by holding, relative performance, heatmap, gold spot); everything else is a point-in-time or fixed-window view, so it looked like the buttons did nothing. Now every chart is tagged either **Follows range** or **Current snapshot** (or a fixed window such as *Next 90 days*), and more of them follow the range:
+
+| Chart | Today | 7d / 30d / 90d |
+|---|---|---|
+| Portfolio vs benchmarks | day move | return over the range from the daily Portfolio Note observations (`benchmarksPeriod`) — holdings only, cash excluded; an index with no recorded moves is omitted, never shown as 0% |
+| Movers & beat/lag | day % | each holding's move over the range (first stored snapshot in the window → current price) vs its sector index over the same range (`periodMovers`) |
+| Trailing return | fixed 5 days | exactly the selected range (`trailingWindowDays`) |
+| Portfolio value, price by holding, relative performance, gold spot history | follow the range (as before) | |
+| Move heatmap | follows the range, capped at 14 days (a 90-column grid is unreadable), so 30d and 90d look the same | |
+| Drawdown, allocation, total return vs cost, P&L by stock, gold book move, earnings, dividends | current snapshot / fixed | |
+
+Currency: the Nasdaq and SOX proxies (QQQ, SOXX) are **USD-priced** ETFs and STW is AUD; holdings are AUD. The benchmark charts say so rather than converting.
+
+`history: { firstSnapshotAt, availableDays }` in the payload lets the UI say "only N days of history recorded" when the chosen range is longer than what exists.
+
+### UI
+
+The Charts tab is split into sub-tabs: **Movement** · **Performance** · **Holdings** · **Calendar & patterns** · **Metals** (only with gold holdings) · **Dividends** (only once dividends exist). The charts dim and show "Updating…" while a new range loads, and only the newest request may update the page (a slow earlier response can't overwrite a newer click). Tests: `node server/services/sharesChartData.test.js`.
 
 ---
 
