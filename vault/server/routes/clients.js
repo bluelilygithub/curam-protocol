@@ -557,6 +557,17 @@ router.post('/:id/touchpoints', async (req, res) => {
 
   if (!note || !note.trim()) return res.status(400).json({ error: 'note is required' });
 
+  // Optional custom date/time ("when did this actually happen"). The activity log is a
+  // past-tense record, so it must be a real date and not in the future (5 min of clock
+  // skew allowed) — something upcoming belongs in a task, not here.
+  if (date != null && date !== '') {
+    const when = new Date(date);
+    if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'date is not a valid date/time' });
+    if (when.getTime() > Date.now() + 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'date cannot be in the future — the activity log records things that already happened (use a task for something upcoming)' });
+    }
+  }
+
   try {
     await assertClientOwner(clientId, req.user.id, res);
     if (res.headersSent) return;
@@ -887,6 +898,15 @@ const TOUCHPOINT_TYPE_LABELS = {
 // GET /api/clients/:id/activity
 router.get('/:id/activity', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
+  // ?contactId=<id> scopes the feed to one person; ?contactId=none to entries logged against
+  // the whole client (no person). Anything else is a 400, not silently ignored.
+  const rawContact = req.query.contactId;
+  let contactFilter = null; // null = everyone
+  if (rawContact != null && rawContact !== '') {
+    if (rawContact === 'none') contactFilter = 'none';
+    else if (/^\d+$/.test(String(rawContact))) contactFilter = parseInt(rawContact, 10);
+    else return res.status(400).json({ error: "contactId must be a contact id or 'none'" });
+  }
   try {
     const ok = await assertClientOwner(clientId, req.user.id, res);
     if (!ok) return;
@@ -907,18 +927,22 @@ router.get('/:id/activity', async (req, res) => {
         LEFT JOIN client_deals cd ON cd.id = ci."dealId"
         LEFT JOIN tasks t ON t.id = ci."taskId"
         WHERE ci."clientId"=$1 AND ci."caseId" IS NULL
+          ${contactFilter === 'none' ? 'AND ci."contactId" IS NULL' : contactFilter != null ? 'AND ci."contactId" = $2' : ''}
         ORDER BY ci.date DESC, ci."createdAt" DESC
         LIMIT 200
-      `, [clientId]),
+      `, contactFilter != null && contactFilter !== 'none' ? [clientId, contactFilter] : [clientId]),
       // "caseId IS NULL" — a Case's steps are tasks tagged to that case, and
       // already shown in the Case's own view (CaseDetail's Steps/History).
       // Without this exclusion the same task renders twice: once here as a
       // generic "Task created", once there as "Step added" — same row, two
       // places, exactly the duplication the CRM redesign was meant to kill.
-      pool.query(`
-        SELECT id, title, status, "createdAt", "updatedAt", "dueDate"
-        FROM tasks WHERE "clientId"=$1 AND "caseId" IS NULL
-      `, [clientId]),
+      // Tasks aren't tied to a person, so they're left out while the feed is filtered to one.
+      contactFilter != null
+        ? Promise.resolve({ rows: [] })
+        : pool.query(`
+            SELECT id, title, status, "createdAt", "updatedAt", "dueDate"
+            FROM tasks WHERE "clientId"=$1 AND "caseId" IS NULL
+          `, [clientId]),
     ]);
 
     // Attachments live on any client_interactions row (entityType

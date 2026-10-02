@@ -6,6 +6,7 @@ import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
+import { useVoice } from '../hooks/useVoice';
 import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
 import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
@@ -26,6 +27,12 @@ function fmtDate(d) {
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// 'YYYY-MM-DDTHH:mm' in the user's local time, as a <input type="datetime-local"> expects.
+function toLocalInput(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // Activity timestamps are real datetimes now (client_interactions.date is
@@ -552,7 +559,7 @@ export default function ClientDetailPage() {
                GET /api/clients/:id/activity in server/routes/clients.js. */}
           <Section tourId="crm-activity" title="Activity" open={sections.activity} onToggle={() => toggleSection('activity')}>
             <LogActivity clientId={id} contacts={contacts || []} tasks={tasks || []} onLogged={() => setActivityRefresh(n => n + 1)} />
-            <ActivityFeed clientId={id} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
+            <ActivityFeed clientId={id} contacts={contacts || []} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
           </Section>
 
           {/* 0. Deals */}
@@ -637,6 +644,19 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
   const [needsFollowUp, setNeedsFollowUp] = useState(false);
   const [saving, setSaving]     = useState(false);
   const addToast = useToastStore(s => s.addToast);
+  const getIcon = useIcon();
+
+  // Custom date/time: hidden by default so the common case ("just happened") stays a one-box
+  // form. Revealed with "Change date"; the value is local time and is only sent when shown.
+  const [showDate, setShowDate] = useState(false);
+  const [when, setWhen]         = useState(() => toLocalInput());
+
+  // Voice dictation into the note — same shared hook the Chat page uses (browser speech
+  // recognition where available, local transcription otherwise).
+  const { isSTTAvailable, isLocalSTTAvailable, isListening, isTranscribing, interimText, transcript, voiceError, startListening, stopListening } = useVoice();
+  useEffect(() => {
+    if (transcript) setNote(prev => (prev.trimEnd() ? `${prev.trimEnd()} ${transcript.trim()}` : transcript.trim()));
+  }, [transcript]);
 
   // Addendum 2: arriving via the "Log outcome in CRM" toast link
   // (?logTask=<id>) pre-attaches that task. It may already be done, so it
@@ -659,12 +679,22 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
     if (!note.trim()) return;
     setSaving(true);
     try {
-      const tp = await api.post(`/api/clients/${clientId}/touchpoints`, {
+      let dateIso;
+      if (showDate) {
+        const parsed = new Date(when);
+        if (!when || Number.isNaN(parsed.getTime())) throw new Error('Pick a valid date and time, or choose "Use now"');
+        if (parsed.getTime() > Date.now() + 5 * 60 * 1000) throw new Error('The date can\'t be in the future — log what already happened');
+        dateIso = parsed.toISOString();
+      }
+      const res0 = await api.post(`/api/clients/${clientId}/touchpoints`, {
         note: note.trim(),
         contactId: contactId || null,
         taskId: promptedTaskId || taskId || null,
         needsFollowUp,
-      }).then(r => r.json());
+        ...(dateIso ? { date: dateIso } : {}),
+      });
+      const tp = await res0.json();
+      if (!res0.ok) throw new Error(tp.error || 'Failed to log activity');
 
       // Attach the file after the note exists — reuses the same
       // entity-attachment upload the old Touchpoints UI already had
@@ -684,6 +714,8 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
       setTaskId('');
       setNeedsFollowUp(false);
       setFile(null);
+      setShowDate(false);
+      setWhen(toLocalInput());
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (promptedTaskId) {
         searchParams.delete('logTask');
@@ -706,6 +738,44 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
         </p>
       )}
       <Input rows={2} value={note} onChange={setNote} placeholder="Log a call, email, or note…" />
+      {(isSTTAvailable || isLocalSTTAvailable) && (
+        <div className="flex items-center gap-2 mt-1.5 min-h-[1.5rem]">
+          <button
+            type="button"
+            onClick={startListening}
+            disabled={isListening || isTranscribing}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-opacity hover:opacity-70 relative flex-shrink-0"
+            style={{ color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)' }}
+            title="Dictate the note"
+          >
+            {getIcon('mic', { size: 14 })}
+            {(isListening || isTranscribing) && (
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
+            )}
+          </button>
+          {(isListening || isTranscribing) && (
+            <>
+              <span className="text-xs truncate" style={{ color: '#ef4444' }}>
+                {interimText || (isTranscribing ? 'Transcribing…' : 'Listening…')}
+              </span>
+              {isListening && (
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium hover:opacity-70 transition-opacity"
+                  style={{ background: '#ef4444', color: '#fff' }}
+                  title="Stop recording"
+                >
+                  {getIcon('square', { size: 10 })} Stop
+                </button>
+              )}
+            </>
+          )}
+          {!isListening && !isTranscribing && voiceError && (
+            <span className="text-xs truncate" style={{ color: '#ef4444' }} title={voiceError}>{voiceError}</span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-3 mt-2 flex-wrap">
         <select
           value={contactId}
@@ -731,6 +801,24 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
           <input type="checkbox" checked={needsFollowUp} onChange={e => setNeedsFollowUp(e.target.checked)} />
           Needs follow-up
         </label>
+        {showDate ? (
+          <span className="flex items-center gap-1.5">
+            <input
+              type="datetime-local"
+              value={when}
+              max={toLocalInput()}
+              onChange={e => setWhen(e.target.value)}
+              className="text-xs px-2 py-1 rounded-lg border"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              title="When this actually happened"
+            />
+            <button type="button" onClick={() => { setShowDate(false); setWhen(toLocalInput()); }} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Use now</button>
+          </span>
+        ) : (
+          <button type="button" onClick={() => { setWhen(toLocalInput()); setShowDate(true); }} className="text-xs underline hover:opacity-60" style={{ color: 'var(--color-muted)' }} title="Log this as having happened at a different time">
+            Change date
+          </button>
+        )}
         <input ref={fileInputRef} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -818,20 +906,23 @@ function OutstandingSection({ clientId, refreshKey, onChanged }) {
 
 const ACTIVITY_ICON = { touchpoint: '💬', deal: '🤝', contact: '👤', task: '✓' };
 
-function ActivityFeed({ clientId, refreshKey, onChanged }) {
+function ActivityFeed({ clientId, contacts = [], refreshKey, onChanged }) {
   const [items, setItems]     = useState(null); // null = loading
   const [error, setError]     = useState('');
+  // '' = everyone, 'none' = entries logged against the whole client, otherwise a contact id.
+  const [person, setPerson]   = useState('');
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
     let cancelled = false;
     setItems(null);
-    api.get(`/api/clients/${clientId}/activity`)
+    setError('');
+    api.get(`/api/clients/${clientId}/activity${person ? `?contactId=${encodeURIComponent(person)}` : ''}`)
       .then(r => r.json())
       .then(json => { if (!cancelled) setItems(Array.isArray(json) ? json : []); })
       .catch(() => { if (!cancelled) setError('Failed to load activity'); });
     return () => { cancelled = true; };
-  }, [clientId, refreshKey]);
+  }, [clientId, refreshKey, person]);
 
   const deleteAttachment = async (attachment) => {
     try {
@@ -842,12 +933,38 @@ function ActivityFeed({ clientId, refreshKey, onChanged }) {
     }
   };
 
+  const personFilter = contacts.length > 0 ? (
+    <div className="flex items-center gap-2 pt-3">
+      <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Show</label>
+      <select
+        value={person}
+        onChange={e => setPerson(e.target.value)}
+        className="text-xs px-2 py-1.5 rounded-lg border"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        title="Filter the activity to one person"
+      >
+        <option value="">Everyone</option>
+        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        <option value="none">Whole client (no person)</option>
+      </select>
+    </div>
+  ) : null;
+
   if (error) return <p className="text-sm pt-3" style={{ color: '#ef4444' }}>{error}</p>;
-  if (items === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
-  if (!items.length) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>No activity yet — log a touchpoint or create a deal to see it here.</p>;
+  if (items === null) return <>{personFilter}<p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p></>;
+  if (!items.length) return (
+    <>
+      {personFilter}
+      <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>
+        {person ? 'No activity logged for this selection.' : 'No activity yet — log a touchpoint or create a deal to see it here.'}
+      </p>
+    </>
+  );
 
   return (
-    <div className="pt-3">
+    <div>
+      {personFilter}
+      <div className="pt-3">
       {items.map(it => (
         <div key={it.id} className="flex items-start gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
           <span className="text-base flex-shrink-0 mt-0.5">{ACTIVITY_ICON[it.kind] || '•'}</span>
@@ -873,6 +990,7 @@ function ActivityFeed({ clientId, refreshKey, onChanged }) {
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{fmtRelative(it.ts)}</span>
         </div>
       ))}
+      </div>
     </div>
   );
 }

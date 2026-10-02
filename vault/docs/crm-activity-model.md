@@ -134,3 +134,12 @@ Deals/Contacts/Projects sections are explicitly out of scope for this collapse �
 5. Workspace-level views (last): "my open cases," "recent activity," "contacts untouched in 30 days" — all `clientId`-scope-dropping queries, cheap once the above is consistent.
 
 Do not add columns, tables, or UI sections beyond what's written here without flagging the addition and the reason first.
+
+## Addendum (2026-10-02): custom date, person filter, voice input on the Activity log
+
+Flagged per the rule above — **no new columns or tables**, only additions inside the existing Activity section (`ClientDetailPage.jsx` `LogActivity` / `ActivityFeed`, `server/routes/clients.js`):
+
+- **Custom date/time.** `client_interactions.date` is already a TIMESTAMPTZ and `POST /:id/touchpoints` already accepted `date`; the form now has a **Change date** toggle (hidden by default, so the common "just happened" case stays one box) with a `datetime-local` input in the user's local time. The server now *validates* a supplied date: unparseable -> 400 (it used to reach the database and 500), and **in the future -> 400** (5 minutes of clock skew tolerated) — the log is a past-tense record; something upcoming is a task. The feed is ordered by the event date, so a back-dated entry lands among the older ones.
+- **Filter by person.** `GET /:id/activity?contactId=<id>|none`. A contact id scopes the feed to that person's entries; `none` shows entries logged against the whole client. While filtered, **tasks are left out** (they aren't tied to a person) and so are deal-stage rows (no contact). A non-numeric value is a 400; a contact with no entries returns an empty list. The dropdown only appears when the client has contacts.
+- **Voice input.** A mic button next to the note box reuses the shared `useVoice()` hook (browser speech recognition where available, local transcription otherwise — same as Chat). Dictated text is appended to the note.
+
