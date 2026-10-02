@@ -41,7 +41,7 @@ export default function EarningsTimeline({ events = [] }) {
               )}
             </div>
             {e.epsEstimate != null && (
-              <span style={{ color: 'var(--color-muted)' }}>EPS est {Number(e.epsEstimate).toFixed(2)}</span>
+              <span style={{ color: 'var(--color-muted)' }}>EPS est US${Number(e.epsEstimate).toFixed(2)}</span>
             )}
           </li>
         );
