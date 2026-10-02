@@ -1,5 +1,7 @@
 import React from 'react';
 
+const fmtSignedAud = (n) => `${n >= 0 ? '+' : '\u2212'}${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(Math.abs(n))}`;
+
 export default function BenchmarkBarChart({ items = [] }) {
   if (!items.length) {
     return (
@@ -26,6 +28,7 @@ export default function BenchmarkBarChart({ items = [] }) {
               </span>
               <span style={{ color: positive ? '#16a34a' : '#dc2626', fontWeight: isPortfolio ? 600 : 400 }}>
                 {v >= 0 ? '+' : ''}{v.toFixed(2)}%
+                {it.changeAud != null && <span> · {fmtSignedAud(it.changeAud)}</span>}
               </span>
             </div>
             <div className="h-3 rounded-full overflow-hidden relative" style={{ background: 'var(--color-border)' }}>

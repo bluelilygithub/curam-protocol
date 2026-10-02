@@ -101,9 +101,9 @@ export default function SharesChartsTab({
         title={today ? 'Portfolio vs benchmarks' : `Portfolio vs benchmarks — ${rangeLabel}`}
         tag={<RangeTag follows />}
         subtitle={today
-          ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
+          ? "Holdings day move (cash excluded) compared to Nasdaq, SOX, and ASX 200 ETF proxies — same basis as the Portfolio Note header. The dollar figure is your holdings' move in AUD. Nasdaq and SOX are USD-priced ETFs; your holdings are in AUD."
           : bp?.available
-            ? `Return over ${bp.from} to ${bp.to} (${bp.observationCount} daily Portfolio Notes), holdings only, cash excluded. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD.`
+            ? `Return over ${bp.from} to ${bp.to} (${bp.observationCount} daily Portfolio Notes), holdings only, cash excluded. The dollar figure is the price change on the units you hold today${bp.changeAudCoverage && bp.changeAudCoverage.included < bp.changeAudCoverage.total ? ` (${bp.changeAudCoverage.included} of ${bp.changeAudCoverage.total} holdings have a stored price in this range)` : ''} — buys and sells inside the range aren't adjusted for. Nasdaq and SOX are USD-priced ETF proxies; your holdings are in AUD.`
             : 'Not enough daily Portfolio Notes recorded for this range yet.'}
       >
         <BenchmarkBarChart items={today ? charts.benchmarksToday : (bp?.items || [])} />
@@ -113,12 +113,12 @@ export default function SharesChartsTab({
         title={today ? 'Day movers & beat/lag' : `Movers & beat/lag — ${rangeLabel}`}
         tag={<RangeTag follows />}
         subtitle={today
-          ? 'Per-holding day % with divergence vs assigned sector benchmark (SOX for semis, ASX 200 for ASX, Nasdaq otherwise).'
-          : `Each holding's move over the last ${days} days (from its first stored price in that window) against its sector index over the same range.`}
+          ? 'Per-holding day % and day $ (AUD) with divergence vs assigned sector benchmark (SOX for semis, ASX 200 for ASX, Nasdaq otherwise).'
+          : `Each holding's move over the last ${days} days (from its first stored price in that window) against its sector index over the same range. The dollar figure is the price change on the units you hold today.`}
       >
         {today
           ? <DayMoversChart movers={charts.dayMovers} />
-          : <DayMoversChart movers={charts.periodMovers} valueKey="periodChangePct" periodLabel={rangeLabel} />}
+          : <DayMoversChart movers={charts.periodMovers} valueKey="periodChangePct" amountKey="changeAud" periodLabel={rangeLabel} />}
       </ChartSection>
 
       <ChartSection

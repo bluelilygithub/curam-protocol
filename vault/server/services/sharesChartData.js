@@ -206,6 +206,10 @@ async function loadTrailingMetrics(userId, holdings, windowDays = 5, bufferDays 
       dataAvailable: true,
       windowDays,
       trailingPct: round2(((current - start.priceAud) / start.priceAud) * 100),
+      // $ move over the window on the units held TODAY (price change x current quantity) — buys and
+      // sells inside the window are not adjusted for, so this is "what the position you hold now
+      // has done", not an account statement.
+      changeAud: round2((current - start.priceAud) * num(h.quantity)),
       startRecordedAt: start.recordedAt,
     };
   }).sort((a, b) => Math.abs(b.trailingPct || 0) - Math.abs(a.trailingPct || 0));
@@ -341,6 +345,7 @@ function buildPeriodMovers(enriched, trailing, benchmarksPeriod) {
         key: h.key, symbol: h.symbol, exchange: h.exchange,
         sectorBenchmark: h.sectorBenchmark,
         periodChangePct: t.trailingPct,
+        changeAud: t.changeAud ?? null,
         sectorBenchmarkPct: sectorPct,
         vsSectorPct: vsSector,
         relativeToSector,
@@ -518,6 +523,15 @@ async function getChartData(userId, rawDays = 30) {
   const normalizedPerformance = buildNormalizedPerformance(observationHistory);
   const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory);
   const periodMovers = days <= 1 ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
+  if (benchmarksPeriod.available && periodMovers.length) {
+    const own = benchmarksPeriod.items.find((i) => i.kind === 'portfolio');
+    const dollars = periodMovers.filter((m) => m.changeAud != null);
+    if (own && dollars.length) {
+      own.changeAud = round2(dollars.reduce((sum, m) => sum + m.changeAud, 0));
+      // $ is only the holdings that have a stored price in the window — tell the UI if that's not all of them
+      benchmarksPeriod.changeAudCoverage = { included: dollars.length, total: enriched.length };
+    }
+  }
   const firstSnapshotAt = firstSnapRes.rows[0]?.first || null;
   const history = {
     firstSnapshotAt,
@@ -569,7 +583,7 @@ async function getChartData(userId, rawDays = 30) {
     .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct));
 
   const benchmarksToday = [
-    { label: 'Your holdings', pct: portfolioMove?.changePct ?? null, kind: 'portfolio' },
+    { label: 'Your holdings', pct: portfolioMove?.changePct ?? null, changeAud: portfolioMove?.changeAud ?? null, kind: 'portfolio' },
     { label: 'Nasdaq', pct: nasdaqPct, kind: 'nasdaq' },
     { label: 'SOX', pct: soxPct, kind: 'sox' },
     { label: 'ASX 200', pct: asxPct, kind: 'asx' },

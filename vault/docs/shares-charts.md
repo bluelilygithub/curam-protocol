@@ -82,6 +82,8 @@ The range buttons used to change only a handful of charts (portfolio value, pric
 | Move heatmap | follows the range, capped at 14 days (a 90-column grid is unreadable), so 30d and 90d look the same | |
 | Drawdown, allocation, total return vs cost, P&L by stock, gold book move, earnings, dividends | current snapshot / fixed | |
 
+Dollar amounts (2026-10-02): the Movement charts show the AUD figure beside the %. Today = the holdings' day move in AUD (`portfolioMove.changeAud`) and each holding's `dayChangeAud`. For 7d/30d/90d = price change × the units held **today** (`changeAud` on `periodMovers`/`trailingReturns`); the portfolio line is the sum of the holdings that have a stored price in the window (`benchmarksPeriod.changeAudCoverage` says how many), and buys/sells inside the window are not adjusted for. Index bars have no dollar figure.
+
 Currency: the Nasdaq and SOX proxies (QQQ, SOXX) are **USD-priced** ETFs and STW is AUD; holdings are AUD. The benchmark charts say so rather than converting.
 
 `history: { firstSnapshotAt, availableDays }` in the payload lets the UI say "only N days of history recorded" when the chosen range is longer than what exists.

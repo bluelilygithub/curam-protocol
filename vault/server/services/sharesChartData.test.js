@@ -83,6 +83,16 @@ test('a holding with no snapshot in the window is left out; no benchmark -> "unk
   assert.ok(m.every((x) => x.relativeToSector === 'unknown' && x.vsSectorPct === null));
 });
 
+test('period movers carry the dollar move through unchanged (and null when unavailable)', () => {
+  const withDollars = [
+    { key: 'TSM:NYSE', dataAvailable: true, trailingPct: 12, changeAud: 480.25 },
+    { key: 'GOOG:NASDAQ', dataAvailable: true, trailingPct: -3 }, // no changeAud supplied
+  ];
+  const m = buildPeriodMovers(holdings, withDollars, bench);
+  assert.strictEqual(m.find((x) => x.symbol === 'TSM').changeAud, 480.25);
+  assert.strictEqual(m.find((x) => x.symbol === 'GOOG').changeAud, null);
+});
+
 test('period movers are sorted by size of move', () => {
   const m = buildPeriodMovers(holdings, trailing, bench);
   assert.deepStrictEqual(m.map((x) => x.symbol), ['TSM', 'GOOG']);

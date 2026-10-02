@@ -1,7 +1,10 @@
 import React from 'react';
 
 // valueKey/periodLabel let the same chart show a move over a longer range (e.g. 30d) instead of the day.
-export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct', periodLabel = 'Day' }) {
+const fmtSignedAud = (n) => `${n >= 0 ? '+' : '\u2212'}${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(Math.abs(n))}`;
+
+// amountKey: the dollar move for the same period (dayChangeAud / changeAud), shown beside the %.
+export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct', amountKey = 'dayChangeAud', periodLabel = 'Day' }) {
   const items = movers.filter((m) => m[valueKey] != null).slice(0, 12);
   if (!items.length) {
     return (
@@ -38,7 +41,10 @@ export default function DayMoversChart({ movers = [], valueKey = 'dayChangePct',
               <div>
                 <div className="flex justify-between text-[10px] mb-0.5" style={{ color: 'var(--color-muted)' }}>
                   <span>{periodLabel}</span>
-                  <span style={{ color: day >= 0 ? '#16a34a' : '#dc2626' }}>{day >= 0 ? '+' : ''}{day.toFixed(2)}%</span>
+                  <span style={{ color: day >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {day >= 0 ? '+' : ''}{day.toFixed(2)}%
+                    {m[amountKey] != null && <span> · {fmtSignedAud(Number(m[amountKey]))}</span>}
+                  </span>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
                   <div
