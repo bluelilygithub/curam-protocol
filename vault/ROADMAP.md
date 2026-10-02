@@ -10,6 +10,8 @@ Shipped to production (`version-7`), each as its own push:
 - **Step 2 code — CGT view:** parcels, held-days wording, FY totals. Commits `0b1d2aaf`, `eda71970`. *Not built yet:* the "what-if sell" part.
 - **Not on the roadmap:** the Charts range fix and sub-tabs (commit `ca8540bd`).
 
+**Data verified:** all 27 trades were re-entered from the AUD prices paid on the CMC statements (confirmed by the user, 2026-10-02). This closes the step 3 spot-check for USD prices labelled AUD and puts the CGT view's AUD-as-stored basis on verified figures. It also means the USD price at purchase is not stored, so any step 6 currency-effect split would have to be estimated from historical exchange rates.
+
 **Still to verify on production** (the checks in the steps below): the Cash tab ledger total is unchanged; the 14 dividends and their dates match CMC; FY 2025-26 shows a $7,501.33 loss carried forward. Open questions from step 1: confirm W-8BEN with CMC; which database staging uses.
 
 ## Decisions already made (don't reopen)
