@@ -52,6 +52,14 @@ function KeyboardShortcutsModal({ onClose }) {
             </div>
           ))}
         </div>
+        <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Leaving a chat without a reply</p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            Nothing is sent until you press <kbd className="font-mono">Enter</kbd> (or Send), so you can walk away from a chat at any
+            time — open another with <kbd className="font-mono">⌘</kbd> <kbd className="font-mono">N</kbd> or just navigate elsewhere,
+            and no reply is requested. If a reply is already on its way, the Stop button cancels it.
+          </p>
+        </div>
       </div>
     </div>
   );
