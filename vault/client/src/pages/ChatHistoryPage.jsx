@@ -5,6 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
 import useProjectStore from '../store/projectStore';
 import { formatSessionLabel, formatSessionLocation } from '../utils/sessionDisplay';
+import { openNewChatModal } from '../utils/openNewChatModal';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -286,6 +287,20 @@ export default function ChatHistoryPage() {
       {/* Header + tab switcher */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Chat History</h1>
+        <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Starts a chat in the project being viewed (when the list is filtered to one), else a quick chat. */}
+        <button
+          type="button"
+          onClick={() => openNewChatModal(projectFilterId
+            ? { defaultMode: 'project', defaultProjectId: String(projectFilterId) }
+            : { defaultMode: 'quick' })}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity duration-200"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+          title={projectFilterName ? `Start a new chat in ${projectFilterName}` : 'Start a new chat'}
+        >
+          {getIcon('plus', { size: 14 })}
+          New chat
+        </button>
         <div className="flex rounded-xl border overflow-hidden flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <button
             onClick={() => setTab('history')}
@@ -341,6 +356,7 @@ export default function ChatHistoryPage() {
               </span>
             )}
           </button>
+        </div>
         </div>
       </div>
 
