@@ -1070,9 +1070,16 @@ function ChatPage({ general = false }) {
             Quick chat
           </span>
         ) : project ? (
-          <span className="text-sm font-medium flex-shrink-0 truncate max-w-[120px]" style={{ color: 'var(--color-text)' }}>
+          // Opens the chat history already filtered to this project (/history?projectId=).
+          <button
+            type="button"
+            onClick={() => navigate(`/history?projectId=${project.id}`)}
+            className="text-sm font-medium flex-shrink-0 truncate max-w-[120px] hover:opacity-70 transition-opacity duration-200"
+            style={{ color: 'var(--color-text)' }}
+            title={`All chats in ${project.name}`}
+          >
             {project.name}
-          </span>
+          </button>
         ) : null}
 
         {(general ? sessionId : (project && sessionId)) && (
