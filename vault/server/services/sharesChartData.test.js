@@ -7,7 +7,10 @@
 'use strict';
 
 const assert = require('assert');
-const { buildBenchmarksPeriod, buildPeriodMovers, buildNormalizedPerformance } = require('./sharesChartData');
+const {
+  buildBenchmarksPeriod, buildPeriodMovers, buildNormalizedPerformance,
+  rangeKeyFrom, fyStartFor, buildRange, downsampleDaily,
+} = require('./sharesChartData');
 
 let n = 0;
 function test(name, fn) {
@@ -91,6 +94,66 @@ test('period movers carry the dollar move through unchanged (and null when unava
   const m = buildPeriodMovers(holdings, withDollars, bench);
   assert.strictEqual(m.find((x) => x.symbol === 'TSM').changeAud, 480.25);
   assert.strictEqual(m.find((x) => x.symbol === 'GOOG').changeAud, null);
+});
+
+// ── ranges: Today, 7d, 30d, 90d, 12 months, Financial year, All time ──────────────────────
+test('range keys: the new ones are accepted, the old ?days= numbers still map, junk falls back to 30d', () => {
+  for (const k of ['today', '7d', '30d', '90d', '12m', 'fy', 'all']) assert.strictEqual(rangeKeyFrom(k), k);
+  assert.strictEqual(rangeKeyFrom('FY'), 'fy');
+  assert.strictEqual(rangeKeyFrom(' 12M '), '12m');
+  assert.deepStrictEqual([1, 7, 30, 90, '1', '90'].map(rangeKeyFrom), ['today', '7d', '30d', '90d', 'today', '90d']);
+  for (const junk of [undefined, null, '', 'banana', 45, '365', '12']) assert.strictEqual(rangeKeyFrom(junk), '30d');
+});
+
+test('financial year starts 1 July: 30 Jun is still last year, 1 Jul begins the new one', () => {
+  assert.strictEqual(fyStartFor('2026-06-30'), '2025-07-01');
+  assert.strictEqual(fyStartFor('2026-07-01'), '2026-07-01');
+  assert.strictEqual(fyStartFor('2026-10-02'), '2026-07-01');
+  assert.strictEqual(fyStartFor('2027-01-15'), '2026-07-01');
+  assert.strictEqual(fyStartFor('2026-01-01'), '2025-07-01');
+});
+
+test('financial-year range: window length counts both ends (1 Jul alone = 1 day; 2 Oct = 94)', () => {
+  assert.strictEqual(buildRange('fy', { today: '2026-07-01' }).days, 1);
+  const r = buildRange('fy', { today: '2026-10-02' });
+  assert.strictEqual(r.days, 94);
+  assert.strictEqual(r.fromDate, '2026-07-01');
+  assert.strictEqual(r.phrase, 'the current financial year (since 1 Jul 2026)');
+  assert.strictEqual(r.label, 'Financial year');
+});
+
+test('12 months = 365 days; fixed ranges carry their own length and wording', () => {
+  assert.strictEqual(buildRange('12m', { today: '2026-10-02' }).days, 365);
+  assert.strictEqual(buildRange('12m', { today: '2026-10-02' }).phrase, 'the last 12 months');
+  assert.strictEqual(buildRange('90d', { today: '2026-10-02' }).days, 90);
+  assert.strictEqual(buildRange('7d', { today: '2026-10-02' }).phrase, 'the last 7 days');
+  assert.strictEqual(buildRange('today', { today: '2026-10-02' }).days, 1);
+});
+
+test('all time reaches back to the first snapshot, and says when that was', () => {
+  const r = buildRange('all', { today: '2026-10-02', firstSnapshotAt: '2026-05-18T08:45:02Z' });
+  assert.strictEqual(r.key, 'all');
+  assert.strictEqual(r.fromDate, '2026-05-18');
+  assert.strictEqual(r.phrase, 'all recorded history (since 18 May 2026)');
+  const expectedDays = Math.ceil((Date.now() - Date.parse('2026-05-18T08:45:02Z')) / 86400000);
+  assert.ok(Math.abs(r.days - expectedDays) <= 1);
+});
+
+test('all time with nothing recorded yet does not crash', () => {
+  const r = buildRange('all', { today: '2026-10-02', firstSnapshotAt: null });
+  assert.strictEqual(r.days, 1);
+  assert.strictEqual(r.fromDate, null);
+  assert.strictEqual(r.phrase, 'all recorded history');
+});
+
+test('downsampleDaily keeps the LAST point of each day, in order', () => {
+  const pts = [
+    { recordedAt: '2026-09-01T01:00:00Z', priceAud: 1 }, { recordedAt: '2026-09-01T09:00:00Z', priceAud: 2 },
+    { recordedAt: '2026-09-02T03:00:00Z', priceAud: 3 }, { recordedAt: '2026-09-01T20:00:00Z', priceAud: 9 },
+  ];
+  // input order is what the database returns (ascending); the 20:00 row arriving late still lands on 1 Sep
+  const out = downsampleDaily(pts.slice(0, 3));
+  assert.deepStrictEqual(out.map((p) => p.priceAud), [2, 3]);
 });
 
 test('period movers are sorted by size of move', () => {

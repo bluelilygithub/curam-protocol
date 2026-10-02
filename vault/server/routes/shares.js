@@ -112,7 +112,8 @@ router.delete('/ask', async (req, res) => {
 router.get('/charts', async (req, res) => {
   try {
     const chartData = require('../services/sharesChartData');
-    const data = await chartData.getChartData(req.user.id, req.query.days);
+    // ?range=today|7d|30d|90d|12m|fy|all (the older ?days=1|7|30|90 still works)
+    const data = await chartData.getChartData(req.user.id, req.query.range ?? req.query.days);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

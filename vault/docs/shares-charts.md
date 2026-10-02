@@ -88,6 +88,20 @@ Currency: the Nasdaq and SOX proxies (QQQ, SOXX) are **USD-priced** ETFs and STW
 
 `history: { firstSnapshotAt, availableDays }` in the payload lets the UI say "only N days of history recorded" when the chosen range is longer than what exists.
 
+### Ranges (2026-10-02)
+
+`GET /api/shares/charts?range=today|7d|30d|90d|12m|fy|all` (the older `?days=1|7|30|90` still works; anything unrecognised falls back to `30d`). The response carries `range: { key, label, phrase, days, fromDate }` so the UI wording always matches the window used.
+
+| Range | Window |
+|---|---|
+| `today` | since local midnight in the workspace timezone |
+| `7d` / `30d` / `90d` | that many days back from now |
+| `12m` | 365 days back from now |
+| `fy` | **Australian financial year to date** — local midnight on 1 July (30 Jun–1 Jul is the boundary) to now; `days` counts both ends |
+| `all` | everything recorded — from the first portfolio snapshot (`history.firstSnapshotAt`); observations from the start |
+
+Beyond 90 days (`12m`, `fy` once it passes 90 days, `all`) the per-holding price series is cut to **one point a day** (the last of each day) so the payload stays a sensible size. The trailing return and period movers/benchmarks use the same window; for `fy` and `all` the trailing window is pinned to the exact start (`loadTrailingMetrics(..., windowStart)`) rather than "N days ago". The heatmap stays capped at 14 days. When the chosen range is longer than what has been recorded, the UI says how many days exist. Tests: `node server/services/sharesChartData.test.js` (range logic).
+
 ### UI
 
 The Charts tab is split into sub-tabs: **Movement** · **Performance** · **Holdings** · **Calendar & patterns** · **Metals** (only with gold holdings) · **Dividends** (only once dividends exist). The charts dim and show "Updating…" while a new range loads, and only the newest request may update the page (a slow earlier response can't overwrite a newer click). Tests: `node server/services/sharesChartData.test.js`.

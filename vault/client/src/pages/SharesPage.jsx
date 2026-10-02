@@ -345,7 +345,7 @@ export default function SharesPage() {
   const [tab, setTab] = useState('portfolio');
   const [dashboard, setDashboard] = useState(null);
   const [charts, setCharts] = useState(null);
-  const [chartDays, setChartDays] = useState(30);
+  const [chartRange, setChartRange] = useState('30d'); // today | 7d | 30d | 90d | 12m | fy | all
   const [chartsLoading, setChartsLoading] = useState(false);
   const [trades, setTrades] = useState([]);
   const [cashRows, setCashRows] = useState([]);
@@ -378,11 +378,11 @@ export default function SharesPage() {
   // Only the newest request may update the charts: a slow response for an earlier range (click
   // 90d then 7d quickly) must never overwrite the newer one.
   const chartReqRef = useRef(0);
-  const loadCharts = useCallback(async (days) => {
+  const loadCharts = useCallback(async (range) => {
     const reqId = ++chartReqRef.current;
     setChartsLoading(true);
     try {
-      const chartRes = await api.get(`/api/shares/charts?days=${days}`);
+      const chartRes = await api.get(`/api/shares/charts?range=${range}`);
       const chartData = await chartRes.json();
       if (!chartRes.ok) throw new Error(chartData.error || 'Failed to load charts');
       if (reqId === chartReqRef.current) setCharts(chartData);
@@ -485,8 +485,8 @@ export default function SharesPage() {
   }, [canUseShares, loadAll]);
 
   useEffect(() => {
-    if (canUseShares && tab === 'charts') loadCharts(chartDays);
-  }, [canUseShares, tab, chartDays, loadCharts]);
+    if (canUseShares && tab === 'charts') loadCharts(chartRange);
+  }, [canUseShares, tab, chartRange, loadCharts]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -495,7 +495,7 @@ export default function SharesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Refresh failed');
       setDashboard(data.dashboard);
-      await loadCharts(chartDays);
+      await loadCharts(chartRange);
       addToast('Quotes updated', 'success');
     } catch (err) {
       addToast(err.message || 'Refresh failed', 'error');
@@ -768,8 +768,8 @@ export default function SharesPage() {
     return <Navigate to="/" replace />;
   }
 
-  const handleChartDaysChange = (days) => {
-    setChartDays(days);
+  const handleChartRangeChange = (range) => {
+    setChartRange(range);
   };
 
   return (
@@ -1336,8 +1336,8 @@ export default function SharesPage() {
             {tab === 'charts' && (
               <SharesChartsTab
                 charts={charts}
-                days={chartDays}
-                onDaysChange={handleChartDaysChange}
+                range={chartRange}
+                onRangeChange={handleChartRangeChange}
                 loading={chartsLoading}
                 positions={dashboard?.positions || []}
                 realized={dashboard?.realized || []}

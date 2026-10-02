@@ -8,11 +8,16 @@ import EarningsTimeline from './EarningsTimeline';
 import AllocationPie from './AllocationPie';
 import HorizontalBars from './HorizontalBars';
 
-const DAY_OPTIONS = [
-  { value: 1, label: 'Today' },
-  { value: 7, label: '7d' },
-  { value: 30, label: '30d' },
-  { value: 90, label: '90d' },
+// value = the ?range= key the API takes. 'fy' is the Australian financial year to date (from 1 July);
+// 'all' is everything recorded so far.
+const RANGE_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: '90d', label: '90d' },
+  { value: '12m', label: '12 months' },
+  { value: 'fy', label: 'Financial year' },
+  { value: 'all', label: 'All time' },
 ];
 
 // Charts are grouped into tabs. Each chart is tagged as either following the range buttons or
@@ -61,8 +66,8 @@ function ChartSection({ title, subtitle, children, tag }) {
 
 export default function SharesChartsTab({
   charts,
-  days,
-  onDaysChange,
+  range,
+  onRangeChange,
   loading,
   positions = [],
   realized = [],
@@ -82,11 +87,15 @@ export default function SharesChartsTab({
   const symbolKeys = Object.keys(charts.bySymbol || {});
   const pattern = charts.patternSummary || {};
   const thresholds = pattern.alertThresholds || {};
-  const today = days === 1;
-  const rangeLabel = DAY_OPTIONS.find((o) => o.value === days)?.label || `${days}d`;
+  const today = range === 'today';
+  const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label || range;
+  // "the last 30 days", "the current financial year (since 1 Jul 2026)", "all recorded history (since …)" —
+  // supplied by the server so the wording always matches the window it actually used.
+  const phrase = charts.range?.phrase || `the selected range`;
   const bp = charts.benchmarksPeriod;
   const historyDays = charts.history?.availableDays || 0;
-  const thinHistory = !today && historyDays > 0 && historyDays < days;
+  // All time is by definition everything there is, so every other range can come up short.
+  const thinHistory = !today && range !== 'all' && historyDays > 0 && historyDays < (charts.range?.days || 0);
 
   const visibleGroups = GROUPS.filter((g) => {
     if (g.id === 'metals') return !!charts.metals?.hasHoldings;
@@ -114,7 +123,7 @@ export default function SharesChartsTab({
         tag={<RangeTag follows />}
         subtitle={today
           ? 'Per-holding day % and day $ (AUD) with divergence vs assigned sector benchmark (SOX for semis, ASX 200 for ASX, Nasdaq otherwise).'
-          : `Each holding's move over the last ${days} days (from its first stored price in that window) against its sector index over the same range. The dollar figure is the price change on the units you hold today.`}
+          : `Each holding's move over ${phrase} (from its first stored price in that window) against its sector index over the same range. The dollar figure is the price change on the units you hold today.`}
       >
         {today
           ? <DayMoversChart movers={charts.dayMovers} />
@@ -169,7 +178,7 @@ export default function SharesChartsTab({
       <ChartSection
         title="Portfolio value"
         tag={<RangeTag follows />}
-        subtitle={today ? 'Intraday snapshots from quote polls and manual refresh.' : `Daily snapshots over the last ${days} days.`}
+        subtitle={today ? 'Intraday snapshots from quote polls and manual refresh.' : `Daily snapshots over ${phrase}.`}
       >
         <div className="flex gap-2 mb-3">
           <button
@@ -219,11 +228,11 @@ export default function SharesChartsTab({
       </ChartSection>
 
       <ChartSection
-        title={`${trailingDays}-day trailing return`}
+        title={today ? `${trailingDays}-day trailing return` : `Trailing return — ${rangeLabel}`}
         tag={today ? <RangeTag label="Fixed 5 days" /> : <RangeTag follows />}
         subtitle={today
-          ? 'Price change from the earliest snapshot in the last ~5 days — same metric cited in Portfolio Note movers. Pick 7d, 30d or 90d to widen it.'
-          : `Price change over the last ${days} days, from each holding's first stored price in that window.`}
+          ? 'Price change from the earliest snapshot in the last ~5 days — same metric cited in Portfolio Note movers. Pick a longer range to widen it.'
+          : `Price change over ${phrase}, from each holding's first stored price in that window.`}
       >
         <HorizontalBars items={trailingItems} valueKey="trailingPct" labelKey="symbol" />
         {(charts.trailingReturns || []).some((t) => !t.dataAvailable) && (
@@ -237,7 +246,7 @@ export default function SharesChartsTab({
         <ChartSection
           title="Price by holding"
           tag={<RangeTag follows />}
-          subtitle={today ? 'Intraday price AUD (quantity changes do not affect this line).' : `Price history over ${days} days.`}
+          subtitle={today ? 'Intraday price AUD (quantity changes do not affect this line).' : `Price history over ${phrase}${charts.range?.days > 90 ? ' (one point a day)' : ''}.`}
         >
           <div className="space-y-6">
             {symbolKeys.map((key) => {
@@ -364,7 +373,7 @@ export default function SharesChartsTab({
       <ChartSection
         title="XAU/AUD spot history"
         tag={today ? <RangeTag label="Needs 7d or more" /> : <RangeTag follows />}
-        subtitle={today ? 'Pick 7d, 30d or 90d to see the spot price history.' : `Gold spot over the last ${days} days.`}
+        subtitle={today ? 'Pick a longer range to see the spot price history.' : `Gold spot over ${phrase}.`}
       >
         {charts.metals.spotHistory?.length > 1 ? (
           <MultiLineChart
@@ -414,17 +423,17 @@ export default function SharesChartsTab({
         </p>
         <div className="flex items-center gap-2">
           {loading && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Updating…</span>}
-          <div className="flex gap-1 p-0.5 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-            {DAY_OPTIONS.map((opt) => (
+          <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            {RANGE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => onDaysChange(opt.value)}
+                onClick={() => onRangeChange(opt.value)}
                 disabled={loading}
                 className="px-3 py-1 rounded-md text-xs font-medium transition-opacity hover:opacity-70 disabled:opacity-60"
                 style={{
-                  background: days === opt.value ? 'var(--color-primary)' : 'transparent',
-                  color: days === opt.value ? '#fff' : 'var(--color-muted)',
+                  background: range === opt.value ? 'var(--color-primary)' : 'transparent',
+                  color: range === opt.value ? '#fff' : 'var(--color-muted)',
                 }}
               >
                 {opt.label}

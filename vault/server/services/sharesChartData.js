@@ -32,6 +32,70 @@ function parseDays(raw) {
   return VALID_DAYS.includes(n) ? n : 30;
 }
 
+// ── ranges ──────────────────────────────────────────────────────────────────────────────
+// The chart range buttons: Today, 7d, 30d, 90d, 12 months, Financial year (AU, 1 Jul - 30 Jun,
+// year to date) and All time (since the first recorded snapshot). The API takes ?range=<key>;
+// the original ?days=1|7|30|90 still works.
+const RANGE_KEYS = ['today', '7d', '30d', '90d', '12m', 'fy', 'all'];
+const LEGACY_DAYS = { 1: 'today', 7: '7d', 30: '30d', 90: '90d' };
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RANGE_LABELS = { today: 'Today', '7d': '7d', '30d': '30d', '90d': '90d', '12m': '12 months', fy: 'Financial year', all: 'All time' };
+
+function rangeKeyFrom(raw) {
+  const v = String(raw ?? '').trim().toLowerCase();
+  if (RANGE_KEYS.includes(v)) return v;
+  if (LEGACY_DAYS[Number(v)]) return LEGACY_DAYS[Number(v)];
+  return '30d';
+}
+
+// Start of the current Australian financial year as 'YYYY-MM-DD' (1 July), from today's date.
+function fyStartFor(todayStr) {
+  const [y, m] = todayStr.slice(0, 7).split('-').map(Number);
+  return `${m >= 7 ? y : y - 1}-07-01`;
+}
+
+function daysBetween(fromStr, toStr) {
+  return Math.round((Date.parse(`${toStr}T00:00:00Z`) - Date.parse(`${fromStr}T00:00:00Z`)) / DAY_MS);
+}
+
+function fmtLongDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`;
+}
+
+// Resolve a range key into { key, label, phrase, days, fromDate }.
+//   days     — length of the window in days (today = 1; all = days of recorded history)
+//   fromDate — 'YYYY-MM-DD' start of the window where it is a calendar date (fy, all), else null
+//   phrase   — reads naturally after "over": "the last 30 days", "the current financial year (since 1 Jul 2026)"
+function buildRange(key, { today, firstSnapshotAt = null }) {
+  const label = RANGE_LABELS[key];
+  switch (key) {
+    case 'today': return { key, label, phrase: 'today', days: 1, fromDate: today };
+    case '7d': case '30d': case '90d': {
+      const days = Number(key.slice(0, -1));
+      return { key, label, phrase: `the last ${days} days`, days, fromDate: null };
+    }
+    case '12m': return { key, label, phrase: 'the last 12 months', days: 365, fromDate: null };
+    case 'fy': {
+      const fromDate = fyStartFor(today);
+      return { key, label, phrase: `the current financial year (since ${fmtLongDate(fromDate)})`, days: daysBetween(fromDate, today) + 1, fromDate };
+    }
+    default: { // 'all'
+      const first = firstSnapshotAt ? new Date(firstSnapshotAt) : null;
+      const fromDate = first && !Number.isNaN(first.getTime()) ? first.toISOString().slice(0, 10) : null;
+      const days = first ? Math.max(1, Math.ceil((Date.now() - first.getTime()) / DAY_MS)) : 1;
+      return { key: 'all', label, phrase: fromDate ? `all recorded history (since ${fmtLongDate(fromDate)})` : 'all recorded history', days, fromDate };
+    }
+  }
+}
+
+// One point per calendar day (the last of each) — keeps long-range price series a sensible size.
+function downsampleDaily(points) {
+  const byDay = new Map();
+  for (const p of points) byDay.set(new Date(p.recordedAt).toISOString().slice(0, 10), p);
+  return [...byDay.values()];
+}
+
 function num(v) {
   return Number(v) || 0;
 }
@@ -171,11 +235,13 @@ function buildAllocationByBenchmark(enriched, holdingsValueAud) {
 
 // bufferDays: the original 5-day metric reaches back 3 extra days so a weekend still has a
 // snapshot to start from. The range-driven version passes 0 so "30d" means 30 days.
-async function loadTrailingMetrics(userId, holdings, windowDays = 5, bufferDays = 3) {
+async function loadTrailingMetrics(userId, holdings, windowDays = 5, bufferDays = 3, windowStart = null) {
   const symbols = [...new Set(holdings.map((h) => h.symbol).filter(Boolean))];
   if (!symbols.length) return [];
 
-  const cutoff = new Date(Date.now() - (windowDays + bufferDays) * 24 * 60 * 60 * 1000);
+  // windowStart (a Date) pins the window exactly — used by the financial-year and all-time ranges,
+  // whose start is a calendar date rather than "N days ago".
+  const cutoff = windowStart || new Date(Date.now() - (windowDays + bufferDays) * 24 * 60 * 60 * 1000);
   const { rows } = await pool.query(
     `SELECT DISTINCT ON (symbol) symbol, "priceAud", "recordedAt"
      FROM share_symbol_snapshots
@@ -254,8 +320,8 @@ function parseHeadlines(val) {
   return {};
 }
 
-async function loadObservationHistory(userId, days) {
-  const cutoff = getDateInTz(await getWorkspaceTimezone(), days);
+async function loadObservationHistory(userId, days, cutoffDate = null) {
+  const cutoff = cutoffDate || getDateInTz(await getWorkspaceTimezone(), days);
   const { rows } = await pool.query(
     `SELECT date, headlines FROM share_news_briefings
      WHERE "userId"=$1 AND type='observation' AND date >= $2
@@ -446,12 +512,27 @@ function downsamplePortfolioSnapshots(rows, days) {
   return [...byDay.values()].sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
 }
 
-async function getChartData(userId, rawDays = 30) {
-  const days = parseDays(rawDays);
+async function getChartData(userId, rawRange = '30d') {
   const tz = await getWorkspaceTimezone();
   const today = getDateInTz(tz);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const sinceParam = days <= 1 ? null : since;
+  const rangeKey = rangeKeyFrom(rawRange);
+  const { rows: [firstRow] } = await pool.query(
+    `SELECT MIN("recordedAt") AS first FROM share_portfolio_snapshots WHERE "userId"=$1`, [userId]
+  );
+  const range = buildRange(rangeKey, { today, firstSnapshotAt: firstRow?.first || null });
+  const days = range.days;
+  const isToday = range.key === 'today';
+  // Where the window starts. Today uses local midnight (SQL below); the financial year starts at
+  // local midnight on 1 July; all-time reaches back to the beginning; the rest are "N days ago".
+  let sinceParam = null;
+  if (range.key === 'fy') {
+    const { rows: [m] } = await pool.query(`SELECT (($1::date)::timestamp AT TIME ZONE $2) AS t`, [range.fromDate, tz]);
+    sinceParam = new Date(m.t);
+  } else if (range.key === 'all') {
+    sinceParam = new Date('2000-01-01T00:00:00Z');
+  } else if (!isToday) {
+    sinceParam = new Date(Date.now() - days * DAY_MS);
+  }
   // "Today" = since local midnight in the workspace timezone. It used to be CURRENT_DATE, which is
   // the database server's (UTC) date, so for Sydney the window only began around 10-11am.
   const TODAY_START_SQL = `(($2::date)::timestamp AT TIME ZONE $3)`;
@@ -460,7 +541,7 @@ async function getChartData(userId, rawDays = 30) {
     sharesPortfolio.buildDashboard(userId),
     metalsPortfolio.buildMetalsDashboard(userId, tz),
     pool.query(
-      days <= 1
+      isToday
         ? `SELECT "totalValueAud", "holdingsValueAud", "cashAud", "costBasisAud", "recordedAt"
            FROM share_portfolio_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= ${TODAY_START_SQL}
@@ -469,10 +550,10 @@ async function getChartData(userId, rawDays = 30) {
            FROM share_portfolio_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= $2
            ORDER BY "recordedAt" ASC`,
-      days <= 1 ? [userId, today, tz] : [userId, sinceParam]
+      isToday ? [userId, today, tz] : [userId, sinceParam]
     ),
     pool.query(
-      days <= 1
+      isToday
         ? `SELECT symbol, "priceAud", "valueAud", quantity, "recordedAt"
            FROM share_symbol_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= ${TODAY_START_SQL}
@@ -481,9 +562,9 @@ async function getChartData(userId, rawDays = 30) {
            FROM share_symbol_snapshots
            WHERE "userId"=$1 AND "recordedAt" >= $2
            ORDER BY "recordedAt" ASC`,
-      days <= 1 ? [userId, today, tz] : [userId, sinceParam]
+      isToday ? [userId, today, tz] : [userId, sinceParam]
     ),
-    loadObservationHistory(userId, days),
+    loadObservationHistory(userId, days, range.key === 'fy' ? range.fromDate : range.key === 'all' ? '2000-01-01' : null),
     pool.query(`SELECT MIN("recordedAt") AS first FROM share_portfolio_snapshots WHERE "userId"=$1`, [userId]),
   ]);
 
@@ -514,15 +595,15 @@ async function getChartData(userId, rawDays = 30) {
   ].sort((a, b) => (a.pctOffPeak ?? 0) - (b.pctOffPeak ?? 0));
 
   // Today keeps the original 5-day trailing metric; any longer range uses exactly that range.
-  const trailingWindowDays = days <= 1 ? 5 : days;
+  const trailingWindowDays = isToday ? 5 : days;
   const [trailingReturns, earningsTimeline] = await Promise.all([
-    loadTrailingMetrics(userId, enriched, trailingWindowDays, days <= 1 ? 3 : 0),
+    loadTrailingMetrics(userId, enriched, trailingWindowDays, isToday ? 3 : 0, isToday ? null : sinceParam),
     loadUpcomingEarnings(enriched, today, tz, 90),
   ]);
 
   const normalizedPerformance = buildNormalizedPerformance(observationHistory);
   const benchmarksPeriod = buildBenchmarksPeriod(normalizedPerformance, observationHistory);
-  const periodMovers = days <= 1 ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
+  const periodMovers = isToday ? [] : buildPeriodMovers(enriched, trailingReturns, benchmarksPeriod);
   if (benchmarksPeriod.available && periodMovers.length) {
     const own = benchmarksPeriod.items.find((i) => i.kind === 'portfolio');
     const dollars = periodMovers.filter((m) => m.changeAud != null);
@@ -542,9 +623,9 @@ async function getChartData(userId, rawDays = 30) {
 
   const latestObs = observationHistory[observationHistory.length - 1];
   const unexplainedHistory = latestObs?.unexplainedMoveHistory || {};
-  const moveHeatmap = await buildMoveHeatmap(userId, Math.min(days, 14), unexplainedHistory);
+  const moveHeatmap = await buildMoveHeatmap(userId, isToday ? 1 : Math.max(2, Math.min(days, 14)), unexplainedHistory);
 
-  const portfolioSnapshots = downsamplePortfolioSnapshots(portfolioRows.rows, days).map((r) => ({
+  const portfolioSnapshots = downsamplePortfolioSnapshots(portfolioRows.rows, isToday ? 1 : Math.max(2, days)).map((r) => ({
     recordedAt: r.recordedAt,
     totalValueAud: num(r.totalValueAud),
     holdingsValueAud: num(r.holdingsValueAud),
@@ -566,6 +647,11 @@ async function getChartData(userId, rawDays = 30) {
       valueAud: num(r.valueAud),
       quantity: num(r.quantity),
     });
+  }
+
+  // Beyond 90 days an hourly series per holding is more points than a chart can show; keep one a day.
+  if (!isToday && days > 90) {
+    for (const key of Object.keys(bySymbol)) bySymbol[key] = downsampleDaily(bySymbol[key]);
   }
 
   const allocation = enriched
@@ -590,7 +676,7 @@ async function getChartData(userId, rawDays = 30) {
   ].filter((b) => b.pct != null || b.kind === 'portfolio');
 
   let metalsSpotHistory = [];
-  if (days > 1 && sinceParam) {
+  if (!isToday && sinceParam) {
     const { rows: spotRows } = await pool.query(
       `SELECT "audPerOz", "recordedAt" FROM metal_spot_snapshots
        WHERE metal='XAU' AND "recordedAt" >= $1 ORDER BY "recordedAt" ASC`,
@@ -608,6 +694,7 @@ async function getChartData(userId, rawDays = 30) {
 
   return {
     days,
+    range,
     asOf: dash.quotedAt,
     benchmarksToday,
     benchmarksPeriod,
@@ -655,6 +742,10 @@ module.exports = {
   parseDays,
   VALID_DAYS,
   // pure helpers, exported for tests
+  rangeKeyFrom,
+  fyStartFor,
+  buildRange,
+  downsampleDaily,
   buildBenchmarksPeriod,
   buildPeriodMovers,
   buildNormalizedPerformance,
