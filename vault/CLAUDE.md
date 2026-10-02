@@ -326,6 +326,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 - File uploads: `multer` to `uploads/<projectId>/`. Code files stored as `<name>_<ext>.txt`. SSRF guard in `fetchUrl.js` — resolves DNS + rejects private IP ranges before fetching any user URL.
 - Kanban columns sort by `task.order`, not `sortTasks()`. Critical for within-column reorder.
 - `formatEffort(mins)` → `'3h 30m'` / `'45m'` / `'—'`. `parseEffortInput(str)` handles `45m`, `3h`, `1.5h`, `2d`, bare numbers.
+- **Chat message deletion is a HARD delete** (decided 2026-10-02): `DELETE /api/chat/messages/:id` and `DELETE /api/chat/messages` `{ ids }` remove the rows (bookmarks cascade); there is no soft-delete/tombstone for messages (sessions do soft-delete via `deletedAt`). Replies are rebuilt from stored messages, so a deleted message stops influencing the chat; already-generated session summaries/titles are not rewritten. Ownership = session owner or project owner; the batch is all-or-nothing. Chat-to-task already exists (`SelectionToolbar` -> `QuickCapture`); tasks have **no assignee** (each task belongs to one user).
 - `toast-in` animation, sidebar collapse, icon rotation: all 200ms. Single `--duration-fast: 200ms` if ever extracted.
 
 ---

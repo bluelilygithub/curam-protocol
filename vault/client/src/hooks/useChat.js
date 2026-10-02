@@ -215,6 +215,35 @@ export function useChat({ projectId, studentCards = false }) {
     });
   }, [sessionId]);
 
+  // Hard-delete messages by position. The server deletes by id, and messages streamed in THIS
+  // session don't carry an id yet, so any missing ids are looked up from the saved history first
+  // (only trusted when the saved chat lines up with what's on screen). Throws on failure so the
+  // caller can show it; the on-screen list only changes after the server confirms.
+  const deleteMessages = useCallback(async (indices) => {
+    if (!sessionId) throw new Error('This chat has not been saved yet');
+    const targets = [...new Set(indices)].filter((i) => Number.isInteger(i) && i >= 0 && i < messages.length);
+    if (!targets.length) return;
+    let ids = targets.map((i) => messages[i]?.id);
+    if (ids.some((id) => !id)) {
+      const hres = await api.get(`/api/chat/history/${sessionId}`);
+      const hist = await hres.json().catch(() => null);
+      if (!hres.ok || !Array.isArray(hist)) throw new Error('Could not look that message up — reload the chat and try again');
+      const aligned = hist.length === messages.length;
+      ids = targets.map((i) => {
+        const m = messages[i];
+        if (m.id) return m.id;
+        const h = hist[i];
+        return h && h.role === m.role && (aligned || h.content === m.content) ? h.id : null;
+      });
+      if (ids.some((id) => !id)) throw new Error('Could not match that message to the saved chat — reload the chat and try again');
+    }
+    const res = await api.delete('/api/chat/messages', { ids });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'Delete failed');
+    const gone = new Set(targets);
+    setMessages((prev) => prev.filter((_, i) => !gone.has(i)));
+  }, [sessionId, messages]);
+
   // Regenerate: remove last assistant (and possibly user) pair, re-send last user message
   const regenerate = useCallback(async (lastUserText, attachmentIds, attachmentMeta, model, urlAttachments, temperature, personaId, reasoning, webSearch = true) => {
     if (isStreaming) return;
@@ -246,5 +275,5 @@ export function useChat({ projectId, studentCards = false }) {
     }
   }, [isStreaming, sessionId, sendMessage, studentCards]);
 
-  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive };
+  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, deleteMessages, regenerate, streamError, clearStreamError, ragFallbackActive };
 }

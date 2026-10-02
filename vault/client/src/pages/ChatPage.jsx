@@ -22,6 +22,7 @@ import { downloadChatMd } from '../utils/exportMd';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
 import SelectionToolbar from '../components/SelectionToolbar';
+import useToastStore from '../store/toastStore';
 import OverflowMenu from '../components/OverflowMenu';
 import PromptVariableModal from '../components/PromptVariableModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -93,7 +94,8 @@ const MemoMessageList = React.memo(function MemoMessageList({
             <MessageBubble
               message={msg}
               messageIndex={i}
-              onDelete={msg.role === 'user' && !isStreaming ? onDelete : undefined}
+              onDelete={!isStreaming ? onDelete : undefined}
+              pairAvailable={msg.role === 'user' ? messages[i + 1]?.role === 'assistant' : messages[i - 1]?.role === 'user'}
               onOpenArtifact={msg.role === 'assistant' ? onOpenArtifact : undefined}
               onBranch={msg.role === 'user' && !!sessionId && !isStreaming ? onBranch : undefined}
               onBranchResponse={isLastAssistant && !!sessionId && !isStreaming ? () => onBranchResponse(i, msg) : undefined}
@@ -136,8 +138,9 @@ function ChatPage({ general = false }) {
   const canSelectModel = isAdmin || featureAccess.memberModelSelection !== false;
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
+  const addToast = useToastStore((st) => st.addToast);
 
-  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
+  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, deleteMessages, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS, defaultModel } = useModels();
   const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isLocalCloneConfigured, isLocalVoiceAvailable, isGeneratingSpeech, isListening, transcript, interimText, voiceError, speechStatus, isTranscribing, isSpeaking, isPaused, speakingId, voices, selectedVoiceURI, setSelectedVoiceURI, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking, clearVoiceError } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
@@ -278,6 +281,24 @@ function ChatPage({ general = false }) {
   const titleInputRef = useRef(null);
   const mentionTimerRef = useRef(null);
   const handleSendRef = useRef(null);
+
+  // Hard-delete one message, or a question + its answer ('pair'). Permanent: the server removes
+  // the rows, so the model also stops seeing them in later replies.
+  const handleDeleteMessage = useCallback(async (index, scope) => {
+    const msg = messages[index];
+    if (!msg) return;
+    let indices = [index];
+    if (scope === 'pair') {
+      if (msg.role === 'user' && messages[index + 1]?.role === 'assistant') indices = [index, index + 1];
+      else if (msg.role === 'assistant' && messages[index - 1]?.role === 'user') indices = [index - 1, index];
+    }
+    try {
+      await deleteMessages(indices);
+      addToast(indices.length > 1 ? 'Question and answer deleted' : 'Message deleted');
+    } catch (err) {
+      addToast(err.message || 'Could not delete the message', 'error');
+    }
+  }, [messages, deleteMessages, addToast]);
 
   const startBlankChat = useCallback(() => {
     document.dispatchEvent(new CustomEvent('vault:new-chat'));
@@ -1603,7 +1624,7 @@ function ChatPage({ general = false }) {
                 isAiSearching={isAiSearching}
                 sessionId={sessionId}
                 suggestions={suggestions}
-                onDelete={deleteMessagePair}
+                onDelete={handleDeleteMessage}
                 onBranch={handleBranch}
                 onBranchResponse={openBranchResponseModal}
                 onOpenArtifact={handleOpenArtifact}

@@ -1613,15 +1613,74 @@ router.post('/sessions/:sessionId/summarize', async (req, res) => {
   }
 });
 
-// DELETE /api/chat/messages/pair — delete a user+assistant pair by position
+// Messages this user may delete: those in a session they own, or in a project they own — the
+// same ownership rule the other chat routes use.
+async function ownedMessageIds(userId, ids) {
+  const { rows } = await pool.query(
+    `SELECT m.id
+     FROM messages m
+     JOIN sessions s ON s."sessionId" = m."sessionId"
+     LEFT JOIN projects p ON p.id = s."projectId"
+     WHERE m.id = ANY($1::int[])
+       AND (s."userId" = $2 OR (s."projectId" IS NOT NULL AND p."userId" = $2))`,
+    [ids, userId]
+  );
+  return rows.map((r) => r.id);
+}
+
+// DELETE /api/chat/messages/pair — delete a user+assistant pair by position.
+// Legacy (position-based); the chat UI now uses the id-based routes below. Still checks the
+// caller owns the session — it previously deleted from any session id it was given.
 router.delete('/messages/pair', async (req, res) => {
   try {
     const { sessionId, startIndex } = req.body;
     if (!sessionId || startIndex == null) return res.status(400).json({ error: 'sessionId and startIndex required' });
+    const { rows: own } = await pool.query(
+      `SELECT 1 FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId"=$1 AND (s."userId"=$2 OR (s."projectId" IS NOT NULL AND p."userId"=$2))`,
+      [sessionId, req.user.id]
+    );
+    if (!own.length) return res.status(404).json({ error: 'Session not found' });
     const { rows: msgs } = await pool.query('SELECT id FROM messages WHERE "sessionId"=$1 ORDER BY id ASC', [sessionId]);
     const toDelete = [msgs[startIndex], msgs[startIndex + 1]].filter(Boolean);
     for (const msg of toDelete) await pool.query('DELETE FROM messages WHERE id=$1', [msg.id]);
     res.json({ deleted: toDelete.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/chat/messages — body { ids: number[] }. HARD delete: the rows are removed, not
+// flagged. Because every reply is built from the stored messages, a deleted message also stops
+// influencing later replies; its bookmark (if any) goes with it (ON DELETE CASCADE). All-or-
+// nothing: if any id isn't one of the caller's messages, nothing is deleted.
+// (Session summaries/titles already generated are not rewritten.)
+router.delete('/messages', async (req, res) => {
+  try {
+    const raw = req.body?.ids;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 50) {
+      return res.status(400).json({ error: 'ids must be an array of 1-50 message ids' });
+    }
+    const ids = [...new Set(raw.map(Number))];
+    if (ids.some((n) => !Number.isInteger(n) || n <= 0)) return res.status(400).json({ error: 'ids must be positive integers' });
+    const owned = await ownedMessageIds(req.user.id, ids);
+    if (owned.length !== ids.length) return res.status(404).json({ error: 'Message not found' });
+    const { rowCount } = await pool.query('DELETE FROM messages WHERE id = ANY($1::int[])', [ids]);
+    res.json({ deleted: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/chat/messages/:id — hard delete one message.
+router.delete('/messages/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid message id' });
+    const owned = await ownedMessageIds(req.user.id, [id]);
+    if (!owned.length) return res.status(404).json({ error: 'Message not found' });
+    await pool.query('DELETE FROM messages WHERE id=$1', [id]);
+    res.json({ deleted: 1 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

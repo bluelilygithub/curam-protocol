@@ -21,11 +21,53 @@ const COLLAPSE_CHAR_THRESHOLD = 2500;
 const COLLAPSED_HEIGHT = 220; // px
 const BRANCH_SUMMARY_PREFIX = '[[VAULT_BRANCH_SUMMARY]]\n';
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isGeneratingSpeech, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
+// Trash control shown on hover for every message. Deletion is permanent (hard delete), so it
+// asks first; when the message has a partner (a question and its answer) you can remove just
+// this message or the pair.
+function DeleteControl({ messageIndex, onDelete, pairAvailable, getIcon, boxed }) {
+  const [confirming, setConfirming] = useState(false);
+  if (!onDelete) return null;
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2 text-xs flex-wrap" style={{ color: 'var(--color-muted)' }}>
+        <span>Delete permanently?</span>
+        <button onClick={() => { setConfirming(false); onDelete(messageIndex, 'one'); }} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>
+          This message
+        </button>
+        {pairAvailable && (
+          <button onClick={() => { setConfirming(false); onDelete(messageIndex, 'pair'); }} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>
+            Question + answer
+          </button>
+        )}
+        <button onClick={() => setConfirming(false)} className="hover:opacity-70 transition-opacity">Cancel</button>
+      </div>
+    );
+  }
+  return boxed ? (
+    <button
+      onClick={() => setConfirming(true)}
+      className="w-6 h-6 flex items-center justify-center rounded-md"
+      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+      title="Delete this message"
+    >
+      {getIcon('trash', { size: 11 })}
+    </button>
+  ) : (
+    <button
+      onClick={() => setConfirming(true)}
+      className="self-end opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity flex items-center gap-1 text-xs"
+      style={{ color: 'var(--color-muted)' }}
+      title="Delete this message"
+    >
+      {getIcon('trash', { size: 11 })}
+    </button>
+  );
+}
+
+function MessageBubble({ message, onDelete, pairAvailable, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isGeneratingSpeech, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
   // Compute code blocks only when message content changes (not on every parent re-render)
@@ -144,30 +186,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchRe
                 {getIcon('git-branch', { size: 11 })}
               </button>
             )}
-            {onDelete && (
-              confirmingDelete ? (
-                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                  <span>Delete this exchange?</span>
-                  <button
-                    onClick={() => { onDelete(messageIndex); setConfirmingDelete(false); }}
-                    className="font-medium"
-                    style={{ color: '#ef4444' }}
-                  >
-                    Delete
-                  </button>
-                  <button onClick={() => setConfirmingDelete(false)}>Cancel</button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmingDelete(true)}
-                  className="self-end opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity flex items-center gap-1 text-xs"
-                  style={{ color: 'var(--color-muted)' }}
-                  title="Delete this prompt &amp; response"
-                >
-                  {getIcon('trash', { size: 11 })}
-                </button>
-              )
-            )}
+            <DeleteControl messageIndex={messageIndex} onDelete={onDelete} pairAvailable={pairAvailable} getIcon={getIcon} />
           </div>
         </div>
       </div>
@@ -366,6 +385,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchRe
                 </button>
               )
             )}
+            <DeleteControl messageIndex={messageIndex} onDelete={onDelete} pairAvailable={pairAvailable} getIcon={getIcon} boxed />
           </div>
         )}
       </div>
