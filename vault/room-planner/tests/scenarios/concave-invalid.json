@@ -1,0 +1,124 @@
+{
+  "furnitureDefinitions": [
+    {
+      "category": "test",
+      "defaultHeight": 0.85,
+      "defaultLength": 0.9,
+      "defaultWidth": 2,
+      "id": "sofa",
+      "name": "sofa"
+    }
+  ],
+  "id": "concave-invalid",
+  "materials": [],
+  "rooms": [
+    {
+      "ceilingHeight": 2.7,
+      "fixtures": [],
+      "floorElevation": 0,
+      "furniture": [
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-1",
+          "length": 0.9,
+          "position": {
+            "x": 2.4,
+            "y": 2.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.6457718232379019,
+          "width": 2
+        }
+      ],
+      "id": "room-1",
+      "name": "Room",
+      "vertices": [
+        {
+          "id": "a",
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "b",
+          "position": {
+            "x": 6,
+            "y": 0
+          }
+        },
+        {
+          "id": "c",
+          "position": {
+            "x": 6,
+            "y": 3
+          }
+        },
+        {
+          "id": "d",
+          "position": {
+            "x": 3,
+            "y": 3
+          }
+        },
+        {
+          "id": "e",
+          "position": {
+            "x": 3,
+            "y": 6
+          }
+        },
+        {
+          "id": "f",
+          "position": {
+            "x": 0,
+            "y": 6
+          }
+        }
+      ],
+      "wallHeight": 2.7,
+      "walls": [
+        {
+          "endVertexId": "b",
+          "id": "wall-ab",
+          "startVertexId": "a",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "c",
+          "id": "wall-bc",
+          "startVertexId": "b",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "d",
+          "id": "wall-cd",
+          "startVertexId": "c",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "e",
+          "id": "wall-de",
+          "startVertexId": "d",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "f",
+          "id": "wall-ef",
+          "startVertexId": "e",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "a",
+          "id": "wall-fa",
+          "startVertexId": "f",
+          "thickness": 0.15
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "units": "metric"
+}

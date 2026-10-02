@@ -1,0 +1,183 @@
+{
+  "furnitureDefinitions": [
+    {
+      "category": "test",
+      "defaultHeight": 0.85,
+      "defaultLength": 0.9,
+      "defaultWidth": 2,
+      "id": "sofa",
+      "name": "sofa"
+    },
+    {
+      "category": "test",
+      "defaultHeight": 0.75,
+      "defaultLength": 0.6,
+      "defaultWidth": 1,
+      "id": "table",
+      "name": "table"
+    },
+    {
+      "category": "test",
+      "defaultHeight": 0.9,
+      "defaultLength": 0.5,
+      "defaultWidth": 0.5,
+      "id": "chair",
+      "name": "chair"
+    },
+    {
+      "category": "test",
+      "defaultHeight": 1.8,
+      "defaultLength": 0.35,
+      "defaultWidth": 0.9,
+      "id": "shelf",
+      "name": "shelf"
+    }
+  ],
+  "id": "wall-edit-cascade",
+  "materials": [],
+  "rooms": [
+    {
+      "ceilingHeight": 2.7,
+      "fixtures": [
+        {
+          "elevation": 0.9,
+          "height": 1.2,
+          "id": "win-e",
+          "offsetAlongWall": 4.5,
+          "type": "window",
+          "wallId": "w2",
+          "width": 0.8
+        },
+        {
+          "elevation": 0.9,
+          "height": 1.2,
+          "id": "win-n",
+          "offsetAlongWall": 2,
+          "type": "window",
+          "wallId": "w3",
+          "width": 1.2
+        }
+      ],
+      "floorElevation": 0,
+      "furniture": [
+        {
+          "definitionId": "chair",
+          "elevation": 0,
+          "height": 0.9,
+          "id": "chair-1",
+          "length": 0.5,
+          "position": {
+            "x": 3.5,
+            "y": 4.6
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.5
+        },
+        {
+          "definitionId": "shelf",
+          "elevation": 0,
+          "height": 1.8,
+          "id": "shelf-1",
+          "length": 0.35,
+          "position": {
+            "x": 2,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.9
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-1",
+          "length": 0.9,
+          "position": {
+            "x": 2,
+            "y": 4.5
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 2
+        },
+        {
+          "definitionId": "table",
+          "elevation": 0,
+          "height": 0.75,
+          "id": "table-1",
+          "length": 0.6,
+          "position": {
+            "x": 3.5,
+            "y": 3.9
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        }
+      ],
+      "id": "room-1",
+      "name": "Room",
+      "vertices": [
+        {
+          "id": "v1",
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "v2",
+          "position": {
+            "x": 4,
+            "y": 0
+          }
+        },
+        {
+          "id": "v3",
+          "position": {
+            "x": 4,
+            "y": 5
+          }
+        },
+        {
+          "id": "v4",
+          "position": {
+            "x": 0,
+            "y": 5
+          }
+        }
+      ],
+      "wallHeight": 2.7,
+      "walls": [
+        {
+          "endVertexId": "v2",
+          "id": "w1",
+          "startVertexId": "v1",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v3",
+          "id": "w2",
+          "startVertexId": "v2",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v4",
+          "id": "w3",
+          "startVertexId": "v3",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v1",
+          "id": "w4",
+          "startVertexId": "v4",
+          "thickness": 0.15
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "units": "metric"
+}

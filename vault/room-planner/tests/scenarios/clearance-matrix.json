@@ -1,0 +1,225 @@
+{
+  "furnitureDefinitions": [
+    {
+      "category": "test",
+      "clearancePolicies": [
+        {
+          "offset": 0.75,
+          "severity": "hard",
+          "side": "front"
+        }
+      ],
+      "defaultHeight": 0.85,
+      "defaultLength": 0.9,
+      "defaultWidth": 2,
+      "id": "sofa",
+      "name": "sofa"
+    },
+    {
+      "category": "test",
+      "defaultHeight": 0.9,
+      "defaultLength": 0.5,
+      "defaultWidth": 0.5,
+      "id": "chair",
+      "name": "chair"
+    }
+  ],
+  "id": "clearance-matrix",
+  "materials": [],
+  "rooms": [
+    {
+      "ceilingHeight": 2.7,
+      "fixtures": [],
+      "floorElevation": 0,
+      "furniture": [
+        {
+          "definitionId": "chair",
+          "elevation": 0,
+          "height": 0.9,
+          "id": "chair-1",
+          "length": 0.5,
+          "position": {
+            "x": 4.5,
+            "y": 1.8
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.5
+        },
+        {
+          "definitionId": "chair",
+          "elevation": 0,
+          "height": 0.9,
+          "id": "chair-2",
+          "length": 0.5,
+          "position": {
+            "x": 4.2,
+            "y": 4.5
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.5
+        },
+        {
+          "definitionId": "chair",
+          "elevation": 0,
+          "height": 0.9,
+          "id": "chair-3",
+          "length": 0.4,
+          "position": {
+            "x": 5.7,
+            "y": 4.5
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.4
+        },
+        {
+          "definitionId": "chair",
+          "elevation": 0,
+          "height": 0.9,
+          "id": "chair-4",
+          "length": 0.4,
+          "position": {
+            "x": 5,
+            "y": 5.75
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 0.4
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-1",
+          "length": 0.9,
+          "position": {
+            "x": 4.5,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 2
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-2",
+          "length": 0.9,
+          "position": {
+            "x": 1.5,
+            "y": 5.4
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 2
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-3",
+          "length": 0.9,
+          "position": {
+            "x": 1.5,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 2
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-4",
+          "length": 0.9,
+          "position": {
+            "x": 1.5,
+            "y": 2.65
+          },
+          "roomId": "room-1",
+          "rotation": 3.141592653589793,
+          "width": 2
+        },
+        {
+          "definitionId": "sofa",
+          "elevation": 0,
+          "height": 0.85,
+          "id": "sofa-5",
+          "length": 0.9,
+          "position": {
+            "x": 5,
+            "y": 4.5
+          },
+          "roomId": "room-1",
+          "rotation": 1.5707963267948966,
+          "width": 2
+        }
+      ],
+      "id": "room-1",
+      "name": "Room",
+      "vertices": [
+        {
+          "id": "v1",
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "v2",
+          "position": {
+            "x": 6,
+            "y": 0
+          }
+        },
+        {
+          "id": "v3",
+          "position": {
+            "x": 6,
+            "y": 6
+          }
+        },
+        {
+          "id": "v4",
+          "position": {
+            "x": 0,
+            "y": 6
+          }
+        }
+      ],
+      "wallHeight": 2.7,
+      "walls": [
+        {
+          "endVertexId": "v2",
+          "id": "w1",
+          "startVertexId": "v1",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v3",
+          "id": "w2",
+          "startVertexId": "v2",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v4",
+          "id": "w3",
+          "startVertexId": "v3",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "v1",
+          "id": "w4",
+          "startVertexId": "v4",
+          "thickness": 0.15
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "units": "metric"
+}

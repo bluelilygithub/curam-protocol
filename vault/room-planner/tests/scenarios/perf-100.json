@@ -1,0 +1,1510 @@
+{
+  "furnitureDefinitions": [
+    {
+      "category": "test",
+      "defaultHeight": 0.8,
+      "defaultLength": 0.8,
+      "defaultWidth": 1,
+      "id": "box",
+      "name": "box"
+    }
+  ],
+  "id": "perf-100",
+  "materials": [],
+  "rooms": [
+    {
+      "ceilingHeight": 2.7,
+      "fixtures": [],
+      "floorElevation": 0,
+      "furniture": [
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f000",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f001",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f002",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f003",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f004",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f005",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f006",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f007",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f008",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f009",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f010",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f011",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 1
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f012",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f013",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f014",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f015",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f016",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f017",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f018",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f019",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f020",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f021",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f022",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f023",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 2.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f024",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f025",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f026",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f027",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f028",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f029",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f030",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f031",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f032",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f033",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f034",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f035",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 4.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f036",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f037",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f038",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f039",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f040",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f041",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f042",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f043",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f044",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f045",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f046",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f047",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 5.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f048",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f049",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f050",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f051",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f052",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f053",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f054",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f055",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f056",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f057",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f058",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f059",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 7.4
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f060",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f061",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f062",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f063",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f064",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f065",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f066",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f067",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f068",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f069",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f070",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f071",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 9
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f072",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f073",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f074",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f075",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f076",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f077",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f078",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f079",
+          "length": 0.8,
+          "position": {
+            "x": 12.2,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f080",
+          "length": 0.8,
+          "position": {
+            "x": 13.8,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f081",
+          "length": 0.8,
+          "position": {
+            "x": 15.4,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f082",
+          "length": 0.8,
+          "position": {
+            "x": 17,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f083",
+          "length": 0.8,
+          "position": {
+            "x": 18.6,
+            "y": 10.6
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f084",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f085",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f086",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f087",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f088",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f089",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f090",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 12.2
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f091",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f092",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f093",
+          "length": 0.8,
+          "position": {
+            "x": 4.2,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f094",
+          "length": 0.8,
+          "position": {
+            "x": 5.8,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.0471975511965976,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f095",
+          "length": 0.8,
+          "position": {
+            "x": 7.4,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 1.3089969389957472,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f096",
+          "length": 0.8,
+          "position": {
+            "x": 9,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 0,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f097",
+          "length": 0.8,
+          "position": {
+            "x": 10.6,
+            "y": 13.8
+          },
+          "roomId": "room-1",
+          "rotation": 0.2617993877991494,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0.5,
+          "height": 0.8,
+          "id": "f098",
+          "length": 0.8,
+          "position": {
+            "x": 1,
+            "y": 15.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.5235987755982988,
+          "width": 1
+        },
+        {
+          "definitionId": "box",
+          "elevation": 0,
+          "height": 0.8,
+          "id": "f099",
+          "length": 0.8,
+          "position": {
+            "x": 2.6,
+            "y": 15.4
+          },
+          "roomId": "room-1",
+          "rotation": 0.7853981633974483,
+          "width": 1
+        }
+      ],
+      "id": "room-1",
+      "name": "Room",
+      "vertices": [
+        {
+          "id": "p1",
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "p2",
+          "position": {
+            "x": 20,
+            "y": 0
+          }
+        },
+        {
+          "id": "p3",
+          "position": {
+            "x": 20,
+            "y": 12
+          }
+        },
+        {
+          "id": "p4",
+          "position": {
+            "x": 12,
+            "y": 12
+          }
+        },
+        {
+          "id": "p5",
+          "position": {
+            "x": 12,
+            "y": 20
+          }
+        },
+        {
+          "id": "p6",
+          "position": {
+            "x": 0,
+            "y": 20
+          }
+        }
+      ],
+      "wallHeight": 2.7,
+      "walls": [
+        {
+          "endVertexId": "p2",
+          "id": "pw1",
+          "startVertexId": "p1",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "p3",
+          "id": "pw2",
+          "startVertexId": "p2",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "p4",
+          "id": "pw3",
+          "startVertexId": "p3",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "p5",
+          "id": "pw4",
+          "startVertexId": "p4",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "p6",
+          "id": "pw5",
+          "startVertexId": "p5",
+          "thickness": 0.15
+        },
+        {
+          "endVertexId": "p1",
+          "id": "pw6",
+          "startVertexId": "p6",
+          "thickness": 0.15
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "units": "metric"
+}
