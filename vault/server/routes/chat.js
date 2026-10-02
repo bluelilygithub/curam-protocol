@@ -1528,14 +1528,39 @@ router.get('/history/:sessionId', async (req, res) => {
   }
 });
 
+// The ownership rule every session-scoped chat route must apply: the caller owns the session, or
+// owns the project it lives in. A chat with no saved session row yet is the caller's only if its
+// messages sit in one of the caller's projects (so an unsaved chat can't be claimed by id alone).
+async function ownsSession(userId, sessionId) {
+  const { rows } = await pool.query(
+    `SELECT 1
+     WHERE EXISTS (
+       SELECT 1 FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId" = $1 AND (s."userId" = $2 OR (s."projectId" IS NOT NULL AND p."userId" = $2))
+     )
+     OR (
+       NOT EXISTS (SELECT 1 FROM sessions WHERE "sessionId" = $1)
+       AND EXISTS (SELECT 1 FROM messages m JOIN projects p ON p.id = m."projectId" WHERE m."sessionId" = $1 AND p."userId" = $2)
+     )`,
+    [sessionId, userId]
+  );
+  return rows.length > 0;
+}
+
 // GET /api/chat/sessions/:sessionId/summary
 router.get('/sessions/:sessionId/summary', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT "isSummarized","summaryContent" FROM sessions WHERE "sessionId"=$1',
-      [req.params.sessionId]
+      `SELECT s."isSummarized", s."summaryContent",
+              (s."userId" = $2 OR (s."projectId" IS NOT NULL AND p."userId" = $2)) AS mine
+       FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId"=$1`,
+      [req.params.sessionId, req.user.id]
     );
     const session = rows[0];
+    // A chat that exists but isn't yours: never reveal its summary. (No row at all = a new chat,
+    // which legitimately has nothing yet.)
+    if (session && !session.mine) return res.status(404).json({ error: 'Chat not found' });
     res.json({
       isSummarized: session?.isSummarized ? true : false,
       summaryContent: session?.summaryContent || null,
@@ -1551,6 +1576,7 @@ router.patch('/sessions/:sessionId/title', async (req, res) => {
     const { title } = req.body;
     const { rows } = await pool.query('SELECT "sessionId" FROM sessions WHERE "sessionId"=$1', [req.params.sessionId]);
     if (rows[0]) {
+      if (!(await ownsSession(req.user.id, req.params.sessionId))) return res.status(404).json({ error: 'Chat not found' });
       await pool.query('UPDATE sessions SET title=$1,"updatedAt"=NOW() WHERE "sessionId"=$2', [title || '', req.params.sessionId]);
     } else {
       await pool.query('INSERT INTO sessions ("sessionId","userId",title) VALUES ($1,$2,$3)', [req.params.sessionId, req.user?.id ?? null, title || '']);
@@ -1564,6 +1590,7 @@ router.patch('/sessions/:sessionId/title', async (req, res) => {
 // DELETE /api/chat/sessions/:sessionId/summary — revert to full thread
 router.delete('/sessions/:sessionId/summary', async (req, res) => {
   try {
+    if (!(await ownsSession(req.user.id, req.params.sessionId))) return res.status(404).json({ error: 'Chat not found' });
     await pool.query(
       'UPDATE sessions SET "isSummarized"=0,"summaryContent"=NULL,"summarizedAt"=NULL WHERE "sessionId"=$1',
       [req.params.sessionId]
@@ -1577,6 +1604,7 @@ router.delete('/sessions/:sessionId/summary', async (req, res) => {
 // POST /api/chat/sessions/:sessionId/summarize
 router.post('/sessions/:sessionId/summarize', async (req, res) => {
   const { sessionId } = req.params;
+  if (!(await ownsSession(req.user.id, sessionId))) return res.status(404).json({ error: 'Chat not found' });
   const { rows: msgs } = await pool.query(
     'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
     [sessionId]
@@ -1764,6 +1792,8 @@ router.post('/sessions/:sessionId/branch', async (req, res) => {
   try {
     const { messageIndex } = req.body;
     if (messageIndex == null) return res.status(400).json({ error: 'messageIndex required' });
+    // Branching copies the conversation into a new chat — only from a chat the caller may read.
+    if (!(await ownsSession(req.user.id, req.params.sessionId))) return res.status(404).json({ error: 'Chat not found' });
 
     const { rows: msgs } = await pool.query(
       'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
