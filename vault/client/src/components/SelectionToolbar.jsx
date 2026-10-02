@@ -80,9 +80,19 @@ export default function SelectionToolbar({ projectId, sessionId, contextRef }) {
     setToolbar(null);
     window.getSelection()?.removeAllRanges();
 
+    // Title = the first line, trimmed; the full selection goes in the task description (notes),
+    // not the title — a pasted paragraph makes a useless task name. A short single-line
+    // selection IS the title, so it isn't repeated as notes.
+    const firstLine = toolbar.text.split(/\r?\n/).map((l) => l.trim()).find(Boolean) || toolbar.text.trim();
+    const plain = firstLine.replace(/^[#>*\-\s]+/, '').replace(/[*_`]/g, '').trim() || firstLine;
+    const title = plain.length > 80 ? `${plain.slice(0, 79).trimEnd()}…` : plain;
+    const notes = toolbar.text.trim() === title ? '' : toolbar.text.trim();
+
     document.dispatchEvent(new CustomEvent('vault:open-quick-capture', {
       detail: {
-        title: toolbar.text,
+        title,
+        notes,
+        toastMessage: 'Task created from chat ✓',
         projectId: projectId || null,
         sessionId: sessionId || null,
         priority,
