@@ -27,6 +27,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/store/authStore.js` — Zustand auth (token, user); persisted
 - `client/src/store/processingStore.js` — global long-running operation state; drives `ProcessingModal`
 - `client/src/components/ProcessingModal.jsx` — **global blocking overlay** for slow operations; rendered once in `App.jsx`
+- `client/src/components/ChatListPanel.jsx` — ChatGPT-style floating chat list (opened from the sidebar's **Search chats** button / the collapsed rail): New chat, search, Recent/Pinned, group by date or project, click-outside/Esc to dismiss. Data from `GET /api/chat/all-history` (newest 300); search covers each chat's title, first question, last reply and project name — not every message. **Pinned = the existing `sessions.starred` flag** (`PATCH /sessions/:id/star`, owner-checked), no new column. Grouping/search logic is pure in `client/src/utils/chatPanelGroups.mjs` (`node client/src/utils/chatPanelGroups.test.mjs`).
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
 - `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)

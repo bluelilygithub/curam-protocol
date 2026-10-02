@@ -1413,6 +1413,7 @@ router.get('/all-history', async (req, res) => {
         MIN(m."projectId") as "projectId",
         MIN(p.name) as "projectName",
         MAX(m."createdAt") as "lastAt",
+        COALESCE(MAX(s.starred), 0) as starred,
         (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'user' ORDER BY m2."createdAt" ASC LIMIT 1) as "firstUserMsg",
         (SELECT content FROM messages m2 WHERE m2."sessionId" = m."sessionId" AND m2.role = 'assistant' ORDER BY m2."createdAt" DESC LIMIT 1) as "lastMsg"
       FROM messages m
@@ -1733,13 +1734,24 @@ router.delete('/sessions/:sessionId', async (req, res) => {
 // PATCH /api/chat/sessions/:sessionId/star — toggle starred
 router.patch('/sessions/:sessionId/star', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [req.params.sessionId]);
+    // Only the session's owner (or the owner of its project) may pin it — this used to toggle
+    // any session id it was handed.
+    const { rows } = await pool.query(
+      `SELECT s.starred, s."userId", s."projectId", p."userId" AS "projectOwnerId"
+       FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId"=$1`,
+      [req.params.sessionId]
+    );
     if (rows[0]) {
-      const newVal = rows[0].starred ? 0 : 1;
+      const r = rows[0];
+      const mine = r.userId === req.user.id || (r.projectId != null && r.projectOwnerId === req.user.id);
+      if (!mine) return res.status(404).json({ error: 'Session not found' });
+      const newVal = r.starred ? 0 : 1;
       await pool.query('UPDATE sessions SET starred=$1 WHERE "sessionId"=$2', [newVal, req.params.sessionId]);
       res.json({ starred: !!newVal });
     } else {
-      await pool.query('INSERT INTO sessions ("sessionId",starred) VALUES ($1,1)', [req.params.sessionId]);
+      // Pinning a chat that has no saved session row yet: create it, owned by the caller.
+      await pool.query('INSERT INTO sessions ("sessionId","userId",starred) VALUES ($1,$2,1)', [req.params.sessionId, req.user.id]);
       res.json({ starred: true });
     }
   } catch (err) {

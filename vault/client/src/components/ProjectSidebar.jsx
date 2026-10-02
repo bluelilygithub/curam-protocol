@@ -7,6 +7,7 @@ import api from '../utils/apiClient';
 import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
 import { loadSessionById } from '../utils/chatNavigation';
+import ChatListPanel from './ChatListPanel';
 import OverflowMenu from './OverflowMenu';
 
 const UNASSIGNED_ID = 'unassigned';
@@ -46,6 +47,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
   const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
   const [tpSaving, setTpSaving] = useState(false);
   const [railTip, setRailTip] = useState(null);
+  const [showChatPanel, setShowChatPanel] = useState(false); // floating chat list (search / pinned / grouped)
 
   useEffect(() => {
     const loadSessionLists = () => {
@@ -206,6 +208,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
   if (collapsed) {
     const railItems = [
       { icon: 'plus', title: 'New chat', action: startQuickChat },
+      { icon: 'search', title: 'Search chats', action: () => setShowChatPanel(true), active: showChatPanel },
       { icon: 'home', title: 'Home', action: () => navigate('/'), active: location.pathname === '/' },
       { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
     ];
@@ -227,6 +230,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
             {getIcon(item.icon, { size: 16 })}
           </button>
         ))}
+        <ChatListPanel open={showChatPanel} onClose={() => setShowChatPanel(false)} onNavigate={onClose} />
         {railTip && (
           <div
             style={{
@@ -263,6 +267,17 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
           {getIcon('plus', { size: 14 })}
           New chat
         </button>
+        <button
+          type="button"
+          onClick={() => setShowChatPanel(true)}
+          className="w-full mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-opacity duration-200 hover:opacity-70"
+          style={{ color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+          title="Search, pin and browse all your chats"
+        >
+          {getIcon('search', { size: 13 })}
+          Search chats
+        </button>
+        <ChatListPanel open={showChatPanel} onClose={() => setShowChatPanel(false)} onNavigate={onClose} />
       </div>
 
       {/* Projects header */}
