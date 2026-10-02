@@ -1,5 +1,7 @@
+import { wallGeometry } from './constraints';
+import { angularDistance } from './coordinates';
 import { footprintCorners, type OrientedRect } from './footprints';
-import { add, dist, dot, normalize, perpLeft, scale, sub } from './geometry';
+import { add, dist, distPointSegment, dot, normalize, perpLeft, scale, sub } from './geometry';
 import type { FurnitureInstance, Room, SnapCandidate, SnapTargetType, Vec2 } from './types';
 
 export const DEFAULT_SNAP_DISTANCE = 0.25;
@@ -111,6 +113,35 @@ export function generateSnapCandidates(ctx: SnapContext): SnapCandidate[] {
     }
   }
   return out.filter((c) => c.distance <= snapDistance);
+}
+
+/** B2: the rotation snaps to wall-flush when within this many degrees of it. */
+export const WALL_FLUSH_WINDOW_DEG = 10;
+
+/**
+ * Wall-orientation rotation snap (B2, priority 70): if any footprint corner of `inst` rotated to `rotation` is within
+ * `snapDistance` of a wall and `rotation` is within 10° of a wall-flush angle (the wall direction plus k × 90°, i.e. facing
+ * into / away from the wall or along it), returns that flush angle; otherwise null.
+ * Deviation noted in DECISIONS: the spec says "centre within snapDistance of a wall", which furniture can almost never satisfy,
+ * so the footprint's nearest corner is used instead.
+ */
+export function wallFlushAngle(
+  inst: { position: Vec2; width: number; length: number }, rotation: number, room: Room, snapDistance = DEFAULT_SNAP_DISTANCE,
+): number | null {
+  const corners = footprintCorners({ position: inst.position, width: inst.width, length: inst.length, rotation });
+  let best: { angle: number; diff: number } | null = null;
+  for (const w of room.walls) {
+    const g = wallGeometry(room, w.id);
+    if (!g) continue;
+    if (!corners.some((c) => distPointSegment(c, g.start, g.end) <= snapDistance)) continue;
+    const base = Math.atan2(g.dir.y, g.dir.x);
+    for (let k = 0; k < 4; k++) {
+      const angle = base + (k * Math.PI) / 2;
+      const diff = angularDistance(angle, rotation);
+      if (diff <= (WALL_FLUSH_WINDOW_DEG * Math.PI) / 180 && (!best || diff < best.diff)) best = { angle, diff };
+    }
+  }
+  return best ? best.angle : null;
 }
 
 /**

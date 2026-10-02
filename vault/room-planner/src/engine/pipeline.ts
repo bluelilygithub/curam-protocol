@@ -83,6 +83,16 @@ function escapeOk(before: ValidationViolation[], after: ValidationViolation[], s
   return true;
 }
 
+/**
+ * The pipeline's validate + escape-rule step, exposed so the interaction layer can give live per-frame feedback with
+ * exactly the same decision the commit will make. `ok` means "this command would be committed".
+ */
+export function evaluateCommand(
+  project: Project, command: Command, subjectIds: string[],
+): { ok: boolean; violations: ValidationViolation[] } {
+  return evaluate(project, command, subjectIds);
+}
+
 function evaluate(
   project: Project, command: Command, subjectIds: string[],
 ): { ok: boolean; violations: ValidationViolation[] } {
@@ -332,20 +342,56 @@ export function proposeGroupMove(project: Project, ids: string[], delta: Vec2): 
   return finishGroup(project, ids, commands);
 }
 
-/** Group rotate: pivot is the bounding-box centre of the selection (B2); each instance also rotates by `deltaRad`. */
-export function proposeGroupRotate(project: Project, ids: string[], deltaRad: number): PipelineResult {
-  const insts = groupInstances(project, ids);
-  const locked = insts.filter((i) => i.locked);
-  if (locked.length) return reject(locked.map((i) => lockedViolation(i.id)));
+/** Bounding-box centre of a selection: the group-rotate pivot (B2, single source of truth). */
+export function selectionPivot(insts: FurnitureInstance[]): Vec2 {
   const box = aabbOf(insts.flatMap((i) => footprintOf(i)));
-  const pivot = scale(add(box.min, box.max), 0.5);
+  return scale(add(box.min, box.max), 0.5);
+}
+
+/** The Move + Rotate commands of a group rotate. Exposed so the interaction layer can preview exactly what a commit would do. */
+export function groupRotateCommands(project: Project, ids: string[], deltaRad: number): Command[] {
+  const insts = groupInstances(project, ids);
+  const pivot = selectionPivot(insts);
   const commands: Command[] = [];
   for (const i of insts) {
     const pos = quantizeVec2(add(pivot, rotateVec(sub(i.position, pivot), deltaRad)));
     commands.push({ type: 'MoveFurniture', instanceId: i.id, from: { ...i.position }, to: pos });
     commands.push({ type: 'RotateFurniture', instanceId: i.id, from: i.rotation, to: quantizeRotation(i.rotation + deltaRad) });
   }
-  return finishGroup(project, ids, commands);
+  return commands;
+}
+
+/** Group rotate: pivot is the bounding-box centre of the selection (B2); each instance also rotates by `deltaRad`. */
+export function proposeGroupRotate(project: Project, ids: string[], deltaRad: number): PipelineResult {
+  const insts = groupInstances(project, ids);
+  const locked = insts.filter((i) => i.locked);
+  if (locked.length) return reject(locked.map((i) => lockedViolation(i.id)));
+  return finishGroup(project, ids, groupRotateCommands(project, ids, deltaRad));
+}
+
+/** A6: default duplicate offset, one default grid unit on both axes. */
+export const DUPLICATE_OFFSET = 0.1;
+
+/**
+ * Duplicate (A6): offset +0.1 m on X and Y. New ids are supplied by the caller (never generated here) and the copies are
+ * not locked. One instance → `PlaceFurniture`; several → one `Composite`. If the offset position is hard-invalid the result is a
+ * rejection and nothing is committed: the interaction layer keeps a ghost attached to the pointer.
+ */
+export function proposeDuplicate(project: Project, ids: string[], newIds: string[]): PipelineResult {
+  if (ids.length !== newIds.length) throw new RangeError('one new id per duplicated instance is required');
+  const insts = groupInstances(project, ids);
+  const commands: Command[] = insts.map((i, k): Command => {
+    const copy = quantizeInstance({
+      ...structuredClone(i),
+      id: newIds[k],
+      position: { x: i.position.x + DUPLICATE_OFFSET, y: i.position.y + DUPLICATE_OFFSET },
+    });
+    delete copy.locked;
+    return { type: 'PlaceFurniture', instance: copy };
+  });
+  const command: Command = commands.length === 1 ? commands[0] : { type: 'Composite', commands };
+  const r = evaluate(project, command, newIds);
+  return r.ok ? accept(command) : reject(r.violations);
 }
 
 export function proposeGroupDelete(project: Project, ids: string[]): PipelineResult {

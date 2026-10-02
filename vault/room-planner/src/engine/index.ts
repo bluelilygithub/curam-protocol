@@ -13,3 +13,8 @@ export * from './history';
 export * from './serialize';
 export * from './nearestValid';
 export * from './pipeline';
+export * from './cutPlane';
+export * from './fixtureSnap';
+export * from './wallOutline';
+export * from './liveDimensions';
+export * from './selection';
