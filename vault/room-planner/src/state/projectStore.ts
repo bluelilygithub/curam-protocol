@@ -28,6 +28,11 @@ export interface ProjectActions {
   commit(command: Command, label: string): boolean;
   undo(): string | undefined | null;
   redo(): string | undefined | null;
+  /**
+   * Change the project without a history entry (saved 3D views only, D44): presentation, not design. Bumps `revision` so
+   * autosave picks it up. Never use for anything the commands operate on.
+   */
+  updateSilently(fn: (p: Project) => Project): void;
   /** Read-only view of history length (tests). */
   historyLength(): number;
   /** Serialisable copy of the history (tests, diagnostics). Never persisted by the app. */
@@ -93,6 +98,14 @@ export function createProjectStore(initial: Project | null = null, hooks: Projec
       if (!next) return null;
       set(snapshot(next, get().revision + 1));
       return label;
+    },
+
+    updateSilently(fn) {
+      const { project } = get();
+      if (!project) return;
+      const next = fn(project);
+      if (next === project) return;
+      set(snapshot(next, get().revision + 1));
     },
 
     historyLength: () => history.length,

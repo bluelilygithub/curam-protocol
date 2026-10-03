@@ -3,9 +3,9 @@
 Professional interior-design room planner. One authoritative domain model; 2D (Konva) and 3D (React Three Fiber) are
 independent renderers of it. Spec lives in `../specs/` (Spec V2 Rev 4, Phase 1 Rev 3, Appendix B, **Appendix C**, Test Plan).
 
-**Status: M2 — first 2D editing loop (designer demo).** `src/engine/` is pure TypeScript with no React, Konva, R3F or store code.
+**Status: M4 — 3D view (built, awaiting review); M3 wall editing and the M2 2D loop are on `staging`.** `src/engine/` is pure TypeScript with no React, Konva, R3F or store code.
 On top of it: Zustand stores (`src/state/`), a DOM-free interaction state machine (`src/interaction/`), an imperative Konva
-renderer (`src/render2d/`) and the React shell (`src/ui/`). Not included yet: wall/vertex editing (M3), 3D (M4), PDF export and
+renderer (`src/render2d/`), the 3D view (`src/render3d/`: pure geometry in `transforms`/`wallPieces`/`furnitureParts`/`fixtureParts`/`wallFade`/`cameraPresets`, the imperative three.js `Scene3D` mounted by R3F, and `controller3d` which feeds the same `Interaction`) and the React shell (`src/ui/`). Not included yet: PDF/other export and
 the `room_projects` table (M5).
 
 ```
@@ -13,6 +13,7 @@ npm install
 npm run dev        # http://127.0.0.1:5174/room-planner-app/  (Vault embeds it at /room-planner)
 npm test           # unit, scenarios, property, interaction gates, perf
 npm run e2e        # drives the real UI in Chrome (start `npm run dev` first)
+npm run e2e3d      # the same for the 3D view (software WebGL)
 ```
 
 The demo walkthrough is in `docs/room-planner.md` (Vault docs folder).

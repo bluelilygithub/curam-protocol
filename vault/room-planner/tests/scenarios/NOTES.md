@@ -78,3 +78,14 @@ Room 4 × 5 (v1 (0,0) v2 (4,0) v3 (4,5) v4 (0,5); w1 floor, w2 right L 5, w3 top
 100 boxes 1.0 × 0.8 on a 1.6 m lattice (offset 1.0) in a 20 × 20 L-room with a 8 × 8 notch; rotations (n mod 6) × 15°,
 half-diagonal ≤ 0.64 m < 0.8 m (half the pitch) so nothing overlaps; every 7th object sits at elevation 0.5.
 **Expected: valid, zero violations.**
+
+## 3D geometry (M4; `tests/unit/m4geometry.test.ts`, `tests/property/transforms.properties.test.ts`)
+Room 4 × 5, walls 0.15 thick, height 2.7 (v1 (0,0) v2 (4,0) v3 (4,5) v4 (0,5); w1 along the bottom, w2 right, w3 top, w4 left).
+- **Wall ring:** the mitred outer rectangle is (4 + 0.3) × (5 + 0.3) = 22.79 m², the room 20 m², so the ring is 2.79 m² and its volume 2.79 × 2.7 = 7.533 m³. The bottom wall's outline reaches x = −0.15 and 4.15 (mitred ends kept whole).
+- **Door** 0.9 × 2.04 at offset 1 on w1: opening x 0.55..1.45 → pieces full | above-head (y 2.04..2.7) | full; opening volume 0.9 × 0.15 × 2.04 = 0.2754 → 7.2576 m³.
+- **Window** 1.2 × 1.2, sill 0.9, at offset 2.5 on w2: pieces full | below (0..0.9) | above (2.1..2.7) | full; removed volume 1.2 × 0.15 × 1.2 = 0.216.
+- **Door + window on w1** (door 0.55..1.45, window 1.9..3.1): full, above, full, below, above, full = 6 pieces. At y = 0.5 only the door is open (ring − 0.135); at 1.5 both (ring − 0.135 − 0.18); at 2.4 neither.
+- **L-room** (0,0)(6,0)(6,3)(3,3)(3,6)(0,6), walls 0.3: ring area = perimeter 24 × 0.3 + 5 convex corners × 0.09 − 1 reflex × 0.09 = 7.56 m².
+- **Window on w2** (dir (0,1), interior normal (−1,0)): group origin (4, 0, 2.5), rotation.y = −π/2; the middle of the wall thickness is local z = −0.075 → three x = 4.075.
+- **Wall fade** (a wall fades if the camera is on the outer side of its inside face): camera (9, −5) → w1 (below y = 0) and w2 (right of x = 4); camera (9, 10) → w2 and w3; camera over the room → none. L-room camera (9, 9): w2, w3, w4, w5 (w1 and w6 see it from the inside).
+- **Camera:** bounds centre (2, 1.35, 2.5), radius = half of hypot(4, 5, 2.7); the isometric direction has equal components; the top preset is within 0.002 rad of straight down.

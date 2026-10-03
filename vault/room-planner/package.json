@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "e2e": "node scripts/e2e.mjs",
+    "e2e3d": "node scripts/e2e3d.mjs",
     "walkthrough": "node scripts/walkthrough.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,6 +18,7 @@
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^3.2.4",
     "fast-check": "^4.1.1",
@@ -26,9 +28,12 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
     "konva": "^10.7.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "three": "^0.186.1",
     "zustand": "^5.0.15"
   }
 }

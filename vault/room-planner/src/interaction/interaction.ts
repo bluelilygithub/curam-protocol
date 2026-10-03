@@ -21,7 +21,7 @@ import type {
 import { type FeedbackBus, type PreviewObject } from '../state/feedbackBus';
 import type { IdGen } from '../state/projectFactory';
 import type { ProjectStore } from '../state/projectStore';
-import { TOOL_KEYS, type UiStore } from '../state/uiStore';
+import { TOOL_KEYS, type Tool, type UiStore, type ViewMode } from '../state/uiStore';
 import { ARROW_SMALL, DRAG_SLOP_PX } from './constants';
 import { computeHandles, hitHandle, MIN_SIZE } from './handles';
 import { describeViolation, LABELS, nameOf, polygonErrorText } from './statusMessages';
@@ -47,6 +47,13 @@ export interface PointerEv {
   /** World metres per screen pixel. */
   mpp: number;
   button?: number;
+  /**
+   * 3D only: everything under the pointer, nearest first, from the ray cast (replaces the plan pick). `world` is then the point
+   * under the pointer on a horizontal plane (the floor, or the height of the grabbed object while dragging it).
+   */
+  hits?: SelectionRef[];
+  /** True for events from the 3D view: no handles, no marquee, no fixture dragging, and an empty drag orbits instead. */
+  view3d?: boolean;
 }
 export interface KeyEv { key: string; shift: boolean; ctrl: boolean; alt: boolean }
 
@@ -90,6 +97,15 @@ export class Interaction {
 
   get stateName(): StateName {
     return this.p.ui.getState().tool === 'wall_edit' && this.wall.busy ? this.wall.stateName : this.state.t;
+  }
+
+  /**
+   * 3D: true while the current gesture belongs to the editor rather than the camera: dragging furniture, placing a ghost, or a
+   * press on furniture that may become a drag. The 3D host suspends orbiting for exactly these gestures.
+   */
+  get capturesPointer(): boolean {
+    const s = this.state;
+    return s.t === 'drag' || s.t === 'ghost' || (s.t === 'press' && s.hit?.kind === 'furniture');
   }
 
   /** Touch: the host calls this when a press on a wall has been held long enough (B1 "long-press inserts a corner"). */
@@ -164,7 +180,7 @@ export class Interaction {
     }
     if (u.tool !== 'select') return;
 
-    const handles = computeHandles(project, u.selection, e.mpp);
+    const handles = e.view3d ? { resize: [], rotate: null } : computeHandles(project, u.selection, e.mpp);
     const hit = hitHandle(handles, e.world, e.mpp);
     if (hit?.kind === 'rotate') {
       this.startRotate(e);
@@ -177,7 +193,7 @@ export class Interaction {
       return;
     }
 
-    const hits = pickAll(room, e.world, { tolerance: Math.max(0.01, 4 * e.mpp) });
+    const hits = e.hits ?? pickAll(room, e.world, { tolerance: Math.max(0.01, 4 * e.mpp) });
     const { pick, state } = cyclePick(hits, e.screen, this.p.now(), this.cycle);
     this.cycle = state;
     const wasSelected = !!pick && u.selection.some((s) => sameRef(s, pick));
@@ -211,6 +227,10 @@ export class Interaction {
     switch (s.t) {
       case 'press':
         if (dist(s.start.screen, e.screen) <= DRAG_SLOP_PX) return;
+        if (e.view3d && (!s.hit || s.hit.kind !== 'furniture')) {
+          this.state = { t: 'idle' }; // 3D: dragging empty space or a wall/opening orbits the camera; nothing to do here
+          return;
+        }
         if (!s.hit) {
           this.state = { t: 'marquee', a: s.start.world, b: e.world, shift: s.shift, base: u.selection };
           this.p.bus.set({ marquee: { a: s.start.world, b: e.world } });
@@ -287,7 +307,7 @@ export class Interaction {
       this.p.ui.getState().setStatus({ text: `${nameOf(this.project!, locked.id)} is locked`, severity: 'warn' });
       return;
     }
-    const picked = pickAll(room, start.world).find((h) => h.kind === 'furniture' && ids.includes(h.id));
+    const picked = (start.hits ?? pickAll(room, start.world)).find((h) => h.kind === 'furniture' && ids.includes(h.id));
     const primary = picked?.id ?? insts[0].id;
     this.state = {
       t: 'drag', ids: insts.map((i) => i.id), primary, startWorld: start.world,
@@ -684,16 +704,22 @@ export class Interaction {
     }
     if (k.key === 'Escape') { this.cancel(true); return true; }
     if (u.tool === 'wall_edit' && !mod && this.wall.keyDown(k)) return true;
+    if (!mod && !k.alt && (k.key === 'v' || k.key === 'V')) {
+      this.switchView(u.viewMode === '2d' ? '3d' : '2d');
+      return true;
+    }
     if (!project || !room) {
       // with no room yet the only keys that matter are the tool shortcuts (e.g. 3 to start drawing, 1 to leave)
-      if (!mod && !k.alt && TOOL_KEYS[k.key] && u.tool !== TOOL_KEYS[k.key] && !(this.wall.busy && u.tool === 'wall_edit' && k.key === 'Backspace')) {
-        this.setTool(TOOL_KEYS[k.key]);
+      const t = this.toolFor(k);
+      if (!mod && !k.alt && t && u.tool !== t && !(this.wall.busy && u.tool === 'wall_edit' && k.key === 'Backspace')) {
+        this.setTool(t);
         return true;
       }
       return false;
     }
-    if (!mod && !k.alt && TOOL_KEYS[k.key] && u.tool !== TOOL_KEYS[k.key]) {
-      this.setTool(TOOL_KEYS[k.key]);
+    const tool = this.toolFor(k);
+    if (!mod && !k.alt && tool && u.tool !== tool) {
+      this.setTool(tool);
       return true;
     }
     if (mod && k.key.toLowerCase() === 'a') {
@@ -770,6 +796,24 @@ export class Interaction {
     } else {
       this.reportRejection(r);
     }
+  }
+
+  /** Tool shortcut for a key; in 3D only Select is available (Pan, Walls and Measure are 2D tools, D45). */
+  private toolFor(k: KeyEv): Tool | undefined {
+    const t = TOOL_KEYS[k.key];
+    return t && this.ui.viewMode === '3d' && t !== 'select' ? undefined : t;
+  }
+
+  /**
+   * Switch between the 2D and 3D views. Any gesture in progress is cancelled first (B7: no command, no history, the object is
+   * restored); selection, project and both views' cameras are untouched. 3D has only the Select tool.
+   */
+  switchView(mode: ViewMode): void {
+    if (this.p.ui.getState().viewMode === mode) return;
+    this.cancel();
+    const ui = this.p.ui.getState();
+    if (mode === '3d' && ui.tool !== 'select') this.setTool('select');
+    this.p.ui.getState().setViewMode(mode);
   }
 
   setTool(tool: 'select' | 'pan' | 'wall_edit' | 'measure'): void {

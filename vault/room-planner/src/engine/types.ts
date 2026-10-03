@@ -145,6 +145,20 @@ export interface Room {
   furniture: FurnitureInstance[]; // kept sorted by id
 }
 
+/**
+ * A named 3D camera (M4, D44). Saved views are presentation, not design: they live in the project file but are never part of
+ * undo history, and they do not change what the commands operate on.
+ */
+export interface SavedView {
+  id: string;
+  name: string;
+  cameraPosition: [number, number, number];
+  target: [number, number, number];
+  projection: 'perspective' | 'orthographic';
+  zoom?: number;
+  roomId?: string;
+}
+
 export interface Project {
   schemaVersion: 1;
   id: string;
@@ -152,6 +166,8 @@ export interface Project {
   rooms: Room[]; // kept sorted by id
   furnitureDefinitions: FurnitureDefinition[];
   materials: Material[];
+  /** Optional so projects saved before M4 load unchanged; kept in creation order. */
+  savedViews?: SavedView[];
 }
 
 // ---------------------------------------------------------------- commands

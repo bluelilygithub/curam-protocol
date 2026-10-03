@@ -1,6 +1,7 @@
 import { fitView, panBy } from './adapters/canvas';
 import { proposeCreateRoom, proposeDeleteRoom, proposeFixPosition } from './engine/pipeline';
 import { aabbOf } from './engine/geometry';
+import { addSavedView, deleteSavedView, renameSavedView, savedViewsOf } from './engine/savedViews';
 import { Interaction } from './interaction/interaction';
 import { nameOf } from './interaction/statusMessages';
 import { createFeedbackBus } from './state/feedbackBus';
@@ -10,7 +11,9 @@ import {
 import { newProject, randomId, rectangleRoom } from './state/projectFactory';
 import { createProjectStore } from './state/projectStore';
 import { serializeProject } from './engine/serialize';
-import { createUiStore } from './state/uiStore';
+import { createCameraStore } from './state/cameraStore';
+import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
+import { createUiStore, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
 /**
@@ -22,6 +25,7 @@ export function createApp(storage: StorageLike) {
   const ui = createUiStore();
   const view = createViewStore();
   const bus = createFeedbackBus();
+  const camera = createCameraStore();
   const interaction = new Interaction({
     project, ui, bus, newId: randomId, now: () => performance.now(),
     panBy: (dx, dy) => view.getState().setView(panBy(view.getState().view, dx, dy)),
@@ -64,9 +68,63 @@ export function createApp(storage: StorageLike) {
   }
 
   return {
-    project, ui, view, bus, interaction,
+    project, ui, view, bus, interaction, camera,
 
     fitToRoom,
+
+    // ------------------------------------------------------------ 3D view (M4)
+
+    /** Switch between the 2D and 3D views. A gesture in progress is cancelled; selection and both cameras are kept. */
+    setViewMode(mode: ViewMode): void {
+      interaction.switchView(mode);
+    },
+
+    /** Move the 3D camera to a preset (animated). `fit` keeps the current direction. */
+    cameraPreset(preset: CameraPreset): void {
+      const room = project.getState().project?.rooms[0];
+      if (!room) return;
+      const { camera: cur, viewport } = camera.getState();
+      camera.getState().requestCamera(
+        presetCamera(room, preset, cur, { aspect: viewport.w / viewport.h, viewportW: viewport.w, viewportH: viewport.h }), true,
+      );
+    },
+
+    /** Perspective ⇄ orthographic, keeping the framing (no animation: the camera object is swapped). */
+    setProjection(projection: Projection): void {
+      const { camera: cur, viewport } = camera.getState();
+      if (!cur || cur.projection === projection) return;
+      camera.getState().requestCamera(convertProjection(cur, projection, viewport.h), false);
+    },
+
+    /** Save the current 3D camera as a named view (not an undoable edit, D44). Returns the new id. */
+    saveView(name?: string): string | null {
+      const cur = camera.getState().camera;
+      const room = project.getState().project?.rooms[0];
+      if (!cur || !project.getState().project) return null;
+      const id = randomId();
+      project.getState().updateSilently((p) => addSavedView(p, {
+        id, ...(name ? { name } : {}), cameraPosition: cur.position, target: cur.target, projection: cur.projection, zoom: cur.zoom,
+        ...(room ? { roomId: room.id } : {}),
+      }));
+      return id;
+    },
+
+    /** Fly to a saved view. */
+    restoreView(id: string): void {
+      const p = project.getState().project;
+      const v = p ? savedViewsOf(p).find((x) => x.id === id) : undefined;
+      if (!v) return;
+      const state: CameraState = { position: v.cameraPosition, target: v.target, projection: v.projection, zoom: v.zoom ?? camera.getState().camera?.zoom ?? 100 };
+      camera.getState().requestCamera(state, camera.getState().camera?.projection === v.projection);
+    },
+
+    renameView(id: string, name: string): void {
+      project.getState().updateSilently((p) => renameSavedView(p, id, name));
+    },
+
+    deleteView(id: string): void {
+      project.getState().updateSilently((p) => deleteSavedView(p, id));
+    },
 
     /** B8 "Start from a rectangle": one undoable CreateRoom. */
     startRectangle(): void {

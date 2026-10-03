@@ -1,0 +1,203 @@
+// The 3D viewport (R3F). R3F owns the canvas, the render-on-demand loop and the resize handling; the scene itself is the
+// imperative `Scene3D`, mounted as one <primitive>. Pointer input goes through `Controller3D` into the shared `Interaction`.
+import { OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
+import { Canvas, useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { useStore } from 'zustand';
+import * as THREE from 'three';
+import { useApp, useProject, useUi } from '../ui/AppContext';
+import { DEFAULT_FOV_DEG, polarFromVertical, presetCamera, type CameraState } from './cameraPresets';
+import { Controller3D } from './controller3d';
+import { Scene3D } from './Scene3D';
+import { Viewbar3D } from './Viewbar3D';
+
+const BACKGROUND = '#F5F5F0';
+
+/** The part of OrbitControls this viewport uses (drei hands it over as `controls`). */
+interface Orbit {
+  target: THREE.Vector3;
+  enabled: boolean;
+  update(): void;
+  addEventListener(type: string, fn: () => void): void;
+  removeEventListener(type: string, fn: () => void): void;
+}
+
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isOrtho = (c: THREE.Camera): boolean => !!(c as THREE.OrthographicCamera).isOrthographicCamera;
+
+function Host() {
+  const app = useApp();
+  const { gl, scene, camera, controls, size, invalidate } = useThree();
+  const projection = useStore(app.camera, (s) => s.camera?.projection ?? 'perspective');
+  const active = useUi((s) => s.viewMode === '3d');
+  const hasRoom = useProject((s) => !!s.project?.rooms.length);
+  const live = useRef<{ camera: THREE.Camera; controls: Orbit | null }>({ camera, controls: controls as unknown as Orbit | null });
+  live.current = { camera, controls: controls as unknown as Orbit | null };
+
+  const scene3d = useMemo(
+    () => new Scene3D({
+      project: app.project, ui: app.ui, bus: app.bus, invalidate: () => invalidate(),
+      onAnimationDone: () => app.interaction.animationDone(), animateMs: reducedMotion() ? 0 : 160,
+    }),
+    [app, invalidate],
+  );
+  useEffect(() => () => scene3d.dispose(), [scene3d]);
+  useEffect(() => { scene.background = new THREE.Color(BACKGROUND); invalidate(); }, [scene, invalidate]);
+
+  // exposed for the browser walkthrough and tests; harmless in production
+  useEffect(() => {
+    (window as unknown as { roomPlanner3d?: unknown }).roomPlanner3d = {
+      scene3d, scene, gl, get camera() { return live.current.camera; }, get controls() { return live.current.controls; },
+    };
+  }, [scene3d, scene, gl]);
+
+  useEffect(() => {
+    app.camera.getState().setViewport(Math.max(1, Math.round(size.width)), Math.max(1, Math.round(size.height)));
+  }, [app, size.width, size.height]);
+
+  const read = (): CameraState | null => {
+    const { camera: cam, controls: ctl } = live.current;
+    if (!ctl) return null;
+    return {
+      position: [cam.position.x, cam.position.y, cam.position.z], target: [ctl.target.x, ctl.target.y, ctl.target.z],
+      projection: isOrtho(cam) ? 'orthographic' : 'perspective', zoom: (cam as THREE.OrthographicCamera).zoom,
+    };
+  };
+  const apply = (c: CameraState): void => {
+    const { camera: cam, controls: ctl } = live.current;
+    cam.position.set(c.position[0], c.position[1], c.position[2]);
+    if (isOrtho(cam)) { (cam as THREE.OrthographicCamera).zoom = c.zoom; (cam as THREE.OrthographicCamera).updateProjectionMatrix(); }
+    if (ctl) { ctl.target.set(c.target[0], c.target[1], c.target[2]); ctl.update(); } else cam.lookAt(c.target[0], c.target[1], c.target[2]);
+    invalidate();
+  };
+
+  // First use frames the room; afterwards the store holds the camera across view switches and projection swaps.
+  useEffect(() => {
+    if (!controls) return;
+    const st = app.camera.getState();
+    if (st.camera) {
+      if (st.camera.projection === (isOrtho(camera) ? 'orthographic' : 'perspective')) apply(st.camera);
+      return;
+    }
+    const room = app.project.getState().project?.rooms[0];
+    if (!room) return;
+    const { viewport } = st;
+    const c = presetCamera(room, 'iso', null, { aspect: viewport.w / viewport.h, viewportW: viewport.w, viewportH: viewport.h });
+    st.setCamera(c);
+    apply(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controls, camera, hasRoom]);
+
+  // Camera requests (presets, saved views, projection swap): same projection and animated → fly there; otherwise jump. A swapped
+  // camera object is positioned by the effect above once it exists.
+  useEffect(() => {
+    let raf = 0;
+    const unsub = app.camera.subscribe((s, prev) => {
+      const req = s.request;
+      if (!req || req === prev.request) return;
+      const cur = read();
+      const same = !!cur && cur.projection === req.camera.projection;
+      if (!cur || !same) return;
+      if (!req.animate || reducedMotion()) { apply(req.camera); return; }
+      cancelAnimationFrame(raf);
+      const t0 = performance.now();
+      const step = (): void => {
+        const u = Math.min(1, (performance.now() - t0) / 380);
+        const e = u * u * (3 - 2 * u);
+        const mix = (a: number[], b: number[]): [number, number, number] => [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e, a[2] + (b[2] - a[2]) * e];
+        apply({ ...req.camera, position: mix(cur.position, req.camera.position), target: mix(cur.target, req.camera.target), zoom: cur.zoom + (req.camera.zoom - cur.zoom) * e });
+        if (u < 1) raf = requestAnimationFrame(step);
+        else app.camera.getState().setCamera(req.camera);
+      };
+      raf = requestAnimationFrame(step);
+    });
+    return () => { unsub(); cancelAnimationFrame(raf); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app, invalidate]);
+
+  // Orbit/pan/zoom: remember where the camera ended, and fade the walls in front of it (A7).
+  useEffect(() => {
+    const ctl = controls as unknown as Orbit | null;
+    if (!ctl) return;
+    const fade = (): void => {
+      const c = read();
+      if (!c) return;
+      scene3d.updateFade({ x: c.position[0], y: c.position[2] }, polarFromVertical(c.position, c.target));
+    };
+    const end = (): void => { const c = read(); if (c) app.camera.getState().setCamera(c); fade(); };
+    ctl.addEventListener('change', fade);
+    ctl.addEventListener('end', end);
+    fade();
+    return () => { ctl.removeEventListener('change', fade); ctl.removeEventListener('end', end); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controls, camera, scene3d, app]);
+
+  // Pointers: the editor takes a gesture that starts on furniture (or places a ghost); everything else orbits.
+  useEffect(() => {
+    const el = gl.domElement;
+    const controller = new Controller3D({
+      scene: scene3d, interaction: app.interaction, ui: app.ui,
+      camera: () => live.current.camera,
+      size: () => ({ w: el.clientWidth || 1, h: el.clientHeight || 1 }),
+      setOrbitEnabled: (on) => { if (live.current.controls) live.current.controls.enabled = on; },
+    });
+    const pointers = new Set<number>();
+    const mods = (e: PointerEvent) => ({ shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, button: e.button });
+    const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const down = (e: PointerEvent): void => {
+      if (app.ui.getState().viewMode !== '3d') return;
+      pointers.add(e.pointerId);
+      if (pointers.size > 1) { controller.cancel(); return; } // two fingers: the camera takes over
+      if (e.button !== 0) return;
+      const p = local(e);
+      if (controller.down(p.x, p.y, mods(e))) el.setPointerCapture(e.pointerId);
+    };
+    const move = (e: PointerEvent): void => {
+      if (app.ui.getState().viewMode !== '3d' || pointers.size > 1) return;
+      const p = local(e);
+      controller.move(p.x, p.y, mods(e));
+    };
+    const up = (e: PointerEvent): void => {
+      const had = pointers.delete(e.pointerId);
+      if (!had || app.ui.getState().viewMode !== '3d') return;
+      if (e.type === 'pointercancel') { controller.cancel(); return; }
+      if (e.button !== 0) return;
+      const p = local(e);
+      controller.up(p.x, p.y, mods(e));
+    };
+    el.addEventListener('pointerdown', down, { capture: true });
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    return () => {
+      el.removeEventListener('pointerdown', down, { capture: true });
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+    };
+  }, [gl, scene3d, app]);
+
+  useEffect(() => { if (active) invalidate(); }, [active, invalidate]);
+
+  return (
+    <>
+      <primitive object={scene3d.root} />
+      {projection === 'perspective'
+        ? <PerspectiveCamera makeDefault fov={DEFAULT_FOV_DEG} near={0.1} far={500} />
+        : <OrthographicCamera makeDefault near={-300} far={600} />}
+      <OrbitControls makeDefault enableDamping={false} minDistance={0.5} maxDistance={120} maxPolarAngle={Math.PI / 2 - 0.02} />
+    </>
+  );
+}
+
+export default function Viewport3D() {
+  const active = useUi((s) => s.viewMode === '3d');
+  return (
+    <div className={`stage3d ${active ? '' : 'inactive'}`} data-testid="stage3d" aria-hidden={!active}>
+      <Canvas frameloop="demand" flat shadows dpr={[1, 2]} gl={{ antialias: true }}>
+        <Host />
+      </Canvas>
+      {active && <Viewbar3D />}
+    </div>
+  );
+}

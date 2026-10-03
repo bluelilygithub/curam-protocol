@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo } from 'react';
+﻿import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { createApp } from './createApp';
 import { AppContext, useProject, useUi } from './ui/AppContext';
 import { EmptyState } from './ui/EmptyState';
@@ -9,8 +9,14 @@ import { Stage2D } from './ui/Stage2D';
 import { StatusBar } from './ui/StatusBar';
 import { Toolbar } from './ui/Toolbar';
 
+const Viewport3D = lazy(() => import('./render3d/Viewport3D'));
+
 function Shell() {
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
+  const viewMode = useUi((s) => s.viewMode);
+  // The 3D chunk (three.js) loads the first time 3D is asked for, then stays mounted so its camera and GPU state persist.
+  const [load3d, setLoad3d] = useState(false);
+  useEffect(() => { if (viewMode === '3d') setLoad3d(true); }, [viewMode]);
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
   return (
@@ -18,8 +24,13 @@ function Shell() {
       <Toolbar />
       {leftOpen && <LibraryPanel />}
       <main className="viewport">
-        <Stage2D />
-        {hasRoom ? <Hud /> : <EmptyState />}
+        <div className={`stage-slot ${viewMode === '2d' ? '' : 'inactive'}`}><Stage2D /></div>
+        {load3d && (
+          <Suspense fallback={<div className="loading3d">Loading 3D view…</div>}>
+            <Viewport3D />
+          </Suspense>
+        )}
+        {hasRoom ? (viewMode === '2d' ? <Hud /> : null) : <EmptyState />}
       </main>
       {rightOpen && <Inspector />}
       <StatusBar />

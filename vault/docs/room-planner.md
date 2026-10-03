@@ -19,8 +19,8 @@ state. The domain is a pure TypeScript engine with no UI code.
 |---|---|---|
 | M1 | Pure spatial core `src/engine/`, tests, scenario fixtures | **Done** (332 tests, ~99.5 % line coverage) |
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
-| M3 | Wall / corner editing, draw a room, set room size, impact preview | **Built, awaiting review** (631 unit/property/gate tests + browser e2e) |
-| M4 | 3D (R3F), shared selection, mitred wall corners in 3D | Not started |
+| M3 | Wall / corner editing, draw a room, set room size, impact preview | **On `staging`** (631 unit/property/gate tests + browser e2e) |
+| M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
 | M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
@@ -51,7 +51,7 @@ Open points to settle at M5 start: where PDF is produced (client-side with the s
 ## Where things are
 - `room-planner/README.md` — module table, how to run.
 - `room-planner/TESTING.md` — test layout, binding rules, milestone gates.
-- `room-planner/DECISIONS.md` — engine decisions awaiting owner review (D4/D5 provisional, in plain words) and the M2 UI decisions D15–D25.
+- `room-planner/DECISIONS.md` — engine decisions awaiting owner review (D4/D5 provisional, in plain words), the M2 UI decisions D15–D25, M3 D26–D36 and M4 (3D) D37–D49.
 - `specs/` — Spec V2 Rev 4, Phase 1 Rev 3, Appendix B, **Appendix C (binding; wins on conflict)**, Test Plan v1.0.
   `04-appendix-c-resolutions.md` is the current text (C1–C22); the Appendix C PDF is older.
 
@@ -71,6 +71,14 @@ In Vault open **Room Planner** from the Apps launcher (Content Creation), or run
 - **Add / remove corners:** double-click a wall (touch: long-press) adds a corner; select a corner and press `Delete` to remove it (a room keeps at least three).
 - **Room size:** select a wall and type its **inside length**; select a corner and type X / Y. *Delete room* (Inspector, nothing selected) lets you start over; it is undoable.
 - Doors and windows are re-fitted to the new wall lengths; furniture is never moved.
+
+### 3D view (M4), button **3D** or key `V`
+- **Switch:** the 2D | 3D buttons (or `V`). Selection, undo history and the project are shared; each view remembers its own camera. Switching mid-drag cancels the drag.
+- **Look around:** drag on empty space to orbit, right-drag to pan, wheel to zoom. The bar at the top has **Perspective / Orthographic**, **Isometric**, **Top** and **Fit room**. Walls that stand between you and the room fade as you orbit, and drop away when you look straight down.
+- **Saved views:** *Save view* stores the current camera under a name; click the name to fly back to it, ✎ renames, × deletes. They are saved with the project but are not undoable.
+- **Select and move:** click furniture, a door/window (the whole opening), or a wall. Click the same spot again within half a second to pick what is behind. **Drag furniture along the floor**: same snapping, red/amber feedback and messages as 2D, one drag = one undo step, and an invalid drop slides back. Library items can be placed from 3D too (the ghost follows the floor point).
+- **Not in 3D:** resize/rotate handles, marquee, Pan/Walls/Measure tools, dragging doors or windows. Rotate with `R`, resize in the Inspector, or switch to 2D.
+- Furniture appears as simple shapes per type at its true size, coloured by its finish; red/amber glow = the same problems the Inspector lists.
 
 Questions to put to the designer: is the *front marker* (small triangle) the right way to show which side is front, and does *left/right hinge* match how they think about doors? (C20/C21 are provisional until then.)
 
@@ -95,6 +103,6 @@ npm run typecheck
 - `src/data/furnitureLibrary.ts` is the only place the seed furniture numbers live (C17).
 
 ## Open items
-- C16 unequal-thickness corners: mitred outer corner approved for drawing; 3D follows at M4.
+- C16 unequal-thickness corners: mitred outer corner approved for drawing and now also drawn in 3D (M4).
 - C20 / C21 provisional. D6–D8, D10–D14 in `DECISIONS.md` await review.
 - Imperial display is P1; the Draw-a-room flow (C14) and wall editing arrive in M3.

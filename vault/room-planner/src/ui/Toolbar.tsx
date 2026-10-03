@@ -13,6 +13,7 @@ const TOOLS: Array<{ tool: Tool; key: string; label: string; icon: keyof typeof 
 export function Toolbar() {
   const app = useApp();
   const tool = useUi((s) => s.tool);
+  const viewMode = useUi((s) => s.viewMode);
   const showClearances = useUi((s) => s.showClearances);
   const showGrid = useUi((s) => s.showGrid);
   const leftOpen = useUi((s) => s.leftOpen);
@@ -51,7 +52,7 @@ export function Toolbar() {
           <button
             key={t.tool}
             className={`btn icon ${tool === t.tool ? 'active' : ''}`}
-            disabled={t.disabled}
+            disabled={t.disabled || (viewMode === '3d' && t.tool !== 'select')}
             aria-pressed={tool === t.tool}
             title={t.hint ?? `${t.label} (${t.key})`}
             onClick={() => app.interaction.setTool(t.tool)}
@@ -60,6 +61,15 @@ export function Toolbar() {
             <span className="kbd">{t.key}</span>
           </button>
         ))}
+      </div>
+
+      <div className="group seg3d" role="group" aria-label="Switch view">
+        <button className={`btn ${viewMode === '2d' ? 'active' : ''}`} aria-pressed={viewMode === '2d'} title="2D plan view (V)" onClick={() => app.setViewMode('2d')}>
+          <span className="label">2D</span>
+        </button>
+        <button className={`btn ${viewMode === '3d' ? 'active' : ''}`} aria-pressed={viewMode === '3d'} disabled={!hasRoom} title="3D view (V)" onClick={() => app.setViewMode('3d')}>
+          <span className="label">3D</span>
+        </button>
       </div>
 
       <div className="group" role="group" aria-label="History">
@@ -78,7 +88,7 @@ export function Toolbar() {
         <button className={`btn icon ${showGrid ? 'active' : ''}`} aria-pressed={showGrid} title="Grid" onClick={() => app.ui.getState().toggleGrid()}>
           {Icons.grid}
         </button>
-        <button className="btn icon" disabled={!hasRoom} title="Fit room to view" onClick={() => app.fitToRoom()}>{Icons.fit}</button>
+        <button className="btn icon" disabled={!hasRoom} title="Fit room to view" onClick={() => (viewMode === '3d' ? app.cameraPreset('fit') : app.fitToRoom())}>{Icons.fit}</button>
       </div>
 
       <div className="spacer" />

@@ -11,6 +11,7 @@ node scripts/gen-scenarios.mjs   # regenerate scenario INPUTS (never the expecta
 
 `npm run e2e` drives the real app in Chrome (Playwright, installed browser; start `npm run dev` first) and prints PASS/FAIL per check,
 including the 44 px touch-target rule on a coarse-pointer device and "pointer moves cause zero store updates" measured in the browser.
+`npm run e2e3d` does the same for the 3D view in Chrome's software WebGL (SwiftShader): scene renders, picking and dragging on projected screen points, orbit, presets, orthographic, saved views, reload. Run it with `RP_URL=http://localhost:5174/room-planner-app/ node scripts/e2e3d.mjs <screenshotDir>` if `127.0.0.1` does not answer.
 `npm run walkthrough` takes screenshots of the demo loop.
 
 ## Layout
@@ -21,6 +22,8 @@ including the 44 px touch-target rule on a coarse-pointer device and "pointer mo
 - `tests/interaction/` the M2 gates against the real interaction engine (`m2gates.test.ts`: one drag = one command = one entry, invalid drag = zero
   history, rejected commit untouched, zero store updates on pointer moves, B7 escape matrix, scripted random session replay) and `inspector.test.ts`
   (A5/A9/B4). `harness.ts` builds the stores + engine without a DOM.
+- `tests/unit/m4geometry.test.ts` + `tests/property/transforms.properties.test.ts`: the pure 3D geometry (wall pieces, furniture/fixture models, wall fade, camera presets, saved views, the axis mapping and rotation convention).
+- `tests/interaction/m4gates.test.ts` the M4 gates against a real three.js scene, a real camera and real ray casts, in Node (no WebGL): selection sync, one drag = one entry in 3D, A12, view switch mid-drag, ghost placement, wall fade.
 - `tests/property/` fast-check, seed fixed, capped at 500 cases (200 for command sequences).
 - `tests/perf/` deterministic ceilings on `perf-100.json` (median of N runs). Fix regressions algorithmically, never raise a ceiling.
 
@@ -34,4 +37,6 @@ including the 44 px touch-target rule on a coarse-pointer device and "pointer mo
 
 ## Milestone gates
 M1: Phase 1 §10 matrix green · all scenarios · all property tests · perf smoke.
-M2: all Test Plan §4 M2 gates (`tests/interaction/m2gates.test.ts`) plus `npm run e2e`. M3+ gates are in the Test Plan §4.
+M2: all Test Plan §4 M2 gates (`tests/interaction/m2gates.test.ts`) plus `npm run e2e`.
+M3: `tests/interaction/m3gates.test.ts`, `wallEdit` unit and property tests.
+M4: `tests/interaction/m4gates.test.ts`, `m4geometry`, `transforms.properties`, `perf3d`, and `npm run e2e3d`. M5 gates are in the Test Plan §4.

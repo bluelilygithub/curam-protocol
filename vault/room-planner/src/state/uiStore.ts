@@ -7,6 +7,8 @@ import type { FurnitureInstance, SnapTargetType } from '../engine/types';
  * (tool, selection, toggles). Per-frame drag, ghost and dimension previews go through the feedback bus (ref/Konva), never here.
  */
 export type Tool = 'select' | 'pan' | 'wall_edit' | 'measure';
+/** Which renderer is showing (M4). Both draw the same project; the selection and tool state are shared. */
+export type ViewMode = '2d' | '3d';
 export const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'pan', '3': 'wall_edit', '4': 'measure' };
 
 /** What the next click on the canvas will place (a ghost follows the pointer). */
@@ -19,6 +21,7 @@ export type Placing =
 export interface StatusMessage { text: string; severity: 'info' | 'warn' | 'error' }
 
 export interface UiState {
+  viewMode: ViewMode;
   tool: Tool;
   selection: SelectionRef[];
   placing: Placing;
@@ -39,6 +42,7 @@ export interface UiState {
 }
 
 export interface UiActions {
+  setViewMode(m: ViewMode): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
   toggleSelect(ref: SelectionRef): void;
@@ -60,6 +64,7 @@ export const ALL_SNAPS: SnapTargetType[] = ['wall_endpoint', 'wall', 'furniture_
 
 export function createUiStore(): UiStore {
   return createStore<UiState & UiActions>((set, get) => ({
+    viewMode: '2d',
     tool: 'select',
     selection: [],
     placing: null,
@@ -75,6 +80,7 @@ export function createUiStore(): UiStore {
     saveStatus: 'saved',
 
     setSaveStatus: (saveStatus) => set({ saveStatus }),
+    setViewMode: (viewMode) => set({ viewMode }),
     setTool: (tool) => set({ tool, placing: null }),
     select: (selection) => set({ selection, popoverOpen: false }),
     toggleSelect(ref) {
