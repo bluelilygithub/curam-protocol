@@ -24,6 +24,7 @@ including the 44 px touch-target rule on a coarse-pointer device and "pointer mo
   (A5/A9/B4). `harness.ts` builds the stores + engine without a DOM.
 - `tests/unit/m4geometry.test.ts` + `tests/property/transforms.properties.test.ts`: the pure 3D geometry (wall pieces, furniture/fixture models, wall fade, camera presets, saved views, the axis mapping and rotation convention).
 - `tests/interaction/m4gates.test.ts` the M4 gates against a real three.js scene, a real camera and real ray casts, in Node (no WebGL): selection sync, one drag = one entry in 3D, A12, view switch mid-drag, ghost placement, wall fade.
+- `tests/unit/tour.test.ts` the fly-through path (hand-derived stops, timeline, speed limit, stays inside rooms including the owner's cut-corner room) and `tests/interaction/cinematic.test.ts` (clay look, Quality, cut-away walls, tour controls, keys ignored while it plays).
 - `tests/property/` fast-check, seed fixed, capped at 500 cases (200 for command sequences).
 - `tests/perf/` deterministic ceilings on `perf-100.json` (median of N runs). Fix regressions algorithmically, never raise a ceiling.
 
@@ -39,4 +40,7 @@ including the 44 px touch-target rule on a coarse-pointer device and "pointer mo
 M1: Phase 1 §10 matrix green · all scenarios · all property tests · perf smoke.
 M2: all Test Plan §4 M2 gates (`tests/interaction/m2gates.test.ts`) plus `npm run e2e`.
 M3: `tests/interaction/m3gates.test.ts`, `wallEdit` unit and property tests.
-M4: `tests/interaction/m4gates.test.ts`, `m4geometry`, `transforms.properties`, `perf3d`, and `npm run e2e3d`. M5 gates are in the Test Plan §4.
+M4: `tests/interaction/m4gates.test.ts`, `m4geometry`, `transforms.properties`, `perf3d`, and `npm run e2e3d`. M4.5 (Cinematic: clay, Quality, fly-through): `tour.test.ts`, `cinematic.test.ts`, and the Cinematic section of `npm run e2e3d` (clay look, Low/High, play/pause/Space/Esc, full screen, a one-pass tour ending by itself, Quality remembered).
+
+**Laptop (integrated GPU) check for Quality — run by the owner before release:** open a plan with ≥ 10 objects, turn on Cinematic, Low, press Play tour and watch the frame rate (Chrome: DevTools → Rendering → Frame Rendering Stats). Low must stay near 30 fps; High may drop and is allowed to. Note the GPU and results in this file.
+M5 gates are in the Test Plan §4.

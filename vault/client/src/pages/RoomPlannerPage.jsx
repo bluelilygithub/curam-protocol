@@ -41,6 +41,8 @@ export default function RoomPlannerPage() {
         <iframe
           src={`${APP_URL}?embedded=1`}
           title="Room Planner"
+          allow="fullscreen"
+          allowFullScreen
           className="flex-1 w-full border-0 min-h-0"
           style={{ flex: 1, minHeight: 0, height: '100%', background: 'var(--color-bg)' }}
         />

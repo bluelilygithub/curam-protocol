@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { SavedView } from '../engine/types';
-import { useApp, useProject } from '../ui/AppContext';
+import { useApp, useProject, useUi } from '../ui/AppContext';
 
 const NO_VIEWS: SavedView[] = [];
 
@@ -10,6 +10,14 @@ export function Viewbar3D() {
   const app = useApp();
   const projection = useStore(app.camera, (s) => s.camera?.projection ?? 'perspective');
   const views = useProject((s) => s.project?.savedViews ?? NO_VIEWS);
+  const cinematic = useUi((s) => s.cinematic);
+  const quality = useUi((s) => s.quality);
+  const playing = useUi((s) => s.tourPlaying);
+  const loop = useUi((s) => s.tourLoop);
+  const immersive = useUi((s) => s.immersive);
+  const progress = useUi((s) => s.tourProgress);
+  const project = useProject((s) => s.project);
+  const summary = useMemo(() => app.tourSummary(), [app, project]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
 
@@ -18,8 +26,52 @@ export function Viewbar3D() {
     setEditing(null);
   };
 
+  // Presentation view: the interface is hidden; only play/pause, where we are, and the way out remain.
+  if (immersive) {
+    return (
+      <div className="immersive-bar" role="toolbar" aria-label="Presentation controls">
+        <button className="btn" onClick={() => app.toggleTour()} aria-pressed={playing}><span className="label">{playing ? 'Pause tour' : 'Play tour'}</span></button>
+        {progress && summary && <span className="tour-note" role="status">Stop {progress.stop + 1} of {progress.total}</span>}
+        <button className="btn" onClick={() => app.exitImmersive()} title="Esc"><span className="label">Exit full screen</span></button>
+      </div>
+    );
+  }
+
   return (
     <div className="viewbar3d" role="toolbar" aria-label="3D camera">
+      <div className="group" role="group" aria-label="Cinematic">
+        <button className={`btn ${cinematic ? 'active' : ''}`} aria-pressed={cinematic} onClick={() => app.setCinematic(!cinematic)} title="Cinematic: clay look and a fly-through of your room">
+          <span className="label">Cinematic</span>
+        </button>
+        {cinematic && (
+          <>
+            <button className={`btn ${quality === 'low' ? 'active' : ''}`} aria-pressed={quality === 'low'} onClick={() => app.setQuality('low')} title="Low quality: fastest, for laptops">
+              <span className="label">Low</span>
+            </button>
+            <button className={`btn ${quality === 'high' ? 'active' : ''}`} aria-pressed={quality === 'high'} onClick={() => app.setQuality('high')} title="High quality: softer shadows and ambient shading, needs a stronger graphics card">
+              <span className="label">High</span>
+            </button>
+          </>
+        )}
+      </div>
+      {cinematic && (
+        <div className="group" role="group" aria-label="Fly-through">
+          <button className={`btn ${playing ? 'active' : ''}`} aria-pressed={playing} onClick={() => app.toggleTour()} title="Play or pause the fly-through (Space)">
+            <span className="label">{playing ? 'Pause tour' : 'Play tour'}</span>
+          </button>
+          <button className={`btn ${loop ? 'active' : ''}`} aria-pressed={loop} onClick={() => app.ui.getState().setTourLoop(!loop)} title="Repeat the tour">
+            <span className="label">Loop</span>
+          </button>
+          <button className="btn" onClick={() => app.enterImmersive()} title="Full screen, interface hidden">
+            <span className="label">Full screen</span>
+          </button>
+          {summary && (
+            <span className="tour-note" role="status" title="The tour visits your saved views; with fewer than two it adds an overview, the entrance and corner views">
+              {progress && playing ? `Stop ${progress.stop + 1} of ${progress.total} · ` : ''}{summary.stops} stops · {summary.source}
+            </span>
+          )}
+        </div>
+      )}
       <div className="group" role="group" aria-label="Projection">
         <button className={`btn ${projection === 'perspective' ? 'active' : ''}`} aria-pressed={projection === 'perspective'} onClick={() => app.setProjection('perspective')} title="Perspective camera">
           <span className="label">Perspective</span>

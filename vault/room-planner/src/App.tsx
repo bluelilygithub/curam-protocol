@@ -14,13 +14,14 @@ const Viewport3D = lazy(() => import('./render3d/Viewport3D'));
 function Shell() {
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
   const viewMode = useUi((s) => s.viewMode);
+  const immersive = useUi((s) => s.immersive);
   // The 3D chunk (three.js) loads the first time 3D is asked for, then stays mounted so its camera and GPU state persist.
   const [load3d, setLoad3d] = useState(false);
   useEffect(() => { if (viewMode === '3d') setLoad3d(true); }, [viewMode]);
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
   return (
-    <div className={`app ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''}`}>
+    <div className={`app ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${immersive ? 'immersive' : ''}`}>
       <Toolbar />
       {leftOpen && <LibraryPanel />}
       <main className="viewport">

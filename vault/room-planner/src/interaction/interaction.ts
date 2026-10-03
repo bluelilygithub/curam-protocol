@@ -689,19 +689,29 @@ export class Interaction {
     const u = this.ui;
     const mod = k.ctrl;
 
-    if (mod && k.key.toLowerCase() === 'z') {
+    if (mod && k.key.toLowerCase() === 'z' && !u.tourPlaying) {
       this.cancel();
       const label = k.shift ? this.p.project.getState().redo() : this.p.project.getState().undo();
       if (label !== null) this.p.ui.getState().setStatus({ text: `${k.shift ? 'Redid' : 'Undid'}: ${label ?? 'last action'}`, severity: 'info' });
       this.p.ui.getState().clearSelection();
       return true;
     }
-    if (mod && k.key.toLowerCase() === 'y') {
+    if (mod && k.key.toLowerCase() === 'y' && !u.tourPlaying) {
       this.cancel();
       const label = this.p.project.getState().redo();
       if (label !== null) this.p.ui.getState().setStatus({ text: `Redid: ${label ?? 'last action'}`, severity: 'info' });
       return true;
     }
+    if (u.tourPlaying) {
+      // the fly-through is a presentation: Space or Esc pauses it (Esc also leaves full screen), every other key is ignored
+      if (k.key === ' ' || k.key === 'Escape') {
+        this.p.ui.getState().setTourPlaying(false);
+        if (k.key === 'Escape') this.p.ui.getState().setImmersive(false);
+      }
+      return true;
+    }
+    if (k.key === 'Escape' && u.immersive) { this.p.ui.getState().setImmersive(false); return true; }
+    if (k.key === ' ' && !mod && u.cinematic && u.viewMode === '3d') { this.p.ui.getState().setTourPlaying(true); return true; }
     if (k.key === 'Escape') { this.cancel(true); return true; }
     if (u.tool === 'wall_edit' && !mod && this.wall.keyDown(k)) return true;
     if (!mod && !k.alt && (k.key === 'v' || k.key === 'V')) {

@@ -89,3 +89,12 @@ Room 4 × 5, walls 0.15 thick, height 2.7 (v1 (0,0) v2 (4,0) v3 (4,5) v4 (0,5); 
 - **Window on w2** (dir (0,1), interior normal (−1,0)): group origin (4, 0, 2.5), rotation.y = −π/2; the middle of the wall thickness is local z = −0.075 → three x = 4.075.
 - **Wall fade** (a wall fades if the camera is on the outer side of its inside face): camera (9, −5) → w1 (below y = 0) and w2 (right of x = 4); camera (9, 10) → w2 and w3; camera over the room → none. L-room camera (9, 9): w2, w3, w4, w5 (w1 and w6 see it from the inside).
 - **Camera:** bounds centre (2, 1.35, 2.5), radius = half of hypot(4, 5, 2.7); the isometric direction has equal components; the top preset is within 0.002 rad of straight down.
+
+## Fly-through (M4.5; `tests/unit/tour.test.ts`)
+4 × 5 room, door 0.9 wide on w1 (y = 0, interior normal +y) centred at x = 1.
+- **Entrance:** door centre (1, 0) + 0.6 × normal = (1, 0.6) at height 1.55, looking at the centroid (2, 2.5) at height 1.0.
+- **Corner stand points** are the corner moved 0.45 m along the inward bisector, i.e. 0.45 × cos 45° = 0.3182 m on each axis: (0.318, 0.318), (3.682, 0.318), (3.682, 4.682), (0.318, 4.682). Skipped if within 1.5 m of the entrance: the first is 0.74 m away. Distances from (1, 0.6): 2.70, 4.88, 4.14 → all three used.
+- **Order:** counter-clockwise around the centre from the entrance's direction (atan2(−1.9, −1) = −117.8°): (3.682, 0.318) at 65°, (3.682, 4.682) at 170°, (0.318, 4.682) at 245° → bottom-right, top-right, top-left.
+- **Look-at** of a corner stop = centre + 0.25 × (centre − stand point): for (3.682, 4.682) that is (1.580, 1.955).
+- **L-room** (0,0)(6,0)(6,3)(3,3)(3,6)(0,6): area centroid = (18·(3, 1.5) + 9·(1.5, 4.5)) / 27 = (2.5, 2.5); the reflex corner (3, 3) is never a stand point.
+- **Timeline:** legs run at 1.2 m/s clamped to 3–8 s; a looping tour has as many legs as stops; segments are contiguous; the camera never exceeds 4 m/s (an eased leg peaks at 1.5 × its average).

@@ -13,7 +13,8 @@ import { createProjectStore } from './state/projectStore';
 import { serializeProject } from './engine/serialize';
 import { createCameraStore } from './state/cameraStore';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
-import { createUiStore, type ViewMode } from './state/uiStore';
+import { buildTour } from './render3d/tour';
+import { createUiStore, type Quality, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
 /**
@@ -34,6 +35,19 @@ export function createApp(storage: StorageLike) {
 
   project.getState().load(loadStoredProject(storage) ?? newProject());
 
+  // Quality is a per-browser preference (never part of the project). Default low.
+  const QUALITY_KEY = 'room-planner:quality:v1';
+  try {
+    const q = storage.getItem(QUALITY_KEY);
+    if (q === 'low' || q === 'high') ui.getState().setQuality(q);
+  } catch { /* storage unavailable: keep the default */ }
+  let lastQuality = ui.getState().quality;
+  ui.subscribe((s) => {
+    if (s.quality === lastQuality) return;
+    lastQuality = s.quality;
+    try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
+  });
+
   /**
    * Begin autosaving; returns the cleanup. Kept out of `createApp` so React StrictMode's mount → unmount → mount cycle
    * (which reuses the same app object) re-arms it instead of leaving it disposed.
@@ -48,9 +62,18 @@ export function createApp(storage: StorageLike) {
       }),
       (s) => ui.getState().setSaveStatus(s),
     );
+    // leaving browser full screen (Esc, or the browser's own control) also leaves the presentation view and pauses the tour
+    const onFullscreen = (): void => {
+      if (typeof document !== 'undefined' && !document.fullscreenElement && ui.getState().immersive) {
+        ui.getState().setImmersive(false);
+        ui.getState().setTourPlaying(false);
+      }
+    };
+    if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', onFullscreen);
     return () => {
       autosave.dispose();
       interaction.cancel();
+      if (typeof document !== 'undefined') document.removeEventListener('fullscreenchange', onFullscreen);
     };
   }
 
@@ -67,6 +90,12 @@ export function createApp(storage: StorageLike) {
     ));
   }
 
+  function app_exitImmersive(): void {
+    ui.getState().setImmersive(false);
+    ui.getState().setTourPlaying(false);
+    try { if (typeof document !== 'undefined' && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); } catch { /* ignore */ }
+  }
+
   return {
     project, ui, view, bus, interaction, camera,
 
@@ -78,6 +107,33 @@ export function createApp(storage: StorageLike) {
     setViewMode(mode: ViewMode): void {
       interaction.switchView(mode);
     },
+
+    // ------------------------------------------------------------ Cinematic (Spec Addition A1)
+
+    /** Cinematic on/off. Presentation only: the project and its history are never touched. */
+    setCinematic(on: boolean): void {
+      if (!on && ui.getState().immersive) app_exitImmersive();
+      ui.getState().setCinematic(on);
+    },
+    setQuality(q: Quality): void { ui.getState().setQuality(q); },
+    playTour(): void { ui.getState().setTourPlaying(true); },
+    pauseTour(): void { ui.getState().setTourPlaying(false); },
+    toggleTour(): void { ui.getState().setTourPlaying(!ui.getState().tourPlaying); },
+    /** What the fly-through would visit right now (for the label next to Play). */
+    tourSummary(): { stops: number; source: 'saved views' | 'automatic' | 'saved view + automatic' } | null {
+      const p = project.getState().project;
+      const room = p?.rooms[0];
+      if (!p || !room) return null;
+      const views = p.savedViews ?? [];
+      const t = buildTour(room, views);
+      return { stops: t.stops.length, source: views.length >= 2 ? 'saved views' : views.length === 1 ? 'saved view + automatic' : 'automatic' };
+    },
+    /** Hide the interface for a presentation, and ask the browser for full screen where it allows it (inside Vault's frame it may not). */
+    enterImmersive(): void {
+      ui.getState().setImmersive(true);
+      try { void document.documentElement.requestFullscreen?.().catch(() => undefined); } catch { /* not allowed: the hidden interface still works */ }
+    },
+    exitImmersive(): void { app_exitImmersive(); },
 
     /** Move the 3D camera to a preset (animated). `fit` keeps the current direction. */
     cameraPreset(preset: CameraPreset): void {

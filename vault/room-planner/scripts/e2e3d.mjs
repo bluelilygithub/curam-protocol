@@ -208,6 +208,114 @@ await wait(250);
 s = await state();
 check('Ctrl+Z in 3D undoes the last edit', s.view === '3d' && s.hist >= 0);
 
+// ------------------------------------------------------------------ Cinematic (Spec Addition A1): clay look, quality, fly-through
+const cine = () => ev(() => {
+  const a = window.roomPlanner;
+  const u = a.ui.getState();
+  const t = window.roomPlanner3d;
+  const cam = t.camera;
+  const sofa = t.scene3d.furnitureObject('sofa');
+  let colour = null;
+  sofa?.traverse((o) => { if (!colour && o.isMesh && o.visible) colour = o.material.color.getHexString(); });
+  return {
+    cinematic: u.cinematic, quality: u.quality, playing: u.tourPlaying, loop: u.tourLoop, immersive: u.immersive, progress: u.tourProgress,
+    selection: u.selection, hist: a.project.getState().historyLength(),
+    cam: [cam.position.x, cam.position.y, cam.position.z], ctlEnabled: t.controls.enabled,
+    tone: t.gl.toneMapping, shadow: t.gl.shadowMap.type, sofaColour: colour, calls: t.gl.info.render.calls,
+    toolbar: getComputedStyle(document.querySelector('.toolbar')).display, bar: !!document.querySelector('.immersive-bar'),
+    camStore: a.camera.getState().camera?.position,
+  };
+});
+const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await wait(700);
+let c = await cine();
+check('Cinematic turns on the clay look: white sofa, filmic tone mapping, soft shadows', c.cinematic && c.sofaColour === 'f3f1ec' && c.tone === 4 && c.shadow === 3, JSON.stringify(c));
+check('Cinematic leaves the project alone (no history)', c.hist === (await state()).hist);
+await shot('3d-11-cinematic-low');
+check('quality defaults to low', c.quality === 'low' && (await page.getByRole('button', { name: 'Low', exact: true }).getAttribute('aria-pressed')) === 'true');
+
+await page.getByRole('button', { name: 'High', exact: true }).click();
+await wait(1500);
+c = await cine();
+check('High quality renders (post effects) with no console errors', c.quality === 'high' && c.calls > 0 && problems.length === 0, JSON.stringify({ calls: c.calls, problems }));
+await shot('3d-12-cinematic-high');
+await page.getByRole('button', { name: 'Low', exact: true }).click();
+await wait(500);
+
+// fly-through: with one saved view the tour is that view plus automatic stops
+check('the tour says what it will visit', (await page.locator('.tour-note').innerText()).includes('saved view + automatic'));
+const before = (await cine()).cam;
+await page.getByRole('button', { name: 'Play tour' }).click();
+await wait(7000); // 3 s resting on the first stop, then it starts to travel
+c = await cine();
+check('Play tour moves the camera along the path, with orbit controls off', c.playing && dist3(c.cam, before) > 0.5 && c.ctlEnabled === false, JSON.stringify(c));
+check('the tour reports its stop', c.progress && c.progress.total >= 3);
+await shot('3d-13-tour');
+const mid = c.cam;
+await page.mouse.click(700, 500);
+await wait(200);
+check('clicking the canvas during the tour edits and selects nothing', (await cine()).selection.length === c.selection.length && (await cine()).hist === c.hist);
+await page.keyboard.press('Space');
+await wait(300);
+c = await cine();
+check('Space pauses the tour; controls come back; the camera is remembered', !c.playing && c.ctlEnabled === true && dist3(c.cam, c.camStore) < 0.01, JSON.stringify(c));
+const paused = c.cam;
+await wait(800);
+check('a paused tour stays put', dist3((await cine()).cam, paused) < 1e-6);
+await page.keyboard.press('Space');
+await wait(2200);
+check('Space resumes it where it was', (await cine()).playing && dist3((await cine()).cam, paused) > 0.001);
+await page.keyboard.press('Delete');
+check('keys do not edit the design while it plays', (await cine()).hist === c.hist);
+
+// full screen: the interface is hidden, Esc leaves it
+await page.getByRole('button', { name: 'Pause tour' }).click();
+await page.getByRole('button', { name: 'Full screen' }).click();
+await wait(600);
+c = await cine();
+check('Full screen hides the interface and shows only the presentation controls', c.immersive && c.toolbar === 'none' && c.bar);
+await shot('3d-14-fullscreen');
+await page.getByRole('button', { name: 'Play tour' }).click();
+await wait(600);
+await page.keyboard.press('Escape');
+await wait(400);
+c = await cine();
+check('Esc pauses the tour and brings the interface back', !c.playing && !c.immersive && c.toolbar !== 'none');
+
+// a short one-pass tour from two saved views ends by itself
+await ev(() => {
+  const a = window.roomPlanner;
+  a.saveView('Start');
+});
+await page.getByRole('button', { name: 'Top', exact: true }).click();
+await wait(700);
+await ev(() => window.roomPlanner.saveView('End'));
+await wait(200);
+check('two or more saved views are the tour', (await page.locator('.tour-note').innerText()).includes('saved views'));
+await page.getByRole('button', { name: 'Loop' }).click();
+check('Loop can be turned off', (await cine()).loop === false);
+await page.getByRole('button', { name: 'Play tour' }).click();
+await page.waitForFunction(() => !window.roomPlanner.ui.getState().tourPlaying, null, { timeout: 70000 }).catch(() => undefined);
+c = await cine();
+check('a one-pass tour stops by itself at the end', !c.playing, JSON.stringify(c.progress));
+
+// back to ordinary 3D: everything returns
+await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await wait(600);
+c = await cine();
+check('turning Cinematic off restores the real colours and no tour', !c.cinematic && c.sofaColour !== 'f3f1ec' && c.tone === 0 && !c.playing);
+
+// quality is remembered across a reload
+await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await page.getByRole('button', { name: 'High', exact: true }).click();
+await wait(500);
+await page.reload();
+await page.waitForSelector('[data-testid=stage] canvas');
+check('quality is remembered per browser', (await ev(() => window.roomPlanner.ui.getState().quality)) === 'high');
+await ev(() => window.roomPlanner.ui.getState().setQuality('low'));
+
 check('no console or page errors at any point', problems.length === 0, problems.join(' | '));
 await browser.close();
 console.log(failures === 0 ? '\nAll 3D checks passed.' : `\n${failures} check(s) failed.`);

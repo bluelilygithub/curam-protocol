@@ -8,10 +8,14 @@ import * as THREE from 'three';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 import { DEFAULT_FOV_DEG, polarFromVertical, presetCamera, type CameraState } from './cameraPresets';
 import { Controller3D } from './controller3d';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { PostFx } from './PostFx';
 import { Scene3D } from './Scene3D';
+import { buildTour, sampleTour, stopAt } from './tour';
 import { Viewbar3D } from './Viewbar3D';
 
 const BACKGROUND = '#F5F5F0';
+const CLAY_BACKGROUND = '#ececec';
 
 /** The part of OrbitControls this viewport uses (drei hands it over as `controls`). */
 interface Orbit {
@@ -31,6 +35,11 @@ function Host() {
   const projection = useStore(app.camera, (s) => s.camera?.projection ?? 'perspective');
   const active = useUi((s) => s.viewMode === '3d');
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
+  const cinematic = useUi((s) => s.cinematic);
+  const quality = useUi((s) => s.quality);
+  const tourPlaying = useUi((s) => s.tourPlaying);
+  const tourLoop = useUi((s) => s.tourLoop);
+  const tourTime = useRef(0);
   const live = useRef<{ camera: THREE.Camera; controls: Orbit | null }>({ camera, controls: controls as unknown as Orbit | null });
   live.current = { camera, controls: controls as unknown as Orbit | null };
 
@@ -43,6 +52,31 @@ function Host() {
   );
   useEffect(() => () => scene3d.dispose(), [scene3d]);
   useEffect(() => { scene.background = new THREE.Color(BACKGROUND); invalidate(); }, [scene, invalidate]);
+
+  // Cinematic look: soft (variance) shadows, filmic tone mapping, a neutral studio environment for fill light, a pale background.
+  // The scene itself switches to clay materials and its light levels (see Scene3D); this is the renderer's half.
+  useEffect(() => {
+    gl.shadowMap.type = cinematic ? THREE.VSMShadowMap : THREE.PCFSoftShadowMap;
+    gl.toneMapping = cinematic ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    gl.toneMappingExposure = 1;
+    scene.background = new THREE.Color(cinematic ? CLAY_BACKGROUND : BACKGROUND);
+    let pm: THREE.PMREMGenerator | null = null;
+    let env: THREE.Texture | null = null;
+    if (cinematic) {
+      pm = new THREE.PMREMGenerator(gl);
+      env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = env;
+      scene.environmentIntensity = 0.8;
+    } else {
+      scene.environment = null;
+    }
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true;
+    });
+    invalidate();
+    return () => { env?.dispose(); pm?.dispose(); };
+  }, [cinematic, gl, scene, invalidate]);
 
   // exposed for the browser walkthrough and tests; harmless in production
   useEffect(() => {
@@ -132,6 +166,39 @@ function Host() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controls, camera, scene3d, app]);
 
+  // Fly-through (Spec Addition A1, C3): the camera follows the tour path while it plays; orbit controls are off meanwhile.
+  useEffect(() => {
+    const ctl = controls as unknown as Orbit | null;
+    if (!tourPlaying || !ctl) return;
+    if (isOrtho(camera)) { app.setProjection('perspective'); return; } // the tour is a perspective shot; this effect re-runs on the new camera
+    const project = app.project.getState().project;
+    const room = project?.rooms[0];
+    if (!project || !room) { app.ui.getState().setTourPlaying(false); return; }
+    const tour = buildTour(room, project.savedViews ?? [], tourLoop);
+    if (!tour.loop && tourTime.current >= tour.duration) tourTime.current = 0;
+    ctl.enabled = false;
+    let raf = 0;
+    let last = performance.now();
+    const frame = (): void => {
+      const now = performance.now();
+      tourTime.current += Math.min(0.5, (now - last) / 1000); // real elapsed time, so a slow graphics card skips frames instead of slowing the tour
+      last = now;
+      const pose = sampleTour(tour, tourTime.current);
+      apply({ position: pose.position, target: pose.target, projection: 'perspective', zoom: 1 });
+      app.ui.getState().setTourProgress({ stop: stopAt(tour, tourTime.current), total: tour.stops.length });
+      if (!tour.loop && tourTime.current >= tour.duration) { app.ui.getState().setTourPlaying(false); return; }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      ctl.enabled = true;
+      const c = read();
+      if (c) app.camera.getState().setCamera(c);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourPlaying, tourLoop, controls, camera, app]);
+
   // Pointers: the editor takes a gesture that starts on furniture (or places a ghost); everything else orbits.
   useEffect(() => {
     const el = gl.domElement;
@@ -145,7 +212,7 @@ function Host() {
     const mods = (e: PointerEvent) => ({ shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, button: e.button });
     const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const down = (e: PointerEvent): void => {
-      if (app.ui.getState().viewMode !== '3d') return;
+      if (app.ui.getState().viewMode !== '3d' || app.ui.getState().tourPlaying) return;
       pointers.add(e.pointerId);
       if (pointers.size > 1) { controller.cancel(); return; } // two fingers: the camera takes over
       if (e.button !== 0) return;
@@ -182,6 +249,7 @@ function Host() {
   return (
     <>
       <primitive object={scene3d.root} />
+      {cinematic && quality === 'high' && <PostFx />}
       {projection === 'perspective'
         ? <PerspectiveCamera makeDefault fov={DEFAULT_FOV_DEG} near={0.1} far={500} />
         : <OrthographicCamera makeDefault near={-300} far={600} />}

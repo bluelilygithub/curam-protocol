@@ -21,7 +21,8 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
 | M3 | Wall / corner editing, draw a room, set room size, impact preview | **On `staging`** (631 unit/property/gate tests + browser e2e) |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
-| M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): realistic or clay look, fly-through from saved views, walk mode with collision, Quality low/high. C0 style spike first (two stills of the owner's room), then C1 furniture shapes (if realistic), C2 materials + quality, C3 fly-through, C4 walk mode, C5 "See an example" | **Scoped; C0 style spike next** |
+| M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): **clay look** (decided), Quality low/high, fly-through from saved views, walk mode with collision. **C2 clay + Quality and C3 fly-through built, awaiting review** (clay re-confirmed on a furnished scene); C4 walk mode and C5 "See an example" (lowest) still to do | **In progress** |
+| M4.6 | **Realistic look** (planned follow-up): better furniture shapes first, then a switchable realistic Cinematic look with generated/CC0 textures | Planned, after M4.5 |
 | M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
@@ -80,6 +81,12 @@ In Vault open **Room Planner** from the Apps launcher (Content Creation), or run
 - **Select and move:** click furniture, a door/window (the whole opening), or a wall. Click the same spot again within half a second to pick what is behind. **Drag furniture along the floor**: same snapping, red/amber feedback and messages as 2D, one drag = one undo step, and an invalid drop slides back. Library items can be placed from 3D too (the ghost follows the floor point).
 - **Not in 3D:** resize/rotate handles, marquee, Pan/Walls/Measure tools, dragging doors or windows. Rotate with `R`, resize in the Inspector, or switch to 2D.
 - Furniture appears as simple shapes per type at its true size, coloured by its finish; red/amber glow = the same problems the Inspector lists.
+
+### Cinematic (M4.5), button **Cinematic** in the 3D bar
+- **Cinematic** switches the 3D view to a white clay architectural model: soft shadows, no colours, the walls between you and the room cut away. It changes nothing in your design and is not in undo history.
+- **Low / High:** Low (default) is the safe choice for laptops. High adds softer shadows and ambient shading and needs a stronger graphics card. Your choice is remembered in this browser.
+- **Play tour:** a camera fly-through. With two or more **saved views** it visits them in the order you saved them. With fewer it starts with an overview, then the entrance, then a view from each far corner. **Space** pauses and resumes, **Loop** repeats it, **Full screen** hides the interface for presenting (Esc comes back). While it plays, nothing can be edited by accident.
+- Not built yet in this milestone: walking through the room yourself with collision (C4) and the optional "See an example" link (C5). A realistic-textures look is a planned follow-up (M4.6).
 
 Questions to put to the designer: is the *front marker* (small triangle) the right way to show which side is front, and does *left/right hinge* match how they think about doors? (C20/C21 are provisional until then.)
 

@@ -34,7 +34,20 @@ export interface Scene3DPorts {
 export const FADED_WALL_OPACITY = 0.12;
 const WALL_COLOUR = '#ddd6c8';
 const FLOOR_COLOUR = '#e6dfd0';
-const SHADOW_MAP = 2048;
+/** Cinematic (clay) look, Spec Addition A1: one white matte material for everything, a slightly darker floor to separate the planes. */
+export const CLAY_COLOUR = '#f3f1ec';
+export const CLAY_FLOOR_COLOUR = '#d9d6cf';
+/** Shadow-map size per Quality level. */
+export const SHADOW_MAP_BY_QUALITY = { low: 1024, high: 2048 } as const;
+export const CLAY_SUN = 2.6;
+export const CLAY_AMBIENT = 0.35;
+
+/** Everything is the same white matte clay; glass stays a pale translucent pane so openings still read. */
+function clayLook(role: string): { colour: string; roughness: number; metalness: number; opacity: number } {
+  return role === 'glass'
+    ? { colour: '#ffffff', roughness: 0.2, metalness: 0, opacity: 0.3 }
+    : { colour: CLAY_COLOUR, roughness: 1, metalness: 0, opacity: 1 };
+}
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCylinder = new THREE.CylinderGeometry(1, 1, 1, 32);
@@ -94,15 +107,16 @@ export class Scene3D {
 
   /** Rebuilds of the committed scene so far (tests: pointer moves must not cause any). */
   rebuildCount = 0;
+  private lookKey = '';
 
   constructor(private readonly p: Scene3DPorts) {
     this.root.name = 'room-planner-3d';
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.02;
     this.root.add(this.ambient, this.sun, this.sun.target, this.committed, this.previews, this.selectionLines);
 
+    this.applyLighting();
     this.rebuild();
     this.applySelection();
     this.applyBus(p.bus.get());
@@ -113,6 +127,13 @@ export class Scene3D {
       }),
       p.ui.subscribe((s) => {
         if (s.selection !== lastSel) { lastSel = s.selection; this.applySelection(); this.p.invalidate(); }
+        if (this.currentLookKey() !== this.lookKey) {
+          this.applyLighting();
+          this.rebuild();
+          this.applySelection();
+          this.applyBus(this.p.bus.get());
+          this.p.invalidate();
+        }
       }),
       p.bus.subscribe((b) => { this.applyBus(b); this.p.invalidate(); }),
     );
@@ -129,6 +150,43 @@ export class Scene3D {
   /** The preview object currently shown for a dragged/ghost id. */
   previewObject(id: string): THREE.Object3D | undefined { return this.previewEntries.get(id)?.group; }
   get previewCount(): number { return this.previewEntries.size; }
+
+  // ------------------------------------------------------------------ look (Cinematic)
+
+  private get cinematic(): boolean { return this.p.ui.getState().cinematic; }
+  private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}`; }
+
+  /** Light levels and shadow-map size for the current look and Quality. The renderer sets the shadow type and the environment. */
+  private applyLighting(): void {
+    const u = this.p.ui.getState();
+    this.lookKey = this.currentLookKey();
+    const size = SHADOW_MAP_BY_QUALITY[u.quality];
+    this.sun.shadow.mapSize.set(size, size);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
+    if (u.cinematic) {
+      this.sun.intensity = CLAY_SUN;
+      this.sun.color.set('#ffffff');
+      this.ambient.intensity = CLAY_AMBIENT;
+      this.sun.shadow.radius = 8;
+      this.sun.shadow.blurSamples = 16;
+    } else {
+      this.sun.intensity = 0.8 * Math.PI;
+      this.ambient.intensity = 0.6 * Math.PI;
+      this.sun.shadow.radius = 1;
+    }
+  }
+
+  /** Visibility of committed objects: hidden while previewed, and (cinematic) openings on cut-away walls are cut away with them. */
+  private syncVisibility(): void {
+    const hidden = new Set(this.p.bus.get().hiddenIds);
+    const room = this.room;
+    for (const [id, o] of this.furnitureObjects) o.visible = !hidden.has(id);
+    for (const [id, o] of this.fixtureObjects) {
+      const wall = room?.fixtures.find((f) => f.id === id)?.wallId;
+      o.visible = !hidden.has(id) && !(this.cinematic && wall !== undefined && this.faded.has(wall));
+    }
+  }
 
   // ------------------------------------------------------------------ build
 
@@ -147,7 +205,9 @@ export class Scene3D {
   private furnitureGroup(inst: FurnitureInstance, project: Project, tint: Tint, opacity = 1): THREE.Group {
     const g = new THREE.Group();
     for (const part of furnitureParts(inst.definitionId, inst.width, inst.length, inst.height)) {
-      const look = { ...lookOf(part.role, inst, project.materials), tint };
+      const look = this.cinematic
+        ? { ...clayLook(part.role), tint: null as Tint }
+        : { ...lookOf(part.role, inst, project.materials), tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
     }
@@ -162,7 +222,9 @@ export class Scene3D {
     if (!model) return null;
     const g = new THREE.Group();
     for (const part of model.parts) {
-      const look = { ...lookOf(part.role, undefined, []), tint: part.role === 'glass' ? null : tint };
+      const look = this.cinematic
+        ? { ...clayLook(part.role), tint: null as Tint }
+        : { ...lookOf(part.role, undefined, []), tint: part.role === 'glass' ? null : tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
     }
@@ -188,7 +250,7 @@ export class Scene3D {
 
     // walls: one material per wall so a wall can fade on its own
     for (const w of room.walls) {
-      const mat = new THREE.MeshStandardMaterial({ color: WALL_COLOUR, roughness: 0.9, metalness: 0 });
+      const mat = new THREE.MeshStandardMaterial({ color: this.cinematic ? CLAY_COLOUR : WALL_COLOUR, roughness: this.cinematic ? 1 : 0.9, metalness: 0 });
       this.wallMaterials.set(w.id, mat);
       this.disposables.push(mat);
     }
@@ -259,7 +321,7 @@ export class Scene3D {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     this.disposables.push(geo);
-    const mat = new THREE.MeshStandardMaterial({ color: FLOOR_COLOUR, roughness: 0.9, metalness: 0 });
+    const mat = new THREE.MeshStandardMaterial({ color: this.cinematic ? CLAY_FLOOR_COLOUR : FLOOR_COLOUR, roughness: this.cinematic ? 1 : 0.9, metalness: 0 });
     this.disposables.push(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
@@ -318,10 +380,8 @@ export class Scene3D {
 
   private applyBus(b: FeedbackState): void {
     // hide committed objects that are being previewed
-    const hidden = new Set(b.hiddenIds);
-    for (const [id, o] of this.furnitureObjects) o.visible = !hidden.has(id);
-    for (const [id, o] of this.fixtureObjects) o.visible = !hidden.has(id);
-    this.selectionLines.visible = hidden.size === 0;
+    this.syncVisibility();
+    this.selectionLines.visible = b.hiddenIds.length === 0;
 
     const project = this.p.project.getState().project;
     const room = project?.rooms[0];
@@ -420,17 +480,18 @@ export class Scene3D {
   private reapplyFade(): void {
     const room = this.room;
     const next = new Set(room && this.lastCamera ? wallsToFade(room, this.lastCamera.plan, this.lastCamera.polar) : []);
+    const cut = this.cinematic; // cinematic cuts the walls away (like an architectural model); the ordinary view fades them
     for (const [id, m] of this.wallMaterials) {
       const fade = next.has(id);
-      const wasFaded = m.opacity < 1;
-      if (fade === wasFaded) continue;
-      m.transparent = fade;
-      m.opacity = fade ? FADED_WALL_OPACITY : 1;
-      m.depthWrite = !fade;
-      m.needsUpdate = true;
+      const transparent = fade && !cut;
+      if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
+      m.opacity = transparent ? FADED_WALL_OPACITY : 1;
+      m.depthWrite = !transparent;
+      m.visible = !(fade && cut);
     }
     const changed = next.size !== this.faded.size || [...next].some((x) => !this.faded.has(x));
     this.faded = next;
+    this.syncVisibility();
     if (changed) this.p.invalidate();
   }
 

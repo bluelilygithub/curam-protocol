@@ -107,7 +107,17 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .view-chip { display: inline-flex; align-items: center; gap: 1px; border: 1px solid var(--color-border); border-radius: 8px; padding: 0 2px; background: var(--color-bg); }
 .view-chip .btn { border: 0; background: transparent; }
 .view-chip input { width: 130px; min-height: var(--ctl); border: 0; background: transparent; font: inherit; padding: 0 6px; }
-.seg3d .btn, .viewbar3d .btn { min-width: var(--ctl); }
+.seg3d .btn, .viewbar3d .btn, .immersive-bar .btn { min-width: var(--ctl); }
+.tour-note { align-self: center; padding: 0 10px; font: 12px var(--font-mono); color: var(--color-muted); white-space: nowrap; }
+/* presentation view: the interface is hidden, the 3D view fills the window */
+.app.immersive { grid-template-rows: 0 minmax(0, 1fr) 0; grid-template-columns: 0 minmax(0, 1fr) 0; }
+.app.immersive .toolbar, .app.immersive .panel, .app.immersive .statusbar { display: none; }
+.immersive-bar {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 5;
+  padding: 4px; background: color-mix(in srgb, var(--rp-paper) 90%, transparent); border: 1px solid var(--color-border); border-radius: 10px;
+  box-shadow: 0 10px 26px -14px rgba(26,26,26,.55);
+}
+.immersive-bar .btn.active { background: var(--color-text); color: var(--rp-paper); }
 .seg3d .btn.active { background: var(--color-text); color: var(--rp-paper); }
 
 .empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 16px; }

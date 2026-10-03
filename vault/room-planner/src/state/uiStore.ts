@@ -9,6 +9,8 @@ import type { FurnitureInstance, SnapTargetType } from '../engine/types';
 export type Tool = 'select' | 'pan' | 'wall_edit' | 'measure';
 /** Which renderer is showing (M4). Both draw the same project; the selection and tool state are shared. */
 export type ViewMode = '2d' | '3d';
+/** Cinematic render quality (Spec Addition A1): low = no post effects, small shadow map; high = soft shadows and ambient occlusion. */
+export type Quality = 'low' | 'high';
 export const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'pan', '3': 'wall_edit', '4': 'measure' };
 
 /** What the next click on the canvas will place (a ghost follows the pointer). */
@@ -22,6 +24,15 @@ export interface StatusMessage { text: string; severity: 'info' | 'warn' | 'erro
 
 export interface UiState {
   viewMode: ViewMode;
+  /** Cinematic mode of the 3D view (clay look, fly-through). Presentation only: never touches the project. */
+  cinematic: boolean;
+  quality: Quality;
+  tourPlaying: boolean;
+  tourLoop: boolean;
+  /** Interface hidden for a full-screen presentation. */
+  immersive: boolean;
+  /** Where the fly-through is: stop index (0-based) of `total`. */
+  tourProgress: { stop: number; total: number } | null;
   tool: Tool;
   selection: SelectionRef[];
   placing: Placing;
@@ -43,6 +54,12 @@ export interface UiState {
 
 export interface UiActions {
   setViewMode(m: ViewMode): void;
+  setCinematic(on: boolean): void;
+  setQuality(q: Quality): void;
+  setTourPlaying(on: boolean): void;
+  setTourLoop(on: boolean): void;
+  setImmersive(on: boolean): void;
+  setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
   toggleSelect(ref: SelectionRef): void;
@@ -65,6 +82,12 @@ export const ALL_SNAPS: SnapTargetType[] = ['wall_endpoint', 'wall', 'furniture_
 export function createUiStore(): UiStore {
   return createStore<UiState & UiActions>((set, get) => ({
     viewMode: '2d',
+    cinematic: false,
+    quality: 'low',
+    tourPlaying: false,
+    tourLoop: true,
+    immersive: false,
+    tourProgress: null,
     tool: 'select',
     selection: [],
     placing: null,
@@ -80,7 +103,17 @@ export function createUiStore(): UiStore {
     saveStatus: 'saved',
 
     setSaveStatus: (saveStatus) => set({ saveStatus }),
-    setViewMode: (viewMode) => set({ viewMode }),
+    setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, immersive: false }),
+    setCinematic: (cinematic) => set(cinematic ? { cinematic } : { cinematic, tourPlaying: false, immersive: false, tourProgress: null }),
+    setQuality: (quality) => set({ quality }),
+    setTourPlaying: (tourPlaying) => set({ tourPlaying }),
+    setTourLoop: (tourLoop) => set({ tourLoop }),
+    setImmersive: (immersive) => set({ immersive }),
+    setTourProgress(p) {
+      const cur = get().tourProgress;
+      if (cur?.stop === p?.stop && cur?.total === p?.total) return;
+      set({ tourProgress: p });
+    },
     setTool: (tool) => set({ tool, placing: null }),
     select: (selection) => set({ selection, popoverOpen: false }),
     toggleSelect(ref) {
