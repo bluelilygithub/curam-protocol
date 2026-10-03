@@ -43,6 +43,7 @@ export function Stage2D() {
     // --- pointers (mouse, pen, touch); two fingers pinch/pan the view and cancel any gesture
     const pointers = new Map<number, { x: number; y: number }>();
     let pinch: { dist: number; cx: number; cy: number } | null = null;
+    let pressTimer: ReturnType<typeof setTimeout> | undefined;
     const pinchState = (): { dist: number; cx: number; cy: number } => {
       const [a, b] = [...pointers.values()];
       return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
@@ -57,10 +58,21 @@ export function Stage2D() {
         pinch = pinchState();
         return;
       }
-      if (pointers.size === 1) interaction.pointerDown(toEv(e));
+      if (pointers.size === 1) {
+        interaction.pointerDown(toEv(e));
+        // touch: holding a press on a wall in the wall tool inserts a corner (B1 long-press)
+        if (e.pointerType === 'touch' && ui.getState().tool === 'wall_edit') {
+          clearTimeout(pressTimer);
+          pressTimer = setTimeout(() => interaction.longPress(), 550);
+        }
+      }
     };
     const onMove = (e: PointerEvent): void => {
-      if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.has(e.pointerId)) {
+        const prev = pointers.get(e.pointerId)!;
+        if (Math.hypot(e.clientX - prev.x, e.clientY - prev.y) > 6) clearTimeout(pressTimer);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
       if (pinch && pointers.size === 2) {
         const next = pinchState();
         const r = el.getBoundingClientRect();
@@ -80,6 +92,7 @@ export function Stage2D() {
       }
     };
     const onUp = (e: PointerEvent): void => {
+      clearTimeout(pressTimer);
       const had = pointers.delete(e.pointerId);
       if (pinch) { if (pointers.size < 2) pinch = null; return; }
       if (had) interaction.pointerUp(toEv(e));

@@ -101,6 +101,14 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .empty h1 { margin: 0 0 8px; font: 400 32px/1.1 var(--font-display); letter-spacing: -.01em; }
 .lede { margin: 0 auto 22px; max-width: 40ch; color: #4a4843; font-size: 14px; }
 .empty-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.draw-hint {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%); max-width: min(520px, calc(100% - 24px)); padding: 12px 16px;
+  background: var(--rp-paper); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 26px -16px rgba(26,26,26,.5);
+  pointer-events: none; z-index: 5;
+}
+.draw-hint strong { font: 400 16px var(--font-display); }
+.draw-hint ol { margin: 6px 0 0; padding-left: 18px; color: #4a4843; }
+.draw-hint li { margin: 2px 0; }
 .fine { margin: 18px 0 0; font-size: 12px; color: var(--color-muted); }
 
 .hud {

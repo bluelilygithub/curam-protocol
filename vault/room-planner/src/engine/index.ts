@@ -18,3 +18,5 @@ export * from './fixtureSnap';
 export * from './wallOutline';
 export * from './liveDimensions';
 export * from './selection';
+export * from './wallEdit';
+export * from './wallPipeline';

@@ -1,5 +1,5 @@
 import { fitView, panBy } from './adapters/canvas';
-import { proposeCreateRoom, proposeFixPosition } from './engine/pipeline';
+import { proposeCreateRoom, proposeDeleteRoom, proposeFixPosition } from './engine/pipeline';
 import { aabbOf } from './engine/geometry';
 import { Interaction } from './interaction/interaction';
 import { nameOf } from './interaction/statusMessages';
@@ -25,6 +25,7 @@ export function createApp(storage: StorageLike) {
   const interaction = new Interaction({
     project, ui, bus, newId: randomId, now: () => performance.now(),
     panBy: (dx, dy) => view.getState().setView(panBy(view.getState().view, dx, dy)),
+    onRoomCreated: () => fitToRoom(),
   });
 
   project.getState().load(loadStoredProject(storage) ?? newProject());
@@ -73,6 +74,21 @@ export function createApp(storage: StorageLike) {
       if (!p) return;
       const result = proposeCreateRoom(p, rectangleRoom(randomId));
       if (project.getState().commitResult(result, 'Create room')) fitToRoom();
+    },
+
+    /** B8 "Draw a room": the wall tool with no room yet. Click corners, click the first one (or Enter) to close. */
+    startDrawing(): void {
+      interaction.setTool('wall_edit');
+    },
+
+    /** Remove the room (undoable) so another can be drawn. Furniture and doors in it go with it, and come back on undo. */
+    deleteRoom(): void {
+      const p = project.getState().project;
+      const room = p?.rooms[0];
+      if (!p || !room) return;
+      interaction.cancel();
+      ui.getState().clearSelection();
+      project.getState().commitResult(proposeDeleteRoom(p, room.id), 'Delete room');
     },
 
     /** Discard the current project and start empty (history resets). */

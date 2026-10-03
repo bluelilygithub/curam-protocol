@@ -19,6 +19,8 @@ export interface Harness {
   pushes: Array<{ command: Command; label: string }>;
   panned: Array<[number, number]>;
   clock: { t: number };
+  /** How many times the app would have been told a drawn room was created (fit-to-room). */
+  created: { n: number };
   /** Pointer event at world metres; screen = 100 px per metre, Y flipped. */
   ptr(x: number, y: number, o?: Partial<PointerEv>): PointerEv;
   key(key: string, o?: Partial<KeyEv>): boolean;
@@ -37,7 +39,7 @@ export function inst(over: Partial<FurnitureInstance> & { id: string }): Furnitu
   };
 }
 
-export function makeHarness(opts: { furniture?: FurnitureInstance[]; fixtures?: Fixture[]; room?: Partial<Room> } = {}): Harness {
+export function makeHarness(opts: { furniture?: FurnitureInstance[]; fixtures?: Fixture[]; room?: Partial<Room>; noRoom?: boolean } = {}): Harness {
   const pushes: Harness['pushes'] = [];
   const project = createProjectStore(null, { onPush: (command, label) => pushes.push({ command, label }) });
   const ui = createUiStore();
@@ -45,17 +47,19 @@ export function makeHarness(opts: { furniture?: FurnitureInstance[]; fixtures?: 
   const clock = { t: 1000 };
   const bus = createFeedbackBus(() => clock.t);
   const panned: Array<[number, number]> = [];
+  const created = { n: 0 };
   const it = new Interaction({
     project, ui, bus, newId: counterIds('new'), now: () => clock.t, panBy: (dx, dy) => panned.push([dx, dy]),
+    onRoomCreated: () => { created.n++; },
   });
   const room = makeRoom({ furniture: [...(opts.furniture ?? [])].sort((a, b) => (a.id < b.id ? -1 : 1)), fixtures: opts.fixtures ?? [], ...opts.room });
   project.getState().load({
-    schemaVersion: 1, id: 'p', units: 'metric', rooms: [room],
+    schemaVersion: 1, id: 'p', units: 'metric', rooms: opts.noRoom ? [] : [room],
     furnitureDefinitions: structuredClone(FURNITURE_LIBRARY), materials: structuredClone(SEED_MATERIALS),
   });
 
   const h: Harness = {
-    project, ui, view, bus, it, pushes, panned, clock,
+    project, ui, view, bus, it, pushes, panned, clock, created,
     ptr: (x, y, o = {}) => ({ world: { x, y }, screen: { x: x * 100, y: -y * 100 }, shift: false, alt: false, ctrl: false, mpp: 0.01, ...o }),
     key: (key, o = {}) => it.keyDown({ key, shift: false, ctrl: false, alt: false, ...o }),
     drag(from, to, steps = 12, o = {}) {

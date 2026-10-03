@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apply, quantizeRotation, type Project } from '../../src/engine';
 import {
-  parseLength, previewFixtureEdit, previewFurnitureEdit, previewWallThickness, readFixtureField, readFurnitureField,
+  parseLength, previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
 } from '../../src/ui/inspectorLogic';
 import { makeDoor } from '../helpers';
 import { inst, makeHarness } from './harness';
@@ -162,6 +162,41 @@ describe('fixture inspector', () => {
   it('a swing that would hit furniture is rejected', () => {
     const hh = makeHarness({ fixtures: [makeDoor({ id: 'd', offsetAlongWall: 2 })], furniture: [inst({ id: 'a', position: { x: 2.9, y: 0.4 }, width: 0.2, length: 0.2 })] });
     expect(previewFixtureEdit(proj(hh), 'd', 'swingAngleDeg', '180')).toMatchObject({ state: 'hard', message: '3-seat sofa blocks the door swing' });
+  });
+});
+
+describe('corner position and wall length (M3: this is how room size is set)', () => {
+  const h = makeHarness({ furniture: [inst({ id: 'a', position: { x: 2, y: 4.4 }, width: 1, length: 0.6 })] });
+  it('a corner coordinate builds one EditWall; mm and cm are accepted', () => {
+    const p = previewVertexPosition(proj(h), 'v3', 'x', '3500mm');
+    expect(p).toMatchObject({ state: 'ok', label: 'Move corner' });
+    expect((p.command as { to: { vertices: Array<{ id: string; position: { x: number; y: number } }> } }).to.vertices[2].position).toEqual({ x: 3.5, y: 5 });
+  });
+  it('a value that would make the walls cross is refused in plain words, with no command', () => {
+    expect(previewVertexPosition(proj(h), 'v3', 'y', '-1')).toMatchObject({ state: 'hard', command: null, message: 'The walls would cross each other' });
+  });
+  it('typing the same value is a no-op; nonsense is invalid; unknown corner is explained', () => {
+    expect(previewVertexPosition(proj(h), 'v3', 'x', '4')).toMatchObject({ state: 'ok', command: null });
+    expect(previewVertexPosition(proj(h), 'v3', 'x', 'abc')).toMatchObject({ state: 'invalid', message: 'Enter a number' });
+    expect(previewVertexPosition(proj(h), 'zz', 'x', '1')).toMatchObject({ state: 'invalid' });
+  });
+  it('an edit that would leave furniture outside commits but warns: "1 object will need attention" (soft)', () => {
+    expect(previewVertexPosition(proj(h), 'v3', 'y', '3')).toMatchObject({ state: 'soft', message: '1 object will need attention' });
+    expect(previewVertexPosition(proj(h), 'v3', 'y', '3').command).not.toBeNull();
+  });
+  it('wall length: typing 5 on the 4 m floor wall moves its far corner to x = 5', () => {
+    const p = previewWallLength(proj(h), 'w1', '5');
+    expect(p).toMatchObject({ state: 'ok', label: 'Set wall length' });
+    expect((p.command as { to: { vertices: Array<{ position: { x: number } }> } }).to.vertices[1].position.x).toBe(5);
+  });
+  it('wall length: units, minimum, and the soft warning when it shrinks the room around furniture', () => {
+    expect(previewWallLength(proj(h), 'w1', '300cm').state).toBe('ok');
+    expect(previewWallLength(proj(h), 'w1', '0.01')).toMatchObject({ state: 'invalid', message: 'A wall must be at least 0.05 m long' });
+    expect(previewWallLength(proj(h), 'w1', 'abc').state).toBe('invalid');
+    expect(previewWallLength(proj(h), 'w1', '4').command).toBeNull(); // unchanged
+    // right wall 5 m -> 1 m puts v3 at (4, 1): the top edge now runs (4,1)→(0,5), cutting through the sofa (y 4.1..4.7 at x = 2 where the edge is at y = 3)
+    expect(previewWallLength(proj(h), 'w2', '1')).toMatchObject({ state: 'soft', message: '1 object will need attention' });
+    expect(previewWallLength(proj(h), 'w1', '2').state).toBe('ok'); // a shorter floor still contains the sofa
   });
 });
 

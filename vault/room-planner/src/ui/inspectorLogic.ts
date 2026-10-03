@@ -4,8 +4,10 @@ import {
   evaluateCommand, proposeEditWall, proposeUpdateFixture, type PipelineResult,
 } from '../engine/pipeline';
 import { validateInstance } from '../engine/validation';
+import { impactOf } from '../engine/wallEdit';
+import { proposeMoveVertex, proposeSetWallLength } from '../engine/wallPipeline';
 import { MIN_SIZE } from '../interaction/handles';
-import { describeViolation, LABELS, nameOf } from '../interaction/statusMessages';
+import { describeViolation, LABELS, nameOf, polygonErrorText } from '../interaction/statusMessages';
 import type {
   Command, FurnitureInstance, FurnitureMetadata, FurniturePatch, Project, ValidationViolation, Fixture, FixturePatch,
 } from '../engine/types';
@@ -218,6 +220,40 @@ export function previewFixtureEdit(project: Project, id: string, field: FixtureF
     return { state: 'hard', command: null, label, message: r.violations[0] ? describeViolation(project, r.violations[0]) : 'Not allowed here', violations: r.violations };
   }
   return { state: 'ok', command: r.command, label, violations: [] };
+}
+
+// ------------------------------------------------------------------ corners and wall length (M3)
+
+function wallEditPreview(project: Project, label: string, r: PipelineResult): FieldPreview {
+  if (r.rejected) {
+    if (r.noop) return { state: 'ok', command: null, label, violations: [] };
+    const message = r.polygonError ? polygonErrorText(r.polygonError) : r.message ?? 'That edit is not allowed';
+    return { state: 'hard', command: null, label, message, violations: [] };
+  }
+  // The edit always commits (A3). If it would leave things outside or colliding, say so (soft): same function as the live drag preview.
+  const to = (r.command as { to?: Parameters<typeof impactOf>[2] }).to;
+  const n = to ? impactOf(project, project.rooms[0].id, to).newlyInvalid.length : 0;
+  if (n > 0) return { state: 'soft', command: r.command, label, message: `${n} ${n === 1 ? 'object' : 'objects'} will need attention`, violations: [] };
+  return { state: 'ok', command: r.command, label, violations: [] };
+}
+
+/** Type a corner's X or Y (metres, mm or cm). One EditWall; rejected only if the polygon would become invalid. */
+export function previewVertexPosition(project: Project, vertexId: string, axis: 'x' | 'y', raw: FieldValue): FieldPreview {
+  const label = LABELS.corner.move;
+  const v = project.rooms[0]?.vertices.find((x) => x.id === vertexId);
+  const n = typeof raw === 'number' ? raw : parseLength(String(raw)) ?? NaN;
+  if (!v) return rejectedPreview('invalid', label, 'Unknown corner');
+  if (!Number.isFinite(n)) return rejectedPreview('invalid', label, 'Enter a number');
+  return wallEditPreview(project, label, proposeMoveVertex(project, vertexId, { ...v.position, [axis]: n }));
+}
+
+/** Type a wall's inside length: its end corner moves along the wall. This is how room size is set. */
+export function previewWallLength(project: Project, wallId: string, raw: FieldValue): FieldPreview {
+  const label = LABELS.corner.length;
+  const n = typeof raw === 'number' ? raw : parseLength(String(raw)) ?? NaN;
+  if (!Number.isFinite(n)) return rejectedPreview('invalid', label, 'Enter a number');
+  if (n < 0.05) return rejectedPreview('invalid', label, 'A wall must be at least 0.05 m long');
+  return wallEditPreview(project, label, proposeSetWallLength(project, wallId, n));
 }
 
 // ------------------------------------------------------------------ walls

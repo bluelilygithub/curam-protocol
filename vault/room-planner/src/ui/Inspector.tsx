@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { aabbOf } from '../engine/geometry';
 import { polygonArea } from '../engine/polygons';
 import { validateRoom } from '../engine/validation';
 import { describeViolation, nameOf } from '../interaction/statusMessages';
@@ -6,7 +7,7 @@ import type { ValidationViolation, Project } from '../engine/types';
 import { useApp, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
 import {
-  previewFixtureEdit, previewFurnitureEdit, previewWallThickness, readFixtureField, readFurnitureField,
+  previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
   type FieldPreview, type FieldValue, type FixtureField, type FurnitureField,
 } from './inspectorLogic';
 
@@ -262,6 +263,10 @@ export function Inspector() {
               <p className="subject-sub">Inside length {Math.hypot(b.x - a.x, b.y - a.y).toFixed(3)} m</p>
             </div>
           </div>
+          <Section title="Length">
+            <Field label="Inside length" unit="m" committed={fmt(Math.hypot(b.x - a.x, b.y - a.y))} preview={(d) => previewWallLength(project, wall.id, d as FieldValue)} onCommit={commit} />
+            <p className="hint">Typing a length moves this wall’s far corner along the wall. Use it to set the room’s size.</p>
+          </Section>
           <Section title="Thickness">
             <Field label="Thickness" unit="m" committed={fmt(wall.thickness)} preview={(d) => previewWallThickness(project, wall.id, d as FieldValue)} onCommit={commit} />
             <p className="hint">Walls grow outward only. The room’s inside size never changes.</p>
@@ -269,16 +274,44 @@ export function Inspector() {
         </>
       );
     }
+  } else if (single?.kind === 'vertex') {
+    const idx = room.vertices.findIndex((v) => v.id === single.id);
+    const vertex = room.vertices[idx];
+    if (!vertex) { body = null; } else {
+      body = (
+        <>
+          <div className="subject">
+            <div>
+              <h3 className="subject-name">Corner {idx + 1}</h3>
+              <p className="subject-sub">Room corner · {room.vertices.length} in total</p>
+            </div>
+          </div>
+          <Section title="Position">
+            <div className="two">
+              <Field label="X" unit="m" committed={fmt(vertex.position.x)} preview={(d) => previewVertexPosition(project, vertex.id, 'x', d as FieldValue)} onCommit={commit} />
+              <Field label="Y" unit="m" committed={fmt(vertex.position.y)} preview={(d) => previewVertexPosition(project, vertex.id, 'y', d as FieldValue)} onCommit={commit} />
+            </div>
+            <p className="hint">Drag the corner on the plan, or type exact values. Doors and windows are re-fitted to the new wall lengths; furniture never moves by itself.</p>
+          </Section>
+          <div className="actions">
+            <button className="btn danger" disabled={room.vertices.length < 4} title={room.vertices.length < 4 ? 'A room needs at least three corners' : 'Remove this corner (Delete)'} onClick={() => app.interaction.keyDown({ key: 'Delete', ctrl: false, shift: false, alt: false })}>{Icons.trash}<span className="label">Delete corner</span></button>
+          </div>
+        </>
+      );
+    }
   } else if (selection.length > 1) {
     body = <p className="hint">Select furniture only to edit several things at once.</p>;
   } else {
     const area = polygonArea(room.vertices.map((v) => v.position));
+    const box = aabbOf(room.vertices.map((v) => v.position));
+    const size = { w: box.max.x - box.min.x, l: box.max.y - box.min.y };
     const issues = validation?.violations.length ?? 0;
     body = (
       <>
         <div className="subject"><div><h3 className="subject-name">{room.name}</h3><p className="subject-sub">Room</p></div></div>
         <Section title="Room">
           <dl className="facts">
+            <dt>Size</dt><dd>{size.w.toFixed(2)} × {size.l.toFixed(2)} m</dd>
             <dt>Area</dt><dd>{area.toFixed(2)} m²</dd>
             <dt>Walls</dt><dd>{room.walls.length}</dd>
             <dt>Wall height</dt><dd>{fmt(room.wallHeight)} m</dd>
@@ -286,7 +319,15 @@ export function Inspector() {
             <dt>Problems</dt><dd>{issues === 0 ? 'None' : `${issues} to look at`}</dd>
           </dl>
         </Section>
-        <p className="hint">Click a wall, door, window or piece of furniture to edit it. Drag on empty floor to select several.</p>
+        <p className="hint">Click a wall, door, window or piece of furniture to edit it. Drag on empty floor to select several. Use the Walls tool (key 3) to move, add or remove corners.</p>
+        <div className="actions">
+          <button
+            className="btn danger"
+            onClick={() => { if (window.confirm('Delete this room? Its furniture, doors and windows go with it. You can undo this.')) app.deleteRoom(); }}
+          >
+            {Icons.trash}<span className="label">Delete room</span>
+          </button>
+        </div>
       </>
     );
   }

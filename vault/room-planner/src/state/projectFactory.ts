@@ -1,5 +1,5 @@
 import { FURNITURE_LIBRARY, SEED_MATERIALS } from '../data/furnitureLibrary';
-import type { Project, Room, Vertex, WallSegment } from '../engine/types';
+import type { Project, Room, Vec2, Vertex, WallSegment } from '../engine/types';
 
 export type IdGen = () => string;
 
@@ -21,6 +21,25 @@ export function newProject(newId: IdGen = randomId): Project {
     furnitureDefinitions: structuredClone(FURNITURE_LIBRARY),
     materials: structuredClone(SEED_MATERIALS),
   };
+}
+
+/**
+ * A room from drawn corners (C14): counter-clockwise, default 150 mm walls, ids generated here (outside `apply`). The corners are
+ * re-ordered CCW BEFORE the walls are built, so every wall runs in polygon order and its interior normal points into the room.
+ */
+export function roomFromPoints(points: Vec2[], newId: IdGen = randomId, name = 'Room 1'): Room {
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  const ordered = area < 0 ? [...points].reverse() : points;
+  const vertices: Vertex[] = ordered.map((p) => ({ id: newId(), position: { x: p.x, y: p.y } }));
+  const walls: WallSegment[] = vertices.map((v, i) => ({
+    id: newId(), startVertexId: v.id, endVertexId: vertices[(i + 1) % vertices.length].id, thickness: 0.15,
+  }));
+  return { id: newId(), name, floorElevation: 0, wallHeight: 2.7, ceilingHeight: 2.7, vertices, walls, fixtures: [], furniture: [] };
 }
 
 export const DEFAULT_RECT = { width: 4, length: 5 } as const;

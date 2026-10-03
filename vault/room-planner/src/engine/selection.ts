@@ -2,11 +2,11 @@ import { EPSILON } from './coordinates';
 import { CUT_PLANE_HEIGHT } from './cutPlane';
 import { fixtureCentre, wallGeometry } from './constraints';
 import { footprintOf } from './footprints';
-import { aabbOf, add, dist, pointInPolygonInclusive, scale } from './geometry';
+import { aabbOf, add, dist, distPointSegment, pointInPolygonInclusive, scale } from './geometry';
 import { wallOutlines } from './wallOutline';
 import type { Room, Vec2 } from './types';
 
-export type SelectionKind = 'furniture' | 'fixture' | 'wall';
+export type SelectionKind = 'furniture' | 'fixture' | 'wall' | 'vertex';
 export interface SelectionRef { kind: SelectionKind; id: string }
 
 export const sameRef = (a: SelectionRef, b: SelectionRef): boolean => a.kind === b.kind && a.id === b.id;
@@ -80,6 +80,43 @@ export function marqueeSelect(room: Room, a: Vec2, b: Vec2): SelectionRef[] {
     if (inside(e1) && inside(e2)) out.push({ kind: 'fixture', id: fx.id });
   }
   return out.sort((x, y) => (x.kind === y.kind ? (x.id < y.id ? -1 : 1) : x.kind < y.kind ? -1 : 1));
+}
+
+// ------------------------------------------------------------------ wall tool picking (B1)
+
+/** B1: corners are picked within 0.15 m of the world position, never under 20 screen pixels. */
+export const VERTEX_PICK_WORLD = 0.15;
+export const VERTEX_PICK_MIN_PX = 20;
+export const vertexPickRadius = (mpp: number): number => Math.max(VERTEX_PICK_WORLD, VERTEX_PICK_MIN_PX * mpp);
+
+/** The corner under `point` (nearest within the pick radius), or undefined. */
+export function pickVertexId(room: Room, point: Vec2, mpp: number): string | undefined {
+  const r = vertexPickRadius(mpp);
+  let best: { id: string; d: number } | undefined;
+  for (const v of room.vertices) {
+    const d = dist(v.position, point);
+    if (d <= r && (!best || d < best.d - 1e-12 || (Math.abs(d - best.d) <= 1e-12 && v.id < best.id))) best = { id: v.id, d };
+  }
+  return best?.id;
+}
+
+/**
+ * The wall segment under `point`, away from corners: inside its drawn body (the mitred outline) or within a few pixels of its
+ * inside face, so the thin line is easy to hit. Nearest inside face wins when two overlap at a corner.
+ */
+export function pickWallId(room: Room, point: Vec2, mpp: number): string | undefined {
+  const reach = Math.max(0.02, 6 * mpp);
+  let best: { id: string; d: number } | undefined;
+  for (const o of wallOutlines(room.vertices, room.walls)) {
+    if (!o.wallId) continue;
+    const a = o.polygon[0];
+    const b = o.polygon[1];
+    const d = distPointSegment(point, a, b);
+    if (d <= reach || pointInPolygonInclusive(point, o.polygon, 0.01)) {
+      if (!best || d < best.d) best = { id: o.wallId, d };
+    }
+  }
+  return best?.id;
 }
 
 export interface PickCycleState {

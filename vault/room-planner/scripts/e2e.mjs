@@ -56,7 +56,7 @@ await page.goto(URL);
 await page.evaluate(() => localStorage.clear());
 await page.reload();
 await page.waitForSelector('[data-testid=stage] canvas');
-check('empty state shows the two ways to begin', (await page.getByText('Start with a room').count()) === 1 && (await page.getByRole('button', { name: /Draw a room/ }).isDisabled()));
+check('empty state shows the two ways to begin', (await page.getByText('Start with a room').count()) === 1 && (await page.getByRole('button', { name: /Draw a room/ }).isEnabled()));
 check('Undo/Redo disabled at the start', (await page.getByRole('button', { name: /^Undo/ }).isDisabled()) && (await page.getByRole('button', { name: /^Redo/ }).isDisabled()));
 await page.getByRole('button', { name: /Start from a rectangle/ }).click();
 await page.waitForTimeout(250);
@@ -75,9 +75,10 @@ check('redo brings the room back', s.rooms === 1);
 await click(2, -0.07);
 s = await S();
 check('SELECT tool selects a wall', s.selection.length === 1 && s.selection[0].kind === 'wall');
-let input = page.locator('.panel.right input').first();
+const thickness = () => page.locator('.field', { hasText: /^Thickness/ }).locator('input');
+let input = thickness();
 await input.fill('0.2'); await input.press('Enter');
-await click(4.1, 2.5); input = page.locator('.panel.right input').first();
+await click(4.1, 2.5); input = thickness();
 await input.fill('300mm'); await input.press('Enter');
 s = await S();
 check('thickness edits commit as EditWall (mm accepted, quantized)', s.walls[0] === 0.2 && s.walls[1] === 0.3 && s.walls[2] === 0.15, JSON.stringify(s.walls));
@@ -299,6 +300,127 @@ await page.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeTyp
 await page.waitForTimeout(300);
 check('a bad file is explained, nothing is lost', (await S()).rooms === 1 && /Could not open/.test(await page.locator('.statusbar').innerText()));
 await shot('e07-final');
+
+// ------------------------------------------------------------------ 6b. M3: wall tool, draw a room, corners, room size
+const newProject = async () => {
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: /^New$/ }).click();
+  await page.waitForTimeout(250);
+};
+const orange = () => nodes(() => window.roomPlannerRenderer.stage.find('Line').filter((l) => l.stroke() === '#f97316').length);
+const dashedRed = () => nodes(() => window.roomPlannerRenderer.stage.find('Line').filter((l) => l.stroke() === '#ef4444' && (l.dash?.() ?? []).length > 0 && l.closed()).length);
+const roomOf = () => ev(() => { const r = window.roomPlanner.project.getState().project.rooms[0]; return r ? { v: r.vertices.map((x) => [x.id.slice(0, 4), x.position.x, x.position.y]), walls: r.walls.length, area: Math.abs(r.vertices.reduce((a, v, i, arr) => a + (v.position.x * arr[(i + 1) % arr.length].position.y - arr[(i + 1) % arr.length].position.x * v.position.y), 0)) / 2 } : null; });
+
+await newProject();
+await page.getByRole('button', { name: /Draw a room/ }).click();
+check('Draw a room starts the wall tool and shows the three-step hint', (await S()).tool === 'wall_edit' && (await page.getByText('Click the first corner again').count()) + (await page.getByText(/first.*corner again/).count()) >= 1);
+for (const [x, y] of [[0, 0], [3, 0], [3, 1.5], [1.5, 1.5], [1.5, 3], [0, 3]]) await click(x, y); // an L: 3 x 3 minus a 1.5 x 1.5 corner
+await moveTo(0.04, 0.03);
+await shot('e08-drawing');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(250);
+s = await S();
+let room = await roomOf();
+check('an L-shaped room is drawn with Enter: one CreateRoom, six corners, area 6.75 m²', s.rooms === 1 && s.hist === 1 && s.undo === 'Draw room' && room.v.length === 6 && near(room.area, 6.75, 1e-6), JSON.stringify(room));
+check('drawing returns to the Select tool and fits the view', s.tool === 'select');
+await shot('e09-l-room');
+await page.keyboard.press('Control+z');
+check('undo of the drawn room returns to the empty prompt', (await S()).rooms === 0 && (await page.getByText('Start with a room').count()) === 1);
+
+await page.getByRole('button', { name: /Draw a room/ }).click();
+for (const [x, y] of [[0, 0], [4, 3], [4, 0], [0, 3]]) await click(x, y);
+await page.keyboard.press('Enter');
+await page.waitForTimeout(150);
+check('a crossing shape cannot be closed: plain message, nothing created', (await S()).rooms === 0 && /walls would cross/.test(await page.locator('.statusbar').innerText()), await page.locator('.statusbar').innerText());
+await page.keyboard.press('Escape');
+check('Escape abandons the drawing but stays in the wall tool', (await S()).tool === 'wall_edit' && (await ev(() => window.roomPlanner.bus.get().drawing)) === null);
+await page.keyboard.press('1');
+
+await page.getByRole('button', { name: /Start from a rectangle/ }).click();
+await page.waitForTimeout(250);
+await card('3-seat sofa').click();
+await moveTo(2.0, 4.4); await click(2.0, 4.4);
+await page.keyboard.press('3');
+check('the wall tool dims furniture and clears the selection', (await S()).tool === 'wall_edit' && (await S()).selection.length === 0);
+await click(4, 5);
+s = await S();
+check('a corner is selected by clicking near it, and the inspector shows Corner X / Y', s.selection[0]?.kind === 'vertex' && (await page.getByText(/^Corner \d/).count()) >= 1);
+await shot('e10-corner-selected');
+
+// drag with impact preview: pull the top-right corner down so the sofa is left outside
+let before3 = await S();
+await drag([4, 5], [4, 4.2], { hold: true, steps: 14 });
+check('dragging a corner shows "N object will need attention" and dashed red outlines', /will need attention/.test(await page.locator('.statusbar').innerText()) && (await dashedRed()) >= 1, await page.locator('.statusbar').innerText());
+await shot('e11-impact');
+await page.mouse.up();
+await page.waitForTimeout(250);
+s = await S(); room = await roomOf();
+check('the edit commits (A3): one entry "Move corner", the sofa did not move', s.undo === 'Move corner' && near(room.v[2][2], 4.2, 0.011) && near(s.furniture['sofa-3'].y, before3.furniture['sofa-3'].y, 0.0001), JSON.stringify(room));
+
+// sticking: drag a corner through the opposite wall
+const histBefore = (await S()).hist;
+await drag([4, 4.2], [4, -1], { hold: true, steps: 24 });
+check('through-the-wall drag: the corner sticks and the bad edges are orange', (await orange()) >= 1 && /cannot cross/.test(await page.locator('.statusbar').innerText()), await page.locator('.statusbar').innerText());
+await shot('e12-sticks');
+await page.mouse.up();
+await page.waitForTimeout(250);
+room = await roomOf();
+check('release commits the valid spot; the room is still a valid polygon', (await S()).hist === histBefore + 1 && room.area > 0 && room.v.length === 4, JSON.stringify(room));
+await page.keyboard.press('Control+z'); // the stuck corner move
+await page.keyboard.press('Control+z'); // the first corner move: back to the rectangle, sofa still placed
+// Escape mid-drag reverts
+before3 = await S();
+await click(4, 5);
+await drag([4, 5], [3.2, 4.1], { hold: true });
+await page.keyboard.press('Escape');
+await page.mouse.up();
+await page.waitForTimeout(200);
+check('Escape during a corner drag reverts it (no history)', (await S()).hist === before3.hist && (await roomOf()).v[2][1] === 4);
+
+// insert + delete a corner
+const nBefore = (await roomOf()).v.length;
+const dbl = await at(1.3, 0.03);
+await page.mouse.dblclick(dbl.x, dbl.y);
+await page.waitForTimeout(200);
+s = await S(); room = await roomOf();
+check('double-click on a wall inserts a corner on the line (one entry)', room.v.length === nBefore + 1 && s.undo === 'Add corner' && room.v[1][2] === 0, JSON.stringify(room));
+await page.keyboard.press('Delete');
+s = await S();
+check('Delete removes the selected corner again', (await roomOf()).v.length === nBefore && s.undo === 'Delete corner');
+
+// room size by typing a wall length, then a corner coordinate
+await page.waitForTimeout(650);
+await click(2, -0.07);
+const lengthField = page.locator('.field', { hasText: /^Inside length/ }).locator('input');
+await lengthField.fill('5'); await lengthField.press('Enter');
+room = await roomOf();
+check('typing a wall length sets the room size (floor wall 4 m -> 5 m)', near(room.v[1][1], 5, 0.001) && (await S()).undo === 'Set wall length', JSON.stringify(room));
+await page.waitForTimeout(650);
+await click(5, 0);
+const xField = page.locator('.field', { hasText: /^X/ }).locator('input');
+await xField.fill('4500mm'); await xField.press('Enter');
+check('typing a corner X (mm accepted) moves the corner', near((await roomOf()).v[1][1], 4.5, 0.001));
+await page.waitForTimeout(650);
+await click(0, 0); // corner 1, then type the Y of corner 4 into it: two corners on the same spot
+await page.locator('.field', { hasText: /^Y/ }).locator('input').fill('5');
+check('an invalid typed corner shows a plain message', /too close|same place/.test(await page.locator('.field-msg').first().innerText()));
+await page.keyboard.press('Escape');
+await page.locator('.field', { hasText: /^Y/ }).locator('input').press('Escape');
+
+// switching tools mid-gesture, then delete room + undo
+await page.keyboard.press('1');
+await page.waitForTimeout(150);
+await page.keyboard.press('Escape');
+await page.getByRole('button', { name: /Delete room/ }).click().catch(() => {});
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: /Delete room/ }).click().catch(() => {});
+await page.waitForTimeout(250);
+s = await S();
+check('Delete room is one undoable command and brings back the empty prompt', s.rooms === 0 && s.undo === 'Delete room');
+await page.keyboard.press('Control+z');
+s = await S();
+check('undo brings the room back with its furniture', s.rooms === 1 && !!s.furniture['sofa-3'], JSON.stringify({ rooms: s.rooms, f: Object.keys(s.furniture), undo: s.undo, redo: s.redo, hist: s.hist }));
+await shot('e13-after-m3');
 
 // ------------------------------------------------------------------ 7. touch targets on a coarse-pointer device
 const touch = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true, isMobile: true });

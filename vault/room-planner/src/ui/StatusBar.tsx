@@ -37,6 +37,10 @@ export function StatusBar() {
     } else if (s.kind === 'fixture') {
       const f = room.fixtures.find((x) => x.id === s.id);
       if (f) context = `${nameOf(project, f.id)} · ${f.offsetAlongWall.toFixed(3)} m along wall`;
+    } else if (s.kind === 'vertex') {
+      const i = room.vertices.findIndex((x) => x.id === s.id);
+      const v = room.vertices[i];
+      if (v) context = `Corner ${i + 1} · x ${v.position.x.toFixed(3)}  y ${v.position.y.toFixed(3)}`;
     } else {
       context = `Wall ${room.walls.findIndex((w) => w.id === s.id) + 1}`;
     }

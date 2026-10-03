@@ -1,4 +1,4 @@
-import type { Project, ValidationViolation } from '../engine/types';
+import type { PolygonErrorCode, Project, ValidationViolation } from '../engine/types';
 
 /** Human name of an object id: its definition name for furniture, "Door"/"Window" for fixtures. */
 export function nameOf(project: Project, id: string): string {
@@ -31,6 +31,17 @@ export function describeViolation(project: Project, v: ValidationViolation): str
   }
 }
 
+/** Plain-words reason a room shape was refused (never the code name). */
+export function polygonErrorText(code: PolygonErrorCode): string {
+  switch (code) {
+    case 'SELF_INTERSECTION': return 'The walls would cross each other';
+    case 'ZERO_AREA': return 'The corners are in a straight line, so there is no room';
+    case 'DEGENERATE_EDGE': return 'Two corners are too close together (under 1 mm)';
+    case 'DUPLICATE_VERTEX': return 'Two corners are in the same place';
+    case 'TOO_FEW_VERTICES': return 'A room needs at least three corners';
+  }
+}
+
 /** Undo-label verbs (B9): "Undo · Move Sofa". */
 export const LABELS = {
   move: (n: string) => `Move ${n}`,
@@ -42,4 +53,5 @@ export const LABELS = {
   edit: (n: string) => `Edit ${n}`,
   lock: (n: string, locked: boolean) => `${locked ? 'Lock' : 'Unlock'} ${n}`,
   group: (verb: string, count: number) => `${verb} ${count} objects`,
+  corner: { move: 'Move corner', add: 'Add corner', delete: 'Delete corner', length: 'Set wall length', draw: 'Draw room', deleteRoom: 'Delete room' },
 } as const;

@@ -19,7 +19,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 |---|---|---|
 | M1 | Pure spatial core `src/engine/`, tests, scenario fixtures | **Done** (332 tests, ~99.5 % line coverage) |
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
-| M3 | Wall / vertex editing, impact preview | Not started |
+| M3 | Wall / corner editing, draw a room, set room size, impact preview | **Built, awaiting review** (631 unit/property/gate tests + browser e2e) |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D | Not started |
 | M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
 
@@ -64,6 +64,13 @@ In Vault open **Room Planner** from the Apps launcher (Content Creation), or run
 5. **High object.** Place the wardrobe or bookshelf: it is drawn **dashed** (above the 1.2 m cut-plane).
 6. **Inspect.** Edit dimensions (type `2.4`, `2400mm` or `240cm`), vendor/SKU/cost, lock an object. Select several (drag a box, or shift-click) and edit "Mixed" fields.
 7. Undo/redo (buttons name the action), **Measure** (key `4`), save / open a `.json` file. Reload: the project is back, undo history starts fresh.
+
+### Walls tool (M3), key `3`
+- **Draw a room:** empty project → *Draw a room*. Click each corner, click the first corner (or `Enter`) to close, `Backspace` removes the last corner, `Esc` cancels. A shape whose walls cross cannot be closed.
+- **Reshape:** click a corner and drag it (snaps to grid and other corners). If the shape would cross itself the corner stops at the last valid spot and the bad edges turn orange. Objects that would end up outside or colliding get a dashed red outline and the status bar says how many; the edit still goes ahead and nothing moves by itself.
+- **Add / remove corners:** double-click a wall (touch: long-press) adds a corner; select a corner and press `Delete` to remove it (a room keeps at least three).
+- **Room size:** select a wall and type its **inside length**; select a corner and type X / Y. *Delete room* (Inspector, nothing selected) lets you start over; it is undoable.
+- Doors and windows are re-fitted to the new wall lengths; furniture is never moved.
 
 Questions to put to the designer: is the *front marker* (small triangle) the right way to show which side is front, and does *left/right hinge* match how they think about doors? (C20/C21 are provisional until then.)
 

@@ -52,6 +52,22 @@ same angle.
 | D24 | **Undo history is never persisted.** Only the project is autosaved; the UI says "Project saved" and its tooltip says undo starts fresh. | `persistence.ts` | Owner decision. |
 | D25 | Single-room UI: the editor works on `rooms[0]`; a project with several rooms opens but only the first is editable. | `interaction.ts` | Multi-room navigator is a foundation, not P0. |
 
+## M3 decisions (wall and corner editing) — awaiting review
+
+| # | Decision | Where | Why |
+|---|---|---|---|
+| D26 | **Insert a corner projects the click onto the wall**, so the shape does not change (three collinear corners are valid, C7). B1 says "at the quantized click position"; a kink is made by dragging the new corner. | `wallEdit.ts` | Inserting must never make an invalid or surprising shape. |
+| D27 | **Double-click anywhere on a wall body** inserts (touch: long-press); B1 says "segment midpoint". | `wallTool.ts` | A midpoint-only target is too fiddly to hit. A "+" marks the midpoint of a selected wall as a hint. |
+| D28 | Deleting a corner re-homes the **outgoing** wall's fixtures with `offset + incoming length`, then re-fits them; ones that cannot fit are carried unclamped and flagged (C15). Inserting then deleting restores the original exactly. | `wallEdit.ts` | C6 says "re-homed the same way" without the arithmetic. |
+| D29 | Fixtures are **re-clamped on every corner move and every length change** (not only on release), and carried in `to.fixtures` (C5). | `wallEdit.ts` | The live preview must show what will be committed. |
+| D30 | **Room size = wall length field** (moves the wall's *end* corner along the wall, start stays) **+ corner X/Y fields + dragging**. No Width × Length form (owner decision). | `wallEdit.ts`, Inspector | One mechanism that works for any shape. |
+| D31 | **One editable room.** "Draw a room" is for an empty project; to redraw, use *Delete room* (undoable, confirmed). | `createApp.ts` | Multi-room/Room Navigator is not P0. |
+| D32 | **Walls tool (key 3) is the only place corners are edited.** Furniture is dimmed and not pickable there; entering it clears the selection. | `interaction.ts` | Prevents moving furniture by accident. |
+| D33 | Corner snapping: another corner (100), alignment with a corner's X or Y (40), grid (20), reach 0.25 m. A snap that would make the polygon invalid is skipped. | `wallEdit.ts` | B1 gives no snap set for corners. |
+| D34 | "N objects will need attention" counts only objects that **become** invalid, not ones already invalid. Same `validateRoom` as the post-commit check, so preview = outcome. | `wallEdit.ts` `impactOf` | An edit that changes nothing for an already-invalid object should not nag. |
+| D35 | **Closing a drawn room is blocked when invalid**: a plain message, and the corners stay so Backspace can fix it (C14). Error codes are never shown to users. | `wallTool.ts` | C14 says blocked; behaviour afterwards was unspecified. |
+| D36 | A drag that would cross itself **sticks at the last valid millimetre** along the drag (bisection), with the bad edges orange (B1, owner decision). | `wallEdit.ts` `stickVertex` | Owner decision. |
+
 ## Known limits (not decisions)
 - Coverage ≥ 95 % lines on `src/engine/` (currently ~99.5 %).
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation

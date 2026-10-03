@@ -25,6 +25,32 @@ export function normalizeCCW(vertices: Vertex[]): Vertex[] {
   return signedArea(copy.map((v) => v.position)) < 0 ? copy.reverse() : copy;
 }
 
+/**
+ * Indices of the edges (edge i = vertices[i] → vertices[i+1]) involved in whatever makes the polygon invalid: too-short edges,
+ * edges at duplicated corners, and edges that cross or touch a non-adjacent edge. Empty for a valid polygon. Used to draw the
+ * offending edges orange during a corner drag (B1); `validatePolygon` stays the single validity rule.
+ */
+export function polygonProblemEdges(vertices: Vertex[]): number[] {
+  const n = vertices.length;
+  const bad = new Set<number>();
+  if (n < 3) return [];
+  const p = vertices.map((v) => v.position);
+  for (let i = 0; i < n; i++) {
+    if (dist(p[i], p[(i + 1) % n]) < MIN_EDGE - EPSILON) bad.add(i);
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (dist(p[i], p[j]) <= EPSILON) {
+        for (const v of [i, j]) { bad.add(v); bad.add((v - 1 + n) % n); }
+      }
+      if (segmentsTouch(p[i], p[(i + 1) % n], p[j], p[(j + 1) % n])) { bad.add(i); bad.add(j); }
+    }
+  }
+  if (bad.size === 0 && Math.abs(signedArea(p)) <= EPSILON) for (let i = 0; i < n; i++) bad.add(i);
+  return [...bad].sort((a, b) => a - b);
+}
+
 export type PolygonValidation = { ok: true } | { ok: false; code: PolygonErrorCode };
 
 /**

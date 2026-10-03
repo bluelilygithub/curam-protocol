@@ -64,6 +64,16 @@ Chair 0.5 square in the 4 × 5 room, proposed x → quantized: 0.2504 → 0.25 (
 0.2496 → 0.25 (valid); 0.2494 → 0.249 (left edge −0.001: outside → rejected). Elevations 0.0004 → 0, 0.0005 → 0.001,
 0.0006 → 0.001 (midpoint rounds away from zero, C2).
 
+## wall editing arithmetic (M3; `tests/unit/wallEdit.test.ts`, `tests/interaction/m3gates.test.ts`)
+Room 4 × 5 (v1 (0,0) v2 (4,0) v3 (4,5) v4 (0,5); w1 floor, w2 right L 5, w3 top, w4 left).
+- **Clamp:** window width 1.2 on w2 at 2.5. Move v3 to (4,2): L = 2, legal centre range [0.6 + 0.05, 2 − 0.65] = [0.65, 1.35] → 1.35. At L = 1 the wall is shorter than 1.2 + 0.1, so it cannot be clamped and stays 2.5 (then `fixture_out_of_wall`).
+- **Insert** on w1 at (1.3, 0.4): projected to (1.3, 0), first half L1 = 1.3. A window at 2.5 has its centre past L1 → new segment, offset 2.5 − 1.3 = 1.2; a door at 0.9 stays. Delete the corner again: 1.2 + 1.3 = 2.5, geometry identical.
+- **Delete v3** (rectangle → triangle): incoming w2 (L 5) merges into v2 → v4, the diagonal √(4² + 5²) = 6.4031. A window at 2 on w3 becomes 2 + 5 = 7, re-fitted to hi = 6.4031 − 0.6 − 0.05 = 5.7531 → 5.753.
+- **Wall length:** floor wall 4 → 5 moves v2 to (5, 0). A 3-4-5 wall (0,0)→(3,4) set to 10 puts its end at (6, 8).
+- **Stick:** dragging v3 straight down from (4,5): v3 reaches v2's position at y = 0 (degenerate), so the last valid millimetre is y = 0.001 (edge v2→v3 of 1 mm is allowed).
+- **Impact:** v3 → (4, 4.2) and v4 → (0, 4.2) (the `wall-edit-cascade` scenario): sofa (y 4.05..4.95) crosses the new wall, chair (y 4.35..4.85) is outside, table (touching y = 4.2) is fine → exactly `chair-1`, `sofa-1`. With only v3 moved to (4, 4.2) and the sofa at (2, 4.5): the wall runs (4,4.2)→(0,5), at x = 3.1 it is at y 4.38 → the sofa's corner (3.1, 4.975) is outside → one object.
+- **Reshape (e2e/gate):** corners (0,0) (4,0) (2,2.5) (2,5) (0,5): shoelace = (0 + 10 + 5 + 10 + 0)/2 = 12.5 m². The drawn L (3 × 3 minus 1.5 × 1.5) = 6.75 m².
+
 ## perf-100
 100 boxes 1.0 × 0.8 on a 1.6 m lattice (offset 1.0) in a 20 × 20 L-room with a 8 × 8 notch; rotations (n mod 6) × 15°,
 half-diagonal ≤ 0.64 m < 0.8 m (half the pitch) so nothing overlaps; every 7th object sits at elevation 0.5.

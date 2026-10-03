@@ -22,8 +22,10 @@ import { type FeedbackBus, type PreviewObject } from '../state/feedbackBus';
 import type { IdGen } from '../state/projectFactory';
 import type { ProjectStore } from '../state/projectStore';
 import { TOOL_KEYS, type UiStore } from '../state/uiStore';
+import { ARROW_SMALL, DRAG_SLOP_PX } from './constants';
 import { computeHandles, hitHandle, MIN_SIZE } from './handles';
-import { describeViolation, LABELS, nameOf } from './statusMessages';
+import { describeViolation, LABELS, nameOf, polygonErrorText } from './statusMessages';
+import { WallTool, type WallToolState } from './wallTool';
 
 export interface Ports {
   project: ProjectStore;
@@ -32,6 +34,8 @@ export interface Ports {
   newId: IdGen;
   now: () => number;
   panBy: (dx: number, dy: number) => void;
+  /** Called after a drawn room is committed (the app fits the view to it). */
+  onRoomCreated?: () => void;
 }
 
 export interface PointerEv {
@@ -46,8 +50,7 @@ export interface PointerEv {
 }
 export interface KeyEv { key: string; shift: boolean; ctrl: boolean; alt: boolean }
 
-export const DRAG_SLOP_PX = 3;
-export const ARROW_SMALL = 0.01;
+export { DRAG_SLOP_PX, ARROW_SMALL };
 /** Default angular snap while rotating (Shift = free, re-quantized to 0.1° on release, B2). */
 export const ANGLE_SNAP_DEG = 15;
 export const WALL_FLUSH_WINDOW_DEG = 10;
@@ -67,7 +70,7 @@ type State =
   | { t: 'measure' };
 interface Valid<T> { valid: boolean; value: T }
 
-export type StateName = State['t'];
+export type StateName = State['t'] | WallToolState;
 
 /**
  * The pointer/keyboard state machine for the 2D editor (Spec §5, Appendix B). No DOM, no Konva, no React: it takes
@@ -79,9 +82,18 @@ export class Interaction {
   private cycle: PickCycleState | null = null;
   private measure: { a: Vec2; b: Vec2 | null } | null = null;
 
-  constructor(private readonly p: Ports) {}
+  private readonly wall: WallTool;
 
-  get stateName(): StateName { return this.state.t; }
+  constructor(private readonly p: Ports) {
+    this.wall = new WallTool({ p, commit: (r, label) => this.commit(r, label) });
+  }
+
+  get stateName(): StateName {
+    return this.p.ui.getState().tool === 'wall_edit' && this.wall.busy ? this.wall.stateName : this.state.t;
+  }
+
+  /** Touch: the host calls this when a press on a wall has been held long enough (B1 "long-press inserts a corner"). */
+  longPress(): void { this.wall.longPress(); }
 
   // ---------------------------------------------------------------- context
 
@@ -111,7 +123,7 @@ export class Interaction {
   private reportRejection(r: Extract<PipelineResult, { rejected: true }>): void {
     const project = this.project;
     if (!project) return;
-    const text = r.message ?? (r.polygonError ? `Not a valid room shape (${r.polygonError})` : r.violations[0] ? describeViolation(project, r.violations[0]) : null);
+    const text = r.message ?? (r.polygonError ? polygonErrorText(r.polygonError) : r.violations[0] ? describeViolation(project, r.violations[0]) : null);
     if (text) this.p.ui.getState().setStatus({ text, severity: 'warn' });
   }
 
@@ -131,13 +143,15 @@ export class Interaction {
   pointerDown(e: PointerEv): void {
     const project = this.project;
     const room = this.room;
-    if (!project || !room) return;
+    if (!project) return;
     const u = this.ui;
 
     if (u.tool === 'pan' || e.button === 1) {
       this.state = { t: 'pan', last: e.screen };
       return;
     }
+    if (u.tool === 'wall_edit') { this.wall.pointerDown(e); return; }
+    if (!room) return;
     if (u.placing) {
       if (this.state.t !== 'ghost') this.state = { t: 'ghost', rotation: u.placing.kind === 'furniture' ? (u.placing.template?.rotation ?? 0) : 0, hinge: 'left', last: null };
       this.updateGhost(e);
@@ -184,6 +198,7 @@ export class Interaction {
       s.last = e.screen;
       return;
     }
+    if (u.tool === 'wall_edit') { this.wall.pointerMove(e); return; }
     if (u.placing && this.project && this.room) {
       if (this.state.t !== 'ghost') this.state = { t: 'ghost', rotation: u.placing.kind === 'furniture' ? (u.placing.template?.rotation ?? 0) : 0, hinge: 'left', last: null };
       this.updateGhost(e);
@@ -222,6 +237,7 @@ export class Interaction {
 
   pointerUp(e: PointerEv): void {
     const s = this.state;
+    if (this.ui.tool === 'wall_edit' && s.t !== 'pan') { this.wall.pointerUp(e); return; }
     switch (s.t) {
       case 'pan': this.state = { t: 'idle' }; return;
       case 'press': {
@@ -666,9 +682,16 @@ export class Interaction {
       if (label !== null) this.p.ui.getState().setStatus({ text: `Redid: ${label ?? 'last action'}`, severity: 'info' });
       return true;
     }
-    if (!project || !room) return false;
-
     if (k.key === 'Escape') { this.cancel(true); return true; }
+    if (u.tool === 'wall_edit' && !mod && this.wall.keyDown(k)) return true;
+    if (!project || !room) {
+      // with no room yet the only keys that matter are the tool shortcuts (e.g. 3 to start drawing, 1 to leave)
+      if (!mod && !k.alt && TOOL_KEYS[k.key] && u.tool !== TOOL_KEYS[k.key] && !(this.wall.busy && u.tool === 'wall_edit' && k.key === 'Backspace')) {
+        this.setTool(TOOL_KEYS[k.key]);
+        return true;
+      }
+      return false;
+    }
     if (!mod && !k.alt && TOOL_KEYS[k.key] && u.tool !== TOOL_KEYS[k.key]) {
       this.setTool(TOOL_KEYS[k.key]);
       return true;
@@ -751,11 +774,14 @@ export class Interaction {
 
   setTool(tool: 'select' | 'pan' | 'wall_edit' | 'measure'): void {
     this.cancel(); // B7: switching tools mid-drag cancels the drag first
+    const ui = this.p.ui.getState();
     if (tool === 'wall_edit') {
-      this.p.ui.getState().setStatus({ text: 'Wall editing arrives in the next milestone', severity: 'info' });
-      return;
+      ui.clearSelection(); // furniture is not pickable in this tool
+      ui.setStatus(this.room
+        ? { text: 'Click a corner or wall. Drag a corner to reshape; double-click a wall to add a corner.', severity: 'info' }
+        : { text: 'Click to place the first corner. Click the first corner again, or press Enter, to close the room.', severity: 'info' });
     }
-    this.p.ui.getState().setTool(tool);
+    ui.setTool(tool);
     if (tool !== 'measure') { this.measure = null; this.p.bus.set({ measure: null }); }
   }
 
@@ -766,6 +792,7 @@ export class Interaction {
   cancel(escape = false): void {
     const s = this.state;
     const u = this.p.ui.getState();
+    if (u.tool === 'wall_edit' && this.wall.cancel(escape)) return; // B7: MOVING_VERTEX reverts; drawing is abandoned; Escape deselects
     if (s.t === 'ghost' || u.placing) {
       this.state = { t: 'idle' };
       u.stopPlacing(); // discard, no history

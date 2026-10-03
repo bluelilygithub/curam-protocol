@@ -1,5 +1,5 @@
 import type { DimLine } from '../engine/liveDimensions';
-import type { SnapCandidate, ValidationViolation, Fixture, FurnitureInstance, Vec2 } from '../engine/types';
+import type { SnapCandidate, ValidationViolation, Fixture, FurnitureInstance, Vec2, Vertex, WallSegment } from '../engine/types';
 
 /**
  * High-frequency interaction feedback: drag/ghost/resize/rotate previews, live dimensions, the constraint message, the
@@ -30,6 +30,15 @@ export interface FeedbackState {
   snap: SnapCandidate | null;
   marquee: { a: Vec2; b: Vec2 } | null;
   measure: { a: Vec2; b: Vec2 | null } | null;
+  /**
+   * Candidate room while a corner is dragged (B1). The committed room is hidden (`hiddenIds` contains `ROOM_ID`) and this is drawn
+   * instead; `badEdges` are the edge indices to draw orange.
+   */
+  roomPreview: { vertices: Vertex[]; walls: WallSegment[]; fixtures: Fixture[]; badEdges: number[] } | null;
+  /** Objects that WOULD become hard-invalid if the wall edit were committed (dashed red outline, "N objects will need attention"). */
+  impact: string[];
+  /** "Draw a room" in progress (C14). */
+  drawing: { points: Vec2[]; cursor: Vec2 | null; closable: boolean; nearFirst: boolean; badEdges: number[] } | null;
   /** Live constraint message (throttled to once per 100 ms, B5). */
   message: { text: string; severity: 'hard' | 'soft'; violations: ValidationViolation[] } | null;
   /** Set once on an invalid release: the renderer animates previews back to the committed state, then clears. */
@@ -38,8 +47,12 @@ export interface FeedbackState {
 }
 
 export const EMPTY_FEEDBACK: FeedbackState = {
-  previews: [], hiddenIds: [], dims: [], snap: null, marquee: null, measure: null, message: null, animateBack: false, cursor: 'default',
+  previews: [], hiddenIds: [], dims: [], snap: null, marquee: null, measure: null, roomPreview: null, impact: [], drawing: null,
+  message: null, animateBack: false, cursor: 'default',
 };
+
+/** Pseudo object id: put it in `hiddenIds` to hide the committed room (walls + fixtures) while a candidate room is drawn. */
+export const ROOM_ID = '__room__';
 
 export const MESSAGE_THROTTLE_MS = 100;
 

@@ -10,7 +10,7 @@ import { validateRoom } from '../engine/validation';
 import { wallOutlines } from '../engine/wallOutline';
 import type { Fixture, FurnitureInstance, Project, Room, ValidationViolation, Vec2 } from '../engine/types';
 import { computeHandles } from '../interaction/handles';
-import type { FeedbackBus, FeedbackState, PreviewObject } from '../state/feedbackBus';
+import { ROOM_ID, type FeedbackBus, type FeedbackState, type PreviewObject } from '../state/feedbackBus';
 import type { ProjectStore } from '../state/projectStore';
 import type { UiStore } from '../state/uiStore';
 import type { ViewStore } from '../state/viewStore';
@@ -120,11 +120,17 @@ export class SceneRenderer {
     this.drawGrid(ui.showGrid, ui.grid);
     const room = project?.rooms[0];
     if (project && room) {
+      const wallTool = ui.tool === 'wall_edit';
+      const roomHidden = bus.hiddenIds.includes(ROOM_ID); // a candidate room is being dragged: it is drawn in the overlay
       const validation = validateRoom(room, project.furnitureDefinitions);
-      this.drawRoom(room, ui.selection.filter((s) => s.kind === 'wall').map((s) => s.id));
-      this.drawFixtures(room, ui.selection.filter((s) => s.kind === 'fixture').map((s) => s.id), bus.hiddenIds, validation.violations);
-      this.drawFurniture(room, ui.selection.filter((s) => s.kind === 'furniture').map((s) => s.id), bus.hiddenIds, validation.violations);
-      if (ui.showClearances) this.drawClearances(project, room, ui.selection.filter((s) => s.kind === 'furniture').map((s) => s.id));
+      if (!roomHidden) {
+        this.drawRoom(room, ui.selection.filter((s) => s.kind === 'wall').map((s) => s.id));
+        this.drawFixtures(room, ui.selection.filter((s) => s.kind === 'fixture').map((s) => s.id), bus.hiddenIds, validation.violations);
+      }
+      // in the wall tool furniture is dimmed and cannot be selected
+      this.drawFurniture(room, wallTool ? [] : ui.selection.filter((s) => s.kind === 'furniture').map((s) => s.id), bus.hiddenIds, validation.violations, wallTool ? 0.45 : 1);
+      if (ui.showClearances && !wallTool) this.drawClearances(project, room, ui.selection.filter((s) => s.kind === 'furniture').map((s) => s.id));
+      if (wallTool && !roomHidden) this.drawVertexHandles(room, ui.selection);
       this.drawRoomLabel(room);
     }
     this.gridLayer.batchDraw();
@@ -230,7 +236,29 @@ export class SceneRenderer {
     }
   }
 
-  private drawFurniture(room: Room, selected: string[], hidden: string[], violations: ValidationViolation[]): void {
+  /** Corner squares (selected one filled) and, for a selected wall, a "+" at its midpoint hinting at double-click to add a corner. */
+  private drawVertexHandles(room: Room, selection: Array<{ kind: string; id: string }>): void {
+    const p = this.palette;
+    const selV = selection.filter((s) => s.kind === 'vertex').map((s) => s.id);
+    for (const v of room.vertices) {
+      const c = this.cv(v.position);
+      const sel = selV.includes(v.id);
+      this.sceneLayer.add(new Konva.Rect({
+        x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: sel ? p.primary : p.paper, stroke: sel ? p.primary : p.text,
+        strokeWidth: 1.6, listening: false,
+      }));
+    }
+    for (const w of selection.filter((s) => s.kind === 'wall')) {
+      const g = wallGeometry(room, w.id);
+      if (!g) continue;
+      const m = this.cv({ x: (g.start.x + g.end.x) / 2, y: (g.start.y + g.end.y) / 2 });
+      this.sceneLayer.add(new Konva.Circle({ x: m.x, y: m.y, radius: 9, fill: p.paper, stroke: p.primary, strokeWidth: 1.6, listening: false }));
+      this.sceneLayer.add(new Konva.Line({ points: [m.x - 4, m.y, m.x + 4, m.y], stroke: p.primary, strokeWidth: 1.6, listening: false }));
+      this.sceneLayer.add(new Konva.Line({ points: [m.x, m.y - 4, m.x, m.y + 4], stroke: p.primary, strokeWidth: 1.6, listening: false }));
+    }
+  }
+
+  private drawFurniture(room: Room, selected: string[], hidden: string[], violations: ValidationViolation[], alpha = 1): void {
     const p = this.palette;
     const sorted = [...room.furniture].sort((a, b) => a.elevation - b.elevation || (a.id < b.id ? -1 : 1)); // explicit draw order (C18)
     for (const inst of sorted) {
@@ -238,7 +266,7 @@ export class SceneRenderer {
       const mine = violations.filter((v) => v.involvedObjectIds.includes(inst.id));
       const hard = mine.some((v) => v.severity === 'hard');
       const soft = !hard && mine.some((v) => v.severity === 'soft');
-      this.sceneLayer.add(this.furnitureGroup(inst, { stroke: p.text, dashed: isAboveCutPlane(inst, CUT_PLANE_HEIGHT), fill: p.paper, alpha: 1, hard, soft }));
+      this.sceneLayer.add(this.furnitureGroup(inst, { stroke: p.text, dashed: isAboveCutPlane(inst, CUT_PLANE_HEIGHT), fill: p.paper, alpha, hard, soft }));
       if (selected.includes(inst.id)) {
         this.sceneLayer.add(new Konva.Line({
           points: this.flat(footprintOf(inst)), closed: true, stroke: p.primary, strokeWidth: 2.2, strokeScaleEnabled: false, listening: false,
@@ -308,6 +336,8 @@ export class SceneRenderer {
     const project = this.project;
     const room = project?.rooms[0];
     this.overlayLayer.destroyChildren();
+    if (project && room && s.roomPreview) this.drawRoomPreview(room, s);
+    if (s.drawing) this.drawDrawing(s.drawing);
     if (project && room) {
       for (const pv of s.previews) this.drawPreview(room, pv);
       if (s.previews.length === 0) this.drawHandles(project);
@@ -317,6 +347,80 @@ export class SceneRenderer {
       if (s.measure) this.drawMeasure(s.measure.a, s.measure.b);
     }
     this.overlayLayer.batchDraw();
+  }
+
+  /** The candidate room while a corner is dragged: floor, mitred walls, fixtures, orange bad edges, dashed-red impact outlines. */
+  private drawRoomPreview(room: Room, s: FeedbackState): void {
+    const p = this.palette;
+    const rp = s.roomPreview!;
+    const candidate: Room = { ...room, vertices: rp.vertices, walls: rp.walls, fixtures: rp.fixtures };
+    const pts = rp.vertices.map((v) => v.position);
+    this.overlayLayer.add(new Konva.Line({ points: this.flat(pts), closed: true, fill: p.floor, listening: false }));
+    for (const o of wallOutlines(rp.vertices, rp.walls)) {
+      this.overlayLayer.add(new Konva.Line({ points: this.flat(o.polygon), closed: true, fill: p.wall, stroke: p.wallEdge, strokeWidth: 0.8, strokeScaleEnabled: false, listening: false }));
+    }
+    for (const f of rp.fixtures) this.drawFixture(this.overlayLayer, candidate, f, { selected: false, invalid: false, ghost: false });
+    this.overlayLayer.add(new Konva.Line({ points: this.flat(pts), closed: true, stroke: p.wallEdge, strokeWidth: 1.6, listening: false }));
+    for (const i of rp.badEdges) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      this.overlayLayer.add(new Konva.Line({ points: this.flat([a, b]), stroke: '#f97316', strokeWidth: 4, lineCap: 'round', listening: false }));
+    }
+    for (const v of rp.vertices) {
+      const c = this.cv(v.position);
+      this.overlayLayer.add(new Konva.Rect({ x: c.x - 6, y: c.y - 6, width: 12, height: 12, fill: p.paper, stroke: p.text, strokeWidth: 1.6, listening: false }));
+    }
+    for (const id of s.impact) {
+      const f = room.furniture.find((x) => x.id === id);
+      if (f) {
+        this.overlayLayer.add(new Konva.Line({
+          points: this.flat(footprintOf(f)), closed: true, stroke: p.hard, strokeWidth: 2, dash: [6, 4], fill: 'rgba(239,68,68,0.10)', strokeScaleEnabled: false, listening: false,
+        }));
+        continue;
+      }
+      const fx = rp.fixtures.find((x) => x.id === id);
+      const g = fx ? wallGeometry(candidate, fx.wallId) : undefined;
+      if (fx && g) {
+        const c = fixtureCentre(g, fx);
+        const a = add(c, scale(g.dir, -fx.width / 2));
+        const b = add(c, scale(g.dir, fx.width / 2));
+        const out = scale(g.normal, -g.wall.thickness);
+        this.overlayLayer.add(new Konva.Line({ points: this.flat([a, b, add(b, out), add(a, out)]), closed: true, stroke: p.hard, strokeWidth: 2, dash: [5, 3], listening: false }));
+      }
+    }
+  }
+
+  /** "Draw a room" in progress: corners, segment lengths, rubber band, a ring on the first corner when it can be closed. */
+  private drawDrawing(d: NonNullable<FeedbackState['drawing']>): void {
+    const p = this.palette;
+    const line = d.cursor ? [...d.points, d.cursor] : d.points;
+    if (d.points.length >= 3) {
+      this.overlayLayer.add(new Konva.Line({ points: this.flat(d.points), closed: true, fill: 'rgba(204,120,92,0.07)', listening: false }));
+    }
+    this.overlayLayer.add(new Konva.Line({ points: this.flat(line), stroke: p.primary, strokeWidth: 2.2, lineJoin: 'round', listening: false }));
+    for (const i of d.badEdges) {
+      const a = line[i];
+      const b = line[(i + 1) % line.length];
+      if (a && b) this.overlayLayer.add(new Konva.Line({ points: this.flat([a, b]), stroke: '#f97316', strokeWidth: 4, lineCap: 'round', listening: false }));
+    }
+    for (let i = 0; i + 1 < line.length; i++) {
+      const a = line[i];
+      const b = line[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len > 0.01) {
+        const m = this.cv({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+        this.chip(`${len.toFixed(2)} m`, { x: m.x, y: m.y - 14 }, p.dim);
+      }
+    }
+    for (const q of d.points) {
+      const c = this.cv(q);
+      this.overlayLayer.add(new Konva.Rect({ x: c.x - 5, y: c.y - 5, width: 10, height: 10, fill: p.paper, stroke: p.primary, strokeWidth: 2, listening: false }));
+    }
+    if (d.points.length) {
+      const f = this.cv(d.points[0]);
+      if (d.nearFirst) this.overlayLayer.add(new Konva.Circle({ x: f.x, y: f.y, radius: 13, stroke: p.valid, strokeWidth: 2.5, listening: false }));
+      else if (d.closable) this.overlayLayer.add(new Konva.Circle({ x: f.x, y: f.y, radius: 11, stroke: p.primary, strokeWidth: 1.4, dash: [3, 3], listening: false }));
+    }
   }
 
   private drawPreview(room: Room, pv: PreviewObject): void {

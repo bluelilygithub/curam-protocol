@@ -6,7 +6,7 @@ import type { Tool } from '../state/uiStore';
 const TOOLS: Array<{ tool: Tool; key: string; label: string; icon: keyof typeof Icons; disabled?: boolean; hint?: string }> = [
   { tool: 'select', key: '1', label: 'Select', icon: 'select' },
   { tool: 'pan', key: '2', label: 'Pan', icon: 'pan' },
-  { tool: 'wall_edit', key: '3', label: 'Walls', icon: 'wall', disabled: true, hint: 'Wall and vertex editing arrive in the next milestone' },
+  { tool: 'wall_edit', key: '3', label: 'Walls', icon: 'wall', hint: 'Walls (3): drag corners, double-click a wall to add a corner, or draw a room' },
   { tool: 'measure', key: '4', label: 'Measure', icon: 'measure' },
 ];
 

@@ -249,11 +249,12 @@ describe('B7 Escape and cancel semantics', () => {
       expect(h.ui.getState().tool).toBe(tool);
     }
   });
-  it('wall-edit tool is not available yet (M3): shortcut 3 explains instead of switching', () => {
+  it('shortcut 3 is the wall tool (M3); Escape does not leave it', () => {
     const h = makeHarness();
     h.key('3');
-    expect(h.ui.getState().tool).toBe('select');
-    expect(h.ui.getState().status?.text).toMatch(/next milestone/);
+    expect(h.ui.getState().tool).toBe('wall_edit');
+    h.key('Escape');
+    expect(h.ui.getState().tool).toBe('wall_edit');
   });
   it('switching tools mid-drag cancels the drag first', () => {
     const h = makeHarness({ furniture: [sofa()] });
