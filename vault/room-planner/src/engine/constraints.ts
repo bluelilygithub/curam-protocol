@@ -77,6 +77,32 @@ export function arcSegmentCount(angle: number, radius: number): number {
   return Math.max(1, Math.ceil(angle / step - 1e-9));
 }
 
+export interface DoorFrame {
+  hinge: Vec2;
+  /** Unit vector of the closed leaf, from the hinge along the opening. */
+  closed: Vec2;
+  /** Rotation sense that swings the leaf into the room: −1 (clockwise) for a left hinge, +1 for a right hinge. */
+  sign: 1 | -1;
+  angle: number;
+  radius: number;
+}
+
+/** Hinge, closed-leaf direction and swing sense of a door (C21). Shared by the geometry and the 2D drawing. */
+export function doorFrame(room: Room, f: Fixture): DoorFrame | undefined {
+  if (f.type !== 'door') return undefined;
+  const g = wallGeometry(room, f.wallId);
+  if (!g) return undefined;
+  const left = (f.hingeSide ?? 'left') === 'left';
+  const centre = fixtureCentre(g, f);
+  return {
+    hinge: add(centre, scale(g.dir, (left ? 1 : -1) * (f.width / 2))),
+    closed: scale(g.dir, left ? -1 : 1),
+    sign: left ? -1 : 1,
+    angle: f.swingAngle ?? DEFAULT_SWING_ANGLE,
+    radius: f.width,
+  };
+}
+
 export interface DoorShapes {
   hinge: Vec2;
   /** Convex pieces (triangles) covering the swing sector. */

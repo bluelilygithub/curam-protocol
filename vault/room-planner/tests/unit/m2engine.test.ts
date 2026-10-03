@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  apply, checkFixtureInWall, CommandHistory, cyclePick, dist, DIM_SCALE_LIMIT, footprintOf, isAboveCutPlane, liveDimensions,
-  marqueeSelect, MAX_DIMS, pickAll, proposeDuplicate, snapFixtureToWall, wallOutlines, CUT_PLANE_HEIGHT,
+  apply, checkFixtureInWall, CommandHistory, cyclePick, dist, DIM_SCALE_LIMIT, doorFrame, footprintOf, isAboveCutPlane, liveDimensions,
+  marqueeSelect, MAX_DIMS, pickAll, proposeDuplicate, rotateVec, snapFixtureToWall, wallOutlines, CUT_PLANE_HEIGHT,
 } from '../../src/engine';
 import type { Command, SelectionRef } from '../../src/engine';
 import { FIXTURE_LIBRARY, SEED_MATERIALS } from '../../src/data/furnitureLibrary';
@@ -290,6 +290,33 @@ describe('proposeDuplicate (A6)', () => {
     expect(after.rooms[0].furniture.map((f) => f.id)).toEqual(['a', 'a2']);
     expect(after.rooms[0].furniture[1]).toMatchObject({ width: 0.05, metadata: { sku: 'S1' } });
     expect(footprintOf(after.rooms[0].furniture[0])).toEqual(footprintOf(src));
+  });
+});
+
+describe('doorFrame (C21): shared by the geometry and the 2D drawing', () => {
+  const room = makeRoom();
+  it('left hinge (seen from inside, facing the wall) is toward the wall END; leaf starts along −wall direction and swings clockwise into the room', () => {
+    const f = doorFrame(room, makeDoor({ id: 'd', offsetAlongWall: 2, width: 0.9, hingeSide: 'left' }))!;
+    expect(f.hinge.x).toBeCloseTo(2.45, 12);
+    expect(f.closed).toEqual({ x: -1, y: -0 });
+    expect(f.sign).toBe(-1);
+    expect(f.angle).toBeCloseTo(Math.PI / 2, 12);
+    // fully open (90°): the leaf points into the room (+Y for the bottom wall)
+    const open = rotateVec(f.closed, f.sign * f.angle);
+    expect(open.x).toBeCloseTo(0, 12);
+    expect(open.y).toBeCloseTo(1, 12);
+  });
+  it('right hinge mirrors it', () => {
+    const f = doorFrame(room, makeDoor({ id: 'd', offsetAlongWall: 2, width: 0.9, hingeSide: 'right' }))!;
+    expect(f.hinge.x).toBeCloseTo(1.55, 12);
+    expect(f.sign).toBe(1);
+    const open = rotateVec(f.closed, f.sign * f.angle);
+    expect(open.y).toBeCloseTo(1, 12);
+  });
+  it('windows and unknown walls have no frame; a custom swing angle is carried', () => {
+    expect(doorFrame(room, { id: 'w', type: 'window', wallId: 'w1', offsetAlongWall: 2, width: 1, height: 1, elevation: 1 })).toBeUndefined();
+    expect(doorFrame(room, makeDoor({ id: 'd', wallId: 'nope' }))).toBeUndefined();
+    expect(doorFrame(room, makeDoor({ id: 'd', swingAngle: 1 }))!.angle).toBe(1);
   });
 });
 

@@ -36,6 +36,22 @@ same angle.
 | D13 | Group rotate rotates each member about its own centre by the delta **and** orbits it about the selection's bounding-box centre. | `pipeline.ts` | B2 fixes the pivot; B4 says per-instance rotation edits are about each instance's own centre. A group *rotate* needs both. |
 | D14 | Group duplicate and the "no-op proposal" result (`noop: true`) are not full features yet. | `pipeline.ts` | Duplicate (A6) is interaction-layer ghost logic; noop avoids empty history entries. |
 
+## M2 decisions (2D editing loop) — awaiting review
+
+| # | Decision | Where | Why |
+|---|---|---|---|
+| D15 | **Drag and rotate follow the pointer and turn red when invalid; on release an invalid drag animates back (no history).** **Resize sticks** at the last valid size. | `interaction.ts` | Spec §5 says "red feedback, then silent animate-back" for drags; A2/B1 hint that furniture should "stick" at the nearest valid spot. B3 says resize sticks. I read §5 for drags/rotation and B3 for resize. Easy to switch drags to sticking if designers prefer. |
+| D16 | Wall-flush **rotation snap** triggers when a footprint *corner* is within 0.25 m of a wall (and the angle is within 10° of flush). | `snapping.ts` `wallFlushAngle` | B2 says "centre within snapDistance of a wall", which furniture can almost never satisfy. |
+| D17 | While rotating, the default angular snap is **15°** (Shift = free, 0.1°). A wall-flush snap keeps 0.1° so it lands on the wall angle. | `interaction.ts` | B2 says Shift disables angular snapping, implying it is on by default; the spec names no increment. |
+| D18 | **Arrow = 1 cm, Shift+Arrow = one grid unit (10 cm)**; each key press is its own history entry. | `interaction.ts` | Spec: "small move / larger move (respects snap)". No sizes given. |
+| D19 | Live dimensions: nearest wall per axis and nearest furniture gap per axis by ray casting; fixture = nearest opening centre; alignment shown when centres line up within 5 mm. The "below screen-scale 0.15" rule is read as **suppress non-wall dimensions when zoomed out past 0.15 m per pixel**. | `liveDimensions.ts` | B10 wording is ambiguous about the direction of "below". |
+| D20 | **Duplicate (A6):** an offset copy always collides with its same-size source, so Ctrl+D normally puts a **ghost of the copy on the pointer** (single object). A multi-object duplicate that does not fit just reports why. | `interaction.ts` | A6 says the ghost "remains attached"; the group case is not specified. |
+| D21 | `isAboveCutPlane` uses an **EPSILON tolerance** (0.8 + 0.4 is not above 1.2). | `selection.ts` | Float sums land a hair over the plane. |
+| D22 | Quick repeated clicks at the same point (< 500 ms) **cycle to the next object under the pointer** (B6). A fast double-click on an object therefore selects the one beneath it. | `selection.ts` | That is the spec'd cycle rule; flagged because it can surprise. |
+| D23 | The 2D renderer is **plain Konva driven imperatively**, not react-konva. | `render2d/SceneRenderer.ts` | The plan said react-konva; per-frame previews must never go through React or a store (A12), and this keeps that guarantee structural. |
+| D24 | **Undo history is never persisted.** Only the project is autosaved; the UI says "Project saved" and its tooltip says undo starts fresh. | `persistence.ts` | Owner decision. |
+| D25 | Single-room UI: the editor works on `rooms[0]`; a project with several rooms opens but only the first is editable. | `interaction.ts` | Multi-room navigator is a foundation, not P0. |
+
 ## Known limits (not decisions)
 - Coverage ≥ 95 % lines on `src/engine/` (currently ~99.5 %).
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation

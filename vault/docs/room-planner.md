@@ -11,7 +11,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | Milestone | Scope | State |
 |---|---|---|
 | M1 | Pure spatial core `src/engine/`, tests, scenario fixtures | **Done** (332 tests, ~99.5 % line coverage) |
-| M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | Planned, approved |
+| M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
 | M3 | Wall / vertex editing, impact preview | Not started |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D | Not started |
 | M5 | Save/load polish, PDF + image export, `room_projects` table | Not started |
@@ -19,15 +19,29 @@ state. The domain is a pure TypeScript engine with no UI code.
 ## Where things are
 - `room-planner/README.md` — module table, how to run.
 - `room-planner/TESTING.md` — test layout, binding rules, milestone gates.
-- `room-planner/DECISIONS.md` — engine decisions still awaiting owner review (D4/D5 provisional, in plain words).
+- `room-planner/DECISIONS.md` — engine decisions awaiting owner review (D4/D5 provisional, in plain words) and the M2 UI decisions D15–D25.
 - `specs/` — Spec V2 Rev 4, Phase 1 Rev 3, Appendix B, **Appendix C (binding; wins on conflict)**, Test Plan v1.0.
   `04-appendix-c-resolutions.md` is the current text (C1–C22); the Appendix C PDF is older.
+
+## Designer demo (M2) — about ten minutes
+Run `npm run dev` in `vault/room-planner` and open http://127.0.0.1:5174. This is the Spec §11 early-validation loop minus 3D and PDF.
+1. **Start from a rectangle.** Click a wall, then set unequal **thickness** in the inspector (e.g. 150 / 200 / 150 / 100 mm). Corners are mitred.
+2. **Door and window.** Pick them in the library; the ghost snaps to the nearest wall, turns red where it does not fit. Click to place. `H` flips the hinge. Click a door to edit width, hinge, swing, offset.
+3. **Sofa and coffee table.** Pick, move (ghost follows), `R` rotates 45°, click to place. Drag objects; live dimensions show distances. Drag one into a wall: it turns red, a message says why, and on release it slides back.
+4. **Clearances.** Select the sofa and toggle the dashed-square button: soft clearance zones appear. Put the table inside it: amber, not blocked.
+5. **High object.** Place the wardrobe or bookshelf: it is drawn **dashed** (above the 1.2 m cut-plane).
+6. **Inspect.** Edit dimensions (type `2.4`, `2400mm` or `240cm`), vendor/SKU/cost, lock an object. Select several (drag a box, or shift-click) and edit "Mixed" fields.
+7. Undo/redo (buttons name the action), **Measure** (key `4`), save / open a `.json` file. Reload: the project is back, undo history starts fresh.
+
+Questions to put to the designer: is the *front marker* (small triangle) the right way to show which side is front, and does *left/right hinge* match how they think about doors? (C20/C21 are provisional until then.)
 
 ## Run
 ```
 cd vault/room-planner
 npm install
-npm test            # unit, scenarios, property, perf
+npm run dev         # the app
+npm run e2e         # drives the app in Chrome (dev server must be running)
+npm test            # unit, scenarios, property, interaction gates, perf
 npm run coverage    # perf excluded, fails under 95 % lines on src/engine
 npm run typecheck
 ```

@@ -9,11 +9,18 @@ npm run typecheck
 node scripts/gen-scenarios.mjs   # regenerate scenario INPUTS (never the expectations)
 ```
 
+`npm run e2e` drives the real app in Chrome (Playwright, installed browser; start `npm run dev` first) and prints PASS/FAIL per check,
+including the 44 px touch-target rule on a coarse-pointer device and "pointer moves cause zero store updates" measured in the browser.
+`npm run walkthrough` takes screenshots of the demo loop.
+
 ## Layout
 - `tests/unit/` one file per engine module (Phase 1 §10 matrix), plus `pipeline` (C11) and `nearestValid` (C10).
 - `tests/scenarios/` canonical projects (C12 renamed `fixtures/` to avoid confusion with doors and windows). Inputs are JSON,
   expectations are hand-derived in `scenarios.test.ts` with the working in `NOTES.md`. Changing an expectation needs a
   one-line justification in the PR; it usually signals a contract change.
+- `tests/interaction/` the M2 gates against the real interaction engine (`m2gates.test.ts`: one drag = one command = one entry, invalid drag = zero
+  history, rejected commit untouched, zero store updates on pointer moves, B7 escape matrix, scripted random session replay) and `inspector.test.ts`
+  (A5/A9/B4). `harness.ts` builds the stores + engine without a DOM.
 - `tests/property/` fast-check, seed fixed, capped at 500 cases (200 for command sequences).
 - `tests/perf/` deterministic ceilings on `perf-100.json` (median of N runs). Fix regressions algorithmically, never raise a ceiling.
 
@@ -26,4 +33,5 @@ node scripts/gen-scenarios.mjs   # regenerate scenario INPUTS (never the expecta
 - Every `ApplyErrorCode` has a test that produces it; every user-visible defect gets a reproducing test named after it.
 
 ## Milestone gates
-M1 (this folder): Phase 1 §10 matrix green · all scenarios · all property tests · perf smoke. M2+ gates are listed in the Test Plan §4.
+M1: Phase 1 §10 matrix green · all scenarios · all property tests · perf smoke.
+M2: all Test Plan §4 M2 gates (`tests/interaction/m2gates.test.ts`) plus `npm run e2e`. M3+ gates are in the Test Plan §4.

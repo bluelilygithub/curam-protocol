@@ -34,6 +34,8 @@ export interface UiState {
   rightOpen: boolean;
   /** Violation popover (B5) */
   popoverOpen: boolean;
+  /** Autosave indicator. The wording never implies undo history is saved: it is not. */
+  saveStatus: 'saved' | 'saving' | 'error';
 }
 
 export interface UiActions {
@@ -49,6 +51,7 @@ export interface UiActions {
   noteRecent(id: string): void;
   setPanel(side: 'left' | 'right', open: boolean): void;
   setPopover(open: boolean): void;
+  setSaveStatus(s: 'saved' | 'saving' | 'error'): void;
 }
 
 export type UiStore = StoreApi<UiState & UiActions>;
@@ -69,7 +72,9 @@ export function createUiStore(): UiStore {
     leftOpen: true,
     rightOpen: true,
     popoverOpen: false,
+    saveStatus: 'saved',
 
+    setSaveStatus: (saveStatus) => set({ saveStatus }),
     setTool: (tool) => set({ tool, placing: null }),
     select: (selection) => set({ selection, popoverOpen: false }),
     toggleSelect(ref) {
