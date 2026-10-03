@@ -8,6 +8,7 @@
     "build": "vite build",
     "e2e": "node scripts/e2e.mjs",
     "e2e3d": "node scripts/e2e3d.mjs",
+    "e2e-photo": "node scripts/e2e-photo.mjs",
     "e2e-projects": "node scripts/e2e-projects.mjs",
     "walkthrough": "node scripts/walkthrough.mjs",
     "test": "vitest run",
@@ -35,6 +36,12 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.186.1",
+    "three-gpu-pathtracer": "0.0.26",
+    "three-mesh-bvh": "0.9.15",
+    "xatlas-web": "0.1.0",
     "zustand": "^5.0.15"
+  },
+  "overrides": {
+    "three-mesh-bvh": "0.9.15"
   }
 }

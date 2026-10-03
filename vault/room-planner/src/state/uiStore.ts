@@ -38,6 +38,8 @@ export interface UiState {
   immersive: boolean;
   /** The Projects panel (new, open, rename, duplicate, delete, import, export). */
   projectsOpen: boolean;
+  /** The Render photo panel (path-traced still image, M4.7). */
+  photoOpen: boolean;
   /** Where the fly-through is: stop index (0-based) of `total`. */
   tourProgress: { stop: number; total: number } | null;
   tool: Tool;
@@ -69,6 +71,7 @@ export interface UiActions {
   setTourLoop(on: boolean): void;
   setImmersive(on: boolean): void;
   setProjectsOpen(on: boolean): void;
+  setPhotoOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
@@ -100,6 +103,7 @@ export function createUiStore(): UiStore {
     tourLoop: true,
     immersive: false,
     projectsOpen: false,
+    photoOpen: false,
     tourProgress: null,
     tool: 'select',
     selection: [],
@@ -116,7 +120,7 @@ export function createUiStore(): UiStore {
     saveStatus: 'saved',
 
     setSaveStatus: (saveStatus) => set({ saveStatus }),
-    setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, walking: false, immersive: false }),
+    setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, walking: false, immersive: false, photoOpen: false }),
     setCinematic: (cinematic) => set(cinematic ? { cinematic } : { cinematic, tourPlaying: false, immersive: false, tourProgress: null }),
     setQuality: (quality) => set({ quality }),
     setLook: (look) => set({ look }),
@@ -125,6 +129,7 @@ export function createUiStore(): UiStore {
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
     setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
+    setPhotoOpen: (photoOpen) => set(photoOpen ? { photoOpen, tourPlaying: false, walking: false } : { photoOpen }),
     setTourProgress(p) {
       const cur = get().tourProgress;
       if (cur?.stop === p?.stop && cur?.total === p?.total) return;

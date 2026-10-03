@@ -13,6 +13,7 @@ import { StatusBar } from './ui/StatusBar';
 import { Toolbar } from './ui/Toolbar';
 
 const Viewport3D = lazy(() => import('./render3d/Viewport3D'));
+const PhotoPanel = lazy(() => import('./render3d/PhotoPanel'));
 
 function Shell() {
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
@@ -23,6 +24,7 @@ function Shell() {
   useEffect(() => { if (viewMode === '3d') setLoad3d(true); }, [viewMode]);
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
+  const photoOpen = useUi((s) => s.photoOpen);
   return (
     <div className={`app ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${immersive ? 'immersive' : ''}`}>
       <Toolbar />
@@ -41,6 +43,7 @@ function Shell() {
       {rightOpen && <Inspector />}
       <StatusBar />
       <ProjectsPanel />
+      {photoOpen && <Suspense fallback={null}><PhotoPanel /></Suspense>}
     </div>
   );
 }

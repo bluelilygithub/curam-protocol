@@ -79,6 +79,11 @@ export function Viewbar3D() {
           </>
         )}
       </div>
+      <div className="group" role="group" aria-label="Photo">
+        <button className="btn" onClick={() => app.ui.getState().setPhotoOpen(true)} title="Make a photographic picture of this room to download (takes a minute or more)">
+          <span className="label">Render photo</span>
+        </button>
+      </div>
       {cinematic && (
         <div className="group" role="group" aria-label="Fly-through">
           <button className={`btn ${playing ? 'active' : ''}`} aria-pressed={playing} onClick={() => app.toggleTour()} title="Play or pause the fly-through (Space)">

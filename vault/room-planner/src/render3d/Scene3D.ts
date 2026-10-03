@@ -276,7 +276,7 @@ export class Scene3D {
     for (const w of room.walls) {
       const mode = this.mode;
       const mat = mode === 'realistic'
-        ? new THREE.MeshStandardMaterial({ color: REAL_WALL_COLOUR, roughness: 0.95, metalness: 0, map: textureOf('plaster'), bumpMap: textureOf('plaster'), bumpScale: 0.35 })
+        ? new THREE.MeshStandardMaterial({ color: REAL_WALL_COLOUR, roughness: 0.7, metalness: 0, map: textureOf('plaster'), bumpMap: textureOf('plaster'), bumpScale: 0.35 })
         : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_COLOUR : WALL_COLOUR, roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
       this.wallMaterials.set(w.id, mat);
       this.disposables.push(mat);

@@ -299,3 +299,20 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Render photo panel (M4.7) */
+.photo-panel { width: min(1100px, 100%); }
+.photo-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; padding: 12px 16px 16px; overflow: auto; }
+.photo-stage { position: relative; min-height: 240px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; display: grid; place-items: center; overflow: hidden; }
+.photo-canvas { display: contents; }
+.photo-canvas canvas { display: block; width: 100%; height: auto; max-height: 70dvh; object-fit: contain; }
+.photo-hint { position: absolute; inset: auto 16px 16px 16px; margin: 0; padding: 8px 10px; font-size: 13px; color: var(--color-muted); background: color-mix(in srgb, var(--rp-paper) 88%, transparent); border-radius: 8px; }
+.photo-controls { display: grid; gap: 10px; align-content: start; }
+.photo-controls label { display: grid; gap: 4px; font-size: 12px; color: var(--color-muted); }
+.photo-controls label.check { display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 13px; }
+.photo-controls select { min-height: var(--ctl); padding: 0 8px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; color: var(--color-text); }
+.photo-progress { display: grid; gap: 4px; font-size: 13px; }
+.photo-progress .bar { height: 8px; border-radius: 4px; background: var(--color-surface); overflow: hidden; }
+.photo-progress .fill { height: 100%; background: var(--color-primary); transition: width 200ms; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 760px) { .photo-body { grid-template-columns: 1fr; } }

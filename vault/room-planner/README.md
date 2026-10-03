@@ -13,7 +13,8 @@ npm install
 npm run dev        # http://127.0.0.1:5174/room-planner-app/  (Vault embeds it at /room-planner)
 npm test           # unit, scenarios, property, interaction gates, perf
 npm run e2e        # drives the real UI in Chrome (start `npm run dev` first)
-npm run e2e3d      # the same for the 3D view, incl. Cinematic, the fly-through and walk mode (software WebGL)
+npm run e2e3d      # the same for the 3D view, incl. Cinematic, the Realistic look, the fly-through and walk mode (software WebGL)
+npm run e2e-photo  # Render photo: renders a tiny picture for a few passes, pauses, stops, downloads the PNG (software WebGL)
 npm run e2e-projects  # projects and rooms: library, autosave, conflicts, account mode (fake API)
 ```
 

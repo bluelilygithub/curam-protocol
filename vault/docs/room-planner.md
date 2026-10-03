@@ -23,7 +23,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
 | M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): **clay look** (decided and confirmed), Quality low/high, fly-through from saved views, walk mode with collision. **C2, C3 and C4 built** (C2 + C3 are on `staging`; walk mode awaiting review); C5 "See an example" (lowest) still to do | **In progress** |
 | M4.6 | **Realistic look** (Spec Addition A2, `specs/06-spec-addition-photo.md`): better furniture shapes, generated textures, finishes as data, `Clay | Realistic` switch in Cinematic | **Built, awaiting owner check of stills** |
-| M4.7 | **Render photo** (A2): path-traced still image of the open room for client presentation; camera / lighting / size / quality, progressive render, PNG download with optional caption | Planned, after M4.6 |
+| M4.7 | **Render photo** (A2): path-traced still image of the open room for client presentation; camera / lighting / size / quality, progressive render, PNG download with optional caption | **Built, awaiting owner check of sample photos** |
 | M5 | **Plan library** (saved projects in Vault's database, several rooms per project: **built, awaiting review**); **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule (**not started**) | **Library built; export not started** |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
@@ -50,6 +50,10 @@ Exports are built from the domain model (Spec §10), never from screenshots, so 
 | **DWG, RVT, IFC (BIM)** | DWG is proprietary (DXF is the practical route); RVT/IFC need a BIM model the planner does not have. | Not planned; revisit only on a concrete client need. |
 
 Open points to settle at M5 start: where PDF is produced (client-side with the same drawing code, or server-side like Finance's `invoicePdf.js` via react-pdf, which Vault already ships); font embedding; whether exports from the library (saved plans) can be re-generated without opening the plan; and which paper sizes/scales to offer.
+
+### Render photo (M4.7)
+
+In the 3D view press **Render photo**. Pick the view (the current 3D view or any saved view), the lighting (Daylight, Overcast, Evening), the size (640 x 360 quick look up to 4K) and the quality (Draft 64 passes, Good 256, Best 1024), then **Render**. The picture starts grainy and sharpens while it works; a bar shows the progress and the time left, measured from the real speed. **Pause**, **Stop** (keeps the picture so far) and **Download PNG** (with an optional caption: project, room, date; file name `<project>-<room>-<date>.png`). Esc stops a render, then closes the panel. Your design is never changed; if it changes while rendering, the render stops. It needs WebGL2 with float render targets; otherwise the panel says so and the Realistic 3D view still works. Draft is visibly grainy in shaded areas; use Good for a client. Cut-away walls are left out of the picture just as in Cinematic, so the room is lit from the camera's side.
 
 ## Where things are
 - `room-planner/README.md` — module table, how to run.

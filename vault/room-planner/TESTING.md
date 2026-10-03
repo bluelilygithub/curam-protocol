@@ -46,5 +46,9 @@ M2: all Test Plan §4 M2 gates (`tests/interaction/m2gates.test.ts`) plus `npm r
 M3: `tests/interaction/m3gates.test.ts`, `wallEdit` unit and property tests.
 M4: `tests/interaction/m4gates.test.ts`, `m4geometry`, `transforms.properties`, `perf3d`, and `npm run e2e3d`. M4.5 (Cinematic: clay, Quality, fly-through, walk): `tour.test.ts`, `cinematic.test.ts`, `walk.test.ts` (unit and interaction), and the Cinematic and Walk sections of `npm run e2e3d` (clay look, Low/High, play/pause/Space/Esc, full screen, a one-pass tour ending by itself, Quality remembered; walking forward, strafing, running into furniture and walls and staying clear of them, looking, Esc restoring the orbit camera).
 
+M4.6/M4.7 (Realistic look, Render photo): `textures.test.ts`, `photo.test.ts` (unit), `realistic.test.ts` (interaction), the Realistic section of `npm run e2e3d`, and `npm run e2e-photo` (renders a tiny picture for a few passes on software GL, pauses, stops, downloads the PNG and checks its size and that the design is unchanged). `node scripts/photo-samples.mjs <dir> draft sm` renders finished sample photos.
+
+**Laptop check for Render photo - run by the owner:** open a furnished room, 3D, Render photo, 1920 x 1080, Draft, press Render and note the time shown when it reaches Done; repeat with Good. Note the GPU and times in this file. If Draft takes over about 3 minutes, tell the assistant (a smaller default size or fewer passes is an easy change).
+
 **Laptop (integrated GPU) check for Quality — run by the owner before release:** open a plan with ≥ 10 objects, turn on Cinematic, Low, press Play tour and watch the frame rate (Chrome: DevTools → Rendering → Frame Rendering Stats). Low must stay near 30 fps; High may drop and is allowed to. Note the GPU and results in this file.
 M5 gates are in the Test Plan §4.
