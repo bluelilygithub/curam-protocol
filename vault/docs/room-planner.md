@@ -21,7 +21,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
 | M3 | Wall / vertex editing, impact preview | Not started |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D | Not started |
-| M5 | **Plan library** (saved plans in Vault's database), save/load polish, PDF + image export, furniture schedule | Not started |
+| M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
 Today a plan lives only in the browser's localStorage plus downloadable `.json` files; there is no library. M5 adds one, as a database table (the same idea as My Fonts / `font_projects`, not a browser-only list):
@@ -30,6 +30,23 @@ Today a plan lives only in the browser's localStorage plus downloadable `.json` 
 - **Planner side:** a "My plans" list (open, rename, duplicate, delete, thumbnail), "Save to library" and autosave to the open plan. Because the planner runs in an iframe with no auth of its own, it talks to the API through the Vault page (postMessage bridge) or through same-origin requests that reuse Vault's token; to be decided when M5 starts.
 - **Kept:** `.json` download/upload and the browser autosave as the offline fallback. Undo history is still never saved.
 - **Not in scope:** sharing, collaboration, versions/alternatives (Spec P2/P3).
+
+### M5 scope: export (owner request 2026-10-03: "PDF and any major formats")
+Exports are built from the domain model (Spec §10), never from screenshots, so they stay accurate at any scale. Proposed set, in priority order:
+
+| Format | What it is for | Plan |
+|---|---|---|
+| **PDF** | The deliverable: floor plan to scale (dimensions, labels, room area, wall thicknesses, doors/windows with swings, furniture with tags) plus the furniture **schedule** (Tag, Item, Dimensions, Finish, Vendor/SKU) and a materials/finishes list. Paper size and scale selectable (A4/A3/Letter, 1:20–1:100). | M5 core (Spec P0) |
+| **PNG / JPG** | Quick image of the 2D plan; the 3D view image once M4 exists. | M5 core (Spec P0) |
+| **SVG** | Vector plan for editing in Illustrator/Figma/Inkscape, or for web. | M5 core (cheap: same drawing code as PDF) |
+| **CSV (and XLSX)** | The schedule and costs (unit cost × quantity) for quoting and spreadsheets. | M5 core |
+| **JSON** | Native project file (already exists). | Done |
+| **DXF** (2D) | Hand the plan to CAD users: walls, openings, furniture outlines on named layers (Architecture, Furniture, Fixtures, Annotations, Measurements, matching the spec's layer set). | M5 stretch. **Spec says "sophisticated DXF" is Deferred**; a plain 2D export is small, but confirm before building and record it in Appendix C as an override. |
+| **glTF / GLB** (3D) | Open in Blender, SketchUp, web viewers, AR. | After M4; Spec lists the glTF path under P2. |
+| **OBJ** | Older 3D interchange. | Only if asked; glTF covers it. |
+| **DWG, RVT, IFC (BIM)** | DWG is proprietary (DXF is the practical route); RVT/IFC need a BIM model the planner does not have. | Not planned; revisit only on a concrete client need. |
+
+Open points to settle at M5 start: where PDF is produced (client-side with the same drawing code, or server-side like Finance's `invoicePdf.js` via react-pdf, which Vault already ships); font embedding; whether exports from the library (saved plans) can be re-generated without opening the plan; and which paper sizes/scales to offer.
 
 ## Where things are
 - `room-planner/README.md` — module table, how to run.
