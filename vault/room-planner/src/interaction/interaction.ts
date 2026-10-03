@@ -689,17 +689,22 @@ export class Interaction {
     const u = this.ui;
     const mod = k.ctrl;
 
-    if (mod && k.key.toLowerCase() === 'z' && !u.tourPlaying) {
+    if (mod && k.key.toLowerCase() === 'z' && !u.tourPlaying && !u.walking) {
       this.cancel();
       const label = k.shift ? this.p.project.getState().redo() : this.p.project.getState().undo();
       if (label !== null) this.p.ui.getState().setStatus({ text: `${k.shift ? 'Redid' : 'Undid'}: ${label ?? 'last action'}`, severity: 'info' });
       this.p.ui.getState().clearSelection();
       return true;
     }
-    if (mod && k.key.toLowerCase() === 'y' && !u.tourPlaying) {
+    if (mod && k.key.toLowerCase() === 'y' && !u.tourPlaying && !u.walking) {
       this.cancel();
       const label = this.p.project.getState().redo();
       if (label !== null) this.p.ui.getState().setStatus({ text: `Redid: ${label ?? 'last action'}`, severity: 'info' });
+      return true;
+    }
+    if (u.walking) {
+      // walking: the 3D view reads the movement keys itself; nothing else may edit the design. Esc stops walking.
+      if (k.key === 'Escape') this.p.ui.getState().setWalking(false);
       return true;
     }
     if (u.tourPlaying) {

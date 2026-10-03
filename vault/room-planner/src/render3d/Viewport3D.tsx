@@ -12,6 +12,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { PostFx } from './PostFx';
 import { Scene3D } from './Scene3D';
 import { buildTour, sampleTour, stopAt } from './tour';
+import { NO_INPUT, stepWalk, walkPose, walkStart, type WalkInput } from './walk';
+import { WalkPad } from './WalkPad';
 import { Viewbar3D } from './Viewbar3D';
 
 const BACKGROUND = '#F5F5F0';
@@ -38,6 +40,7 @@ function Host() {
   const cinematic = useUi((s) => s.cinematic);
   const quality = useUi((s) => s.quality);
   const tourPlaying = useUi((s) => s.tourPlaying);
+  const walking = useUi((s) => s.walking);
   const tourLoop = useUi((s) => s.tourLoop);
   const tourTime = useRef(0);
   const live = useRef<{ camera: THREE.Camera; controls: Orbit | null }>({ camera, controls: controls as unknown as Orbit | null });
@@ -199,6 +202,94 @@ function Host() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourPlaying, tourLoop, controls, camera, app]);
 
+  // Walk mode (Spec Addition A1, C4): first person at eye height, with collision. The orbit camera is parked and restored afterwards;
+  // the camera is placed directly (OrbitControls would clamp a level or upward look).
+  useEffect(() => {
+    const ctl = controls as unknown as Orbit | null;
+    if (!walking || !ctl) return;
+    if (isOrtho(camera)) { app.setProjection('perspective'); return; }
+    const room = app.project.getState().project?.rooms[0];
+    const start = room ? walkStart(room) : null;
+    if (!room || !start) { app.ui.getState().setWalking(false); return; }
+    const parked = read();
+    let state = start;
+    ctl.enabled = false;
+    const input = app.walkInput;
+    input.keys.clear();
+    let lookYaw = 0;
+    let lookPitch = 0;
+
+    const KEYS: Record<string, string> = { w: 'forward', arrowup: 'forward', s: 'back', arrowdown: 'back', a: 'left', d: 'right', arrowleft: 'turnleft', arrowright: 'turnright', shift: 'run' };
+    const typing = (t: EventTarget | null): boolean => { const el = t as HTMLElement | null; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'); };
+    const keydown = (e: KeyboardEvent): void => { const k = KEYS[e.key.toLowerCase()]; if (k && !typing(e.target)) { input.keys.add(k); e.preventDefault(); } };
+    const keyup = (e: KeyboardEvent): void => { const k = KEYS[e.key.toLowerCase()]; if (k) input.keys.delete(k); };
+    const blur = (): void => { input.keys.clear(); };
+
+    // drag to look (mouse, pen or one finger); the on-screen pad is a separate element and handles its own pointer
+    const el = gl.domElement;
+    let drag: { id: number; x: number; y: number } | null = null;
+    const pdown = (e: PointerEvent): void => { if (e.button !== 0 || drag) return; drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; el.setPointerCapture(e.pointerId); };
+    const pmove = (e: PointerEvent): void => {
+      if (!drag || e.pointerId !== drag.id) return;
+      lookYaw += (e.clientX - drag.x) * 0.0035;
+      lookPitch += -(e.clientY - drag.y) * 0.0035;
+      drag.x = e.clientX; drag.y = e.clientY;
+    };
+    const pup = (e: PointerEvent): void => { if (drag && e.pointerId === drag.id) drag = null; };
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
+    el.addEventListener('pointerdown', pdown);
+    el.addEventListener('pointermove', pmove);
+    el.addEventListener('pointerup', pup);
+    el.addEventListener('pointercancel', pup);
+
+    const place = (): void => {
+      const pose = walkPose(state);
+      camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
+      camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
+      camera.updateMatrixWorld();
+      scene3d.updateFade({ x: state.position.x, y: state.position.y }, Math.PI / 2);
+      invalidate();
+    };
+    place();
+    let raf = 0;
+    let last = performance.now();
+    const frame = (): void => {
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const k = input.keys;
+      const frameInput: WalkInput = {
+        ...NO_INPUT,
+        forward: Math.max(-1, Math.min(1, (k.has('forward') ? 1 : 0) - (k.has('back') ? 1 : 0) + input.padY)),
+        strafe: Math.max(-1, Math.min(1, (k.has('right') ? 1 : 0) - (k.has('left') ? 1 : 0) + input.padX)),
+        turn: ((k.has('turnright') ? 1 : 0) - (k.has('turnleft') ? 1 : 0)) * 1.8,
+        run: k.has('run'),
+        lookYaw, lookPitch,
+      };
+      lookYaw = 0; lookPitch = 0;
+      state = stepWalk(room, state, frameInput, dt);
+      place();
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
+      el.removeEventListener('pointerdown', pdown);
+      el.removeEventListener('pointermove', pmove);
+      el.removeEventListener('pointerup', pup);
+      el.removeEventListener('pointercancel', pup);
+      input.keys.clear(); input.padX = 0; input.padY = 0;
+      ctl.enabled = true;
+      if (parked) apply(parked); // back to the orbit camera you left
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walking, controls, camera, app]);
+
   // Pointers: the editor takes a gesture that starts on furniture (or places a ghost); everything else orbits.
   useEffect(() => {
     const el = gl.domElement;
@@ -212,7 +303,7 @@ function Host() {
     const mods = (e: PointerEvent) => ({ shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, button: e.button });
     const local = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const down = (e: PointerEvent): void => {
-      if (app.ui.getState().viewMode !== '3d' || app.ui.getState().tourPlaying) return;
+      if (app.ui.getState().viewMode !== '3d' || app.ui.getState().tourPlaying || app.ui.getState().walking) return;
       pointers.add(e.pointerId);
       if (pointers.size > 1) { controller.cancel(); return; } // two fingers: the camera takes over
       if (e.button !== 0) return;
@@ -266,6 +357,7 @@ export default function Viewport3D() {
         <Host />
       </Canvas>
       {active && <Viewbar3D />}
+      {active && <WalkPad />}
     </div>
   );
 }

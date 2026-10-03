@@ -108,6 +108,11 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .view-chip .btn { border: 0; background: transparent; }
 .view-chip input { width: 130px; min-height: var(--ctl); border: 0; background: transparent; font: inherit; padding: 0 6px; }
 .seg3d .btn, .viewbar3d .btn, .immersive-bar .btn { min-width: var(--ctl); }
+.walkpad {
+  position: absolute; left: 22px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%; z-index: 5; touch-action: none;
+  background: color-mix(in srgb, var(--rp-paper) 80%, transparent); border: 1px solid var(--color-border); box-shadow: 0 10px 26px -14px rgba(26,26,26,.55);
+}
+.walkpad-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: var(--color-text); opacity: .75; }
 .tour-note { align-self: center; padding: 0 10px; font: 12px var(--font-mono); color: var(--color-muted); white-space: nowrap; }
 /* presentation view: the interface is hidden, the 3D view fills the window */
 .app.immersive { grid-template-rows: 0 minmax(0, 1fr) 0; grid-template-columns: 0 minmax(0, 1fr) 0; }

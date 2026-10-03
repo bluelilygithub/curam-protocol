@@ -15,6 +15,7 @@ export function Viewbar3D() {
   const playing = useUi((s) => s.tourPlaying);
   const loop = useUi((s) => s.tourLoop);
   const immersive = useUi((s) => s.immersive);
+  const walking = useUi((s) => s.walking);
   const progress = useUi((s) => s.tourProgress);
   const project = useProject((s) => s.project);
   const summary = useMemo(() => app.tourSummary(), [app, project]);
@@ -25,6 +26,18 @@ export function Viewbar3D() {
     app.renameView(id, draft);
     setEditing(null);
   };
+
+  // Walking: only the way out and how to move are shown.
+  if (walking && !immersive) {
+    return (
+      <div className="viewbar3d" role="toolbar" aria-label="Walk mode">
+        <div className="group" role="group" aria-label="Walk">
+          <button className="btn active" aria-pressed onClick={() => app.stopWalk()} title="Stop walking (Esc)"><span className="label">Stop walking</span></button>
+          <span className="tour-note" role="status">WASD or arrows to move · drag to look · Shift to run · Esc to stop</span>
+        </div>
+      </div>
+    );
+  }
 
   // Presentation view: the interface is hidden; only play/pause, where we are, and the way out remain.
   if (immersive) {
@@ -39,6 +52,11 @@ export function Viewbar3D() {
 
   return (
     <div className="viewbar3d" role="toolbar" aria-label="3D camera">
+      <div className="group" role="group" aria-label="Walk">
+        <button className="btn" onClick={() => app.toggleWalk()} title="Walk through the room at eye height; you cannot walk through walls or furniture">
+          <span className="label">Walk</span>
+        </button>
+      </div>
       <div className="group" role="group" aria-label="Cinematic">
         <button className={`btn ${cinematic ? 'active' : ''}`} aria-pressed={cinematic} onClick={() => app.setCinematic(!cinematic)} title="Cinematic: clay look and a fly-through of your room">
           <span className="label">Cinematic</span>

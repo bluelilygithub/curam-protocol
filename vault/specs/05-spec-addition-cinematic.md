@@ -23,7 +23,7 @@ A **Cinematic** mode of the 3D view for the plan being designed (never a separat
 | C1 | ~~Better furniture shapes~~ — moved to the realistic follow-up (A1.7). |
 | C2 | **Clay look** (one white matte material, neutral light, soft shadows, AO at high quality) and the **Quality setting** (low/high, default low). No texture files are needed for clay, so no licences yet. **Built.** |
 | C3 | **Fly-through:** path from saved views, or automatic stops (an overview, the entrance, then the diagonal view from each far corner); Play / Pause / Loop; full-screen view with the interface hidden. **Built.** |
-| C4 | Walk mode: eye height about 1.6 m, keyboard/mouse and touch, collision with walls and furniture. |
+| C4 | Walk mode: eye height about 1.6 m, keyboard/mouse and touch, collision with walls and furniture. **Built.** |
 | C5 | "See an example" link (lowest priority). |
 
 ## A1.4 Acceptance

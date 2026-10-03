@@ -316,6 +316,105 @@ await page.waitForSelector('[data-testid=stage] canvas');
 check('quality is remembered per browser', (await ev(() => window.roomPlanner.ui.getState().quality)) === 'high');
 await ev(() => window.roomPlanner.ui.getState().setQuality('low'));
 
+// ------------------------------------------------------------------ Walk mode (Spec Addition A1, C4)
+await page.getByRole('button', { name: '3D', exact: true }).click();
+await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 20000 });
+await wait(900);
+const walkState = () => ev(() => {
+  const a = window.roomPlanner;
+  const t = window.roomPlanner3d;
+  const cam = t.camera;
+  const dir = new (cam.position.constructor)();
+  cam.getWorldDirection(dir);
+  const room = a.project.getState().project.rooms[0];
+  return {
+    walking: a.ui.getState().walking, hist: a.project.getState().historyLength(),
+    p: [cam.position.x, cam.position.y, cam.position.z], dir: [dir.x, dir.y, dir.z], ctlEnabled: t.controls.enabled,
+    pad: !!document.querySelector('.walkpad'), stopBtn: !!Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Stop walking'),
+    verts: room.vertices.map((v) => [v.position.x, v.position.y]),
+    furn: room.furniture.map((f) => ({ id: f.id, x: f.position.x, y: f.position.y, w: f.width, l: f.length, rot: f.rotation, h: f.height, el: f.elevation })),
+    selection: a.ui.getState().selection,
+  };
+});
+const orbitBefore = (await walkState()).p;
+await page.getByRole('button', { name: 'Walk', exact: true }).click();
+await wait(700);
+let w = await walkState();
+const R = 0.25;
+const inRoomWithClearance = (st) => {
+  // axis-aligned 4 x 5 room in this script; furniture are unrotated boxes
+  const [x, , z] = st.p;
+  const xs = st.verts.map((v) => v[0]), ys = st.verts.map((v) => v[1]);
+  if (x < Math.min(...xs) + R - 1e-3 || x > Math.max(...xs) - R + 1e-3 || z < Math.min(...ys) + R - 1e-3 || z > Math.max(...ys) - R + 1e-3) return false;
+  for (const f of st.furn) {
+    if (f.el + f.h <= 0.4 || f.el >= 1.8) continue;
+    const hw = (f.rot === 0 ? f.w : f.l) / 2 + R - 1e-3, hl = (f.rot === 0 ? f.l : f.w) / 2 + R - 1e-3;
+    if (Math.abs(x - f.x) < hw && Math.abs(z - f.y) < hl) return false;
+  }
+  return true;
+};
+check('Walk starts at eye height inside the room, with the orbit controls off, the pad and the stop button shown', w.walking && Math.abs(w.p[1] - 1.6) < 1e-6 && inRoomWithClearance(w) && !w.ctlEnabled && w.pad && w.stopBtn, JSON.stringify(w));
+check('starting to walk changes nothing in the design', w.hist === (await ev(() => window.roomPlanner.project.getState().historyLength())));
+await shot('3d-15-walk-start');
+
+const startP = w.p;
+await page.keyboard.down('w');
+await wait(2500);
+await page.keyboard.up('w');
+await wait(200);
+w = await walkState();
+check('W walks forward', Math.hypot(w.p[0] - startP[0], w.p[2] - startP[2]) > 1.0, JSON.stringify([startP, w.p]));
+await shot('3d-16-walk-moved');
+
+// walk long enough into the furniture and walls that the collision has to hold
+await page.keyboard.down('w');
+await wait(9000);
+await page.keyboard.up('w');
+await wait(200);
+w = await walkState();
+check('walking into furniture and walls is stopped: still clear of every wall and object', inRoomWithClearance(w), JSON.stringify({ p: w.p, furn: w.furn }));
+await page.keyboard.down('d');
+await page.keyboard.down('Shift');
+await wait(1500);
+await page.keyboard.up('Shift');
+await page.keyboard.up('d');
+w = await walkState();
+check('strafing and running into things still never ends inside them', inRoomWithClearance(w), JSON.stringify(w.p));
+
+// drag to look: dragging right turns the view to the right
+const dirBefore = w.dir;
+await page.mouse.move(700, 450);
+await page.mouse.down();
+await page.mouse.move(900, 450, { steps: 8 });
+await page.mouse.up();
+await wait(200);
+w = await walkState();
+check('dragging on the view turns it', Math.hypot(w.dir[0] - dirBefore[0], w.dir[2] - dirBefore[2]) > 0.2, JSON.stringify([dirBefore, w.dir]));
+await shot('3d-17-walk-looked');
+
+await page.keyboard.press('Delete');
+await wait(150);
+check('keys do not edit the design while walking', (await walkState()).hist === w.hist && (await walkState()).furn.length === w.furn.length);
+
+await page.keyboard.press('Escape');
+await wait(600);
+w = await walkState();
+check('Esc stops walking and returns to the orbit camera you left', !w.walking && w.ctlEnabled && Math.hypot(w.p[0] - orbitBefore[0], w.p[1] - orbitBefore[1], w.p[2] - orbitBefore[2]) < 0.05, JSON.stringify([orbitBefore, w.p]));
+
+// walking inside Cinematic (clay) too
+await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await page.getByRole('button', { name: 'Walk', exact: true }).click();
+await wait(700);
+await page.keyboard.down('w');
+await wait(1500);
+await page.keyboard.up('w');
+await shot('3d-18-walk-clay');
+w = await walkState();
+check('walking works in the clay look', w.walking && inRoomWithClearance(w));
+await page.getByRole('button', { name: 'Stop walking' }).click();
+await wait(400);
+check('Stop walking works from the bar', !(await walkState()).walking);
+
 check('no console or page errors at any point', problems.length === 0, problems.join(' | '));
 await browser.close();
 console.log(failures === 0 ? '\nAll 3D checks passed.' : `\n${failures} check(s) failed.`);

@@ -14,6 +14,7 @@ import { serializeProject } from './engine/serialize';
 import { createCameraStore } from './state/cameraStore';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
 import { buildTour } from './render3d/tour';
+import { walkStart } from './render3d/walk';
 import { createUiStore, type Quality, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
@@ -77,6 +78,12 @@ export function createApp(storage: StorageLike) {
     };
   }
 
+  /**
+   * Live walk-mode input, written by the keyboard and the on-screen pad and read every frame by the 3D view. It changes many times
+   * a second, so it is deliberately not a store (A12).
+   */
+  const walkInput = { keys: new Set<string>(), padX: 0, padY: 0 };
+
   const notify = (text: string, severity: 'info' | 'warn' | 'error' = 'info'): void => ui.getState().setStatus({ text, severity });
 
   function fitToRoom(): void {
@@ -116,6 +123,19 @@ export function createApp(storage: StorageLike) {
       ui.getState().setCinematic(on);
     },
     setQuality(q: Quality): void { ui.getState().setQuality(q); },
+    walkInput,
+
+    /** Start walking through the room at eye height (collides with walls and furniture). False, with a message, if there is nowhere to stand. */
+    startWalk(): boolean {
+      const room = project.getState().project?.rooms[0];
+      if (!room) return false;
+      if (!walkStart(room)) { notify('There is no room to walk in here: the floor is too small or full.', 'warn'); return false; }
+      interaction.cancel();
+      ui.getState().setWalking(true);
+      return true;
+    },
+    stopWalk(): void { ui.getState().setWalking(false); },
+    toggleWalk(): void { if (ui.getState().walking) ui.getState().setWalking(false); else this.startWalk(); },
     playTour(): void { ui.getState().setTourPlaying(true); },
     pauseTour(): void { ui.getState().setTourPlaying(false); },
     toggleTour(): void { ui.getState().setTourPlaying(!ui.getState().tourPlaying); },

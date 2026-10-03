@@ -1,0 +1,22 @@
+[
+  {
+    "name": "eye-realistic.png",
+    "ms": 21,
+    "calls": 1
+  },
+  {
+    "name": "eye-clay.png",
+    "ms": 5,
+    "calls": 1
+  },
+  {
+    "name": "iso-realistic.png",
+    "ms": 6,
+    "calls": 1
+  },
+  {
+    "name": "iso-clay.png",
+    "ms": 3,
+    "calls": 1
+  }
+]

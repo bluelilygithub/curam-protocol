@@ -98,3 +98,12 @@ Room 4 × 5, walls 0.15 thick, height 2.7 (v1 (0,0) v2 (4,0) v3 (4,5) v4 (0,5); 
 - **Look-at** of a corner stop = centre + 0.25 × (centre − stand point): for (3.682, 4.682) that is (1.580, 1.955).
 - **L-room** (0,0)(6,0)(6,3)(3,3)(3,6)(0,6): area centroid = (18·(3, 1.5) + 9·(1.5, 4.5)) / 27 = (2.5, 2.5); the reflex corner (3, 3) is never a stand point.
 - **Timeline:** legs run at 1.2 m/s clamped to 3–8 s; a looping tour has as many legs as stops; segments are contiguous; the camera never exceeds 4 m/s (an eased leg peaks at 1.5 × its average).
+
+## Walk mode (M4.5; `tests/unit/walk.test.ts`)
+Walker radius R = 0.25 m; 4 × 5 room (inside faces x = 0, 4 and y = 0, 5).
+- **Wall:** from (2, 2.5) walking +5 m in x stops at x = 4 − 0.25 = 3.75, y unchanged. From (3.7, 2) heading (+1, +1): x held at 3.75, y carries on the full metre to 3.0. A corner target (+5, +5) from (3, 4) stops at (3.75, 4.75). A 100 m step does not tunnel.
+- **Furniture:** a sofa 2 × 1 at (2, 2.5) occupies x 1..3, y 2..3. From (2, 1) walking +3 in y stops at y = 2 − 0.25 = 1.75. A 2 × 0.1 shelf at y = 2.5 is not tunnelled by a 3 m step: it stops at 2.5 − 0.05 − 0.25 = 2.2. From (0.5, 2.5) heading (+1, +0.3): x held at 1 − 0.25 = 0.75, y reaches 2.8, still beside the sofa.
+- **What blocks:** top > 0.4 m and underside < 1.8 m. A rug (0.02 m) and an object of top exactly 0.4 m do not; a coffee table (0.42 m) does; a shelf with its underside at exactly 1.8 m does not; a box from 1.0 to 1.5 m does.
+- **Start:** door at x = 1 on w1: entrance (1, 0.6), looking at the centre (2, 2.5): yaw = atan2(1.9, 1) = 1.0856 rad, pitch 0.
+- **Movement:** 1.4 m/s forward, 2.4 m/s running, diagonal not faster (forward + strafe 1 each moves 1.4 m in a second), strafe goes to the right of the facing direction (facing +x, right is +y), arrow turn rate 1.8 rad/s, pitch limited to ±80°.
+- **Pose:** camera at (x, 1.6, y) looking along (cos yaw cos pitch, sin pitch, sin yaw cos pitch).

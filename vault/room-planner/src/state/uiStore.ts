@@ -28,6 +28,8 @@ export interface UiState {
   cinematic: boolean;
   quality: Quality;
   tourPlaying: boolean;
+  /** First-person walk mode (Spec Addition A1, C4). Exclusive with the fly-through. */
+  walking: boolean;
   tourLoop: boolean;
   /** Interface hidden for a full-screen presentation. */
   immersive: boolean;
@@ -57,6 +59,7 @@ export interface UiActions {
   setCinematic(on: boolean): void;
   setQuality(q: Quality): void;
   setTourPlaying(on: boolean): void;
+  setWalking(on: boolean): void;
   setTourLoop(on: boolean): void;
   setImmersive(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
@@ -85,6 +88,7 @@ export function createUiStore(): UiStore {
     cinematic: false,
     quality: 'low',
     tourPlaying: false,
+    walking: false,
     tourLoop: true,
     immersive: false,
     tourProgress: null,
@@ -103,10 +107,11 @@ export function createUiStore(): UiStore {
     saveStatus: 'saved',
 
     setSaveStatus: (saveStatus) => set({ saveStatus }),
-    setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, immersive: false }),
+    setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, walking: false, immersive: false }),
     setCinematic: (cinematic) => set(cinematic ? { cinematic } : { cinematic, tourPlaying: false, immersive: false, tourProgress: null }),
     setQuality: (quality) => set({ quality }),
-    setTourPlaying: (tourPlaying) => set({ tourPlaying }),
+    setTourPlaying: (tourPlaying) => set(tourPlaying ? { tourPlaying, walking: false } : { tourPlaying }),
+    setWalking: (walking) => set(walking ? { walking, tourPlaying: false, tourProgress: null } : { walking }),
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
     setTourProgress(p) {
