@@ -10,6 +10,7 @@
     "build": "vite build --config client/vite.config.js && node scripts/buildRoomPlanner.js",
     "start": "node server/index.js",
     "migrate:embeddings": "node server/scripts/migrateEmbeddings.js",
+    "test:room-projects": "node server/routes/roomProjects.test.js",
     "test:document-redaction-m1": "node server/services/documentRedaction/milestone1.test.js",
     "test:contract-review-m1": "node server/services/contractReview/milestone1.test.js",
     "test:contract-review-m2": "node server/services/contractReview/milestone2.test.js",

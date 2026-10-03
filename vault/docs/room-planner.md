@@ -23,7 +23,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
 | M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): **clay look** (decided and confirmed), Quality low/high, fly-through from saved views, walk mode with collision. **C2, C3 and C4 built** (C2 + C3 are on `staging`; walk mode awaiting review); C5 "See an example" (lowest) still to do | **In progress** |
 | M4.6 | **Realistic look** (planned follow-up): better furniture shapes first, then a switchable realistic Cinematic look with generated/CC0 textures | Planned, after M4.5 |
-| M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
+| M5 | **Plan library** (saved projects in Vault's database, several rooms per project: **built, awaiting review**); **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule (**not started**) | **Library built; export not started** |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
 Today a plan lives only in the browser's localStorage plus downloadable `.json` files; there is no library. M5 adds one, as a database table (the same idea as My Fonts / `font_projects`, not a browser-only list):
@@ -81,6 +81,13 @@ In Vault open **Room Planner** from the Apps launcher (Content Creation), or run
 - **Select and move:** click furniture, a door/window (the whole opening), or a wall. Click the same spot again within half a second to pick what is behind. **Drag furniture along the floor**: same snapping, red/amber feedback and messages as 2D, one drag = one undo step, and an invalid drop slides back. Library items can be placed from 3D too (the ghost follows the floor point).
 - **Not in 3D:** resize/rotate handles, marquee, Pan/Walls/Measure tools, dragging doors or windows. Rotate with `R`, resize in the Inspector, or switch to 2D.
 - Furniture appears as simple shapes per type at its true size, coloured by its finish; red/amber glow = the same problems the Inspector lists.
+
+### Projects and rooms (M5, library part)
+- **Projects:** the project name in the toolbar opens the **Projects** panel: **New project**, open any project, **Rename**, **Duplicate**, **Delete** (asks "Delete? Yes / No"), **Import file…** and **Export open project** (a `.json` backup with every room). **Save** saves now; otherwise it saves a moment after your last change. The toolbar shows *Saved*, *Saving…*, *Unsaved changes* or *Could not save*.
+- **Where it is saved:** when you open Room Planner from Vault while signed in, projects are saved to **your Vault account** (the `room_projects` table; any device). Otherwise they are saved **in this browser only**; the Projects panel says which. If your Vault session ends, saving says so and your work stays in the browser until you sign in again.
+- **Two windows:** if the same project is saved from another window, you are asked to **reload the saved version** or **keep yours and overwrite**; nothing is overwritten silently.
+- **Rooms:** a project holds several rooms. The tabs at the top left of the view switch between them; **+ Add room** offers a 4 × 5 m rectangle, **Draw a room** (corner by corner; Esc twice or Cancel gives up) or **a copy of this room**. Double-click a tab (or use the Inspector) to rename a room; **×** deletes the open room (asks first; **Ctrl+Z** brings it back). Rooms are separate plans: no shared walls, one shown at a time (2D, 3D, tour and walk all follow the open room).
+- Vault side: `vault/server/routes/roomProjects.js` (+ `roomProjectsRouter.js`), mounted at `/api/room-projects` behind the `roomPlanner` feature flag; table `room_projects` created at boot in `server/db.js`. Limits: 200 projects per user, 5 MB per project. Tests: `npm run test:room-projects` in `vault/`.
 
 ### Cinematic (M4.5), button **Cinematic** in the 3D bar
 - **Cinematic** switches the 3D view to a white clay architectural model: soft shadows, no colours, the walls between you and the room cut away. It changes nothing in your design and is not in undo history.

@@ -105,6 +105,20 @@ same angle.
 | D61 | **Controls:** W A S D or arrows to move (Left/Right arrows turn), drag to look (one finger on touch), Shift to run (2.4 m/s; walking 1.4 m/s), an on-screen pad for touch, Esc or the button to stop. While walking, every other key and click is ignored. **The camera is placed directly rather than through the orbit controls** (they would clamp a level or upward look), and the orbit camera you left is restored on exit. | `Viewport3D.tsx`, `WalkPad.tsx`, `interaction.ts` | A walker must not edit by accident; direct placement is the only way to look level. |
 
 
+## Projects and rooms (M5, library part) — awaiting review
+
+| # | Decision | Where | Why |
+|---|---|---|---|
+| D62 | **The store keeps the whole project (`document`) and shows the editor one room (`project` = a view with only the active room).** Commands carry room ids and apply to the document; renderers, interaction, inspector, tour and walk keep reading `project` unchanged. | `projectStore.ts` | The UI read `rooms[0]` in 31 places; this makes several rooms a store concern instead of a 31-place change, and keeps single-room tests valid. |
+| D63 | **Rooms are separate: no shared walls, one shown at a time**, each with its own coordinates. A new, copied or drawn room becomes the open one; deleting the open room opens its neighbour; undo and redo keep a valid open room. | `projectStore.ts` `nextActive` | Owner choice (switch between rooms). Side-by-side rooms with shared walls is a much bigger model. |
+| D64 | **Ids are time-ordered** (base-36 time, counter, random), so sorting by id (C18) lists rooms and furniture in creation order. Older files keep their random ids, so their rooms may list in any order. | `projectFactory.ts` | The room tabs would otherwise appear in random order. |
+| D65 | **Projects are saved to the Vault account when the user is signed in to Vault, otherwise in this browser** (the interface says which). The planner reads Vault's token from `localStorage['vault-auth']` (same origin); a ended session or unreachable Vault falls back to the browser with the reason. | `library.ts`, `vaultAuth.ts` | Owner choice (database). Standalone dev has no token, so it works offline. |
+| D66 | **Save:** every change marks the project *Unsaved* and saves after a 1.5 s pause; **Save** saves now; a failed network save retries every 15 s; the old single-key draft stays as crash recovery and is re-saved if the last session ended with unsaved changes. Undo history is still never saved (D24). | `projects.ts` | Owner choice (autosave + manual Save). |
+| D67 | **Two windows cannot silently overwrite each other:** a save carries the time it last saw; if the project changed since, the server answers 409, autosave pauses, and the owner chooses *Reload the saved version* or *Keep mine and overwrite*. Switching projects is refused while a save problem is unresolved. | `roomProjectsRouter.js`, `projects.ts`, `LibraryBanner.tsx` | Autosave in two tabs would otherwise lose work without a word. |
+| D68 | **Server limits:** 200 projects per user, 5 MB per project, names up to 120 characters, every query filtered by user, ids must be plain numbers. | `roomProjectsRouter.js` | Protects the database and other users' data. |
+| D69 | **Deleting a project or a room asks inline ("Delete? Yes / No")**, never with a browser dialog; room deletes are undoable, project deletes are not (a project is a whole file; use Export first). | `ProjectsPanel.tsx`, `RoomBar.tsx`, Inspector | Vault's UI rule for routine deletions. |
+| D70 | **A project has a name** (optional field `name`, schema stays 1); the account's name column is the truth when the two differ. File export is named after it. | `types.ts`, `library.ts` | The library needs something to show. |
+
 ## Known limits (not decisions)
 - Coverage ≥ 95 % lines on `src/engine/` (currently ~99.5 %).
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation

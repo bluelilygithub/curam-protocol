@@ -2,6 +2,7 @@
 import { useStore } from 'zustand';
 import type { App } from '../createApp';
 import type { FeedbackBus, FeedbackState } from '../state/feedbackBus';
+import type { LibraryActions, LibraryState } from '../state/libraryStore';
 import type { ProjectActions, ProjectState } from '../state/projectStore';
 import type { UiActions, UiState } from '../state/uiStore';
 import type { ViewActions, ViewState } from '../state/viewStore';
@@ -16,6 +17,7 @@ export function useApp(): App {
 
 export const useProject = <T,>(sel: (s: ProjectState & ProjectActions) => T): T => useStore(useApp().project, sel);
 export const useUi = <T,>(sel: (s: UiState & UiActions) => T): T => useStore(useApp().ui, sel);
+export const useLibrary = <T,>(sel: (s: LibraryState & LibraryActions) => T): T => useStore(useApp().library, sel);
 export const useView = <T,>(sel: (s: ViewState & ViewActions) => T): T => useStore(useApp().view, sel);
 
 /** Feedback bus as an external store: only components that read it re-render, and only at the bus's own (throttled) cadence. */

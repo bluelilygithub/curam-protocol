@@ -21,3 +21,4 @@ export * from './selection';
 export * from './wallEdit';
 export * from './wallPipeline';
 export * from './savedViews';
+export * from './roomOps';

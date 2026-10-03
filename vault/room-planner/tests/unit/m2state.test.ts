@@ -195,9 +195,11 @@ describe('persistence (project only; undo history resets on reload)', () => {
     const ok = parseProjectFile(JSON.stringify(p()));
     expect(ok.ok && ok.project.id).toBe('p1');
   });
-  it('file name comes from the room name', () => {
+  // M5 projects: a project now has its own name, so the file is named after it; older projects fall back to the first room, then "project".
+  it('file name comes from the project name, else the first room, else "project"', () => {
+    expect(projectFileName({ ...makeProject([makeRoom({ name: 'Hall' })]), name: 'Flat #4' })).toBe('flat-4.roomplan.json');
     expect(projectFileName(makeProject([makeRoom({ name: 'Living Room #2' })]))).toBe('living-room-2.roomplan.json');
-    expect(projectFileName(makeProject([]))).toBe('room.roomplan.json');
+    expect(projectFileName(makeProject([]))).toBe('project.roomplan.json');
   });
 
   describe('autosave', () => {

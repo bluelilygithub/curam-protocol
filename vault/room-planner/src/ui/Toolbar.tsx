@@ -1,5 +1,4 @@
-import { useRef } from 'react';
-import { useApp, useProject, useUi } from './AppContext';
+import { useApp, useLibrary, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
 import type { Tool } from '../state/uiStore';
 
@@ -18,27 +17,19 @@ export function Toolbar() {
   const showGrid = useUi((s) => s.showGrid);
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
-  const saveStatus = useUi((s) => s.saveStatus);
+  const status = useLibrary((s) => s.status);
+  const kind = useLibrary((s) => s.kind);
+  const note = useLibrary((s) => s.note);
+  const error = useLibrary((s) => s.error);
+  const name = useProject((s) => s.document?.name ?? s.document?.rooms[0]?.name);
   const canUndo = useProject((s) => s.canUndo);
   const canRedo = useProject((s) => s.canRedo);
   const undoLabel = useProject((s) => s.undoLabel);
   const redoLabel = useProject((s) => s.redoLabel);
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const undo = () => app.interaction.keyDown({ key: 'z', ctrl: true, shift: false, alt: false });
   const redo = () => app.interaction.keyDown({ key: 'z', ctrl: true, shift: true, alt: false });
-
-  const download = (): void => {
-    const out = app.exportJson();
-    if (!out) return;
-    const url = URL.createObjectURL(new Blob([out.text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = out.name;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
@@ -93,36 +84,21 @@ export function Toolbar() {
 
       <div className="spacer" />
 
-      <div className="group" role="group" aria-label="File">
-        <button className="btn" onClick={download} disabled={!hasRoom} title="Download the project as a .json file">
-          {Icons.file}<span className="label">Save file</span>
+      <div className="group" role="group" aria-label="Project">
+        <button className="btn project-button" onClick={() => app.ui.getState().setProjectsOpen(true)} title="Projects: new, open, rename, duplicate, delete, import, export">
+          {Icons.file}<span className="label">{name || 'Projects'}</span>
         </button>
-        <button className="btn" onClick={() => fileInput.current?.click()} title="Open a project .json file">
-          <span className="label">Open…</span>
+        <button className="btn" onClick={() => void app.saveProject()} disabled={status === 'saved' || status === 'saving' || status === 'loading'} title="Save now (autosave also runs a moment after each change)">
+          <span className="label">Save</span>
         </button>
-        <button
-          className="btn"
-          onClick={() => { if (!hasRoom || window.confirm('Start a new project? Download the current one first if you want to keep it.')) app.newBlank(); }}
-          title="Start a new empty project"
-        >
-          <span className="label">New</span>
-        </button>
-        <input
-          ref={fileInput} type="file" accept="application/json,.json" hidden
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (f) app.openJson(await f.text());
-            e.target.value = '';
-          }}
-        />
       </div>
 
       <span
-        className={`save save-${saveStatus}`}
+        className={`save save-${status}`}
         role="status"
-        title="Your project is saved in this browser. Undo history is not saved: it starts fresh each time the project is opened."
+        title={`${note ? `${note} ` : ''}${error ?? ''}Undo history is not saved: it starts fresh each time a project is opened.`}
       >
-        {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Could not save' : 'Project saved'}
+        {status === 'loading' ? 'Loading…' : status === 'saving' ? 'Saving…' : status === 'unsaved' ? 'Unsaved changes' : status === 'error' ? 'Could not save' : status === 'conflict' ? 'Needs your attention' : kind === 'server' ? 'Saved to Vault' : 'Saved in this browser'}
       </span>
 
       <div className="group" role="group" aria-label="Panels">

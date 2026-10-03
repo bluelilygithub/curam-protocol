@@ -108,6 +108,43 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .view-chip .btn { border: 0; background: transparent; }
 .view-chip input { width: 130px; min-height: var(--ctl); border: 0; background: transparent; font: inherit; padding: 0 6px; }
 .seg3d .btn, .viewbar3d .btn, .immersive-bar .btn { min-width: var(--ctl); }
+/* projects and rooms */
+.project-button { max-width: 220px; }
+.save-unsaved { color: var(--rp-soft); }
+.save-conflict { color: var(--rp-hard); }
+.roombar {
+  position: absolute; top: 10px; left: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 38%;
+}
+.app.immersive .roombar { display: none; }
+.room-tab { display: inline-flex; align-items: center; gap: 2px; padding: 0 2px; background: var(--rp-paper); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: 0 6px 18px -14px rgba(26,26,26,.5); }
+.room-tab.active { border-color: var(--color-text); }
+.room-tab .btn { border: 0; background: transparent; }
+.room-tab input { width: 110px; min-height: var(--ctl); border: 0; background: transparent; font: inherit; padding: 0 6px; }
+.add-room { position: relative; }
+.add-room > .btn { background: var(--rp-paper); border: 1px solid var(--color-border); }
+.menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; display: grid; gap: 2px; min-width: 190px; padding: 4px; background: var(--rp-paper); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: 0 14px 30px -16px rgba(26,26,26,.55); }
+.menu .btn { justify-content: flex-start; border: 0; background: transparent; }
+.inline-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 0 4px; }
+.save-banner { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; max-width: calc(100% - 24px); background: var(--rp-paper); border: 1px solid var(--rp-hard); border-radius: 10px; box-shadow: 0 12px 28px -14px rgba(26,26,26,.55); font-size: 13px; }
+.save-banner.error { border-color: var(--rp-soft); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(26,26,26,.38); }
+.modal { width: min(640px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; background: var(--rp-paper); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 24px 60px -24px rgba(26,26,26,.6); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0; }
+.modal-head h2 { margin: 0; font: 400 22px var(--font-display); }
+.storage-note { margin: 4px 16px 10px; font-size: 12px; color: var(--color-muted); }
+.new-project { display: flex; gap: 8px; padding: 0 16px 10px; }
+.new-project input, .project-row input { flex: 1; min-height: var(--ctl); padding: 0 10px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; }
+.project-list { list-style: none; margin: 0; padding: 0 8px; overflow: auto; flex: 1; }
+.project-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 8px; }
+.project-row:hover { background: color-mix(in srgb, var(--color-surface) 70%, transparent); }
+.project-row.current { background: var(--color-surface); }
+.project-main { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.project-main small { color: var(--color-muted); }
+.project-name { all: unset; cursor: pointer; font-weight: 600; min-height: var(--ctl); display: flex; align-items: center; min-width: 0; }
+.project-name .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-actions { display: inline-flex; gap: 4px; flex: none; }
+.empty-line { padding: 12px 8px; color: var(--color-muted); }
+.modal-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--color-border); }
 .walkpad {
   position: absolute; left: 22px; bottom: 22px; width: 120px; height: 120px; border-radius: 50%; z-index: 5; touch-action: none;
   background: color-mix(in srgb, var(--rp-paper) 80%, transparent); border: 1px solid var(--color-border); box-shadow: 0 10px 26px -14px rgba(26,26,26,.55);
@@ -142,6 +179,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .draw-hint strong { font: 400 16px var(--font-display); }
 .draw-hint ol { margin: 6px 0 0; padding-left: 18px; color: #4a4843; }
 .draw-hint li { margin: 2px 0; }
+.draw-hint .btn { pointer-events: auto; margin-top: 8px; } /* the hint ignores the pointer, its Cancel button does not */
 .fine { margin: 18px 0 0; font-size: 12px; color: var(--color-muted); }
 
 .hud {

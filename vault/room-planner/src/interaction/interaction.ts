@@ -717,7 +717,13 @@ export class Interaction {
     }
     if (k.key === 'Escape' && u.immersive) { this.p.ui.getState().setImmersive(false); return true; }
     if (k.key === ' ' && !mod && u.cinematic && u.viewMode === '3d') { this.p.ui.getState().setTourPlaying(true); return true; }
-    if (k.key === 'Escape') { this.cancel(true); return true; }
+    if (k.key === 'Escape') {
+      const wasDrawing = this.wall.busy; // corners placed so far: the first Esc only abandons them
+      this.cancel(true);
+      // a second Esc, with no corners left to abandon, gives up adding the room
+      if (!wasDrawing && this.p.project.getState().activeRoomId === null && (this.p.project.getState().document?.rooms.length ?? 0) > 0) this.setTool('select');
+      return true;
+    }
     if (u.tool === 'wall_edit' && !mod && this.wall.keyDown(k)) return true;
     if (!mod && !k.alt && (k.key === 'v' || k.key === 'V')) {
       this.switchView(u.viewMode === '2d' ? '3d' : '2d');
@@ -813,6 +819,12 @@ export class Interaction {
     }
   }
 
+  /** "Drawing a new room" has no active room; anything that ends the drawing without a room brings the open room back. */
+  private leaveNewRoomDrawing(): void {
+    const ps = this.p.project.getState();
+    if (ps.activeRoomId === null && (ps.document?.rooms.length ?? 0) > 0) ps.restoreActiveRoom();
+  }
+
   /** Tool shortcut for a key; in 3D only Select is available (Pan, Walls and Measure are 2D tools, D45). */
   private toolFor(k: KeyEv): Tool | undefined {
     const t = TOOL_KEYS[k.key];
@@ -841,6 +853,7 @@ export class Interaction {
         : { text: 'Click to place the first corner. Click the first corner again, or press Enter, to close the room.', severity: 'info' });
     }
     ui.setTool(tool);
+    if (tool !== 'wall_edit') this.leaveNewRoomDrawing(); // switching away from drawing a new room goes back to the room that was open
     if (tool !== 'measure') { this.measure = null; this.p.bus.set({ measure: null }); }
   }
 

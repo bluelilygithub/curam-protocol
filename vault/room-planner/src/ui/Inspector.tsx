@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { aabbOf } from '../engine/geometry';
+import { cleanName } from '../engine/roomOps';
 import { polygonArea } from '../engine/polygons';
 import { validateRoom } from '../engine/validation';
 import { describeViolation, nameOf } from '../interaction/statusMessages';
@@ -96,8 +97,31 @@ function ViolationList({ items, project }: { items: ValidationViolation[]; proje
   );
 }
 
+/** Rename the open room: type and press Enter (or leave the field). One undoable step. */
+function RoomNameField({ id, name }: { id: string; name: string }) {
+  const app = useApp();
+  const [draft, setDraft] = useState(name);
+  useEffect(() => setDraft(name), [name]); // follows a rename made elsewhere (the room tab, undo)
+  const finish = (): void => {
+    const next = cleanName(draft, name);
+    if (next === name) setDraft(name); // blank or unchanged: put the real name back
+    else app.renameRoom(id, next);
+  };
+  return (
+    <label className="field">
+      <span className="field-label">Room name</span>
+      <input
+        value={draft} maxLength={80} aria-label="Room name"
+        onChange={(e) => setDraft(e.target.value)} onBlur={finish}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setDraft(name); (e.target as HTMLInputElement).blur(); } }}
+      />
+    </label>
+  );
+}
+
 export function Inspector() {
   const app = useApp();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const project = useProject((s) => s.project);
   const selection = useUi((s) => s.selection);
   const room = project?.rooms[0];
@@ -309,6 +333,7 @@ export function Inspector() {
     body = (
       <>
         <div className="subject"><div><h3 className="subject-name">{room.name}</h3><p className="subject-sub">Room</p></div></div>
+        <RoomNameField key={room.id} id={room.id} name={room.name} />
         <Section title="Room">
           <dl className="facts">
             <dt>Size</dt><dd>{size.w.toFixed(2)} × {size.l.toFixed(2)} m</dd>
@@ -321,12 +346,17 @@ export function Inspector() {
         </Section>
         <p className="hint">Click a wall, door, window or piece of furniture to edit it. Drag on empty floor to select several. Use the Walls tool (key 3) to move, add or remove corners.</p>
         <div className="actions">
-          <button
-            className="btn danger"
-            onClick={() => { if (window.confirm('Delete this room? Its furniture, doors and windows go with it. You can undo this.')) app.deleteRoom(); }}
-          >
-            {Icons.trash}<span className="label">Delete room</span>
-          </button>
+          {confirmDelete ? (
+            <span className="inline-confirm" role="group" aria-label="Delete this room?">
+              Delete this room and everything in it? You can undo.
+              <button className="btn danger" onClick={() => { setConfirmDelete(false); app.deleteRoom(); }}>Yes</button>
+              <button className="btn" onClick={() => setConfirmDelete(false)}>No</button>
+            </span>
+          ) : (
+            <button className="btn danger" onClick={() => setConfirmDelete(true)}>
+              {Icons.trash}<span className="label">Delete room</span>
+            </button>
+          )}
         </div>
       </>
     );

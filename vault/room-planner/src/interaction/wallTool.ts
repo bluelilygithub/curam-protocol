@@ -1,4 +1,5 @@
 import { quantizeVec2 } from '../engine/coordinates';
+import { nextRoomName } from '../engine/roomOps';
 import { add, dist, scale } from '../engine/geometry';
 import { polygonProblemEdges, validatePolygon } from '../engine/polygons';
 import {
@@ -278,7 +279,7 @@ export class WallTool {
       this.h.p.ui.getState().setStatus({ text: polygonErrorText('TOO_FEW_VERTICES'), severity: 'warn' });
       return;
     }
-    const result = proposeCreateRoom(project, roomFromPoints(pts, this.h.p.newId));
+    const result = proposeCreateRoom(project, roomFromPoints(pts, this.h.p.newId, nextRoomName(this.h.p.project.getState().document ?? project)));
     if (result.rejected) {
       if (result.polygonError) this.h.p.ui.getState().setStatus({ text: polygonErrorText(result.polygonError), severity: 'warn' });
       return; // closing is blocked: the corners stay so they can be fixed (Backspace)

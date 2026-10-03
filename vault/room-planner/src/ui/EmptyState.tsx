@@ -1,10 +1,26 @@
-import { useApp, useUi } from './AppContext';
+import { useApp, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
 
 /** B8: centred first-run prompt with the two ways to begin. While drawing a room it shrinks to a three-step hint. */
 export function EmptyState() {
   const app = useApp();
   const tool = useUi((s) => s.tool);
+  const roomsInProject = useProject((s) => s.document?.rooms.length ?? 0);
+
+  // Adding a room to a project that already has some: just the drawing hint, with a way back.
+  if (roomsInProject > 0) {
+    return (
+      <div className="draw-hint" role="status">
+        <strong>Draw a new room</strong>
+        <ol>
+          <li>Click to place the first corner, then each next corner.</li>
+          <li>Click the <em>first</em> corner again, or press <kbd>Enter</kbd>, to close the room.</li>
+          <li><kbd>Backspace</kbd> removes the last corner · <kbd>Esc</kbd> twice gives up.</li>
+        </ol>
+        <button className="btn" onClick={() => app.cancelNewRoom()}>Cancel</button>
+      </div>
+    );
+  }
 
   if (tool === 'wall_edit') {
     return (
@@ -33,7 +49,7 @@ export function EmptyState() {
             {Icons.pencil}<span>Draw a room</span><small>any shape</small>
           </button>
         </div>
-        <p className="fine">Everything you change can be undone. Your project is saved in this browser as you go.</p>
+        <p className="fine">Everything you change can be undone. Your project is saved as you go; open <strong>Projects</strong> in the toolbar to manage them.</p>
       </div>
     </div>
   );

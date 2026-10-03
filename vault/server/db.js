@@ -877,6 +877,24 @@ async function initSchema() {
       )
     `);
 
+    // ── Room Planner project library ─────────────────────────────────────────
+    // Each user's saved planner projects: the planner's whole project JSON (all rooms) in one JSONB column.
+    // "roomCount" and name are kept beside it so the list never has to read the data. See server/routes/roomProjects.js.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS room_projects (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        data          JSONB NOT NULL,
+        "roomCount"   INTEGER NOT NULL DEFAULT 0,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_room_projects_user_updated ON room_projects ("userId", "updatedAt" DESC)
+    `);
+
     // ── Browser agent run archive ─────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS browser_agent_runs (

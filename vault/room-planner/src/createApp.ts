@@ -1,5 +1,6 @@
 import { fitView, panBy } from './adapters/canvas';
 import { proposeCreateRoom, proposeDeleteRoom, proposeFixPosition } from './engine/pipeline';
+import { cleanName, cloneRoom, nextRoomName } from './engine/roomOps';
 import { aabbOf } from './engine/geometry';
 import { addSavedView, deleteSavedView, renameSavedView, savedViewsOf } from './engine/savedViews';
 import { Interaction } from './interaction/interaction';
@@ -12,6 +13,9 @@ import { newProject, randomId, rectangleRoom } from './state/projectFactory';
 import { createProjectStore } from './state/projectStore';
 import { serializeProject } from './engine/serialize';
 import { createCameraStore } from './state/cameraStore';
+import { chooseLibrary, type FetchLike } from './state/library';
+import { createLibraryStore } from './state/libraryStore';
+import { ProjectsController } from './state/projects';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
 import { buildTour } from './render3d/tour';
 import { walkStart } from './render3d/walk';
@@ -28,6 +32,7 @@ export function createApp(storage: StorageLike) {
   const view = createViewStore();
   const bus = createFeedbackBus();
   const camera = createCameraStore();
+  const library = createLibraryStore();
   const interaction = new Interaction({
     project, ui, bus, newId: randomId, now: () => performance.now(),
     panBy: (dx, dy) => view.getState().setView(panBy(view.getState().view, dx, dy)),
@@ -49,6 +54,36 @@ export function createApp(storage: StorageLike) {
     try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
   });
 
+  /** Put the 3D camera back on the (new) active room, if the 3D view has been used. */
+  function frameCamera(): void {
+    const room = project.getState().project?.rooms[0];
+    const cur = camera.getState().camera;
+    if (!room || !cur) return;
+    const { viewport } = camera.getState();
+    camera.getState().requestCamera(presetCamera(room, 'iso', cur, { aspect: viewport.w / viewport.h, viewportW: viewport.w, viewportH: viewport.h }), false);
+  }
+
+  /** The project library: where projects are saved, which one is open, and saving it (Spec M5 projects). */
+  const projects = new ProjectsController({
+    project, store: library, storage, newId: randomId,
+    choose: () => chooseLibrary({
+      storage, newId: randomId,
+      fetch: typeof fetch === 'function' ? (((url, init) => fetch(url, init)) as FetchLike) : undefined,
+    }),
+    newEmpty: (name) => ({ ...newProject(), name }),
+    schedule: (fn, ms) => { const t = setTimeout(fn, ms); return () => clearTimeout(t); },
+    notify: (text, severity) => notify(text, severity),
+    onLoaded: () => {
+      interaction.cancel();
+      ui.getState().clearSelection();
+      ui.getState().setTourPlaying(false);
+      ui.getState().setWalking(false);
+      fitToRoom();
+      frameCamera();
+    },
+  });
+  let initDone: Promise<void> | null = null;
+
   /**
    * Begin autosaving; returns the cleanup. Kept out of `createApp` so React StrictMode's mount → unmount → mount cycle
    * (which reuses the same app object) re-arms it instead of leaving it disposed.
@@ -57,12 +92,14 @@ export function createApp(storage: StorageLike) {
     let lastRevision = project.getState().revision;
     const autosave: Autosave = startAutosave(
       storage,
-      () => project.getState().project,
+      () => project.getState().document, // the draft mirror holds every room
       (onChange) => project.subscribe((s) => {
         if (s.revision !== lastRevision) { lastRevision = s.revision; onChange(); }
       }),
       (s) => ui.getState().setSaveStatus(s),
     );
+    const detach = projects.attach();
+    initDone ??= projects.init();
     // leaving browser full screen (Esc, or the browser's own control) also leaves the presentation view and pauses the tour
     const onFullscreen = (): void => {
       if (typeof document !== 'undefined' && !document.fullscreenElement && ui.getState().immersive) {
@@ -73,6 +110,7 @@ export function createApp(storage: StorageLike) {
     if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', onFullscreen);
     return () => {
       autosave.dispose();
+      detach();
       interaction.cancel();
       if (typeof document !== 'undefined') document.removeEventListener('fullscreenchange', onFullscreen);
     };
@@ -202,50 +240,102 @@ export function createApp(storage: StorageLike) {
       project.getState().updateSilently((p) => deleteSavedView(p, id));
     },
 
-    /** B8 "Start from a rectangle": one undoable CreateRoom. */
+    // ------------------------------------------------------------ rooms (several per project)
+
+    /** B8 "Start from a rectangle" / "Add room": a 4 × 5 m room named Room N, one undoable CreateRoom; it becomes the open room. */
     startRectangle(): void {
-      const p = project.getState().project;
-      if (!p) return;
-      const result = proposeCreateRoom(p, rectangleRoom(randomId));
-      if (project.getState().commitResult(result, 'Create room')) fitToRoom();
+      const d = project.getState().document;
+      if (!d) return;
+      const result = proposeCreateRoom(d, rectangleRoom(randomId, 4, 5, nextRoomName(d)));
+      if (project.getState().commitResult(result, 'Create room')) { ui.getState().clearSelection(); fitToRoom(); frameCamera(); }
     },
 
-    /** B8 "Draw a room": the wall tool with no room yet. Click corners, click the first one (or Enter) to close. */
+    /** B8 "Draw a room": the wall tool with no room open. With rooms already there, the open room steps aside until this one is closed. */
     startDrawing(): void {
+      if ((project.getState().document?.rooms.length ?? 0) > 0) { interaction.cancel(); ui.getState().clearSelection(); project.getState().setActiveRoom(null); }
       interaction.setTool('wall_edit');
     },
 
-    /** Remove the room (undoable) so another can be drawn. Furniture and doors in it go with it, and come back on undo. */
-    deleteRoom(): void {
-      const p = project.getState().project;
-      const room = p?.rooms[0];
-      if (!p || !room) return;
+    /** Give up adding a room and go back to the one that was open. */
+    cancelNewRoom(): void {
       interaction.cancel();
-      ui.getState().clearSelection();
-      project.getState().commitResult(proposeDeleteRoom(p, room.id), 'Delete room');
+      project.getState().restoreActiveRoom();
+      interaction.setTool('select');
     },
 
-    /** Discard the current project and start empty (history resets). */
-    newBlank(): void {
+    /** Open another room of this project (no history entry). */
+    switchRoom(id: string): void {
+      if (id === project.getState().activeRoomId) return;
       interaction.cancel();
       ui.getState().clearSelection();
-      project.getState().load(newProject());
+      project.getState().setActiveRoom(id);
+      fitToRoom();
+      frameCamera();
     },
 
-    openJson(text: string): boolean {
+    /** A copy of a room (default: the open one) with its furniture and openings; one undoable step, and it becomes the open room. */
+    duplicateRoom(id?: string): void {
+      const d = project.getState().document;
+      const room = d?.rooms.find((r) => r.id === (id ?? project.getState().activeRoomId));
+      if (!d || !room) return;
+      const copy = cloneRoom(room, randomId, cleanName(`${room.name} (copy)`, 'Room copy'));
+      if (project.getState().commitResult(proposeCreateRoom(d, copy), 'Duplicate room')) { ui.getState().clearSelection(); fitToRoom(); frameCamera(); }
+    },
+
+    /** Rename a room: one undoable step. */
+    renameRoom(id: string, name: string): void {
+      const room = project.getState().document?.rooms.find((r) => r.id === id);
+      if (!room) return;
+      const next = cleanName(name, room.name);
+      if (next === room.name) return;
+      project.getState().commit({ type: 'UpdateRoom', roomId: id, from: { name: room.name }, to: { name: next } }, 'Rename room');
+    },
+
+    /** Remove a room (default: the open one), undoable. Its furniture and doors go with it and come back on undo. */
+    deleteRoom(id?: string): void {
+      const d = project.getState().document;
+      const target = id ?? project.getState().activeRoomId;
+      if (!d || !target || !d.rooms.some((r) => r.id === target)) return;
+      interaction.cancel();
+      ui.getState().clearSelection();
+      project.getState().commitResult(proposeDeleteRoom(d, target), 'Delete room');
+      fitToRoom();
+      frameCamera();
+    },
+
+    // ------------------------------------------------------------ projects (the library)
+
+    library,
+    projects,
+    /** Resolves when the library has been chosen and the last project opened (tests, start-up). */
+    whenReady(): Promise<void> { return initDone ?? Promise.resolve(); },
+    newProject: (name?: string) => projects.newProject(name),
+    openProject: (id: string) => projects.open(id),
+    renameProject: (id: string, name: string) => projects.rename(id, name),
+    duplicateProject: (id: string) => projects.duplicate(id),
+    deleteProject: (id: string) => projects.remove(id),
+    saveProject: () => projects.saveNow(),
+
+    /** Add a project from a file's text and open it. */
+    async importFile(text: string): Promise<boolean> {
       const r = parseProjectFile(text);
       if (!r.ok) { notify(`Could not open that file: ${r.error}`, 'error'); return false; }
-      interaction.cancel();
-      ui.getState().clearSelection();
-      project.getState().load(r.project);
-      fitToRoom();
-      notify('Project opened. Undo history starts fresh.');
+      await projects.importProject(r.project);
+      notify('Project added to your library and opened. Undo history starts fresh.');
       return true;
     },
 
-    /** The text of the download. The caller turns it into a file. */
+    /** Synchronous check plus a fire-and-forget import (kept for callers that only need to know the file was readable). */
+    openJson(text: string): boolean {
+      const r = parseProjectFile(text);
+      if (!r.ok) { notify(`Could not open that file: ${r.error}`, 'error'); return false; }
+      void projects.importProject(r.project);
+      return true;
+    },
+
+    /** The text of the download (every room). The caller turns it into a file. */
     exportJson(): { name: string; text: string } | null {
-      const p = project.getState().project;
+      const p = project.getState().document;
       return p ? { name: projectFileName(p), text: serializeProject(p) } : null;
     },
 

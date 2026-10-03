@@ -49,7 +49,7 @@ export function parseProjectFile(text: string): ImportResult {
 }
 
 export function projectFileName(project: Project): string {
-  const first = project.rooms[0]?.name ?? 'room';
+  const first = project.name?.trim() || project.rooms[0]?.name || 'project';
   return `${first.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'room'}.roomplan.json`;
 }
 

@@ -12,6 +12,7 @@ node scripts/gen-scenarios.mjs   # regenerate scenario INPUTS (never the expecta
 `npm run e2e` drives the real app in Chrome (Playwright, installed browser; start `npm run dev` first) and prints PASS/FAIL per check,
 including the 44 px touch-target rule on a coarse-pointer device and "pointer moves cause zero store updates" measured in the browser.
 `npm run e2e3d` does the same for the 3D view in Chrome's software WebGL (SwiftShader): scene renders, picking and dragging on projected screen points, orbit, presets, orthographic, saved views, reload. Run it with `RP_URL=http://localhost:5174/room-planner-app/ node scripts/e2e3d.mjs <screenshotDir>` if `127.0.0.1` does not answer.
+`npm run e2e-projects` covers projects and rooms in Chrome: several rooms (add, switch, rename, copy, delete with inline confirm, undo), the Projects panel, autosave and reload, a second window (conflict, both resolutions), the Vault-account mode against a fake `/api/room-projects` (create, rename, delete, session ended) and the browser fallback.
 `npm run walkthrough` takes screenshots of the demo loop.
 
 ## Layout
@@ -26,6 +27,8 @@ including the 44 px touch-target rule on a coarse-pointer device and "pointer mo
 - `tests/interaction/m4gates.test.ts` the M4 gates against a real three.js scene, a real camera and real ray casts, in Node (no WebGL): selection sync, one drag = one entry in 3D, A12, view switch mid-drag, ghost placement, wall fade.
 - `tests/unit/tour.test.ts` the fly-through path (hand-derived stops, timeline, speed limit, stays inside rooms including the owner's cut-corner room) and `tests/interaction/cinematic.test.ts` (clay look, Quality, cut-away walls, tour controls, keys ignored while it plays).
 - `tests/unit/walk.test.ts` walk mode: hand-derived stopping distances at walls, corners, furniture and a thin shelf, what blocks (knee/head), where it starts, movement and looking, plus a 300-run property that after any sequence of steps in rectangular and L-shaped rooms with random furniture the walker is never inside a wall or an object and never moves farther than asked. `tests/interaction/walk.test.ts`: start/stop, exclusivity with the tour, every edit key ignored while walking.
+- `tests/unit/roomOps.test.ts` (clone a room / project, names, the rename command), `tests/unit/projectStore.multiroom.test.ts` (active room and view), `tests/unit/projectLibrary.test.ts` (browser library, Vault client against a fake fetch, choosing, the save state machine, conflicts), `tests/unit/ids.test.ts`, `tests/interaction/projects.test.ts` (several rooms and the library through the real app).
+- `../server/routes/roomProjects.test.js` (run with `npm run test:room-projects` in `vault/`): the library routes against an in-memory stand-in for the database: ownership, validation, limits, 409, errors. The SQL itself is checked on staging.
 - `tests/property/` fast-check, seed fixed, capped at 500 cases (200 for command sequences).
 - `tests/perf/` deterministic ceilings on `perf-100.json` (median of N runs). Fix regressions algorithmically, never raise a ceiling.
 

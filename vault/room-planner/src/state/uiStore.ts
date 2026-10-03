@@ -33,6 +33,8 @@ export interface UiState {
   tourLoop: boolean;
   /** Interface hidden for a full-screen presentation. */
   immersive: boolean;
+  /** The Projects panel (new, open, rename, duplicate, delete, import, export). */
+  projectsOpen: boolean;
   /** Where the fly-through is: stop index (0-based) of `total`. */
   tourProgress: { stop: number; total: number } | null;
   tool: Tool;
@@ -62,6 +64,7 @@ export interface UiActions {
   setWalking(on: boolean): void;
   setTourLoop(on: boolean): void;
   setImmersive(on: boolean): void;
+  setProjectsOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
@@ -91,6 +94,7 @@ export function createUiStore(): UiStore {
     walking: false,
     tourLoop: true,
     immersive: false,
+    projectsOpen: false,
     tourProgress: null,
     tool: 'select',
     selection: [],
@@ -114,6 +118,7 @@ export function createUiStore(): UiStore {
     setWalking: (walking) => set(walking ? { walking, tourPlaying: false, tourProgress: null } : { walking }),
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
+    setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
     setTourProgress(p) {
       const cur = get().tourProgress;
       if (cur?.stop === p?.stop && cur?.total === p?.total) return;

@@ -3,9 +3,18 @@ import type { Project, Room, Vec2, Vertex, WallSegment } from '../engine/types';
 
 export type IdGen = () => string;
 
-/** Collision-resistant ids for the browser; tests inject a counter instead. */
-export const randomId: IdGen = () =>
-  (globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`);
+let lastTime = 0;
+let sequence = 0;
+/**
+ * Collision-resistant ids for the browser. They are TIME-ORDERED (a base-36 timestamp, a per-millisecond counter, then random
+ * characters), so sorting by id (C18) lists rooms and furniture in the order they were created. Tests inject a counter instead.
+ */
+export const randomId: IdGen = () => {
+  const now = Date.now();
+  if (now === lastTime) sequence++; else { lastTime = now; sequence = 0; }
+  const random = (globalThis.crypto?.randomUUID?.() ?? `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/-/g, '').slice(0, 12);
+  return `${now.toString(36).padStart(9, '0')}${sequence.toString(36).padStart(3, '0')}-${random}`;
+};
 
 export function counterIds(prefix = 'id'): IdGen {
   let n = 0;

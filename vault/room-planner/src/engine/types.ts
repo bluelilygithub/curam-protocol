@@ -162,6 +162,8 @@ export interface SavedView {
 export interface Project {
   schemaVersion: 1;
   id: string;
+  /** Optional so older files load unchanged; the library shows `projectName()` when absent. */
+  name?: string;
   units: 'metric' | 'imperial';
   rooms: Room[]; // kept sorted by id
   furnitureDefinitions: FurnitureDefinition[];
@@ -231,6 +233,8 @@ export interface UpdateFixtureCommand {
   to: FixturePatch;
 }
 export interface DeleteFixtureCommand { type: 'DeleteFixture'; fixtureId: string; snapshot: Fixture }
+/** Rename a room (the only room property edited through a command so far). */
+export interface UpdateRoomCommand { type: 'UpdateRoom'; roomId: string; from: { name: string }; to: { name: string } }
 export interface CreateRoomCommand { type: 'CreateRoom'; room: Room }
 export interface DeleteRoomCommand { type: 'DeleteRoom'; roomId: string; snapshot: Room }
 export interface CompositeCommand { type: 'Composite'; commands: Command[] }
@@ -246,6 +250,7 @@ export type Command =
   | UpdateFurnitureCommand
   | UpdateFixtureCommand
   | DeleteFixtureCommand
+  | UpdateRoomCommand
   | CreateRoomCommand
   | DeleteRoomCommand
   | CompositeCommand;

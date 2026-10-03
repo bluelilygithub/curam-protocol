@@ -291,6 +291,14 @@ export function apply(command: Command, project: Project): Project {
       for (const f of reqArray(room.furniture, 'room.furniture')) checkInstance(f);
       return { ...project, rooms: [...project.rooms, structuredClone(room)].sort(byId) };
     }
+    case 'UpdateRoom': {
+      const id = reqId(c.roomId, 'roomId');
+      const room = findRoom(project, id);
+      const to = c.to;
+      if (!isObj(to) || typeof to.name !== 'string' || !to.name.trim()) corrupt('to.name must be a non-empty string');
+      if (!isObj(c.from) || typeof c.from.name !== 'string') corrupt('from.name must be a string');
+      return withRoom(project, { ...room, name: (to as { name: string }).name });
+    }
     case 'DeleteRoom': {
       const id = reqId(c.roomId, 'roomId');
       if (!isObj(c.snapshot)) corrupt('snapshot is required');
@@ -322,6 +330,7 @@ export function inverse(command: Command): Command {
     case 'EditWall': return { ...command, from: command.to, to: command.from };
     case 'UpdateFurniture': return { ...command, from: command.to, to: command.from };
     case 'UpdateFixture': return { ...command, from: command.to, to: command.from };
+    case 'UpdateRoom': return { ...command, from: command.to, to: command.from };
     case 'CreateRoom': return { type: 'DeleteRoom', roomId: command.room.id, snapshot: command.room };
     case 'DeleteRoom': return { type: 'CreateRoom', room: command.snapshot };
     case 'Composite': return { type: 'Composite', commands: [...command.commands].reverse().map(inverse) };

@@ -49,6 +49,21 @@ const drag = async (a, b, { hold = false, steps = 12, shift = false } = {}) => {
   if (!hold) { await page.mouse.up(); if (shift) await page.keyboard.up('Shift'); await page.waitForTimeout(80); }
 };
 const card = (name) => page.locator('.card', { hasText: name }).first();
+// M5 projects: the Projects panel replaced the Save file / Open / New buttons
+const openPanel = async () => { if (!(await page.locator('.projects-panel').count())) await page.locator('.project-button').click(); await page.waitForSelector('.projects-panel'); };
+const closePanel = async () => { if (await page.locator('.projects-panel').count()) await page.getByRole('button', { name: 'Close projects' }).click(); };
+const newProjectViaPanel = async (name = '') => {
+  await openPanel();
+  if (name) await page.getByLabel('New project name').fill(name);
+  await page.getByRole('button', { name: 'New project', exact: true }).click();
+  await page.waitForSelector('.projects-panel', { state: 'detached' });
+  await page.waitForTimeout(300);
+};
+const deleteRoomViaInspector = async () => {
+  await page.locator('.actions').getByRole('button', { name: /Delete room/ }).click();
+  await page.locator('.actions').getByRole('button', { name: 'Yes' }).click();
+  await page.waitForTimeout(250);
+};
 const nodes = (fn, arg) => ev(fn, arg);
 
 // ------------------------------------------------------------------ 1. empty state and room creation
@@ -276,37 +291,37 @@ check('measure tool shows the distance, and the room area label is present', all
 await page.keyboard.press('1');
 check('shortcut 1 returns to Select', (await S()).tool === 'select');
 
-const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Save file/ }).click()]);
+await openPanel();
+const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export open project' }).click()]);
+await closePanel();
 const saved = await download.createReadStream().then((st) => new Promise((res) => { let d = ''; st.on('data', (c) => (d += c)); st.on('end', () => res(d)); }));
-check('Save file downloads valid project JSON', JSON.parse(saved).schemaVersion === 1 && JSON.parse(saved).rooms[0].furniture.length === 3);
-await page.waitForTimeout(500);
+check('Export downloads valid project JSON (every room)', JSON.parse(saved).schemaVersion === 1 && JSON.parse(saved).rooms[0].furniture.length === 3);
+await page.waitForTimeout(2300); // past the autosave pause: the library has it
 await page.reload();
 await page.waitForSelector('[data-testid=stage] canvas');
-s = await S();
-check('reload restores the project from this browser', s.rooms === 1 && Object.keys(s.furniture).length === 3, JSON.stringify({ rooms: s.rooms, f: Object.keys(s.furniture) }));
-check('...but undo history starts fresh and the UI does not pretend otherwise', !s.canUndo && !s.canRedo && (await page.getByRole('button', { name: /^Undo/ }).isDisabled()));
-check('the autosave label never mentions undo', !/undo/i.test(await page.locator('.save').innerText()));
-await page.getByRole('button', { name: /New/ }).click().catch(() => {});
-page.once('dialog', (d) => d.accept());
-await page.getByRole('button', { name: /^New$/ }).click().catch(() => {});
+await page.waitForFunction(() => window.roomPlanner.library.getState().ready, null, { timeout: 15000 });
 await page.waitForTimeout(300);
 s = await S();
-check('New clears the project (after confirmation)', s.rooms === 0);
+check('reload reopens the saved project from the library', s.rooms === 1 && Object.keys(s.furniture).length === 3, JSON.stringify({ rooms: s.rooms, f: Object.keys(s.furniture) }));
+check('...but undo history starts fresh and the UI does not pretend otherwise', !s.canUndo && !s.canRedo && (await page.getByRole('button', { name: /^Undo/ }).isDisabled()));
+check('the autosave label never mentions undo', !/undo/i.test(await page.locator('.save').innerText()));
+await newProjectViaPanel('Second plan');
+s = await S();
+check('New project opens an empty one, named as typed, and the first stays in the list', s.rooms === 0 && (await ev(() => window.roomPlanner.library.getState().entries.map((e) => e.name))).includes('Second plan'));
+await openPanel();
 await page.locator('input[type=file]').setInputFiles({ name: 'plan.json', mimeType: 'application/json', buffer: Buffer.from(saved) });
 await page.waitForTimeout(500);
 s = await S();
-check('Open loads a saved file', s.rooms === 1 && Object.keys(s.furniture).length === 3);
+check('Import adds a saved file as a project and opens it', s.rooms === 1 && Object.keys(s.furniture).length === 3);
+await openPanel();
 await page.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{nope') });
 await page.waitForTimeout(300);
 check('a bad file is explained, nothing is lost', (await S()).rooms === 1 && /Could not open/.test(await page.locator('.statusbar').innerText()));
+await closePanel();
 await shot('e07-final');
 
 // ------------------------------------------------------------------ 6b. M3: wall tool, draw a room, corners, room size
-const newProject = async () => {
-  page.once('dialog', (d) => d.accept());
-  await page.getByRole('button', { name: /^New$/ }).click();
-  await page.waitForTimeout(250);
-};
+const newProject = async () => { await newProjectViaPanel(); };
 const orange = () => nodes(() => window.roomPlannerRenderer.stage.find('Line').filter((l) => l.stroke() === '#f97316').length);
 const dashedRed = () => nodes(() => window.roomPlannerRenderer.stage.find('Line').filter((l) => l.stroke() === '#ef4444' && (l.dash?.() ?? []).length > 0 && l.closed()).length);
 const roomOf = () => ev(() => { const r = window.roomPlanner.project.getState().project.rooms[0]; return r ? { v: r.vertices.map((x) => [x.id.slice(0, 4), x.position.x, x.position.y]), walls: r.walls.length, area: Math.abs(r.vertices.reduce((a, v, i, arr) => a + (v.position.x * arr[(i + 1) % arr.length].position.y - arr[(i + 1) % arr.length].position.x * v.position.y), 0)) / 2 } : null; });
@@ -411,10 +426,7 @@ await page.locator('.field', { hasText: /^Y/ }).locator('input').press('Escape')
 await page.keyboard.press('1');
 await page.waitForTimeout(150);
 await page.keyboard.press('Escape');
-await page.getByRole('button', { name: /Delete room/ }).click().catch(() => {});
-page.once('dialog', (d) => d.accept());
-await page.getByRole('button', { name: /Delete room/ }).click().catch(() => {});
-await page.waitForTimeout(250);
+await deleteRoomViaInspector();
 s = await S();
 check('Delete room is one undoable command and brings back the empty prompt', s.rooms === 0 && s.undo === 'Delete room');
 await page.keyboard.press('Control+z');

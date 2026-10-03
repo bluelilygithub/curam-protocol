@@ -4,6 +4,9 @@ import { AppContext, useProject, useUi } from './ui/AppContext';
 import { EmptyState } from './ui/EmptyState';
 import { Hud } from './ui/Hud';
 import { Inspector } from './ui/Inspector';
+import { LibraryBanner } from './ui/LibraryBanner';
+import { ProjectsPanel } from './ui/ProjectsPanel';
+import { RoomBar } from './ui/RoomBar';
 import { LibraryPanel } from './ui/LibraryPanel';
 import { Stage2D } from './ui/Stage2D';
 import { StatusBar } from './ui/StatusBar';
@@ -32,9 +35,12 @@ function Shell() {
           </Suspense>
         )}
         {hasRoom ? (viewMode === '2d' ? <Hud /> : null) : <EmptyState />}
+        <RoomBar />
+        <LibraryBanner />
       </main>
       {rightOpen && <Inspector />}
       <StatusBar />
+      <ProjectsPanel />
     </div>
   );
 }
