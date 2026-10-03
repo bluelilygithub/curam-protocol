@@ -145,6 +145,7 @@ const semanticMap = {
   contrast: { lucide: 'Contrast' },
   film: { lucide: 'Film' },
   utensils: { lucide: 'UtensilsCrossed' },
+  armchair: { lucide: 'Armchair' },
   languages: { lucide: 'Languages' },
   guitar: { lucide: 'Guitar' },
   music: { lucide: 'Music' },

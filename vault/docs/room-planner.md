@@ -1,7 +1,14 @@
 # Room Planner
 
-Professional interior-design room planner. Standalone app in `vault/room-planner/`; **not yet wired into Vault** (no route,
-feature flag, table, or import from `server/` or `client/`). It cannot affect the running Vault app.
+Professional interior-design room planner. Standalone app in `vault/room-planner/`, shown inside Vault as the **Room Planner** page
+(`/room-planner`, Apps launcher → Content Creation, armchair icon, feature flag `roomPlanner`, allow-by-default).
+
+**How it is wired** (same idea as the WP Theme Builder): the planner is its own Vite app with base `/room-planner-app/`. The root
+`npm run build` builds Vault, then `scripts/buildRoomPlanner.js` builds the planner into `dist/room-planner-app/`; Express already serves
+`dist/`. `client/src/pages/RoomPlannerPage.jsx` embeds it in an iframe, and shows a plain notice if the planner build is missing
+(the planner build is non-fatal so it can never break a Vault deploy). It has no server API: projects live in the browser's
+localStorage and `.json` files. The page route and the app path differ on purpose, so a hard load of `/room-planner` reaches Vault's router.
+Locally: run `npm run dev` inside `room-planner/` too; the Vault client dev server proxies `/room-planner-app` to it.
 
 ## Principle
 One authoritative domain model. 2D (Konva) and 3D (React Three Fiber) are independent renderers of it; neither owns design
@@ -24,7 +31,7 @@ state. The domain is a pure TypeScript engine with no UI code.
   `04-appendix-c-resolutions.md` is the current text (C1–C22); the Appendix C PDF is older.
 
 ## Designer demo (M2) — about ten minutes
-Run `npm run dev` in `vault/room-planner` and open http://127.0.0.1:5174. This is the Spec §11 early-validation loop minus 3D and PDF.
+In Vault open **Room Planner** from the Apps launcher (Content Creation), or run `npm run dev` in `vault/room-planner` and open http://127.0.0.1:5174/room-planner-app/. This is the Spec §11 early-validation loop minus 3D and PDF.
 1. **Start from a rectangle.** Click a wall, then set unequal **thickness** in the inspector (e.g. 150 / 200 / 150 / 100 mm). Corners are mitred.
 2. **Door and window.** Pick them in the library; the ghost snaps to the nearest wall, turns red where it does not fit. Click to place. `H` flips the hinge. Click a door to edit width, hinge, swing, offset.
 3. **Sofa and coffee table.** Pick, move (ghost follows), `R` rotates 45°, click to place. Drag objects; live dimensions show distances. Drag one into a wall: it turns red, a message says why, and on release it slides back.

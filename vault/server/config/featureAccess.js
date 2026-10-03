@@ -36,6 +36,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   fonts: true,
   restyle: true,
   browserAgent: true,
+  roomPlanner: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

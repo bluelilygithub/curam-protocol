@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
-const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/';
+const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/room-planner-app/';
 const out = process.argv[2];
 if (out) mkdirSync(out, { recursive: true });
 

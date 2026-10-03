@@ -10,7 +10,7 @@ the `room_projects` table (M5).
 
 ```
 npm install
-npm run dev        # http://127.0.0.1:5174  (standalone, not mounted in Vault)
+npm run dev        # http://127.0.0.1:5174/room-planner-app/  (Vault embeds it at /room-planner)
 npm test           # unit, scenarios, property, interaction gates, perf
 npm run e2e        # drives the real UI in Chrome (start `npm run dev` first)
 ```
@@ -43,5 +43,5 @@ The demo walkthrough is in `docs/room-planner.md` (Vault docs folder).
 
 See `TESTING.md` for how to run and what is enforced, and **`DECISIONS.md` for the choices that need owner confirmation**.
 
-Seed furniture **and the default door/window sizes** live in that one file. Not wired into Vault's server or client yet (no route,
-no feature flag, no `room_projects` table); that arrives with M5.
+Seed furniture **and the default door/window sizes** live in that one file. Vault embeds the app at `/room-planner` (see `docs/room-planner.md`);
+it still has no server API and no `room_projects` table: that arrives with M5.

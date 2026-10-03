@@ -22,6 +22,12 @@ export default defineConfig({
         changeOrigin: true,
         ws: true, // Browser Agent's /api/browser-agent/ws upgrade needs this forwarded too
       },
+      // Room Planner dev server (`npm run dev` inside room-planner/, port 5174, base /room-planner-app/)
+      '/room-planner-app': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+        ws: true, // Vite HMR
+      },
       '/tb': {
         target: 'http://localhost:3001',
         changeOrigin: true,

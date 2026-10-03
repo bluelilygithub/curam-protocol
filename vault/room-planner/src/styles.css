@@ -60,6 +60,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .brand { display: flex; align-items: center; gap: 9px; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--color-border); height: 28px; flex: none; }
 .brand-mark { width: 18px; height: 14px; border: 2px solid var(--color-text); position: relative; }
 .brand-mark::after { content: ""; position: absolute; left: 3px; top: 3px; width: 6px; height: 4px; background: var(--color-primary); }
+[data-embedded] .brand { display: none; }
 .brand-name { font-family: var(--font-display); font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
 .group { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; flex: none; }
 .spacer { flex: 1; min-width: 8px; }

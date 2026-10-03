@@ -36,6 +36,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   fonts: true,
   restyle: true,
   browserAgent: true,
+  roomPlanner: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -78,6 +79,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'fonts', label: 'Font Customizer' },
       { key: 'restyle', label: 'CSS' },
       { key: 'browserAgent', label: 'Browser Agent' },
+      { key: 'roomPlanner', label: 'Room Planner' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

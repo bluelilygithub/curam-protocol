@@ -64,6 +64,7 @@ export const APP_NAV_GROUPS = [
       { id: 'restyle', label: 'CSS', path: '/restyle', icon: 'brush', featureKey: 'restyle' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
+      { id: 'roomPlanner', label: 'Room Planner', path: '/room-planner', icon: 'armchair', featureKey: 'roomPlanner' },
     ],
   },
   {

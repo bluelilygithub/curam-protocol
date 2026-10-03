@@ -6,7 +6,7 @@ import { chromium } from 'playwright-core';
 
 const out = process.argv[2] ?? join(process.cwd(), 'walkthrough');
 mkdirSync(out, { recursive: true });
-const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/';
+const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/room-planner-app/';
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, deviceScaleFactor: 1 });

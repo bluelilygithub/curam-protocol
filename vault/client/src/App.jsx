@@ -57,6 +57,7 @@ import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
 import ExpenseReviewPage from './pages/ExpenseReviewPage';
+import RoomPlannerPage from './pages/RoomPlannerPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
 import StudentQuizLayout from './pages/studentQuiz/StudentQuizLayout';
@@ -197,6 +198,7 @@ function App() {
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />
               <Route path="/expense-review" element={<ExpenseReviewPage />} />
+              <Route path="/room-planner" element={<RoomPlannerPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
