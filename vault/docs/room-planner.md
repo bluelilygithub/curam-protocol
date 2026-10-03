@@ -21,7 +21,15 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
 | M3 | Wall / vertex editing, impact preview | Not started |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D | Not started |
-| M5 | Save/load polish, PDF + image export, `room_projects` table | Not started |
+| M5 | **Plan library** (saved plans in Vault's database), save/load polish, PDF + image export, furniture schedule | Not started |
+
+### M5 scope: the plan library (owner decision 2026-10-03)
+Today a plan lives only in the browser's localStorage plus downloadable `.json` files; there is no library. M5 adds one, as a database table (the same idea as My Fonts / `font_projects`, not a browser-only list):
+- **Table `room_projects`** (`id`, `"userId"`, `name`, `"projectJson"` JSONB = the serialised `Project`, `"schemaVersion"`, `"thumbnail"` optional, `"createdAt"`, `"updatedAt"`); every query filters by `"userId"`; idempotent DDL in `server/db.js`.
+- **API** `/api/room-projects` (list, get, create, update, rename, duplicate, delete), behind `requireAuth` + `requireFeature('roomPlanner')`; named routes before `/:id`. Revision/updatedAt check so two tabs cannot silently overwrite each other (the spec's cloud-ready serialisation: stable project id, `schemaVersion`, `revision`).
+- **Planner side:** a "My plans" list (open, rename, duplicate, delete, thumbnail), "Save to library" and autosave to the open plan. Because the planner runs in an iframe with no auth of its own, it talks to the API through the Vault page (postMessage bridge) or through same-origin requests that reuse Vault's token; to be decided when M5 starts.
+- **Kept:** `.json` download/upload and the browser autosave as the offline fallback. Undo history is still never saved.
+- **Not in scope:** sharing, collaboration, versions/alternatives (Spec P2/P3).
 
 ## Where things are
 - `room-planner/README.md` — module table, how to run.
