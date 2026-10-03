@@ -22,7 +22,8 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M3 | Wall / corner editing, draw a room, set room size, impact preview | **On `staging`** (631 unit/property/gate tests + browser e2e) |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
 | M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): **clay look** (decided and confirmed), Quality low/high, fly-through from saved views, walk mode with collision. **C2, C3 and C4 built** (C2 + C3 are on `staging`; walk mode awaiting review); C5 "See an example" (lowest) still to do | **In progress** |
-| M4.6 | **Realistic look** (planned follow-up): better furniture shapes first, then a switchable realistic Cinematic look with generated/CC0 textures | Planned, after M4.5 |
+| M4.6 | **Realistic look** (Spec Addition A2, `specs/06-spec-addition-photo.md`): better furniture shapes, generated textures, finishes as data, `Clay | Realistic` switch in Cinematic | **In progress** |
+| M4.7 | **Render photo** (A2): path-traced still image of the open room for client presentation; camera / lighting / size / quality, progressive render, PNG download with optional caption | Planned, after M4.6 |
 | M5 | **Plan library** (saved projects in Vault's database, several rooms per project: **built, awaiting review**); **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule (**not started**) | **Library built; export not started** |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)

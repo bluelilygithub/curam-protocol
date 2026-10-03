@@ -119,6 +119,12 @@ same angle.
 | D69 | **Deleting a project or a room asks inline ("Delete? Yes / No")**, never with a browser dialog; room deletes are undoable, project deletes are not (a project is a whole file; use Export first). | `ProjectsPanel.tsx`, `RoomBar.tsx`, Inspector | Vault's UI rule for routine deletions. |
 | D70 | **A project has a name** (optional field `name`, schema stays 1); the account's name column is the truth when the two differ. File export is named after it. | `types.ts`, `library.ts` | The library needs something to show. |
 
+## Photographic view (M4.6 / M4.7, Spec Addition A2) — decisions as made
+
+| # | Decision | Where | Why |
+|---|---|---|---|
+| D71 | **Realistic first, then a path-traced photo; no AI images.** Textures are generated at run time (no files, no licence question). Finishes become data (material texture kind + default finishes per part); designer overrides always win. | `specs/06-spec-addition-photo.md` | Owner decision 2026-10-03: client presentation must show the real design. |
+
 ## Known limits (not decisions)
 - Coverage ≥ 95 % lines on `src/engine/` (currently ~99.5 %).
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation
