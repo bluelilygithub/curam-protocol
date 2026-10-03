@@ -21,6 +21,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M2 | First 2D editing loop (Vite + React + Konva + Zustand), designer demo | **Built, awaiting the designer demo** (530 tests + browser e2e) |
 | M3 | Wall / corner editing, draw a room, set room size, impact preview | **On `staging`** (631 unit/property/gate tests + browser e2e) |
 | M4 | 3D (R3F), shared selection, mitred wall corners in 3D, saved viewpoints, drag along the floor | **Built, awaiting review** (3D geometry, gates, perf and browser e2e; see below) |
+| M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): realistic or clay look, fly-through from saved views, walk mode with collision, Quality low/high. C0 style spike first (two stills of the owner's room), then C1 furniture shapes (if realistic), C2 materials + quality, C3 fly-through, C4 walk mode, C5 "See an example" | **Scoped; C0 style spike next** |
 | M5 | **Plan library** (saved plans in Vault's database), **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule | Not started |
 
 ### M5 scope: the plan library (owner decision 2026-10-03)
@@ -52,7 +53,7 @@ Open points to settle at M5 start: where PDF is produced (client-side with the s
 - `room-planner/README.md` — module table, how to run.
 - `room-planner/TESTING.md` — test layout, binding rules, milestone gates.
 - `room-planner/DECISIONS.md` — engine decisions awaiting owner review (D4/D5 provisional, in plain words), the M2 UI decisions D15–D25, M3 D26–D36 and M4 (3D) D37–D49.
-- `specs/` — Spec V2 Rev 4, Phase 1 Rev 3, Appendix B, **Appendix C (binding; wins on conflict)**, Test Plan v1.0.
+- `specs/` — Spec V2 Rev 4, **Spec Addition A1 (Cinematic, `05-spec-addition-cinematic.md`)**, Phase 1 Rev 3, Appendix B, **Appendix C (binding; wins on conflict)**, Test Plan v1.0.
   `04-appendix-c-resolutions.md` is the current text (C1–C22); the Appendix C PDF is older.
 
 ## Designer demo (M2) — about ten minutes

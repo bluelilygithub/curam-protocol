@@ -86,6 +86,14 @@ same angle.
 | D48 | **Both views stay mounted** once opened: 2D is hidden (not destroyed) while 3D shows, and the 3D chunk (three.js, ~260 kB gzipped) loads the first time 3D is opened. Each keeps its own camera. | `App.tsx` | Instant switching, state kept, and 2D start-up does not pay for three.js. |
 | D49 | **Picking in 3D** is depth-ordered (nearest first); repeated clicks on the same screen point within 500 ms cycle to the next hit (B6); furniture and openings are picked by an invisible box around them. | `Scene3D.ts` | B6 wording is for plan view; this is its natural 3D reading. |
 
+## Cinematic (M4.5) decisions — filled in as they are made (Spec Addition A1)
+
+| # | Decision | Where | Why |
+|---|---|---|---|
+| D50 | **Cinematic is a mode of the current plan**, not a sample scene; fly-through stops are the saved views, with automatic stops (entrance, then far-corner diagonals) when there are none. | `specs/05-spec-addition-cinematic.md` | Owner decision 2026-10-03. |
+| D51 | **Look is chosen from two stills of the owner's room** (realistic textures vs clay) before any build; realistic means better furniture shapes come first. | A1.2 | Avoids building the expensive path before the choice. |
+| D52 | **Textures: CC0 or self-generated only**, licence recorded per file, enforced by a test. **Quality low/high, default low**, tested on an integrated GPU. **Walk mode collides** with walls and furniture. | A1.2 | Owner decision. |
+
 ## Known limits (not decisions)
 - Coverage ≥ 95 % lines on `src/engine/` (currently ~99.5 %).
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation
